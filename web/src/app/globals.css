@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Amixos Design Tokens */
+  --color-primary: #4F46E5;      /* Indigo — trust, tech */
+  --color-primary-dark: #3730A3;
+  --color-accent: #10B981;       /* Emerald — growth, money */
+  --color-warning: #F59E0B;      /* Amber — alerts */
+  --color-danger: #EF4444;       /* Red — errors, overdue */
+  --color-surface: #F9FAFB;      /* Light background */
+  --color-text: #111827;
+  --color-muted: #6B7280;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: 'Inter', sans-serif;
+}
