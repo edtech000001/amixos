@@ -15,7 +15,7 @@ create table if not exists public.profiles (
   last_name text not null default '',
   phone text,
   avatar_url text,
-  language text not null default 'en',
+  language text not null default 'es',
   two_factor_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

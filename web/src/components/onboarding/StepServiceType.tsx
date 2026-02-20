@@ -29,7 +29,7 @@ export function StepServiceType({ value, onChange, onNext, onBack }: Props) {
 
   const handleNext = () => {
     if (!value) {
-      setError('Please select a service type');
+      setError('Por favor selecciona un tipo de negocio');
       return;
     }
     setError('');
@@ -39,8 +39,8 @@ export function StepServiceType({ value, onChange, onNext, onBack }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">What type of business is this?</h2>
-        <p className="text-sm text-gray-500 mt-1">We'll activate the right features for your industry.</p>
+        <h2 className="text-xl font-bold text-gray-900">¿Qué tipo de negocio es este?</h2>
+        <p className="text-sm text-gray-500 mt-1">Activaremos las funciones correctas para tu industria.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -64,8 +64,8 @@ export function StepServiceType({ value, onChange, onNext, onBack }: Props) {
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Back</Button>
-        <Button onClick={handleNext} size="lg" className="flex-1">Continue</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
+        <Button onClick={handleNext} size="lg" className="flex-1">Continuar</Button>
       </div>
     </div>
   );

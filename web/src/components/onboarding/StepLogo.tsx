@@ -54,8 +54,8 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
           <ImageIcon className="text-primary" size={24} />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Upload your logo</h2>
-        <p className="text-sm text-gray-500 mt-1">Optional — you can add it later in settings.</p>
+        <h2 className="text-xl font-bold text-gray-900">Sube tu logo</h2>
+        <p className="text-sm text-gray-500 mt-1">Opcional — puedes agregarlo después en ajustes.</p>
       </div>
 
       <div
@@ -78,8 +78,8 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
           <>
             <Upload size={28} className="text-gray-300" />
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-700">Click to upload logo</p>
-              <p className="text-xs text-gray-400">PNG, JPG up to 2MB</p>
+              <p className="text-sm font-medium text-gray-700">Toca para subir tu logo</p>
+              <p className="text-xs text-gray-400">PNG, JPG hasta 2MB</p>
             </div>
           </>
         )}
@@ -90,9 +90,9 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Back</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
         <Button onClick={onNext} loading={uploading} size="lg" className="flex-1">
-          {logoUrl ? 'Continue' : 'Skip for now'}
+          {logoUrl ? 'Continuar' : 'Saltar por ahora'}
         </Button>
       </div>
     </div>

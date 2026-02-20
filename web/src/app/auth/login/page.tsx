@@ -49,12 +49,12 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary">Amixos</h1>
-          <p className="text-gray-500 mt-1 text-sm">Welcome back. Let's get to work.</p>
+          <p className="text-gray-500 mt-1 text-sm">Bienvenido de vuelta. A darle.</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Log in to your account</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Entra a tu cuenta</h2>
 
           {/* OAuth Buttons */}
           <OAuthButtons />
@@ -62,7 +62,7 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">or continue with email</span>
+            <span className="text-xs text-gray-400">o continúa con correo</span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -87,7 +87,7 @@ export default function LoginPage() {
 
             <div className="flex justify-end">
               <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline">
-                Forgot password?
+                ¿Olvidaste tu contraseña?
               </Link>
             </div>
 
@@ -98,15 +98,15 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-              Log In
+              Entrar
             </Button>
           </form>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Don&apos;t have an account?{' '}
+          ¿No tienes cuenta?{' '}
           <Link href="/auth/register" className="text-primary font-medium hover:underline">
-            Sign up free
+            Regístrate gratis
           </Link>
         </p>
       </div>

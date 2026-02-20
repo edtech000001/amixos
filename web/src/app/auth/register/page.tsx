@@ -62,13 +62,13 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary">Amixos</h1>
-          <p className="text-gray-500 mt-1 text-sm">Build your business. Run your crew.</p>
+          <p className="text-gray-500 mt-1 text-sm">Construye tu negocio. Maneja tu equipo.</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-1">Create your account</h2>
-          <p className="text-sm text-gray-400 mb-6">30 days free. No credit card needed.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">Crea tu cuenta</h2>
+          <p className="text-sm text-gray-400 mb-6">30 días gratis. Sin tarjeta de crédito.</p>
 
           {/* OAuth Buttons */}
           <OAuthButtons mode="register" />
@@ -76,7 +76,7 @@ export default function RegisterPage() {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">or sign up with email</span>
+            <span className="text-xs text-gray-400">o regístrate con correo</span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -84,14 +84,14 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Input
-                label="First Name"
+                label="Nombre"
                 placeholder="Edvin"
                 leftIcon={<User size={16} />}
                 error={errors.firstName?.message}
                 {...register('firstName')}
               />
               <Input
-                label="Last Name"
+                label="Apellido"
                 placeholder="Ramirez"
                 error={errors.lastName?.message}
                 {...register('lastName')}
@@ -99,23 +99,23 @@ export default function RegisterPage() {
             </div>
 
             <Input
-              label="Email"
+              label="Correo electrónico"
               type="email"
-              placeholder="you@example.com"
+              placeholder="tu@correo.com"
               leftIcon={<Mail size={16} />}
               error={errors.email?.message}
               {...register('email')}
             />
             <Input
-              label="Password"
+              label="Contraseña"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="Mínimo 8 caracteres"
               leftIcon={<Lock size={16} />}
               error={errors.password?.message}
               {...register('password')}
             />
             <Input
-              label="Confirm Password"
+              label="Confirmar contraseña"
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock size={16} />}
@@ -130,22 +130,22 @@ export default function RegisterPage() {
             )}
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-              Create Account
+              Crear cuenta
             </Button>
 
             <p className="text-xs text-center text-gray-400">
-              By signing up you agree to our{' '}
-              <Link href="/terms" className="text-primary hover:underline">Terms</Link>
-              {' '}and{' '}
-              <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+              Al registrarte aceptas nuestros{' '}
+              <Link href="/terms" className="text-primary hover:underline">Términos</Link>
+              {' '}y{' '}
+              <Link href="/privacy" className="text-primary hover:underline">Política de privacidad</Link>
             </p>
           </form>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Already have an account?{' '}
+          ¿Ya tienes cuenta?{' '}
           <Link href="/auth/login" className="text-primary font-medium hover:underline">
-            Log in
+            Entra aquí
           </Link>
         </p>
       </div>

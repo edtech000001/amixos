@@ -23,7 +23,7 @@ export function OAuthButtons({ mode = 'login' }: OAuthButtonsProps) {
     setLoading(null);
   };
 
-  const label = mode === 'login' ? 'Continue with' : 'Sign up with';
+  const label = mode === 'login' ? 'Continuar con' : 'Registrarse con';
 
   return (
     <div className="flex flex-col gap-3">

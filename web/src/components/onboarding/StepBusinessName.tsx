@@ -16,7 +16,7 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
 
   const handleNext = () => {
     if (!value.trim()) {
-      setError('Business name is required');
+      setError('El nombre del negocio es requerido');
       return;
     }
     setError('');
@@ -29,13 +29,13 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
           <Building2 className="text-primary" size={24} />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">What's your business called?</h2>
-        <p className="text-sm text-gray-500 mt-1">You can always change this later.</p>
+        <h2 className="text-xl font-bold text-gray-900">¿Cómo se llama tu negocio?</h2>
+        <p className="text-sm text-gray-500 mt-1">Puedes cambiarlo después cuando quieras.</p>
       </div>
 
       <Input
         label="Business Name"
-        placeholder="e.g. Champion Built"
+        placeholder="ej. Champion Built"
         value={value}
         onChange={e => onChange(e.target.value)}
         error={error}
@@ -44,7 +44,7 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
       />
 
       <Button onClick={handleNext} fullWidth size="lg">
-        Continue
+        Continuar
       </Button>
     </div>
   );

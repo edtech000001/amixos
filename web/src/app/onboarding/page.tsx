@@ -94,8 +94,8 @@ export default function OnboardingPage() {
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between text-xs text-gray-400 mb-2">
-          <span>Setting up your business</span>
-          <span>{Math.min(step, TOTAL_STEPS)} of {TOTAL_STEPS}</span>
+          <span>Configurando tu negocio</span>
+          <span>{Math.min(step, TOTAL_STEPS)} de {TOTAL_STEPS}</span>
         </div>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
@@ -135,7 +135,7 @@ export default function OnboardingPage() {
       {/* Note */}
       {step < TOTAL_STEPS + 1 && (
         <p className="text-xs text-gray-400 mt-4 text-center">
-          You can add more businesses and change settings anytime after setup.
+          Puedes agregar más negocios y cambiar ajustes en cualquier momento.
         </p>
       )}
     </div>

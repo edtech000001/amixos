@@ -17,8 +17,8 @@ export function StepComplete() {
       <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center">
         <CheckCircle2 className="text-accent" size={36} />
       </div>
-      <h2 className="text-xl font-bold text-gray-900">You're all set!</h2>
-      <p className="text-sm text-gray-500">Setting up your dashboard...</p>
+      <h2 className="text-xl font-bold text-gray-900">¡Todo listo!</h2>
+      <p className="text-sm text-gray-500">Preparando tu panel...</p>
       <div className="flex gap-1 mt-2">
         {[0, 1, 2].map(i => (
           <div

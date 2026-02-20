@@ -36,8 +36,8 @@ export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFin
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Any add-ons for your business?</h2>
-        <p className="text-sm text-gray-500 mt-1">Select what applies — both are optional and free to try.</p>
+        <h2 className="text-xl font-bold text-gray-900">¿Extras para tu negocio?</h2>
+        <p className="text-sm text-gray-500 mt-1">Selecciona lo que aplica — ambos son opcionales y gratis.</p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -71,9 +71,9 @@ export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFin
       </div>
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Back</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
         <Button onClick={onFinish} loading={loading} size="lg" className="flex-1">
-          Create My Business 🚀
+          Crear mi negocio 🚀
         </Button>
       </div>
     </div>
