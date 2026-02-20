@@ -130,7 +130,7 @@ export default function RegisterPage() {
             )}
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-              Crear cuenta
+              Crear Cuenta
             </Button>
 
             <p className="text-xs text-center text-gray-400">

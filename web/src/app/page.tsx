@@ -7,7 +7,7 @@ export default function Home() {
         <h1 className="text-5xl font-bold mb-4">Amixos</h1>
         <p className="text-xl mb-2 opacity-90">Donde se hace la chamba.</p>
         <p className="text-lg mb-10 opacity-75">
-          Gestión de negocios hecha para tu equipo. Bilingüe. Simple. Poderosa.
+          Administración de negocios hecha para tu equipo. Bilingüe. Simple. Poderoso.
         </p>
         <div className="flex gap-4 justify-center">
           <Link
