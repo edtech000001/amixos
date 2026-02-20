@@ -5,7 +5,7 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 to-emerald-500 text-white px-6">
       <div className="text-center max-w-2xl">
         <h1 className="text-5xl font-bold mb-4">Amixos</h1>
-        <p className="text-xl mb-2 opacity-90">Donde se hace la chamba.</p>
+        <p className="text-xl mb-2 opacity-90">Donde negocios prospera.</p>
         <p className="text-lg mb-10 opacity-75">
           Administración de negocios hecha para tu equipo. Bilingüe. Simple. Poderoso.
         </p>
@@ -14,7 +14,7 @@ export default function Home() {
             href="/auth/login"
             className="bg-white text-indigo-600 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition"
           >
-            Entrar
+            Iniciar
           </Link>
           <Link
             href="/auth/register"
