@@ -1,15 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { supabase } from '../config/supabase';
 
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    businessId: string;
-    role: string;
+    email: string;
+    role?: string;
+    businessId?: string;
   };
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
@@ -17,17 +18,28 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    req.user = decoded;
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email!,
+      role: user.user_metadata?.role,
+      businessId: user.user_metadata?.activeBusinessId,
+    };
+
     next();
   } catch {
-    return res.status(401).json({ success: false, message: 'Invalid token' });
+    return res.status(401).json({ success: false, message: 'Authentication failed' });
   }
 };
 
 export const requireRole = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user?.role || !roles.includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
     next();

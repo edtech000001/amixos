@@ -1,0 +1,154 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Mail, Lock, User } from 'lucide-react';
+import { createSupabaseClient } from '@/lib/supabase';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
+
+const registerSchema = z.object({
+  firstName: z.string().min(1, 'First name required'),
+  lastName: z.string().min(1, 'Last name required'),
+  email: z.string().email('Enter a valid email'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string(),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword'],
+});
+
+type RegisterForm = z.infer<typeof registerSchema>;
+
+export default function RegisterPage() {
+  const router = useRouter();
+  const supabase = createSupabaseClient();
+  const [error, setError] = useState('');
+
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+  });
+
+  const onSubmit = async (data: RegisterForm) => {
+    setError('');
+    const { error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          first_name: data.firstName,
+          last_name: data.lastName,
+        },
+      },
+    });
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    // Redirect to onboarding to set up first business
+    router.push('/onboarding');
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-surface px-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-primary">Amixos</h1>
+          <p className="text-gray-500 mt-1 text-sm">Build your business. Run your crew.</p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">Create your account</h2>
+          <p className="text-sm text-gray-400 mb-6">30 days free. No credit card needed.</p>
+
+          {/* OAuth Buttons */}
+          <OAuthButtons mode="register" />
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-xs text-gray-400">or sign up with email</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="First Name"
+                placeholder="Edvin"
+                leftIcon={<User size={16} />}
+                error={errors.firstName?.message}
+                {...register('firstName')}
+              />
+              <Input
+                label="Last Name"
+                placeholder="Ramirez"
+                error={errors.lastName?.message}
+                {...register('lastName')}
+              />
+            </div>
+
+            <Input
+              label="Email"
+              type="email"
+              placeholder="you@example.com"
+              leftIcon={<Mail size={16} />}
+              error={errors.email?.message}
+              {...register('email')}
+            />
+            <Input
+              label="Password"
+              type="password"
+              placeholder="At least 8 characters"
+              leftIcon={<Lock size={16} />}
+              error={errors.password?.message}
+              {...register('password')}
+            />
+            <Input
+              label="Confirm Password"
+              type="password"
+              placeholder="••••••••"
+              leftIcon={<Lock size={16} />}
+              error={errors.confirmPassword?.message}
+              {...register('confirmPassword')}
+            />
+
+            {error && (
+              <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl px-4 py-3">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" loading={isSubmitting} fullWidth size="lg">
+              Create Account
+            </Button>
+
+            <p className="text-xs text-center text-gray-400">
+              By signing up you agree to our{' '}
+              <Link href="/terms" className="text-primary hover:underline">Terms</Link>
+              {' '}and{' '}
+              <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+            </p>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-gray-500 mt-6">
+          Already have an account?{' '}
+          <Link href="/auth/login" className="text-primary font-medium hover:underline">
+            Log in
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
