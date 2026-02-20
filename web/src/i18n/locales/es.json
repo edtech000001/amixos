@@ -1,10 +1,10 @@
 {
   "app": {
     "name": "Amixos",
-    "tagline": "Donde se hace la chamba."
+    "tagline": "Donde negocios prospera."
   },
   "auth": {
-    "login": "Entrar",
+    "login": "Iniciar",
     "register": "Registrarse",
     "logout": "Cerrar sesión",
     "email": "Correo",
