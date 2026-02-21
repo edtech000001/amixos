@@ -87,14 +87,14 @@ export default function RegisterPage() {
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label="Nombre"
-                placeholder="Edvin"
+                placeholder="Carlos"
                 leftIcon={<User size={16} />}
                 error={errors.firstName?.message}
                 {...register('firstName')}
               />
               <Input
                 label="Apellido"
-                placeholder="Ramirez"
+                placeholder="Mendoza"
                 error={errors.lastName?.message}
                 {...register('lastName')}
               />
