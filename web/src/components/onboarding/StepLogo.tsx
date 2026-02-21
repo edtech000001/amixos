@@ -23,7 +23,7 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      setError('Logo must be under 2MB');
+      setError('El logo debe ser menor a 2MB');
       return;
     }
 
@@ -38,7 +38,7 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
       .upload(path, file, { upsert: true });
 
     if (uploadError) {
-      setError('Upload failed. Try again.');
+      setError('Error al subir. Intenta de nuevo.');
       setUploading(false);
       return;
     }
@@ -71,7 +71,7 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
               onClick={e => { e.stopPropagation(); onChange(null); }}
               className="text-xs text-red-400 flex items-center gap-1 hover:text-red-500"
             >
-              <X size={12} /> Remove
+              <X size={12} /> Quitar
             </button>
           </>
         ) : (

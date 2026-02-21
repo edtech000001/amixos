@@ -34,8 +34,8 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
       </div>
 
       <Input
-        label="Business Name"
-        placeholder="ej. Champion Built"
+        label="Nombre del negocio"
+        placeholder="ej. Servicios Ramírez"
         value={value}
         onChange={e => onChange(e.target.value)}
         error={error}
