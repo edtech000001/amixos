@@ -53,7 +53,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   const updateStatus = async (status: string) => {
     setUpdating(true);
-    await supabase.from('invoices').update({ status }).eq('id', params.id);
+    const update: any = { status };
+    if (status === 'paid') update.paid_at = new Date().toISOString();
+    if (status === 'sent') update.sent_at = new Date().toISOString();
+    await supabase.from('invoices').update(update).eq('id', params.id);
     setInvoice(prev => prev ? { ...prev, status } : prev);
     setUpdating(false);
   };

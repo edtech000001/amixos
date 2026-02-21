@@ -59,7 +59,10 @@ export default function FacturasPage() {
   useEffect(() => { load(); }, [business]);
 
   const updateStatus = async (id: string, status: string) => {
-    await supabase.from('invoices').update({ status }).eq('id', id);
+    const update: any = { status };
+    if (status === 'paid') update.paid_at = new Date().toISOString();
+    if (status === 'sent') update.sent_at = new Date().toISOString();
+    await supabase.from('invoices').update(update).eq('id', id);
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
   };
 

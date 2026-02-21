@@ -55,10 +55,10 @@ export default function DashboardPage() {
       const [paidMonth, paidYear, pending, overdue, clients, clocked, recentInv] = await Promise.all([
         // Earnings this month
         supabase.from('invoices').select('total_amount')
-          .eq('business_id', business.id).eq('status', 'paid').gte('updated_at', startMonth),
+          .eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
         // Earnings this year
         supabase.from('invoices').select('total_amount')
-          .eq('business_id', business.id).eq('status', 'paid').gte('updated_at', startYear),
+          .eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startYear),
         // Pending invoices
         supabase.from('invoices').select('id', { count: 'exact', head: true })
           .eq('business_id', business.id).eq('status', 'sent'),
