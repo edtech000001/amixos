@@ -47,6 +47,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!business) return;
+    // Auto-mark overdue: sent invoices past their due date
+    const markOverdue = async () => {
+      await supabase.from('invoices')
+        .update({ status: 'overdue' })
+        .eq('business_id', business.id)
+        .eq('status', 'sent')
+        .lt('due_date', new Date().toISOString().split('T')[0]);
+    };
+    markOverdue();
+  }, [business]);
+
+  useEffect(() => {
+    if (!business) return;
     const load = async () => {
       const now = new Date();
       const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

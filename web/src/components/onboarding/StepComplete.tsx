@@ -2,15 +2,12 @@
 
 import { CheckCircle2 } from 'lucide-react';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export function StepComplete() {
-  const router = useRouter();
-
   useEffect(() => {
-    const t = setTimeout(() => router.push('/dashboard'), 2000);
+    const t = setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
     return () => clearTimeout(t);
-  }, [router]);
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">

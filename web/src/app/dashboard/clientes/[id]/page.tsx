@@ -1,0 +1,409 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2 } from 'lucide-react';
+import { createSupabaseClient } from '@/lib/supabase';
+import { useApp } from '@/lib/AppContext';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+
+interface FieldTemplate {
+  id: string; field_key: string; field_label: string;
+  field_type: string; field_options: string[] | null; required: boolean; sort_order: number;
+}
+
+interface Client {
+  id: string;
+  first_name: string; last_name: string;
+  company: string | null;
+  phone: string | null;
+  phone_cell: string | null; phone_office: string | null;
+  email: string | null;
+  email_office: string | null; email_home: string | null;
+  address: string | null; address_line2: string | null;
+  city: string | null; state: string | null; zip_code: string | null;
+  notes: string | null;
+  custom_fields: Record<string, string> | null;
+  created_at: string; updated_at: string;
+}
+
+interface Invoice {
+  id: string; invoice_number: string; status: string; total_amount: number; due_date: string | null; created_at: string;
+}
+
+const STATUS: Record<string, { label: string; color: string }> = {
+  draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-500' },
+  sent:     { label: 'Enviada',   color: 'bg-blue-100 text-blue-600' },
+  paid:     { label: 'Pagada',    color: 'bg-emerald-100 text-emerald-700' },
+  overdue:  { label: 'Vencida',   color: 'bg-red-100 text-red-600' },
+  cancelled:{ label: 'Cancelada', color: 'bg-gray-100 text-gray-400' },
+};
+
+const US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
+  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
+  'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
+
+function fmt(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+}
+
+function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: string; href?: string }) {
+  const content = (
+    <div className="flex items-start gap-2.5">
+      <span className="text-gray-400 mt-0.5 shrink-0">{icon}</span>
+      <div>
+        <p className="text-xs text-gray-400">{label}</p>
+        <p className="text-sm text-gray-900 font-medium">{value}</p>
+      </div>
+    </div>
+  );
+  if (href) return <a href={href} className="hover:text-primary transition-colors">{content}</a>;
+  return <div>{content}</div>;
+}
+
+export default function ClienteDetailPage({ params }: { params: { id: string } }) {
+  const supabase = createSupabaseClient();
+  const { business } = useApp();
+  const [client, setClient] = useState<Client | null>(null);
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editModal, setEditModal] = useState(false);
+  const [form, setForm] = useState({
+    first_name: '', last_name: '', company: '',
+    phone_cell: '', phone_office: '',
+    email_office: '', email_home: '',
+    address: '', address_line2: '', city: '', state: '', zip_code: '',
+    notes: '',
+  });
+  const [customVals, setCustomVals] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    if (!business) return;
+    const [{ data: c }, { data: inv }, { data: tpl }] = await Promise.all([
+      supabase.from('clients').select('*').eq('id', params.id).single(),
+      supabase.from('invoices').select('id, invoice_number, status, total_amount, due_date, created_at')
+        .eq('client_id', params.id).order('created_at', { ascending: false }),
+      supabase.from('client_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
+    ]);
+    if (c) {
+      setClient(c);
+      setForm({
+        first_name: c.first_name, last_name: c.last_name, company: c.company ?? '',
+        phone_cell: c.phone_cell ?? c.phone ?? '', phone_office: c.phone_office ?? '',
+        email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
+        address: c.address ?? '', address_line2: c.address_line2 ?? '',
+        city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
+        notes: c.notes ?? '',
+      });
+      setCustomVals(c.custom_fields ?? {});
+    }
+    setInvoices(inv ?? []);
+    setTemplates(tpl ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [params.id, business]);
+
+  const saveEdit = async () => {
+    setSaving(true);
+    const payload = {
+      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+      company: form.company.trim() || null,
+      phone_cell: form.phone_cell.trim() || null, phone_office: form.phone_office.trim() || null,
+      email_office: form.email_office.trim() || null, email_home: form.email_home.trim() || null,
+      address: form.address.trim() || null, address_line2: form.address_line2.trim() || null,
+      city: form.city.trim() || null, state: form.state.trim() || null, zip_code: form.zip_code.trim() || null,
+      notes: form.notes.trim() || null,
+      custom_fields: Object.keys(customVals).length > 0 ? customVals : null,
+    };
+    await supabase.from('clients').update(payload).eq('id', params.id);
+    setClient(prev => prev ? { ...prev, ...payload } : prev);
+    setSaving(false); setEditModal(false);
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
+    </div>
+  );
+  if (!client) return <div className="p-6 text-gray-400">Cliente no encontrado.</div>;
+
+  const totalSpent = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
+  const pendingTotal = invoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
+
+  const primaryPhone = client.phone_cell ?? client.phone;
+  const officePhone = client.phone_office;
+  const primaryEmail = client.email_office ?? client.email;
+  const homeEmail = client.email_home;
+
+  const fullAddress = [
+    client.address,
+    client.address_line2,
+    [client.city, client.state].filter(Boolean).join(', '),
+    client.zip_code,
+  ].filter(Boolean).join('\n');
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/clientes" className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <ArrowLeft size={18} className="text-gray-500"/>
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-primary text-lg font-bold">
+                {client.first_name.charAt(0)}{client.last_name.charAt(0)}
+              </span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{client.first_name} {client.last_name}</h1>
+              {client.company && (
+                <p className="text-sm text-gray-500 flex items-center gap-1">
+                  <Building2 size={13} className="text-gray-400"/> {client.company}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setEditModal(true)}>
+            <Pencil size={14} className="mr-1.5"/> Editar
+          </Button>
+          <Link href={`/dashboard/facturas/nueva?client=${params.id}`}>
+            <Button size="sm"><Plus size={14} className="mr-1.5"/> Nueva factura</Button>
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Left column */}
+        <div className="flex flex-col gap-4">
+
+          {/* Contact card */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contacto</h2>
+            <div className="flex flex-col gap-3">
+              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label="Celular" value={primaryPhone} href={`tel:${primaryPhone}`}/>}
+              {officePhone && <ContactRow icon={<Phone size={15}/>} label="Oficina" value={officePhone} href={`tel:${officePhone}`}/>}
+              {primaryEmail && <ContactRow icon={<Mail size={15}/>} label="Correo oficina" value={primaryEmail} href={`mailto:${primaryEmail}`}/>}
+              {homeEmail && <ContactRow icon={<Mail size={15}/>} label="Correo personal" value={homeEmail} href={`mailto:${homeEmail}`}/>}
+              {fullAddress && (
+                <ContactRow icon={<MapPin size={15}/>} label="Dirección" value={fullAddress}/>
+              )}
+              {!primaryPhone && !primaryEmail && !fullAddress && (
+                <p className="text-xs text-gray-400">Sin datos de contacto.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Custom fields */}
+          {templates.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Campos personalizados</h2>
+              <div className="flex flex-col gap-2.5">
+                {templates.map(tpl => {
+                  const val = client.custom_fields?.[tpl.field_key];
+                  if (!val && !tpl.required) return null;
+                  return (
+                    <div key={tpl.field_key}>
+                      <p className="text-xs text-gray-400">{tpl.field_label}</p>
+                      <p className="text-sm text-gray-900 font-medium">
+                        {tpl.field_type === 'boolean' ? (val === 'true' ? 'Sí' : 'No') : val ?? '—'}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {client.notes && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Notas</h2>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{client.notes}</p>
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Resumen</h2>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Total pagado</span>
+                <span className="font-semibold text-emerald-600">{fmt(totalSpent)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Pendiente</span>
+                <span className="font-semibold text-blue-600">{fmt(pendingTotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Facturas</span>
+                <span className="font-semibold text-gray-900">{invoices.length}</span>
+              </div>
+              <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
+                <span className="text-gray-400 text-xs">Agregado</span>
+                <span className="text-xs text-gray-500">{new Date(client.created_at).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })}</span>
+              </div>
+              {client.updated_at && client.updated_at !== client.created_at && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400 text-xs">Modificado</span>
+                  <span className="text-xs text-gray-500">{new Date(client.updated_at).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right — Invoices */}
+        <div className="md:col-span-2">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Facturas</h2>
+              <Link href={`/dashboard/facturas/nueva?client=${params.id}`} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
+                <Plus size={13}/> Nueva
+              </Link>
+            </div>
+            {invoices.length === 0 ? (
+              <div className="px-5 py-12 text-center text-gray-400">
+                <FileText size={32} className="mx-auto mb-3 opacity-30"/>
+                <p className="text-sm">Sin facturas aún.</p>
+                <Link href={`/dashboard/facturas/nueva?client=${params.id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">Crear primera factura →</Link>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {invoices.map(inv => {
+                  const st = STATUS[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-500' };
+                  return (
+                    <Link key={inv.id} href={`/dashboard/facturas/${inv.id}`}
+                      className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(inv.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {inv.due_date && ` · Vence ${new Date(inv.due_date).toLocaleDateString('es-MX', { day:'numeric', month:'short' })}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${st.color}`}>{st.label}</span>
+                        <span className="text-sm font-bold text-gray-900">{fmt(inv.total_amount)}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      <Modal open={editModal} onClose={() => setEditModal(false)} title="Editar cliente" size="lg">
+        <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
+
+          <section>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Información básica</p>
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Nombre *" value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}/>
+                <Input label="Apellido" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}/>
+              </div>
+              <Input label="Empresa" value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} leftIcon={<Building2 size={15}/>}/>
+            </div>
+          </section>
+
+          <section>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Celular" value={form.phone_cell} onChange={e => setForm(f => ({ ...f, phone_cell: e.target.value }))} leftIcon={<Phone size={15}/>}/>
+              <Input label="Oficina" value={form.phone_office} onChange={e => setForm(f => ({ ...f, phone_office: e.target.value }))} leftIcon={<Phone size={15}/>}/>
+            </div>
+          </section>
+
+          <section>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Correos</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Correo oficina" type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+              <Input label="Correo personal" type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+            </div>
+          </section>
+
+          <section>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dirección</p>
+            <div className="flex flex-col gap-3">
+              <Input label="Calle y número" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
+              <Input label="Apartamento / Suite" value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
+              <div className="grid grid-cols-[1fr_120px_90px] gap-3">
+                <Input label="Ciudad" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700">Estado</label>
+                  <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    <option value="">—</option>
+                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <Input label="ZIP" value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
+              </div>
+            </div>
+          </section>
+
+          {templates.length > 0 && (
+            <section>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Campos personalizados</p>
+              <div className="grid grid-cols-2 gap-3">
+                {templates.map(tpl => (
+                  <div key={tpl.field_key} className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">{tpl.field_label}</label>
+                    {tpl.field_type === 'select' && tpl.field_options ? (
+                      <select value={customVals[tpl.field_key] ?? ''}
+                        onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                        <option value="">—</option>
+                        {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : tpl.field_type === 'boolean' ? (
+                      <div className="flex items-center gap-3 h-[42px]">
+                        <button type="button" onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: v[tpl.field_key] === 'true' ? 'false' : 'true' }))}
+                          className={`relative w-11 h-6 rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
+                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
+                        </button>
+                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? 'Sí' : 'No'}</span>
+                      </div>
+                    ) : (
+                      <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
+                        value={customVals[tpl.field_key] ?? ''}
+                        onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"/>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Notas</p>
+            <textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"/>
+          </section>
+
+          <div className="flex gap-3 pt-1 pb-2">
+            <Button variant="secondary" onClick={() => setEditModal(false)} fullWidth>Cancelar</Button>
+            <Button onClick={saveEdit} loading={saving} fullWidth>Guardar cambios</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

@@ -41,7 +41,7 @@ export default function EmpleadosPage() {
   const { business } = useApp();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
-  const [tab, setTab] = useState<'empleados' | 'horas'>('empleados');
+  const [tab, setTab] = useState<'empleados' | 'horas' | 'nomina'>('empleados');
   const [empModal, setEmpModal] = useState<'add' | 'edit' | null>(null);
   const [tsModal, setTsModal] = useState(false);
   const [selEmp, setSelEmp] = useState<Employee | null>(null);
@@ -112,6 +112,26 @@ export default function EmpleadosPage() {
     return timesheets.filter(t => new Date(t.work_date) >= start).reduce((s, t) => s + (t.hours_worked ?? 0), 0);
   })();
 
+  // Payroll computation for nomina tab
+  const payrollRows = (() => {
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthSheets = timesheets.filter(t => new Date(t.work_date) >= startMonth);
+    const byWorker: Record<string, { hours: number; emp?: typeof employees[0] }> = {};
+    monthSheets.forEach(t => {
+      const key = t.worker_name ?? 'Desconocido';
+      if (!byWorker[key]) byWorker[key] = { hours: 0, emp: employees.find(e => e.id === t.employee_id) };
+      byWorker[key].hours += t.hours_worked ?? 0;
+    });
+    return Object.entries(byWorker);
+  })();
+  const payrollMonth = new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+  const payrollTotal = payrollRows.reduce((s, [, { hours, emp }]) => {
+    const rate = emp?.pay_rate ?? 0;
+    const pt = emp?.pay_type ?? 'hourly';
+    return s + (pt === 'hourly' ? hours * rate : pt === 'daily' ? Math.ceil(hours / 8) * rate : rate);
+  }, 0);
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -132,10 +152,10 @@ export default function EmpleadosPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
-        {(['empleados', 'horas'] as const).map(t => (
+        {(['empleados', 'horas', 'nomina'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {t === 'empleados' ? 'Equipo' : 'Horas'}
+            {t === 'empleados' ? 'Equipo' : t === 'horas' ? 'Horas' : 'Nómina'}
           </button>
         ))}
       </div>
@@ -179,7 +199,7 @@ export default function EmpleadosPage() {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'horas' ? (
         // ── Timesheets ─────────────────────────────────────────────────────────
         timesheets.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
@@ -201,6 +221,40 @@ export default function EmpleadosPage() {
                 <span className="text-gray-400 text-xs truncate">{t.job_description ?? '—'}</span>
               </div>
             ))}
+          </div>
+        )
+      ) : (
+        // ── Payroll summary ──────────────────────────────────────────────────
+        payrollRows.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">
+            <DollarSign size={40} className="mx-auto mb-3 opacity-30"/>
+            <p className="text-sm">Sin registros de horas este mes.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-50 text-xs font-semibold text-gray-400">
+              Resumen de nómina — {payrollMonth}
+            </div>
+            <div className="grid grid-cols-[1fr_80px_90px_110px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50">
+              <span>Empleado</span><span className="text-center">Horas</span><span className="text-center">Tarifa</span><span className="text-right">Total</span>
+            </div>
+            {payrollRows.map(([name, { hours, emp }], i) => {
+              const rate = emp?.pay_rate ?? 0;
+              const payType = emp?.pay_type ?? 'hourly';
+              const pay = payType === 'hourly' ? hours * rate : payType === 'daily' ? Math.ceil(hours / 8) * rate : rate;
+              return (
+                <div key={name} className={`grid grid-cols-[1fr_80px_90px_110px] items-center px-5 py-3.5 text-sm ${i < payrollRows.length-1 ? 'border-b border-gray-50' : ''}`}>
+                  <span className="font-medium text-gray-900 truncate">{name}</span>
+                  <span className="text-center text-gray-600">{hours}</span>
+                  <span className="text-center text-gray-400 text-xs">${rate.toFixed(2)}/{payType === 'hourly' ? 'hr' : payType === 'daily' ? 'día' : 'mes'}</span>
+                  <span className="text-right font-bold text-gray-900">${pay.toFixed(2)}</span>
+                </div>
+              );
+            })}
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-between text-sm font-bold">
+              <span className="text-gray-700">Total estimado del mes</span>
+              <span className="text-primary">${payrollTotal.toFixed(2)}</span>
+            </div>
           </div>
         )
       )}

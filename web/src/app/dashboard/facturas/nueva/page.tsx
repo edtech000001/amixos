@@ -28,7 +28,9 @@ export default function NuevaFacturaPage() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [clients, setClients] = useState<Client[]>([]);
-  const [clientId, setClientId] = useState('');
+  // Pre-select client from query param (e.g. coming from client profile)
+  const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') ?? '' : '';
+  const [clientId, setClientId] = useState(initialClient);
   const [invoiceNumber, setInvoiceNumber] = useState(genInvoiceNumber());
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
