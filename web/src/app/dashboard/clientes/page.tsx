@@ -622,7 +622,7 @@ export default function ClientesPage() {
                   <div key={field.key} className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
                       {field.label}
-                      {field.required && <span className="text-red-400">*</span>}
+                      {'required' in field && field.required && <span className="text-red-400">*</span>}
                       {'isCustom' in field && field.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
                     </label>
                     <select
