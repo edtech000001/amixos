@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2 } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +31,17 @@ interface Client {
   created_at: string; updated_at: string;
 }
 
+interface ClientContact {
+  id: string;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  is_primary: boolean;
+  created_at: string;
+}
+
 interface Invoice {
   id: string; invoice_number: string; status: string; total_amount: number; due_date: string | null; created_at: string;
 }
@@ -48,6 +59,8 @@ const US_STATES = [
   'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
+
+const EMPTY_CONTACT = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false };
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -73,7 +86,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const [client, setClient] = useState<Client | null>(null);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Client edit modal
   const [editModal, setEditModal] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', company: '',
@@ -85,13 +101,20 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Contact modal
+  const [contactModal, setContactModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
+  const [savingContact, setSavingContact] = useState(false);
+
   const load = async () => {
     if (!business) return;
-    const [{ data: c }, { data: inv }, { data: tpl }] = await Promise.all([
+    const [{ data: c }, { data: inv }, { data: tpl }, { data: cts }] = await Promise.all([
       supabase.from('clients').select('*').eq('id', params.id).single(),
       supabase.from('invoices').select('id, invoice_number, status, total_amount, due_date, created_at')
         .eq('client_id', params.id).order('created_at', { ascending: false }),
       supabase.from('client_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
+      supabase.from('client_contacts').select('*').eq('client_id', params.id).order('is_primary', { ascending: false }),
     ]);
     if (c) {
       setClient(c);
@@ -107,6 +130,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     }
     setInvoices(inv ?? []);
     setTemplates(tpl ?? []);
+    setContacts(cts ?? []);
     setLoading(false);
   };
 
@@ -127,6 +151,53 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     await supabase.from('clients').update(payload).eq('id', params.id);
     setClient(prev => prev ? { ...prev, ...payload } : prev);
     setSaving(false); setEditModal(false);
+  };
+
+  const openAddContact = () => {
+    setEditingContact(null);
+    setContactForm(EMPTY_CONTACT);
+    setContactModal(true);
+  };
+
+  const openEditContact = (ct: ClientContact) => {
+    setEditingContact(ct);
+    setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary });
+    setContactModal(true);
+  };
+
+  const saveContact = async () => {
+    if (!contactForm.name.trim()) return;
+    setSavingContact(true);
+    const payload = {
+      name: contactForm.name.trim(),
+      role: contactForm.role.trim() || null,
+      phone: contactForm.phone.trim() || null,
+      email: contactForm.email.trim() || null,
+      notes: contactForm.notes.trim() || null,
+      is_primary: contactForm.is_primary,
+    };
+
+    if (contactForm.is_primary) {
+      // Remove primary flag from others first
+      await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', params.id);
+    }
+
+    if (editingContact) {
+      await supabase.from('client_contacts').update(payload).eq('id', editingContact.id);
+    } else {
+      await supabase.from('client_contacts').insert({ ...payload, client_id: params.id, business_id: business!.id });
+    }
+
+    const { data } = await supabase.from('client_contacts').select('*').eq('client_id', params.id).order('is_primary', { ascending: false });
+    setContacts(data ?? []);
+    setSavingContact(false);
+    setContactModal(false);
+  };
+
+  const removeContact = async (id: string) => {
+    if (!confirm('¿Eliminar este contacto?')) return;
+    await supabase.from('client_contacts').delete().eq('id', id);
+    setContacts(prev => prev.filter(c => c.id !== id));
   };
 
   if (loading) return (
@@ -204,6 +275,59 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                 <p className="text-xs text-gray-400">Sin datos de contacto.</p>
               )}
             </div>
+          </div>
+
+          {/* Contacts (people) card */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Personas de contacto</h2>
+              <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                <UserPlus size={14} className="text-gray-400"/>
+              </button>
+            </div>
+            {contacts.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-xs text-gray-400">Sin contactos agregados.</p>
+                <button onClick={openAddContact} className="text-xs text-primary font-medium hover:underline mt-1">
+                  + Agregar contacto
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y divide-gray-50">
+                {contacts.map(ct => (
+                  <div key={ct.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{ct.name}</p>
+                          {ct.is_primary && <Star size={11} className="text-amber-400 fill-amber-400 shrink-0"/>}
+                        </div>
+                        {ct.role && <p className="text-xs text-gray-400">{ct.role}</p>}
+                        {ct.phone && (
+                          <a href={`tel:${ct.phone}`} className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
+                            <Phone size={11}/> {ct.phone}
+                          </a>
+                        )}
+                        {ct.email && (
+                          <a href={`mailto:${ct.email}`} className="text-xs text-primary hover:underline flex items-center gap-1">
+                            <Mail size={11}/> {ct.email}
+                          </a>
+                        )}
+                        {ct.notes && <p className="text-xs text-gray-400 mt-1 italic">{ct.notes}</p>}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => openEditContact(ct)} className="p-1 rounded-lg hover:bg-blue-50 transition-colors">
+                          <Pencil size={12} className="text-blue-400"/>
+                        </button>
+                        <button onClick={() => removeContact(ct.id)} className="p-1 rounded-lg hover:bg-red-50 transition-colors">
+                          <Trash2 size={12} className="text-red-400"/>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Custom fields */}
@@ -307,7 +431,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* Edit Modal */}
+      {/* ── Edit client modal ─────────────────────────────────────────────── */}
       <Modal open={editModal} onClose={() => setEditModal(false)} title="Editar cliente" size="lg">
         <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
 
@@ -343,12 +467,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             <div className="flex flex-col gap-3">
               <Input label="Calle y número" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
               <Input label="Apartamento / Suite" value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
-              <div className="grid grid-cols-[1fr_120px_90px] gap-3">
+              <div className="grid grid-cols-[1fr_100px_110px] gap-3">
                 <Input label="Ciudad" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">Estado</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -368,14 +492,15 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                     {tpl.field_type === 'select' && tpl.field_options ? (
                       <select value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                         <option value="">—</option>
                         {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
                     ) : tpl.field_type === 'boolean' ? (
                       <div className="flex items-center gap-3 h-[42px]">
                         <button type="button" onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: v[tpl.field_key] === 'true' ? 'false' : 'true' }))}
-                          className={`relative w-11 h-6 rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
+                          style={{ width: '44px', height: '24px', flexShrink: 0 }}
+                          className={`relative rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
                           <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
                         </button>
                         <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? 'Sí' : 'No'}</span>
@@ -384,7 +509,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
                         value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"/>
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent"/>
                     )}
                   </div>
                 ))}
@@ -395,12 +520,58 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Notas</p>
             <textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"/>
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
 
           <div className="flex gap-3 pt-1 pb-2">
             <Button variant="secondary" onClick={() => setEditModal(false)} fullWidth>Cancelar</Button>
             <Button onClick={saveEdit} loading={saving} fullWidth>Guardar cambios</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Add / Edit contact modal ──────────────────────────────────────── */}
+      <Modal open={contactModal} onClose={() => setContactModal(false)}
+        title={editingContact ? 'Editar contacto' : 'Nuevo contacto'} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label="Nombre *" placeholder="María López"
+            value={contactForm.name}
+            onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
+          <Input label="Cargo / Rol" placeholder="Dueño, Asistente, Encargado..."
+            value={contactForm.role}
+            onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Teléfono" type="tel" placeholder="555-1234"
+              value={contactForm.phone}
+              onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))}
+              leftIcon={<Phone size={15}/>}/>
+            <Input label="Correo" type="email" placeholder="maria@empresa.com"
+              value={contactForm.email}
+              onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
+              leftIcon={<Mail size={15}/>}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">Notas</label>
+            <textarea rows={2} placeholder="Ej. Disponible solo por las mañanas..."
+              value={contactForm.notes}
+              onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setContactForm(f => ({ ...f, is_primary: !f.is_primary }))}
+              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+              className={`relative rounded-full transition-colors ${contactForm.is_primary ? 'bg-amber-400' : 'bg-gray-200'}`}>
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${contactForm.is_primary ? 'translate-x-6' : 'translate-x-1'}`}/>
+            </button>
+            <span className="text-sm text-gray-700 select-none">Contacto principal <Star size={12} className="inline text-amber-400 fill-amber-400 mb-0.5"/></span>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" onClick={() => setContactModal(false)} fullWidth>Cancelar</Button>
+            <Button onClick={saveContact} loading={savingContact} disabled={!contactForm.name.trim()} fullWidth>
+              {editingContact ? 'Guardar cambios' : 'Agregar contacto'}
+            </Button>
           </div>
         </div>
       </Modal>
