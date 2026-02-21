@@ -58,24 +58,28 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
+    console.log('[Amixos] 1. Form submitted — email:', data.email);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('[Amixos] 2. Calling supabase.auth.signInWithPassword...');
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
+      console.log('[Amixos] 3. Supabase response — error:', error, '| user:', authData?.user?.id ?? 'null');
 
       if (error) {
+        console.log('[Amixos] 4. Auth error:', error.message, '| status:', error.status);
         setError(getErrorMessage(error.message));
         return;
       }
 
-      // router.refresh() is required with @supabase/ssr + App Router:
-      // it forces the middleware to re-read the session cookie before navigation.
-      // Without it the server sees no session and bounces back to login.
+      console.log('[Amixos] 4. Login success — calling router.refresh()');
       router.refresh();
+      console.log('[Amixos] 5. router.refresh() done — calling router.push(/dashboard)');
       router.push('/dashboard');
+      console.log('[Amixos] 6. router.push called');
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('[Amixos] CAUGHT EXCEPTION:', err);
       setError('Error de conexión. Verifica tu internet e intenta de nuevo.');
     }
   };
