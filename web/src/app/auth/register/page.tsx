@@ -15,13 +15,13 @@ import { Input } from '@/components/ui/Input';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 const registerSchema = z.object({
-  firstName: z.string().min(1, 'First name required'),
-  lastName: z.string().min(1, 'Last name required'),
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  firstName: z.string().min(1, 'Nombre requerido'),
+  lastName: z.string().min(1, 'Apellido requerido'),
+  email: z.string().email('Ingresa un correo válido'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
   confirmPassword: z.string(),
 }).refine((d) => d.password === d.confirmPassword, {
-  message: "Passwords don't match",
+  message: 'Las contraseñas no coinciden',
   path: ['confirmPassword'],
 });
 
@@ -50,8 +50,17 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setError(error.message);
+      if (error.message.includes('already registered') || error.message.includes('already been registered')) {
+        setError('Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?');
+      } else {
+        setError('Algo salió mal. Intenta de nuevo.');
+      }
       return;
+    }
+
+    // Supabase sends a confirmation email — let user know
+    if (true) {
+      setError('');
     }
 
     // Redirect to onboarding to set up first business
@@ -101,7 +110,7 @@ export default function RegisterPage() {
             </div>
 
             <Input
-              label="Correo electrónico"
+              label="Correo"
               type="email"
               placeholder="tu@correo.com"
               leftIcon={<Mail size={16} />}
@@ -130,6 +139,10 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
+
+            <div className="bg-blue-50 border border-blue-100 text-blue-600 text-xs rounded-xl px-4 py-3">
+              📧 Al registrarte recibirás un correo de verificación. Revísalo antes de iniciar sesión.
+            </div>
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
               Crear Cuenta

@@ -15,11 +15,28 @@ import { Input } from '@/components/ui/Input';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: z.string().email('Ingresa un correo válido'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
+
+// Map Supabase error messages to Spanish
+const getErrorMessage = (msg: string): string => {
+  if (msg.includes('Email not confirmed') || msg.includes('email not confirmed')) {
+    return 'Correo no está verificado. Revisa tu correo 📧';
+  }
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+    return 'Correo o contraseña incorrectos. Intenta de nuevo.';
+  }
+  if (msg.includes('Too many requests')) {
+    return 'Demasiados intentos. Espera un momento e intenta de nuevo.';
+  }
+  if (msg.includes('User not found')) {
+    return 'No existe una cuenta con ese correo.';
+  }
+  return 'Algo salió mal. Intenta de nuevo.';
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -38,7 +55,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError(getErrorMessage(error.message));
       return;
     }
 
@@ -71,15 +88,15 @@ export default function LoginPage() {
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <Input
-              label="Email"
+              label="Correo"
               type="email"
-              placeholder="you@example.com"
+              placeholder="tu@correo.com"
               leftIcon={<Mail size={16} />}
               error={errors.email?.message}
               {...register('email')}
             />
             <Input
-              label="Password"
+              label="Contraseña"
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock size={16} />}
@@ -100,7 +117,7 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-              Entrar
+              Iniciar Sesión
             </Button>
           </form>
         </div>
