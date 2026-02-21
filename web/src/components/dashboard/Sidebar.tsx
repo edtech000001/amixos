@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, Clock, Calendar,
-  Package, Settings, LogOut, ChevronLeft, Menu, X, Briefcase,
+  Package, Settings, LogOut, ChevronLeft, Menu, X, Briefcase, ClipboardList,
 } from 'lucide-react';
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -14,6 +14,7 @@ import { useApp } from '@/lib/AppContext';
 const NAV = [
   { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/trabajos', label: 'Trabajos', icon: Briefcase },
+  { href: '/dashboard/cotizaciones', label: 'Cotizaciones', icon: ClipboardList },
   { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
   { href: '/dashboard/facturas', label: 'Facturas', icon: FileText },
   { href: '/dashboard/empleados', label: 'Empleados', icon: Clock },
