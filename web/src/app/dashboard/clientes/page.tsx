@@ -756,7 +756,8 @@ export default function ClientesPage() {
               role="switch"
               aria-checked={tplForm.required}
               onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${
+              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+              className={`relative rounded-full transition-colors ${
                 tplForm.required ? 'bg-primary' : 'bg-gray-200'
               }`}>
               <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
@@ -809,7 +810,8 @@ export default function ClientesPage() {
               role="switch"
               aria-checked={tplForm.required}
               onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              className={`relative w-11 h-6 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${
+              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+              className={`relative rounded-full transition-colors ${
                 tplForm.required ? 'bg-primary' : 'bg-gray-200'
               }`}>
               <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
