@@ -514,7 +514,7 @@ export default function ClientesPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">Estado</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -538,7 +538,7 @@ export default function ClientesPage() {
                     {tpl.field_type === 'select' && tpl.field_options ? (
                       <select value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                         <option value="">—</option>
                         {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -554,7 +554,7 @@ export default function ClientesPage() {
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
                         value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"/>
+                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent"/>
                     )}
                   </div>
                 ))}
@@ -567,7 +567,7 @@ export default function ClientesPage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Notas</p>
             <textarea rows={3} placeholder="Notas internas sobre este cliente..." value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"/>
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
@@ -628,7 +628,7 @@ export default function ClientesPage() {
                     <select
                       value={colMap[field.key] ?? ''}
                       onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       <option value="">— No importar —</option>
                       {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
@@ -774,7 +774,7 @@ export default function ClientesPage() {
             <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -787,7 +787,7 @@ export default function ClientesPage() {
               <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
 
@@ -829,7 +829,7 @@ export default function ClientesPage() {
             <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -842,7 +842,7 @@ export default function ClientesPage() {
               <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
 
