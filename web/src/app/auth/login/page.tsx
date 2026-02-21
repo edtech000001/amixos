@@ -58,17 +58,26 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
-    if (error) {
-      setError(getErrorMessage(error.message));
-      return;
+      if (error) {
+        setError(getErrorMessage(error.message));
+        return;
+      }
+
+      // router.refresh() is required with @supabase/ssr + App Router:
+      // it forces the middleware to re-read the session cookie before navigation.
+      // Without it the server sees no session and bounces back to login.
+      router.refresh();
+      router.push('/dashboard');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Error de conexión. Verifica tu internet e intenta de nuevo.');
     }
-
-    router.push('/dashboard');
   };
 
   return (

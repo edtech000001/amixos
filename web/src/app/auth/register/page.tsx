@@ -64,6 +64,7 @@ export default function RegisterPage() {
     }
 
     // Redirect to onboarding to set up first business
+    router.refresh();
     router.push('/onboarding');
   };
 
