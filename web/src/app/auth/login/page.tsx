@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -39,7 +38,6 @@ const getErrorMessage = (msg: string): string => {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const supabase = createSupabaseClient();
 
   // Check for errors passed via URL (e.g. from auth callback)
@@ -58,27 +56,21 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
-    console.log('[Amixos] 1. Form submitted — email:', data.email);
     try {
-      console.log('[Amixos] 2. Calling supabase.auth.signInWithPassword...');
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
-      console.log('[Amixos] 3. Supabase response — error:', error, '| user:', authData?.user?.id ?? 'null');
 
       if (error) {
-        console.log('[Amixos] 4. Auth error:', error.message, '| status:', error.status);
         setError(getErrorMessage(error.message));
         return;
       }
 
-      console.log('[Amixos] 4. Login success — hard redirecting to /dashboard');
-      // Hard redirect: forces full page reload so browser commits session cookies
-      // before the dashboard tries to read them. Soft router.push() loses the session.
+      // Hard redirect so session is fully committed to localStorage before dashboard loads
       window.location.href = '/dashboard';
     } catch (err) {
-      console.error('[Amixos] CAUGHT EXCEPTION:', err);
+      console.error('Login error:', err);
       setError('Error de conexión. Verifica tu internet e intenta de nuevo.');
     }
   };
