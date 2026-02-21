@@ -41,7 +41,16 @@ const getErrorMessage = (msg: string): string => {
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const [error, setError] = useState('');
+
+  // Check for errors passed via URL (e.g. from auth callback)
+  const searchParams = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search)
+    : null;
+  const urlError = searchParams?.get('error');
+
+  const [error, setError] = useState(
+    urlError ? 'Algo salió mal con la verificación. Intenta iniciar sesión o registrarte de nuevo.' : ''
+  );
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
