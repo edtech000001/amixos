@@ -32,7 +32,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: Props) {
             <X size={16} className="text-gray-500" />
           </button>
         </div>
-        <div className="overflow-y-auto p-6">
+        <div className="overflow-y-auto py-6 px-7">
           {children}
         </div>
       </div>
