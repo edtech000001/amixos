@@ -59,6 +59,24 @@ const US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
+const STATE_NAME_TO_ABBR: Record<string, string> = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+  'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+  'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+  'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM',
+  'new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+  'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+};
+const normalizeState = (val: string) => {
+  const t = val.trim();
+  if (t.length === 2) return t.toUpperCase();
+  return STATE_NAME_TO_ABBR[t.toLowerCase()] ?? t;
+};
+
 function displayPhone(c: Client) {
   return c.phone_cell ?? c.phone ?? null;
 }
@@ -185,6 +203,12 @@ export default function ClientesPage() {
     { key: 'notes',        label: 'Notas' },
   ];
 
+  // Includes custom field templates so the mapper shows them too
+  const allImportFields = [
+    ...CLIENT_FIELDS,
+    ...templates.map(t => ({ key: `custom:${t.field_key}`, label: t.field_label, isCustom: true })),
+  ];
+
   const handleFileSelect = (file: File) => {
     Papa.parse<Record<string, string>>(file, {
       header: true,
@@ -193,12 +217,12 @@ export default function ClientesPage() {
         const headers = result.meta.fields ?? [];
         setCsvHeaders(headers);
         setCsvRows(result.data);
-        // Auto-map columns with similar names
+        // Auto-map columns with similar names (standard + custom fields)
         const auto: Record<string, string> = {};
         const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
-        CLIENT_FIELDS.forEach(field => {
+        allImportFields.forEach(field => {
           const fNorm = normalize(field.label);
-          const fKey = normalize(field.key);
+          const fKey = normalize(field.key.replace('custom:', ''));
           const match = headers.find(h => {
             const hNorm = normalize(h);
             return hNorm === fKey || hNorm === fNorm ||
@@ -218,12 +242,26 @@ export default function ClientesPage() {
     const batch: any[] = [];
     for (const row of csvRows) {
       const entry: any = { business_id: business!.id };
+      const customFields: Record<string, string> = {};
+
       CLIENT_FIELDS.forEach(field => {
         const col = colMap[field.key];
         if (col && row[col] !== undefined) {
-          entry[field.key] = row[col].trim() || null;
+          let val: string | null = row[col].trim() || null;
+          if (field.key === 'state' && val) val = normalizeState(val);
+          entry[field.key] = val;
         }
       });
+
+      templates.forEach(tpl => {
+        const col = colMap[`custom:${tpl.field_key}`];
+        if (col && row[col] !== undefined) {
+          const val = row[col].trim();
+          if (val) customFields[tpl.field_key] = val;
+        }
+      });
+
+      if (Object.keys(customFields).length > 0) entry.custom_fields = customFields;
       if (!entry.first_name) { errors++; continue; }
       batch.push(entry);
     }
@@ -240,8 +278,10 @@ export default function ClientesPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = ['Nombre', 'Apellido', 'Empresa', 'Celular', 'Telefono oficina', 'Correo oficina', 'Correo personal', 'Direccion', 'Ciudad', 'Estado', 'Codigo postal', 'Notas'];
-    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', 'Cliente frecuente'];
+    const headers = ['Nombre', 'Apellido', 'Empresa', 'Celular', 'Telefono oficina', 'Correo oficina', 'Correo personal', 'Direccion', 'Ciudad', 'Estado', 'Codigo postal', 'Notas',
+      ...templates.map(t => t.field_label)];
+    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', 'Cliente frecuente',
+      ...templates.map(() => '')];
     const csv = [headers.join(','), example.join(',')].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -578,10 +618,12 @@ export default function ClientesPage() {
                 Archivo: <span className="font-medium text-gray-900">{csvRows.length} filas detectadas</span>. Asigna cada campo de Amixos a la columna de tu archivo.
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
-                {CLIENT_FIELDS.map(field => (
+                {allImportFields.map(field => (
                   <div key={field.key} className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-gray-600">
-                      {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
+                    <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      {field.label}
+                      {field.required && <span className="text-red-400">*</span>}
+                      {'isCustom' in field && field.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
                     </label>
                     <select
                       value={colMap[field.key] ?? ''}
@@ -617,7 +659,7 @@ export default function ClientesPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50">
                     <tr>
-                      {CLIENT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                      {allImportFields.filter(f => colMap[f.key]).map(f => (
                         <th key={f.key} className="text-left px-3 py-2 font-semibold text-gray-500 whitespace-nowrap">{f.label}</th>
                       ))}
                     </tr>
@@ -625,7 +667,7 @@ export default function ClientesPage() {
                   <tbody className="divide-y divide-gray-50">
                     {csvRows.slice(0, 5).map((row, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        {CLIENT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                        {allImportFields.filter(f => colMap[f.key]).map(f => (
                           <td key={f.key} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[120px] truncate">
                             {row[colMap[f.key]] || <span className="text-gray-300">—</span>}
                           </td>
