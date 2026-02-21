@@ -1,8 +1,10 @@
--- Migration 004: Drop old recursive business_members policy (correct name this time)
--- Migration 002 used wrong names — the actual policy from 001 is below
+-- Migration 004: Drop ALL recursive policies (correct names from 001_initial_schema.sql)
 
--- Drop the recursive policy (exact name from 001_initial_schema.sql)
+-- Drop the recursive self-referencing policy on business_members
 drop policy if exists "Owners and managers can manage members" on public.business_members;
+
+-- Drop the businesses policy that references business_members (causes recursion on SELECT)
+drop policy if exists "Members can view their business" on public.businesses;
 
 -- Also clean up any conflicting policies from migration 002 (in case they were created)
 drop policy if exists "Owner can manage all members of their business" on public.business_members;
