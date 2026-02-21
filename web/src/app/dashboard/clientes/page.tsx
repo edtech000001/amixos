@@ -204,7 +204,7 @@ export default function ClientesPage() {
   ];
 
   // Includes custom field templates so the mapper shows them too
-  const allImportFields = [
+  const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean }[] = [
     ...CLIENT_FIELDS,
     ...templates.map(t => ({ key: `custom:${t.field_key}`, label: t.field_label, isCustom: true })),
   ];
@@ -622,8 +622,8 @@ export default function ClientesPage() {
                   <div key={field.key} className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
                       {field.label}
-                      {'required' in field && field.required && <span className="text-red-400">*</span>}
-                      {'isCustom' in field && field.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
+                      {field.required && <span className="text-red-400">*</span>}
+                      {field.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
                     </label>
                     <select
                       value={colMap[field.key] ?? ''}
