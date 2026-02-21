@@ -13,16 +13,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/auth/login');
+    const init = async () => {
+      // getSession() reads from localStorage — instant, no network call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = '/auth/login';
         return;
       }
-      setUser(user);
+      setUser(session.user);
       setLoading(false);
     };
-    getUser();
+    init();
   }, []);
 
   const handleLogout = async () => {

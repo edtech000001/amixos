@@ -48,7 +48,8 @@ export default function OnboardingPage() {
   const finish = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error('Not authenticated');
 
       // Create the business
