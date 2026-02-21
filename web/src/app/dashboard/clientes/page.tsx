@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User } from 'lucide-react';
+import Papa from 'papaparse';
+import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -158,6 +159,102 @@ export default function ClientesPage() {
     ].filter(Boolean).join(' ').toLowerCase().includes(q);
   });
 
+  // ── Import state ──────────────────────────────────────────────────────────
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importModal, setImportModal] = useState(false);
+  const [importStep, setImportStep] = useState<'upload' | 'map' | 'preview' | 'done'>('upload');
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
+  const [colMap, setColMap] = useState<Record<string, string>>({});
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState({ success: 0, errors: 0 });
+
+  // Fields available for mapping
+  const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [
+    { key: 'first_name',   label: 'Nombre',            required: true },
+    { key: 'last_name',    label: 'Apellido' },
+    { key: 'company',      label: 'Empresa' },
+    { key: 'phone_cell',   label: 'Celular' },
+    { key: 'phone_office', label: 'Teléfono oficina' },
+    { key: 'email_office', label: 'Correo oficina' },
+    { key: 'email_home',   label: 'Correo personal' },
+    { key: 'address',      label: 'Dirección' },
+    { key: 'city',         label: 'Ciudad' },
+    { key: 'state',        label: 'Estado' },
+    { key: 'zip_code',     label: 'Código postal' },
+    { key: 'notes',        label: 'Notas' },
+  ];
+
+  const handleFileSelect = (file: File) => {
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        const headers = result.meta.fields ?? [];
+        setCsvHeaders(headers);
+        setCsvRows(result.data);
+        // Auto-map columns with similar names
+        const auto: Record<string, string> = {};
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+        CLIENT_FIELDS.forEach(field => {
+          const fNorm = normalize(field.label);
+          const fKey = normalize(field.key);
+          const match = headers.find(h => {
+            const hNorm = normalize(h);
+            return hNorm === fKey || hNorm === fNorm ||
+              hNorm.includes(fKey) || fKey.includes(hNorm);
+          });
+          if (match) auto[field.key] = match;
+        });
+        setColMap(auto);
+        setImportStep('map');
+      },
+    });
+  };
+
+  const runImport = async () => {
+    setImporting(true);
+    let success = 0; let errors = 0;
+    const batch: any[] = [];
+    for (const row of csvRows) {
+      const entry: any = { business_id: business!.id };
+      CLIENT_FIELDS.forEach(field => {
+        const col = colMap[field.key];
+        if (col && row[col] !== undefined) {
+          entry[field.key] = row[col].trim() || null;
+        }
+      });
+      if (!entry.first_name) { errors++; continue; }
+      batch.push(entry);
+    }
+    // Insert in batches of 50
+    for (let i = 0; i < batch.length; i += 50) {
+      const { error } = await supabase.from('clients').insert(batch.slice(i, i + 50));
+      if (error) errors += Math.min(50, batch.length - i);
+      else success += Math.min(50, batch.length - i);
+    }
+    setImportResult({ success, errors });
+    await load();
+    setImporting(false);
+    setImportStep('done');
+  };
+
+  const downloadTemplate = () => {
+    const headers = ['Nombre', 'Apellido', 'Empresa', 'Celular', 'Telefono oficina', 'Correo oficina', 'Correo personal', 'Direccion', 'Ciudad', 'Estado', 'Codigo postal', 'Notas'];
+    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', 'Cliente frecuente'];
+    const csv = [headers.join(','), example.join(',')].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'plantilla_clientes.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetImport = () => {
+    setImportStep('upload'); setCsvHeaders([]); setCsvRows([]); setColMap({});
+    setImportResult({ success: 0, errors: 0 }); setImportModal(false);
+  };
+
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -166,9 +263,14 @@ export default function ClientesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
           <p className="text-sm text-gray-500 mt-0.5">{clients.length} en total</p>
         </div>
-        <Button onClick={openAdd} size="md">
-          <Plus size={15} className="mr-1.5"/> Nuevo cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="md" onClick={() => { setImportStep('upload'); setImportModal(true); }}>
+            <Upload size={15} className="mr-1.5"/> Importar
+          </Button>
+          <Button onClick={openAdd} size="md">
+            <Plus size={15} className="mr-1.5"/> Nuevo cliente
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -351,6 +453,133 @@ export default function ClientesPage() {
             <Button variant="secondary" onClick={() => setModal(null)} fullWidth>Cancelar</Button>
             <Button onClick={save} loading={saving} fullWidth>Guardar cliente</Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Hidden file input */}
+      <input ref={fileRef} type="file" accept=".csv" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }}/>
+
+      {/* ── Import Modal ─────────────────────────────────────────────────── */}
+      <Modal open={importModal} onClose={resetImport}
+        title={importStep === 'done' ? '¡Importación completa!' : importStep === 'preview' ? 'Vista previa' : importStep === 'map' ? 'Mapear columnas' : 'Importar clientes'}
+        size="lg">
+        <div className="flex flex-col gap-4">
+
+          {/* Step: upload */}
+          {importStep === 'upload' && (
+            <>
+              <div
+                onClick={() => fileRef.current?.click()}
+                className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+                <Upload size={32} className="mx-auto mb-3 text-gray-300"/>
+                <p className="text-sm font-semibold text-gray-700">Haz clic para seleccionar un archivo CSV</p>
+                <p className="text-xs text-gray-400 mt-1">O arrastra y suelta aquí</p>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-gray-700">¿Tienes el formato correcto?</p>
+                  <p className="text-xs text-gray-400">Descarga la plantilla de ejemplo</p>
+                </div>
+                <button onClick={downloadTemplate} className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
+                  <Download size={14}/> Plantilla CSV
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step: map columns */}
+          {importStep === 'map' && (
+            <>
+              <p className="text-xs text-gray-500">
+                Archivo: <span className="font-medium text-gray-900">{csvRows.length} filas detectadas</span>. Asigna cada campo de Amixos a la columna de tu archivo.
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                {CLIENT_FIELDS.map(field => (
+                  <div key={field.key} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-gray-600">
+                      {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
+                    </label>
+                    <select
+                      value={colMap[field.key] ?? ''}
+                      onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                      <option value="">— No importar —</option>
+                      {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              {!colMap['first_name'] && (
+                <p className="text-xs text-orange-500 flex items-center gap-1">
+                  <AlertCircle size={13}/> El campo "Nombre" es requerido para importar
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>Atrás</Button>
+                <Button onClick={() => setImportStep('preview')} disabled={!colMap['first_name']} fullWidth>
+                  Vista previa →
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Step: preview */}
+          {importStep === 'preview' && (
+            <>
+              <p className="text-xs text-gray-500">
+                Mostrando las primeras <span className="font-medium">{Math.min(5, csvRows.length)}</span> de <span className="font-medium">{csvRows.length}</span> filas.
+              </p>
+              <div className="overflow-x-auto rounded-xl border border-gray-100">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {CLIENT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                        <th key={f.key} className="text-left px-3 py-2 font-semibold text-gray-500 whitespace-nowrap">{f.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {csvRows.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        {CLIENT_FIELDS.filter(f => colMap[f.key]).map(f => (
+                          <td key={f.key} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[120px] truncate">
+                            {row[colMap[f.key]] || <span className="text-gray-300">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <Button variant="secondary" onClick={() => setImportStep('map')} fullWidth>Atrás</Button>
+                <Button onClick={runImport} loading={importing} fullWidth>
+                  Importar {csvRows.length} cliente{csvRows.length !== 1 ? 's' : ''}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Step: done */}
+          {importStep === 'done' && (
+            <div className="flex flex-col items-center gap-4 py-4 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
+                <CheckCircle2 size={32} className="text-emerald-500"/>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900">Importación terminada</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  <span className="text-emerald-600 font-semibold">{importResult.success} importados</span>
+                  {importResult.errors > 0 && <span className="text-red-500 font-semibold ml-2">· {importResult.errors} con error</span>}
+                </p>
+                {importResult.errors > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">Las filas con error no tenían "Nombre" o fallaron al guardar.</p>
+                )}
+              </div>
+              <Button onClick={resetImport} fullWidth>Ver clientes</Button>
+            </div>
+          )}
         </div>
       </Modal>
     </div>
