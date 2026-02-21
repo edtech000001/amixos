@@ -3,7 +3,6 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { StepBusinessName } from '@/components/onboarding/StepBusinessName';
 import { StepServiceType } from '@/components/onboarding/StepServiceType';
@@ -26,10 +25,10 @@ export interface OnboardingData {
 const TOTAL_STEPS = 5;
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const supabase = createSupabaseClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [finishError, setFinishError] = useState('');
   const [data, setData] = useState<OnboardingData>({
     businessName: '',
     serviceType: '',
@@ -47,10 +46,14 @@ export default function OnboardingPage() {
 
   const finish = async () => {
     setLoading(true);
+    setFinishError('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
-      if (!user) throw new Error('Not authenticated');
+      if (!user) {
+        window.location.href = '/auth/login';
+        return;
+      }
 
       // Create the business
       const { data: business, error: bizError } = await supabase
@@ -67,27 +70,34 @@ export default function OnboardingPage() {
         .select()
         .single();
 
-      if (bizError) throw bizError;
+      if (bizError) {
+        console.error('Business insert error:', bizError);
+        throw new Error(`Error al crear negocio: ${bizError.message}`);
+      }
 
       // Add owner as a business member
-      await supabase.from('business_members').insert({
+      const { error: memberError } = await supabase.from('business_members').insert({
         business_id: business.id,
         user_id: user.id,
         role: 'owner',
       });
+      if (memberError) console.warn('Member insert warning:', memberError.message);
 
       // Activate modules based on selections
       const modules = [data.serviceType];
       if (data.needsInventory) modules.push('inventory');
       if (data.needsVirtualNumber) modules.push('voip');
 
-      await supabase.from('business_modules').insert(
+      const { error: modulesError } = await supabase.from('business_modules').insert(
         modules.map(key => ({ business_id: business.id, module_key: key }))
       );
+      if (modulesError) console.warn('Modules insert warning:', modulesError.message);
 
-      router.push('/dashboard');
-    } catch (err) {
-      console.error(err);
+      // Hard redirect so session state is fresh on dashboard
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      console.error('Finish error:', err);
+      setFinishError(err.message || 'Algo salió mal. Intenta de nuevo.');
       setLoading(false);
     }
   };
@@ -130,6 +140,7 @@ export default function OnboardingPage() {
             onFinish={finish}
             onBack={back}
             loading={loading}
+            error={finishError}
           />
         )}
         {step > TOTAL_STEPS && <StepComplete />}

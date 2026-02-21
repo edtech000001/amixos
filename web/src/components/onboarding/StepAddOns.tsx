@@ -11,26 +11,27 @@ interface Props {
   onFinish: () => void;
   onBack: () => void;
   loading: boolean;
+  error?: string;
 }
 
 const addOns = [
   {
     key: 'needsInventory' as const,
     icon: Package,
-    title: 'Inventory System',
-    description: 'Track products, materials, and stock levels. Know when you\'re running low.',
-    note: 'Can be turned on later in settings',
+    title: 'Sistema de Inventario',
+    description: 'Controla productos, materiales y niveles de stock. Recibe alertas cuando te estés quedando sin algo.',
+    note: 'Se puede activar después en ajustes',
   },
   {
     key: 'needsVirtualNumber' as const,
     icon: Phone,
-    title: 'Virtual Phone Number',
-    description: 'Get a dedicated business number for calls and texts. Keep personal and work separate.',
-    note: 'Can be added later in settings',
+    title: 'Número Virtual de Negocio',
+    description: 'Obtén un número dedicado para llamadas y mensajes. Mantén lo personal separado del trabajo.',
+    note: 'Se puede agregar después en ajustes',
   },
 ];
 
-export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFinish, onBack, loading }: Props) {
+export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFinish, onBack, loading, error }: Props) {
   const values = { needsInventory, needsVirtualNumber };
 
   return (
@@ -69,6 +70,12 @@ export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFin
           );
         })}
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl px-4 py-3">
+          {error}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>

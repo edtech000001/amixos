@@ -5,6 +5,19 @@ import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
+  'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia',
+  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland',
+  'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri',
+  'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
+  'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
+  'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
+  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+];
+
 interface Props {
   city: string;
   state: string;
@@ -37,18 +50,27 @@ export function StepLocation({ city, state, onChange, onNext, onBack }: Props) {
 
       <div className="flex flex-col gap-3">
         <Input
-          label="City"
-          placeholder="e.g. Omaha"
+          label="Ciudad"
+          placeholder="ej. Los Ángeles"
           value={city}
           onChange={e => onChange({ city: e.target.value })}
           autoFocus
         />
-        <Input
-          label="State / Province"
-          placeholder="e.g. Nebraska"
-          value={state}
-          onChange={e => onChange({ state: e.target.value })}
-        />
+
+        {/* State dropdown */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">Estado</label>
+          <select
+            value={state}
+            onChange={e => onChange({ state: e.target.value })}
+            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150 appearance-none"
+          >
+            <option value="">Selecciona un estado</option>
+            {US_STATES.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
