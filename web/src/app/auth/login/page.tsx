@@ -73,11 +73,10 @@ export default function LoginPage() {
         return;
       }
 
-      console.log('[Amixos] 4. Login success — calling router.refresh()');
-      router.refresh();
-      console.log('[Amixos] 5. router.refresh() done — calling router.push(/dashboard)');
-      router.push('/dashboard');
-      console.log('[Amixos] 6. router.push called');
+      console.log('[Amixos] 4. Login success — hard redirecting to /dashboard');
+      // Hard redirect: forces full page reload so browser commits session cookies
+      // before the dashboard tries to read them. Soft router.push() loses the session.
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error('[Amixos] CAUGHT EXCEPTION:', err);
       setError('Error de conexión. Verifica tu internet e intenta de nuevo.');

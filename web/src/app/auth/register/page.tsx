@@ -63,9 +63,8 @@ export default function RegisterPage() {
       setError('');
     }
 
-    // Redirect to onboarding to set up first business
-    router.refresh();
-    router.push('/onboarding');
+    // Hard redirect — commits session cookies before onboarding tries to read them
+    window.location.href = '/onboarding';
   };
 
   return (
