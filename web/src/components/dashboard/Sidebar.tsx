@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, Clock, Calendar,
-  Package, Settings, LogOut, ChevronLeft, Menu, X, Briefcase, ClipboardList,
+  Package, Settings, LogOut, ChevronLeft, Menu, X, Briefcase, ClipboardList, BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -20,6 +20,7 @@ const NAV = [
   { href: '/dashboard/empleados', label: 'Empleados', icon: Clock },
   { href: '/dashboard/calendario', label: 'Calendario', icon: Calendar },
   { href: '/dashboard/inventario', label: 'Inventario', icon: Package },
+  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3 },
 ];
 
 export function Sidebar() {
