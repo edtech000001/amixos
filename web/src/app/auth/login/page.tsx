@@ -67,7 +67,21 @@ export default function LoginPage() {
         return;
       }
 
-      // Hard redirect so session is fully committed to localStorage before dashboard loads
+      // Check if this user has set up a business yet
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: businesses } = await supabase
+          .from('businesses')
+          .select('id')
+          .eq('owner_id', session.user.id)
+          .limit(1);
+
+        if (!businesses || businesses.length === 0) {
+          window.location.href = '/onboarding';
+          return;
+        }
+      }
+
       window.location.href = '/dashboard';
     } catch (err) {
       console.error('Login error:', err);
