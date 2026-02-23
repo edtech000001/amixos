@@ -264,6 +264,8 @@ export default function ClientesPage() {
       if (Object.keys(customFields).length > 0) entry.custom_fields = customFields;
       if (!entry.first_name && !entry.last_name && !entry.company) { errors++; continue; }
       if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
+      // DB has NOT NULL on both name columns — default to '' to avoid constraint violations
+      if (!entry.last_name) entry.last_name = '';
       batch.push(entry);
     }
     // Insert in batches of 50
