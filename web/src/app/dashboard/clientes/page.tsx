@@ -185,6 +185,7 @@ export default function ClientesPage() {
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [importResult, setImportResult] = useState({ success: 0, errors: 0 });
 
   // Fields available for mapping
@@ -594,8 +595,19 @@ export default function ClientesPage() {
             <>
               <div
                 onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
-                <Upload size={32} className="mx-auto mb-3 text-gray-300"/>
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragEnter={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleFileSelect(file);
+                }}
+                className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
+                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary hover:bg-primary/5'
+                }`}>
+                <Upload size={32} className={`mx-auto mb-3 transition-colors ${dragOver ? 'text-primary' : 'text-gray-300'}`}/>
                 <p className="text-sm font-semibold text-gray-700">Haz clic para seleccionar un archivo CSV</p>
                 <p className="text-xs text-gray-400 mt-1">O arrastra y suelta aquí</p>
               </div>
