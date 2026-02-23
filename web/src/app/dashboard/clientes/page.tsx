@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Papa from 'papaparse';
-import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, AlertCircle, Sliders, GripVertical } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, Sliders, GripVertical } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -132,7 +132,6 @@ export default function ClientesPage() {
   };
 
   const save = async () => {
-    if (!form.first_name.trim()) { setError('El nombre es requerido'); return; }
     setSaving(true); setError('');
 
     const payload = {
@@ -190,7 +189,7 @@ export default function ClientesPage() {
 
   // Fields available for mapping
   const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [
-    { key: 'first_name',   label: 'Nombre',            required: true },
+    { key: 'first_name',   label: 'Nombre' },
     { key: 'last_name',    label: 'Apellido' },
     { key: 'company',      label: 'Empresa' },
     { key: 'phone_cell',   label: 'Celular' },
@@ -263,7 +262,8 @@ export default function ClientesPage() {
       });
 
       if (Object.keys(customFields).length > 0) entry.custom_fields = customFields;
-      if (!entry.first_name) { errors++; continue; }
+      if (!entry.first_name && !entry.last_name && !entry.company) { errors++; continue; }
+      if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
       batch.push(entry);
     }
     // Insert in batches of 50
@@ -463,7 +463,7 @@ export default function ClientesPage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Información básica</p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Nombre *" placeholder="Juan" value={form.first_name}
+                <Input label="Nombre" placeholder="Juan" value={form.first_name}
                   onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
                 <Input label="Apellido" placeholder="Pérez" value={form.last_name}
                   onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
@@ -647,15 +647,10 @@ export default function ClientesPage() {
                   </div>
                 ))}
               </div>
-              {!colMap['first_name'] && (
-                <p className="text-xs text-orange-500 flex items-center gap-1">
-                  <AlertCircle size={13}/> El campo "Nombre" es requerido para importar
-                </p>
-              )}
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>Atrás</Button>
-                <Button onClick={() => setImportStep('preview')} disabled={!colMap['first_name']} fullWidth>
-                  Vista previa →
+                <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>Cancelar</Button>
+                <Button onClick={() => setImportStep('preview')} fullWidth>
+                  Ver datos
                 </Button>
               </div>
             </>
