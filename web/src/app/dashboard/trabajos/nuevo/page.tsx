@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, MapPin, Calendar, Users, DollarSign, FileText } from 'lucide-react';
@@ -43,6 +43,14 @@ const newLaborItem = (): LineItem => ({
 });
 
 export default function NuevoTrabajoPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Cargando...</div>}>
+      <NuevoTrabajoContent />
+    </Suspense>
+  );
+}
+
+function NuevoTrabajoContent() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const router = useRouter();
