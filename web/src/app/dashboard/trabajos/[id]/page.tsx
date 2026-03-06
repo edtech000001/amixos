@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
-  XCircle, Send, ArrowRight,
+  XCircle, Send, ArrowRight, Trash2, Pencil,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -73,6 +73,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [invoiceModal, setInvoiceModal] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [taxRate, setTaxRate] = useState(0);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('action') === 'invoice') {
@@ -158,6 +160,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     }
   };
 
+  const deleteJob = async () => {
+    setDeleting(true);
+    // Delete related records first, then the job
+    await supabase.from('job_items').delete().eq('job_id', id);
+    await supabase.from('job_assignments').delete().eq('job_id', id);
+    const { error } = await supabase.from('jobs').delete().eq('id', id);
+    if (!error) {
+      window.location.href = '/dashboard/trabajos';
+    }
+    setDeleting(false);
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
@@ -212,6 +226,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </Button>
             </Link>
           )}
+          <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
+            className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+            title="Editar trabajo">
+            <Pencil size={16}/>
+          </Link>
+          <button
+            onClick={() => setDeleteModal(true)}
+            className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Eliminar trabajo"
+          >
+            <Trash2 size={16}/>
+          </button>
         </div>
       </div>
 
@@ -583,6 +609,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             <Button onClick={generateInvoice} loading={invoicing} fullWidth>
               Crear factura →
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar trabajo" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600">
+            ¿Estás seguro de que deseas eliminar <strong>{job.title}</strong>? Esta acción no se puede deshacer.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setDeleteModal(false)} fullWidth>Cancelar</Button>
+            <button
+              onClick={deleteJob}
+              disabled={deleting}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {deleting ? 'Eliminando...' : 'Eliminar'}
+            </button>
           </div>
         </div>
       </Modal>

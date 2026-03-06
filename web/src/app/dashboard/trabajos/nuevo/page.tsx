@@ -55,12 +55,15 @@ function NuevoTrabajoContent() {
   const { business } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
   const isProposal = searchParams.get('modo') === 'propuesta';
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [editIsProposal, setEditIsProposal] = useState(false);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -75,7 +78,7 @@ function NuevoTrabajoContent() {
   const [timeEnd, setTimeEnd] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
-  const [items, setItems] = useState<LineItem[]>([isProposal ? newItem() : newLaborItem()]);
+  const [items, setItems] = useState<LineItem[]>([]);
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
 
@@ -96,18 +99,75 @@ function NuevoTrabajoContent() {
   const [taxRate, setTaxRate] = useState(0);
   const [discount, setDiscount] = useState(0);
 
+  const isEditProposal = editId ? editIsProposal : isProposal;
+
+  // Initialize default item for new jobs (not edit mode)
+  useEffect(() => {
+    if (!editId && items.length === 0) {
+      setItems([isEditProposal ? newItem() : newLaborItem()]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!business) return;
     const clientParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') ?? '' : '';
     if (clientParam) setClientId(clientParam);
 
-    Promise.all([
-      supabase.from('clients').select('id, first_name, last_name, company, address, city, state').eq('business_id', business.id).order('first_name'),
-      supabase.from('employees').select('id, first_name, last_name, role').eq('business_id', business.id).eq('active', true).order('first_name'),
-    ]).then(([{ data: cl }, { data: emp }]) => {
+    const loadData = async () => {
+      const [{ data: cl }, { data: emp }] = await Promise.all([
+        supabase.from('clients').select('id, first_name, last_name, company, address, city, state').eq('business_id', business.id).order('first_name'),
+        supabase.from('employees').select('id, first_name, last_name, role').eq('business_id', business.id).eq('active', true).order('first_name'),
+      ]);
       setClients(cl ?? []);
       setEmployees(emp ?? []);
-    });
+
+      if (editId) {
+        const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
+          supabase.from('jobs').select('*').eq('id', editId).single(),
+          supabase.from('job_items').select('*').eq('job_id', editId).order('created_at'),
+          supabase.from('job_assignments').select('*').eq('job_id', editId),
+        ]);
+        if (job) {
+          setTitle(job.title || '');
+          setClientId(job.client_id || '');
+          setStatus(job.status === 'in_progress' ? 'in_progress' : 'scheduled');
+          setPriority(job.priority || 'normal');
+          setAddress(job.job_address || '');
+          setCity(job.job_city || '');
+          setState(job.job_state || '');
+          setScheduledDate(job.scheduled_date || '');
+          setTimeStart(job.time_start || '');
+          setTimeEnd(job.time_end || '');
+          setDescription(job.description || '');
+          setInternalNotes(job.internal_notes || '');
+          const isEst = !!job.estimate_number;
+          setEditIsProposal(isEst);
+          if (isEst) {
+            setClientNotes(job.notes || '');
+            setIssueDate(job.issue_date || new Date().toISOString().split('T')[0]);
+            setExpiryDate(job.expiry_date || '');
+            setTaxRate(job.tax_rate || 0);
+            setDiscount(job.discount || 0);
+          }
+        }
+        if (jobItems && jobItems.length > 0) {
+          setItems(jobItems.map((i: any) => ({
+            id: i.id,
+            item_type: i.item_type || 'other',
+            description: i.description || '',
+            quantity: i.quantity || 1,
+            unit_price: i.unit_price || 0,
+          })));
+        }
+        if (assigns) {
+          setAssignedEmployees(assigns.filter((a: any) => a.employee_id).map((a: any) => a.employee_id));
+          const manual = assigns.filter((a: any) => !a.employee_id && a.worker_name).map((a: any) => a.worker_name);
+          if (manual.length > 0) setManualWorkers(manual);
+        }
+        setLoadingEdit(false);
+      }
+    };
+    loadData();
   }, [business]);
 
   // Close client dropdown on outside click
@@ -126,7 +186,7 @@ function NuevoTrabajoContent() {
     setClientDropdownOpen(false);
     setClientSearch('');
     const client = clients.find(c => c.id === id);
-    if (client && !isProposal) {
+    if (client && !isEditProposal) {
       if (client.city) setCity(client.city);
       if (client.state) setState(client.state);
     }
@@ -176,29 +236,20 @@ function NuevoTrabajoContent() {
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const taxAmt = subtotal * (taxRate / 100);
-  const total = isProposal ? subtotal + taxAmt - discount : subtotal;
+  const total = isEditProposal ? subtotal + taxAmt - discount : subtotal;
 
   const save = async () => {
-    if (!title.trim()) { setError(isProposal ? 'El título es requerido' : 'El título del trabajo es requerido'); return; }
+    if (!title.trim()) { setError(isEditProposal ? 'El título es requerido' : 'El título del trabajo es requerido'); return; }
     const validItems = items.filter(i => i.description.trim());
-    if (isProposal && validItems.length === 0) { setError('Agrega al menos un ítem'); return; }
+    if (isEditProposal && validItems.length === 0) { setError('Agrega al menos un ítem'); return; }
     setSaving(true); setError('');
 
     try {
-      if (isProposal) {
-        // Generate estimate number
-        const { count } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
-          .eq('business_id', business!.id).not('estimate_number', 'is', null);
-        const estNum = `COT-${String((count ?? 0) + 1).padStart(4, '0')}`;
-
-        const { data: job, error: jobErr } = await supabase.from('jobs').insert({
-          business_id: business!.id,
+      if (isEditProposal) {
+        const proposalData: any = {
           client_id: clientId || null,
           title: title.trim(),
           description: description.trim() || null,
-          status: 'proposal',
-          priority: 'normal',
-          estimate_number: estNum,
           notes: clientNotes.trim() || null,
           internal_notes: internalNotes.trim() || null,
           issue_date: issueDate,
@@ -208,32 +259,42 @@ function NuevoTrabajoContent() {
           tax_amount: +taxAmt.toFixed(2),
           discount: +discount.toFixed(2),
           total_amount: +total.toFixed(2),
-        }).select().single();
+        };
 
-        if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating proposal');
+        let finalJobId: string;
+        if (editId) {
+          const { error: jobErr } = await supabase.from('jobs').update(proposalData).eq('id', editId);
+          if (jobErr) throw new Error(jobErr.message);
+          finalJobId = editId;
+        } else {
+          const { count } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
+            .eq('business_id', business!.id).not('estimate_number', 'is', null);
+          const estNum = `COT-${String((count ?? 0) + 1).padStart(4, '0')}`;
+          const { data: job, error: jobErr } = await supabase.from('jobs').insert({
+            business_id: business!.id, status: 'proposal', priority: 'normal',
+            estimate_number: estNum, ...proposalData,
+          }).select().single();
+          if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating proposal');
+          finalJobId = job.id;
+        }
 
-        // Job items
+        // Replace job items
+        if (editId) await supabase.from('job_items').delete().eq('job_id', finalJobId);
         if (validItems.length > 0) {
           await supabase.from('job_items').insert(
             validItems.map(i => ({
-              job_id: job.id,
-              item_type: i.item_type,
-              description: i.description,
-              quantity: i.quantity,
-              unit_price: i.unit_price,
+              job_id: finalJobId, item_type: i.item_type,
+              description: i.description, quantity: i.quantity, unit_price: i.unit_price,
             }))
           );
         }
 
-        router.push(`/dashboard/trabajos/${job.id}`);
+        router.push(`/dashboard/trabajos/${finalJobId}`);
       } else {
-        // Regular job creation
-        const { data: job, error: jobErr } = await supabase.from('jobs').insert({
-          business_id: business!.id,
+        const jobData: any = {
           client_id: clientId || null,
           title: title.trim(),
           description: description.trim() || null,
-          status,
           priority,
           job_address: address.trim() || null,
           job_city: city.trim() || null,
@@ -243,40 +304,50 @@ function NuevoTrabajoContent() {
           time_end: timeEnd || null,
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
-        }).select().single();
+        };
 
-        if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating job');
+        let finalJobId: string;
+        if (editId) {
+          const { error: jobErr } = await supabase.from('jobs').update(jobData).eq('id', editId);
+          if (jobErr) throw new Error(jobErr.message);
+          finalJobId = editId;
+        } else {
+          const { data: job, error: jobErr } = await supabase.from('jobs').insert({
+            business_id: business!.id, status, ...jobData,
+          }).select().single();
+          if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating job');
+          finalJobId = job.id;
+        }
 
-        // Job items
+        // Replace job items
+        if (editId) await supabase.from('job_items').delete().eq('job_id', finalJobId);
         if (validItems.length > 0) {
           await supabase.from('job_items').insert(
             validItems.map(i => ({
-              job_id: job.id,
-              item_type: i.item_type,
-              description: i.description,
-              quantity: i.quantity,
-              unit_price: i.unit_price,
+              job_id: finalJobId, item_type: i.item_type,
+              description: i.description, quantity: i.quantity, unit_price: i.unit_price,
             }))
           );
         }
 
-        // Employee assignments
+        // Replace assignments
+        if (editId) await supabase.from('job_assignments').delete().eq('job_id', finalJobId);
         const assignments: any[] = [];
         assignedEmployees.forEach(empId => {
           const emp = employees.find(e => e.id === empId);
           if (emp) assignments.push({
-            job_id: job.id, employee_id: empId,
+            job_id: finalJobId, employee_id: empId,
             worker_name: `${emp.first_name} ${emp.last_name}`,
           });
         });
         manualWorkers.filter(w => w.trim()).forEach(name => {
-          assignments.push({ job_id: job.id, worker_name: name.trim() });
+          assignments.push({ job_id: finalJobId, worker_name: name.trim() });
         });
         if (assignments.length > 0) {
           await supabase.from('job_assignments').insert(assignments);
         }
 
-        router.push(`/dashboard/trabajos/${job.id}`);
+        router.push(`/dashboard/trabajos/${finalJobId}`);
       }
     } catch (e: any) {
       setError(e.message || 'Error al guardar');
@@ -284,19 +355,25 @@ function NuevoTrabajoContent() {
     }
   };
 
+  if (loadingEdit) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
+    </div>
+  );
+
   return (
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/dashboard/trabajos" className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+        <Link href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <ArrowLeft size={18} className="text-gray-500"/>
         </Link>
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {isProposal ? 'Nueva propuesta' : 'Nuevo trabajo'}
+            {editId ? (isEditProposal ? 'Editar propuesta' : 'Editar trabajo') : (isEditProposal ? 'Nueva propuesta' : 'Nuevo trabajo')}
           </h1>
           <p className="text-xs text-gray-400">
-            {isProposal ? 'Crea una propuesta de precio para tu cliente' : 'Completa los detalles del trabajo'}
+            {editId ? 'Modifica los detalles' : (isEditProposal ? 'Crea una propuesta de precio para tu cliente' : 'Completa los detalles del trabajo')}
           </p>
         </div>
       </div>
@@ -307,7 +384,7 @@ function NuevoTrabajoContent() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Información general</p>
           <div className="flex flex-col gap-3">
-            <Input label={isProposal ? 'Título *' : 'Título del trabajo *'}
+            <Input label={isEditProposal ? 'Título *' : 'Título del trabajo *'}
               placeholder="ej. Instalación de pivote — Rancho García"
               value={title} onChange={e => setTitle(e.target.value)}/>
             <div className="flex flex-col gap-1.5">
@@ -362,7 +439,7 @@ function NuevoTrabajoContent() {
               </div>
             </div>
 
-            {isProposal ? (
+            {isEditProposal ? (
               /* Proposal: issue + expiry dates */
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Fecha de emisión" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
@@ -402,7 +479,7 @@ function NuevoTrabajoContent() {
         </div>
 
         {/* ── Ubicación (job mode only) */}
-        {!isProposal && (
+        {!isEditProposal && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={15} className="text-primary"/>
@@ -441,7 +518,7 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Horario (job mode only) */}
-        {!isProposal && (
+        {!isEditProposal && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={15} className="text-primary"/>
@@ -459,7 +536,7 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Empleados (job mode only) */}
-        {!isProposal && (
+        {!isEditProposal && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Users size={15} className="text-primary"/>
@@ -516,16 +593,16 @@ function NuevoTrabajoContent() {
             <div className="flex items-center gap-2">
               <DollarSign size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                {isProposal ? 'Ítems / Servicios' : 'Materiales y mano de obra'}
+                {isEditProposal ? 'Ítems / Servicios' : 'Materiales y mano de obra'}
               </p>
             </div>
-            <button onClick={() => setItems(prev => [...prev, isProposal ? newItem() : newLaborItem()])}
+            <button onClick={() => setItems(prev => [...prev, isEditProposal ? newItem() : newLaborItem()])}
               className="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
               <Plus size={13}/> Agregar
             </button>
           </div>
           <div className="flex flex-col gap-2">
-            {isProposal ? (
+            {isEditProposal ? (
               /* Proposal: simpler grid without item_type */
               <>
                 <div className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1">
@@ -590,7 +667,7 @@ function NuevoTrabajoContent() {
 
             {/* Totals */}
             <div className="border-t border-gray-100 mt-2 pt-3 flex justify-end">
-              {isProposal ? (
+              {isEditProposal ? (
                 <div className="w-52 flex flex-col gap-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Subtotal</span>
@@ -630,7 +707,7 @@ function NuevoTrabajoContent() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Notas</p>
           </div>
           <div className="flex flex-col gap-3">
-            {isProposal && (
+            {isEditProposal && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">Nota para el cliente</label>
                 <textarea rows={2} placeholder="Términos, condiciones, detalles adicionales para el cliente..."
@@ -640,9 +717,9 @@ function NuevoTrabajoContent() {
             )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                {isProposal ? 'Nota interna' : 'Notas internas'}
+                {isEditProposal ? 'Nota interna' : 'Notas internas'}
               </label>
-              <textarea rows={3} placeholder={isProposal ? 'Notas privadas (no visibles para el cliente)...' : 'Instrucciones especiales, detalles del sitio, acceso...'}
+              <textarea rows={3} placeholder={isEditProposal ? 'Notas privadas (no visibles para el cliente)...' : 'Instrucciones especiales, detalles del sitio, acceso...'}
                 value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
             </div>
@@ -653,11 +730,11 @@ function NuevoTrabajoContent() {
 
         {/* Actions */}
         <div className="flex gap-3 pb-6">
-          <Link href="/dashboard/trabajos" className="flex-1">
+          <Link href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'} className="flex-1">
             <Button variant="secondary" fullWidth>Cancelar</Button>
           </Link>
           <Button onClick={save} loading={saving} fullWidth>
-            {isProposal ? 'Crear propuesta' : 'Crear trabajo'}
+            {editId ? 'Guardar cambios' : (isEditProposal ? 'Crear propuesta' : 'Crear trabajo')}
           </Button>
         </div>
       </div>
