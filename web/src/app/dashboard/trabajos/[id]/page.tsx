@@ -176,7 +176,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-start gap-3">

@@ -79,7 +79,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const st = STATUS[invoice.status] ?? { label: invoice.status, color: 'bg-gray-100 text-gray-500' };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">

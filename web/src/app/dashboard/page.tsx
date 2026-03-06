@@ -173,7 +173,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
