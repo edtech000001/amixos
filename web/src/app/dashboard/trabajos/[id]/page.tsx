@@ -82,14 +82,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const load = async () => {
     if (!business) return;
-    const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
+    const [jobRes, { data: a }, { data: it }] = await Promise.all([
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, phone)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
     ]);
-    if (j) {
-      setJob(j as Job);
-      if (j.tax_rate > 0) setTaxRate(j.tax_rate);
+    console.log('[TrabajoDetail] id:', id, 'business:', business.id, 'jobRes:', jobRes);
+    if (jobRes.data) {
+      setJob(jobRes.data as Job);
+      if (jobRes.data.tax_rate > 0) setTaxRate(jobRes.data.tax_rate);
     }
     setAssignments(a ?? []);
     setItems(it ?? []);
