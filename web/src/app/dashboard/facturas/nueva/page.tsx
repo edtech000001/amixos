@@ -3,12 +3,13 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, X } from 'lucide-react';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import type { InvoiceLang } from '@/lib/invoice-i18n';
 
 interface LineItem { description: string; qty: number; rate: number; }
 interface Client { id: string; first_name: string; last_name: string; }
@@ -29,13 +30,14 @@ export default function NuevaFacturaPage() {
   const { business } = useApp();
   const [clients, setClients] = useState<Client[]>([]);
   // Pre-select client from query param (e.g. coming from client profile)
-  const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') ?? '' : '';
-  const [clientId, setClientId] = useState(initialClient);
+  const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
+  const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
   const [invoiceNumber, setInvoiceNumber] = useState(genInvoiceNumber());
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [taxRate, setTaxRate] = useState(0);
+  const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -63,9 +65,10 @@ export default function NuevaFacturaPage() {
 
     const validLines = lines.filter(l => l.description.trim());
 
+    // Keep client_id for backwards compat (first selected client)
     const { data, error: e } = await supabase.from('invoices').insert({
       business_id: business.id,
-      client_id: clientId || null,
+      client_id: clientIds[0] || null,
       invoice_number: invoiceNumber,
       status,
       issue_date: issueDate,
@@ -76,9 +79,18 @@ export default function NuevaFacturaPage() {
       tax_amount: taxAmount,
       total_amount: total,
       notes: notes || null,
+      language,
     }).select().single();
 
     if (e) { setError('Error al guardar. Intenta de nuevo.'); setSaving(false); return; }
+
+    // Insert all selected clients into junction table
+    if (clientIds.length > 0) {
+      await supabase.from('invoice_clients').insert(
+        clientIds.map(cid => ({ invoice_id: data.id, client_id: cid }))
+      );
+    }
+
     window.location.href = `/dashboard/facturas/${data.id}`;
   };
 
@@ -100,16 +112,37 @@ export default function NuevaFacturaPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-gray-700">Información general</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Client select */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Cliente</label>
+            {/* Client multi-select */}
+            <div className="flex flex-col gap-1.5 md:col-span-2">
+              <label className="text-sm font-medium text-gray-700">Clientes</label>
+              {/* Selected chips */}
+              {clientIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {clientIds.map(cid => {
+                    const c = clients.find(cl => cl.id === cid);
+                    if (!c) return null;
+                    return (
+                      <span key={cid} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
+                        {c.first_name} {c.last_name}
+                        <button type="button" onClick={() => setClientIds(prev => prev.filter(id => id !== cid))} className="hover:text-red-500 transition-colors">
+                          <X size={12} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Add client dropdown */}
               <select
-                value={clientId}
-                onChange={e => setClientId(e.target.value)}
+                value=""
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val && !clientIds.includes(val)) setClientIds(prev => [...prev, val]);
+                }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
               >
-                <option value="">Sin cliente</option>
-                {clients.map(c => (
+                <option value="">{clientIds.length === 0 ? 'Seleccionar cliente...' : 'Agregar otro cliente...'}</option>
+                {clients.filter(c => !clientIds.includes(c.id)).map(c => (
                   <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
                 ))}
               </select>
@@ -117,6 +150,18 @@ export default function NuevaFacturaPage() {
             <Input label="Número de factura" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} />
             <Input label="Fecha de emisión" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
             <Input label="Fecha de vencimiento" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            {/* Language for client-facing invoice */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Idioma de la factura</label>
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value as InvoiceLang)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
+              >
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
+            </div>
           </div>
         </div>
 

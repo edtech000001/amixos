@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
+interface InvoiceClient { first_name: string; last_name: string }
 interface Invoice {
   id: string;
   invoice_number: string;
@@ -17,7 +18,8 @@ interface Invoice {
   total_amount: number;
   due_date: string | null;
   created_at: string;
-  clients: { first_name: string; last_name: string } | null;
+  clients: InvoiceClient | null;
+  invoice_clients: { clients: InvoiceClient }[];
 }
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -37,6 +39,13 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
+function getClientNames(inv: Invoice): string {
+  const list = inv.invoice_clients?.length
+    ? inv.invoice_clients.map(ic => `${ic.clients.first_name} ${ic.clients.last_name}`)
+    : inv.clients ? [`${inv.clients.first_name} ${inv.clients.last_name}`] : [];
+  return list.join(', ') || 'Sin cliente';
+}
+
 export default function FacturasPage() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
@@ -48,7 +57,7 @@ export default function FacturasPage() {
   const load = async () => {
     if (!business) return;
     let q = supabase.from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, created_at, clients(first_name, last_name)')
+      .select('id, invoice_number, status, total_amount, due_date, created_at, clients(first_name, last_name), invoice_clients(clients(first_name, last_name))')
       .eq('business_id', business.id)
       .order('created_at', { ascending: false });
     const { data } = await q;
@@ -69,7 +78,7 @@ export default function FacturasPage() {
   const filtered = invoices.filter(inv => {
     if (filter !== 'todas' && inv.status !== filter) return false;
     const q = search.toLowerCase();
-    const cn = inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}`.toLowerCase() : '';
+    const cn = getClientNames(inv).toLowerCase();
     return `${inv.invoice_number} ${cn}`.includes(q);
   });
 
@@ -130,7 +139,7 @@ export default function FacturasPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {filtered.map((inv, i) => {
             const st = STATUS[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-500' };
-            const client = inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : 'Sin cliente';
+            const client = getClientNames(inv);
             const due = inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : null;
             return (
               <div key={inv.id} className={`flex items-center gap-4 px-5 py-4 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors`}>
