@@ -191,8 +191,13 @@ export default function ClientesPage() {
     if (!confirm(`¿Eliminar ${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} permanentemente?`)) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
-    const { error: e } = await supabase.from('clients').delete().in('id', ids);
-    if (!e) {
+    // Batch deletes to avoid Supabase URL length limits
+    let hasError = false;
+    for (let i = 0; i < ids.length; i += 50) {
+      const { error: e } = await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));
+      if (e) hasError = true;
+    }
+    if (!hasError) {
       setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
