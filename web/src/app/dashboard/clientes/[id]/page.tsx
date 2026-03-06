@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -80,8 +80,8 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
   return <div>{content}</div>;
 }
 
-export default function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ClienteDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [client, setClient] = useState<Client | null>(null);

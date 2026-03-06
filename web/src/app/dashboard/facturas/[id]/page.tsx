@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Printer, CheckCircle, Send } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -39,8 +39,8 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export default function FacturaDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function FacturaDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
