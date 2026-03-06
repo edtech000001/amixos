@@ -10,6 +10,7 @@ export interface Business {
   service_type: string;
   city: string;
   state: string;
+  client_field_required: Record<string, boolean>;
 }
 
 export interface AppUser {
@@ -40,7 +41,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchBusiness = async (userId: string) => {
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, logo_url, service_type, city, state')
+      .select('id, name, logo_url, service_type, city, state, client_field_required')
       .eq('owner_id', userId)
       .limit(1)
       .single();

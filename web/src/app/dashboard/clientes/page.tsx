@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Papa from 'papaparse';
-import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, Sliders, GripVertical, X } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -133,8 +133,35 @@ export default function ClientesPage() {
     setError(''); setModal('edit');
   };
 
+  const FIELD_LABELS: Record<string, string> = {
+    first_name: 'Nombre', last_name: 'Apellido', company: 'Empresa',
+    phone_cell: 'Celular', phone_office: 'Teléfono oficina',
+    email_office: 'Correo oficina', email_home: 'Correo personal',
+    address: 'Dirección', city: 'Ciudad', state: 'Estado', zip_code: 'Código postal',
+  };
+
   const save = async () => {
     setSaving(true); setError('');
+
+    // Validate required fields from business preferences
+    const req = business?.client_field_required ?? {};
+    const missing: string[] = [];
+    for (const [key, isReq] of Object.entries(req)) {
+      if (!isReq) continue;
+      const val = (form as any)[key];
+      if (!val || !val.trim()) missing.push(FIELD_LABELS[key] ?? key);
+    }
+    // Also check custom field templates marked as required
+    for (const tpl of templates) {
+      if (tpl.required && !customVals[tpl.field_key]?.trim()) {
+        missing.push(tpl.field_label);
+      }
+    }
+    if (missing.length > 0) {
+      setError(`Campos requeridos: ${missing.join(', ')}`);
+      setSaving(false);
+      return;
+    }
 
     const payload = {
       first_name: form.first_name.trim(),
@@ -335,83 +362,14 @@ export default function ClientesPage() {
   };
 
 
-  // ── Field template manager state ─────────────────────────────────────────
-  const FIELD_TYPES: Record<string, string> = {
-    text: 'Texto', number: 'Número', date: 'Fecha', boolean: 'Sí / No', select: 'Lista de opciones',
-  };
-  const [camposModal, setCamposModal] = useState(false);
-  const [addFieldModal, setAddFieldModal] = useState(false);
-  const [editFieldModal, setEditFieldModal] = useState(false);
-  const [editingTpl, setEditingTpl] = useState<FieldTemplate | null>(null);
-  const [tplForm, setTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
-  const [savingTpl, setSavingTpl] = useState(false);
-  const [tplError, setTplError] = useState('');
-
-  const toKey = (label: string) =>
-    label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const isReq = (key: string) => !!(business?.client_field_required ?? {})[key];
+  const rLabel = (key: string, base: string) => isReq(key) ? `${base} *` : base;
 
   const loadTemplates = async () => {
     if (!business) return;
     const { data } = await supabase.from('client_field_templates').select('*')
       .eq('business_id', business.id).order('sort_order');
     setTemplates(data ?? []);
-  };
-
-  const addTemplate = async () => {
-    if (!tplForm.field_label.trim()) { setTplError('El nombre del campo es requerido'); return; }
-    const key = toKey(tplForm.field_label);
-    if (templates.some(t => t.field_key === key)) { setTplError('Ya existe un campo con ese nombre'); return; }
-    setSavingTpl(true); setTplError('');
-    const options = tplForm.field_type === 'select'
-      ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean)
-      : null;
-    const { error } = await supabase.from('client_field_templates').insert({
-      business_id: business!.id,
-      field_key: key, field_label: tplForm.field_label.trim(),
-      field_type: tplForm.field_type, field_options: options,
-      required: tplForm.required, sort_order: templates.length,
-    });
-    if (error) { setTplError('Error al guardar.'); setSavingTpl(false); return; }
-    await loadTemplates();
-    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-    setSavingTpl(false); setAddFieldModal(false);
-  };
-
-  const removeTemplate = async (id: string) => {
-    if (!confirm('¿Eliminar este campo? Los datos en clientes existentes se perderán.')) return;
-    await supabase.from('client_field_templates').delete().eq('id', id);
-    setTemplates(prev => prev.filter(t => t.id !== id));
-  };
-
-  const openEditTemplate = (tpl: FieldTemplate) => {
-    setEditingTpl(tpl);
-    setTplForm({
-      field_label: tpl.field_label,
-      field_type: tpl.field_type,
-      required: tpl.required,
-      options_raw: tpl.field_options?.join('\n') ?? '',
-    });
-    setTplError('');
-    setEditFieldModal(true);
-  };
-
-  const updateTemplate = async () => {
-    if (!editingTpl || !tplForm.field_label.trim()) { setTplError('El nombre del campo es requerido'); return; }
-    setSavingTpl(true); setTplError('');
-    const options = tplForm.field_type === 'select'
-      ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean)
-      : null;
-    const { error } = await supabase.from('client_field_templates').update({
-      field_label: tplForm.field_label.trim(),
-      field_type: tplForm.field_type,
-      field_options: options,
-      required: tplForm.required,
-    }).eq('id', editingTpl.id);
-    if (error) { setTplError('Error al guardar.'); setSavingTpl(false); return; }
-    await loadTemplates();
-    setSavingTpl(false);
-    setEditFieldModal(false);
-    setEditingTpl(null);
   };
 
 
@@ -424,9 +382,6 @@ export default function ClientesPage() {
           <p className="text-sm text-gray-500 mt-0.5">{clients.length} en total</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="md" onClick={() => setCamposModal(true)} title="Campos personalizados">
-            <Sliders size={15} className="mr-1.5"/> Campos
-          </Button>
           <Button variant="secondary" size="md" onClick={() => { setImportStep('upload'); setImportModal(true); }}>
             <Upload size={15} className="mr-1.5"/> Importar
           </Button>
@@ -532,12 +487,12 @@ export default function ClientesPage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Información básica</p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Nombre" placeholder="Juan" value={form.first_name}
+                <Input label={rLabel('first_name', 'Nombre')} placeholder="Juan" value={form.first_name}
                   onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
-                <Input label="Apellido" placeholder="Pérez" value={form.last_name}
+                <Input label={rLabel('last_name', 'Apellido')} placeholder="Pérez" value={form.last_name}
                   onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
               </div>
-              <Input label="Empresa" placeholder="Construcciones Ramírez" value={form.company}
+              <Input label={rLabel('company', 'Empresa')} placeholder="Construcciones Ramírez" value={form.company}
                 onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
                 leftIcon={<Building2 size={15}/>}/>
             </div>
@@ -547,10 +502,10 @@ export default function ClientesPage() {
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Celular" placeholder="+1 (555) 000-0000" value={form.phone_cell}
+              <Input label={rLabel('phone_cell', 'Celular')} placeholder="+1 (555) 000-0000" value={form.phone_cell}
                 onChange={e => setForm(f => ({ ...f, phone_cell: e.target.value }))}
                 leftIcon={<Phone size={15}/>}/>
-              <Input label="Teléfono oficina" placeholder="+1 (555) 100-0000" value={form.phone_office}
+              <Input label={rLabel('phone_office', 'Teléfono oficina')} placeholder="+1 (555) 100-0000" value={form.phone_office}
                 onChange={e => setForm(f => ({ ...f, phone_office: e.target.value }))}
                 leftIcon={<Phone size={15}/>}/>
             </div>
@@ -560,10 +515,10 @@ export default function ClientesPage() {
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Correos electrónicos</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Correo oficina" type="email" placeholder="oficina@empresa.com" value={form.email_office}
+              <Input label={rLabel('email_office', 'Correo oficina')} type="email" placeholder="oficina@empresa.com" value={form.email_office}
                 onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))}
                 leftIcon={<Mail size={15}/>}/>
-              <Input label="Correo personal" type="email" placeholder="juan@personal.com" value={form.email_home}
+              <Input label={rLabel('email_home', 'Correo personal')} type="email" placeholder="juan@personal.com" value={form.email_home}
                 onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))}
                 leftIcon={<Mail size={15}/>}/>
             </div>
@@ -573,23 +528,23 @@ export default function ClientesPage() {
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dirección</p>
             <div className="flex flex-col gap-3">
-              <Input label="Calle y número" placeholder="123 Main St" value={form.address}
+              <Input label={rLabel('address', 'Calle y número')} placeholder="123 Main St" value={form.address}
                 onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
                 leftIcon={<MapPin size={15}/>}/>
               <Input label="Apartamento / Suite" placeholder="Apt 4B" value={form.address_line2}
                 onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
               <div className="grid grid-cols-[1fr_100px_110px] gap-3">
-                <Input label="Ciudad" placeholder="Omaha" value={form.city}
+                <Input label={rLabel('city', 'Ciudad')} placeholder="Omaha" value={form.city}
                   onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">Estado</label>
+                  <label className="text-sm font-medium text-gray-700">{rLabel('state', 'Estado')}</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <Input label="Código postal" placeholder="68102" value={form.zip_code}
+                <Input label={rLabel('zip_code', 'Código postal')} placeholder="68102" value={form.zip_code}
                   onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
               </div>
             </div>
@@ -784,169 +739,6 @@ export default function ClientesPage() {
         </div>
       </Modal>
 
-      {/* ── Campos personalizados manager ───────────────────────────────── */}
-      <Modal open={camposModal} onClose={() => setCamposModal(false)} title="Campos personalizados de clientes" size="md">
-        <div className="flex flex-col gap-4">
-          <div className="bg-blue-50 rounded-xl px-4 py-3">
-            <p className="text-xs text-blue-600">
-              Agrega campos extra que aparecerán en el formulario de cada cliente — ideal para datos específicos de tu negocio como "Número de contrato", "Tipo de servicio", etc.
-            </p>
-          </div>
-
-          {templates.length === 0 ? (
-            <div className="py-8 text-center text-gray-400">
-              <Sliders size={28} className="mx-auto mb-2 opacity-30"/>
-              <p className="text-sm">Sin campos personalizados.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-              {templates.map(tpl => (
-                <div key={tpl.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
-                  <GripVertical size={14} className="text-gray-300 shrink-0"/>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">{tpl.field_label}</span>
-                      {tpl.required && (
-                        <span className="text-xs text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">Requerido</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {FIELD_TYPES[tpl.field_type]}
-                      {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
-                    </p>
-                  </div>
-                  <button onClick={() => openEditTemplate(tpl)}
-                    className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
-                    <Pencil size={13} className="text-blue-400"/>
-                  </button>
-                  <button onClick={() => removeTemplate(tpl.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0">
-                    <Trash2 size={13} className="text-red-400"/>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <Button onClick={() => { setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' }); setTplError(''); setAddFieldModal(true); }} fullWidth variant="secondary">
-            <Plus size={14} className="mr-1.5"/> Agregar campo
-          </Button>
-        </div>
-      </Modal>
-
-      {/* ── Add field modal ─────────────────────────────────────────────── */}
-      <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title="Nuevo campo personalizado" size="sm">
-        <div className="flex flex-col gap-4">
-          <Input label="Nombre del campo *" placeholder="ej. Número de contrato"
-            value={tplForm.field_label}
-            onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {tplForm.field_label && (
-            <p className="text-xs text-gray-400 -mt-2">
-              Clave: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(tplForm.field_label)}</code>
-            </p>
-          )}
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
-            <select value={tplForm.field_type}
-              onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-
-          {tplForm.field_type === 'select' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Opciones <span className="text-gray-400 font-normal">(una por línea)</span>
-              </label>
-              <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
-                value={tplForm.options_raw}
-                onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
-            </div>
-          )}
-
-          {/* Fixed toggle — div wrapper, not label */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={tplForm.required}
-              onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${
-                tplForm.required ? 'bg-primary' : 'bg-gray-200'
-              }`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                tplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
-            <span className="text-sm text-gray-700 select-none">Campo requerido</span>
-          </div>
-
-          {tplError && <p className="text-xs text-red-500">{tplError}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setAddFieldModal(false)} fullWidth>Cancelar</Button>
-            <Button onClick={addTemplate} loading={savingTpl} fullWidth>Agregar campo</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Edit field modal ─────────────────────────────────────────────── */}
-      <Modal open={editFieldModal} onClose={() => setEditFieldModal(false)} title="Editar campo personalizado" size="sm">
-        <div className="flex flex-col gap-4">
-          <Input label="Nombre del campo *" placeholder="ej. Número de contrato"
-            value={tplForm.field_label}
-            onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
-            <select value={tplForm.field_type}
-              onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-
-          {tplForm.field_type === 'select' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Opciones <span className="text-gray-400 font-normal">(una por línea)</span>
-              </label>
-              <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
-                value={tplForm.options_raw}
-                onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={tplForm.required}
-              onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${
-                tplForm.required ? 'bg-primary' : 'bg-gray-200'
-              }`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                tplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
-            <span className="text-sm text-gray-700 select-none">Campo requerido</span>
-          </div>
-
-          {tplError && <p className="text-xs text-red-500">{tplError}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setEditFieldModal(false)} fullWidth>Cancelar</Button>
-            <Button onClick={updateTemplate} loading={savingTpl} fullWidth>Guardar cambios</Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
