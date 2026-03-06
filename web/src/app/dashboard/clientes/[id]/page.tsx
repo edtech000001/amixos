@@ -223,7 +223,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   ].filter(Boolean).join('\n');
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -256,9 +256,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Left column */}
-        <div className="flex flex-col gap-4">
+        <div className="lg:col-span-2 flex flex-col gap-4">
 
           {/* Contact card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -390,7 +390,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
 
         {/* Right — Invoices */}
-        <div className="md:col-span-2">
+        <div className="lg:col-span-3">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">Facturas</h2>
