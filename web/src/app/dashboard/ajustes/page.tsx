@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Lock, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders } from 'lucide-react';
+import { Building2, User, Lock, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ChevronRight } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -38,9 +38,18 @@ const FIELD_TYPES: Record<string, string> = {
   text: 'Texto', number: 'Número', date: 'Fecha', boolean: 'Sí / No', select: 'Lista de opciones',
 };
 
+type Tab = 'negocio' | 'clientes' | 'cuenta';
+
+const TABS: { key: Tab; label: string; icon: any }[] = [
+  { key: 'negocio', label: 'Negocio', icon: Building2 },
+  { key: 'clientes', label: 'Clientes', icon: Users },
+  { key: 'cuenta', label: 'Cuenta', icon: User },
+];
+
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
   const { business, user, refetchBusiness } = useApp();
+  const [tab, setTab] = useState<Tab>('negocio');
 
   // ── Business info
   const [bizName, setBizName] = useState(business?.name ?? '');
@@ -177,132 +186,160 @@ export default function AjustesPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Ajustes</h1>
 
-      <div className="flex flex-col gap-5">
-        {/* ── Business info ──────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 size={18} className="text-primary"/>
-            <h2 className="text-sm font-semibold text-gray-900">Información del negocio</h2>
-          </div>
-          <div className="flex flex-col gap-3">
-            <Input label="Nombre del negocio" value={bizName} onChange={e => setBizName(e.target.value)}/>
-            <Input label="Ciudad" value={bizCity} onChange={e => setBizCity(e.target.value)}/>
-          </div>
-          {bizMsg && <p className={`text-xs mt-3 ${bizMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
-          <div className="mt-4">
-            <Button onClick={saveBusiness} loading={savingBiz}>
-              <Save size={14} className="mr-1.5"/> Guardar cambios
-            </Button>
-          </div>
-        </div>
-
-        {/* ── Client preferences ─────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Users size={18} className="text-primary"/>
-            <h2 className="text-sm font-semibold text-gray-900">Preferencias de clientes</h2>
-          </div>
-          <p className="text-xs text-gray-400 mb-5">Elige cuáles campos son obligatorios al crear o editar un cliente.</p>
-
-          <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-            {DEFAULT_CLIENT_FIELDS.map(f => (
-              <div key={f.key} className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                <span className="text-sm text-gray-700">{f.label}</span>
-                <button
-                  type="button" role="switch" aria-checked={!!fieldRequired[f.key]}
-                  onClick={() => toggleFieldRequired(f.key)}
-                  style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                  className={`relative rounded-full transition-colors ${fieldRequired[f.key] ? 'bg-primary' : 'bg-gray-200'}`}>
-                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    fieldRequired[f.key] ? 'translate-x-6' : 'translate-x-1'
-                  }`}/>
+      <div className="flex gap-6">
+        {/* ── Sidebar nav ─────────────────────────────────────────── */}
+        <nav className="w-52 shrink-0">
+          <div className="flex flex-col gap-1 sticky top-6">
+            {TABS.map(t => {
+              const Icon = t.icon;
+              const active = tab === t.key;
+              return (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left w-full ${
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                  }`}>
+                  <Icon size={16} className={active ? 'text-primary' : 'text-gray-400'}/>
+                  {t.label}
                 </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </nav>
 
-          {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
-          <Button onClick={saveFieldPreferences} loading={savingFields}>
-            <Save size={14} className="mr-1.5"/> Guardar preferencias
-          </Button>
+        {/* ── Content ─────────────────────────────────────────────── */}
+        <div className="flex-1 min-w-0">
 
-          {/* ── Custom fields ─────────────────────────────────────── */}
-          <div className="mt-6 pt-6 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">Campos personalizados</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Campos extra que aparecen en el formulario de cada cliente.</p>
+          {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
+          {tab === 'negocio' && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-1">Información del negocio</h2>
+              <p className="text-xs text-gray-400 mb-5">Datos básicos de tu empresa.</p>
+              <div className="flex flex-col gap-3 max-w-md">
+                <Input label="Nombre del negocio" value={bizName} onChange={e => setBizName(e.target.value)}/>
+                <Input label="Ciudad" value={bizCity} onChange={e => setBizCity(e.target.value)}/>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => {
-                setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-                setTplError(''); setAddFieldModal(true);
-              }}>
-                <Plus size={14} className="mr-1"/> Agregar
-              </Button>
+              {bizMsg && <p className={`text-xs mt-3 ${bizMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
+              <div className="mt-5">
+                <Button onClick={saveBusiness} loading={savingBiz}>
+                  <Save size={14} className="mr-1.5"/> Guardar cambios
+                </Button>
+              </div>
             </div>
+          )}
 
-            {templates.length === 0 ? (
-              <div className="py-6 text-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-                <Sliders size={24} className="mx-auto mb-1.5 opacity-30"/>
-                <p className="text-xs">Sin campos personalizados.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                {templates.map(tpl => (
-                  <div key={tpl.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
-                    <GripVertical size={14} className="text-gray-300 shrink-0"/>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">{tpl.field_label}</span>
-                        {tpl.required && (
-                          <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">Requerido</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {FIELD_TYPES[tpl.field_type]}
-                        {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
-                      </p>
+          {/* ══ CLIENTES ═════════════════════════════════════════════ */}
+          {tab === 'clientes' && (
+            <div className="flex flex-col gap-5">
+              {/* Required fields */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Campos obligatorios</h2>
+                <p className="text-xs text-gray-400 mb-5">Elige cuáles campos son obligatorios al crear o editar un cliente.</p>
+
+                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
+                  {DEFAULT_CLIENT_FIELDS.map(f => (
+                    <div key={f.key} className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                      <span className="text-sm text-gray-700">{f.label}</span>
+                      <button
+                        type="button" role="switch" aria-checked={!!fieldRequired[f.key]}
+                        onClick={() => toggleFieldRequired(f.key)}
+                        style={{ width: '44px', height: '24px', flexShrink: 0 }}
+                        className={`relative rounded-full transition-colors ${fieldRequired[f.key] ? 'bg-primary' : 'bg-gray-200'}`}>
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          fieldRequired[f.key] ? 'translate-x-6' : 'translate-x-1'
+                        }`}/>
+                      </button>
                     </div>
-                    <button onClick={() => openEditTemplate(tpl)}
-                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
-                      <Pencil size={13} className="text-blue-400"/>
-                    </button>
-                    <button onClick={() => removeTemplate(tpl.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0">
-                      <Trash2 size={13} className="text-red-400"/>
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
+                <Button onClick={saveFieldPreferences} loading={savingFields}>
+                  <Save size={14} className="mr-1.5"/> Guardar preferencias
+                </Button>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* ── Account ────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <User size={18} className="text-primary"/>
-            <h2 className="text-sm font-semibold text-gray-900">Cuenta</h2>
-          </div>
-          <p className="text-sm text-gray-500">Correo: <span className="font-medium text-gray-900">{user?.email}</span></p>
-        </div>
+              {/* Custom fields */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-base font-semibold text-gray-900">Campos personalizados</h2>
+                  <Button size="sm" variant="secondary" onClick={() => {
+                    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setTplError(''); setAddFieldModal(true);
+                  }}>
+                    <Plus size={14} className="mr-1"/> Agregar
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mb-5">Campos extra que aparecen en el formulario de cada cliente.</p>
 
-        {/* ── Password ───────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Lock size={18} className="text-primary"/>
-            <h2 className="text-sm font-semibold text-gray-900">Cambiar contraseña</h2>
-          </div>
-          <Input label="Nueva contraseña" type="password" placeholder="Mínimo 6 caracteres" value={newPw} onChange={e => setNewPw(e.target.value)}/>
-          {pwMsg && <p className={`text-xs mt-3 ${pwMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
-          <div className="mt-4">
-            <Button onClick={savePassword} loading={savingPw}>
-              <Save size={14} className="mr-1.5"/> Actualizar contraseña
-            </Button>
-          </div>
+                {templates.length === 0 ? (
+                  <div className="py-6 text-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                    <Sliders size={24} className="mx-auto mb-1.5 opacity-30"/>
+                    <p className="text-xs">Sin campos personalizados.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                    {templates.map(tpl => (
+                      <div key={tpl.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+                        <GripVertical size={14} className="text-gray-300 shrink-0"/>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{tpl.field_label}</span>
+                            {tpl.required && (
+                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">Requerido</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {FIELD_TYPES[tpl.field_type]}
+                            {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                          </p>
+                        </div>
+                        <button onClick={() => openEditTemplate(tpl)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
+                          <Pencil size={13} className="text-blue-400"/>
+                        </button>
+                        <button onClick={() => removeTemplate(tpl.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0">
+                          <Trash2 size={13} className="text-red-400"/>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══ CUENTA ═══════════════════════════════════════════════ */}
+          {tab === 'cuenta' && (
+            <div className="flex flex-col gap-5">
+              {/* Account info */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Cuenta</h2>
+                <p className="text-xs text-gray-400 mb-4">Tu información de acceso.</p>
+                <p className="text-sm text-gray-500">Correo: <span className="font-medium text-gray-900">{user?.email}</span></p>
+              </div>
+
+              {/* Password */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Cambiar contraseña</h2>
+                <p className="text-xs text-gray-400 mb-4">Actualiza tu contraseña de acceso.</p>
+                <div className="max-w-md">
+                  <Input label="Nueva contraseña" type="password" placeholder="Mínimo 6 caracteres" value={newPw} onChange={e => setNewPw(e.target.value)}/>
+                </div>
+                {pwMsg && <p className={`text-xs mt-3 ${pwMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
+                <div className="mt-5">
+                  <Button onClick={savePassword} loading={savingPw}>
+                    <Save size={14} className="mr-1.5"/> Actualizar contraseña
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
