@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
@@ -61,7 +61,8 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export default function TrabajoDetailPage({ params }: { params: { id: string } }) {
+export default function TrabajoDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [job, setJob] = useState<Job | null>(null);
@@ -81,9 +82,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const load = async () => {
     const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
-      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, phone)').eq('id', params.id).single(),
-      supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', params.id),
-      supabase.from('job_items').select('*').eq('job_id', params.id).order('created_at'),
+      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, phone)').eq('id', id).single(),
+      supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', id),
+      supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
     ]);
     if (j) {
       setJob(j as Job);
@@ -94,7 +95,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [params.id]);
+  useEffect(() => { load(); }, [id]);
 
   const updateStatus = async (newStatus: string) => {
     setUpdatingStatus(true);
@@ -103,7 +104,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (newStatus === 'sent') update.sent_at = new Date().toISOString();
     if (newStatus === 'accepted') update.accepted_at = new Date().toISOString();
     if (newStatus === 'declined') update.declined_at = new Date().toISOString();
-    await supabase.from('jobs').update(update).eq('id', params.id);
+    await supabase.from('jobs').update(update).eq('id', id);
     setJob(prev => prev ? { ...prev, ...update } : prev);
     setUpdatingStatus(false);
   };
@@ -148,7 +149,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     }).select().single();
 
     if (!error && invoice) {
-      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', params.id);
+      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', id);
       setInvoicing(false);
       window.location.href = `/dashboard/facturas/${invoice.id}`;
     } else {

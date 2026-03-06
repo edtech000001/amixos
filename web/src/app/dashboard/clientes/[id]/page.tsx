@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -80,7 +80,8 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
   return <div>{content}</div>;
 }
 
-export default function ClienteDetailPage({ params }: { params: { id: string } }) {
+export default function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [client, setClient] = useState<Client | null>(null);
@@ -110,11 +111,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const load = async () => {
     if (!business) return;
     const [{ data: c }, { data: inv }, { data: tpl }, { data: cts }] = await Promise.all([
-      supabase.from('clients').select('*').eq('id', params.id).single(),
+      supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('invoices').select('id, invoice_number, status, total_amount, due_date, created_at')
-        .eq('client_id', params.id).order('created_at', { ascending: false }),
+        .eq('client_id', id).order('created_at', { ascending: false }),
       supabase.from('client_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
-      supabase.from('client_contacts').select('*').eq('client_id', params.id).order('is_primary', { ascending: false }),
+      supabase.from('client_contacts').select('*').eq('client_id', id).order('is_primary', { ascending: false }),
     ]);
     if (c) {
       setClient(c);
@@ -134,7 +135,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [params.id, business]);
+  useEffect(() => { load(); }, [id, business]);
 
   const saveEdit = async () => {
     setSaving(true);
@@ -148,7 +149,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       notes: form.notes.trim() || null,
       custom_fields: Object.keys(customVals).length > 0 ? customVals : null,
     };
-    await supabase.from('clients').update(payload).eq('id', params.id);
+    await supabase.from('clients').update(payload).eq('id', id);
     setClient(prev => prev ? { ...prev, ...payload } : prev);
     setSaving(false); setEditModal(false);
   };
@@ -179,16 +180,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
     if (contactForm.is_primary) {
       // Remove primary flag from others first
-      await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', params.id);
+      await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', id);
     }
 
     if (editingContact) {
       await supabase.from('client_contacts').update(payload).eq('id', editingContact.id);
     } else {
-      await supabase.from('client_contacts').insert({ ...payload, client_id: params.id, business_id: business!.id });
+      await supabase.from('client_contacts').insert({ ...payload, client_id: id, business_id: business!.id });
     }
 
-    const { data } = await supabase.from('client_contacts').select('*').eq('client_id', params.id).order('is_primary', { ascending: false });
+    const { data } = await supabase.from('client_contacts').select('*').eq('client_id', id).order('is_primary', { ascending: false });
     setContacts(data ?? []);
     setSavingContact(false);
     setContactModal(false);
@@ -250,7 +251,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Button variant="secondary" size="sm" onClick={() => setEditModal(true)}>
             <Pencil size={14} className="mr-1.5"/> Editar
           </Button>
-          <Link href={`/dashboard/facturas/nueva?client=${params.id}`}>
+          <Link href={`/dashboard/facturas/nueva?client=${id}`}>
             <Button size="sm"><Plus size={14} className="mr-1.5"/> Nueva factura</Button>
           </Link>
         </div>
@@ -394,7 +395,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">Facturas</h2>
-              <Link href={`/dashboard/facturas/nueva?client=${params.id}`} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
+              <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
                 <Plus size={13}/> Nueva
               </Link>
             </div>
@@ -402,7 +403,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               <div className="px-5 py-12 text-center text-gray-400">
                 <FileText size={32} className="mx-auto mb-3 opacity-30"/>
                 <p className="text-sm">Sin facturas aún.</p>
-                <Link href={`/dashboard/facturas/nueva?client=${params.id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">Crear primera factura →</Link>
+                <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">Crear primera factura →</Link>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">

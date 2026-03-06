@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Printer, CheckCircle, Send } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -39,7 +39,8 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export default function FacturaDetailPage({ params }: { params: { id: string } }) {
+export default function FacturaDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -49,17 +50,17 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     supabase.from('invoices')
       .select('*, clients(first_name, last_name, email, phone), invoice_clients(clients(first_name, last_name, email, phone))')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
       .then(({ data }) => { setInvoice(data as Invoice); setLoading(false); });
-  }, [params.id]);
+  }, [id]);
 
   const updateStatus = async (status: string) => {
     setUpdating(true);
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
-    await supabase.from('invoices').update(update).eq('id', params.id);
+    await supabase.from('invoices').update(update).eq('id', id);
     setInvoice(prev => prev ? { ...prev, status } : prev);
     setUpdating(false);
   };

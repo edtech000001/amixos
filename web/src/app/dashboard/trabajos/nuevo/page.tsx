@@ -2,10 +2,10 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, MapPin, Calendar, Users, DollarSign, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -79,6 +79,14 @@ function NuevoTrabajoContent() {
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
 
+  // Client search
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Map link
+  const [mapLink, setMapLink] = useState('');
+
   // Proposal-only fields
   const [clientNotes, setClientNotes] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -102,12 +110,58 @@ function NuevoTrabajoContent() {
     });
   }, [business]);
 
+  // Close client dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleClientChange = (id: string) => {
     setClientId(id);
+    setClientDropdownOpen(false);
+    setClientSearch('');
     const client = clients.find(c => c.id === id);
     if (client && !isProposal) {
       if (client.city) setCity(client.city);
       if (client.state) setState(client.state);
+    }
+  };
+
+  const filteredClients = clientSearch
+    ? clients.filter(c => {
+        const q = clientSearch.toLowerCase();
+        return [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase().includes(q);
+      })
+    : clients;
+
+  const selectedClient = clients.find(c => c.id === clientId);
+
+  const parseMapLink = (link: string) => {
+    setMapLink(link);
+    if (!link.trim()) return;
+    // Try to extract coordinates from Google/Apple Maps URLs
+    // Google Maps: @lat,lng or ?q=lat,lng or place/.../@lat,lng
+    // Apple Maps: ll=lat,lng or q=lat,lng
+    const coordMatch = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+      link.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+      link.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+
+    // Try to extract place name / address from Google Maps URL
+    // e.g. /place/123+Main+St,+City,+State/
+    const placeMatch = link.match(/\/place\/([^/@]+)/);
+    if (placeMatch) {
+      const parts = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ').split(',').map(s => s.trim());
+      if (parts.length >= 1 && !address) setAddress(parts[0]);
+      if (parts.length >= 2 && !city) setCity(parts[1]);
+      if (parts.length >= 3 && !state) {
+        const st = parts[2].replace(/\d/g, '').trim();
+        if (st.length === 2) setState(st.toUpperCase());
+      }
     }
   };
 
@@ -231,7 +285,7 @@ function NuevoTrabajoContent() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/dashboard/trabajos" className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
@@ -258,15 +312,54 @@ function NuevoTrabajoContent() {
               value={title} onChange={e => setTitle(e.target.value)}/>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">Cliente</label>
-              <select value={clientId} onChange={e => handleClientChange(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                <option value="">— Sin cliente —</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.first_name} {c.last_name}{c.company ? ` · ${c.company}` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={clientDropdownRef}>
+                <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                  {selectedClient ? (
+                    <span className="text-gray-900 truncate">
+                      {selectedClient.first_name} {selectedClient.last_name}
+                      {selectedClient.company && <span className="text-gray-400"> · {selectedClient.company}</span>}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">— Sin cliente —</span>
+                  )}
+                  <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                </button>
+                {clientDropdownOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    <div className="p-2 border-b border-gray-100">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input autoFocus type="text" placeholder="Buscar cliente..."
+                          value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      </div>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <button type="button" onClick={() => handleClientChange('')}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                        — Sin cliente —
+                      </button>
+                      {filteredClients.map(c => (
+                        <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
+                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                          {c.first_name} {c.last_name}
+                          {c.company && <span className="text-gray-400 ml-1">· {c.company}</span>}
+                        </button>
+                      ))}
+                      {filteredClients.length === 0 && (
+                        <p className="px-4 py-3 text-xs text-gray-400 text-center">Sin resultados</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {clientId && (
+                  <button type="button" onClick={() => handleClientChange('')}
+                    className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors">
+                    <X size={12} className="text-gray-400"/>
+                  </button>
+                )}
+              </div>
             </div>
 
             {isProposal ? (
@@ -316,6 +409,19 @@ function NuevoTrabajoContent() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Ubicación del trabajo</p>
             </div>
             <div className="flex flex-col gap-3">
+              {/* Map link paste */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                  <Link2 size={13} className="text-gray-400"/> Pegar enlace de mapa
+                </label>
+                <input type="url" placeholder="https://maps.google.com/... o https://maps.apple.com/..."
+                  value={mapLink} onChange={e => parseMapLink(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
+                  <p className="text-xs text-amber-500">Pega un enlace de Google Maps o Apple Maps para auto-llenar la dirección</p>
+                )}
+              </div>
+              <div className="border-t border-gray-100 pt-3"/>
               <Input label="Dirección" placeholder="123 County Road" value={address}
                 onChange={e => setAddress(e.target.value)}/>
               <div className="grid grid-cols-[1fr_120px] gap-3">
