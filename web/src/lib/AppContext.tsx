@@ -53,12 +53,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      // Middleware already refreshed the token and guards /dashboard routes,
-      // so getSession() here will always return a valid session on dashboard pages.
+      // Middleware refreshes the token via cookies on each request.
+      // getSession() reads the cookie-stored session.
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setUser({ id: session.user.id, email: session.user.email ?? '' });
         await fetchBusiness(session.user.id);
+      } else if (window.location.pathname.startsWith('/dashboard')) {
+        window.location.href = '/auth/login';
+        return;
       }
       setLoading(false);
     };
