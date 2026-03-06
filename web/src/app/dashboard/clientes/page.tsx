@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Papa from 'papaparse';
-import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, Sliders, GripVertical } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, Sliders, GripVertical, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -97,6 +97,8 @@ export default function ClientesPage() {
   const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     if (!business) return;
@@ -165,6 +167,36 @@ export default function ClientesPage() {
     if (!confirm('¿Eliminar este cliente permanentemente?')) return;
     await supabase.from('clients').delete().eq('id', id);
     setClients(prev => prev.filter(c => c.id !== id));
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`¿Eliminar ${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} permanentemente?`)) return;
+    setDeleting(true);
+    const ids = Array.from(selectedIds);
+    const { error: e } = await supabase.from('clients').delete().in('id', ids);
+    if (!e) {
+      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+      setSelectedIds(new Set());
+    }
+    setDeleting(false);
   };
 
   const filtered = clients.filter(c => {
@@ -402,8 +434,24 @@ export default function ClientesPage() {
       {/* Search */}
       <div className="mb-4">
         <Input placeholder="Buscar por nombre, empresa, teléfono, ciudad..." value={search}
-          onChange={e => setSearch(e.target.value)} leftIcon={<Search size={16}/>}/>
+          onChange={e => { setSearch(e.target.value); setSelectedIds(new Set()); }} leftIcon={<Search size={16}/>}/>
       </div>
+
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
+          <button onClick={() => setSelectedIds(new Set())} className="p-1 rounded hover:bg-primary/10 transition-colors">
+            <X size={14} className="text-primary"/>
+          </button>
+          <span className="text-sm font-medium text-primary">
+            {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <div className="flex-1"/>
+          <Button variant="danger" size="sm" onClick={bulkDelete} loading={deleting}>
+            <Trash2 size={14} className="mr-1.5"/> Eliminar
+          </Button>
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -418,11 +466,24 @@ export default function ClientesPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Select all header */}
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-100 bg-gray-50/50">
+              <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer"/>
+              <span className="text-xs text-gray-400">Seleccionar todos</span>
+            </div>
+          )}
           {filtered.map((c, i) => {
             const phone = displayPhone(c);
             const email = displayEmail(c);
+            const isChecked = selectedIds.has(c.id);
             return (
-              <div key={c.id} className={`flex items-center justify-between px-5 py-4 ${i < filtered.length-1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors`}>
+              <div key={c.id} className={`flex items-center justify-between px-5 py-4 ${i < filtered.length-1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors ${isChecked ? 'bg-primary/[0.03]' : ''}`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(c.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer shrink-0"/>
                 <Link href={`/dashboard/clientes/${c.id}`} className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <span className="text-primary text-sm font-bold">
@@ -441,6 +502,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
                 </Link>
+                </div>
                 <div className="flex items-center gap-1 shrink-0 ml-4">
                   <button onClick={() => openEdit(c)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
                     <Pencil size={14} className="text-gray-400"/>
