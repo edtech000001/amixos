@@ -26,7 +26,7 @@ interface Job {
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
   created_at: string; updated_at: string;
-  clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null; phone: string | null } | null;
+  clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null } | null;
 }
 interface Assignment {
   id: string; worker_name: string | null;
@@ -82,15 +82,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const load = async () => {
     if (!business) return;
-    const [jobRes, { data: a }, { data: it }] = await Promise.all([
-      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, phone)').eq('id', id).single(),
+    const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
+      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
     ]);
-    console.log('[TrabajoDetail] id:', id, 'business:', business.id, 'jobRes:', jobRes);
-    if (jobRes.data) {
-      setJob(jobRes.data as Job);
-      if (jobRes.data.tax_rate > 0) setTaxRate(jobRes.data.tax_rate);
+    if (j) {
+      setJob(j as Job);
+      if (j.tax_rate > 0) setTaxRate(j.tax_rate);
     }
     setAssignments(a ?? []);
     setItems(it ?? []);
@@ -172,7 +171,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
-  const clientPhone = job.clients?.phone_cell ?? job.clients?.phone;
+  const clientPhone = job.clients?.phone_cell;
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
 

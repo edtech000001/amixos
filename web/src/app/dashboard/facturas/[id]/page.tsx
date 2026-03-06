@@ -23,8 +23,8 @@ interface Invoice {
   total_amount: number;
   notes: string | null;
   language: InvoiceLang;
-  clients: { first_name: string; last_name: string; email: string | null; phone: string | null } | null;
-  invoice_clients: { clients: { first_name: string; last_name: string; email: string | null; phone: string | null } }[];
+  clients: { first_name: string; last_name: string; email: string | null; phone_cell: string | null } | null;
+  invoice_clients: { clients: { first_name: string; last_name: string; email: string | null; phone_cell: string | null } }[];
 }
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -50,7 +50,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     if (!business) return;
     supabase.from('invoices')
-      .select('*, clients(first_name, last_name, email, phone), invoice_clients(clients(first_name, last_name, email, phone))')
+      .select('*, clients(first_name, last_name, email, phone_cell), invoice_clients(clients(first_name, last_name, email, phone_cell))')
       .eq('id', id)
       .single()
       .then(({ data }) => { setInvoice(data as Invoice); setLoading(false); });
@@ -136,7 +136,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     <div key={i} className={i > 0 ? 'mt-2' : ''}>
                       <p className="text-sm font-semibold text-gray-900">{c.first_name} {c.last_name}</p>
                       {c.email && <p className="text-xs text-gray-400">{c.email}</p>}
-                      {c.phone && <p className="text-xs text-gray-400">{c.phone}</p>}
+                      {c.phone_cell && <p className="text-xs text-gray-400">{c.phone_cell}</p>}
                     </div>
                   ))}
                 </div>
