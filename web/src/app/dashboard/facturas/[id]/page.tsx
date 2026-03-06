@@ -48,12 +48,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
+    if (!business) return;
     supabase.from('invoices')
       .select('*, clients(first_name, last_name, email, phone), invoice_clients(clients(first_name, last_name, email, phone))')
       .eq('id', id)
       .single()
       .then(({ data }) => { setInvoice(data as Invoice); setLoading(false); });
-  }, [id]);
+  }, [id, business]);
 
   const updateStatus = async (status: string) => {
     setUpdating(true);

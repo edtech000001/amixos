@@ -52,17 +52,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/auth/login';
-        return;
+    // Listen for auth state changes — handles initial load, token refresh, and sign-out
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session) {
+          setUser({ id: session.user.id, email: session.user.email ?? '' });
+          await fetchBusiness(session.user.id);
+          setLoading(false);
+        } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+          // Only redirect on explicit sign-out or when there's truly no session
+          setUser(null);
+          setBusiness(null);
+          setLoading(false);
+          if (window.location.pathname.startsWith('/dashboard')) {
+            window.location.href = '/auth/login';
+          }
+        }
       }
-      setUser({ id: session.user.id, email: session.user.email ?? '' });
-      await fetchBusiness(session.user.id);
-      setLoading(false);
-    };
-    init();
+    );
+    return () => subscription.unsubscribe();
   }, []);
 
   return (

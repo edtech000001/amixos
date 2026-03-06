@@ -81,6 +81,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   }, []);
 
   const load = async () => {
+    if (!business) return;
     const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, phone)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', id),
@@ -95,7 +96,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [id, business]);
 
   const updateStatus = async (newStatus: string) => {
     setUpdatingStatus(true);
