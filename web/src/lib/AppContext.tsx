@@ -52,18 +52,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Listen for auth state changes — handles initial load, token refresh, and sign-out
+    // Initial session check — getSession() waits for token restore from localStorage
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser({ id: session.user.id, email: session.user.email ?? '' });
+        await fetchBusiness(session.user.id);
+      } else if (window.location.pathname.startsWith('/dashboard')) {
+        window.location.href = '/auth/login';
+        return;
+      }
+      setLoading(false);
+    };
+    init();
+
+    // Listen for subsequent auth changes (token refresh, sign-out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session) {
+        if (event === 'SIGNED_IN' && session) {
           setUser({ id: session.user.id, email: session.user.email ?? '' });
           await fetchBusiness(session.user.id);
           setLoading(false);
-        } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-          // Only redirect on explicit sign-out or when there's truly no session
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setBusiness(null);
-          setLoading(false);
           if (window.location.pathname.startsWith('/dashboard')) {
             window.location.href = '/auth/login';
           }
