@@ -547,14 +547,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
       {/* ── Add / Edit contact modal ──────────────────────────────────────── */}
       <Modal open={contactModal} onClose={() => setContactModal(false)}
-        title={editingContact ? 'Editar contacto' : 'Nuevo contacto'} size="sm">
-        <div className="flex flex-col gap-4">
-          <Input label="Nombre *" placeholder="María López"
-            value={contactForm.name}
-            onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
-          <Input label="Cargo / Rol" placeholder="Dueño, Asistente, Encargado..."
-            value={contactForm.role}
-            onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
+        title={editingContact ? 'Editar contacto' : 'Nuevo contacto'} size="md">
+        <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Nombre *" placeholder="María López"
+              value={contactForm.name}
+              onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
+            <Input label="Cargo / Rol" placeholder="Dueño, Asistente, Encargado..."
+              value={contactForm.role}
+              onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="Teléfono" type="tel" placeholder="(555) 000-0000"
               value={fmtPhoneInput(contactForm.phone)}
@@ -567,7 +569,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">Notas</label>
-            <textarea rows={2} placeholder="Ej. Disponible solo por las mañanas..."
+            <textarea rows={3} placeholder="Ej. Disponible solo por las mañanas..."
               value={contactForm.notes}
               onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
@@ -577,10 +579,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               type="button"
               onClick={() => setContactForm(f => ({ ...f, is_primary: !f.is_primary }))}
               style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${contactForm.is_primary ? 'bg-amber-400' : 'bg-gray-200'}`}>
+              className={`relative rounded-full transition-colors ${contactForm.is_primary ? 'bg-primary' : 'bg-gray-200'}`}>
               <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${contactForm.is_primary ? 'translate-x-6' : 'translate-x-1'}`}/>
             </button>
-            <span className="text-sm text-gray-700 select-none">Contacto principal <Star size={12} className="inline text-amber-400 fill-amber-400 mb-0.5"/></span>
+            <span className="text-sm text-gray-700 select-none">Contacto principal <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
           </div>
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setContactModal(false)} fullWidth>Cancelar</Button>
