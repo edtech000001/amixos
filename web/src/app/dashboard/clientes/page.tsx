@@ -77,8 +77,16 @@ const normalizeState = (val: string) => {
   return STATE_NAME_TO_ABBR[t.toLowerCase()] ?? t;
 };
 
+function fmtPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && digits[0] === '1') return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+  return raw;
+}
+
 function displayPhone(c: Client) {
-  return c.phone_cell ?? c.phone ?? null;
+  const raw = c.phone_cell ?? c.phone ?? null;
+  return raw ? fmtPhone(raw) : null;
 }
 function displayEmail(c: Client) {
   return c.email_office ?? c.email ?? null;
@@ -273,10 +281,17 @@ export default function ClientesPage() {
     ...templates.map(t => ({ key: `custom:${t.field_key}`, label: t.field_label, isCustom: true })),
   ];
 
+  // Strip non-printable chars, BOM, and Unicode replacement char from CSV values
+  const sanitize = (s: string) =>
+    s.replace(/[\uFFFD\uFEFF]/g, '').replace(/[^\x20-\x7E\xA0-\xFF\u0100-\uFFFF]/g, '').trim();
+
   const handleFileSelect = (file: File) => {
     Papa.parse<Record<string, string>>(file, {
       header: true,
       skipEmptyLines: true,
+      encoding: 'UTF-8',
+      transform: (value: string) => sanitize(value),
+      transformHeader: (header: string) => sanitize(header),
       complete: (result) => {
         const headers = result.meta.fields ?? [];
         setCsvHeaders(headers);

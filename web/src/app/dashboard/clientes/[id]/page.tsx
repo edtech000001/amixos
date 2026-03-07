@@ -66,6 +66,13 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
+function fmtPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && digits[0] === '1') return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+  return raw;
+}
+
 function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: string; href?: string }) {
   const content = (
     <div className="flex items-start gap-2.5">
@@ -265,8 +272,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contacto</h2>
             <div className="flex flex-col gap-3">
-              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label="Celular" value={primaryPhone} href={`tel:${primaryPhone}`}/>}
-              {officePhone && <ContactRow icon={<Phone size={15}/>} label="Oficina" value={officePhone} href={`tel:${officePhone}`}/>}
+              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label="Celular" value={fmtPhone(primaryPhone)} href={`tel:${primaryPhone}`}/>}
+              {officePhone && <ContactRow icon={<Phone size={15}/>} label="Teléfono oficina" value={fmtPhone(officePhone)} href={`tel:${officePhone}`}/>}
               {primaryEmail && <ContactRow icon={<Mail size={15}/>} label="Correo oficina" value={primaryEmail} href={`mailto:${primaryEmail}`}/>}
               {homeEmail && <ContactRow icon={<Mail size={15}/>} label="Correo personal" value={homeEmail} href={`mailto:${homeEmail}`}/>}
               {fullAddress && (
@@ -306,7 +313,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                         {ct.role && <p className="text-xs text-gray-400">{ct.role}</p>}
                         {ct.phone && (
                           <a href={`tel:${ct.phone}`} className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
-                            <Phone size={11}/> {ct.phone}
+                            <Phone size={11}/> {fmtPhone(ct.phone)}
                           </a>
                         )}
                         {ct.email && (
