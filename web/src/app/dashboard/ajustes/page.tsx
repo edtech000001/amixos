@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Lock, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ChevronRight } from 'lucide-react';
+import { Building2, User, Lock, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ChevronRight, Briefcase } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -38,12 +38,23 @@ const FIELD_TYPES: Record<string, string> = {
   text: 'Texto', number: 'Número', date: 'Fecha', boolean: 'Sí / No', select: 'Lista de opciones',
 };
 
-type Tab = 'negocio' | 'clientes' | 'cuenta';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'cuenta';
 
 const TABS: { key: Tab; label: string; icon: any }[] = [
   { key: 'negocio', label: 'Negocio', icon: Building2 },
+  { key: 'trabajos', label: 'Trabajos', icon: Briefcase },
   { key: 'clientes', label: 'Clientes', icon: Users },
   { key: 'cuenta', label: 'Cuenta', icon: User },
+];
+
+const ALL_PIPELINE_STEPS: { key: string; label: string; description: string }[] = [
+  { key: 'proposal', label: 'Propuesta', description: 'Fase inicial de cotizaciones y propuestas' },
+  { key: 'sent', label: 'Enviada', description: 'Propuesta enviada al cliente' },
+  { key: 'accepted', label: 'Aceptada', description: 'Propuesta aceptada por el cliente' },
+  { key: 'scheduled', label: 'Programado', description: 'Trabajo agendado con fecha' },
+  { key: 'in_progress', label: 'En progreso', description: 'Trabajo actualmente en ejecucion' },
+  { key: 'completed', label: 'Completado', description: 'Trabajo terminado' },
+  { key: 'invoiced', label: 'Facturado', description: 'Factura generada para el trabajo' },
 ];
 
 export default function AjustesPage() {
@@ -78,11 +89,19 @@ export default function AjustesPage() {
   const [savingTpl, setSavingTpl] = useState(false);
   const [tplError, setTplError] = useState('');
 
+  // ── Job pipeline config
+  const [pipelineDisabled, setPipelineDisabled] = useState<Record<string, boolean>>(
+    business?.job_pipeline_disabled ?? {}
+  );
+  const [savingPipeline, setSavingPipeline] = useState(false);
+  const [pipelineMsg, setPipelineMsg] = useState('');
+
   useEffect(() => {
     if (business) {
       setBizName(business.name);
       setBizCity(business.city);
       setFieldRequired(business.client_field_required ?? {});
+      setPipelineDisabled(business.job_pipeline_disabled ?? {});
     }
   }, [business]);
 
@@ -123,6 +142,23 @@ export default function AjustesPage() {
     setFieldsMsg(error ? 'Error al guardar.' : '¡Guardado!');
     if (!error) await refetchBusiness();
     setSavingFields(false);
+  };
+
+  // ── Job pipeline config
+  const togglePipelineStep = (key: string) => {
+    setPipelineDisabled(prev => ({ ...prev, [key]: !prev[key] }));
+    setPipelineMsg('');
+  };
+
+  const savePipelineConfig = async () => {
+    if (!business) return;
+    setSavingPipeline(true); setPipelineMsg('');
+    const { error } = await supabase.from('businesses')
+      .update({ job_pipeline_disabled: pipelineDisabled })
+      .eq('id', business.id);
+    setPipelineMsg(error ? 'Error al guardar.' : '¡Guardado!');
+    if (!error) await refetchBusiness();
+    setSavingPipeline(false);
   };
 
   // ── Custom field template CRUD
@@ -229,6 +265,42 @@ export default function AjustesPage() {
                   <Save size={14} className="mr-1.5"/> Guardar cambios
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* ══ TRABAJOS ══════════════════════════════════════════════ */}
+          {tab === 'trabajos' && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-1">Etapas del proceso</h2>
+              <p className="text-xs text-gray-400 mb-5">Desactiva las etapas que no uses en tu flujo de trabajo. Las etapas desactivadas no se mostraran en el pipeline de trabajos.</p>
+
+              <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
+                {ALL_PIPELINE_STEPS.map(step => {
+                  const isDisabled = !!pipelineDisabled[step.key];
+                  return (
+                    <div key={step.key} className={`flex items-center justify-between px-4 py-3 transition-colors ${isDisabled ? 'bg-gray-50/50' : 'bg-white hover:bg-gray-50/50'}`}>
+                      <div className="min-w-0">
+                        <span className={`text-sm font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-700'}`}>{step.label}</span>
+                        <p className={`text-xs mt-0.5 ${isDisabled ? 'text-gray-300' : 'text-gray-400'}`}>{step.description}</p>
+                      </div>
+                      <button
+                        type="button" role="switch" aria-checked={!isDisabled}
+                        onClick={() => togglePipelineStep(step.key)}
+                        style={{ width: '44px', height: '24px', flexShrink: 0 }}
+                        className={`relative rounded-full transition-colors ${!isDisabled ? 'bg-primary' : 'bg-gray-200'}`}>
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          !isDisabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}/>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {pipelineMsg && <p className={`text-xs mb-3 ${pipelineMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{pipelineMsg}</p>}
+              <Button onClick={savePipelineConfig} loading={savingPipeline}>
+                <Save size={14} className="mr-1.5"/> Guardar configuracion
+              </Button>
             </div>
           )}
 

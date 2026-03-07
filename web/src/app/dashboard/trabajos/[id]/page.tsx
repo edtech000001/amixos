@@ -180,8 +180,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   if (!job) return <div className="p-6 text-gray-400">Trabajo no encontrado.</div>;
 
   const isProposal = !!job.estimate_number;
-  const pipeline = isProposal ? PROPOSAL_PIPELINE : WORK_PIPELINE;
+  const disabled = business?.job_pipeline_disabled ?? {};
+  const fullPipeline = isProposal ? PROPOSAL_PIPELINE : WORK_PIPELINE;
+  const pipeline = fullPipeline.filter(s => !disabled[s.key]);
   const pipelineIdx = pipeline.findIndex(s => s.key === job.status);
+
+  // Map pipeline steps to their timestamps
+  const stepTimestamp: Record<string, string | null> = {
+    proposal: job.created_at,
+    sent: job.sent_at,
+    accepted: job.accepted_at,
+    scheduled: job.scheduled_date,
+    in_progress: null,
+    completed: job.completed_date,
+    invoiced: job.invoice_id ? job.updated_at : null,
+  };
+  const fmtDate = (d: string | null) => {
+    if (!d) return null;
+    return new Date(d.includes('T') ? d : d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  };
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
@@ -264,6 +281,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <span className={`text-xs font-semibold ${isCurrent ? s.color : isPast ? 'text-gray-400' : 'text-gray-300'}`}>
                       {s.label}
                     </span>
+                    {(isPast || isCurrent) && fmtDate(stepTimestamp[s.key]) && (
+                      <span className="text-[10px] text-gray-400">{fmtDate(stepTimestamp[s.key])}</span>
+                    )}
                   </div>
                   {i < pipeline.length - 1 && (
                     <div className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < pipelineIdx ? 'bg-gray-300' : 'bg-gray-100'}`}/>
