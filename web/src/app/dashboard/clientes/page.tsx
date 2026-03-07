@@ -84,6 +84,13 @@ function fmtPhone(raw: string): string {
   return raw;
 }
 
+function fmtPhoneInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+}
+
 function displayPhone(c: Client) {
   const raw = c.phone_cell ?? c.phone ?? null;
   return raw ? fmtPhone(raw) : null;
@@ -517,11 +524,11 @@ export default function ClientesPage() {
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label={rLabel('phone_cell', 'Celular')} placeholder="+1 (555) 000-0000" value={form.phone_cell}
-                onChange={e => setForm(f => ({ ...f, phone_cell: e.target.value }))}
+              <Input label={rLabel('phone_cell', 'Celular')} placeholder="(555) 000-0000" value={fmtPhoneInput(form.phone_cell)}
+                onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))}
                 leftIcon={<Phone size={15}/>}/>
-              <Input label={rLabel('phone_office', 'Teléfono oficina')} placeholder="+1 (555) 100-0000" value={form.phone_office}
-                onChange={e => setForm(f => ({ ...f, phone_office: e.target.value }))}
+              <Input label={rLabel('phone_office', 'Teléfono oficina')} placeholder="(555) 000-0000" value={fmtPhoneInput(form.phone_office)}
+                onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))}
                 leftIcon={<Phone size={15}/>}/>
             </div>
           </section>

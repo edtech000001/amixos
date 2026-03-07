@@ -73,6 +73,13 @@ function fmtPhone(raw: string): string {
   return raw;
 }
 
+function fmtPhoneInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+}
+
 function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: string; href?: string }) {
   const content = (
     <div className="flex items-start gap-2.5">
@@ -457,8 +464,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <section>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Celular" value={form.phone_cell} onChange={e => setForm(f => ({ ...f, phone_cell: e.target.value }))} leftIcon={<Phone size={15}/>}/>
-              <Input label="Oficina" value={form.phone_office} onChange={e => setForm(f => ({ ...f, phone_office: e.target.value }))} leftIcon={<Phone size={15}/>}/>
+              <Input label="Celular" value={fmtPhoneInput(form.phone_cell)} onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder="(555) 000-0000"/>
+              <Input label="Oficina" value={fmtPhoneInput(form.phone_office)} onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder="(555) 000-0000"/>
             </div>
           </section>
 
@@ -549,9 +556,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             value={contactForm.role}
             onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Teléfono" type="tel" placeholder="555-1234"
-              value={contactForm.phone}
-              onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))}
+            <Input label="Teléfono" type="tel" placeholder="(555) 000-0000"
+              value={fmtPhoneInput(contactForm.phone)}
+              onChange={e => setContactForm(f => ({ ...f, phone: fmtPhoneInput(e.target.value) }))}
               leftIcon={<Phone size={15}/>}/>
             <Input label="Correo" type="email" placeholder="maria@empresa.com"
               value={contactForm.email}
