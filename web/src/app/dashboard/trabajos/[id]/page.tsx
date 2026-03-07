@@ -8,6 +8,7 @@ import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil,
+  Share2, Download, RotateCcw,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -25,6 +26,7 @@ interface Job {
   issue_date: string | null; expiry_date: string | null;
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
+  share_token: string | null; created_by: string | null; cancelled_at: string | null;
   created_at: string; updated_at: string;
   clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null } | null;
 }
@@ -64,7 +66,7 @@ function fmt(n: number) {
 export default function TrabajoDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [items, setItems] = useState<JobItem[]>([]);
@@ -107,6 +109,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (newStatus === 'sent') update.sent_at = new Date().toISOString();
     if (newStatus === 'accepted') update.accepted_at = new Date().toISOString();
     if (newStatus === 'declined') update.declined_at = new Date().toISOString();
+    if (newStatus === 'cancelled') update.cancelled_at = new Date().toISOString();
     await supabase.from('jobs').update(update).eq('id', id);
     setJob(prev => prev ? { ...prev, ...update } : prev);
     setUpdatingStatus(false);
@@ -170,6 +173,40 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       window.location.href = '/dashboard/trabajos';
     }
     setDeleting(false);
+  };
+
+  const reinstateJob = async () => {
+    setUpdatingStatus(true);
+    const newStatus = job?.estimate_number ? 'proposal' : 'scheduled';
+    await supabase.from('jobs').update({ status: newStatus, cancelled_at: null }).eq('id', id);
+    setJob(prev => prev ? { ...prev, status: newStatus, cancelled_at: null } : prev);
+    setUpdatingStatus(false);
+  };
+
+  const [sharecopied, setShareCopied] = useState(false);
+  const shareProposal = async () => {
+    if (!job) return;
+    let token = job.share_token;
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      await supabase.from('jobs').update({ share_token: token }).eq('id', id);
+      setJob(prev => prev ? { ...prev, share_token: token } : prev);
+    }
+    const url = `${window.location.origin}/propuesta/${token}`;
+    await navigator.clipboard.writeText(url);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
+
+  const openPrintView = async () => {
+    if (!job) return;
+    let token = job.share_token;
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      await supabase.from('jobs').update({ share_token: token }).eq('id', id);
+      setJob(prev => prev ? { ...prev, share_token: token } : prev);
+    }
+    window.open(`/propuesta/${token}?print=1`, '_blank');
   };
 
   if (loading) return (
@@ -242,6 +279,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <FileText size={14} className="mr-1.5"/> Ver factura <ArrowRight size={13} className="ml-1"/>
               </Button>
             </Link>
+          )}
+          {isProposal && (
+            <>
+              <button onClick={shareProposal}
+                className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors relative"
+                title="Copiar enlace para compartir">
+                <Share2 size={16}/>
+                {sharecopied && (
+                  <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded whitespace-nowrap">
+                    Enlace copiado
+                  </span>
+                )}
+              </button>
+              <button onClick={openPrintView}
+                className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+                title="Descargar PDF">
+                <Download size={16}/>
+              </button>
+            </>
           )}
           <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
             className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
@@ -351,12 +407,24 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
       {/* Cancelled / Declined banner */}
       {(job.status === 'cancelled' || job.status === 'declined') && (
-        <div className={`rounded-2xl p-4 mb-5 border ${
+        <div className={`rounded-2xl p-4 mb-5 border flex items-center justify-between ${
           job.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-100'
         }`}>
-          <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-gray-500' : 'text-red-600'}`}>
-            {job.status === 'cancelled' ? 'Este trabajo fue cancelado.' : 'Esta propuesta fue rechazada.'}
-          </p>
+          <div>
+            <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-gray-500' : 'text-red-600'}`}>
+              {job.status === 'cancelled' ? 'Este trabajo fue cancelado.' : 'Esta propuesta fue rechazada.'}
+            </p>
+            {job.status === 'cancelled' && job.cancelled_at && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Cancelado el {new Date(job.cancelled_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+          {job.status === 'cancelled' && (
+            <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
+              <RotateCcw size={14} className="mr-1.5"/> Reactivar
+            </Button>
+          )}
         </div>
       )}
 
@@ -457,6 +525,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <p className="text-xs text-amber-800">{job.internal_notes}</p>
             </div>
           )}
+
+          {/* Created by */}
+          <div className="px-1 flex items-center gap-1.5 text-xs text-gray-400">
+            <Clock size={11}/>
+            <span>
+              Creado el {new Date(job.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {job.created_by && user && job.created_by === user.id && ` por ${user.email}`}
+            </span>
+          </div>
 
           {/* Workers card */}
           {assignments.length > 0 && (

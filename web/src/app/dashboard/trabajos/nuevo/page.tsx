@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -52,7 +52,7 @@ export default function NuevoTrabajoPage() {
 
 function NuevoTrabajoContent() {
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
@@ -170,6 +170,15 @@ function NuevoTrabajoContent() {
     loadData();
   }, [business]);
 
+  // Auto-add a new row when all existing items have a description
+  useEffect(() => {
+    if (items.length === 0) return;
+    const allFilled = items.every(i => i.description.trim() !== '');
+    if (allFilled) {
+      setItems(prev => [...prev, isEditProposal ? newItem() : newLaborItem()]);
+    }
+  }, [items.map(i => i.description).join('|')]);
+
   // Close client dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -234,6 +243,8 @@ function NuevoTrabajoContent() {
 
   const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
 
+  const fmtMoney = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const taxAmt = subtotal * (taxRate / 100);
   const total = isEditProposal ? subtotal + taxAmt - discount : subtotal;
@@ -259,6 +270,7 @@ function NuevoTrabajoContent() {
           tax_amount: +taxAmt.toFixed(2),
           discount: +discount.toFixed(2),
           total_amount: +total.toFixed(2),
+          scheduled_date: scheduledDate || null,
         };
 
         let finalJobId: string;
@@ -272,7 +284,7 @@ function NuevoTrabajoContent() {
           const estNum = `COT-${String((count ?? 0) + 1).padStart(4, '0')}`;
           const { data: job, error: jobErr } = await supabase.from('jobs').insert({
             business_id: business!.id, status: 'proposal', priority: 'normal',
-            estimate_number: estNum, ...proposalData,
+            estimate_number: estNum, created_by: user?.id ?? null, ...proposalData,
           }).select().single();
           if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating proposal');
           finalJobId = job.id;
@@ -313,7 +325,7 @@ function NuevoTrabajoContent() {
           finalJobId = editId;
         } else {
           const { data: job, error: jobErr } = await supabase.from('jobs').insert({
-            business_id: business!.id, status, ...jobData,
+            business_id: business!.id, status, created_by: user?.id ?? null, ...jobData,
           }).select().single();
           if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating job');
           finalJobId = job.id;
@@ -440,10 +452,11 @@ function NuevoTrabajoContent() {
             </div>
 
             {isEditProposal ? (
-              /* Proposal: issue + expiry dates */
-              <div className="grid grid-cols-2 gap-3">
+              /* Proposal: issue + expiry + project start dates */
+              <div className="grid grid-cols-3 gap-3">
                 <Input label="Fecha de emisión" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
                 <Input label="Válida hasta" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
+                <Input label="Inicio del proyecto" type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
               </div>
             ) : (
               /* Job: status + priority */
@@ -589,17 +602,11 @@ function NuevoTrabajoContent() {
 
         {/* ── Líneas de trabajo / Ítems */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <DollarSign size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                {isEditProposal ? 'Ítems / Servicios' : 'Materiales y mano de obra'}
-              </p>
-            </div>
-            <button onClick={() => setItems(prev => [...prev, isEditProposal ? newItem() : newLaborItem()])}
-              className="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
-              <Plus size={13}/> Agregar
-            </button>
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign size={15} className="text-primary"/>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              {isEditProposal ? 'Servicios' : 'Materiales y mano de obra'}
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             {isEditProposal ? (
@@ -620,7 +627,7 @@ function NuevoTrabajoContent() {
                       onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
                       className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <p className="text-sm font-semibold text-gray-900 text-right pr-1">
-                      ${(item.quantity * item.unit_price).toFixed(2)}
+                      ${fmtMoney(item.quantity * item.unit_price)}
                     </p>
                     <button onClick={() => items.length > 1 && removeItem(item.id)}
                       disabled={items.length === 1}
@@ -653,7 +660,7 @@ function NuevoTrabajoContent() {
                       onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
                       className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <p className="text-sm font-semibold text-gray-900 text-right pr-1">
-                      ${(item.quantity * item.unit_price).toFixed(2)}
+                      ${fmtMoney(item.quantity * item.unit_price)}
                     </p>
                     <button onClick={() => items.length > 1 && removeItem(item.id)}
                       className="p-1 rounded-lg hover:bg-red-50 transition-colors"
@@ -671,7 +678,7 @@ function NuevoTrabajoContent() {
                 <div className="w-52 flex flex-col gap-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Subtotal</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <span className="font-medium">${fmtMoney(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm gap-3">
                     <span className="text-gray-500 whitespace-nowrap">Impuesto (%)</span>
@@ -687,13 +694,13 @@ function NuevoTrabajoContent() {
                   </div>
                   <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
                     <span>Total</span>
-                    <span className="text-primary">${total.toFixed(2)}</span>
+                    <span className="text-primary">${fmtMoney(total)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Total estimado</p>
-                  <p className="text-lg font-bold text-gray-900">${subtotal.toFixed(2)}</p>
+                  <p className="text-lg font-bold text-gray-900">${fmtMoney(subtotal)}</p>
                 </div>
               )}
             </div>
