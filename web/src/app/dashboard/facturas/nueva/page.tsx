@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, ArrowLeft, X } from 'lucide-react';
+import { Trash2, ArrowLeft, X, Send } from 'lucide-react';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -49,10 +49,16 @@ export default function NuevaFacturaPage() {
   }, [business]);
 
   const updateLine = (i: number, field: keyof LineItem, value: string | number) => {
-    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
+    setLines(prev => {
+      const updated = prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l);
+      // Auto-add a new row when the last row's description is filled
+      if (field === 'description' && i === updated.length - 1 && (value as string).trim()) {
+        updated.push({ ...EMPTY_LINE });
+      }
+      return updated;
+    });
   };
-  const addLine = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
-  const removeLine = (i: number) => setLines(prev => prev.filter((_, idx) => idx !== i));
+  const removeLine = (i: number) => setLines(prev => prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i));
 
   const subtotal = lines.reduce((s, l) => s + (l.qty * l.rate), 0);
   const taxAmount = subtotal * (taxRate / 100);
@@ -203,9 +209,7 @@ export default function NuevaFacturaPage() {
                 </button>
               </div>
             ))}
-            <button onClick={addLine} className="flex items-center gap-2 text-xs text-primary font-medium hover:underline mt-1 w-fit">
-              <Plus size={14}/> Agregar concepto
-            </button>
+            {/* Rows auto-add when last description is filled */}
           </div>
 
           {/* Totals */}
@@ -249,10 +253,10 @@ export default function NuevaFacturaPage() {
         {/* Actions */}
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => save('draft')} loading={saving} fullWidth size="lg">
-            Guardar borrador
+            Guardar Factura
           </Button>
           <Button onClick={() => save('sent')} loading={saving} fullWidth size="lg">
-            Crear y enviar
+            <Send size={15} className="mr-1.5"/> Guardar y marcar enviada
           </Button>
         </div>
       </div>
