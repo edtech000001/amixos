@@ -650,6 +650,12 @@ export type DashboardDict = {
       subtitle: string;
       emailLabel: string;
     };
+    language: {
+      heading: string;
+      subtitle: string;
+      label: string;
+      savedNote: string;
+    };
     password: {
       heading: string;
       subtitle: string;
@@ -1388,6 +1394,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Tu información de acceso.',
         emailLabel: 'Correo',
       },
+      language: {
+        heading: 'Idioma',
+        subtitle: 'Elige el idioma para mostrar la interfaz.',
+        label: 'Idioma de la interfaz',
+        savedNote: 'Los cambios se aplican al instante.',
+      },
       password: {
         heading: 'Cambiar contraseña',
         subtitle: 'Actualiza tu contraseña de acceso.',
@@ -2122,6 +2134,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Account',
         subtitle: 'Your sign-in information.',
         emailLabel: 'Email',
+      },
+      language: {
+        heading: 'Language',
+        subtitle: 'Choose your interface display language.',
+        label: 'Interface language',
+        savedNote: 'Changes apply instantly.',
       },
       password: {
         heading: 'Change password',

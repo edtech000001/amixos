@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase, Globe } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -423,6 +423,10 @@ export default function AjustesPage() {
                 <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
               </div>
 
+              {/* Language */}
+              <LanguageCard />
+
+
               {/* Password */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
@@ -534,6 +538,35 @@ export default function AjustesPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ─── Language card ────────────────────────────────────────────────────────────
+function LanguageCard() {
+  const { t: full, locale, setLocale, locales, labels } = useLang();
+  const t = full.dashboard.settings.language;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Globe size={16} className="text-gray-500" />
+        <h2 className="text-base font-semibold text-gray-900">{t.heading}</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">{t.subtitle}</p>
+      <div className="max-w-xs flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">{t.label}</label>
+        <select
+          value={locale}
+          onChange={e => setLocale(e.target.value as typeof locale)}
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+        >
+          {locales.map(l => (
+            <option key={l} value={l}>{labels[l]}</option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs text-gray-400 mt-3">{t.savedNote}</p>
     </div>
   );
 }
