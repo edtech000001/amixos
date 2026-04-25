@@ -3,12 +3,13 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock, MapPin } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { useLang } from '@/i18n/LangProvider';
 
 interface CalEvent {
   id: string;
@@ -23,16 +24,21 @@ interface CalEvent {
 
 interface Client { id: string; first_name: string; last_name: string; }
 
-const EVENT_TYPES: Record<string, { label: string; color: string; bg: string }> = {
-  job:         { label: 'Trabajo',     color: 'text-primary',     bg: 'bg-primary/10 border-primary/30' },
-  meeting:     { label: 'Reunión',     color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200' },
-  delivery:    { label: 'Entrega',     color: 'text-orange-600',  bg: 'bg-orange-50 border-orange-200' },
-  follow_up:   { label: 'Seguimiento', color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-200' },
-  other:       { label: 'Otro',        color: 'text-gray-600',    bg: 'bg-gray-50 border-gray-200' },
+type EventTypeKey = 'job' | 'meeting' | 'delivery' | 'follow_up' | 'other';
+
+const EVENT_TYPE_KEYS: EventTypeKey[] = ['job', 'meeting', 'delivery', 'follow_up', 'other'];
+
+const EVENT_TYPE_STYLES: Record<EventTypeKey, { color: string; bg: string }> = {
+  job:       { color: 'text-primary',    bg: 'bg-primary/10 border-primary/30' },
+  meeting:   { color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-200' },
+  delivery:  { color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  follow_up: { color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
+  other:     { color: 'text-gray-600',   bg: 'bg-gray-50 border-gray-200' },
 };
 
-const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function eventTypeStyle(key: string) {
+  return EVENT_TYPE_STYLES[(key as EventTypeKey)] ?? EVENT_TYPE_STYLES.other;
+}
 
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -44,6 +50,18 @@ const EMPTY_FORM = {
 };
 
 export default function CalendarioPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard.calendar;
+  const tc = full.common;
+  const dateLocale = full.dashboard.dateLocale;
+
+  const eventTypeLabel = (key: string): string => {
+    if ((EVENT_TYPE_KEYS as string[]).includes(key)) {
+      return t.eventTypes[key as EventTypeKey];
+    }
+    return t.eventTypes.other;
+  };
+
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [today] = useState(new Date());
@@ -82,6 +100,15 @@ export default function CalendarioPage() {
     ...Array.from({ length: daysInMonth }, (_, i) => new Date(cursor.getFullYear(), cursor.getMonth(), i + 1)),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
+
+  // Locale-aware day-of-week headers (Sun..Sat). Use a known Sunday as reference.
+  const dayHeaders = Array.from({ length: 7 }, (_, i) => {
+    // 2024-01-07 is a Sunday (UTC). Use UTC to avoid TZ shifts.
+    const d = new Date(Date.UTC(2024, 0, 7 + i));
+    return d.toLocaleDateString(dateLocale, { weekday: 'short', timeZone: 'UTC' });
+  });
+
+  const monthLabel = cursor.toLocaleDateString(dateLocale, { month: 'long', year: 'numeric' });
 
   const eventsForDay = (d: Date) =>
     events.filter(e => sameDay(new Date(e.start_time), d));
@@ -122,13 +149,20 @@ export default function CalendarioPage() {
   const prevMonth = () => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1));
   const nextMonth = () => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
 
+  const modalTitle = detailEvent
+    ? detailEvent.title
+    : t.modal.newEventTitle.replace(
+        '{{date}}',
+        selected ? selected.toLocaleDateString(dateLocale, { day: 'numeric', month: 'long' }) : ''
+      );
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Calendario</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
         <Button size="md" onClick={() => openAddModal(new Date())}>
-          <Plus size={15} className="mr-1.5" /> Nuevo evento
+          <Plus size={15} className="mr-1.5" /> {t.newEvent}
         </Button>
       </div>
 
@@ -137,8 +171,8 @@ export default function CalendarioPage() {
         <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <ChevronLeft size={18} className="text-gray-600"/>
         </button>
-        <h2 className="text-base font-semibold text-gray-900">
-          {MONTHS_ES[cursor.getMonth()]} {cursor.getFullYear()}
+        <h2 className="text-base font-semibold text-gray-900 capitalize">
+          {monthLabel}
         </h2>
         <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <ChevronRight size={18} className="text-gray-600"/>
@@ -149,8 +183,8 @@ export default function CalendarioPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-gray-100">
-          {DAYS_ES.map(d => (
-            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-400">{d}</div>
+          {dayHeaders.map((d, i) => (
+            <div key={i} className="py-2 text-center text-xs font-semibold text-gray-400 capitalize">{d}</div>
           ))}
         </div>
         {/* Cells */}
@@ -175,19 +209,21 @@ export default function CalendarioPage() {
                     </span>
                     <div className="flex flex-col gap-0.5">
                       {dayEvents.slice(0, 3).map(ev => {
-                        const t = EVENT_TYPES[ev.event_type] ?? EVENT_TYPES.other;
+                        const style = eventTypeStyle(ev.event_type);
                         return (
                           <button
                             key={ev.id}
                             onClick={e => { e.stopPropagation(); setDetailEvent(ev); setModal(true); }}
-                            className={`text-left text-xs px-1.5 py-0.5 rounded-md border truncate font-medium ${t.bg} ${t.color}`}
+                            className={`text-left text-xs px-1.5 py-0.5 rounded-md border truncate font-medium ${style.bg} ${style.color}`}
                           >
                             {ev.title}
                           </button>
                         );
                       })}
                       {dayEvents.length > 3 && (
-                        <span className="text-xs text-gray-400 pl-1">+{dayEvents.length - 3} más</span>
+                        <span className="text-xs text-gray-400 pl-1">
+                          {t.moreCount.replace('{{count}}', String(dayEvents.length - 3))}
+                        </span>
                       )}
                     </div>
                   </>
@@ -200,36 +236,39 @@ export default function CalendarioPage() {
 
       {/* Event type legend */}
       <div className="flex flex-wrap gap-3 mt-4">
-        {Object.entries(EVENT_TYPES).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${v.bg.split(' ')[0]}`}/>
-            <span className="text-xs text-gray-500">{v.label}</span>
-          </div>
-        ))}
+        {EVENT_TYPE_KEYS.map(k => {
+          const style = EVENT_TYPE_STYLES[k];
+          return (
+            <div key={k} className="flex items-center gap-1.5">
+              <div className={`w-2.5 h-2.5 rounded-full ${style.bg.split(' ')[0]}`}/>
+              <span className="text-xs text-gray-500">{t.eventTypes[k]}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Add / Detail modal */}
       <Modal
         open={modal}
         onClose={() => { setModal(false); setDetailEvent(null); }}
-        title={detailEvent ? detailEvent.title : `Nuevo evento — ${selected ? selected.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }) : ''}`}
+        title={modalTitle}
         size="md"
       >
         {detailEvent ? (
           // Detail view
           <div className="flex flex-col gap-4">
-            <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full w-fit ${EVENT_TYPES[detailEvent.event_type]?.bg} ${EVENT_TYPES[detailEvent.event_type]?.color}`}>
-              {EVENT_TYPES[detailEvent.event_type]?.label ?? detailEvent.event_type}
+            <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full w-fit ${eventTypeStyle(detailEvent.event_type).bg} ${eventTypeStyle(detailEvent.event_type).color}`}>
+              {eventTypeLabel(detailEvent.event_type)}
             </div>
             {detailEvent.description && <p className="text-sm text-gray-700">{detailEvent.description}</p>}
             <div className="flex flex-col gap-2 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-gray-400 shrink-0"/>
                 <span>
-                  {new Date(detailEvent.start_time).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {new Date(detailEvent.start_time).toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' })}
                   {' · '}
-                  {new Date(detailEvent.start_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                  {detailEvent.end_time && ` — ${new Date(detailEvent.end_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`}
+                  {new Date(detailEvent.start_time).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}
+                  {detailEvent.end_time && ` — ${new Date(detailEvent.end_time).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}`}
                 </span>
               </div>
               {detailEvent.location && (
@@ -237,43 +276,43 @@ export default function CalendarioPage() {
               )}
             </div>
             <div className="flex gap-2 pt-2">
-              <Button variant="danger" size="sm" onClick={() => deleteEvent(detailEvent.id)}>Eliminar</Button>
-              <Button variant="secondary" size="sm" onClick={() => { setModal(false); setDetailEvent(null); }}>Cerrar</Button>
+              <Button variant="danger" size="sm" onClick={() => deleteEvent(detailEvent.id)}>{tc.buttons.delete}</Button>
+              <Button variant="secondary" size="sm" onClick={() => { setModal(false); setDetailEvent(null); }}>{t.modal.closeBtn}</Button>
             </div>
           </div>
         ) : (
           // Add form
           <div className="flex flex-col gap-4">
-            <Input label="Título *" placeholder="Instalación de pivote, reunión con cliente..." value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} autoFocus />
+            <Input label={t.modal.titleLabel} placeholder={t.modal.titlePlaceholder} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} autoFocus />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Tipo</label>
+              <label className="text-sm font-medium text-gray-700">{t.modal.typeLabel}</label>
               <select value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                {Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                {EVENT_TYPE_KEYS.map(k => <option key={k} value={k}>{t.eventTypes[k]}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Fecha" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-              <Input label="Inicio" type="time" value={form.time_start} onChange={e => setForm(f => ({ ...f, time_start: e.target.value }))} />
-              <Input label="Fin" type="time" value={form.time_end} onChange={e => setForm(f => ({ ...f, time_end: e.target.value }))} />
+              <Input label={t.modal.dateLabel} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              <Input label={t.modal.timeStartLabel} type="time" value={form.time_start} onChange={e => setForm(f => ({ ...f, time_start: e.target.value }))} />
+              <Input label={t.modal.timeEndLabel} type="time" value={form.time_end} onChange={e => setForm(f => ({ ...f, time_end: e.target.value }))} />
             </div>
-            <Input label="Ubicación" placeholder="Dirección o descripción del lugar" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} leftIcon={<MapPin size={14}/>} />
+            <Input label={t.modal.locationLabel} placeholder={t.modal.locationPlaceholder} value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} leftIcon={<MapPin size={14}/>} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Cliente (opcional)</label>
+              <label className="text-sm font-medium text-gray-700">{t.modal.clientLabel}</label>
               <select value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                <option value="">Sin cliente</option>
+                <option value="">{t.modal.noClientOption}</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Notas</label>
-              <textarea rows={2} placeholder="Detalles adicionales..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              <label className="text-sm font-medium text-gray-700">{t.modal.notesLabel}</label>
+              <textarea rows={2} placeholder={t.modal.notesPlaceholder} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
             </div>
             <div className="flex gap-3 pt-2">
-              <Button variant="secondary" onClick={() => setModal(false)} fullWidth>Cancelar</Button>
-              <Button onClick={saveEvent} loading={saving} fullWidth>Guardar evento</Button>
+              <Button variant="secondary" onClick={() => setModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+              <Button onClick={saveEvent} loading={saving} fullWidth>{t.modal.saveBtn}</Button>
             </div>
           </div>
         )}

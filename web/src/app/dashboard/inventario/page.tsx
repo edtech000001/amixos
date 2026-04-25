@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Item {
   id: string;
@@ -25,9 +26,18 @@ const EMPTY: Omit<Item, 'id'> = {
   name: '', sku: '', quantity: 0, unit: 'unidad', unit_cost: 0, category: '', low_stock_threshold: 5,
 };
 
-const UNITS = ['unidad', 'pieza', 'kg', 'lb', 'metro', 'pie', 'litro', 'galón', 'caja', 'rollo', 'bolsa'];
+const UNIT_KEYS = ['unidad', 'pieza', 'kg', 'lb', 'metro', 'pie', 'litro', 'galon', 'caja', 'rollo', 'bolsa'] as const;
+// Map t.units key -> stored DB value (preserves existing data: e.g. 'galón' in DB)
+const UNIT_DB_VALUES: Record<typeof UNIT_KEYS[number], string> = {
+  unidad: 'unidad', pieza: 'pieza', kg: 'kg', lb: 'lb', metro: 'metro', pie: 'pie',
+  litro: 'litro', galon: 'galón', caja: 'caja', rollo: 'rollo', bolsa: 'bolsa',
+};
 
 export default function InventarioPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard.inventory;
+  const tc = full.common;
+
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [items, setItems] = useState<Item[]>([]);
@@ -60,21 +70,21 @@ export default function InventarioPage() {
   const openAdjust = (item: Item) => { setSelected(item); setAdjustQty(0); setAdjustType('add'); setModal('adjust'); };
 
   const save = async () => {
-    if (!form.name.trim()) { setError('El nombre es requerido'); return; }
+    if (!form.name.trim()) { setError(t.modal.errorNameRequired); return; }
     setSaving(true); setError('');
     const payload = { ...form, sku: form.sku || null, category: form.category || null };
     if (modal === 'add') {
       const { error: e } = await supabase.from('inventory_items').insert({ ...payload, business_id: business!.id });
-      if (e) { setError('Error al guardar.'); setSaving(false); return; }
+      if (e) { setError(t.modal.errorSave); setSaving(false); return; }
     } else if (modal === 'edit' && selected) {
       const { error: e } = await supabase.from('inventory_items').update(payload).eq('id', selected.id);
-      if (e) { setError('Error al guardar.'); setSaving(false); return; }
+      if (e) { setError(t.modal.errorSave); setSaving(false); return; }
     }
     await load(); setSaving(false); setModal(null);
   };
 
   const adjust = async () => {
-    if (!selected || adjustQty <= 0) { setError('Ingresa una cantidad válida'); return; }
+    if (!selected || adjustQty <= 0) { setError(t.adjustModal.errorInvalidQty); return; }
     setSaving(true);
     const newQty = adjustType === 'add'
       ? selected.quantity + adjustQty
@@ -85,9 +95,16 @@ export default function InventarioPage() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm('¿Eliminar este artículo?')) return;
+    if (!confirm(t.confirmDelete)) return;
     await supabase.from('inventory_items').delete().eq('id', id);
     setItems(prev => prev.filter(i => i.id !== id));
+  };
+
+  // Look up the localized unit label for a stored DB value; fall back to raw value
+  const unitLabel = (dbValue: string): string => {
+    const entry = (Object.entries(UNIT_DB_VALUES) as [typeof UNIT_KEYS[number], string][])
+      .find(([, v]) => v === dbValue);
+    return entry ? t.units[entry[0]] : dbValue;
   };
 
   const filtered = items.filter(i => {
@@ -100,18 +117,26 @@ export default function InventarioPage() {
   const lowStockCount = items.filter(i => i.quantity <= i.low_stock_threshold).length;
   const totalValue = items.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
 
+  const valueFormatted = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const summaryText = t.summary
+    .replace('{{count}}', String(items.length))
+    .replace('{{value}}', valueFormatted);
+  const summaryLowStockText = t.summaryLowStock.replace('{{count}}', String(lowStockCount));
+  const lowStockBannerText = (lowStockCount > 1 ? t.lowStockBannerPlural : t.lowStockBannerSingle)
+    .replace('{{count}}', String(lowStockCount));
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inventario</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {items.length} artículos · Valor: ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            {lowStockCount > 0 && <span className="ml-2 text-orange-500 font-medium">· {lowStockCount} bajo stock</span>}
+            {summaryText}
+            {lowStockCount > 0 && <span className="ml-2 text-orange-500 font-medium">· {summaryLowStockText}</span>}
           </p>
         </div>
-        <Button onClick={openAdd} size="md"><Plus size={15} className="mr-1.5"/> Agregar artículo</Button>
+        <Button onClick={openAdd} size="md"><Plus size={15} className="mr-1.5"/> {t.addItem}</Button>
       </div>
 
       {/* Low stock alert */}
@@ -119,8 +144,8 @@ export default function InventarioPage() {
         <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
           <AlertTriangle size={18} className="text-orange-500 shrink-0"/>
           <p className="text-sm text-orange-700">
-            <span className="font-semibold">{lowStockCount} artículo{lowStockCount > 1 ? 's' : ''}</span> por debajo del nivel mínimo.
-            <button onClick={() => setFilter('bajo_stock')} className="ml-1.5 underline font-medium">Ver ahora</button>
+            <span className="font-semibold">{lowStockBannerText}</span> {t.lowStockBannerSuffix}
+            <button onClick={() => setFilter('bajo_stock')} className="ml-1.5 underline font-medium">{t.lowStockBannerCta}</button>
           </p>
         </div>
       )}
@@ -131,12 +156,12 @@ export default function InventarioPage() {
           {(['todos', 'bajo_stock'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {f === 'todos' ? 'Todos' : '⚠️ Bajo stock'}
+              {f === 'todos' ? t.filters.all : t.filters.lowStock}
             </button>
           ))}
         </div>
         <div className="flex-1">
-          <Input placeholder="Buscar por nombre, SKU o categoría..." value={search} onChange={e => setSearch(e.target.value)} leftIcon={<Search size={16}/>}/>
+          <Input placeholder={t.searchPlaceholder} value={search} onChange={e => setSearch(e.target.value)} leftIcon={<Search size={16}/>}/>
         </div>
       </div>
 
@@ -146,13 +171,13 @@ export default function InventarioPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-30"/>
-          <p className="text-sm">{search || filter !== 'todos' ? 'Sin resultados.' : 'Tu inventario está vacío.'}</p>
-          {!search && filter === 'todos' && <button onClick={openAdd} className="text-primary text-sm font-medium hover:underline mt-1">Agrega el primer artículo →</button>}
+          <p className="text-sm">{search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}</p>
+          {!search && filter === 'todos' && <button onClick={openAdd} className="text-primary text-sm font-medium hover:underline mt-1">{t.addFirst}</button>}
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[1fr_80px_80px_90px_100px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-3 border-b border-gray-50">
-            <span>Artículo</span><span className="text-center">Stock</span><span className="text-center">Unidad</span><span className="text-right">Costo/u</span><span className="text-right">Acciones</span>
+            <span>{t.cols.item}</span><span className="text-center">{t.cols.stock}</span><span className="text-center">{t.cols.unit}</span><span className="text-right">{t.cols.unitCost}</span><span className="text-right">{t.cols.actions}</span>
           </div>
           {filtered.map((item, i) => {
             const low = item.quantity <= item.low_stock_threshold;
@@ -165,15 +190,15 @@ export default function InventarioPage() {
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {item.category ? `${item.category}` : ''}
-                    {item.sku ? ` · SKU: ${item.sku}` : ''}
-                    {` · Mín: ${item.low_stock_threshold}`}
+                    {item.sku ? ` · ${t.itemMeta.skuPrefix.replace('{{sku}}', item.sku)}` : ''}
+                    {` · ${t.itemMeta.minPrefix.replace('{{min}}', String(item.low_stock_threshold))}`}
                   </p>
                 </div>
                 <div className={`text-center text-sm font-bold ${low ? 'text-orange-500' : 'text-gray-900'}`}>{item.quantity}</div>
-                <div className="text-center text-xs text-gray-500">{item.unit}</div>
+                <div className="text-center text-xs text-gray-500">{unitLabel(item.unit)}</div>
                 <div className="text-right text-sm text-gray-700">${item.unit_cost.toFixed(2)}</div>
                 <div className="flex items-center justify-end gap-1">
-                  <button onClick={() => openAdjust(item)} title="Ajustar stock" className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors">
+                  <button onClick={() => openAdjust(item)} title={t.actions.adjustStock} className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors">
                     <TrendingUp size={14} className="text-primary"/>
                   </button>
                   <button onClick={() => openEdit(item)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -190,53 +215,53 @@ export default function InventarioPage() {
       )}
 
       {/* Add/Edit Modal */}
-      <Modal open={modal === 'add' || modal === 'edit'} onClose={() => setModal(null)} title={modal === 'add' ? 'Nuevo artículo' : 'Editar artículo'}>
+      <Modal open={modal === 'add' || modal === 'edit'} onClose={() => setModal(null)} title={modal === 'add' ? t.modal.addTitle : t.modal.editTitle}>
         <div className="flex flex-col gap-4">
-          <Input label="Nombre *" placeholder='ej. Tubo galvanizado 2"' value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <Input label={t.modal.nameLabel} placeholder={t.modal.namePlaceholder} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="SKU / Código" placeholder="TG-001" value={form.sku ?? ''} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} />
-            <Input label="Categoría" placeholder="Materiales, Herramientas..." value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+            <Input label={t.modal.skuLabel} placeholder={t.modal.skuPlaceholder} value={form.sku ?? ''} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} />
+            <Input label={t.modal.categoryLabel} placeholder={t.modal.categoryPlaceholder} value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Cantidad inicial" type="number" min="0" value={form.quantity || ''} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
+            <Input label={t.modal.quantityLabel} type="number" min="0" value={form.quantity || ''} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Unidad</label>
+              <label className="text-sm font-medium text-gray-700">{t.modal.unitLabel}</label>
               <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                {UNIT_KEYS.map(k => <option key={k} value={UNIT_DB_VALUES[k]}>{t.units[k]}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Costo por unidad ($)" type="number" min="0" step="0.01" value={form.unit_cost || ''} onChange={e => setForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) || 0 }))} />
-            <Input label="Stock mínimo (alerta)" type="number" min="0" value={form.low_stock_threshold || ''} onChange={e => setForm(f => ({ ...f, low_stock_threshold: parseInt(e.target.value) || 0 }))} />
+            <Input label={t.modal.unitCostLabel} type="number" min="0" step="0.01" value={form.unit_cost || ''} onChange={e => setForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) || 0 }))} />
+            <Input label={t.modal.lowStockThresholdLabel} type="number" min="0" value={form.low_stock_threshold || ''} onChange={e => setForm(f => ({ ...f, low_stock_threshold: parseInt(e.target.value) || 0 }))} />
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>Cancelar</Button>
-            <Button onClick={save} loading={saving} fullWidth>Guardar</Button>
+            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={save} loading={saving} fullWidth>{tc.buttons.save}</Button>
           </div>
         </div>
       </Modal>
 
       {/* Adjust stock modal */}
-      <Modal open={modal === 'adjust'} onClose={() => setModal(null)} title={`Ajustar stock — ${selected?.name}`} size="sm">
+      <Modal open={modal === 'adjust'} onClose={() => setModal(null)} title={t.adjustModal.title.replace('{{name}}', selected?.name ?? '')} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-500">Stock actual: <span className="font-bold text-gray-900">{selected?.quantity} {selected?.unit}</span></p>
+          <p className="text-sm text-gray-500">{t.adjustModal.currentStock} <span className="font-bold text-gray-900">{selected?.quantity} {selected ? unitLabel(selected.unit) : ''}</span></p>
           <div className="flex gap-2">
             <button onClick={() => setAdjustType('add')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'add' ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-gray-200 text-gray-500'}`}>
-              <TrendingUp size={15}/> Entrada
+              <TrendingUp size={15}/> {t.adjustModal.addOption}
             </button>
             <button onClick={() => setAdjustType('remove')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'remove' ? 'border-red-400 text-red-500 bg-red-50' : 'border-gray-200 text-gray-500'}`}>
-              <TrendingDown size={15}/> Salida
+              <TrendingDown size={15}/> {t.adjustModal.removeOption}
             </button>
           </div>
-          <Input label="Cantidad" type="number" min="1" placeholder="0" value={adjustQty || ''} onChange={e => setAdjustQty(parseFloat(e.target.value) || 0)} autoFocus />
+          <Input label={t.adjustModal.quantityLabel} type="number" min="1" placeholder={t.adjustModal.quantityPlaceholder} value={adjustQty || ''} onChange={e => setAdjustQty(parseFloat(e.target.value) || 0)} autoFocus />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>Cancelar</Button>
+            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={adjust} loading={saving} fullWidth>
-              {adjustType === 'add' ? `+${adjustQty || 0}` : `-${adjustQty || 0}`} {selected?.unit}
+              {adjustType === 'add' ? `+${adjustQty || 0}` : `-${adjustQty || 0}`} {selected ? unitLabel(selected.unit) : ''}
             </Button>
           </div>
         </div>

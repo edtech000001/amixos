@@ -398,6 +398,185 @@ export type DashboardDict = {
       submitCreateProposal: string;
     };
   };
+  employees: {
+    title: string;
+    summary: string;
+    logHours: string;
+    addBtn: string;
+    tabs: {
+      empleados: string;
+      horas: string;
+      nomina: string;
+    };
+    inactiveBadge: string;
+    roles: {
+      owner: string;
+      manager: string;
+      worker: string;
+    };
+    payTypes: {
+      hourly: string;
+      salary: string;
+      daily: string;
+    };
+    payRateUnit: {
+      hourly: string;
+      salary: string;
+      daily: string;
+    };
+    payRateUnitShort: {
+      hourly: string;
+      salary: string;
+      daily: string;
+    };
+    emptyEmployees: string;
+    addFirst: string;
+    emptyTimesheets: string;
+    emptyPayroll: string;
+    timesheetCols: {
+      worker: string;
+      date: string;
+      hours: string;
+      work: string;
+    };
+    payroll: {
+      summaryHeading: string;
+      colEmployee: string;
+      colHours: string;
+      colRate: string;
+      colTotal: string;
+      monthlyTotal: string;
+      unknownWorker: string;
+    };
+    modal: {
+      addTitle: string;
+      editTitle: string;
+      firstNameLabel: string;
+      firstNamePlaceholder: string;
+      lastNameLabel: string;
+      lastNamePlaceholder: string;
+      phoneLabel: string;
+      phonePlaceholder: string;
+      roleLabel: string;
+      payTypeLabel: string;
+      payRateLabel: string;
+      errorFirstNameRequired: string;
+    };
+    timesheetModal: {
+      title: string;
+      employeeLabel: string;
+      employeeManualOption: string;
+      workerNameLabel: string;
+      workerNamePlaceholder: string;
+      dateLabel: string;
+      hoursLabel: string;
+      hoursPlaceholder: string;
+      jobDescriptionLabel: string;
+      jobDescriptionPlaceholder: string;
+      errorHoursRequired: string;
+    };
+  };
+  inventory: {
+    title: string;
+    summary: string;
+    summaryLowStock: string;
+    addItem: string;
+    lowStockBannerSingle: string;
+    lowStockBannerPlural: string;
+    lowStockBannerSuffix: string;
+    lowStockBannerCta: string;
+    filters: {
+      all: string;
+      lowStock: string;
+    };
+    searchPlaceholder: string;
+    emptyNoMatch: string;
+    emptyAll: string;
+    addFirst: string;
+    cols: {
+      item: string;
+      stock: string;
+      unit: string;
+      unitCost: string;
+      actions: string;
+    };
+    itemMeta: {
+      skuPrefix: string;
+      minPrefix: string;
+    };
+    actions: {
+      adjustStock: string;
+    };
+    confirmDelete: string;
+    units: {
+      unidad: string;
+      pieza: string;
+      kg: string;
+      lb: string;
+      metro: string;
+      pie: string;
+      litro: string;
+      galon: string;
+      caja: string;
+      rollo: string;
+      bolsa: string;
+    };
+    modal: {
+      addTitle: string;
+      editTitle: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      skuLabel: string;
+      skuPlaceholder: string;
+      categoryLabel: string;
+      categoryPlaceholder: string;
+      quantityLabel: string;
+      unitLabel: string;
+      unitCostLabel: string;
+      lowStockThresholdLabel: string;
+      errorNameRequired: string;
+      errorSave: string;
+    };
+    adjustModal: {
+      title: string;
+      currentStock: string;
+      addOption: string;
+      removeOption: string;
+      quantityLabel: string;
+      quantityPlaceholder: string;
+      errorInvalidQty: string;
+    };
+  };
+  calendar: {
+    title: string;
+    newEvent: string;
+    moreCount: string;
+    noClient: string;
+    eventTypes: {
+      job: string;
+      meeting: string;
+      delivery: string;
+      follow_up: string;
+      other: string;
+    };
+    modal: {
+      newEventTitle: string;
+      titleLabel: string;
+      titlePlaceholder: string;
+      typeLabel: string;
+      dateLabel: string;
+      timeStartLabel: string;
+      timeEndLabel: string;
+      locationLabel: string;
+      locationPlaceholder: string;
+      clientLabel: string;
+      noClientOption: string;
+      notesLabel: string;
+      notesPlaceholder: string;
+      saveBtn: string;
+      closeBtn: string;
+    };
+  };
   // Date locale for short month formatting in lists
   dateLocale: string;
 };
@@ -793,6 +972,185 @@ export const dashboard: Record<Locale, DashboardDict> = {
         submitCreateProposal: 'Crear propuesta',
       },
     },
+    employees: {
+      title: 'Empleados',
+      summary: '{{active}} activos · {{hours}}h esta semana',
+      logHours: 'Registrar horas',
+      addBtn: 'Agregar',
+      tabs: {
+        empleados: 'Equipo',
+        horas: 'Horas',
+        nomina: 'Nómina',
+      },
+      inactiveBadge: 'Inactivo',
+      roles: {
+        owner: 'Dueño',
+        manager: 'Gerente',
+        worker: 'Trabajador',
+      },
+      payTypes: {
+        hourly: 'Por hora',
+        salary: 'Salario',
+        daily: 'Por día',
+      },
+      payRateUnit: {
+        hourly: '$/hr',
+        salary: '$/mes',
+        daily: '$/día',
+      },
+      payRateUnitShort: {
+        hourly: 'hr',
+        salary: 'mes',
+        daily: 'día',
+      },
+      emptyEmployees: 'Aún no tienes empleados.',
+      addFirst: 'Agrega el primero →',
+      emptyTimesheets: 'Sin registros de horas.',
+      emptyPayroll: 'Sin registros de horas este mes.',
+      timesheetCols: {
+        worker: 'Trabajador',
+        date: 'Fecha',
+        hours: 'Horas',
+        work: 'Trabajo',
+      },
+      payroll: {
+        summaryHeading: 'Resumen de nómina — {{month}}',
+        colEmployee: 'Empleado',
+        colHours: 'Horas',
+        colRate: 'Tarifa',
+        colTotal: 'Total',
+        monthlyTotal: 'Total estimado del mes',
+        unknownWorker: 'Desconocido',
+      },
+      modal: {
+        addTitle: 'Nuevo empleado',
+        editTitle: 'Editar empleado',
+        firstNameLabel: 'Nombre *',
+        firstNamePlaceholder: 'Juan',
+        lastNameLabel: 'Apellido',
+        lastNamePlaceholder: 'Pérez',
+        phoneLabel: 'Teléfono',
+        phonePlaceholder: '+1 (555) 000-0000',
+        roleLabel: 'Puesto',
+        payTypeLabel: 'Tipo de pago',
+        payRateLabel: 'Tarifa ({{unit}})',
+        errorFirstNameRequired: 'El nombre es requerido',
+      },
+      timesheetModal: {
+        title: 'Registrar horas',
+        employeeLabel: 'Empleado',
+        employeeManualOption: 'Escribir nombre manualmente',
+        workerNameLabel: 'Nombre del trabajador',
+        workerNamePlaceholder: 'Juan Pérez',
+        dateLabel: 'Fecha',
+        hoursLabel: 'Horas trabajadas',
+        hoursPlaceholder: '8',
+        jobDescriptionLabel: 'Descripción del trabajo',
+        jobDescriptionPlaceholder: 'Instalación de pivote, Sección Norte',
+        errorHoursRequired: 'Las horas son requeridas',
+      },
+    },
+    inventory: {
+      title: 'Inventario',
+      summary: '{{count}} artículos · Valor: {{value}}',
+      summaryLowStock: '{{count}} bajo stock',
+      addItem: 'Agregar artículo',
+      lowStockBannerSingle: '{{count}} artículo',
+      lowStockBannerPlural: '{{count}} artículos',
+      lowStockBannerSuffix: 'por debajo del nivel mínimo.',
+      lowStockBannerCta: 'Ver ahora',
+      filters: {
+        all: 'Todos',
+        lowStock: '⚠️ Bajo stock',
+      },
+      searchPlaceholder: 'Buscar por nombre, SKU o categoría...',
+      emptyNoMatch: 'Sin resultados.',
+      emptyAll: 'Tu inventario está vacío.',
+      addFirst: 'Agrega el primer artículo →',
+      cols: {
+        item: 'Artículo',
+        stock: 'Stock',
+        unit: 'Unidad',
+        unitCost: 'Costo/u',
+        actions: 'Acciones',
+      },
+      itemMeta: {
+        skuPrefix: 'SKU: {{sku}}',
+        minPrefix: 'Mín: {{min}}',
+      },
+      actions: {
+        adjustStock: 'Ajustar stock',
+      },
+      confirmDelete: '¿Eliminar este artículo?',
+      units: {
+        unidad: 'unidad',
+        pieza: 'pieza',
+        kg: 'kg',
+        lb: 'lb',
+        metro: 'metro',
+        pie: 'pie',
+        litro: 'litro',
+        galon: 'galón',
+        caja: 'caja',
+        rollo: 'rollo',
+        bolsa: 'bolsa',
+      },
+      modal: {
+        addTitle: 'Nuevo artículo',
+        editTitle: 'Editar artículo',
+        nameLabel: 'Nombre *',
+        namePlaceholder: 'ej. Tubo galvanizado 2"',
+        skuLabel: 'SKU / Código',
+        skuPlaceholder: 'TG-001',
+        categoryLabel: 'Categoría',
+        categoryPlaceholder: 'Materiales, Herramientas...',
+        quantityLabel: 'Cantidad inicial',
+        unitLabel: 'Unidad',
+        unitCostLabel: 'Costo por unidad ($)',
+        lowStockThresholdLabel: 'Stock mínimo (alerta)',
+        errorNameRequired: 'El nombre es requerido',
+        errorSave: 'Error al guardar.',
+      },
+      adjustModal: {
+        title: 'Ajustar stock — {{name}}',
+        currentStock: 'Stock actual:',
+        addOption: 'Entrada',
+        removeOption: 'Salida',
+        quantityLabel: 'Cantidad',
+        quantityPlaceholder: '0',
+        errorInvalidQty: 'Ingresa una cantidad válida',
+      },
+    },
+    calendar: {
+      title: 'Calendario',
+      newEvent: 'Nuevo evento',
+      moreCount: '+{{count}} más',
+      noClient: 'Sin cliente',
+      eventTypes: {
+        job: 'Trabajo',
+        meeting: 'Reunión',
+        delivery: 'Entrega',
+        follow_up: 'Seguimiento',
+        other: 'Otro',
+      },
+      modal: {
+        newEventTitle: 'Nuevo evento — {{date}}',
+        titleLabel: 'Título *',
+        titlePlaceholder: 'Instalación de pivote, reunión con cliente...',
+        typeLabel: 'Tipo',
+        dateLabel: 'Fecha',
+        timeStartLabel: 'Inicio',
+        timeEndLabel: 'Fin',
+        locationLabel: 'Ubicación',
+        locationPlaceholder: 'Dirección o descripción del lugar',
+        clientLabel: 'Cliente (opcional)',
+        noClientOption: 'Sin cliente',
+        notesLabel: 'Notas',
+        notesPlaceholder: 'Detalles adicionales...',
+        saveBtn: 'Guardar evento',
+        closeBtn: 'Cerrar',
+      },
+    },
     dateLocale: 'es-MX',
   },
   en: {
@@ -1183,6 +1541,185 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorSaveGeneric: 'Save error',
         submitCreateJob: 'Create job',
         submitCreateProposal: 'Create proposal',
+      },
+    },
+    employees: {
+      title: 'Employees',
+      summary: '{{active}} active · {{hours}}h this week',
+      logHours: 'Log hours',
+      addBtn: 'Add',
+      tabs: {
+        empleados: 'Team',
+        horas: 'Hours',
+        nomina: 'Payroll',
+      },
+      inactiveBadge: 'Inactive',
+      roles: {
+        owner: 'Owner',
+        manager: 'Manager',
+        worker: 'Worker',
+      },
+      payTypes: {
+        hourly: 'Hourly',
+        salary: 'Salary',
+        daily: 'Daily',
+      },
+      payRateUnit: {
+        hourly: '$/hr',
+        salary: '$/mo',
+        daily: '$/day',
+      },
+      payRateUnitShort: {
+        hourly: 'hr',
+        salary: 'mo',
+        daily: 'day',
+      },
+      emptyEmployees: "You don't have any employees yet.",
+      addFirst: 'Add the first one →',
+      emptyTimesheets: 'No hours logged yet.',
+      emptyPayroll: 'No hours logged this month.',
+      timesheetCols: {
+        worker: 'Worker',
+        date: 'Date',
+        hours: 'Hours',
+        work: 'Work',
+      },
+      payroll: {
+        summaryHeading: 'Payroll summary — {{month}}',
+        colEmployee: 'Employee',
+        colHours: 'Hours',
+        colRate: 'Rate',
+        colTotal: 'Total',
+        monthlyTotal: 'Estimated monthly total',
+        unknownWorker: 'Unknown',
+      },
+      modal: {
+        addTitle: 'New employee',
+        editTitle: 'Edit employee',
+        firstNameLabel: 'First name *',
+        firstNamePlaceholder: 'John',
+        lastNameLabel: 'Last name',
+        lastNamePlaceholder: 'Doe',
+        phoneLabel: 'Phone',
+        phonePlaceholder: '+1 (555) 000-0000',
+        roleLabel: 'Role',
+        payTypeLabel: 'Pay type',
+        payRateLabel: 'Rate ({{unit}})',
+        errorFirstNameRequired: 'First name is required',
+      },
+      timesheetModal: {
+        title: 'Log hours',
+        employeeLabel: 'Employee',
+        employeeManualOption: 'Type name manually',
+        workerNameLabel: 'Worker name',
+        workerNamePlaceholder: 'John Doe',
+        dateLabel: 'Date',
+        hoursLabel: 'Hours worked',
+        hoursPlaceholder: '8',
+        jobDescriptionLabel: 'Job description',
+        jobDescriptionPlaceholder: 'Pivot installation, North section',
+        errorHoursRequired: 'Hours are required',
+      },
+    },
+    inventory: {
+      title: 'Inventory',
+      summary: '{{count}} items · Value: {{value}}',
+      summaryLowStock: '{{count}} low stock',
+      addItem: 'Add item',
+      lowStockBannerSingle: '{{count}} item',
+      lowStockBannerPlural: '{{count}} items',
+      lowStockBannerSuffix: 'below the minimum level.',
+      lowStockBannerCta: 'View now',
+      filters: {
+        all: 'All',
+        lowStock: '⚠️ Low stock',
+      },
+      searchPlaceholder: 'Search by name, SKU, or category...',
+      emptyNoMatch: 'No results.',
+      emptyAll: 'Your inventory is empty.',
+      addFirst: 'Add the first item →',
+      cols: {
+        item: 'Item',
+        stock: 'Stock',
+        unit: 'Unit',
+        unitCost: 'Cost/u',
+        actions: 'Actions',
+      },
+      itemMeta: {
+        skuPrefix: 'SKU: {{sku}}',
+        minPrefix: 'Min: {{min}}',
+      },
+      actions: {
+        adjustStock: 'Adjust stock',
+      },
+      confirmDelete: 'Delete this item?',
+      units: {
+        unidad: 'unit',
+        pieza: 'piece',
+        kg: 'kg',
+        lb: 'lb',
+        metro: 'meter',
+        pie: 'foot',
+        litro: 'liter',
+        galon: 'gallon',
+        caja: 'box',
+        rollo: 'roll',
+        bolsa: 'bag',
+      },
+      modal: {
+        addTitle: 'New item',
+        editTitle: 'Edit item',
+        nameLabel: 'Name *',
+        namePlaceholder: 'e.g. 2" galvanized pipe',
+        skuLabel: 'SKU / Code',
+        skuPlaceholder: 'TG-001',
+        categoryLabel: 'Category',
+        categoryPlaceholder: 'Materials, Tools...',
+        quantityLabel: 'Initial quantity',
+        unitLabel: 'Unit',
+        unitCostLabel: 'Unit cost ($)',
+        lowStockThresholdLabel: 'Low stock threshold',
+        errorNameRequired: 'Name is required',
+        errorSave: 'Save error.',
+      },
+      adjustModal: {
+        title: 'Adjust stock — {{name}}',
+        currentStock: 'Current stock:',
+        addOption: 'Stock in',
+        removeOption: 'Stock out',
+        quantityLabel: 'Quantity',
+        quantityPlaceholder: '0',
+        errorInvalidQty: 'Enter a valid quantity',
+      },
+    },
+    calendar: {
+      title: 'Calendar',
+      newEvent: 'New event',
+      moreCount: '+{{count}} more',
+      noClient: 'No client',
+      eventTypes: {
+        job: 'Job',
+        meeting: 'Meeting',
+        delivery: 'Delivery',
+        follow_up: 'Follow-up',
+        other: 'Other',
+      },
+      modal: {
+        newEventTitle: 'New event — {{date}}',
+        titleLabel: 'Title *',
+        titlePlaceholder: 'Pivot installation, client meeting...',
+        typeLabel: 'Type',
+        dateLabel: 'Date',
+        timeStartLabel: 'Start',
+        timeEndLabel: 'End',
+        locationLabel: 'Location',
+        locationPlaceholder: 'Address or place description',
+        clientLabel: 'Client (optional)',
+        noClientOption: 'No client',
+        notesLabel: 'Notes',
+        notesPlaceholder: 'Additional details...',
+        saveBtn: 'Save event',
+        closeBtn: 'Close',
       },
     },
     dateLocale: 'en-US',
