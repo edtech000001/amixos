@@ -204,9 +204,6 @@ export default function NuevaFacturaPage() {
                 </button>
               </div>
             ))}
-            <button onClick={addLine} className="flex items-center gap-2 text-xs text-primary font-medium hover:underline mt-1 w-fit">
-              <Plus size={14}/> Agregar concepto
-            </button>
           </div>
 
           {/* Totals */}

@@ -1,13 +1,9 @@
-'use client';
-
-export const dynamic = 'force-dynamic';
-
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'expo-router';
+import { Linking } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
-import { OAuthButtons } from '@/components/auth/OAuthButtons';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
 
-export default function RegisterPage() {
+export default function RegisterRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
@@ -24,17 +20,20 @@ export default function RegisterPage() {
       }
       return { ok: false, reason: 'generic' };
     }
-    window.location.href = '/onboarding';
+    router.replace('/onboarding');
     return { ok: true };
   };
+
+  // Mobile: open marketing URLs in the system browser. Replace with the
+  // production marketing-site URLs when available.
+  const openExternal = (url: string) => Linking.openURL(url).catch(() => {});
 
   return (
     <RegisterScreen
       onRegister={handleRegister}
       onLoginPress={() => router.push('/auth/login')}
-      onTermsPress={() => router.push('/terms')}
-      onPrivacyPress={() => router.push('/privacy')}
-      oauthSlot={<OAuthButtons mode="register" />}
+      onTermsPress={() => openExternal('https://amixos.app/terms')}
+      onPrivacyPress={() => openExternal('https://amixos.app/privacy')}
     />
   );
 }

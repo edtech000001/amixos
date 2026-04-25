@@ -232,7 +232,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Estado</p>
             <div className="flex items-center gap-2">
-              <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${st.color}`}>{st.label}</span>
+              <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${statusColor}`}>{statusLabel}</span>
             </div>
             {invoice.status === 'draft' && (
               <Button size="sm" onClick={() => updateStatus('sent')} loading={updating} fullWidth className="mt-3">
