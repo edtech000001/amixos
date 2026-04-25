@@ -1,6 +1,10 @@
 import { Locale } from '../locales';
 
 export type CommonDict = {
+  appMetadata: {
+    title: string;
+    description: string;
+  };
   langSwitcher: {
     label: string;
     switchTo: string;
@@ -29,6 +33,10 @@ export type CommonDict = {
 
 export const common: Record<Locale, CommonDict> = {
   es: {
+    appMetadata: {
+      title: 'Amixos — Donde se hace la chamba.',
+      description: 'Plataforma de gestión para pequeños negocios. Bilingüe. Modular. Hecha para la comunidad.',
+    },
     langSwitcher: {
       label: 'Idioma',
       switchTo: 'Cambiar a',
@@ -55,6 +63,10 @@ export const common: Record<Locale, CommonDict> = {
     },
   },
   en: {
+    appMetadata: {
+      title: 'Amixos — Where the work gets done.',
+      description: 'Business management platform for small businesses. Bilingual. Modular. Built for the community.',
+    },
     langSwitcher: {
       label: 'Language',
       switchTo: 'Switch to',

@@ -176,10 +176,12 @@ export type DashboardDict = {
         addTitle: string;
         editTitle: string;
         nameLabel: string;
+        namePlaceholder: string;
         rolePlaceholder: string;
         roleLabel: string;
         phoneLabel: string;
         emailLabel: string;
+        emailPlaceholder: string;
         notesLabel: string;
         notesPlaceholder: string;
         primaryLabel: string;
@@ -927,10 +929,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addTitle: 'Nuevo contacto',
           editTitle: 'Editar contacto',
           nameLabel: 'Nombre *',
+          namePlaceholder: 'María López',
           roleLabel: 'Cargo / Rol',
           rolePlaceholder: 'Dueño, Asistente, Encargado...',
           phoneLabel: 'Teléfono',
           emailLabel: 'Correo',
+          emailPlaceholder: 'maria@empresa.com',
           notesLabel: 'Notas',
           notesPlaceholder: 'Ej. Disponible solo por las mañanas...',
           primaryLabel: 'Contacto principal',
@@ -1668,10 +1672,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addTitle: 'New contact',
           editTitle: 'Edit contact',
           nameLabel: 'Name *',
+          namePlaceholder: 'Jane Smith',
           roleLabel: 'Role / Title',
           rolePlaceholder: 'Owner, Assistant, Manager...',
           phoneLabel: 'Phone',
           emailLabel: 'Email',
+          emailPlaceholder: 'jane@company.com',
           notesLabel: 'Notes',
           notesPlaceholder: 'E.g. Only available in the mornings...',
           primaryLabel: 'Primary contact',

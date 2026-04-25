@@ -557,7 +557,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         title={editingContact ? td.contactModal.editTitle : td.contactModal.addTitle} size="md">
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-3">
-            <Input label={td.contactModal.nameLabel} placeholder="María López"
+            <Input label={td.contactModal.nameLabel} placeholder={td.contactModal.namePlaceholder}
               value={contactForm.name}
               onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
             <Input label={td.contactModal.roleLabel} placeholder={td.contactModal.rolePlaceholder}
@@ -569,7 +569,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               value={fmtPhoneInput(contactForm.phone)}
               onChange={e => setContactForm(f => ({ ...f, phone: fmtPhoneInput(e.target.value) }))}
               leftIcon={<Phone size={15}/>}/>
-            <Input label={td.contactModal.emailLabel} type="email" placeholder="maria@empresa.com"
+            <Input label={td.contactModal.emailLabel} type="email" placeholder={td.contactModal.emailPlaceholder}
               value={contactForm.email}
               onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
               leftIcon={<Mail size={15}/>}/>

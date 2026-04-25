@@ -3,13 +3,15 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { LangProvider } from '@/i18n/LangProvider';
 import { getServerLocale } from '@/i18n/getServerLocale';
+import { dictionaries } from '@/i18n/dict';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: 'Amixos — Donde se hace la chamba.',
-  description: 'Plataforma de gestión para pequeños negocios. Bilingüe. Modular. Hecha para la comunidad.',
-};
+export function generateMetadata(): Metadata {
+  const locale = getServerLocale();
+  const m = dictionaries[locale].common.appMetadata;
+  return { title: m.title, description: m.description };
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = getServerLocale();
