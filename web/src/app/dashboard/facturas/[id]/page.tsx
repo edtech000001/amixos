@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { getInvoiceLabels, getDateLocale, type InvoiceLang } from '@/lib/invoice-i18n';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Invoice {
   id: string;
@@ -27,12 +28,12 @@ interface Invoice {
   invoice_clients: { clients: { first_name: string; last_name: string; email: string | null; phone_cell: string | null } }[];
 }
 
-const STATUS: Record<string, { label: string; color: string }> = {
-  draft:     { label: 'Borrador',   color: 'bg-gray-100 text-gray-500' },
-  sent:      { label: 'Enviada',    color: 'bg-blue-100 text-blue-600' },
-  paid:      { label: 'Pagada',     color: 'bg-emerald-100 text-emerald-700' },
-  overdue:   { label: 'Vencida',    color: 'bg-red-100 text-red-600' },
-  cancelled: { label: 'Cancelada',  color: 'bg-gray-100 text-gray-400' },
+const STATUS_COLORS: Record<string, string> = {
+  draft:    'bg-gray-100 text-gray-500',
+  sent:     'bg-blue-100 text-blue-600',
+  paid:     'bg-emerald-100 text-emerald-700',
+  overdue:  'bg-red-100 text-red-600',
+  cancelled:'bg-gray-100 text-gray-400',
 };
 
 function fmt(n: number) {
@@ -41,6 +42,9 @@ function fmt(n: number) {
 
 export default function FacturaDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { t: ui } = useLang();
+  const tInv = ui.dashboard.invoices;
+  const tStatus = ui.dashboard.invoiceStatus;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -71,12 +75,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
     </div>
   );
-  if (!invoice) return <div className="p-6 text-gray-400">Factura no encontrada.</div>;
+  if (!invoice) return <div className="p-6 text-gray-400">{tInv.notFound}</div>;
 
   const lang = invoice.language ?? 'es';
   const t = getInvoiceLabels(lang);
   const dateLoc = getDateLocale(lang);
-  const st = STATUS[invoice.status] ?? { label: invoice.status, color: 'bg-gray-100 text-gray-500' };
+  const statusKey = invoice.status as keyof typeof tStatus;
+  const statusLabel = tStatus[statusKey] ?? invoice.status;
+  const statusColor = STATUS_COLORS[invoice.status] ?? 'bg-gray-100 text-gray-500';
 
   return (
     <div className="p-6">
@@ -89,7 +95,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{invoice.invoice_number}</h1>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${st.color}`}>{st.label}</span>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
             </div>
             {invoice.due_date && (
               <p className="text-xs text-gray-400 mt-0.5">
@@ -101,12 +107,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         <div className="flex items-center gap-2">
           {invoice.status === 'draft' && (
             <Button size="sm" onClick={() => updateStatus('sent')} loading={updating}>
-              <Send size={14} className="mr-1.5"/> Marcar enviada
+              <Send size={14} className="mr-1.5"/> {tInv.markSent}
             </Button>
           )}
           {invoice.status === 'sent' && (
             <Button size="sm" onClick={() => updateStatus('paid')} loading={updating}>
-              <CheckCircle size={14} className="mr-1.5"/> Marcar pagada
+              <CheckCircle size={14} className="mr-1.5"/> {tInv.markPaid}
             </Button>
           )}
           <button onClick={() => window.print()} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">

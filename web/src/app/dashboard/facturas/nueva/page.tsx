@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@/lib/invoice-i18n';
+import { useLang } from '@/i18n/LangProvider';
 
 interface LineItem { description: string; qty: number; rate: number; }
 interface Client { id: string; first_name: string; last_name: string; }
@@ -26,10 +27,11 @@ function genInvoiceNumber() {
 }
 
 export default function NuevaFacturaPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [clients, setClients] = useState<Client[]>([]);
-  // Pre-select client from query param (e.g. coming from client profile)
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
   const [invoiceNumber, setInvoiceNumber] = useState(genInvoiceNumber());
@@ -60,12 +62,11 @@ export default function NuevaFacturaPage() {
 
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
-    if (lines.every(l => !l.description.trim())) { setError('Agrega al menos un concepto'); return; }
+    if (lines.every(l => !l.description.trim())) { setError(t.errorAtLeastOne); return; }
     setSaving(true); setError('');
 
     const validLines = lines.filter(l => l.description.trim());
 
-    // Keep client_id for backwards compat (first selected client)
     const { data, error: e } = await supabase.from('invoices').insert({
       business_id: business.id,
       client_id: clientIds[0] || null,
@@ -82,9 +83,8 @@ export default function NuevaFacturaPage() {
       language,
     }).select().single();
 
-    if (e) { setError('Error al guardar. Intenta de nuevo.'); setSaving(false); return; }
+    if (e) { setError(t.errorSave); setSaving(false); return; }
 
-    // Insert all selected clients into junction table
     if (clientIds.length > 0) {
       await supabase.from('invoice_clients').insert(
         clientIds.map(cid => ({ invoice_id: data.id, client_id: cid }))
@@ -102,7 +102,7 @@ export default function NuevaFacturaPage() {
           <ArrowLeft size={18} className="text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nueva factura</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.heading}</h1>
           <p className="text-sm text-gray-400">{invoiceNumber}</p>
         </div>
       </div>
@@ -110,12 +110,10 @@ export default function NuevaFacturaPage() {
       <div className="flex flex-col gap-5">
         {/* Client + dates */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-gray-700">Información general</h2>
+          <h2 className="text-sm font-semibold text-gray-700">{t.generalInfo}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Client multi-select */}
             <div className="flex flex-col gap-1.5 md:col-span-2">
-              <label className="text-sm font-medium text-gray-700">Clientes</label>
-              {/* Selected chips */}
+              <label className="text-sm font-medium text-gray-700">{t.clientsLabel}</label>
               {clientIds.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {clientIds.map(cid => {
@@ -132,7 +130,6 @@ export default function NuevaFacturaPage() {
                   })}
                 </div>
               )}
-              {/* Add client dropdown */}
               <select
                 value=""
                 onChange={e => {
@@ -141,18 +138,17 @@ export default function NuevaFacturaPage() {
                 }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
               >
-                <option value="">{clientIds.length === 0 ? 'Seleccionar cliente...' : 'Agregar otro cliente...'}</option>
+                <option value="">{clientIds.length === 0 ? t.selectClient : t.addAnotherClient}</option>
                 {clients.filter(c => !clientIds.includes(c.id)).map(c => (
                   <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
                 ))}
               </select>
             </div>
-            <Input label="Número de factura" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} />
-            <Input label="Fecha de emisión" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
-            <Input label="Fecha de vencimiento" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-            {/* Language for client-facing invoice */}
+            <Input label={t.invoiceNumberLabel} value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} />
+            <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
+            <Input label={t.dueDateLabel} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Idioma de la factura</label>
+              <label className="text-sm font-medium text-gray-700">{t.languageLabel}</label>
               <select
                 value={language}
                 onChange={e => setLanguage(e.target.value as InvoiceLang)}
@@ -167,17 +163,16 @@ export default function NuevaFacturaPage() {
 
         {/* Line items */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Conceptos</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">{t.itemsHeading}</h2>
           <div className="flex flex-col gap-2">
-            {/* Header row */}
             <div className="hidden md:grid grid-cols-[1fr_80px_100px_32px] gap-2 text-xs font-medium text-gray-400 px-1">
-              <span>Descripción</span><span className="text-center">Cant.</span><span className="text-right">Precio</span><span/>
+              <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colRate}</span><span/>
             </div>
             {lines.map((line, i) => (
               <div key={i} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-center">
                 <input
                   type="text"
-                  placeholder="Descripción del servicio o producto"
+                  placeholder={t.itemPlaceholder}
                   value={line.description}
                   onChange={e => updateLine(i, 'description', e.target.value)}
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
@@ -204,18 +199,18 @@ export default function NuevaFacturaPage() {
               </div>
             ))}
             <button onClick={addLine} className="flex items-center gap-2 text-xs text-primary font-medium hover:underline mt-1 w-fit">
-              <Plus size={14}/> Agregar concepto
+              <Plus size={14}/> {t.addItem}
             </button>
           </div>
 
           {/* Totals */}
           <div className="mt-5 border-t border-gray-50 pt-4 flex flex-col items-end gap-1">
             <div className="flex items-center gap-8 text-sm">
-              <span className="text-gray-500">Subtotal</span>
+              <span className="text-gray-500">{t.subtotal}</span>
               <span className="font-medium text-gray-900 w-24 text-right">{fmt(subtotal)}</span>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <span className="text-gray-500">Impuesto (%)</span>
+              <span className="text-gray-500">{t.taxPercent}</span>
               <input
                 type="number" min="0" max="100" step="0.1"
                 value={taxRate || ''}
@@ -226,7 +221,7 @@ export default function NuevaFacturaPage() {
               <span className="font-medium text-gray-900 w-24 text-right">{fmt(taxAmount)}</span>
             </div>
             <div className="flex items-center gap-8 text-base font-bold border-t border-gray-100 pt-2 mt-1">
-              <span className="text-gray-900">Total</span>
+              <span className="text-gray-900">{t.total}</span>
               <span className="text-primary w-24 text-right">{fmt(total)}</span>
             </div>
           </div>
@@ -234,10 +229,10 @@ export default function NuevaFacturaPage() {
 
         {/* Notes */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <label className="text-sm font-semibold text-gray-700 block mb-2">Notas (opcional)</label>
+          <label className="text-sm font-semibold text-gray-700 block mb-2">{t.notesLabel}</label>
           <textarea
             rows={3}
-            placeholder="Términos de pago, instrucciones de transferencia, etc."
+            placeholder={t.notesPlaceholder}
             value={notes}
             onChange={e => setNotes(e.target.value)}
             className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
@@ -249,10 +244,10 @@ export default function NuevaFacturaPage() {
         {/* Actions */}
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => save('draft')} loading={saving} fullWidth size="lg">
-            Guardar borrador
+            {t.saveDraft}
           </Button>
           <Button onClick={() => save('sent')} loading={saving} fullWidth size="lg">
-            Crear y enviar
+            {t.sendInvoice}
           </Button>
         </div>
       </div>
