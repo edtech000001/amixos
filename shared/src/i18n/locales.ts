@@ -1,7 +1,7 @@
 // Locale registry. Add a new language by:
 //   1. Adding its code to LOCALES below
 //   2. Adding a label to LOCALE_LABELS
-//   3. Creating dict/<code>.ts and registering it in dict/index.ts
+//   3. Creating dict/<code> entries and registering them in each dict file
 //
 // TypeScript will then enforce that all dictionaries cover the same keys.
 
@@ -15,8 +15,8 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   en: 'English',
 };
 
-export const LOCALE_COOKIE = 'amixos-lang';
-export const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+// Storage key shared by web (cookie) and mobile (async storage).
+export const LOCALE_STORAGE_KEY = 'amixos-lang';
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && (LOCALES as readonly string[]).includes(value);

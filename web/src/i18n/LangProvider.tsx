@@ -1,8 +1,16 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { Locale, LOCALES, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, LOCALE_LABELS } from './locales';
-import { dictionaries, type Dictionary } from './dict';
+import {
+  type Locale,
+  LOCALES,
+  LOCALE_LABELS,
+  LOCALE_STORAGE_KEY,
+  dictionaries,
+  type Dictionary,
+} from '@amixos/shared';
+
+const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365; // 1 year
 
 type LangContextValue = {
   locale: Locale;
@@ -26,7 +34,7 @@ export function LangProvider({ initialLocale, children }: LangProviderProps) {
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     if (typeof document !== 'undefined') {
-      document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+      document.cookie = `${LOCALE_STORAGE_KEY}=${next}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
       document.documentElement.lang = next;
     }
   }, []);

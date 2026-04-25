@@ -8,7 +8,7 @@ import {
   Globe, ArrowRight, Star, Zap, Shield, Smartphone,
 } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
-import type { LandingDict } from '@/i18n/dict/landing';
+import type { LandingDict } from '@amixos/shared';
 
 // ─── Waitlist Form ────────────────────────────────────────────────────────────
 function WaitlistForm({ compact = false }: { compact?: boolean }) {

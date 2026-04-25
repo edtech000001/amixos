@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@amixos/shared": "*",
     "@hookform/resolvers": "^3.3.4",
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.43.4",
