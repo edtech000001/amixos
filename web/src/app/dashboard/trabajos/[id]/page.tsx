@@ -14,6 +14,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Job {
   id: string; business_id: string;
@@ -38,27 +39,6 @@ interface JobItem {
   id: string; item_type: string; description: string; quantity: number; unit_price: number; total: number;
 }
 
-const PROPOSAL_PIPELINE = [
-  { key: 'proposal',    label: 'Propuesta',   icon: Clock,         color: 'text-gray-600',    bg: 'bg-gray-100' },
-  { key: 'sent',        label: 'Enviada',     icon: Send,          color: 'text-blue-600',    bg: 'bg-blue-100' },
-  { key: 'accepted',    label: 'Aceptada',    icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
-  { key: 'scheduled',   label: 'Programado',  icon: Clock,         color: 'text-blue-600',    bg: 'bg-blue-100' },
-  { key: 'in_progress', label: 'En progreso', icon: AlertTriangle, color: 'text-amber-600',   bg: 'bg-amber-100' },
-  { key: 'completed',   label: 'Completado',  icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
-  { key: 'invoiced',    label: 'Facturado',   icon: FileText,      color: 'text-purple-600',  bg: 'bg-purple-100' },
-];
-
-const WORK_PIPELINE = [
-  { key: 'scheduled',   label: 'Programado',  icon: Clock,         color: 'text-blue-600',    bg: 'bg-blue-100' },
-  { key: 'in_progress', label: 'En progreso', icon: AlertTriangle, color: 'text-amber-600',   bg: 'bg-amber-100' },
-  { key: 'completed',   label: 'Completado',  icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
-  { key: 'invoiced',    label: 'Facturado',   icon: FileText,      color: 'text-purple-600',  bg: 'bg-purple-100' },
-];
-
-const ITEM_TYPE_LABELS: Record<string, string> = {
-  labor: 'Mano de obra', material: 'Material', equipment: 'Equipo', other: 'Otro',
-};
-
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
@@ -67,6 +47,36 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const { id } = params;
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.jobs;
+  const td = t.detail;
+  const tc = full.common;
+  const dateLoc = full.dashboard.dateLocale;
+
+  const PROPOSAL_PIPELINE = [
+    { key: 'proposal',    label: t.statuses.proposal,    icon: Clock,         color: 'text-gray-600',    bg: 'bg-gray-100' },
+    { key: 'sent',        label: t.statuses.sent,        icon: Send,          color: 'text-blue-600',    bg: 'bg-blue-100' },
+    { key: 'accepted',    label: t.statuses.accepted,    icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { key: 'scheduled',   label: t.statuses.scheduled,   icon: Clock,         color: 'text-blue-600',    bg: 'bg-blue-100' },
+    { key: 'in_progress', label: t.statuses.in_progress, icon: AlertTriangle, color: 'text-amber-600',   bg: 'bg-amber-100' },
+    { key: 'completed',   label: t.statuses.completed,   icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { key: 'invoiced',    label: t.statuses.invoiced,    icon: FileText,      color: 'text-purple-600',  bg: 'bg-purple-100' },
+  ];
+
+  const WORK_PIPELINE = [
+    { key: 'scheduled',   label: t.statuses.scheduled,   icon: Clock,         color: 'text-blue-600',    bg: 'bg-blue-100' },
+    { key: 'in_progress', label: t.statuses.in_progress, icon: AlertTriangle, color: 'text-amber-600',   bg: 'bg-amber-100' },
+    { key: 'completed',   label: t.statuses.completed,   icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { key: 'invoiced',    label: t.statuses.invoiced,    icon: FileText,      color: 'text-purple-600',  bg: 'bg-purple-100' },
+  ];
+
+  const ITEM_TYPE_LABELS: Record<string, string> = {
+    labor: t.new.itemTypeLabor,
+    material: t.new.itemTypeMaterial,
+    equipment: t.new.itemTypeEquipment,
+    other: t.new.itemTypeOther,
+  };
+
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [items, setItems] = useState<JobItem[]>([]);
@@ -151,7 +161,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       tax_amount: invoiceTaxAmt,
       discount: invoiceDiscount,
       total_amount: invoiceTotal,
-      notes: job.estimate_number ? `Propuesta: ${job.estimate_number} — ${job.title}` : `Trabajo: ${job.title}`,
+      notes: job.estimate_number ? `${t.statuses.proposal}: ${job.estimate_number} — ${job.title}` : `${full.dashboard.sidebar.trabajos}: ${job.title}`,
     }).select().single();
 
     if (!error && invoice) {
@@ -214,7 +224,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
     </div>
   );
-  if (!job) return <div className="p-6 text-gray-400">Trabajo no encontrado.</div>;
+  if (!job) return <div className="p-6 text-gray-400">{t.notFound}</div>;
 
   const isProposal = !!job.estimate_number;
   const disabled = business?.job_pipeline_disabled ?? {};
@@ -234,7 +244,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   };
   const fmtDate = (d: string | null) => {
     if (!d) return null;
-    return new Date(d.includes('T') ? d : d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+    return new Date(d.includes('T') ? d : d + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short' });
   };
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
@@ -255,7 +265,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {isProposal && (
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-xs font-mono text-gray-400">{job.estimate_number}</span>
-                {isExpired && <span className="text-xs text-orange-500 font-medium">⚠ Vencida</span>}
+                {isExpired && <span className="text-xs text-orange-500 font-medium">{t.expired}</span>}
               </div>
             )}
             <h1 className="text-xl font-bold text-gray-900">{job.title}</h1>
@@ -270,13 +280,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         <div className="flex gap-2 shrink-0">
           {canInvoice && (
             <Button onClick={() => setInvoiceModal(true)} size="sm">
-              <FileText size={14} className="mr-1.5"/> Generar factura
+              <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
             </Button>
           )}
           {job.invoice_id && (
             <Link href={`/dashboard/facturas/${job.invoice_id}`}>
               <Button variant="secondary" size="sm">
-                <FileText size={14} className="mr-1.5"/> Ver factura <ArrowRight size={13} className="ml-1"/>
+                <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn} <ArrowRight size={13} className="ml-1"/>
               </Button>
             </Link>
           )}
@@ -284,30 +294,30 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             <>
               <button onClick={shareProposal}
                 className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors relative"
-                title="Copiar enlace para compartir">
+                title={td.shareTooltip}>
                 <Share2 size={16}/>
                 {sharecopied && (
                   <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded whitespace-nowrap">
-                    Enlace copiado
+                    {td.shareCopied}
                   </span>
                 )}
               </button>
               <button onClick={openPrintView}
                 className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-                title="Descargar PDF">
+                title={td.printTooltip}>
                 <Download size={16}/>
               </button>
             </>
           )}
           <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
             className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-            title="Editar trabajo">
+            title={td.editTooltip}>
             <Pencil size={16}/>
           </Link>
           <button
             onClick={() => setDeleteModal(true)}
             className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-            title="Eliminar trabajo"
+            title={td.deleteTooltip}
           >
             <Trash2 size={16}/>
           </button>
@@ -354,26 +364,26 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {/* Proposal phase actions */}
             {job.status === 'proposal' && (
               <Button onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
-                <Send size={14} className="mr-1.5"/> Marcar enviada
+                <Send size={14} className="mr-1.5"/> {t.actions.markSent}
               </Button>
             )}
             {job.status === 'sent' && !isExpired && (
               <>
                 <Button variant="secondary" size="sm" onClick={() => updateStatus('declined')} loading={updatingStatus}>
-                  <XCircle size={14} className="mr-1.5"/> Rechazada
+                  <XCircle size={14} className="mr-1.5"/> {t.actions.markDeclined}
                 </Button>
                 <Button size="sm" onClick={() => updateStatus('accepted')} loading={updatingStatus}>
-                  <CheckCircle2 size={14} className="mr-1.5"/> Aceptada
+                  <CheckCircle2 size={14} className="mr-1.5"/> {t.actions.markAccepted}
                 </Button>
               </>
             )}
             {job.status === 'accepted' && (
               <>
                 <Button size="sm" onClick={() => updateStatus('scheduled')} loading={updatingStatus}>
-                  <Calendar size={14} className="mr-1.5"/> Programar trabajo
+                  <Calendar size={14} className="mr-1.5"/> {td.scheduleWork}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
-                  <FileText size={14} className="mr-1.5"/> Facturar directamente
+                  <FileText size={14} className="mr-1.5"/> {td.invoiceDirectly}
                 </Button>
               </>
             )}
@@ -381,24 +391,24 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {/* Work phase actions */}
             {job.status === 'scheduled' && (
               <Button onClick={() => updateStatus('in_progress')} loading={updatingStatus} size="sm">
-                ▶ Iniciar trabajo
+                {t.actions.startWork}
               </Button>
             )}
             {job.status === 'in_progress' && (
               <Button onClick={() => updateStatus('completed')} loading={updatingStatus} size="sm">
-                ✓ Marcar como completado
+                {t.actions.markCompleted}
               </Button>
             )}
             {job.status === 'completed' && !job.invoice_id && (
               <Button onClick={() => setInvoiceModal(true)} size="sm">
-                <FileText size={14} className="mr-1.5"/> Generar factura
+                <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
               </Button>
             )}
 
             {/* Cancel (available in all non-terminal states) */}
             {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
               <Button variant="secondary" size="sm" onClick={() => updateStatus('cancelled')} loading={updatingStatus}>
-                <XCircle size={14} className="mr-1.5"/> Cancelar
+                <XCircle size={14} className="mr-1.5"/> {tc.buttons.cancel}
               </Button>
             )}
           </div>
@@ -412,17 +422,17 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         }`}>
           <div>
             <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-gray-500' : 'text-red-600'}`}>
-              {job.status === 'cancelled' ? 'Este trabajo fue cancelado.' : 'Esta propuesta fue rechazada.'}
+              {job.status === 'cancelled' ? td.cancelledBanner : td.declinedBanner}
             </p>
             {job.status === 'cancelled' && job.cancelled_at && (
               <p className="text-xs text-gray-400 mt-0.5">
-                Cancelado el {new Date(job.cancelled_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {td.cancelledOn.replace('{{date}}', new Date(job.cancelled_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' }))}
               </p>
             )}
           </div>
           {job.status === 'cancelled' && (
             <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
-              <RotateCcw size={14} className="mr-1.5"/> Reactivar
+              <RotateCcw size={14} className="mr-1.5"/> {td.reinstate}
             </Button>
           )}
         </div>
@@ -435,15 +445,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {/* Proposal details card */}
           {isProposal && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Propuesta</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.proposalHeading}</h2>
               <div className="flex flex-col gap-2.5">
                 {job.issue_date && (
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar size={14} className="text-gray-400 shrink-0"/>
                     <div>
-                      <p className="text-xs text-gray-400">Emitida</p>
+                      <p className="text-xs text-gray-400">{td.issuedAt}</p>
                       <p className="font-medium text-gray-900">
-                        {new Date(job.issue_date + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {new Date(job.issue_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
                       </p>
                     </div>
                   </div>
@@ -452,10 +462,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar size={14} className={`shrink-0 ${isExpired ? 'text-orange-400' : 'text-gray-400'}`}/>
                     <div>
-                      <p className="text-xs text-gray-400">Válida hasta</p>
+                      <p className="text-xs text-gray-400">{td.validUntil}</p>
                       <p className={`font-medium ${isExpired ? 'text-orange-600' : 'text-gray-900'}`}>
-                        {new Date(job.expiry_date + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        {isExpired && ' ⚠ Vencida'}
+                        {new Date(job.expiry_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {isExpired && ` ${t.expired}`}
                       </p>
                     </div>
                   </div>
@@ -466,15 +476,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Details card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Detalles</h2>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.detailsHeading}</h2>
             <div className="flex flex-col gap-3">
               {job.scheduled_date && (
                 <div className="flex items-start gap-2.5">
                   <Calendar size={15} className="text-gray-400 mt-0.5 shrink-0"/>
                   <div>
-                    <p className="text-xs text-gray-400">Fecha programada</p>
+                    <p className="text-xs text-gray-400">{td.scheduledDate}</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString(dateLoc, { weekday: 'long', day: 'numeric', month: 'long' })}
                     </p>
                     {(job.time_start || job.time_end) && (
                       <p className="text-xs text-gray-400">
@@ -488,7 +498,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <div className="flex items-start gap-2.5">
                   <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0"/>
                   <div>
-                    <p className="text-xs text-gray-400">Ubicación</p>
+                    <p className="text-xs text-gray-400">{td.location}</p>
                     {job.job_address && <p className="text-sm font-medium text-gray-900">{job.job_address}</p>}
                     {(job.job_city || job.job_state) && (
                       <p className="text-sm text-gray-600">{[job.job_city, job.job_state].filter(Boolean).join(', ')}</p>
@@ -498,12 +508,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
               {clientPhone && (
                 <a href={`tel:${clientPhone}`} className="flex items-center gap-2 text-xs text-primary font-medium hover:underline">
-                  📞 Llamar a cliente
+                  {td.callClient}
                 </a>
               )}
               {job.description && (
                 <div>
-                  <p className="text-xs text-gray-400 mb-1">Descripción</p>
+                  <p className="text-xs text-gray-400 mb-1">{td.description}</p>
                   <p className="text-sm text-gray-700 leading-relaxed">{job.description}</p>
                 </div>
               )}
@@ -513,7 +523,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {/* Client-facing notes */}
           {job.notes && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Nota para cliente</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{td.clientNote}</h2>
               <p className="text-sm text-gray-600 leading-relaxed">{job.notes}</p>
             </div>
           )}
@@ -521,7 +531,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {/* Internal notes */}
           {job.internal_notes && (
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
-              <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">📝 Nota interna</h2>
+              <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-xs text-amber-800">{job.internal_notes}</p>
             </div>
           )}
@@ -530,15 +540,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           <div className="px-1 flex items-center gap-1.5 text-xs text-gray-400">
             <Clock size={11}/>
             <span>
-              Creado el {new Date(job.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-              {job.created_by && user && job.created_by === user.id && ` por ${user.email}`}
+              {td.createdOn.replace('{{date}}', new Date(job.created_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'short', year: 'numeric' }))}
+              {job.created_by && user && job.created_by === user.id && ` ${td.createdBy.replace('{{name}}', user.email ?? '')}`}
             </span>
           </div>
 
           {/* Workers card */}
           {assignments.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Trabajadores</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.workersHeading}</h2>
               <div className="flex flex-col gap-2">
                 {assignments.map(a => {
                   const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
@@ -561,7 +571,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">
-                {isProposal ? 'Detalle de servicios' : 'Materiales y mano de obra'}
+                {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
               </h2>
               <span className="text-sm font-bold text-gray-900">{fmt(hasFinancials ? job.total_amount : itemSubtotal)}</span>
             </div>
@@ -569,12 +579,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {items.length === 0 ? (
               <div className="px-5 py-10 text-center text-gray-400">
                 <DollarSign size={28} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">Sin ítems registrados.</p>
+                <p className="text-sm">{td.noItems}</p>
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-[80px_1fr_60px_80px_80px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50">
-                  <span>Tipo</span><span>Descripción</span><span className="text-center">Cant.</span><span className="text-right">P/u</span><span className="text-right">Total</span>
+                  <span>{t.new.colType}</span><span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span className="text-right">{t.new.colTotal}</span>
                 </div>
                 <div className="divide-y divide-gray-50">
                   {items.map(item => (
@@ -593,29 +603,29 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   {hasFinancials ? (
                     <div className="w-52 flex flex-col gap-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Subtotal</span>
+                        <span className="text-gray-500">{t.new.subtotal}</span>
                         <span>{fmt(job.subtotal_amount)}</span>
                       </div>
                       {job.tax_rate > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Impuesto ({job.tax_rate}%)</span>
+                          <span className="text-gray-500">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
                           <span>{fmt(job.tax_amount)}</span>
                         </div>
                       )}
                       {job.discount > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Descuento</span>
+                          <span className="text-gray-500">{td.discount}</span>
                           <span className="text-emerald-600">-{fmt(job.discount)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
-                        <span>Total</span>
+                        <span>{t.new.total}</span>
                         <span className="text-primary">{fmt(job.total_amount)}</span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex justify-between items-center w-full">
-                      <span className="text-sm text-gray-500">Total estimado</span>
+                      <span className="text-sm text-gray-500">{td.totalEstimated}</span>
                       <span className="text-base font-bold text-gray-900">{fmt(itemSubtotal)}</span>
                     </div>
                   )}
@@ -626,7 +636,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {canInvoice && (
               <div className="px-5 pb-5">
                 <Button onClick={() => setInvoiceModal(true)} fullWidth>
-                  <FileText size={15} className="mr-2"/> Convertir en factura
+                  <FileText size={15} className="mr-2"/> {td.convertToInvoice}
                 </Button>
               </div>
             )}
@@ -635,19 +645,21 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       </div>
 
       {/* Generate Invoice Modal */}
-      <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title="Generar factura" size="sm">
+      <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size="sm">
         <div className="flex flex-col gap-4">
           <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-2">Resumen</p>
+            <p className="text-xs text-gray-500 mb-2">{td.summary}</p>
             <p className="text-sm font-semibold text-gray-900 mb-1">{job.title}</p>
             {job.estimate_number && <p className="text-xs text-gray-400 mb-1">{job.estimate_number}</p>}
-            {clientName && <p className="text-xs text-gray-500">Cliente: {clientName}</p>}
-            <p className="text-xs text-gray-500">{items.length} ítem{items.length !== 1 ? 's' : ''}</p>
+            {clientName && <p className="text-xs text-gray-500">{td.clientPrefix.replace('{{name}}', clientName)}</p>}
+            <p className="text-xs text-gray-500">
+              {(items.length === 1 ? td.itemsCountSingle : td.itemsCountPlural).replace('{{count}}', String(items.length))}
+            </p>
           </div>
 
           {!hasFinancials && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Impuesto (%)</label>
+              <label className="text-sm font-medium text-gray-700">{t.new.taxPercent}</label>
               <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
                 placeholder="0"
                 onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
@@ -659,71 +671,72 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {hasFinancials ? (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-500">{t.new.subtotal}</span>
                   <span className="font-medium">{fmt(job.subtotal_amount)}</span>
                 </div>
                 {job.tax_rate > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Impuesto ({job.tax_rate}%)</span>
+                    <span className="text-gray-500">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
                     <span className="font-medium">{fmt(job.tax_amount)}</span>
                   </div>
                 )}
                 {job.discount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Descuento</span>
+                    <span className="text-gray-500">{td.discount}</span>
                     <span className="font-medium text-emerald-600">-{fmt(job.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
-                  <span>Total</span>
+                  <span>{t.new.total}</span>
                   <span className="text-primary">{fmt(job.total_amount)}</span>
                 </div>
               </>
             ) : (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-500">{t.new.subtotal}</span>
                   <span className="font-medium">{fmt(itemSubtotal)}</span>
                 </div>
                 {taxRate > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Impuesto ({taxRate}%)</span>
+                    <span className="text-gray-500">{td.tax.replace('{{rate}}', String(taxRate))}</span>
                     <span className="font-medium">{fmt(itemSubtotal * taxRate / 100)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
-                  <span>Total</span>
+                  <span>{t.new.total}</span>
                   <span className="text-primary">{fmt(itemSubtotal * (1 + taxRate / 100))}</span>
                 </div>
               </>
             )}
           </div>
 
-          <p className="text-xs text-gray-400">La factura se creará en estado <strong>Borrador</strong>. Puedes editarla antes de enviarla.</p>
+          <p className="text-xs text-gray-400" dangerouslySetInnerHTML={{ __html: td.draftStatusNote }} />
 
           <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => setInvoiceModal(false)} fullWidth>Cancelar</Button>
+            <Button variant="secondary" onClick={() => setInvoiceModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={generateInvoice} loading={invoicing} fullWidth>
-              Crear factura →
+              {td.createInvoiceBtn}
             </Button>
           </div>
         </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar trabajo" size="sm">
+      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title={td.deleteJobTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-600">
-            ¿Estás seguro de que deseas eliminar <strong>{job.title}</strong>? Esta acción no se puede deshacer.
-          </p>
+          <p
+            className="text-sm text-gray-600"
+            dangerouslySetInnerHTML={{ __html: td.deleteJobConfirm.replace('{{name}}', job.title) }}
+          />
           <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => setDeleteModal(false)} fullWidth>Cancelar</Button>
+            <Button variant="secondary" onClick={() => setDeleteModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <button
               onClick={deleteJob}
               disabled={deleting}
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
             >
-              {deleting ? 'Eliminando...' : 'Eliminar'}
+              {deleting ? td.deleting : td.deleteBtn}
             </button>
           </div>
         </div>

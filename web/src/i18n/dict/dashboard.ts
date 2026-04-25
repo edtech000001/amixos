@@ -269,6 +269,134 @@ export type DashboardDict = {
       cancel: string;
     };
     notFound: string;
+    detail: {
+      // Header tooltips and small UI
+      shareTooltip: string;
+      shareCopied: string;
+      printTooltip: string;
+      editTooltip: string;
+      deleteTooltip: string;
+      generateInvoiceBtn: string;
+      viewInvoiceBtn: string;
+      // Pipeline action buttons (detail-specific phrasing)
+      scheduleWork: string;
+      invoiceDirectly: string;
+      // Cancelled / declined banner
+      cancelledBanner: string;
+      declinedBanner: string;
+      cancelledOn: string;
+      reinstate: string;
+      // Cards
+      proposalHeading: string;
+      issuedAt: string;
+      validUntil: string;
+      detailsHeading: string;
+      scheduledDate: string;
+      location: string;
+      callClient: string;
+      description: string;
+      clientNote: string;
+      internalNote: string;
+      createdOn: string;
+      createdBy: string;
+      workersHeading: string;
+      // Line items
+      itemsHeadingProposal: string;
+      itemsHeadingJob: string;
+      noItems: string;
+      colUnitPriceShort: string;
+      tax: string;
+      discount: string;
+      totalEstimated: string;
+      convertToInvoice: string;
+      // Generate invoice modal
+      genInvoiceTitle: string;
+      summary: string;
+      clientPrefix: string;
+      itemsCountSingle: string;
+      itemsCountPlural: string;
+      draftStatusNote: string;
+      createInvoiceBtn: string;
+      // Delete confirmation modal
+      deleteJobTitle: string;
+      deleteJobConfirm: string;
+      deleting: string;
+      deleteBtn: string;
+    };
+    new: {
+      headingNewJob: string;
+      headingNewProposal: string;
+      headingEditJob: string;
+      headingEditProposal: string;
+      subtitleNewJob: string;
+      subtitleNewProposal: string;
+      subtitleEdit: string;
+      generalInfo: string;
+      titleLabelJob: string;
+      titleLabelProposal: string;
+      titlePlaceholder: string;
+      clientLabel: string;
+      clientPlaceholder: string;
+      clientSearchPlaceholder: string;
+      clientNoResults: string;
+      clientNone: string;
+      issueDateLabel: string;
+      expiryDateLabel: string;
+      projectStartLabel: string;
+      statusLabel: string;
+      priorityLabel: string;
+      descriptionLabel: string;
+      descriptionPlaceholder: string;
+      locationHeading: string;
+      mapLinkLabel: string;
+      mapLinkPlaceholder: string;
+      mapLinkHint: string;
+      addressLabel: string;
+      addressPlaceholder: string;
+      cityLabel: string;
+      cityPlaceholder: string;
+      stateLabel: string;
+      stateNone: string;
+      scheduleHeading: string;
+      dateLabel: string;
+      timeStartLabel: string;
+      timeEndLabel: string;
+      workersHeading: string;
+      additionalWorkersLabel: string;
+      workerNumberPlaceholder: string;
+      addWorker: string;
+      itemsHeadingProposal: string;
+      itemsHeadingJob: string;
+      colType: string;
+      colDescription: string;
+      colQty: string;
+      colUnitPrice: string;
+      colTotal: string;
+      itemTypeLabor: string;
+      itemTypeMaterial: string;
+      itemTypeEquipment: string;
+      itemTypeOther: string;
+      itemDescriptionPlaceholderProposal: string;
+      itemDescriptionPlaceholderJob: string;
+      subtotal: string;
+      taxPercent: string;
+      discountAmount: string;
+      total: string;
+      totalEstimated: string;
+      notesHeading: string;
+      clientNoteLabel: string;
+      clientNotePlaceholder: string;
+      internalNoteLabelProposal: string;
+      internalNoteLabelJob: string;
+      internalNotePlaceholderProposal: string;
+      internalNotePlaceholderJob: string;
+      errorTitleRequiredJob: string;
+      errorTitleRequiredProposal: string;
+      errorAtLeastOneItem: string;
+      errorSaveGeneric: string;
+      submitCreateJob: string;
+      submitCreateProposal: string;
+    };
   };
   // Date locale for short month formatting in lists
   dateLocale: string;
@@ -543,6 +671,127 @@ export const dashboard: Record<Locale, DashboardDict> = {
         cancel: 'Cancelar',
       },
       notFound: 'Trabajo no encontrado.',
+      detail: {
+        shareTooltip: 'Copiar enlace para compartir',
+        shareCopied: 'Enlace copiado',
+        printTooltip: 'Descargar PDF',
+        editTooltip: 'Editar trabajo',
+        deleteTooltip: 'Eliminar trabajo',
+        generateInvoiceBtn: 'Generar factura',
+        viewInvoiceBtn: 'Ver factura',
+        scheduleWork: 'Programar trabajo',
+        invoiceDirectly: 'Facturar directamente',
+        cancelledBanner: 'Este trabajo fue cancelado.',
+        declinedBanner: 'Esta propuesta fue rechazada.',
+        cancelledOn: 'Cancelado el {{date}}',
+        reinstate: 'Reactivar',
+        proposalHeading: 'Propuesta',
+        issuedAt: 'Emitida',
+        validUntil: 'Válida hasta',
+        detailsHeading: 'Detalles',
+        scheduledDate: 'Fecha programada',
+        location: 'Ubicación',
+        callClient: '📞 Llamar a cliente',
+        description: 'Descripción',
+        clientNote: 'Nota para cliente',
+        internalNote: '📝 Nota interna',
+        createdOn: 'Creado el {{date}}',
+        createdBy: 'por {{name}}',
+        workersHeading: 'Trabajadores',
+        itemsHeadingProposal: 'Detalle de servicios',
+        itemsHeadingJob: 'Materiales y mano de obra',
+        noItems: 'Sin ítems registrados.',
+        colUnitPriceShort: 'P/u',
+        tax: 'Impuesto ({{rate}}%)',
+        discount: 'Descuento',
+        totalEstimated: 'Total estimado',
+        convertToInvoice: 'Convertir en factura',
+        genInvoiceTitle: 'Generar factura',
+        summary: 'Resumen',
+        clientPrefix: 'Cliente: {{name}}',
+        itemsCountSingle: '{{count}} ítem',
+        itemsCountPlural: '{{count}} ítems',
+        draftStatusNote: 'La factura se creará en estado <strong>Borrador</strong>. Puedes editarla antes de enviarla.',
+        createInvoiceBtn: 'Crear factura →',
+        deleteJobTitle: 'Eliminar trabajo',
+        deleteJobConfirm: '¿Estás seguro de que deseas eliminar <strong>{{name}}</strong>? Esta acción no se puede deshacer.',
+        deleting: 'Eliminando...',
+        deleteBtn: 'Eliminar',
+      },
+      new: {
+        headingNewJob: 'Nuevo trabajo',
+        headingNewProposal: 'Nueva propuesta',
+        headingEditJob: 'Editar trabajo',
+        headingEditProposal: 'Editar propuesta',
+        subtitleNewJob: 'Completa los detalles del trabajo',
+        subtitleNewProposal: 'Crea una propuesta de precio para tu cliente',
+        subtitleEdit: 'Modifica los detalles',
+        generalInfo: 'Información general',
+        titleLabelJob: 'Título del trabajo *',
+        titleLabelProposal: 'Título *',
+        titlePlaceholder: 'ej. Instalación de pivote — Rancho García',
+        clientLabel: 'Cliente',
+        clientPlaceholder: '— Sin cliente —',
+        clientSearchPlaceholder: 'Buscar cliente...',
+        clientNoResults: 'Sin resultados',
+        clientNone: '— Sin cliente —',
+        issueDateLabel: 'Fecha de emisión',
+        expiryDateLabel: 'Válida hasta',
+        projectStartLabel: 'Inicio del proyecto',
+        statusLabel: 'Estado',
+        priorityLabel: 'Prioridad',
+        descriptionLabel: 'Descripción',
+        descriptionPlaceholder: 'Detalle del trabajo a realizar...',
+        locationHeading: 'Ubicación del trabajo',
+        mapLinkLabel: 'Pegar enlace de mapa',
+        mapLinkPlaceholder: 'https://maps.google.com/... o https://maps.apple.com/...',
+        mapLinkHint: 'Pega un enlace de Google Maps o Apple Maps para auto-llenar la dirección',
+        addressLabel: 'Dirección',
+        addressPlaceholder: '123 County Road',
+        cityLabel: 'Ciudad',
+        cityPlaceholder: 'Omaha',
+        stateLabel: 'Estado',
+        stateNone: '—',
+        scheduleHeading: 'Fecha y hora',
+        dateLabel: 'Fecha',
+        timeStartLabel: 'Hora inicio',
+        timeEndLabel: 'Hora fin',
+        workersHeading: 'Trabajadores asignados',
+        additionalWorkersLabel: 'Trabajadores adicionales (manual)',
+        workerNumberPlaceholder: 'Trabajador {{count}}',
+        addWorker: '+ Agregar trabajador',
+        itemsHeadingProposal: 'Servicios',
+        itemsHeadingJob: 'Materiales y mano de obra',
+        colType: 'Tipo',
+        colDescription: 'Descripción',
+        colQty: 'Cant.',
+        colUnitPrice: 'Precio/u',
+        colTotal: 'Total',
+        itemTypeLabor: 'Mano de obra',
+        itemTypeMaterial: 'Material',
+        itemTypeEquipment: 'Equipo',
+        itemTypeOther: 'Otro',
+        itemDescriptionPlaceholderProposal: 'Descripción del servicio o material',
+        itemDescriptionPlaceholderJob: 'Descripción',
+        subtotal: 'Subtotal',
+        taxPercent: 'Impuesto (%)',
+        discountAmount: 'Descuento ($)',
+        total: 'Total',
+        totalEstimated: 'Total estimado',
+        notesHeading: 'Notas',
+        clientNoteLabel: 'Nota para el cliente',
+        clientNotePlaceholder: 'Términos, condiciones, detalles adicionales para el cliente...',
+        internalNoteLabelProposal: 'Nota interna',
+        internalNoteLabelJob: 'Notas internas',
+        internalNotePlaceholderProposal: 'Notas privadas (no visibles para el cliente)...',
+        internalNotePlaceholderJob: 'Instrucciones especiales, detalles del sitio, acceso...',
+        errorTitleRequiredJob: 'El título del trabajo es requerido',
+        errorTitleRequiredProposal: 'El título es requerido',
+        errorAtLeastOneItem: 'Agrega al menos un ítem',
+        errorSaveGeneric: 'Error al guardar',
+        submitCreateJob: 'Crear trabajo',
+        submitCreateProposal: 'Crear propuesta',
+      },
     },
     dateLocale: 'es-MX',
   },
@@ -814,6 +1063,127 @@ export const dashboard: Record<Locale, DashboardDict> = {
         cancel: 'Cancel',
       },
       notFound: 'Job not found.',
+      detail: {
+        shareTooltip: 'Copy share link',
+        shareCopied: 'Link copied',
+        printTooltip: 'Download PDF',
+        editTooltip: 'Edit job',
+        deleteTooltip: 'Delete job',
+        generateInvoiceBtn: 'Generate invoice',
+        viewInvoiceBtn: 'View invoice',
+        scheduleWork: 'Schedule work',
+        invoiceDirectly: 'Invoice directly',
+        cancelledBanner: 'This job was cancelled.',
+        declinedBanner: 'This proposal was declined.',
+        cancelledOn: 'Cancelled on {{date}}',
+        reinstate: 'Reinstate',
+        proposalHeading: 'Proposal',
+        issuedAt: 'Issued',
+        validUntil: 'Valid until',
+        detailsHeading: 'Details',
+        scheduledDate: 'Scheduled date',
+        location: 'Location',
+        callClient: '📞 Call client',
+        description: 'Description',
+        clientNote: 'Note for client',
+        internalNote: '📝 Internal note',
+        createdOn: 'Created on {{date}}',
+        createdBy: 'by {{name}}',
+        workersHeading: 'Workers',
+        itemsHeadingProposal: 'Service details',
+        itemsHeadingJob: 'Materials and labor',
+        noItems: 'No items recorded.',
+        colUnitPriceShort: 'U/p',
+        tax: 'Tax ({{rate}}%)',
+        discount: 'Discount',
+        totalEstimated: 'Estimated total',
+        convertToInvoice: 'Convert to invoice',
+        genInvoiceTitle: 'Generate invoice',
+        summary: 'Summary',
+        clientPrefix: 'Client: {{name}}',
+        itemsCountSingle: '{{count}} item',
+        itemsCountPlural: '{{count}} items',
+        draftStatusNote: 'The invoice will be created as a <strong>Draft</strong>. You can edit it before sending.',
+        createInvoiceBtn: 'Create invoice →',
+        deleteJobTitle: 'Delete job',
+        deleteJobConfirm: 'Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone.',
+        deleting: 'Deleting...',
+        deleteBtn: 'Delete',
+      },
+      new: {
+        headingNewJob: 'New job',
+        headingNewProposal: 'New proposal',
+        headingEditJob: 'Edit job',
+        headingEditProposal: 'Edit proposal',
+        subtitleNewJob: 'Fill in the job details',
+        subtitleNewProposal: 'Create a price proposal for your client',
+        subtitleEdit: 'Modify the details',
+        generalInfo: 'General info',
+        titleLabelJob: 'Job title *',
+        titleLabelProposal: 'Title *',
+        titlePlaceholder: 'e.g. Pivot installation — Rancho García',
+        clientLabel: 'Client',
+        clientPlaceholder: '— No client —',
+        clientSearchPlaceholder: 'Search client...',
+        clientNoResults: 'No results',
+        clientNone: '— No client —',
+        issueDateLabel: 'Issue date',
+        expiryDateLabel: 'Valid until',
+        projectStartLabel: 'Project start',
+        statusLabel: 'Status',
+        priorityLabel: 'Priority',
+        descriptionLabel: 'Description',
+        descriptionPlaceholder: 'Details of the work to be done...',
+        locationHeading: 'Job location',
+        mapLinkLabel: 'Paste map link',
+        mapLinkPlaceholder: 'https://maps.google.com/... or https://maps.apple.com/...',
+        mapLinkHint: 'Paste a Google Maps or Apple Maps link to auto-fill the address',
+        addressLabel: 'Address',
+        addressPlaceholder: '123 County Road',
+        cityLabel: 'City',
+        cityPlaceholder: 'Omaha',
+        stateLabel: 'State',
+        stateNone: '—',
+        scheduleHeading: 'Date and time',
+        dateLabel: 'Date',
+        timeStartLabel: 'Start time',
+        timeEndLabel: 'End time',
+        workersHeading: 'Assigned workers',
+        additionalWorkersLabel: 'Additional workers (manual)',
+        workerNumberPlaceholder: 'Worker {{count}}',
+        addWorker: '+ Add worker',
+        itemsHeadingProposal: 'Services',
+        itemsHeadingJob: 'Materials and labor',
+        colType: 'Type',
+        colDescription: 'Description',
+        colQty: 'Qty',
+        colUnitPrice: 'Unit price',
+        colTotal: 'Total',
+        itemTypeLabor: 'Labor',
+        itemTypeMaterial: 'Material',
+        itemTypeEquipment: 'Equipment',
+        itemTypeOther: 'Other',
+        itemDescriptionPlaceholderProposal: 'Description of the service or material',
+        itemDescriptionPlaceholderJob: 'Description',
+        subtotal: 'Subtotal',
+        taxPercent: 'Tax (%)',
+        discountAmount: 'Discount ($)',
+        total: 'Total',
+        totalEstimated: 'Estimated total',
+        notesHeading: 'Notes',
+        clientNoteLabel: 'Note for client',
+        clientNotePlaceholder: 'Terms, conditions, additional details for the client...',
+        internalNoteLabelProposal: 'Internal note',
+        internalNoteLabelJob: 'Internal notes',
+        internalNotePlaceholderProposal: 'Private notes (not visible to the client)...',
+        internalNotePlaceholderJob: 'Special instructions, site details, access...',
+        errorTitleRequiredJob: 'Job title is required',
+        errorTitleRequiredProposal: 'Title is required',
+        errorAtLeastOneItem: 'Add at least one item',
+        errorSaveGeneric: 'Save error',
+        submitCreateJob: 'Create job',
+        submitCreateProposal: 'Create proposal',
+      },
     },
     dateLocale: 'en-US',
   },

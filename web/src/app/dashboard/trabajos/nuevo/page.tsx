@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -21,10 +22,6 @@ interface LineItem {
   quantity: number;
   unit_price: number;
 }
-
-const ITEM_TYPES: Record<string, string> = {
-  labor: 'Mano de obra', material: 'Material', equipment: 'Equipo', other: 'Otro',
-};
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
@@ -44,13 +41,31 @@ const newLaborItem = (): LineItem => ({
 
 export default function NuevoTrabajoPage() {
   return (
-    <Suspense fallback={<div className="p-6">Cargando...</div>}>
+    <Suspense fallback={<NuevoTrabajoFallback />}>
       <NuevoTrabajoContent />
     </Suspense>
   );
 }
 
+function NuevoTrabajoFallback() {
+  const { t: full } = useLang();
+  return <div className="p-6">{full.common.states.loading}...</div>;
+}
+
 function NuevoTrabajoContent() {
+  const { t: full } = useLang();
+  const t = full.dashboard.jobs.new;
+  const tc = full.common;
+  const tStatuses = full.dashboard.jobs.statuses;
+  const tPriorities = full.dashboard.jobs.priorities;
+
+  const ITEM_TYPES: Record<string, string> = {
+    labor: t.itemTypeLabor,
+    material: t.itemTypeMaterial,
+    equipment: t.itemTypeEquipment,
+    other: t.itemTypeOther,
+  };
+
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const router = useRouter();
@@ -250,9 +265,9 @@ function NuevoTrabajoContent() {
   const total = isEditProposal ? subtotal + taxAmt - discount : subtotal;
 
   const save = async () => {
-    if (!title.trim()) { setError(isEditProposal ? 'El título es requerido' : 'El título del trabajo es requerido'); return; }
+    if (!title.trim()) { setError(isEditProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob); return; }
     const validItems = items.filter(i => i.description.trim());
-    if (isEditProposal && validItems.length === 0) { setError('Agrega al menos un ítem'); return; }
+    if (isEditProposal && validItems.length === 0) { setError(t.errorAtLeastOneItem); return; }
     setSaving(true); setError('');
 
     try {
@@ -362,7 +377,7 @@ function NuevoTrabajoContent() {
         router.push(`/dashboard/trabajos/${finalJobId}`);
       }
     } catch (e: any) {
-      setError(e.message || 'Error al guardar');
+      setError(e.message || t.errorSaveGeneric);
       setSaving(false);
     }
   };
@@ -373,6 +388,13 @@ function NuevoTrabajoContent() {
     </div>
   );
 
+  const heading = editId
+    ? (isEditProposal ? t.headingEditProposal : t.headingEditJob)
+    : (isEditProposal ? t.headingNewProposal : t.headingNewJob);
+  const subtitle = editId
+    ? t.subtitleEdit
+    : (isEditProposal ? t.subtitleNewProposal : t.subtitleNewJob);
+
   return (
     <div className="p-6 max-w-4xl">
       {/* Header */}
@@ -381,12 +403,8 @@ function NuevoTrabajoContent() {
           <ArrowLeft size={18} className="text-gray-500"/>
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">
-            {editId ? (isEditProposal ? 'Editar propuesta' : 'Editar trabajo') : (isEditProposal ? 'Nueva propuesta' : 'Nuevo trabajo')}
-          </h1>
-          <p className="text-xs text-gray-400">
-            {editId ? 'Modifica los detalles' : (isEditProposal ? 'Crea una propuesta de precio para tu cliente' : 'Completa los detalles del trabajo')}
-          </p>
+          <h1 className="text-xl font-bold text-gray-900">{heading}</h1>
+          <p className="text-xs text-gray-400">{subtitle}</p>
         </div>
       </div>
 
@@ -394,13 +412,13 @@ function NuevoTrabajoContent() {
 
         {/* ── Información general */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Información general</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">{t.generalInfo}</p>
           <div className="flex flex-col gap-3">
-            <Input label={isEditProposal ? 'Título *' : 'Título del trabajo *'}
-              placeholder="ej. Instalación de pivote — Rancho García"
+            <Input label={isEditProposal ? t.titleLabelProposal : t.titleLabelJob}
+              placeholder={t.titlePlaceholder}
               value={title} onChange={e => setTitle(e.target.value)}/>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Cliente</label>
+              <label className="text-sm font-medium text-gray-700">{t.clientLabel}</label>
               <div className="relative" ref={clientDropdownRef}>
                 <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
@@ -410,7 +428,7 @@ function NuevoTrabajoContent() {
                       {selectedClient.company && <span className="text-gray-400"> · {selectedClient.company}</span>}
                     </span>
                   ) : (
-                    <span className="text-gray-400">— Sin cliente —</span>
+                    <span className="text-gray-400">{t.clientPlaceholder}</span>
                   )}
                   <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
                 </button>
@@ -419,7 +437,7 @@ function NuevoTrabajoContent() {
                     <div className="p-2 border-b border-gray-100">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                        <input autoFocus type="text" placeholder="Buscar cliente..."
+                        <input autoFocus type="text" placeholder={t.clientSearchPlaceholder}
                           value={clientSearch} onChange={e => setClientSearch(e.target.value)}
                           className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
                       </div>
@@ -427,7 +445,7 @@ function NuevoTrabajoContent() {
                     <div className="max-h-60 overflow-y-auto">
                       <button type="button" onClick={() => handleClientChange('')}
                         className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
-                        — Sin cliente —
+                        {t.clientNone}
                       </button>
                       {filteredClients.map(c => (
                         <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
@@ -437,7 +455,7 @@ function NuevoTrabajoContent() {
                         </button>
                       ))}
                       {filteredClients.length === 0 && (
-                        <p className="px-4 py-3 text-xs text-gray-400 text-center">Sin resultados</p>
+                        <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.clientNoResults}</p>
                       )}
                     </div>
                   </div>
@@ -454,37 +472,37 @@ function NuevoTrabajoContent() {
             {isEditProposal ? (
               /* Proposal: issue + expiry + project start dates */
               <div className="grid grid-cols-3 gap-3">
-                <Input label="Fecha de emisión" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
-                <Input label="Válida hasta" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
-                <Input label="Inicio del proyecto" type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
+                <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
+                <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
+                <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
               </div>
             ) : (
               /* Job: status + priority */
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">Estado</label>
+                  <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
                   <select value={status} onChange={e => setStatus(e.target.value as any)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                    <option value="scheduled">Programado</option>
-                    <option value="in_progress">En progreso</option>
+                    <option value="scheduled">{tStatuses.scheduled}</option>
+                    <option value="in_progress">{tStatuses.in_progress}</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">Prioridad</label>
+                  <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
                   <select value={priority} onChange={e => setPriority(e.target.value as any)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                    <option value="low">Baja</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">Alta</option>
-                    <option value="urgent">Urgente</option>
+                    <option value="low">{tPriorities.low}</option>
+                    <option value="normal">{tPriorities.normal}</option>
+                    <option value="high">{tPriorities.high}</option>
+                    <option value="urgent">{tPriorities.urgent}</option>
                   </select>
                 </div>
               </div>
             )}
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Descripción</label>
-              <textarea rows={2} placeholder="Detalle del trabajo a realizar..."
+              <label className="text-sm font-medium text-gray-700">{t.descriptionLabel}</label>
+              <textarea rows={2} placeholder={t.descriptionPlaceholder}
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
             </div>
@@ -496,32 +514,32 @@ function NuevoTrabajoContent() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Ubicación del trabajo</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.locationHeading}</p>
             </div>
             <div className="flex flex-col gap-3">
               {/* Map link paste */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                  <Link2 size={13} className="text-gray-400"/> Pegar enlace de mapa
+                  <Link2 size={13} className="text-gray-400"/> {t.mapLinkLabel}
                 </label>
-                <input type="url" placeholder="https://maps.google.com/... o https://maps.apple.com/..."
+                <input type="url" placeholder={t.mapLinkPlaceholder}
                   value={mapLink} onChange={e => parseMapLink(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
                 {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
-                  <p className="text-xs text-amber-500">Pega un enlace de Google Maps o Apple Maps para auto-llenar la dirección</p>
+                  <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
                 )}
               </div>
               <div className="border-t border-gray-100 pt-3"/>
-              <Input label="Dirección" placeholder="123 County Road" value={address}
+              <Input label={t.addressLabel} placeholder={t.addressPlaceholder} value={address}
                 onChange={e => setAddress(e.target.value)}/>
               <div className="grid grid-cols-[1fr_120px] gap-3">
-                <Input label="Ciudad" placeholder="Omaha" value={city}
+                <Input label={t.cityLabel} placeholder={t.cityPlaceholder} value={city}
                   onChange={e => setCity(e.target.value)}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">Estado</label>
+                  <label className="text-sm font-medium text-gray-700">{t.stateLabel}</label>
                   <select value={state} onChange={e => setState(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                    <option value="">—</option>
+                    <option value="">{t.stateNone}</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -535,14 +553,14 @@ function NuevoTrabajoContent() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fecha y hora</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Fecha" type="date" value={scheduledDate}
+              <Input label={t.dateLabel} type="date" value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}/>
-              <Input label="Hora inicio" type="time" value={timeStart}
+              <Input label={t.timeStartLabel} type="time" value={timeStart}
                 onChange={e => setTimeStart(e.target.value)}/>
-              <Input label="Hora fin" type="time" value={timeEnd}
+              <Input label={t.timeEndLabel} type="time" value={timeEnd}
                 onChange={e => setTimeEnd(e.target.value)}/>
             </div>
           </div>
@@ -553,7 +571,7 @@ function NuevoTrabajoContent() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Users size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Trabajadores asignados</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
             </div>
             {employees.length > 0 && (
               <div className="grid grid-cols-2 gap-2 mb-3">
@@ -578,10 +596,10 @@ function NuevoTrabajoContent() {
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-gray-400">Trabajadores adicionales (manual)</p>
+              <p className="text-xs text-gray-400">{t.additionalWorkersLabel}</p>
               {manualWorkers.map((w, i) => (
                 <div key={i} className="flex gap-2">
-                  <input type="text" placeholder={`Trabajador ${i + 1}`} value={w}
+                  <input type="text" placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))} value={w}
                     onChange={e => setManualWorkers(prev => prev.map((v, j) => j === i ? e.target.value : v))}
                     className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
                   {manualWorkers.length > 1 && (
@@ -594,7 +612,7 @@ function NuevoTrabajoContent() {
               ))}
               <button onClick={() => setManualWorkers(prev => [...prev, ''])}
                 className="text-xs text-primary font-medium hover:underline text-left">
-                + Agregar trabajador
+                {t.addWorker}
               </button>
             </div>
           </div>
@@ -605,7 +623,7 @@ function NuevoTrabajoContent() {
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={15} className="text-primary"/>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              {isEditProposal ? 'Servicios' : 'Materiales y mano de obra'}
+              {isEditProposal ? t.itemsHeadingProposal : t.itemsHeadingJob}
             </p>
           </div>
           <div className="flex flex-col gap-2">
@@ -613,11 +631,11 @@ function NuevoTrabajoContent() {
               /* Proposal: simpler grid without item_type */
               <>
                 <div className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1">
-                  <span>Descripción</span><span className="text-center">Cant.</span><span className="text-right">Precio/u</span><span className="text-right">Total</span><span/>
+                  <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
                   <div key={item.id} className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 items-center">
-                    <input type="text" placeholder="Descripción del servicio o material"
+                    <input type="text" placeholder={t.itemDescriptionPlaceholderProposal}
                       value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
                       className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.5" value={item.quantity || ''}
@@ -641,7 +659,7 @@ function NuevoTrabajoContent() {
               /* Job: full grid with item_type */
               <>
                 <div className="grid grid-cols-[100px_1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1">
-                  <span>Tipo</span><span>Descripción</span><span className="text-center">Cant.</span><span className="text-right">Precio/u</span><span className="text-right">Total</span><span/>
+                  <span>{t.colType}</span><span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
                   <div key={item.id} className="grid grid-cols-[100px_1fr_70px_90px_80px_32px] gap-2 items-center">
@@ -650,7 +668,7 @@ function NuevoTrabajoContent() {
                       className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                       {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                    <input type="text" placeholder="Descripción" value={item.description}
+                    <input type="text" placeholder={t.itemDescriptionPlaceholderJob} value={item.description}
                       onChange={e => updateItem(item.id, 'description', e.target.value)}
                       className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.5" value={item.quantity || ''}
@@ -677,29 +695,29 @@ function NuevoTrabajoContent() {
               {isEditProposal ? (
                 <div className="w-52 flex flex-col gap-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Subtotal</span>
+                    <span className="text-gray-500">{t.subtotal}</span>
                     <span className="font-medium">${fmtMoney(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-gray-500 whitespace-nowrap">Impuesto (%)</span>
+                    <span className="text-gray-500 whitespace-nowrap">{t.taxPercent}</span>
                     <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
                       placeholder="0" onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
                       className="w-20 rounded-xl border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                   </div>
                   <div className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-gray-500">Descuento ($)</span>
+                    <span className="text-gray-500">{t.discountAmount}</span>
                     <input type="number" min="0" step="0.01" value={discount || ''}
                       placeholder="0" onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
                       className="w-20 rounded-xl border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                   </div>
                   <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
-                    <span>Total</span>
+                    <span>{t.total}</span>
                     <span className="text-primary">${fmtMoney(total)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">Total estimado</p>
+                  <p className="text-xs text-gray-400">{t.totalEstimated}</p>
                   <p className="text-lg font-bold text-gray-900">${fmtMoney(subtotal)}</p>
                 </div>
               )}
@@ -711,22 +729,22 @@ function NuevoTrabajoContent() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={15} className="text-primary"/>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Notas</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.notesHeading}</p>
           </div>
           <div className="flex flex-col gap-3">
             {isEditProposal && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700">Nota para el cliente</label>
-                <textarea rows={2} placeholder="Términos, condiciones, detalles adicionales para el cliente..."
+                <label className="text-sm font-medium text-gray-700">{t.clientNoteLabel}</label>
+                <textarea rows={2} placeholder={t.clientNotePlaceholder}
                   value={clientNotes} onChange={e => setClientNotes(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
               </div>
             )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                {isEditProposal ? 'Nota interna' : 'Notas internas'}
+                {isEditProposal ? t.internalNoteLabelProposal : t.internalNoteLabelJob}
               </label>
-              <textarea rows={3} placeholder={isEditProposal ? 'Notas privadas (no visibles para el cliente)...' : 'Instrucciones especiales, detalles del sitio, acceso...'}
+              <textarea rows={3} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
                 value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
             </div>
@@ -738,10 +756,10 @@ function NuevoTrabajoContent() {
         {/* Actions */}
         <div className="flex gap-3 pb-6">
           <Link href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'} className="flex-1">
-            <Button variant="secondary" fullWidth>Cancelar</Button>
+            <Button variant="secondary" fullWidth>{tc.buttons.cancel}</Button>
           </Link>
           <Button onClick={save} loading={saving} fullWidth>
-            {editId ? 'Guardar cambios' : (isEditProposal ? 'Crear propuesta' : 'Crear trabajo')}
+            {editId ? tc.buttons.saveChanges : (isEditProposal ? t.submitCreateProposal : t.submitCreateJob)}
           </Button>
         </div>
       </div>
