@@ -10,6 +10,7 @@ import { StepLocation } from '@/components/onboarding/StepLocation';
 import { StepLogo } from '@/components/onboarding/StepLogo';
 import { StepAddOns } from '@/components/onboarding/StepAddOns';
 import { StepComplete } from '@/components/onboarding/StepComplete';
+import { useLang } from '@/i18n/LangProvider';
 
 export interface OnboardingData {
   businessName: string;
@@ -25,6 +26,8 @@ export interface OnboardingData {
 const TOTAL_STEPS = 5;
 
 export default function OnboardingPage() {
+  const { t: full } = useLang();
+  const t = full.onboarding;
   const supabase = createSupabaseClient();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -72,7 +75,7 @@ export default function OnboardingPage() {
 
       if (bizError) {
         console.error('Business insert error:', bizError);
-        throw new Error(`Error al crear negocio: ${bizError.message}`);
+        throw new Error(`${t.page.bizCreateError}: ${bizError.message}`);
       }
 
       // Add owner as a business member
@@ -97,7 +100,7 @@ export default function OnboardingPage() {
       window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Finish error:', err);
-      setFinishError(err.message || 'Algo salió mal. Intenta de nuevo.');
+      setFinishError(err.message || t.page.finishGenericError);
       setLoading(false);
     }
   };
@@ -107,8 +110,8 @@ export default function OnboardingPage() {
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between text-xs text-gray-400 mb-2">
-          <span>Configurando tu negocio</span>
-          <span>{Math.min(step, TOTAL_STEPS)} de {TOTAL_STEPS}</span>
+          <span>{t.page.progressLabel}</span>
+          <span>{Math.min(step, TOTAL_STEPS)} {t.page.progressOf} {TOTAL_STEPS}</span>
         </div>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
@@ -149,7 +152,7 @@ export default function OnboardingPage() {
       {/* Note */}
       {step < TOTAL_STEPS + 1 && (
         <p className="text-xs text-gray-400 mt-4 text-center">
-          Puedes agregar más negocios y cambiar ajustes en cualquier momento.
+          {t.page.footerNote}
         </p>
       )}
     </div>

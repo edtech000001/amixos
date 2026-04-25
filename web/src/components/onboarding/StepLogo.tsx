@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { ImageIcon, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Props {
   logoUrl: string | null;
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
+  const { t: full } = useLang();
+  const t = full.onboarding.logo;
   const supabase = createSupabaseClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -23,7 +26,7 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      setError('El logo debe ser menor a 2MB');
+      setError(t.sizeError);
       return;
     }
 
@@ -38,7 +41,7 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
       .upload(path, file, { upsert: true });
 
     if (uploadError) {
-      setError('Error al subir. Intenta de nuevo.');
+      setError(t.uploadError);
       setUploading(false);
       return;
     }
@@ -54,8 +57,8 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
           <ImageIcon className="text-primary" size={24} />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Sube tu logo</h2>
-        <p className="text-sm text-gray-500 mt-1">Opcional — puedes agregarlo después en ajustes.</p>
+        <h2 className="text-xl font-bold text-gray-900">{t.heading}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
 
       <div
@@ -71,15 +74,15 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
               onClick={e => { e.stopPropagation(); onChange(null); }}
               className="text-xs text-red-400 flex items-center gap-1 hover:text-red-500"
             >
-              <X size={12} /> Quitar
+              <X size={12} /> {t.remove}
             </button>
           </>
         ) : (
           <>
             <Upload size={28} className="text-gray-300" />
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-700">Toca para subir tu logo</p>
-              <p className="text-xs text-gray-400">PNG, JPG hasta 2MB</p>
+              <p className="text-sm font-medium text-gray-700">{t.uploadPrimary}</p>
+              <p className="text-xs text-gray-400">{t.uploadSecondary}</p>
             </div>
           </>
         )}
@@ -90,9 +93,9 @@ export function StepLogo({ logoUrl, onChange, onNext, onBack }: Props) {
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">{t.back}</Button>
         <Button onClick={onNext} loading={uploading} size="lg" className="flex-1">
-          {logoUrl ? 'Continuar' : 'Saltar por ahora'}
+          {logoUrl ? t.next : t.skip}
         </Button>
       </div>
     </div>

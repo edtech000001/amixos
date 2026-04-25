@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,17 +11,19 @@ import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-
-const schema = z.object({
-  email: z.string().email('Ingresa un correo válido'),
-});
-
-type FormData = z.infer<typeof schema>;
+import { useLang } from '@/i18n/LangProvider';
 
 export default function ForgotPasswordPage() {
+  const { t: full } = useLang();
+  const t = full.auth;
   const supabase = createSupabaseClient();
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+
+  const schema = useMemo(() => z.object({
+    email: z.string().email(t.forgot.emailInvalid),
+  }), [t]);
+  type FormData = z.infer<typeof schema>;
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -34,7 +36,7 @@ export default function ForgotPasswordPage() {
     });
 
     if (error) {
-      setError('Algo salió mal. Verifica el correo e intenta de nuevo.');
+      setError(t.forgot.error);
       return;
     }
 
@@ -46,8 +48,8 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">Amixos</h1>
-          <p className="text-gray-500 mt-1 text-sm">Recupera tu acceso</p>
+          <h1 className="text-3xl font-bold text-primary">{t.brand.name}</h1>
+          <p className="text-gray-500 mt-1 text-sm">{t.forgot.tagline}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
@@ -55,31 +57,31 @@ export default function ForgotPasswordPage() {
             // ── Success state ──────────────────────────────────────
             <div className="text-center flex flex-col items-center gap-4">
               <CheckCircle size={48} className="text-accent" />
-              <h2 className="text-xl font-semibold text-gray-900">¡Revisa tu correo!</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{t.forgot.successTitle}</h2>
               <p className="text-sm text-gray-500">
-                Te enviamos un enlace para restablecer tu contraseña. Si no lo ves, revisa tu carpeta de spam.
+                {t.forgot.successSub}
               </p>
               <Link
                 href="/auth/login"
                 className="mt-2 text-sm text-primary font-medium hover:underline flex items-center gap-1"
               >
                 <ArrowLeft size={14} />
-                Volver al inicio de sesión
+                {t.forgot.backToLogin}
               </Link>
             </div>
           ) : (
             // ── Form state ─────────────────────────────────────────
             <>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">¿Olvidaste tu contraseña?</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.forgot.heading}</h2>
               <p className="text-sm text-gray-500 mb-6">
-                Ingresa tu correo y te mandamos un enlace para restablecerla.
+                {t.forgot.sub}
               </p>
 
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 <Input
-                  label="Correo"
+                  label={t.forgot.email}
                   type="email"
-                  placeholder="tu@correo.com"
+                  placeholder={t.forgot.emailPlaceholder}
                   leftIcon={<Mail size={16} />}
                   error={errors.email?.message}
                   {...register('email')}
@@ -92,7 +94,7 @@ export default function ForgotPasswordPage() {
                 )}
 
                 <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-                  Enviar enlace
+                  {t.forgot.submit}
                 </Button>
               </form>
 
@@ -102,7 +104,7 @@ export default function ForgotPasswordPage() {
                   className="text-sm text-gray-500 hover:text-primary flex items-center justify-center gap-1"
                 >
                   <ArrowLeft size={14} />
-                  Volver al inicio de sesión
+                  {t.forgot.backToLogin}
                 </Link>
               </div>
             </>

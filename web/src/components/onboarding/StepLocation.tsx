@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useLang } from '@/i18n/LangProvider';
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
@@ -27,11 +28,13 @@ interface Props {
 }
 
 export function StepLocation({ city, state, onChange, onNext, onBack }: Props) {
+  const { t: full } = useLang();
+  const t = full.onboarding.location;
   const [error, setError] = useState('');
 
   const handleNext = () => {
     if (!city.trim() || !state.trim()) {
-      setError('Ciudad y estado son requeridos');
+      setError(t.error);
       return;
     }
     setError('');
@@ -44,14 +47,14 @@ export function StepLocation({ city, state, onChange, onNext, onBack }: Props) {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
           <MapPin className="text-primary" size={24} />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">¿Dónde está tu negocio?</h2>
-        <p className="text-sm text-gray-500 mt-1">Ayuda con horarios locales y manejo de clientes.</p>
+        <h2 className="text-xl font-bold text-gray-900">{t.heading}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
 
       <div className="flex flex-col gap-3">
         <Input
-          label="Ciudad"
-          placeholder="ej. Los Ángeles"
+          label={t.cityLabel}
+          placeholder={t.cityPlaceholder}
           value={city}
           onChange={e => onChange({ city: e.target.value })}
           autoFocus
@@ -59,13 +62,13 @@ export function StepLocation({ city, state, onChange, onNext, onBack }: Props) {
 
         {/* State dropdown */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">Estado</label>
+          <label className="text-sm font-medium text-gray-700">{t.stateLabel}</label>
           <select
             value={state}
             onChange={e => onChange({ state: e.target.value })}
             className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150 appearance-none"
           >
-            <option value="">Selecciona un estado</option>
+            <option value="">{t.statePlaceholder}</option>
             {US_STATES.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -76,8 +79,8 @@ export function StepLocation({ city, state, onChange, onNext, onBack }: Props) {
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
-        <Button onClick={handleNext} size="lg" className="flex-1">Continuar</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">{t.back}</Button>
+        <Button onClick={handleNext} size="lg" className="flex-1">{t.next}</Button>
       </div>
     </div>
   );

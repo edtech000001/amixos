@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Props {
   value: string;
@@ -12,11 +13,13 @@ interface Props {
 }
 
 export function StepBusinessName({ value, onChange, onNext }: Props) {
+  const { t: full } = useLang();
+  const t = full.onboarding.businessName;
   const [error, setError] = useState('');
 
   const handleNext = () => {
     if (!value.trim()) {
-      setError('El nombre del negocio es requerido');
+      setError(t.error);
       return;
     }
     setError('');
@@ -29,13 +32,13 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
           <Building2 className="text-primary" size={24} />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">¿Cómo se llama tu negocio?</h2>
-        <p className="text-sm text-gray-500 mt-1">Puedes cambiarlo después cuando quieras.</p>
+        <h2 className="text-xl font-bold text-gray-900">{t.heading}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
 
       <Input
-        label="Nombre del negocio"
-        placeholder="ej. Servicios Ramírez"
+        label={t.label}
+        placeholder={t.placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
         error={error}
@@ -44,7 +47,7 @@ export function StepBusinessName({ value, onChange, onNext }: Props) {
       />
 
       <Button onClick={handleNext} fullWidth size="lg">
-        Continuar
+        {t.cta}
       </Button>
     </div>
   );
