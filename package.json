@@ -22,6 +22,7 @@
     "lucide-react-native": "^0.378.0",
     "prettier": "^3.2.5",
     "react-native": "0.74.1",
+    "react-native-svg": "15.2.0",
     "typescript": "^5.4.5"
   }
 }
