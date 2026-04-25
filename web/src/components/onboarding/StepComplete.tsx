@@ -2,11 +2,15 @@
 
 import { CheckCircle2 } from 'lucide-react';
 import { useEffect } from 'react';
+import { useLang } from '@/i18n/LangProvider';
 
 export function StepComplete() {
+  const { t: full } = useLang();
+  const t = full.onboarding.complete;
+
   useEffect(() => {
-    const t = setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -14,8 +18,8 @@ export function StepComplete() {
       <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center">
         <CheckCircle2 className="text-accent" size={36} />
       </div>
-      <h2 className="text-xl font-bold text-gray-900">¡Todo listo!</h2>
-      <p className="text-sm text-gray-500">Preparando tu panel...</p>
+      <h2 className="text-xl font-bold text-gray-900">{t.heading}</h2>
+      <p className="text-sm text-gray-500">{t.sub}</p>
       <div className="flex gap-1 mt-2">
         {[0, 1, 2].map(i => (
           <div

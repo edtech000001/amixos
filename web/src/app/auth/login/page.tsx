@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,43 +12,34 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
-
-const loginSchema = z.object({
-  email: z.string().email('Ingresa un correo válido'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
-
-// Map Supabase error messages to Spanish
-const getErrorMessage = (msg: string): string => {
-  if (msg.includes('Email not confirmed') || msg.includes('email not confirmed')) {
-    return 'Correo no está verificado. Revisa tu correo 📧';
-  }
-  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
-    return 'Correo o contraseña incorrectos. Intenta de nuevo.';
-  }
-  if (msg.includes('Too many requests')) {
-    return 'Demasiados intentos. Espera un momento e intenta de nuevo.';
-  }
-  if (msg.includes('User not found')) {
-    return 'No existe una cuenta con ese correo.';
-  }
-  return 'Algo salió mal. Intenta de nuevo.';
-};
+import { useLang } from '@/i18n/LangProvider';
 
 export default function LoginPage() {
+  const { t: full } = useLang();
+  const t = full.auth;
   const supabase = createSupabaseClient();
 
-  // Check for errors passed via URL (e.g. from auth callback)
+  const loginSchema = useMemo(() => z.object({
+    email: z.string().email(t.login.errors.emailInvalid),
+    password: z.string().min(6, t.login.errors.passwordShort),
+  }), [t]);
+
+  type LoginForm = z.infer<typeof loginSchema>;
+
+  const mapError = (msg: string): string => {
+    if (msg.includes('Email not confirmed') || msg.includes('email not confirmed')) return t.login.errors.emailNotConfirmed;
+    if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) return t.login.errors.invalidCredentials;
+    if (msg.includes('Too many requests')) return t.login.errors.tooManyRequests;
+    if (msg.includes('User not found')) return t.login.errors.userNotFound;
+    return t.login.errors.generic;
+  };
+
   const searchParams = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search)
     : null;
   const urlError = searchParams?.get('error');
 
-  const [error, setError] = useState(
-    urlError ? 'Algo salió mal con la verificación. Intenta iniciar sesión o registrarte de nuevo.' : ''
-  );
+  const [error, setError] = useState(urlError ? t.login.urlError : '');
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -63,11 +54,10 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setError(getErrorMessage(error.message));
+        setError(mapError(error.message));
         return;
       }
 
-      // Check if this user has set up a business yet
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const { data: businesses } = await supabase
@@ -85,7 +75,7 @@ export default function LoginPage() {
       window.location.href = '/dashboard';
     } catch (err) {
       console.error('Login error:', err);
-      setError('Error de conexión. Verifica tu internet e intenta de nuevo.');
+      setError(t.login.connectionError);
     }
   };
 
@@ -94,13 +84,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">Amixos</h1>
-          <p className="text-gray-500 mt-1 text-sm">Bienvenido de vuelta. A darle.</p>
+          <h1 className="text-3xl font-bold text-primary">{t.brand.name}</h1>
+          <p className="text-gray-500 mt-1 text-sm">{t.login.tagline}</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Entra a tu cuenta</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">{t.login.heading}</h2>
 
           {/* OAuth Buttons */}
           <OAuthButtons />
@@ -108,22 +98,22 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">o continúa con correo</span>
+            <span className="text-xs text-gray-400">{t.login.dividerEmail}</span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <Input
-              label="Correo"
+              label={t.register.email}
               type="email"
-              placeholder="tu@correo.com"
+              placeholder={t.register.emailPlaceholder}
               leftIcon={<Mail size={16} />}
               error={errors.email?.message}
               {...register('email')}
             />
             <Input
-              label="Contraseña"
+              label={t.register.password}
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock size={16} />}
@@ -133,7 +123,7 @@ export default function LoginPage() {
 
             <div className="flex justify-end">
               <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline">
-                ¿Olvidaste tu contraseña?
+                {t.login.forgotPassword}
               </Link>
             </div>
 
@@ -144,15 +134,15 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" loading={isSubmitting} fullWidth size="lg">
-              Iniciar Sesión
+              {t.login.submit}
             </Button>
           </form>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          ¿No tienes cuenta?{' '}
+          {t.login.noAccount}{' '}
           <Link href="/auth/register" className="text-primary font-medium hover:underline">
-            Regístrate gratis
+            {t.login.registerHere}
           </Link>
         </p>
       </div>

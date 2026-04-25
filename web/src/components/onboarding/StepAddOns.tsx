@@ -3,6 +3,7 @@
 import { Package, Phone, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { clsx } from 'clsx';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Props {
   needsInventory: boolean;
@@ -14,31 +15,33 @@ interface Props {
   error?: string;
 }
 
-const addOns = [
-  {
-    key: 'needsInventory' as const,
-    icon: Package,
-    title: 'Sistema de Inventario',
-    description: 'Controla productos, materiales y niveles de stock. Recibe alertas cuando te estés quedando sin algo.',
-    note: 'Se puede activar después en ajustes',
-  },
-  {
-    key: 'needsVirtualNumber' as const,
-    icon: Phone,
-    title: 'Número Virtual de Negocio',
-    description: 'Obtén un número dedicado para llamadas y mensajes. Mantén lo personal separado del trabajo.',
-    note: 'Se puede agregar después en ajustes',
-  },
-];
-
 export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFinish, onBack, loading, error }: Props) {
+  const { t: full } = useLang();
+  const t = full.onboarding.addOns;
   const values = { needsInventory, needsVirtualNumber };
+
+  const addOns = [
+    {
+      key: 'needsInventory' as const,
+      icon: Package,
+      title: t.inventoryTitle,
+      description: t.inventoryDesc,
+      note: t.inventoryNote,
+    },
+    {
+      key: 'needsVirtualNumber' as const,
+      icon: Phone,
+      title: t.voipTitle,
+      description: t.voipDesc,
+      note: t.voipNote,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">¿Extras para tu negocio?</h2>
-        <p className="text-sm text-gray-500 mt-1">Selecciona lo que aplica — ambos son opcionales y gratis.</p>
+        <h2 className="text-xl font-bold text-gray-900">{t.heading}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -78,9 +81,9 @@ export function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFin
       )}
 
       <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">Atrás</Button>
+        <Button variant="secondary" onClick={onBack} size="lg" className="flex-1">{t.back}</Button>
         <Button onClick={onFinish} loading={loading} size="lg" className="flex-1">
-          Crear mi negocio 🚀
+          {t.finish}
         </Button>
       </div>
     </div>

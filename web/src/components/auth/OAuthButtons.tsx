@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
+import { useLang } from '@/i18n/LangProvider';
 
 interface OAuthButtonsProps {
   mode?: 'login' | 'register';
 }
 
 export function OAuthButtons({ mode = 'login' }: OAuthButtonsProps) {
+  const { t } = useLang();
   const supabase = createSupabaseClient();
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export function OAuthButtons({ mode = 'login' }: OAuthButtonsProps) {
     setLoading(null);
   };
 
-  const label = mode === 'login' ? 'Continuar con' : 'Registrarse con';
+  const label = mode === 'login' ? t.auth.oauth.continueWith : t.auth.oauth.registerWith;
 
   return (
     <div className="flex flex-col gap-3">
