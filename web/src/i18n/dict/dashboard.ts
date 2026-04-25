@@ -577,6 +577,170 @@ export type DashboardDict = {
       closeBtn: string;
     };
   };
+  settings: {
+    title: string;
+    tabs: {
+      negocio: string;
+      trabajos: string;
+      clientes: string;
+      cuenta: string;
+    };
+    fieldTypes: {
+      text: string;
+      number: string;
+      date: string;
+      boolean: string;
+      select: string;
+    };
+    pipelineSteps: {
+      proposal: { label: string; description: string };
+      sent: { label: string; description: string };
+      accepted: { label: string; description: string };
+      scheduled: { label: string; description: string };
+      in_progress: { label: string; description: string };
+      completed: { label: string; description: string };
+      invoiced: { label: string; description: string };
+    };
+    business: {
+      heading: string;
+      subtitle: string;
+      nameLabel: string;
+      cityLabel: string;
+      saveError: string;
+      saveSuccess: string;
+    };
+    pipeline: {
+      heading: string;
+      subtitle: string;
+      saveBtn: string;
+      saveError: string;
+      saveSuccess: string;
+    };
+    requiredFields: {
+      heading: string;
+      subtitle: string;
+      saveBtn: string;
+      saveError: string;
+      saveSuccess: string;
+    };
+    customFields: {
+      heading: string;
+      subtitle: string;
+      addBtn: string;
+      emptyState: string;
+      requiredBadge: string;
+      addModalTitle: string;
+      editModalTitle: string;
+      fieldNameLabel: string;
+      fieldNamePlaceholder: string;
+      keyLabel: string;
+      fieldTypeLabel: string;
+      optionsLabel: string;
+      optionsHint: string;
+      optionsPlaceholder: string;
+      requiredToggleLabel: string;
+      addFieldBtn: string;
+      errorNameRequired: string;
+      errorDuplicate: string;
+      errorSave: string;
+      confirmDelete: string;
+    };
+    account: {
+      heading: string;
+      subtitle: string;
+      emailLabel: string;
+    };
+    password: {
+      heading: string;
+      subtitle: string;
+      newPasswordLabel: string;
+      newPasswordPlaceholder: string;
+      saveBtn: string;
+      errorMinLength: string;
+      errorPrefix: string;
+      successMsg: string;
+    };
+  };
+  reports: {
+    title: string;
+    subtitle: string;
+    ranges: {
+      month: string;
+      last_month: string;
+      quarter: string;
+      half: string;
+      year: string;
+      all: string;
+    };
+    kpis: {
+      revenueCollected: string;
+      pendingToCollect: string;
+      avgJobValue: string;
+      hoursLogged: string;
+      paidInvoicesCountSingle: string;
+      paidInvoicesCountPlural: string;
+      noPaidInvoices: string;
+      overdueSuffix: string;
+      completedJobsCount: string;
+      estPayrollSub: string;
+    };
+    sections: {
+      revenueByMonth: string;
+      invoiceStatus: string;
+      jobsByStatus: string;
+      hoursByEmployee: string;
+      newClients: string;
+      financialSummary: string;
+      inventory: string;
+    };
+    chart: {
+      revenueSeries: string;
+      jobsSeries: string;
+    };
+    empty: {
+      revenue: string;
+      invoices: string;
+      jobs: string;
+      hours: string;
+    };
+    pieStatuses: {
+      paid: string;
+      sent: string;
+      draft: string;
+      overdue: string;
+      cancelled: string;
+    };
+    invoicePie: {
+      total: string;
+    };
+    jobsBreakdown: {
+      seriesName: string;
+      totalJobs: string;
+      completionRate: string;
+    };
+    employees: {
+      hoursSuffix: string;
+      totalEstimatedPayroll: string;
+      manualWorker: string;
+    };
+    newClientsBlock: {
+      newCount: string;
+      totalAccumulated: string;
+    };
+    financial: {
+      revenueCollected: string;
+      pending: string;
+      overdue: string;
+      estPayroll: string;
+      grossMarginEst: string;
+    };
+    inventoryBlock: {
+      totalValueLabel: string;
+      totalItems: string;
+      lowStock: string;
+      outOfStock: string;
+    };
+  };
   // Date locale for short month formatting in lists
   dateLocale: string;
 };
@@ -1151,6 +1315,170 @@ export const dashboard: Record<Locale, DashboardDict> = {
         closeBtn: 'Cerrar',
       },
     },
+    settings: {
+      title: 'Ajustes',
+      tabs: {
+        negocio: 'Negocio',
+        trabajos: 'Trabajos',
+        clientes: 'Clientes',
+        cuenta: 'Cuenta',
+      },
+      fieldTypes: {
+        text: 'Texto',
+        number: 'Número',
+        date: 'Fecha',
+        boolean: 'Sí / No',
+        select: 'Lista de opciones',
+      },
+      pipelineSteps: {
+        proposal: { label: 'Propuesta', description: 'Fase inicial de cotizaciones y propuestas' },
+        sent: { label: 'Enviada', description: 'Propuesta enviada al cliente' },
+        accepted: { label: 'Aceptada', description: 'Propuesta aceptada por el cliente' },
+        scheduled: { label: 'Programado', description: 'Trabajo agendado con fecha' },
+        in_progress: { label: 'En progreso', description: 'Trabajo actualmente en ejecución' },
+        completed: { label: 'Completado', description: 'Trabajo terminado' },
+        invoiced: { label: 'Facturado', description: 'Factura generada para el trabajo' },
+      },
+      business: {
+        heading: 'Información del negocio',
+        subtitle: 'Datos básicos de tu empresa.',
+        nameLabel: 'Nombre del negocio',
+        cityLabel: 'Ciudad',
+        saveError: 'Error al guardar.',
+        saveSuccess: '¡Guardado!',
+      },
+      pipeline: {
+        heading: 'Etapas del proceso',
+        subtitle: 'Desactiva las etapas que no uses en tu flujo de trabajo. Las etapas desactivadas no se mostrarán en el pipeline de trabajos.',
+        saveBtn: 'Guardar configuración',
+        saveError: 'Error al guardar.',
+        saveSuccess: '¡Guardado!',
+      },
+      requiredFields: {
+        heading: 'Campos obligatorios',
+        subtitle: 'Elige cuáles campos son obligatorios al crear o editar un cliente.',
+        saveBtn: 'Guardar preferencias',
+        saveError: 'Error al guardar.',
+        saveSuccess: '¡Guardado!',
+      },
+      customFields: {
+        heading: 'Campos personalizados',
+        subtitle: 'Campos extra que aparecen en el formulario de cada cliente.',
+        addBtn: 'Agregar',
+        emptyState: 'Sin campos personalizados.',
+        requiredBadge: 'Requerido',
+        addModalTitle: 'Nuevo campo personalizado',
+        editModalTitle: 'Editar campo personalizado',
+        fieldNameLabel: 'Nombre del campo *',
+        fieldNamePlaceholder: 'ej. Número de contrato',
+        keyLabel: 'Clave',
+        fieldTypeLabel: 'Tipo de campo',
+        optionsLabel: 'Opciones',
+        optionsHint: '(una por línea)',
+        optionsPlaceholder: 'Opción 1\nOpción 2\nOpción 3',
+        requiredToggleLabel: 'Campo requerido',
+        addFieldBtn: 'Agregar campo',
+        errorNameRequired: 'El nombre del campo es requerido',
+        errorDuplicate: 'Ya existe un campo con ese nombre',
+        errorSave: 'Error al guardar.',
+        confirmDelete: '¿Eliminar este campo? Los datos en clientes existentes se perderán.',
+      },
+      account: {
+        heading: 'Cuenta',
+        subtitle: 'Tu información de acceso.',
+        emailLabel: 'Correo',
+      },
+      password: {
+        heading: 'Cambiar contraseña',
+        subtitle: 'Actualiza tu contraseña de acceso.',
+        newPasswordLabel: 'Nueva contraseña',
+        newPasswordPlaceholder: 'Mínimo 6 caracteres',
+        saveBtn: 'Actualizar contraseña',
+        errorMinLength: 'Mínimo 6 caracteres',
+        errorPrefix: 'Error: {{message}}',
+        successMsg: '¡Contraseña actualizada!',
+      },
+    },
+    reports: {
+      title: 'Reportes',
+      subtitle: 'Analiza el rendimiento de tu negocio',
+      ranges: {
+        month: 'Este mes',
+        last_month: 'Mes anterior',
+        quarter: 'Últimos 3 meses',
+        half: 'Últimos 6 meses',
+        year: 'Este año',
+        all: 'Todo el tiempo',
+      },
+      kpis: {
+        revenueCollected: 'Ingresos cobrados',
+        pendingToCollect: 'Pendiente de cobro',
+        avgJobValue: 'Valor promedio/trabajo',
+        hoursLogged: 'Horas registradas',
+        paidInvoicesCountSingle: '{{count}} factura pagada',
+        paidInvoicesCountPlural: '{{count}} facturas pagadas',
+        noPaidInvoices: 'Sin facturas pagadas',
+        overdueSuffix: '{{amount}} vencido',
+        completedJobsCount: '{{count}} trabajos completados',
+        estPayrollSub: 'Est. nómina: {{amount}}',
+      },
+      sections: {
+        revenueByMonth: 'Ingresos por mes',
+        invoiceStatus: 'Estado de facturas',
+        jobsByStatus: 'Trabajos por estado',
+        hoursByEmployee: 'Horas por empleado',
+        newClients: 'Nuevos clientes',
+        financialSummary: 'Resumen financiero',
+        inventory: 'Inventario',
+      },
+      chart: {
+        revenueSeries: 'Ingresos',
+        jobsSeries: 'Trabajos',
+      },
+      empty: {
+        revenue: 'Sin datos de ingresos en este período.',
+        invoices: 'Sin facturas en este período.',
+        jobs: 'Sin trabajos en este período.',
+        hours: 'Sin registros de horas en este período.',
+      },
+      pieStatuses: {
+        paid: 'Pagadas',
+        sent: 'Enviadas',
+        draft: 'Borrador',
+        overdue: 'Vencidas',
+        cancelled: 'Canceladas',
+      },
+      invoicePie: {
+        total: 'Total',
+      },
+      jobsBreakdown: {
+        seriesName: 'Trabajos',
+        totalJobs: 'Total trabajos',
+        completionRate: 'Tasa de completado',
+      },
+      employees: {
+        hoursSuffix: '{{hours}}h',
+        totalEstimatedPayroll: 'Total estimado nómina',
+        manualWorker: 'Manual',
+      },
+      newClientsBlock: {
+        newCount: 'clientes nuevos',
+        totalAccumulated: '{{count}} total acumulado',
+      },
+      financial: {
+        revenueCollected: 'Ingresos cobrados',
+        pending: 'Por cobrar',
+        overdue: 'Vencido',
+        estPayroll: 'Nómina estimada',
+        grossMarginEst: 'Margen bruto est.',
+      },
+      inventoryBlock: {
+        totalValueLabel: 'valor total en inventario',
+        totalItems: 'Artículos totales',
+        lowStock: 'Bajo stock',
+        outOfStock: 'Sin stock',
+      },
+    },
     dateLocale: 'es-MX',
   },
   en: {
@@ -1720,6 +2048,170 @@ export const dashboard: Record<Locale, DashboardDict> = {
         notesPlaceholder: 'Additional details...',
         saveBtn: 'Save event',
         closeBtn: 'Close',
+      },
+    },
+    settings: {
+      title: 'Settings',
+      tabs: {
+        negocio: 'Business',
+        trabajos: 'Jobs',
+        clientes: 'Clients',
+        cuenta: 'Account',
+      },
+      fieldTypes: {
+        text: 'Text',
+        number: 'Number',
+        date: 'Date',
+        boolean: 'Yes / No',
+        select: 'Dropdown list',
+      },
+      pipelineSteps: {
+        proposal: { label: 'Proposal', description: 'Initial quote and proposal phase' },
+        sent: { label: 'Sent', description: 'Proposal sent to client' },
+        accepted: { label: 'Accepted', description: 'Proposal accepted by client' },
+        scheduled: { label: 'Scheduled', description: 'Job scheduled with a date' },
+        in_progress: { label: 'In progress', description: 'Job currently in execution' },
+        completed: { label: 'Completed', description: 'Job finished' },
+        invoiced: { label: 'Invoiced', description: 'Invoice generated for the job' },
+      },
+      business: {
+        heading: 'Business info',
+        subtitle: 'Basic information about your company.',
+        nameLabel: 'Business name',
+        cityLabel: 'City',
+        saveError: 'Save error.',
+        saveSuccess: 'Saved!',
+      },
+      pipeline: {
+        heading: 'Process stages',
+        subtitle: "Disable the stages you don't use in your workflow. Disabled stages won't appear in the jobs pipeline.",
+        saveBtn: 'Save configuration',
+        saveError: 'Save error.',
+        saveSuccess: 'Saved!',
+      },
+      requiredFields: {
+        heading: 'Required fields',
+        subtitle: 'Choose which fields are required when creating or editing a client.',
+        saveBtn: 'Save preferences',
+        saveError: 'Save error.',
+        saveSuccess: 'Saved!',
+      },
+      customFields: {
+        heading: 'Custom fields',
+        subtitle: "Extra fields that appear in each client's form.",
+        addBtn: 'Add',
+        emptyState: 'No custom fields.',
+        requiredBadge: 'Required',
+        addModalTitle: 'New custom field',
+        editModalTitle: 'Edit custom field',
+        fieldNameLabel: 'Field name *',
+        fieldNamePlaceholder: 'e.g. Contract number',
+        keyLabel: 'Key',
+        fieldTypeLabel: 'Field type',
+        optionsLabel: 'Options',
+        optionsHint: '(one per line)',
+        optionsPlaceholder: 'Option 1\nOption 2\nOption 3',
+        requiredToggleLabel: 'Required field',
+        addFieldBtn: 'Add field',
+        errorNameRequired: 'Field name is required',
+        errorDuplicate: 'A field with that name already exists',
+        errorSave: 'Save error.',
+        confirmDelete: 'Delete this field? Data in existing clients will be lost.',
+      },
+      account: {
+        heading: 'Account',
+        subtitle: 'Your sign-in information.',
+        emailLabel: 'Email',
+      },
+      password: {
+        heading: 'Change password',
+        subtitle: 'Update your sign-in password.',
+        newPasswordLabel: 'New password',
+        newPasswordPlaceholder: 'At least 6 characters',
+        saveBtn: 'Update password',
+        errorMinLength: 'At least 6 characters',
+        errorPrefix: 'Error: {{message}}',
+        successMsg: 'Password updated!',
+      },
+    },
+    reports: {
+      title: 'Reports',
+      subtitle: 'Analyze your business performance',
+      ranges: {
+        month: 'This month',
+        last_month: 'Last month',
+        quarter: 'Last 3 months',
+        half: 'Last 6 months',
+        year: 'This year',
+        all: 'All time',
+      },
+      kpis: {
+        revenueCollected: 'Revenue collected',
+        pendingToCollect: 'Pending to collect',
+        avgJobValue: 'Avg. job value',
+        hoursLogged: 'Hours logged',
+        paidInvoicesCountSingle: '{{count}} paid invoice',
+        paidInvoicesCountPlural: '{{count}} paid invoices',
+        noPaidInvoices: 'No paid invoices',
+        overdueSuffix: '{{amount}} overdue',
+        completedJobsCount: '{{count}} completed jobs',
+        estPayrollSub: 'Est. payroll: {{amount}}',
+      },
+      sections: {
+        revenueByMonth: 'Revenue by month',
+        invoiceStatus: 'Invoice status',
+        jobsByStatus: 'Jobs by status',
+        hoursByEmployee: 'Hours by employee',
+        newClients: 'New clients',
+        financialSummary: 'Financial summary',
+        inventory: 'Inventory',
+      },
+      chart: {
+        revenueSeries: 'Revenue',
+        jobsSeries: 'Jobs',
+      },
+      empty: {
+        revenue: 'No revenue data for this period.',
+        invoices: 'No invoices in this period.',
+        jobs: 'No jobs in this period.',
+        hours: 'No hours logged in this period.',
+      },
+      pieStatuses: {
+        paid: 'Paid',
+        sent: 'Sent',
+        draft: 'Draft',
+        overdue: 'Overdue',
+        cancelled: 'Cancelled',
+      },
+      invoicePie: {
+        total: 'Total',
+      },
+      jobsBreakdown: {
+        seriesName: 'Jobs',
+        totalJobs: 'Total jobs',
+        completionRate: 'Completion rate',
+      },
+      employees: {
+        hoursSuffix: '{{hours}}h',
+        totalEstimatedPayroll: 'Total estimated payroll',
+        manualWorker: 'Manual',
+      },
+      newClientsBlock: {
+        newCount: 'new clients',
+        totalAccumulated: '{{count}} total accumulated',
+      },
+      financial: {
+        revenueCollected: 'Revenue collected',
+        pending: 'Outstanding',
+        overdue: 'Overdue',
+        estPayroll: 'Estimated payroll',
+        grossMarginEst: 'Gross margin est.',
+      },
+      inventoryBlock: {
+        totalValueLabel: 'total inventory value',
+        totalItems: 'Total items',
+        lowStock: 'Low stock',
+        outOfStock: 'Out of stock',
       },
     },
     dateLocale: 'en-US',

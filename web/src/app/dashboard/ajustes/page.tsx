@@ -3,9 +3,10 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Lock, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ChevronRight, Briefcase } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -20,58 +21,72 @@ interface FieldTemplate {
   sort_order: number;
 }
 
-const DEFAULT_CLIENT_FIELDS: { key: string; label: string }[] = [
-  { key: 'first_name', label: 'Nombre' },
-  { key: 'last_name', label: 'Apellido' },
-  { key: 'company', label: 'Empresa' },
-  { key: 'phone_cell', label: 'Celular' },
-  { key: 'phone_office', label: 'Teléfono oficina' },
-  { key: 'email_office', label: 'Correo oficina' },
-  { key: 'email_home', label: 'Correo personal' },
-  { key: 'address', label: 'Dirección' },
-  { key: 'city', label: 'Ciudad' },
-  { key: 'state', label: 'Estado' },
-  { key: 'zip_code', label: 'Código postal' },
-];
-
-const FIELD_TYPES: Record<string, string> = {
-  text: 'Texto', number: 'Número', date: 'Fecha', boolean: 'Sí / No', select: 'Lista de opciones',
-};
-
 type Tab = 'negocio' | 'trabajos' | 'clientes' | 'cuenta';
 
-const TABS: { key: Tab; label: string; icon: any }[] = [
-  { key: 'negocio', label: 'Negocio', icon: Building2 },
-  { key: 'trabajos', label: 'Trabajos', icon: Briefcase },
-  { key: 'clientes', label: 'Clientes', icon: Users },
-  { key: 'cuenta', label: 'Cuenta', icon: User },
-];
+const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
-const ALL_PIPELINE_STEPS: { key: string; label: string; description: string }[] = [
-  { key: 'proposal', label: 'Propuesta', description: 'Fase inicial de cotizaciones y propuestas' },
-  { key: 'sent', label: 'Enviada', description: 'Propuesta enviada al cliente' },
-  { key: 'accepted', label: 'Aceptada', description: 'Propuesta aceptada por el cliente' },
-  { key: 'scheduled', label: 'Programado', description: 'Trabajo agendado con fecha' },
-  { key: 'in_progress', label: 'En progreso', description: 'Trabajo actualmente en ejecucion' },
-  { key: 'completed', label: 'Completado', description: 'Trabajo terminado' },
-  { key: 'invoiced', label: 'Facturado', description: 'Factura generada para el trabajo' },
-];
+const DEFAULT_CLIENT_FIELD_KEYS = [
+  'first_name', 'last_name', 'company', 'phone_cell', 'phone_office',
+  'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
+] as const;
 
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
   const { business, user, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+  const tc = full.common;
+  const tFields = full.dashboard.clients.fields;
   const [tab, setTab] = useState<Tab>('negocio');
+
+  // Map default client field keys to translated labels
+  const DEFAULT_CLIENT_FIELDS: { key: string; label: string }[] = [
+    { key: 'first_name', label: tFields.firstName },
+    { key: 'last_name', label: tFields.lastName },
+    { key: 'company', label: tFields.company },
+    { key: 'phone_cell', label: tFields.phoneCell },
+    { key: 'phone_office', label: tFields.phoneOffice },
+    { key: 'email_office', label: tFields.emailOffice },
+    { key: 'email_home', label: tFields.emailHome },
+    { key: 'address', label: tFields.addressLine1 },
+    { key: 'city', label: tFields.city },
+    { key: 'state', label: tFields.state },
+    { key: 'zip_code', label: tFields.zipCode },
+  ];
+
+  const FIELD_TYPES: Record<string, string> = {
+    text: t.fieldTypes.text,
+    number: t.fieldTypes.number,
+    date: t.fieldTypes.date,
+    boolean: t.fieldTypes.boolean,
+    select: t.fieldTypes.select,
+  };
+
+  const ALL_PIPELINE_STEPS = PIPELINE_STEP_KEYS.map(key => ({
+    key,
+    label: t.pipelineSteps[key].label,
+    description: t.pipelineSteps[key].description,
+  }));
+
+  const TABS: { key: Tab; label: string; icon: any }[] = [
+    { key: 'negocio', label: t.tabs.negocio, icon: Building2 },
+    { key: 'trabajos', label: t.tabs.trabajos, icon: Briefcase },
+    { key: 'clientes', label: t.tabs.clientes, icon: Users },
+    { key: 'cuenta', label: t.tabs.cuenta, icon: User },
+  ];
 
   // ── Business info
   const [bizName, setBizName] = useState(business?.name ?? '');
   const [bizCity, setBizCity] = useState(business?.city ?? '');
   const [savingBiz, setSavingBiz] = useState(false);
   const [bizMsg, setBizMsg] = useState('');
+  const [bizMsgIsError, setBizMsgIsError] = useState(false);
 
   // ── Password
   const [newPw, setNewPw] = useState('');
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
+  const [pwMsgIsError, setPwMsgIsError] = useState(false);
 
   // ── Client field preferences
   const [fieldRequired, setFieldRequired] = useState<Record<string, boolean>>(
@@ -79,6 +94,7 @@ export default function AjustesPage() {
   );
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsMsg, setFieldsMsg] = useState('');
+  const [fieldsMsgIsError, setFieldsMsgIsError] = useState(false);
 
   // ── Custom field templates
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -95,6 +111,7 @@ export default function AjustesPage() {
   );
   const [savingPipeline, setSavingPipeline] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState('');
+  const [pipelineMsgIsError, setPipelineMsgIsError] = useState(false);
 
   useEffect(() => {
     if (business) {
@@ -112,17 +129,23 @@ export default function AjustesPage() {
     if (!business) return;
     setSavingBiz(true); setBizMsg('');
     const { error } = await supabase.from('businesses').update({ name: bizName, city: bizCity }).eq('id', business.id);
-    setBizMsg(error ? 'Error al guardar.' : '¡Guardado!');
+    setBizMsgIsError(!!error);
+    setBizMsg(error ? t.business.saveError : t.business.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingBiz(false);
   };
 
   // ── Password
   const savePassword = async () => {
-    if (!newPw || newPw.length < 6) { setPwMsg('Mínimo 6 caracteres'); return; }
+    if (!newPw || newPw.length < 6) {
+      setPwMsgIsError(true);
+      setPwMsg(t.password.errorMinLength);
+      return;
+    }
     setSavingPw(true); setPwMsg('');
     const { error } = await supabase.auth.updateUser({ password: newPw });
-    setPwMsg(error ? 'Error: ' + error.message : '¡Contraseña actualizada!');
+    setPwMsgIsError(!!error);
+    setPwMsg(error ? t.password.errorPrefix.replace('{{message}}', error.message) : t.password.successMsg);
     if (!error) setNewPw('');
     setSavingPw(false);
   };
@@ -139,7 +162,8 @@ export default function AjustesPage() {
     const { error } = await supabase.from('businesses')
       .update({ client_field_required: fieldRequired })
       .eq('id', business.id);
-    setFieldsMsg(error ? 'Error al guardar.' : '¡Guardado!');
+    setFieldsMsgIsError(!!error);
+    setFieldsMsg(error ? t.requiredFields.saveError : t.requiredFields.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingFields(false);
   };
@@ -156,7 +180,8 @@ export default function AjustesPage() {
     const { error } = await supabase.from('businesses')
       .update({ job_pipeline_disabled: pipelineDisabled })
       .eq('id', business.id);
-    setPipelineMsg(error ? 'Error al guardar.' : '¡Guardado!');
+    setPipelineMsgIsError(!!error);
+    setPipelineMsg(error ? t.pipeline.saveError : t.pipeline.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingPipeline(false);
   };
@@ -170,12 +195,12 @@ export default function AjustesPage() {
   };
 
   const toKey = (label: string) =>
-    label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
   const addTemplate = async () => {
-    if (!tplForm.field_label.trim()) { setTplError('El nombre del campo es requerido'); return; }
+    if (!tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
     const key = toKey(tplForm.field_label);
-    if (templates.some(t => t.field_key === key)) { setTplError('Ya existe un campo con ese nombre'); return; }
+    if (templates.some(tpl => tpl.field_key === key)) { setTplError(t.customFields.errorDuplicate); return; }
     setSavingTpl(true); setTplError('');
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
@@ -185,16 +210,16 @@ export default function AjustesPage() {
       field_type: tplForm.field_type, field_options: options,
       required: tplForm.required, sort_order: templates.length,
     });
-    if (error) { setTplError('Error al guardar.'); setSavingTpl(false); return; }
+    if (error) { setTplError(t.customFields.errorSave); setSavingTpl(false); return; }
     await loadTemplates();
     setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
     setSavingTpl(false); setAddFieldModal(false);
   };
 
   const removeTemplate = async (id: string) => {
-    if (!confirm('¿Eliminar este campo? Los datos en clientes existentes se perderán.')) return;
+    if (!confirm(t.customFields.confirmDelete)) return;
     await supabase.from('client_field_templates').delete().eq('id', id);
-    setTemplates(prev => prev.filter(t => t.id !== id));
+    setTemplates(prev => prev.filter(tpl => tpl.id !== id));
   };
 
   const openEditTemplate = (tpl: FieldTemplate) => {
@@ -208,7 +233,7 @@ export default function AjustesPage() {
   };
 
   const updateTemplate = async () => {
-    if (!editingTpl || !tplForm.field_label.trim()) { setTplError('El nombre del campo es requerido'); return; }
+    if (!editingTpl || !tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
     setSavingTpl(true); setTplError('');
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
@@ -216,31 +241,31 @@ export default function AjustesPage() {
       field_label: tplForm.field_label.trim(), field_type: tplForm.field_type,
       field_options: options, required: tplForm.required,
     }).eq('id', editingTpl.id);
-    if (error) { setTplError('Error al guardar.'); setSavingTpl(false); return; }
+    if (error) { setTplError(t.customFields.errorSave); setSavingTpl(false); return; }
     await loadTemplates();
     setSavingTpl(false); setEditFieldModal(false); setEditingTpl(null);
   };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Ajustes</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t.title}</h1>
 
       <div className="flex gap-6">
         {/* ── Sidebar nav ─────────────────────────────────────────── */}
         <nav className="w-52 shrink-0">
           <div className="flex flex-col gap-1 sticky top-6">
-            {TABS.map(t => {
-              const Icon = t.icon;
-              const active = tab === t.key;
+            {TABS.map(tabItem => {
+              const Icon = tabItem.icon;
+              const active = tab === tabItem.key;
               return (
-                <button key={t.key} onClick={() => setTab(t.key)}
+                <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left w-full ${
                     active
                       ? 'bg-primary/10 text-primary'
                       : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                   }`}>
                   <Icon size={16} className={active ? 'text-primary' : 'text-gray-400'}/>
-                  {t.label}
+                  {tabItem.label}
                 </button>
               );
             })}
@@ -253,16 +278,16 @@ export default function AjustesPage() {
           {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
           {tab === 'negocio' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-1">Información del negocio</h2>
-              <p className="text-xs text-gray-400 mb-5">Datos básicos de tu empresa.</p>
+              <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
+              <p className="text-xs text-gray-400 mb-5">{t.business.subtitle}</p>
               <div className="flex flex-col gap-3 max-w-md">
-                <Input label="Nombre del negocio" value={bizName} onChange={e => setBizName(e.target.value)}/>
-                <Input label="Ciudad" value={bizCity} onChange={e => setBizCity(e.target.value)}/>
+                <Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/>
+                <Input label={t.business.cityLabel} value={bizCity} onChange={e => setBizCity(e.target.value)}/>
               </div>
-              {bizMsg && <p className={`text-xs mt-3 ${bizMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
+              {bizMsg && <p className={`text-xs mt-3 ${bizMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
               <div className="mt-5">
                 <Button onClick={saveBusiness} loading={savingBiz}>
-                  <Save size={14} className="mr-1.5"/> Guardar cambios
+                  <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
                 </Button>
               </div>
             </div>
@@ -271,8 +296,8 @@ export default function AjustesPage() {
           {/* ══ TRABAJOS ══════════════════════════════════════════════ */}
           {tab === 'trabajos' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-1">Etapas del proceso</h2>
-              <p className="text-xs text-gray-400 mb-5">Desactiva las etapas que no uses en tu flujo de trabajo. Las etapas desactivadas no se mostraran en el pipeline de trabajos.</p>
+              <h2 className="text-base font-semibold text-gray-900 mb-1">{t.pipeline.heading}</h2>
+              <p className="text-xs text-gray-400 mb-5">{t.pipeline.subtitle}</p>
 
               <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
                 {ALL_PIPELINE_STEPS.map(step => {
@@ -297,9 +322,9 @@ export default function AjustesPage() {
                 })}
               </div>
 
-              {pipelineMsg && <p className={`text-xs mb-3 ${pipelineMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{pipelineMsg}</p>}
+              {pipelineMsg && <p className={`text-xs mb-3 ${pipelineMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pipelineMsg}</p>}
               <Button onClick={savePipelineConfig} loading={savingPipeline}>
-                <Save size={14} className="mr-1.5"/> Guardar configuracion
+                <Save size={14} className="mr-1.5"/> {t.pipeline.saveBtn}
               </Button>
             </div>
           )}
@@ -309,8 +334,8 @@ export default function AjustesPage() {
             <div className="flex flex-col gap-5">
               {/* Required fields */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">Campos obligatorios</h2>
-                <p className="text-xs text-gray-400 mb-5">Elige cuáles campos son obligatorios al crear o editar un cliente.</p>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.requiredFields.heading}</h2>
+                <p className="text-xs text-gray-400 mb-5">{t.requiredFields.subtitle}</p>
 
                 <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
                   {DEFAULT_CLIENT_FIELDS.map(f => (
@@ -329,29 +354,29 @@ export default function AjustesPage() {
                   ))}
                 </div>
 
-                {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
+                {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
                 <Button onClick={saveFieldPreferences} loading={savingFields}>
-                  <Save size={14} className="mr-1.5"/> Guardar preferencias
+                  <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
               </div>
 
               {/* Custom fields */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-semibold text-gray-900">Campos personalizados</h2>
+                  <h2 className="text-base font-semibold text-gray-900">{t.customFields.heading}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
                     setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
                     setTplError(''); setAddFieldModal(true);
                   }}>
-                    <Plus size={14} className="mr-1"/> Agregar
+                    <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-5">Campos extra que aparecen en el formulario de cada cliente.</p>
+                <p className="text-xs text-gray-400 mb-5">{t.customFields.subtitle}</p>
 
                 {templates.length === 0 ? (
                   <div className="py-6 text-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
                     <Sliders size={24} className="mx-auto mb-1.5 opacity-30"/>
-                    <p className="text-xs">Sin campos personalizados.</p>
+                    <p className="text-xs">{t.customFields.emptyState}</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
@@ -362,7 +387,7 @@ export default function AjustesPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-900">{tpl.field_label}</span>
                             {tpl.required && (
-                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">Requerido</span>
+                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
                             )}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5">
@@ -371,11 +396,13 @@ export default function AjustesPage() {
                           </p>
                         </div>
                         <button onClick={() => openEditTemplate(tpl)}
-                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
+                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+                          aria-label={tc.buttons.edit}>
                           <Pencil size={13} className="text-blue-400"/>
                         </button>
                         <button onClick={() => removeTemplate(tpl.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0">
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                          aria-label={tc.buttons.delete}>
                           <Trash2 size={13} className="text-red-400"/>
                         </button>
                       </div>
@@ -391,22 +418,22 @@ export default function AjustesPage() {
             <div className="flex flex-col gap-5">
               {/* Account info */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">Cuenta</h2>
-                <p className="text-xs text-gray-400 mb-4">Tu información de acceso.</p>
-                <p className="text-sm text-gray-500">Correo: <span className="font-medium text-gray-900">{user?.email}</span></p>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.heading}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.account.subtitle}</p>
+                <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
               </div>
 
               {/* Password */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">Cambiar contraseña</h2>
-                <p className="text-xs text-gray-400 mb-4">Actualiza tu contraseña de acceso.</p>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.password.subtitle}</p>
                 <div className="max-w-md">
-                  <Input label="Nueva contraseña" type="password" placeholder="Mínimo 6 caracteres" value={newPw} onChange={e => setNewPw(e.target.value)}/>
+                  <Input label={t.password.newPasswordLabel} type="password" placeholder={t.password.newPasswordPlaceholder} value={newPw} onChange={e => setNewPw(e.target.value)}/>
                 </div>
-                {pwMsg && <p className={`text-xs mt-3 ${pwMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
+                {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
                 <div className="mt-5">
                   <Button onClick={savePassword} loading={savingPw}>
-                    <Save size={14} className="mr-1.5"/> Actualizar contraseña
+                    <Save size={14} className="mr-1.5"/> {t.password.saveBtn}
                   </Button>
                 </div>
               </div>
@@ -416,18 +443,18 @@ export default function AjustesPage() {
       </div>
 
       {/* ── Add field modal ─────────────────────────────────────── */}
-      <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title="Nuevo campo personalizado" size="sm">
+      <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label="Nombre del campo *" placeholder="ej. Número de contrato"
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
             value={tplForm.field_label}
             onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
           {tplForm.field_label && (
             <p className="text-xs text-gray-400 -mt-2">
-              Clave: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(tplForm.field_label)}</code>
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(tplForm.field_label)}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
@@ -437,9 +464,9 @@ export default function AjustesPage() {
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                Opciones <span className="text-gray-400 font-normal">(una por línea)</span>
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
               </label>
-              <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
@@ -454,24 +481,24 @@ export default function AjustesPage() {
                 tplForm.required ? 'translate-x-6' : 'translate-x-1'
               }`}/>
             </button>
-            <span className="text-sm text-gray-700 select-none">Campo requerido</span>
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
           <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setAddFieldModal(false)} fullWidth>Cancelar</Button>
-            <Button onClick={addTemplate} loading={savingTpl} fullWidth>Agregar campo</Button>
+            <Button variant="secondary" onClick={() => setAddFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={addTemplate} loading={savingTpl} fullWidth>{t.customFields.addFieldBtn}</Button>
           </div>
         </div>
       </Modal>
 
       {/* ── Edit field modal ────────────────────────────────────── */}
-      <Modal open={editFieldModal} onClose={() => setEditFieldModal(false)} title="Editar campo personalizado" size="sm">
+      <Modal open={editFieldModal} onClose={() => setEditFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label="Nombre del campo *" placeholder="ej. Número de contrato"
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
             value={tplForm.field_label}
             onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Tipo de campo</label>
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
@@ -481,9 +508,9 @@ export default function AjustesPage() {
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                Opciones <span className="text-gray-400 font-normal">(una por línea)</span>
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
               </label>
-              <textarea rows={4} placeholder={"Opción 1\nOpción 2\nOpción 3"}
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
@@ -498,12 +525,12 @@ export default function AjustesPage() {
                 tplForm.required ? 'translate-x-6' : 'translate-x-1'
               }`}/>
             </button>
-            <span className="text-sm text-gray-700 select-none">Campo requerido</span>
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
           <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setEditFieldModal(false)} fullWidth>Cancelar</Button>
-            <Button onClick={updateTemplate} loading={savingTpl} fullWidth>Guardar cambios</Button>
+            <Button variant="secondary" onClick={() => setEditFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={updateTemplate} loading={savingTpl} fullWidth>{tc.buttons.saveChanges}</Button>
           </div>
         </div>
       </Modal>

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Invoice {
@@ -30,21 +31,11 @@ interface InventoryItem { id: string; quantity: number; unit_cost: number; }
 
 type Range = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'all';
 
-const RANGE_LABELS: Record<Range, string> = {
-  month: 'Este mes', last_month: 'Mes anterior', quarter: 'Últimos 3 meses',
-  half: 'Últimos 6 meses', year: 'Este año', all: 'Todo el tiempo',
-};
-
-const MONTH_NAMES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const RANGE_KEYS: Range[] = ['month', 'last_month', 'quarter', 'half', 'year', 'all'];
 
 const PIE_COLORS = {
   paid: '#10B981', sent: '#6366F1', draft: '#9CA3AF',
   overdue: '#EF4444', cancelled: '#D1D5DB', invoiced: '#8B5CF6',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  paid: 'Pagadas', sent: 'Enviadas', draft: 'Borrador',
-  overdue: 'Vencidas', cancelled: 'Canceladas',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,6 +121,11 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function ReportesPage() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.reports;
+  const tc = full.common;
+  const dateLocale = full.dashboard.dateLocale;
+
   const [range, setRange] = useState<Range>('year');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -174,7 +170,7 @@ export default function ReportesPage() {
   const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.created_at)), [invoices, range]);
   const filteredJobs     = useMemo(() => jobs.filter(j => inRange(j.created_at)), [jobs, range]);
   const filteredClients  = useMemo(() => clients.filter(c => inRange(c.created_at)), [clients, range]);
-  const filteredSheets   = useMemo(() => timesheets.filter(t => inRange(t.work_date)), [timesheets, range]);
+  const filteredSheets   = useMemo(() => timesheets.filter(ts => inRange(ts.work_date)), [timesheets, range]);
 
   // ── Revenue KPIs ─────────────────────────────────────────────────────────
   const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
@@ -186,7 +182,7 @@ export default function ReportesPage() {
   const completedJobs = filteredJobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
   const avgJobValue = completedJobs.length ? completedJobs.reduce((s, j) => s + j.total_amount, 0) / completedJobs.length : 0;
 
-  const totalHours = filteredSheets.reduce((s, t) => s + (t.hours_worked ?? 0), 0);
+  const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
 
   const inventoryValue = inventory.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
 
@@ -210,22 +206,34 @@ export default function ReportesPage() {
         const jd = new Date(j.created_at);
         return jd.getFullYear() === d.getFullYear() && jd.getMonth() === d.getMonth();
       });
+      // Locale-aware short month label (e.g. "Ene"/"Jan")
+      const name = d.toLocaleDateString(dateLocale, { month: 'short' });
       return {
-        name: MONTH_NAMES_ES[d.getMonth()],
-        'Ingresos': +monthInvoices.reduce((s, i) => s + i.total_amount, 0).toFixed(0),
-        'Trabajos': monthJobs.length,
+        name,
+        [t.chart.revenueSeries]: +monthInvoices.reduce((s, i) => s + i.total_amount, 0).toFixed(0),
+        [t.chart.jobsSeries]: monthJobs.length,
       };
     });
-  }, [paidInvoices, filteredJobs, range]);
+  }, [paidInvoices, filteredJobs, range, dateLocale, t.chart.revenueSeries, t.chart.jobsSeries]);
 
   // ── Invoice status pie ────────────────────────────────────────────────────
   const invoiceStatusData = useMemo(() => {
     const counts: Record<string, number> = {};
     filteredInvoices.forEach(i => { counts[i.status] = (counts[i.status] ?? 0) + 1; });
+    const labelFor = (status: string): string => {
+      switch (status) {
+        case 'paid':      return t.pieStatuses.paid;
+        case 'sent':      return t.pieStatuses.sent;
+        case 'draft':     return t.pieStatuses.draft;
+        case 'overdue':   return t.pieStatuses.overdue;
+        case 'cancelled': return t.pieStatuses.cancelled;
+        default:          return status;
+      }
+    };
     return Object.entries(counts).map(([status, count]) => ({
-      name: STATUS_LABELS[status] ?? status, value: count, status,
+      name: labelFor(status), value: count, status,
     }));
-  }, [filteredInvoices]);
+  }, [filteredInvoices, t.pieStatuses]);
 
   // ── Job status data ───────────────────────────────────────────────────────
   const jobStatusData = useMemo(() => {
@@ -233,22 +241,23 @@ export default function ReportesPage() {
       scheduled: 0, in_progress: 0, completed: 0, invoiced: 0, cancelled: 0,
     };
     filteredJobs.forEach(j => { if (j.status in map) map[j.status]++; });
+    const tabs = full.dashboard.jobs.tabs;
     return [
-      { name: 'Programados', value: map.scheduled,   color: '#6366F1' },
-      { name: 'En progreso', value: map.in_progress,  color: '#F59E0B' },
-      { name: 'Completados', value: map.completed,    color: '#10B981' },
-      { name: 'Facturados',  value: map.invoiced,     color: '#8B5CF6' },
-      { name: 'Cancelados',  value: map.cancelled,    color: '#D1D5DB' },
+      { name: tabs.scheduled,   value: map.scheduled,   color: '#6366F1' },
+      { name: tabs.in_progress, value: map.in_progress, color: '#F59E0B' },
+      { name: tabs.completed,   value: map.completed,   color: '#10B981' },
+      { name: tabs.invoiced,    value: map.invoiced,    color: '#8B5CF6' },
+      { name: tabs.cancelled,   value: map.cancelled,   color: '#D1D5DB' },
     ].filter(d => d.value > 0);
-  }, [filteredJobs]);
+  }, [filteredJobs, full.dashboard.jobs.tabs]);
 
   // ── Employee hours table ──────────────────────────────────────────────────
   const employeeHours = useMemo(() => {
     const map: Record<string, { name: string; hours: number; payRate: number; payType: string }> = {};
     filteredSheets.forEach(ts => {
-      const key = ts.employee_id ?? ts.worker_name ?? 'Sin nombre';
+      const key = ts.employee_id ?? ts.worker_name ?? t.employees.manualWorker;
       const emp = employees.find(e => e.id === ts.employee_id);
-      const name = emp ? `${emp.first_name} ${emp.last_name}` : ts.worker_name ?? 'Manual';
+      const name = emp ? `${emp.first_name} ${emp.last_name}` : ts.worker_name ?? t.employees.manualWorker;
       if (!map[key]) map[key] = { name, hours: 0, payRate: emp?.pay_rate ?? 0, payType: emp?.pay_type ?? 'hourly' };
       map[key].hours += ts.hours_worked ?? 0;
     });
@@ -261,7 +270,7 @@ export default function ReportesPage() {
       }))
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 8);
-  }, [filteredSheets, employees]);
+  }, [filteredSheets, employees, t.employees.manualWorker]);
 
   const totalPayroll = employeeHours.reduce((s, e) => s + e.pay, 0);
 
@@ -284,22 +293,28 @@ export default function ReportesPage() {
     </div>
   );
 
+  const paidSubLabel = paidInvoices.length === 0
+    ? t.kpis.noPaidInvoices
+    : (paidInvoices.length === 1
+        ? t.kpis.paidInvoicesCountSingle.replace('{{count}}', String(paidInvoices.length))
+        : t.kpis.paidInvoicesCountPlural.replace('{{count}}', String(paidInvoices.length)));
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reportes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Analiza el rendimiento de tu negocio</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
         </div>
         {/* Range selector */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
-          {(Object.keys(RANGE_LABELS) as Range[]).map(r => (
+          {RANGE_KEYS.map(r => (
             <button key={r} onClick={() => setRange(r)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 range === r ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}>
-              {RANGE_LABELS[r]}
+              {t.ranges[r]}
             </button>
           ))}
         </div>
@@ -307,24 +322,24 @@ export default function ReportesPage() {
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard icon={<DollarSign size={16}/>} label="Ingresos cobrados" value={fmt(totalRevenue)} color="emerald"
-          sub={paidInvoices.length > 0 ? `${paidInvoices.length} facturas pagadas` : 'Sin facturas pagadas'}/>
-        <KpiCard icon={<FileText size={16}/>} label="Pendiente de cobro" value={fmt(pendingRevenue + overdueRevenue)} color="amber"
-          sub={overdueRevenue > 0 ? `${fmt(overdueRevenue)} vencido` : undefined}/>
-        <KpiCard icon={<Briefcase size={16}/>} label="Valor promedio/trabajo" value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
-          sub={`${completedJobs.length} trabajos completados`}/>
-        <KpiCard icon={<Clock size={16}/>} label="Horas registradas" value={totalHours.toFixed(1)} color="purple"
-          sub={`Est. nómina: ${fmt(totalPayroll)}`}/>
+        <KpiCard icon={<DollarSign size={16}/>} label={t.kpis.revenueCollected} value={fmt(totalRevenue)} color="emerald"
+          sub={paidSubLabel}/>
+        <KpiCard icon={<FileText size={16}/>} label={t.kpis.pendingToCollect} value={fmt(pendingRevenue + overdueRevenue)} color="amber"
+          sub={overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(overdueRevenue)) : undefined}/>
+        <KpiCard icon={<Briefcase size={16}/>} label={t.kpis.avgJobValue} value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
+          sub={t.kpis.completedJobsCount.replace('{{count}}', String(completedJobs.length))}/>
+        <KpiCard icon={<Clock size={16}/>} label={t.kpis.hoursLogged} value={totalHours.toFixed(1)} color="purple"
+          sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(totalPayroll))}/>
       </div>
 
       <div className="grid md:grid-cols-2 gap-5 mb-5">
         {/* ── Revenue chart ─────────────────────────────────────────────── */}
-        <Section title="Ingresos por mes">
-          {monthlyRevenue.every(m => m['Ingresos'] === 0) ? (
+        <Section title={t.sections.revenueByMonth}>
+          {monthlyRevenue.every(m => m[t.chart.revenueSeries] === 0) ? (
             <div className="flex items-center justify-center h-48 text-gray-400">
               <div className="text-center">
                 <BarChart3 size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">Sin datos de ingresos en este período.</p>
+                <p className="text-sm">{t.empty.revenue}</p>
               </div>
             </div>
           ) : (
@@ -335,19 +350,19 @@ export default function ReportesPage() {
                 <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false}
                   tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}/>
                 <Tooltip content={<ChartTooltip/>}/>
-                <Bar dataKey="Ingresos" fill="#4F46E5" radius={[6,6,0,0]}/>
+                <Bar dataKey={t.chart.revenueSeries} fill="#4F46E5" radius={[6,6,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
           )}
         </Section>
 
         {/* ── Invoice status breakdown ───────────────────────────────────── */}
-        <Section title="Estado de facturas">
+        <Section title={t.sections.invoiceStatus}>
           {invoiceStatusData.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400">
               <div className="text-center">
                 <FileText size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">Sin facturas en este período.</p>
+                <p className="text-sm">{t.empty.invoices}</p>
               </div>
             </div>
           ) : (
@@ -375,7 +390,7 @@ export default function ReportesPage() {
                   </div>
                 ))}
                 <div className="border-t border-gray-100 pt-2 flex justify-between text-xs font-bold">
-                  <span className="text-gray-500">Total</span>
+                  <span className="text-gray-500">{t.invoicePie.total}</span>
                   <span>{filteredInvoices.length}</span>
                 </div>
               </div>
@@ -386,12 +401,12 @@ export default function ReportesPage() {
 
       <div className="grid md:grid-cols-2 gap-5 mb-5">
         {/* ── Jobs breakdown ─────────────────────────────────────────────── */}
-        <Section title="Trabajos por estado">
+        <Section title={t.sections.jobsByStatus}>
           {filteredJobs.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400">
               <div className="text-center">
                 <Briefcase size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">Sin trabajos en este período.</p>
+                <p className="text-sm">{t.empty.jobs}</p>
               </div>
             </div>
           ) : (
@@ -402,7 +417,7 @@ export default function ReportesPage() {
                   <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false}/>
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#6B7280' }} width={90} axisLine={false} tickLine={false}/>
                   <Tooltip content={<ChartTooltip/>}/>
-                  <Bar dataKey="value" name="Trabajos" radius={[0,6,6,0]}>
+                  <Bar dataKey="value" name={t.jobsBreakdown.seriesName} radius={[0,6,6,0]}>
                     {jobStatusData.map((entry, i) => <Cell key={i} fill={entry.color}/>)}
                   </Bar>
                 </BarChart>
@@ -410,7 +425,7 @@ export default function ReportesPage() {
               <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-50">
                 <div className="text-center">
                   <p className="text-xl font-black text-gray-900">{filteredJobs.length}</p>
-                  <p className="text-xs text-gray-400">Total trabajos</p>
+                  <p className="text-xs text-gray-400">{t.jobsBreakdown.totalJobs}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xl font-black text-emerald-600">
@@ -418,7 +433,7 @@ export default function ReportesPage() {
                       ? Math.round((completedJobs.length / filteredJobs.length) * 100)
                       : 0}%
                   </p>
-                  <p className="text-xs text-gray-400">Tasa de completado</p>
+                  <p className="text-xs text-gray-400">{t.jobsBreakdown.completionRate}</p>
                 </div>
               </div>
             </>
@@ -426,12 +441,12 @@ export default function ReportesPage() {
         </Section>
 
         {/* ── Employee hours ─────────────────────────────────────────────── */}
-        <Section title="Horas por empleado">
+        <Section title={t.sections.hoursByEmployee}>
           {employeeHours.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400">
               <div className="text-center">
                 <Clock size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">Sin registros de horas en este período.</p>
+                <p className="text-sm">{t.empty.hours}</p>
               </div>
             </div>
           ) : (
@@ -445,7 +460,7 @@ export default function ReportesPage() {
                       <div className="flex justify-between text-xs mb-1">
                         <span className="font-medium text-gray-700 truncate max-w-[140px]">{emp.name}</span>
                         <div className="flex gap-3 shrink-0">
-                          <span className="text-gray-500">{emp.hours}h</span>
+                          <span className="text-gray-500">{t.employees.hoursSuffix.replace('{{hours}}', String(emp.hours))}</span>
                           <span className="font-bold text-gray-900">{fmt(emp.pay)}</span>
                         </div>
                       </div>
@@ -458,7 +473,7 @@ export default function ReportesPage() {
                 })}
               </div>
               <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between text-sm font-bold">
-                <span className="text-gray-500">Total estimado nómina</span>
+                <span className="text-gray-500">{t.employees.totalEstimatedPayroll}</span>
                 <span className="text-primary">{fmt(totalPayroll)}</span>
               </div>
             </>
@@ -469,23 +484,25 @@ export default function ReportesPage() {
       {/* ── Bottom row ───────────────────────────────────────────────────────── */}
       <div className="grid md:grid-cols-3 gap-5">
         {/* Nuevos clientes */}
-        <Section title="Nuevos clientes">
+        <Section title={t.sections.newClients}>
           <div className="text-center py-6">
             <p className="text-5xl font-black text-primary">{filteredClients.length}</p>
-            <p className="text-sm text-gray-500 mt-1">clientes nuevos</p>
-            <p className="text-xs text-gray-400 mt-0.5">{clients.length} total acumulado</p>
+            <p className="text-sm text-gray-500 mt-1">{t.newClientsBlock.newCount}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(clients.length))}
+            </p>
           </div>
         </Section>
 
         {/* Invoice conversion */}
-        <Section title="Resumen financiero">
+        <Section title={t.sections.financialSummary}>
           <div className="flex flex-col gap-3">
             {[
-              { label: 'Ingresos cobrados', value: fmt(totalRevenue), color: 'text-emerald-600' },
-              { label: 'Por cobrar', value: fmt(pendingRevenue), color: 'text-blue-600' },
-              { label: 'Vencido', value: fmt(overdueRevenue), color: 'text-red-500' },
-              { label: 'Nómina estimada', value: fmt(totalPayroll), color: 'text-amber-600' },
-              { label: 'Margen bruto est.', value: totalRevenue > 0 ? fmt(totalRevenue - totalPayroll) : '—', color: 'text-gray-900' },
+              { label: t.financial.revenueCollected, value: fmt(totalRevenue), color: 'text-emerald-600' },
+              { label: t.financial.pending, value: fmt(pendingRevenue), color: 'text-blue-600' },
+              { label: t.financial.overdue, value: fmt(overdueRevenue), color: 'text-red-500' },
+              { label: t.financial.estPayroll, value: fmt(totalPayroll), color: 'text-amber-600' },
+              { label: t.financial.grossMarginEst, value: totalRevenue > 0 ? fmt(totalRevenue - totalPayroll) : '—', color: 'text-gray-900' },
             ].map(row => (
               <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-gray-50 last:border-0">
                 <span className="text-xs text-gray-500">{row.label}</span>
@@ -496,25 +513,25 @@ export default function ReportesPage() {
         </Section>
 
         {/* Inventory value */}
-        <Section title="Inventario">
+        <Section title={t.sections.inventory}>
           <div className="flex flex-col gap-4">
             <div className="text-center py-2">
               <p className="text-3xl font-black text-gray-900">{fmt(inventoryValue)}</p>
-              <p className="text-sm text-gray-500 mt-1">valor total en inventario</p>
+              <p className="text-sm text-gray-500 mt-1">{t.inventoryBlock.totalValueLabel}</p>
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Artículos totales</span>
+                <span className="text-gray-500">{t.inventoryBlock.totalItems}</span>
                 <span className="font-bold">{inventory.length}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Bajo stock</span>
+                <span className="text-gray-500">{t.inventoryBlock.lowStock}</span>
                 <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
                   {inventory.filter(i => i.quantity <= 5).length}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Sin stock</span>
+                <span className="text-gray-500">{t.inventoryBlock.outOfStock}</span>
                 <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-gray-900'}`}>
                   {inventory.filter(i => i.quantity === 0).length}
                 </span>
