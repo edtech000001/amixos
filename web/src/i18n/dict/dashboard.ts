@@ -212,6 +212,64 @@ export type DashboardDict = {
       templateFilename: string;
     };
   };
+  jobs: {
+    title: string;
+    countTotal: string;
+    pendingValue: string;
+    inProgressValue: string;
+    completedValue: string;
+    newDropdown: {
+      trigger: string;
+      jobOption: string;
+      jobOptionSub: string;
+      proposalOption: string;
+      proposalOptionSub: string;
+    };
+    searchPlaceholder: string;
+    tabs: {
+      all: string;
+      proposals: string;
+      scheduled: string;
+      in_progress: string;
+      completed: string;
+      invoiced: string;
+      cancelled: string;
+    };
+    statuses: {
+      proposal: string;
+      sent: string;
+      accepted: string;
+      declined: string;
+      scheduled: string;
+      in_progress: string;
+      completed: string;
+      cancelled: string;
+      invoiced: string;
+    };
+    priorities: {
+      low: string;
+      normal: string;
+      high: string;
+      urgent: string;
+    };
+    expired: string;
+    emptyNoMatch: string;
+    emptyAll: string;
+    createFirst: string;
+    dueShort: string;
+    actions: {
+      markSent: string;
+      markAccepted: string;
+      markDeclined: string;
+      schedule: string;
+      generateInvoice: string;
+      startWork: string;
+      markCompleted: string;
+      viewInvoice: string;
+      cancel: string;
+    };
+    notFound: string;
+  };
   // Date locale for short month formatting in lists
   dateLocale: string;
 };
@@ -428,6 +486,64 @@ export const dashboard: Record<Locale, DashboardDict> = {
         templateFilename: 'plantilla_clientes.csv',
       },
     },
+    jobs: {
+      title: 'Trabajos',
+      countTotal: '{{count}} en total',
+      pendingValue: '{{amount}} pendiente',
+      inProgressValue: '{{amount}} en progreso',
+      completedValue: '{{amount}} completado',
+      newDropdown: {
+        trigger: 'Nuevo',
+        jobOption: 'Nuevo trabajo',
+        jobOptionSub: 'Programar trabajo directamente',
+        proposalOption: 'Nueva propuesta',
+        proposalOptionSub: 'Cotizar antes de trabajar',
+      },
+      searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
+      tabs: {
+        all: 'Todos',
+        proposals: 'Propuestas',
+        scheduled: 'Programados',
+        in_progress: 'En progreso',
+        completed: 'Completados',
+        invoiced: 'Facturados',
+        cancelled: 'Cancelados',
+      },
+      statuses: {
+        proposal: 'Propuesta',
+        sent: 'Enviada',
+        accepted: 'Aceptada',
+        declined: 'Rechazada',
+        scheduled: 'Programado',
+        in_progress: 'En progreso',
+        completed: 'Completado',
+        cancelled: 'Cancelado',
+        invoiced: 'Facturado',
+      },
+      priorities: {
+        low: 'Baja',
+        normal: 'Normal',
+        high: 'Alta',
+        urgent: 'Urgente',
+      },
+      expired: '⚠ Vencida',
+      emptyNoMatch: 'Sin resultados.',
+      emptyAll: 'No tienes trabajos aún.',
+      createFirst: 'Crear el primero →',
+      dueShort: 'Vence {{date}}',
+      actions: {
+        markSent: 'Marcar enviada',
+        markAccepted: 'Aceptada',
+        markDeclined: 'Rechazada',
+        schedule: 'Programar',
+        generateInvoice: 'Facturar',
+        startWork: '▶ Iniciar trabajo',
+        markCompleted: '✓ Marcar completado',
+        viewInvoice: 'Ver factura',
+        cancel: 'Cancelar',
+      },
+      notFound: 'Trabajo no encontrado.',
+    },
     dateLocale: 'es-MX',
   },
   en: {
@@ -640,6 +756,64 @@ export const dashboard: Record<Locale, DashboardDict> = {
         goToList: 'View clients',
         templateFilename: 'clients_template.csv',
       },
+    },
+    jobs: {
+      title: 'Jobs',
+      countTotal: '{{count}} total',
+      pendingValue: '{{amount}} pending',
+      inProgressValue: '{{amount}} in progress',
+      completedValue: '{{amount}} completed',
+      newDropdown: {
+        trigger: 'New',
+        jobOption: 'New job',
+        jobOptionSub: 'Schedule a job directly',
+        proposalOption: 'New proposal',
+        proposalOptionSub: 'Quote before working',
+      },
+      searchPlaceholder: 'Search by name, client, number, city...',
+      tabs: {
+        all: 'All',
+        proposals: 'Proposals',
+        scheduled: 'Scheduled',
+        in_progress: 'In progress',
+        completed: 'Completed',
+        invoiced: 'Invoiced',
+        cancelled: 'Cancelled',
+      },
+      statuses: {
+        proposal: 'Proposal',
+        sent: 'Sent',
+        accepted: 'Accepted',
+        declined: 'Declined',
+        scheduled: 'Scheduled',
+        in_progress: 'In progress',
+        completed: 'Completed',
+        cancelled: 'Cancelled',
+        invoiced: 'Invoiced',
+      },
+      priorities: {
+        low: 'Low',
+        normal: 'Normal',
+        high: 'High',
+        urgent: 'Urgent',
+      },
+      expired: '⚠ Expired',
+      emptyNoMatch: 'No results.',
+      emptyAll: 'No jobs yet.',
+      createFirst: 'Create the first one →',
+      dueShort: 'Due {{date}}',
+      actions: {
+        markSent: 'Mark sent',
+        markAccepted: 'Accepted',
+        markDeclined: 'Declined',
+        schedule: 'Schedule',
+        generateInvoice: 'Invoice',
+        startWork: '▶ Start work',
+        markCompleted: '✓ Mark completed',
+        viewInvoice: 'View invoice',
+        cancel: 'Cancel',
+      },
+      notFound: 'Job not found.',
     },
     dateLocale: 'en-US',
   },

@@ -13,6 +13,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Job {
   id: string;
@@ -36,38 +37,29 @@ interface Job {
   job_assignments: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }[];
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; dot: string }> = {
-  proposal:    { label: 'Propuesta',   color: 'bg-gray-100 text-gray-600',        icon: Clock,         dot: 'bg-gray-400' },
-  sent:        { label: 'Enviada',     color: 'bg-blue-100 text-blue-600',        icon: Send,          dot: 'bg-blue-500' },
-  accepted:    { label: 'Aceptada',    color: 'bg-emerald-100 text-emerald-700',  icon: CheckCircle2,  dot: 'bg-emerald-500' },
-  declined:    { label: 'Rechazada',   color: 'bg-red-100 text-red-600',          icon: XCircle,       dot: 'bg-red-400' },
-  scheduled:   { label: 'Programado',  color: 'bg-blue-100 text-blue-700',        icon: Clock,         dot: 'bg-blue-500' },
-  in_progress: { label: 'En progreso', color: 'bg-amber-100 text-amber-700',      icon: AlertTriangle, dot: 'bg-amber-500' },
-  completed:   { label: 'Completado',  color: 'bg-emerald-100 text-emerald-700',  icon: CheckCircle2,  dot: 'bg-emerald-500' },
-  cancelled:   { label: 'Cancelado',   color: 'bg-gray-100 text-gray-400',        icon: XCircle,       dot: 'bg-gray-400' },
-  invoiced:    { label: 'Facturado',   color: 'bg-purple-100 text-purple-700',    icon: FileText,      dot: 'bg-purple-500' },
+const STATUS_VISUALS: Record<string, { color: string; dot: string }> = {
+  proposal:    { color: 'bg-gray-100 text-gray-600',        dot: 'bg-gray-400' },
+  sent:        { color: 'bg-blue-100 text-blue-600',        dot: 'bg-blue-500' },
+  accepted:    { color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500' },
+  declined:    { color: 'bg-red-100 text-red-600',          dot: 'bg-red-400' },
+  scheduled:   { color: 'bg-blue-100 text-blue-700',        dot: 'bg-blue-500' },
+  in_progress: { color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500' },
+  completed:   { color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500' },
+  cancelled:   { color: 'bg-gray-100 text-gray-400',        dot: 'bg-gray-400' },
+  invoiced:    { color: 'bg-purple-100 text-purple-700',    dot: 'bg-purple-500' },
 };
 
-const PRIORITY_CONFIG = {
-  low:    { label: 'Baja',     color: 'text-gray-400' },
-  normal: { label: 'Normal',   color: 'text-blue-500' },
-  high:   { label: 'Alta',     color: 'text-orange-500' },
-  urgent: { label: 'Urgente',  color: 'text-red-500' },
+const PRIORITY_COLORS: Record<string, string> = {
+  low:    'text-gray-400',
+  normal: 'text-blue-500',
+  high:   'text-orange-500',
+  urgent: 'text-red-500',
 };
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 
-const TABS = [
-  { key: 'all',         label: 'Todos' },
-  { key: 'propuestas',  label: 'Propuestas' },
-  { key: 'scheduled',   label: 'Programados' },
-  { key: 'in_progress', label: 'En progreso' },
-  { key: 'completed',   label: 'Completados' },
-  { key: 'invoiced',    label: 'Facturados' },
-  { key: 'cancelled',   label: 'Cancelados' },
-] as const;
-
-type TabKey = typeof TABS[number]['key'];
+const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled'] as const;
+type TabKey = typeof TAB_KEYS[number];
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -78,6 +70,9 @@ function isExpired(j: Job) {
 }
 
 export default function TrabajosPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard.jobs;
+  const dateLoc = full.dashboard.dateLocale;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -87,15 +82,23 @@ export default function TrabajosPage() {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Read tab from URL on mount
+  const tabLabels: Record<TabKey, string> = {
+    all: t.tabs.all,
+    propuestas: t.tabs.proposals,
+    scheduled: t.tabs.scheduled,
+    in_progress: t.tabs.in_progress,
+    completed: t.tabs.completed,
+    invoiced: t.tabs.invoiced,
+    cancelled: t.tabs.cancelled,
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlTab = new URLSearchParams(window.location.search).get('tab');
-      if (urlTab && TABS.some(t => t.key === urlTab)) setTab(urlTab as TabKey);
+      if (urlTab && TAB_KEYS.includes(urlTab as TabKey)) setTab(urlTab as TabKey);
     }
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setNewMenuOpen(false);
@@ -146,10 +149,10 @@ export default function TrabajosPage() {
     return matchSearch && matchesTab(j);
   });
 
-  const counts = TABS.reduce((acc, t) => {
-    if (t.key === 'all') acc[t.key] = jobs.length;
-    else if (t.key === 'propuestas') acc[t.key] = jobs.filter(j => PROPOSAL_STATUSES.includes(j.status)).length;
-    else acc[t.key] = jobs.filter(j => j.status === t.key).length;
+  const counts = TAB_KEYS.reduce((acc, k) => {
+    if (k === 'all') acc[k] = jobs.length;
+    else if (k === 'propuestas') acc[k] = jobs.filter(j => PROPOSAL_STATUSES.includes(j.status)).length;
+    else acc[k] = jobs.filter(j => j.status === k).length;
     return acc;
   }, {} as Record<TabKey, number>);
 
@@ -165,17 +168,17 @@ export default function TrabajosPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trabajos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {jobs.length} en total
-            {pendingValue > 0 && <span className="ml-2 text-blue-600 font-medium">· {fmt(pendingValue)} pendiente</span>}
-            {inProgressRevenue > 0 && <span className="ml-2 text-amber-600 font-medium">· {fmt(inProgressRevenue)} en progreso</span>}
-            {totalRevenue > 0 && <span className="ml-2 text-emerald-600 font-medium">· {fmt(totalRevenue)} completado</span>}
+            {t.countTotal.replace('{{count}}', String(jobs.length))}
+            {pendingValue > 0 && <span className="ml-2 text-blue-600 font-medium">· {t.pendingValue.replace('{{amount}}', fmt(pendingValue))}</span>}
+            {inProgressRevenue > 0 && <span className="ml-2 text-amber-600 font-medium">· {t.inProgressValue.replace('{{amount}}', fmt(inProgressRevenue))}</span>}
+            {totalRevenue > 0 && <span className="ml-2 text-emerald-600 font-medium">· {t.completedValue.replace('{{amount}}', fmt(totalRevenue))}</span>}
           </p>
         </div>
         <div className="relative" ref={menuRef}>
           <Button size="md" onClick={() => setNewMenuOpen(!newMenuOpen)}>
-            <Plus size={15} className="mr-1.5"/> Nuevo <ChevronDown size={14} className="ml-1"/>
+            <Plus size={15} className="mr-1.5"/> {t.newDropdown.trigger} <ChevronDown size={14} className="ml-1"/>
           </Button>
           {newMenuOpen && (
             <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
@@ -184,8 +187,8 @@ export default function TrabajosPage() {
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50">
                 <Briefcase size={16} className="text-gray-500"/>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Nuevo trabajo</p>
-                  <p className="text-xs text-gray-400">Programar trabajo directamente</p>
+                  <p className="text-sm font-semibold text-gray-900">{t.newDropdown.jobOption}</p>
+                  <p className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</p>
                 </div>
               </Link>
               <Link href="/dashboard/trabajos/nuevo?modo=propuesta"
@@ -193,8 +196,8 @@ export default function TrabajosPage() {
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                 <FileText size={16} className="text-gray-500"/>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Nueva propuesta</p>
-                  <p className="text-xs text-gray-400">Cotizar antes de trabajar</p>
+                  <p className="text-sm font-semibold text-gray-900">{t.newDropdown.proposalOption}</p>
+                  <p className="text-xs text-gray-400">{t.newDropdown.proposalOptionSub}</p>
                 </div>
               </Link>
             </div>
@@ -204,21 +207,21 @@ export default function TrabajosPage() {
 
       {/* Search + Tabs */}
       <div className="flex flex-col gap-3 mb-5">
-        <Input placeholder="Buscar por nombre, cliente, número, ciudad..." value={search}
+        <Input placeholder={t.searchPlaceholder} value={search}
           onChange={e => setSearch(e.target.value)} leftIcon={<Search size={16}/>}/>
         <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
+          {TAB_KEYS.map(k => (
+            <button key={k} onClick={() => setTab(k)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                tab === t.key
+                tab === k
                   ? 'bg-primary text-white shadow-sm'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}>
-              {t.label}
-              {counts[t.key] > 0 && (
+              {tabLabels[k]}
+              {counts[k] > 0 && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                  tab === t.key ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
-                }`}>{counts[t.key]}</span>
+                  tab === k ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>{counts[k]}</span>
               )}
             </button>
           ))}
@@ -235,18 +238,22 @@ export default function TrabajosPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <Briefcase size={40} className="mx-auto mb-3 opacity-30"/>
-          <p className="text-sm">{search || tab !== 'all' ? 'Sin resultados.' : 'No tienes trabajos aún.'}</p>
+          <p className="text-sm">{search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}</p>
           {!search && tab === 'all' && (
             <Link href="/dashboard/trabajos/nuevo" className="text-primary text-sm font-medium hover:underline mt-1 inline-block">
-              Crear el primero →
+              {t.createFirst}
             </Link>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map(job => {
-            const st = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.scheduled;
-            const pr = PRIORITY_CONFIG[job.priority];
+            const statusKey = job.status as keyof typeof t.statuses;
+            const statusLabel = t.statuses[statusKey] ?? job.status;
+            const visual = STATUS_VISUALS[job.status] ?? STATUS_VISUALS.scheduled;
+            const priorityKey = job.priority as keyof typeof t.priorities;
+            const priorityLabel = t.priorities[priorityKey];
+            const priorityColor = PRIORITY_COLORS[job.priority] ?? 'text-blue-500';
             const clientName = job.clients
               ? `${job.clients.first_name} ${job.clients.last_name}`
               : null;
@@ -260,7 +267,7 @@ export default function TrabajosPage() {
               <div key={job.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-start gap-4 p-5">
                   {/* Status dot */}
-                  <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${st.dot}`}/>
+                  <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${visual.dot}`}/>
 
                   {/* Main content */}
                   <div className="flex-1 min-w-0">
@@ -283,12 +290,12 @@ export default function TrabajosPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {!isProposal && job.priority !== 'normal' && (
-                          <span className={`text-xs font-semibold ${pr.color}`}>{pr.label}</span>
+                          <span className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</span>
                         )}
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${st.color}`}>
-                          {st.label}
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${visual.color}`}>
+                          {statusLabel}
                         </span>
-                        {expired && <span className="text-xs text-orange-500 font-medium">⚠ Vencida</span>}
+                        {expired && <span className="text-xs text-orange-500 font-medium">{t.expired}</span>}
                       </div>
                     </div>
 
@@ -297,14 +304,14 @@ export default function TrabajosPage() {
                       {isProposal && job.issue_date && (
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Calendar size={12}/>
-                          {new Date(job.issue_date + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
-                          {job.expiry_date && ` · Vence ${new Date(job.expiry_date + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`}
+                          {new Date(job.issue_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short' })}
+                          {job.expiry_date && ` · ${t.dueShort.replace('{{date}}', new Date(job.expiry_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short' }))}`}
                         </span>
                       )}
                       {!isProposal && job.scheduled_date && (
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Calendar size={12}/>
-                          {new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short', year: 'numeric' })}
                           {job.time_start && ` · ${job.time_start.slice(0,5)}`}
                         </span>
                       )}
@@ -341,11 +348,11 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5 flex items-center gap-2">
                     <button onClick={() => updateStatus(job.id, 'sent')}
                       className="text-xs font-semibold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Send size={11}/> Marcar enviada
+                      <Send size={11}/> {t.actions.markSent}
                     </button>
                     <button onClick={() => updateStatus(job.id, 'cancelled')}
                       className="text-xs text-gray-400 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ml-auto">
-                      Cancelar
+                      {t.actions.cancel}
                     </button>
                   </div>
                 )}
@@ -354,15 +361,15 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5 flex items-center gap-2">
                     <button onClick={() => updateStatus(job.id, 'accepted')}
                       className="text-xs font-semibold text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <CheckCircle2 size={11}/> Aceptada
+                      <CheckCircle2 size={11}/> {t.actions.markAccepted}
                     </button>
                     <button onClick={() => updateStatus(job.id, 'declined')}
                       className="text-xs font-semibold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <XCircle size={11}/> Rechazada
+                      <XCircle size={11}/> {t.actions.markDeclined}
                     </button>
                     <button onClick={() => updateStatus(job.id, 'cancelled')}
                       className="text-xs text-gray-400 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ml-auto">
-                      Cancelar
+                      {t.actions.cancel}
                     </button>
                   </div>
                 )}
@@ -371,15 +378,15 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5 flex items-center gap-2">
                     <button onClick={() => updateStatus(job.id, 'scheduled')}
                       className="text-xs font-semibold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Calendar size={11}/> Programar
+                      <Calendar size={11}/> {t.actions.schedule}
                     </button>
                     <Link href={`/dashboard/trabajos/${job.id}?action=invoice`}
                       className="text-xs font-semibold text-purple-600 hover:bg-purple-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <FileText size={11}/> Facturar
+                      <FileText size={11}/> {t.actions.generateInvoice}
                     </Link>
                     <button onClick={() => updateStatus(job.id, 'cancelled')}
                       className="text-xs text-gray-400 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ml-auto">
-                      Cancelar
+                      {t.actions.cancel}
                     </button>
                   </div>
                 )}
@@ -389,11 +396,11 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5 flex items-center gap-2">
                     <button onClick={() => updateStatus(job.id, 'in_progress')}
                       className="text-xs font-semibold text-amber-600 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                      ▶ Iniciar trabajo
+                      {t.actions.startWork}
                     </button>
                     <button onClick={() => updateStatus(job.id, 'cancelled')}
                       className="text-xs text-gray-400 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ml-auto">
-                      Cancelar
+                      {t.actions.cancel}
                     </button>
                   </div>
                 )}
@@ -402,11 +409,11 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5 flex items-center gap-2">
                     <button onClick={() => updateStatus(job.id, 'completed')}
                       className="text-xs font-semibold text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                      ✓ Marcar completado
+                      {t.actions.markCompleted}
                     </button>
                     <button onClick={() => updateStatus(job.id, 'cancelled')}
                       className="text-xs text-gray-400 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ml-auto">
-                      Cancelar
+                      {t.actions.cancel}
                     </button>
                   </div>
                 )}
@@ -415,7 +422,7 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5">
                     <Link href={`/dashboard/trabajos/${job.id}?action=invoice`}
                       className="text-xs font-semibold text-purple-600 hover:bg-purple-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap flex items-center gap-1">
-                      <FileText size={12}/> Generar factura
+                      <FileText size={12}/> {t.actions.generateInvoice}
                     </Link>
                   </div>
                 )}
@@ -424,7 +431,7 @@ export default function TrabajosPage() {
                   <div className="border-t border-gray-50 px-5 py-2.5">
                     <Link href={`/dashboard/facturas/${job.invoice_id}`}
                       className="text-xs font-semibold text-purple-600 hover:underline flex items-center gap-1">
-                      <FileText size={12}/> Ver factura <ArrowRight size={11}/>
+                      <FileText size={12}/> {t.actions.viewInvoice} <ArrowRight size={11}/>
                     </Link>
                   </div>
                 )}
