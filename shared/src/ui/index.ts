@@ -3,3 +3,4 @@
 // (web: Tailwind CSS; native: NativeWind v4 jsx transform).
 export { Button } from './Button';
 export { Input } from './Input';
+export { Modal } from './Modal';

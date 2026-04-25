@@ -2,7 +2,7 @@ import { Pressable, Text, ActivityIndicator, View, type PressableProps } from 'r
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'danger';
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
@@ -18,6 +18,7 @@ const VARIANT_STYLES: Record<Variant, { bg: string; text: string; pressed: strin
   primary:   { bg: 'bg-primary',    text: 'text-white',     pressed: 'active:bg-primary-dark' },
   secondary: { bg: 'bg-gray-100',   text: 'text-gray-900',  pressed: 'active:bg-gray-200' },
   danger:    { bg: 'bg-red-500',    text: 'text-white',     pressed: 'active:bg-red-600' },
+  ghost:     { bg: 'bg-transparent', text: 'text-gray-600', pressed: 'active:bg-gray-100' },
 };
 
 const SIZE_STYLES: Record<Size, { container: string; text: string }> = {

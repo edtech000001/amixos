@@ -1,27 +1,20 @@
 'use client';
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import {
   type Locale,
   LOCALES,
   LOCALE_LABELS,
   LOCALE_STORAGE_KEY,
   dictionaries,
-  type Dictionary,
+  LangContext,
+  type LangContextValue,
 } from '@amixos/shared';
 
+// Re-export the shared hook so existing imports `from '@/i18n/LangProvider'` work.
+export { useLang } from '@amixos/shared';
+
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365; // 1 year
-
-type LangContextValue = {
-  locale: Locale;
-  setLocale: (next: Locale) => void;
-  toggleLocale: () => void;
-  t: Dictionary;
-  locales: readonly Locale[];
-  labels: Record<Locale, string>;
-};
-
-const LangContext = createContext<LangContextValue | null>(null);
 
 interface LangProviderProps {
   initialLocale: Locale;
@@ -55,12 +48,4 @@ export function LangProvider({ initialLocale, children }: LangProviderProps) {
   };
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
-}
-
-export function useLang(): LangContextValue {
-  const ctx = useContext(LangContext);
-  if (!ctx) {
-    throw new Error('useLang must be used inside <LangProvider>');
-  }
-  return ctx;
 }

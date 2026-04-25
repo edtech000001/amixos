@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   dictionaries,
@@ -7,20 +7,13 @@ import {
   LOCALE_LABELS,
   LOCALE_STORAGE_KEY,
   isLocale,
-  type Dictionary,
+  LangContext,
+  type LangContextValue,
   type Locale,
 } from '@amixos/shared';
 
-type LangContextValue = {
-  locale: Locale;
-  setLocale: (next: Locale) => void;
-  toggleLocale: () => void;
-  t: Dictionary;
-  locales: readonly Locale[];
-  labels: Record<Locale, string>;
-};
-
-const LangContext = createContext<LangContextValue | null>(null);
+// Re-export the shared hook so screens can `import { useLang } from '@/lib/i18n/LangProvider'`.
+export { useLang } from '@amixos/shared';
 
 interface LangProviderProps {
   children: ReactNode;
@@ -70,12 +63,4 @@ export function LangProvider({ children }: LangProviderProps) {
   };
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
-}
-
-export function useLang(): LangContextValue {
-  const ctx = useContext(LangContext);
-  if (!ctx) {
-    throw new Error('useLang must be used inside <LangProvider>');
-  }
-  return ctx;
 }

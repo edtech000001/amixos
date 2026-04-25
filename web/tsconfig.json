@@ -14,10 +14,12 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@amixos/shared": ["../shared/src"],
+      "@amixos/shared/*": ["../shared/src/*"]
     },
     "plugins": [{ "name": "next" }]
   },
-  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx", "../shared/src/nativewind.d.ts"],
   "exclude": ["node_modules"]
 }
