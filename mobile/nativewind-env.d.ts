@@ -15,6 +15,7 @@ declare module 'react-native' {
   }
   interface ScrollViewProps {
     className?: string;
+    contentContainerClassName?: string;
   }
   interface PressableProps {
     className?: string;

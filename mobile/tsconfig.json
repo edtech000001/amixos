@@ -4,7 +4,7 @@
     "strict": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./app/*"],
+      "@/*": ["./*"],
       "@amixos/shared": ["../shared/src"],
       "@amixos/shared/*": ["../shared/src/*"]
     }
