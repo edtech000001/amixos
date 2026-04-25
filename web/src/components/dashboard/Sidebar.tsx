@@ -10,21 +10,24 @@ import {
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 
-const NAV = [
-  { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/trabajos', label: 'Trabajos', icon: Briefcase },
-  { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
-  { href: '/dashboard/facturas', label: 'Facturas', icon: FileText },
-  { href: '/dashboard/empleados', label: 'Empleados', icon: Clock },
-  { href: '/dashboard/calendario', label: 'Calendario', icon: Calendar },
-  { href: '/dashboard/inventario', label: 'Inventario', icon: Package },
-  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3 },
+const NAV_ITEMS = [
+  { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/trabajos', key: 'trabajos' as const, icon: Briefcase },
+  { href: '/dashboard/clientes', key: 'clientes' as const, icon: Users },
+  { href: '/dashboard/facturas', key: 'facturas' as const, icon: FileText },
+  { href: '/dashboard/empleados', key: 'empleados' as const, icon: Clock },
+  { href: '/dashboard/calendario', key: 'calendario' as const, icon: Calendar },
+  { href: '/dashboard/inventario', key: 'inventario' as const, icon: Package },
+  { href: '/dashboard/reportes', key: 'reportes' as const, icon: BarChart3 },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.sidebar;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
 
@@ -59,7 +62,7 @@ export function Sidebar() {
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon, exact }) => {
+        {NAV_ITEMS.map(({ href, key, icon: Icon, exact }) => {
           const active = isActive(href, exact);
           return (
             <Link
@@ -74,7 +77,7 @@ export function Sidebar() {
               )}
             >
               <Icon size={18} />
-              {label}
+              {t[key]}
             </Link>
           );
         })}
@@ -88,14 +91,14 @@ export function Sidebar() {
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all"
         >
           <Settings size={18} />
-          Ajustes
+          {t.ajustes}
         </Link>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-50 hover:text-red-500 transition-all w-full"
         >
           <LogOut size={18} />
-          Cerrar sesión
+          {t.logout}
         </button>
       </div>
     </div>

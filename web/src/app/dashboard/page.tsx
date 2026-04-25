@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { DollarSign, Users, FileText, AlertCircle, Clock, TrendingUp, Plus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 
 interface Stats {
   earningsMonth: number;
@@ -26,12 +27,12 @@ interface RecentInvoice {
   clients: { first_name: string; last_name: string } | null;
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-600' },
-  sent:     { label: 'Enviada',   color: 'bg-blue-100 text-blue-600' },
-  paid:     { label: 'Pagada',    color: 'bg-emerald-100 text-emerald-600' },
-  overdue:  { label: 'Vencida',   color: 'bg-red-100 text-red-600' },
-  cancelled:{ label: 'Cancelada', color: 'bg-gray-100 text-gray-400' },
+const STATUS_COLORS: Record<string, string> = {
+  draft:    'bg-gray-100 text-gray-600',
+  sent:     'bg-blue-100 text-blue-600',
+  paid:     'bg-emerald-100 text-emerald-600',
+  overdue:  'bg-red-100 text-red-600',
+  cancelled:'bg-gray-100 text-gray-400',
 };
 
 function fmt(n: number) {
@@ -39,6 +40,8 @@ function fmt(n: number) {
 }
 
 export default function DashboardPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard;
   const supabase = createSupabaseClient();
   const { business, loading: appLoading } = useApp();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -66,25 +69,18 @@ export default function DashboardPage() {
       const startYear  = new Date(now.getFullYear(), 0, 1).toISOString();
 
       const [paidMonth, paidYear, pending, overdue, clients, clocked, recentInv] = await Promise.all([
-        // Earnings this month
         supabase.from('invoices').select('total_amount')
           .eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
-        // Earnings this year
         supabase.from('invoices').select('total_amount')
           .eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startYear),
-        // Pending invoices
         supabase.from('invoices').select('id', { count: 'exact', head: true })
           .eq('business_id', business.id).eq('status', 'sent'),
-        // Overdue invoices
         supabase.from('invoices').select('id', { count: 'exact', head: true })
           .eq('business_id', business.id).eq('status', 'overdue'),
-        // Total clients
         supabase.from('clients').select('id', { count: 'exact', head: true })
           .eq('business_id', business.id),
-        // Currently clocked in
         supabase.from('timesheets').select('id', { count: 'exact', head: true })
           .eq('business_id', business.id).eq('status', 'active'),
-        // Recent invoices
         supabase.from('invoices')
           .select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)')
           .eq('business_id', business.id)
@@ -121,54 +117,57 @@ export default function DashboardPage() {
     );
   }
 
+  const yearStr = String(new Date().getFullYear());
+  const yearAmount = fmt(stats?.earningsYear ?? 0);
+
   const WIDGETS = [
     {
-      label: 'Ganancias del mes',
+      label: t.home.widgets.earningsMonthLabel,
       value: fmt(stats?.earningsMonth ?? 0),
       icon: DollarSign,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
-      sub: `${fmt(stats?.earningsYear ?? 0)} este año`,
+      sub: t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount),
     },
     {
-      label: 'Facturas pendientes',
+      label: t.home.widgets.invoicesPendingLabel,
       value: stats?.invoicesPending ?? 0,
       icon: FileText,
       color: 'text-primary',
       bg: 'bg-primary/10',
-      sub: 'esperando pago',
+      sub: t.home.widgets.invoicesPendingSub,
     },
     {
-      label: 'Clientes',
+      label: t.home.widgets.clientsLabel,
       value: stats?.clientsTotal ?? 0,
       icon: Users,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
-      sub: 'en tu lista',
+      sub: t.home.widgets.clientsSub,
     },
     {
-      label: 'Facturas vencidas',
+      label: t.home.widgets.invoicesOverdueLabel,
       value: stats?.invoicesOverdue ?? 0,
       icon: AlertCircle,
       color: 'text-red-500',
       bg: 'bg-red-50',
-      sub: 'requieren atención',
+      sub: t.home.widgets.invoicesOverdueSub,
     },
     {
-      label: 'Activos ahora',
+      label: t.home.widgets.clockedInLabel,
       value: stats?.clockedInNow ?? 0,
       icon: Clock,
       color: 'text-orange-500',
       bg: 'bg-orange-50',
-      sub: 'empleados trabajando',
+      sub: t.home.widgets.clockedInSub,
     },
     {
-      label: 'Ganancias del año',
-      value: fmt(stats?.earningsYear ?? 0),
+      label: t.home.widgets.earningsYearLabel,
+      value: yearAmount,
       icon: TrendingUp,
       color: 'text-violet-600',
       bg: 'bg-violet-50',
-      sub: `desde ene ${new Date().getFullYear()}`,
+      sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr),
     },
   ];
 
@@ -177,7 +176,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bienvenido 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.home.welcome}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{business?.name}</p>
         </div>
         <Link
@@ -185,7 +184,7 @@ export default function DashboardPage() {
           className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-primary-dark transition-all shadow-sm"
         >
           <Plus size={16} />
-          Nueva factura
+          {t.home.newInvoice}
         </Link>
       </div>
 
@@ -206,26 +205,28 @@ export default function DashboardPage() {
       {/* Recent invoices */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">Facturas recientes</h2>
+          <h2 className="text-sm font-semibold text-gray-900">{t.home.recent.title}</h2>
           <Link href="/dashboard/facturas" className="text-xs text-primary font-medium hover:underline">
-            Ver todas
+            {t.home.recent.viewAll}
           </Link>
         </div>
         {recent.length === 0 ? (
           <div className="px-6 py-12 text-center text-gray-400 text-sm">
             <FileText size={32} className="mx-auto mb-3 opacity-30" />
-            <p>Aún no tienes facturas.</p>
+            <p>{t.home.recent.empty}</p>
             <Link href="/dashboard/facturas/nueva" className="text-primary font-medium hover:underline mt-1 inline-block">
-              Crea tu primera factura →
+              {t.home.recent.createFirst}
             </Link>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
             {recent.map(inv => {
-              const st = STATUS_LABELS[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-500' };
+              const statusKey = inv.status as keyof typeof t.invoiceStatus;
+              const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
+              const statusColor = STATUS_COLORS[inv.status] ?? 'bg-gray-100 text-gray-500';
               const clientName = inv.clients
                 ? `${inv.clients.first_name} ${inv.clients.last_name}`
-                : 'Sin cliente';
+                : t.home.recent.noClient;
               return (
                 <Link
                   key={inv.id}
@@ -237,8 +238,8 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-400">{clientName}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${st.color}`}>
-                      {st.label}
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor}`}>
+                      {statusLabel}
                     </span>
                     <span className="text-sm font-semibold text-gray-900">{fmt(inv.total_amount)}</span>
                   </div>

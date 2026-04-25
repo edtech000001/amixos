@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useLang } from '@/i18n/LangProvider';
 
 export default function AuthCallbackPage() {
+  const { t } = useLang();
   useEffect(() => {
     const handleCallback = async () => {
       const supabase = createSupabaseClient();
@@ -61,7 +63,7 @@ export default function AuthCallbackPage() {
               style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
-        <p className="text-sm text-gray-500">Verificando...</p>
+        <p className="text-sm text-gray-500">{t.auth.callback.verifying}</p>
       </div>
     </div>
   );

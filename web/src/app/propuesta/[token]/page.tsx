@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useLang } from '@/i18n/LangProvider';
 
 interface ProposalData {
   id: string;
@@ -37,6 +38,8 @@ function fmtMoney(n: number) {
 
 export default function PublicProposalPage({ params }: { params: { token: string } }) {
   const { token } = params;
+  const { t: full } = useLang();
+  const t = full.proposal;
   const searchParams = useSearchParams();
   const autoPrint = searchParams.get('print') === '1';
 
@@ -89,8 +92,8 @@ export default function PublicProposalPage({ params }: { params: { token: string
   if (notFound || !proposal) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <p className="text-lg font-semibold text-gray-900 mb-1">Propuesta no encontrada</p>
-        <p className="text-sm text-gray-400">El enlace puede haber expirado o ser incorrecto.</p>
+        <p className="text-lg font-semibold text-gray-900 mb-1">{t.notFound}</p>
+        <p className="text-sm text-gray-400">{t.notFoundSub}</p>
       </div>
     </div>
   );
@@ -101,7 +104,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
   const hasFinancials = proposal.tax_rate > 0 || proposal.discount > 0;
 
   const fmtDateLong = (d: string) =>
-    new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+    new Date(d + 'T12:00:00').toLocaleDateString(t.dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
@@ -113,39 +116,39 @@ export default function PublicProposalPage({ params }: { params: { token: string
               {biz?.logo_url && (
                 <img src={biz.logo_url} alt={biz.name} className="h-12 mb-3 object-contain"/>
               )}
-              <h2 className="text-lg font-bold text-gray-900">{biz?.name ?? 'Empresa'}</h2>
+              <h2 className="text-lg font-bold text-gray-900">{biz?.name ?? t.defaultBizName}</h2>
               {biz && <p className="text-sm text-gray-500">{biz.city}, {biz.state}</p>}
             </div>
             <div className="text-right">
               <p className="text-xs font-mono text-gray-400 mb-1">{proposal.estimate_number}</p>
-              <h1 className="text-xl font-bold text-gray-900">Propuesta</h1>
+              <h1 className="text-xl font-bold text-gray-900">{t.proposalLabel}</h1>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-6 border-t border-gray-100 pt-5">
             <div>
-              <p className="text-xs text-gray-400 mb-1">Cliente</p>
+              <p className="text-xs text-gray-400 mb-1">{t.client}</p>
               <p className="text-sm font-semibold text-gray-900">
-                {clientName ?? 'Sin cliente'}
+                {clientName ?? t.noClient}
                 {client?.company && <span className="text-gray-400 font-normal"> · {client.company}</span>}
               </p>
             </div>
             <div className="text-right">
               {proposal.issue_date && (
                 <div className="mb-2">
-                  <p className="text-xs text-gray-400">Fecha de emisión</p>
+                  <p className="text-xs text-gray-400">{t.issueDate}</p>
                   <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.issue_date)}</p>
                 </div>
               )}
               {proposal.expiry_date && (
                 <div className="mb-2">
-                  <p className="text-xs text-gray-400">Válida hasta</p>
+                  <p className="text-xs text-gray-400">{t.validUntil}</p>
                   <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.expiry_date)}</p>
                 </div>
               )}
               {proposal.scheduled_date && (
                 <div>
-                  <p className="text-xs text-gray-400">Inicio del proyecto</p>
+                  <p className="text-xs text-gray-400">{t.scheduledDate}</p>
                   <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.scheduled_date)}</p>
                 </div>
               )}
@@ -156,7 +159,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
         {/* Description */}
         {proposal.description && (
           <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 print:border-b shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Descripción</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.description}</p>
             <p className="text-sm text-gray-700 leading-relaxed">{proposal.description}</p>
           </div>
         )}
@@ -164,16 +167,16 @@ export default function PublicProposalPage({ params }: { params: { token: string
         {/* Line items */}
         <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-4">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-900">Servicios</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{t.services}</h2>
           </div>
 
           {items.length > 0 ? (
             <>
               <div className="grid grid-cols-[1fr_60px_80px_90px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-6 py-2 border-b border-gray-50">
-                <span>Descripción</span>
-                <span className="text-center">Cant.</span>
-                <span className="text-right">Precio</span>
-                <span className="text-right">Total</span>
+                <span>{t.colDescription}</span>
+                <span className="text-center">{t.colQuantity}</span>
+                <span className="text-right">{t.colUnitPrice}</span>
+                <span className="text-right">{t.colTotal}</span>
               </div>
               <div className="divide-y divide-gray-50">
                 {items.map(item => (
@@ -187,7 +190,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
               </div>
             </>
           ) : (
-            <div className="px-6 py-8 text-center text-gray-400 text-sm">Sin ítems.</div>
+            <div className="px-6 py-8 text-center text-gray-400 text-sm">{t.noItems}</div>
           )}
 
           {/* Totals */}
@@ -196,29 +199,29 @@ export default function PublicProposalPage({ params }: { params: { token: string
               {hasFinancials ? (
                 <>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Subtotal</span>
+                    <span className="text-gray-500">{t.subtotal}</span>
                     <span>${fmtMoney(proposal.subtotal_amount)}</span>
                   </div>
                   {proposal.tax_rate > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Impuesto ({proposal.tax_rate}%)</span>
+                      <span className="text-gray-500">{t.tax} ({proposal.tax_rate}%)</span>
                       <span>${fmtMoney(proposal.tax_amount)}</span>
                     </div>
                   )}
                   {proposal.discount > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Descuento</span>
+                      <span className="text-gray-500">{t.discount}</span>
                       <span className="text-emerald-600">-${fmtMoney(proposal.discount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
-                    <span>Total</span>
+                    <span>{t.total}</span>
                     <span>${fmtMoney(proposal.total_amount)}</span>
                   </div>
                 </>
               ) : (
                 <div className="flex justify-between text-base font-bold">
-                  <span>Total</span>
+                  <span>{t.total}</span>
                   <span>${fmtMoney(proposal.total_amount)}</span>
                 </div>
               )}
@@ -229,7 +232,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
         {/* Notes for client */}
         {proposal.notes && (
           <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Términos y condiciones</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.termsTitle}</p>
             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{proposal.notes}</p>
           </div>
         )}
@@ -238,7 +241,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
         <div className="text-center print:hidden mt-8">
           <button onClick={() => window.print()}
             className="px-6 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors">
-            Imprimir / Descargar PDF
+            {t.printButton}
           </button>
         </div>
       </div>

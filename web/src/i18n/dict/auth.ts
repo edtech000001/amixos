@@ -72,6 +72,9 @@ export type AuthDict = {
     continueWith: string;
     registerWith: string;
   };
+  callback: {
+    verifying: string;
+  };
 };
 
 export const auth: Record<Locale, AuthDict> = {
@@ -147,6 +150,9 @@ export const auth: Record<Locale, AuthDict> = {
       continueWith: 'Continuar con',
       registerWith: 'Registrarse con',
     },
+    callback: {
+      verifying: 'Verificando...',
+    },
   },
   en: {
     brand: { name: 'Amixos' },
@@ -219,6 +225,9 @@ export const auth: Record<Locale, AuthDict> = {
     oauth: {
       continueWith: 'Continue with',
       registerWith: 'Sign up with',
+    },
+    callback: {
+      verifying: 'Verifying...',
     },
   },
 };
