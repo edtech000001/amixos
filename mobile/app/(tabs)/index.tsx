@@ -1,29 +1,15 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
+import { dictionaries, DEFAULT_LOCALE } from '@amixos/shared';
 
+// Temporary smoke-test screen — proves NativeWind + i18n + shared workspace
+// all wire together. Will be replaced by real dashboard in Phase D.
 export default function DashboardScreen() {
+  const t = dictionaries[DEFAULT_LOCALE].dashboard.home;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Amixos</Text>
-      <Text style={styles.subtitle}>Dashboard coming soon</Text>
+    <View className="flex-1 items-center justify-center bg-surface px-6">
+      <Text className="text-3xl font-bold text-primary mb-2">Amixos</Text>
+      <Text className="text-base text-gray-500">{t.welcome}</Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4F46E5',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-});

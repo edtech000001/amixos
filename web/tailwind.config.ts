@@ -1,30 +1,15 @@
 import type { Config } from 'tailwindcss';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sharedPreset = require('../shared/tailwind-preset.js');
 
 const config: Config = {
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    '../shared/src/**/*.{js,ts,jsx,tsx}',
   ],
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          DEFAULT: '#4F46E5',
-          dark: '#3730A3',
-          light: '#818CF8',
-        },
-        accent: {
-          DEFAULT: '#10B981',
-          dark: '#059669',
-        },
-        surface: '#F9FAFB',
-      },
-      fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-      },
-    },
-  },
+  presets: [sharedPreset],
   plugins: [],
 };
 
