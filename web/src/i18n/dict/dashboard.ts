@@ -96,6 +96,122 @@ export type DashboardDict = {
     // Date formatting locale (e.g. 'es-MX', 'en-US')
     dateLocale: string;
   };
+  clients: {
+    title: string;
+    countTotal: string;
+    newClient: string;
+    importBtn: string;
+    searchPlaceholder: string;
+    selectAll: string;
+    selectedCountSingle: string;
+    selectedCountPlural: string;
+    bulkDelete: string;
+    emptyNoMatch: string;
+    emptyAll: string;
+    addFirst: string;
+    confirmDeleteSingle: string;
+    confirmDeleteBulk: string;
+    notFound: string;
+    fields: {
+      firstName: string;
+      lastName: string;
+      company: string;
+      phoneCell: string;
+      phoneOffice: string;
+      emailOffice: string;
+      emailHome: string;
+      addressLine1: string;
+      addressLine2: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      notes: string;
+      placeholders: {
+        firstName: string;
+        lastName: string;
+        company: string;
+        phone: string;
+        emailOffice: string;
+        emailHome: string;
+        address: string;
+        addressLine2: string;
+        city: string;
+        zipCode: string;
+        notes: string;
+      };
+    };
+    sections: {
+      basicInfo: string;
+      phones: string;
+      emails: string;
+      address: string;
+      customFields: string;
+      notes: string;
+    };
+    modal: {
+      addTitle: string;
+      editTitle: string;
+      requiredError: string;
+      saveError: string;
+      saveBtn: string;
+    };
+    detail: {
+      contact: string;
+      noContactInfo: string;
+      contactPeople: string;
+      noContacts: string;
+      addContact: string;
+      summary: string;
+      totalPaid: string;
+      pending: string;
+      invoicesCount: string;
+      addedAt: string;
+      modifiedAt: string;
+      invoicesTitle: string;
+      newInvoiceShort: string;
+      noInvoices: string;
+      createFirstInvoice: string;
+      dueShort: string;
+      contactModal: {
+        addTitle: string;
+        editTitle: string;
+        nameLabel: string;
+        rolePlaceholder: string;
+        roleLabel: string;
+        phoneLabel: string;
+        emailLabel: string;
+        notesLabel: string;
+        notesPlaceholder: string;
+        primaryLabel: string;
+        addBtn: string;
+        confirmDelete: string;
+      };
+    };
+    importModal: {
+      title: string;
+      mapTitle: string;
+      previewTitle: string;
+      doneTitle: string;
+      uploadPrimary: string;
+      uploadSecondary: string;
+      templatePromptTitle: string;
+      templatePromptSub: string;
+      templateBtn: string;
+      mapDetected: string;
+      mapInstruction: string;
+      customLabel: string;
+      noImport: string;
+      viewData: string;
+      previewSummary: string;
+      importNRows: string;
+      importDone: string;
+      importedCount: string;
+      errorsCount: string;
+      errorsExplanation: string;
+      goToList: string;
+      templateFilename: string;
+    };
+  };
   // Date locale for short month formatting in lists
   dateLocale: string;
 };
@@ -196,6 +312,122 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       dateLocale: 'es-MX',
     },
+    clients: {
+      title: 'Clientes',
+      countTotal: '{{count}} en total',
+      newClient: 'Nuevo cliente',
+      importBtn: 'Importar',
+      searchPlaceholder: 'Buscar por nombre, empresa, teléfono, ciudad...',
+      selectAll: 'Seleccionar todos',
+      selectedCountSingle: '{{count}} seleccionado',
+      selectedCountPlural: '{{count}} seleccionados',
+      bulkDelete: 'Eliminar',
+      emptyNoMatch: 'Sin resultados.',
+      emptyAll: 'Aún no tienes clientes.',
+      addFirst: 'Agrega el primero →',
+      confirmDeleteSingle: '¿Eliminar este cliente permanentemente?',
+      confirmDeleteBulk: '¿Eliminar {{count}} cliente(s) permanentemente?',
+      notFound: 'Cliente no encontrado.',
+      fields: {
+        firstName: 'Nombre',
+        lastName: 'Apellido',
+        company: 'Empresa',
+        phoneCell: 'Celular',
+        phoneOffice: 'Teléfono oficina',
+        emailOffice: 'Correo oficina',
+        emailHome: 'Correo personal',
+        addressLine1: 'Calle y número',
+        addressLine2: 'Apartamento / Suite',
+        city: 'Ciudad',
+        state: 'Estado',
+        zipCode: 'Código postal',
+        notes: 'Notas',
+        placeholders: {
+          firstName: 'Juan',
+          lastName: 'Pérez',
+          company: 'Construcciones Ramírez',
+          phone: '(555) 000-0000',
+          emailOffice: 'oficina@empresa.com',
+          emailHome: 'juan@personal.com',
+          address: '123 Main St',
+          addressLine2: 'Apt 4B',
+          city: 'Omaha',
+          zipCode: '68102',
+          notes: 'Notas internas sobre este cliente...',
+        },
+      },
+      sections: {
+        basicInfo: 'Información básica',
+        phones: 'Teléfonos',
+        emails: 'Correos electrónicos',
+        address: 'Dirección',
+        customFields: 'Campos personalizados',
+        notes: 'Notas',
+      },
+      modal: {
+        addTitle: 'Nuevo cliente',
+        editTitle: 'Editar cliente',
+        requiredError: 'Campos requeridos: {{fields}}',
+        saveError: 'Error al guardar.',
+        saveBtn: 'Guardar cliente',
+      },
+      detail: {
+        contact: 'Contacto',
+        noContactInfo: 'Sin datos de contacto.',
+        contactPeople: 'Personas de contacto',
+        noContacts: 'Sin contactos agregados.',
+        addContact: '+ Agregar contacto',
+        summary: 'Resumen',
+        totalPaid: 'Total pagado',
+        pending: 'Pendiente',
+        invoicesCount: 'Facturas',
+        addedAt: 'Agregado',
+        modifiedAt: 'Modificado',
+        invoicesTitle: 'Facturas',
+        newInvoiceShort: 'Nueva',
+        noInvoices: 'Sin facturas aún.',
+        createFirstInvoice: 'Crear primera factura →',
+        dueShort: 'Vence {{date}}',
+        contactModal: {
+          addTitle: 'Nuevo contacto',
+          editTitle: 'Editar contacto',
+          nameLabel: 'Nombre *',
+          roleLabel: 'Cargo / Rol',
+          rolePlaceholder: 'Dueño, Asistente, Encargado...',
+          phoneLabel: 'Teléfono',
+          emailLabel: 'Correo',
+          notesLabel: 'Notas',
+          notesPlaceholder: 'Ej. Disponible solo por las mañanas...',
+          primaryLabel: 'Contacto principal',
+          addBtn: 'Agregar contacto',
+          confirmDelete: '¿Eliminar este contacto?',
+        },
+      },
+      importModal: {
+        title: 'Importar clientes',
+        mapTitle: 'Mapear columnas',
+        previewTitle: 'Vista previa',
+        doneTitle: '¡Importación completa!',
+        uploadPrimary: 'Haz clic para seleccionar un archivo CSV',
+        uploadSecondary: 'O arrastra y suelta aquí',
+        templatePromptTitle: '¿Tienes el formato correcto?',
+        templatePromptSub: 'Descarga la plantilla de ejemplo',
+        templateBtn: 'Plantilla CSV',
+        mapDetected: '{{count}} filas detectadas',
+        mapInstruction: 'Asigna cada campo de Amixos a la columna de tu archivo.',
+        customLabel: 'personalizado',
+        noImport: '— No importar —',
+        viewData: 'Ver datos',
+        previewSummary: 'Mostrando las primeras {{shown}} de {{total}} filas.',
+        importNRows: 'Importar {{count}} cliente(s)',
+        importDone: 'Importación terminada',
+        importedCount: '{{count}} importados',
+        errorsCount: '{{count}} con error',
+        errorsExplanation: 'Las filas con error no tenían "Nombre" o fallaron al guardar.',
+        goToList: 'Ver clientes',
+        templateFilename: 'plantilla_clientes.csv',
+      },
+    },
     dateLocale: 'es-MX',
   },
   en: {
@@ -292,6 +524,122 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sendInvoice: 'Create and send',
       },
       dateLocale: 'en-US',
+    },
+    clients: {
+      title: 'Clients',
+      countTotal: '{{count}} total',
+      newClient: 'New client',
+      importBtn: 'Import',
+      searchPlaceholder: 'Search by name, company, phone, city...',
+      selectAll: 'Select all',
+      selectedCountSingle: '{{count}} selected',
+      selectedCountPlural: '{{count}} selected',
+      bulkDelete: 'Delete',
+      emptyNoMatch: 'No results.',
+      emptyAll: "You don't have any clients yet.",
+      addFirst: 'Add the first one →',
+      confirmDeleteSingle: 'Delete this client permanently?',
+      confirmDeleteBulk: 'Delete {{count}} client(s) permanently?',
+      notFound: 'Client not found.',
+      fields: {
+        firstName: 'First name',
+        lastName: 'Last name',
+        company: 'Company',
+        phoneCell: 'Cell',
+        phoneOffice: 'Office phone',
+        emailOffice: 'Office email',
+        emailHome: 'Personal email',
+        addressLine1: 'Street address',
+        addressLine2: 'Apartment / Suite',
+        city: 'City',
+        state: 'State',
+        zipCode: 'ZIP code',
+        notes: 'Notes',
+        placeholders: {
+          firstName: 'John',
+          lastName: 'Doe',
+          company: 'Doe Construction',
+          phone: '(555) 000-0000',
+          emailOffice: 'office@company.com',
+          emailHome: 'john@personal.com',
+          address: '123 Main St',
+          addressLine2: 'Apt 4B',
+          city: 'Omaha',
+          zipCode: '68102',
+          notes: 'Internal notes about this client...',
+        },
+      },
+      sections: {
+        basicInfo: 'Basic info',
+        phones: 'Phones',
+        emails: 'Emails',
+        address: 'Address',
+        customFields: 'Custom fields',
+        notes: 'Notes',
+      },
+      modal: {
+        addTitle: 'New client',
+        editTitle: 'Edit client',
+        requiredError: 'Required fields: {{fields}}',
+        saveError: 'Save error.',
+        saveBtn: 'Save client',
+      },
+      detail: {
+        contact: 'Contact',
+        noContactInfo: 'No contact info.',
+        contactPeople: 'Contact people',
+        noContacts: 'No contacts added.',
+        addContact: '+ Add contact',
+        summary: 'Summary',
+        totalPaid: 'Total paid',
+        pending: 'Pending',
+        invoicesCount: 'Invoices',
+        addedAt: 'Added',
+        modifiedAt: 'Modified',
+        invoicesTitle: 'Invoices',
+        newInvoiceShort: 'New',
+        noInvoices: 'No invoices yet.',
+        createFirstInvoice: 'Create first invoice →',
+        dueShort: 'Due {{date}}',
+        contactModal: {
+          addTitle: 'New contact',
+          editTitle: 'Edit contact',
+          nameLabel: 'Name *',
+          roleLabel: 'Role / Title',
+          rolePlaceholder: 'Owner, Assistant, Manager...',
+          phoneLabel: 'Phone',
+          emailLabel: 'Email',
+          notesLabel: 'Notes',
+          notesPlaceholder: 'E.g. Only available in the mornings...',
+          primaryLabel: 'Primary contact',
+          addBtn: 'Add contact',
+          confirmDelete: 'Delete this contact?',
+        },
+      },
+      importModal: {
+        title: 'Import clients',
+        mapTitle: 'Map columns',
+        previewTitle: 'Preview',
+        doneTitle: 'Import complete!',
+        uploadPrimary: 'Click to select a CSV file',
+        uploadSecondary: 'Or drag and drop here',
+        templatePromptTitle: 'Need the right format?',
+        templatePromptSub: 'Download the example template',
+        templateBtn: 'CSV template',
+        mapDetected: '{{count}} rows detected',
+        mapInstruction: 'Map each Amixos field to a column from your file.',
+        customLabel: 'custom',
+        noImport: "— Don't import —",
+        viewData: 'View data',
+        previewSummary: 'Showing the first {{shown}} of {{total}} rows.',
+        importNRows: 'Import {{count}} client(s)',
+        importDone: 'Import finished',
+        importedCount: '{{count}} imported',
+        errorsCount: '{{count}} with errors',
+        errorsExplanation: 'Rows with errors were missing a "Name" or failed to save.',
+        goToList: 'View clients',
+        templateFilename: 'clients_template.csv',
+      },
     },
     dateLocale: 'en-US',
   },

@@ -11,6 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { useLang } from '@/i18n/LangProvider';
 
 interface FieldTemplate {
   id: string;
@@ -52,7 +53,6 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-// US States
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
   'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
@@ -100,6 +100,9 @@ function displayEmail(c: Client) {
 }
 
 export default function ClientesPage() {
+  const { t: full } = useLang();
+  const t = full.dashboard.clients;
+  const tc = full.common;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [clients, setClients] = useState<Client[]>([]);
@@ -148,17 +151,24 @@ export default function ClientesPage() {
     setError(''); setModal('edit');
   };
 
+  // Field labels for required-field validation messages
   const FIELD_LABELS: Record<string, string> = {
-    first_name: 'Nombre', last_name: 'Apellido', company: 'Empresa',
-    phone_cell: 'Celular', phone_office: 'Teléfono oficina',
-    email_office: 'Correo oficina', email_home: 'Correo personal',
-    address: 'Dirección', city: 'Ciudad', state: 'Estado', zip_code: 'Código postal',
+    first_name: t.fields.firstName,
+    last_name: t.fields.lastName,
+    company: t.fields.company,
+    phone_cell: t.fields.phoneCell,
+    phone_office: t.fields.phoneOffice,
+    email_office: t.fields.emailOffice,
+    email_home: t.fields.emailHome,
+    address: t.fields.addressLine1,
+    city: t.fields.city,
+    state: t.fields.state,
+    zip_code: t.fields.zipCode,
   };
 
   const save = async () => {
     setSaving(true); setError('');
 
-    // Validate required fields from business preferences
     const req = business?.client_field_required ?? {};
     const missing: string[] = [];
     for (const [key, isReq] of Object.entries(req)) {
@@ -166,14 +176,13 @@ export default function ClientesPage() {
       const val = (form as any)[key];
       if (!val || !val.trim()) missing.push(FIELD_LABELS[key] ?? key);
     }
-    // Also check custom field templates marked as required
     for (const tpl of templates) {
       if (tpl.required && !customVals[tpl.field_key]?.trim()) {
         missing.push(tpl.field_label);
       }
     }
     if (missing.length > 0) {
-      setError(`Campos requeridos: ${missing.join(', ')}`);
+      setError(t.modal.requiredError.replace('{{fields}}', missing.join(', ')));
       setSaving(false);
       return;
     }
@@ -197,16 +206,16 @@ export default function ClientesPage() {
 
     if (modal === 'add') {
       const { error: e } = await supabase.from('clients').insert({ ...payload, business_id: business!.id });
-      if (e) { setError('Error al guardar.'); setSaving(false); return; }
+      if (e) { setError(t.modal.saveError); setSaving(false); return; }
     } else if (modal === 'edit' && selected) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
-      if (e) { setError('Error al guardar.'); setSaving(false); return; }
+      if (e) { setError(t.modal.saveError); setSaving(false); return; }
     }
     await load(); setSaving(false); setModal(null);
   };
 
   const remove = async (id: string) => {
-    if (!confirm('¿Eliminar este cliente permanentemente?')) return;
+    if (!confirm(t.confirmDeleteSingle)) return;
     await supabase.from('clients').delete().eq('id', id);
     setClients(prev => prev.filter(c => c.id !== id));
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
@@ -230,10 +239,9 @@ export default function ClientesPage() {
 
   const bulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`¿Eliminar ${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} permanentemente?`)) return;
+    if (!confirm(t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)))) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
-    // Batch deletes to avoid Supabase URL length limits
     let hasError = false;
     for (let i = 0; i < ids.length; i += 50) {
       const { error: e } = await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));
@@ -266,31 +274,28 @@ export default function ClientesPage() {
   const [dragOver, setDragOver] = useState(false);
   const [importResult, setImportResult] = useState({ success: 0, errors: 0 });
 
-  // Fields available for mapping
   const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [
-    { key: 'first_name',   label: 'Nombre' },
-    { key: 'last_name',    label: 'Apellido' },
-    { key: 'company',      label: 'Empresa' },
-    { key: 'phone_cell',   label: 'Celular' },
-    { key: 'phone_office', label: 'Teléfono oficina' },
-    { key: 'email_office', label: 'Correo oficina' },
-    { key: 'email_home',   label: 'Correo personal' },
-    { key: 'address',      label: 'Dirección' },
-    { key: 'city',         label: 'Ciudad' },
-    { key: 'state',        label: 'Estado' },
-    { key: 'zip_code',     label: 'Código postal' },
-    { key: 'notes',        label: 'Notas' },
+    { key: 'first_name',   label: t.fields.firstName },
+    { key: 'last_name',    label: t.fields.lastName },
+    { key: 'company',      label: t.fields.company },
+    { key: 'phone_cell',   label: t.fields.phoneCell },
+    { key: 'phone_office', label: t.fields.phoneOffice },
+    { key: 'email_office', label: t.fields.emailOffice },
+    { key: 'email_home',   label: t.fields.emailHome },
+    { key: 'address',      label: t.fields.addressLine1 },
+    { key: 'city',         label: t.fields.city },
+    { key: 'state',        label: t.fields.state },
+    { key: 'zip_code',     label: t.fields.zipCode },
+    { key: 'notes',        label: t.fields.notes },
   ];
 
-  // Includes custom field templates so the mapper shows them too
   const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean }[] = [
     ...CLIENT_FIELDS,
-    ...templates.map(t => ({ key: `custom:${t.field_key}`, label: t.field_label, isCustom: true })),
+    ...templates.map(tpl => ({ key: `custom:${tpl.field_key}`, label: tpl.field_label, isCustom: true })),
   ];
 
-  // Strip non-printable chars, BOM, and Unicode replacement char from CSV values
   const sanitize = (s: string) =>
-    s.replace(/[\uFFFD\uFEFF]/g, '').replace(/[^\x20-\x7E\xA0-\xFF\u0100-\uFFFF]/g, '').trim();
+    s.replace(/[�﻿]/g, '').replace(/[^\x20-\x7E\xA0-\xFFĀ-￿]/g, '').trim();
 
   const handleFileSelect = (file: File) => {
     Papa.parse<Record<string, string>>(file, {
@@ -303,7 +308,6 @@ export default function ClientesPage() {
         const headers = result.meta.fields ?? [];
         setCsvHeaders(headers);
         setCsvRows(result.data);
-        // Auto-map columns with similar names (standard + custom fields)
         const auto: Record<string, string> = {};
         const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
         allImportFields.forEach(field => {
@@ -350,11 +354,9 @@ export default function ClientesPage() {
       if (Object.keys(customFields).length > 0) entry.custom_fields = customFields;
       if (!entry.first_name && !entry.last_name && !entry.company) { errors++; continue; }
       if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
-      // DB has NOT NULL on both name columns — default to '' to avoid constraint violations
       if (!entry.last_name) entry.last_name = '';
       batch.push(entry);
     }
-    // Insert in batches of 50
     for (let i = 0; i < batch.length; i += 50) {
       const { error } = await supabase.from('clients').insert(batch.slice(i, i + 50));
       if (error) errors += Math.min(50, batch.length - i);
@@ -367,14 +369,19 @@ export default function ClientesPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = ['Nombre', 'Apellido', 'Empresa', 'Celular', 'Telefono oficina', 'Correo oficina', 'Correo personal', 'Direccion', 'Ciudad', 'Estado', 'Codigo postal', 'Notas',
-      ...templates.map(t => t.field_label)];
-    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', 'Cliente frecuente',
+    const headers = [
+      t.fields.firstName, t.fields.lastName, t.fields.company,
+      t.fields.phoneCell, t.fields.phoneOffice,
+      t.fields.emailOffice, t.fields.emailHome,
+      t.fields.addressLine1, t.fields.city, t.fields.state, t.fields.zipCode, t.fields.notes,
+      ...templates.map(tpl => tpl.field_label),
+    ];
+    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', '',
       ...templates.map(() => '')];
     const csv = [headers.join(','), example.join(',')].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'plantilla_clientes.csv'; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = t.importModal.templateFilename; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -383,39 +390,32 @@ export default function ClientesPage() {
     setImportResult({ success: 0, errors: 0 }); setImportModal(false);
   };
 
-
   const isReq = (key: string) => !!(business?.client_field_required ?? {})[key];
   const rLabel = (key: string, base: string) => isReq(key) ? `${base} *` : base;
 
-  const loadTemplates = async () => {
-    if (!business) return;
-    const { data } = await supabase.from('client_field_templates').select('*')
-      .eq('business_id', business.id).order('sort_order');
-    setTemplates(data ?? []);
-  };
-
+  const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural).replace('{{count}}', String(selectedIds.size));
 
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{clients.length} en total</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t.countTotal.replace('{{count}}', String(clients.length))}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="md" onClick={() => { setImportStep('upload'); setImportModal(true); }}>
-            <Upload size={15} className="mr-1.5"/> Importar
+            <Upload size={15} className="mr-1.5"/> {t.importBtn}
           </Button>
           <Button onClick={openAdd} size="md">
-            <Plus size={15} className="mr-1.5"/> Nuevo cliente
+            <Plus size={15} className="mr-1.5"/> {t.newClient}
           </Button>
         </div>
       </div>
 
       {/* Search */}
       <div className="mb-4">
-        <Input placeholder="Buscar por nombre, empresa, teléfono, ciudad..." value={search}
+        <Input placeholder={t.searchPlaceholder} value={search}
           onChange={e => { setSearch(e.target.value); setSelectedIds(new Set()); }} leftIcon={<Search size={16}/>}/>
       </div>
 
@@ -426,11 +426,11 @@ export default function ClientesPage() {
             <X size={14} className="text-primary"/>
           </button>
           <span className="text-sm font-medium text-primary">
-            {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
+            {selectedCountText}
           </span>
           <div className="flex-1"/>
           <Button variant="danger" size="sm" onClick={bulkDelete} loading={deleting}>
-            <Trash2 size={14} className="mr-1.5"/> Eliminar
+            <Trash2 size={14} className="mr-1.5"/> {t.bulkDelete}
           </Button>
         </div>
       )}
@@ -443,18 +443,17 @@ export default function ClientesPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <User size={40} className="mx-auto mb-3 opacity-30"/>
-          <p className="text-sm">{search ? 'Sin resultados.' : 'Aún no tienes clientes.'}</p>
-          {!search && <button onClick={openAdd} className="text-primary text-sm font-medium hover:underline mt-1">Agrega el primero →</button>}
+          <p className="text-sm">{search ? t.emptyNoMatch : t.emptyAll}</p>
+          {!search && <button onClick={openAdd} className="text-primary text-sm font-medium hover:underline mt-1">{t.addFirst}</button>}
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Select all header */}
           {filtered.length > 0 && (
             <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-100 bg-gray-50/50">
               <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
                 onChange={toggleSelectAll}
                 className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer"/>
-              <span className="text-xs text-gray-400">Seleccionar todos</span>
+              <span className="text-xs text-gray-400">{t.selectAll}</span>
             </div>
           )}
           {filtered.map((c, i) => {
@@ -501,81 +500,76 @@ export default function ClientesPage() {
 
       {/* Add / Edit Modal */}
       <Modal open={modal !== null} onClose={() => setModal(null)}
-        title={modal === 'add' ? 'Nuevo cliente' : 'Editar cliente'} size="lg">
+        title={modal === 'add' ? t.modal.addTitle : t.modal.editTitle} size="lg">
         <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
 
-          {/* ── Información básica */}
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Información básica</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.basicInfo}</p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <Input label={rLabel('first_name', 'Nombre')} placeholder="Juan" value={form.first_name}
+                <Input label={rLabel('first_name', t.fields.firstName)} placeholder={t.fields.placeholders.firstName} value={form.first_name}
                   onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
-                <Input label={rLabel('last_name', 'Apellido')} placeholder="Pérez" value={form.last_name}
+                <Input label={rLabel('last_name', t.fields.lastName)} placeholder={t.fields.placeholders.lastName} value={form.last_name}
                   onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
               </div>
-              <Input label={rLabel('company', 'Empresa')} placeholder="Construcciones Ramírez" value={form.company}
+              <Input label={rLabel('company', t.fields.company)} placeholder={t.fields.placeholders.company} value={form.company}
                 onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
                 leftIcon={<Building2 size={15}/>}/>
             </div>
           </section>
 
-          {/* ── Teléfonos */}
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.phones}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label={rLabel('phone_cell', 'Celular')} placeholder="(555) 000-0000" value={fmtPhoneInput(form.phone_cell)}
+              <Input label={rLabel('phone_cell', t.fields.phoneCell)} placeholder={t.fields.placeholders.phone} value={fmtPhoneInput(form.phone_cell)}
                 onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))}
                 leftIcon={<Phone size={15}/>}/>
-              <Input label={rLabel('phone_office', 'Teléfono oficina')} placeholder="(555) 000-0000" value={fmtPhoneInput(form.phone_office)}
+              <Input label={rLabel('phone_office', t.fields.phoneOffice)} placeholder={t.fields.placeholders.phone} value={fmtPhoneInput(form.phone_office)}
                 onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))}
                 leftIcon={<Phone size={15}/>}/>
             </div>
           </section>
 
-          {/* ── Correos */}
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Correos electrónicos</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.emails}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label={rLabel('email_office', 'Correo oficina')} type="email" placeholder="oficina@empresa.com" value={form.email_office}
+              <Input label={rLabel('email_office', t.fields.emailOffice)} type="email" placeholder={t.fields.placeholders.emailOffice} value={form.email_office}
                 onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))}
                 leftIcon={<Mail size={15}/>}/>
-              <Input label={rLabel('email_home', 'Correo personal')} type="email" placeholder="juan@personal.com" value={form.email_home}
+              <Input label={rLabel('email_home', t.fields.emailHome)} type="email" placeholder={t.fields.placeholders.emailHome} value={form.email_home}
                 onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))}
                 leftIcon={<Mail size={15}/>}/>
             </div>
           </section>
 
-          {/* ── Dirección */}
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dirección</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.address}</p>
             <div className="flex flex-col gap-3">
-              <Input label={rLabel('address', 'Calle y número')} placeholder="123 Main St" value={form.address}
+              <Input label={rLabel('address', t.fields.addressLine1)} placeholder={t.fields.placeholders.address} value={form.address}
                 onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
                 leftIcon={<MapPin size={15}/>}/>
-              <Input label="Apartamento / Suite" placeholder="Apt 4B" value={form.address_line2}
+              <Input label={t.fields.addressLine2} placeholder={t.fields.placeholders.addressLine2} value={form.address_line2}
                 onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
               <div className="grid grid-cols-[1fr_100px_110px] gap-3">
-                <Input label={rLabel('city', 'Ciudad')} placeholder="Omaha" value={form.city}
+                <Input label={rLabel('city', t.fields.city)} placeholder={t.fields.placeholders.city} value={form.city}
                   onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{rLabel('state', 'Estado')}</label>
+                  <label className="text-sm font-medium text-gray-700">{rLabel('state', t.fields.state)}</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <Input label={rLabel('zip_code', 'Código postal')} placeholder="68102" value={form.zip_code}
+                <Input label={rLabel('zip_code', t.fields.zipCode)} placeholder={t.fields.placeholders.zipCode} value={form.zip_code}
                   onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
               </div>
             </div>
           </section>
 
-          {/* ── Custom fields */}
           {templates.length > 0 && (
             <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Campos personalizados</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</p>
               <div className="grid grid-cols-2 gap-3">
                 {templates.map(tpl => (
                   <div key={tpl.field_key} className="flex flex-col gap-1.5">
@@ -595,7 +589,7 @@ export default function ClientesPage() {
                           className={`relative w-11 h-6 rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
                           <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
                         </button>
-                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? 'Sí' : 'No'}</span>
+                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? tc.states.yes : tc.states.no}</span>
                       </div>
                     ) : (
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
@@ -609,10 +603,9 @@ export default function ClientesPage() {
             </section>
           )}
 
-          {/* ── Notas */}
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Notas</p>
-            <textarea rows={3} placeholder="Notas internas sobre este cliente..." value={form.notes}
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.notes}</p>
+            <textarea rows={3} placeholder={t.fields.placeholders.notes} value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
@@ -620,8 +613,8 @@ export default function ClientesPage() {
           {error && <p className="text-xs text-red-500">{error}</p>}
 
           <div className="flex gap-3 pt-1 pb-2">
-            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>Cancelar</Button>
-            <Button onClick={save} loading={saving} fullWidth>Guardar cliente</Button>
+            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={save} loading={saving} fullWidth>{t.modal.saveBtn}</Button>
           </div>
         </div>
       </Modal>
@@ -632,11 +625,10 @@ export default function ClientesPage() {
 
       {/* ── Import Modal ─────────────────────────────────────────────────── */}
       <Modal open={importModal} onClose={resetImport}
-        title={importStep === 'done' ? '¡Importación completa!' : importStep === 'preview' ? 'Vista previa' : importStep === 'map' ? 'Mapear columnas' : 'Importar clientes'}
+        title={importStep === 'done' ? t.importModal.doneTitle : importStep === 'preview' ? t.importModal.previewTitle : importStep === 'map' ? t.importModal.mapTitle : t.importModal.title}
         size="lg">
         <div className="flex flex-col gap-4">
 
-          {/* Step: upload */}
           {importStep === 'upload' && (
             <>
               <div
@@ -654,26 +646,25 @@ export default function ClientesPage() {
                   dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary hover:bg-primary/5'
                 }`}>
                 <Upload size={32} className={`mx-auto mb-3 transition-colors ${dragOver ? 'text-primary' : 'text-gray-300'}`}/>
-                <p className="text-sm font-semibold text-gray-700">Haz clic para seleccionar un archivo CSV</p>
-                <p className="text-xs text-gray-400 mt-1">O arrastra y suelta aquí</p>
+                <p className="text-sm font-semibold text-gray-700">{t.importModal.uploadPrimary}</p>
+                <p className="text-xs text-gray-400 mt-1">{t.importModal.uploadSecondary}</p>
               </div>
               <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-700">¿Tienes el formato correcto?</p>
-                  <p className="text-xs text-gray-400">Descarga la plantilla de ejemplo</p>
+                  <p className="text-xs font-semibold text-gray-700">{t.importModal.templatePromptTitle}</p>
+                  <p className="text-xs text-gray-400">{t.importModal.templatePromptSub}</p>
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
-                  <Download size={14}/> Plantilla CSV
+                  <Download size={14}/> {t.importModal.templateBtn}
                 </button>
               </div>
             </>
           )}
 
-          {/* Step: map columns */}
           {importStep === 'map' && (
             <>
               <p className="text-xs text-gray-500">
-                Archivo: <span className="font-medium text-gray-900">{csvRows.length} filas detectadas</span>. Asigna cada campo de Amixos a la columna de tu archivo.
+                <span className="font-medium text-gray-900">{t.importModal.mapDetected.replace('{{count}}', String(csvRows.length))}</span>. {t.importModal.mapInstruction}
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
                 {allImportFields.map(field => (
@@ -681,32 +672,33 @@ export default function ClientesPage() {
                     <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
                       {field.label}
                       {field.required && <span className="text-red-400">*</span>}
-                      {field.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
+                      {field.isCustom && <span className="text-blue-400 text-[10px]">{t.importModal.customLabel}</span>}
                     </label>
                     <select
                       value={colMap[field.key] ?? ''}
                       onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                      <option value="">— No importar —</option>
+                      <option value="">{t.importModal.noImport}</option>
                       {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
                   </div>
                 ))}
               </div>
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>Cancelar</Button>
+                <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>{tc.buttons.cancel}</Button>
                 <Button onClick={() => setImportStep('preview')} fullWidth>
-                  Ver datos
+                  {t.importModal.viewData}
                 </Button>
               </div>
             </>
           )}
 
-          {/* Step: preview */}
           {importStep === 'preview' && (
             <>
               <p className="text-xs text-gray-500">
-                Mostrando las primeras <span className="font-medium">{Math.min(5, csvRows.length)}</span> de <span className="font-medium">{csvRows.length}</span> filas.
+                {t.importModal.previewSummary
+                  .replace('{{shown}}', String(Math.min(5, csvRows.length)))
+                  .replace('{{total}}', String(csvRows.length))}
               </p>
               <div className="overflow-x-auto rounded-xl border border-gray-100">
                 <table className="w-full text-xs">
@@ -731,31 +723,30 @@ export default function ClientesPage() {
                 </table>
               </div>
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setImportStep('map')} fullWidth>Atrás</Button>
+                <Button variant="secondary" onClick={() => setImportStep('map')} fullWidth>{tc.buttons.back}</Button>
                 <Button onClick={runImport} loading={importing} fullWidth>
-                  Importar {csvRows.length} cliente{csvRows.length !== 1 ? 's' : ''}
+                  {t.importModal.importNRows.replace('{{count}}', String(csvRows.length))}
                 </Button>
               </div>
             </>
           )}
 
-          {/* Step: done */}
           {importStep === 'done' && (
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 size={32} className="text-emerald-500"/>
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900">Importación terminada</p>
+                <p className="text-lg font-bold text-gray-900">{t.importModal.importDone}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  <span className="text-emerald-600 font-semibold">{importResult.success} importados</span>
-                  {importResult.errors > 0 && <span className="text-red-500 font-semibold ml-2">· {importResult.errors} con error</span>}
+                  <span className="text-emerald-600 font-semibold">{t.importModal.importedCount.replace('{{count}}', String(importResult.success))}</span>
+                  {importResult.errors > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.errors))}</span>}
                 </p>
                 {importResult.errors > 0 && (
-                  <p className="text-xs text-gray-400 mt-1">Las filas con error no tenían "Nombre" o fallaron al guardar.</p>
+                  <p className="text-xs text-gray-400 mt-1">{t.importModal.errorsExplanation}</p>
                 )}
               </div>
-              <Button onClick={resetImport} fullWidth>Ver clientes</Button>
+              <Button onClick={resetImport} fullWidth>{t.importModal.goToList}</Button>
             </div>
           )}
         </div>

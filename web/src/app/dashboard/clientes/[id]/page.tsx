@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { useLang } from '@/i18n/LangProvider';
 
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -46,12 +47,12 @@ interface Invoice {
   id: string; invoice_number: string; status: string; total_amount: number; due_date: string | null; created_at: string;
 }
 
-const STATUS: Record<string, { label: string; color: string }> = {
-  draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-500' },
-  sent:     { label: 'Enviada',   color: 'bg-blue-100 text-blue-600' },
-  paid:     { label: 'Pagada',    color: 'bg-emerald-100 text-emerald-700' },
-  overdue:  { label: 'Vencida',   color: 'bg-red-100 text-red-600' },
-  cancelled:{ label: 'Cancelada', color: 'bg-gray-100 text-gray-400' },
+const STATUS_COLORS: Record<string, string> = {
+  draft:    'bg-gray-100 text-gray-500',
+  sent:     'bg-blue-100 text-blue-600',
+  paid:     'bg-emerald-100 text-emerald-700',
+  overdue:  'bg-red-100 text-red-600',
+  cancelled:'bg-gray-100 text-gray-400',
 };
 
 const US_STATES = [
@@ -96,6 +97,11 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
 
 export default function ClienteDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { t: full } = useLang();
+  const t = full.dashboard.clients;
+  const td = t.detail;
+  const tc = full.common;
+  const tStatus = full.dashboard.invoiceStatus;
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [client, setClient] = useState<Client | null>(null);
@@ -104,7 +110,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Client edit modal
   const [editModal, setEditModal] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', company: '',
@@ -116,7 +121,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Contact modal
   const [contactModal, setContactModal] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
@@ -193,7 +197,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     };
 
     if (contactForm.is_primary) {
-      // Remove primary flag from others first
       await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', id);
     }
 
@@ -209,10 +212,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setContactModal(false);
   };
 
-  const removeContact = async (id: string) => {
-    if (!confirm('¿Eliminar este contacto?')) return;
-    await supabase.from('client_contacts').delete().eq('id', id);
-    setContacts(prev => prev.filter(c => c.id !== id));
+  const removeContact = async (ctId: string) => {
+    if (!confirm(td.contactModal.confirmDelete)) return;
+    await supabase.from('client_contacts').delete().eq('id', ctId);
+    setContacts(prev => prev.filter(c => c.id !== ctId));
   };
 
   if (loading) return (
@@ -220,7 +223,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
     </div>
   );
-  if (!client) return <div className="p-6 text-gray-400">Cliente no encontrado.</div>;
+  if (!client) return <div className="p-6 text-gray-400">{t.notFound}</div>;
 
   const totalSpent = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
   const pendingTotal = invoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
@@ -236,6 +239,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     [client.city, client.state].filter(Boolean).join(', '),
     client.zip_code,
   ].filter(Boolean).join('\n');
+
+  const dateLoc = full.dashboard.dateLocale;
 
   return (
     <div className="p-6">
@@ -263,10 +268,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={() => setEditModal(true)}>
-            <Pencil size={14} className="mr-1.5"/> Editar
+            <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
           </Button>
           <Link href={`/dashboard/facturas/nueva?client=${id}`}>
-            <Button size="sm"><Plus size={14} className="mr-1.5"/> Nueva factura</Button>
+            <Button size="sm"><Plus size={14} className="mr-1.5"/> {full.dashboard.invoices.newInvoice}</Button>
           </Link>
         </div>
       </div>
@@ -277,17 +282,17 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
           {/* Contact card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contacto</h2>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.contact}</h2>
             <div className="flex flex-col gap-3">
-              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label="Celular" value={fmtPhone(primaryPhone)} href={`tel:${primaryPhone}`}/>}
-              {officePhone && <ContactRow icon={<Phone size={15}/>} label="Teléfono oficina" value={fmtPhone(officePhone)} href={`tel:${officePhone}`}/>}
-              {primaryEmail && <ContactRow icon={<Mail size={15}/>} label="Correo oficina" value={primaryEmail} href={`mailto:${primaryEmail}`}/>}
-              {homeEmail && <ContactRow icon={<Mail size={15}/>} label="Correo personal" value={homeEmail} href={`mailto:${homeEmail}`}/>}
+              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneCell} value={fmtPhone(primaryPhone)} href={`tel:${primaryPhone}`}/>}
+              {officePhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneOffice} value={fmtPhone(officePhone)} href={`tel:${officePhone}`}/>}
+              {primaryEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailOffice} value={primaryEmail} href={`mailto:${primaryEmail}`}/>}
+              {homeEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailHome} value={homeEmail} href={`mailto:${homeEmail}`}/>}
               {fullAddress && (
-                <ContactRow icon={<MapPin size={15}/>} label="Dirección" value={fullAddress}/>
+                <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress}/>
               )}
               {!primaryPhone && !primaryEmail && !fullAddress && (
-                <p className="text-xs text-gray-400">Sin datos de contacto.</p>
+                <p className="text-xs text-gray-400">{td.noContactInfo}</p>
               )}
             </div>
           </div>
@@ -295,16 +300,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           {/* Contacts (people) card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Personas de contacto</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{td.contactPeople}</h2>
               <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
                 <UserPlus size={14} className="text-gray-400"/>
               </button>
             </div>
             {contacts.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-xs text-gray-400">Sin contactos agregados.</p>
+                <p className="text-xs text-gray-400">{td.noContacts}</p>
                 <button onClick={openAddContact} className="text-xs text-primary font-medium hover:underline mt-1">
-                  + Agregar contacto
+                  {td.addContact}
                 </button>
               </div>
             ) : (
@@ -348,7 +353,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           {/* Custom fields */}
           {templates.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Campos personalizados</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</h2>
               <div className="flex flex-col gap-2.5">
                 {templates.map(tpl => {
                   const val = client.custom_fields?.[tpl.field_key];
@@ -357,7 +362,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                     <div key={tpl.field_key}>
                       <p className="text-xs text-gray-400">{tpl.field_label}</p>
                       <p className="text-sm text-gray-900 font-medium">
-                        {tpl.field_type === 'boolean' ? (val === 'true' ? 'Sí' : 'No') : val ?? '—'}
+                        {tpl.field_type === 'boolean' ? (val === 'true' ? tc.states.yes : tc.states.no) : val ?? '—'}
                       </p>
                     </div>
                   );
@@ -369,35 +374,35 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           {/* Notes */}
           {client.notes && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Notas</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.sections.notes}</h2>
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{client.notes}</p>
             </div>
           )}
 
           {/* Stats */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Resumen</h2>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.summary}</h2>
             <div className="flex flex-col gap-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Total pagado</span>
+                <span className="text-gray-500">{td.totalPaid}</span>
                 <span className="font-semibold text-emerald-600">{fmt(totalSpent)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Pendiente</span>
+                <span className="text-gray-500">{td.pending}</span>
                 <span className="font-semibold text-blue-600">{fmt(pendingTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Facturas</span>
+                <span className="text-gray-500">{td.invoicesCount}</span>
                 <span className="font-semibold text-gray-900">{invoices.length}</span>
               </div>
               <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
-                <span className="text-gray-400 text-xs">Agregado</span>
-                <span className="text-xs text-gray-500">{new Date(client.created_at).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })}</span>
+                <span className="text-gray-400 text-xs">{td.addedAt}</span>
+                <span className="text-xs text-gray-500">{new Date(client.created_at).toLocaleDateString(dateLoc, { day:'numeric', month:'short', year:'numeric' })}</span>
               </div>
               {client.updated_at && client.updated_at !== client.created_at && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400 text-xs">Modificado</span>
-                  <span className="text-xs text-gray-500">{new Date(client.updated_at).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })}</span>
+                  <span className="text-gray-400 text-xs">{td.modifiedAt}</span>
+                  <span className="text-xs text-gray-500">{new Date(client.updated_at).toLocaleDateString(dateLoc, { day:'numeric', month:'short', year:'numeric' })}</span>
                 </div>
               )}
             </div>
@@ -408,33 +413,35 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         <div className="lg:col-span-3">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">Facturas</h2>
+              <h2 className="text-sm font-semibold text-gray-900">{td.invoicesTitle}</h2>
               <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
-                <Plus size={13}/> Nueva
+                <Plus size={13}/> {td.newInvoiceShort}
               </Link>
             </div>
             {invoices.length === 0 ? (
               <div className="px-5 py-12 text-center text-gray-400">
                 <FileText size={32} className="mx-auto mb-3 opacity-30"/>
-                <p className="text-sm">Sin facturas aún.</p>
-                <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">Crear primera factura →</Link>
+                <p className="text-sm">{td.noInvoices}</p>
+                <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">{td.createFirstInvoice}</Link>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {invoices.map(inv => {
-                  const st = STATUS[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-500' };
+                  const statusKey = inv.status as keyof typeof tStatus;
+                  const statusLabel = tStatus[statusKey] ?? inv.status;
+                  const statusColor = STATUS_COLORS[inv.status] ?? 'bg-gray-100 text-gray-500';
                   return (
                     <Link key={inv.id} href={`/dashboard/facturas/${inv.id}`}
                       className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>
                         <p className="text-xs text-gray-400">
-                          {new Date(inv.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {inv.due_date && ` · Vence ${new Date(inv.due_date).toLocaleDateString('es-MX', { day:'numeric', month:'short' })}`}
+                          {new Date(inv.created_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {inv.due_date && ` · ${td.dueShort.replace('{{date}}', new Date(inv.due_date).toLocaleDateString(dateLoc, { day:'numeric', month:'short' }))}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${st.color}`}>{st.label}</span>
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
                         <span className="text-sm font-bold text-gray-900">{fmt(inv.total_amount)}</span>
                       </div>
                     </Link>
@@ -447,59 +454,59 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       </div>
 
       {/* ── Edit client modal ─────────────────────────────────────────────── */}
-      <Modal open={editModal} onClose={() => setEditModal(false)} title="Editar cliente" size="lg">
+      <Modal open={editModal} onClose={() => setEditModal(false)} title={t.modal.editTitle} size="lg">
         <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Información básica</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.basicInfo}</p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Nombre *" value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}/>
-                <Input label="Apellido" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}/>
+                <Input label={`${t.fields.firstName} *`} value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}/>
+                <Input label={t.fields.lastName} value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}/>
               </div>
-              <Input label="Empresa" value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} leftIcon={<Building2 size={15}/>}/>
+              <Input label={t.fields.company} value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} leftIcon={<Building2 size={15}/>}/>
             </div>
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Teléfonos</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.phones}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Celular" value={fmtPhoneInput(form.phone_cell)} onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder="(555) 000-0000"/>
-              <Input label="Oficina" value={fmtPhoneInput(form.phone_office)} onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder="(555) 000-0000"/>
+              <Input label={t.fields.phoneCell} value={fmtPhoneInput(form.phone_cell)} onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder={t.fields.placeholders.phone}/>
+              <Input label={t.fields.phoneOffice} value={fmtPhoneInput(form.phone_office)} onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder={t.fields.placeholders.phone}/>
             </div>
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Correos</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.emails}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Correo oficina" type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
-              <Input label="Correo personal" type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+              <Input label={t.fields.emailOffice} type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+              <Input label={t.fields.emailHome} type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
             </div>
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dirección</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.address}</p>
             <div className="flex flex-col gap-3">
-              <Input label="Calle y número" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
-              <Input label="Apartamento / Suite" value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
+              <Input label={t.fields.addressLine1} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
+              <Input label={t.fields.addressLine2} value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
               <div className="grid grid-cols-[1fr_100px_110px] gap-3">
-                <Input label="Ciudad" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
+                <Input label={t.fields.city} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">Estado</label>
+                  <label className="text-sm font-medium text-gray-700">{t.fields.state}</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <Input label="ZIP" value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
+                <Input label={t.fields.zipCode} value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
               </div>
             </div>
           </section>
 
           {templates.length > 0 && (
             <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Campos personalizados</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</p>
               <div className="grid grid-cols-2 gap-3">
                 {templates.map(tpl => (
                   <div key={tpl.field_key} className="flex flex-col gap-1.5">
@@ -518,7 +525,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                           className={`relative rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
                           <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
                         </button>
-                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? 'Sí' : 'No'}</span>
+                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? tc.states.yes : tc.states.no}</span>
                       </div>
                     ) : (
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
@@ -533,43 +540,43 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           )}
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Notas</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.notes}</p>
             <textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
 
           <div className="flex gap-3 pt-1 pb-2">
-            <Button variant="secondary" onClick={() => setEditModal(false)} fullWidth>Cancelar</Button>
-            <Button onClick={saveEdit} loading={saving} fullWidth>Guardar cambios</Button>
+            <Button variant="secondary" onClick={() => setEditModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={saveEdit} loading={saving} fullWidth>{tc.buttons.saveChanges}</Button>
           </div>
         </div>
       </Modal>
 
       {/* ── Add / Edit contact modal ──────────────────────────────────────── */}
       <Modal open={contactModal} onClose={() => setContactModal(false)}
-        title={editingContact ? 'Editar contacto' : 'Nuevo contacto'} size="md">
+        title={editingContact ? td.contactModal.editTitle : td.contactModal.addTitle} size="md">
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Nombre *" placeholder="María López"
+            <Input label={td.contactModal.nameLabel} placeholder="María López"
               value={contactForm.name}
               onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
-            <Input label="Cargo / Rol" placeholder="Dueño, Asistente, Encargado..."
+            <Input label={td.contactModal.roleLabel} placeholder={td.contactModal.rolePlaceholder}
               value={contactForm.role}
               onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Teléfono" type="tel" placeholder="(555) 000-0000"
+            <Input label={td.contactModal.phoneLabel} type="tel" placeholder={t.fields.placeholders.phone}
               value={fmtPhoneInput(contactForm.phone)}
               onChange={e => setContactForm(f => ({ ...f, phone: fmtPhoneInput(e.target.value) }))}
               leftIcon={<Phone size={15}/>}/>
-            <Input label="Correo" type="email" placeholder="maria@empresa.com"
+            <Input label={td.contactModal.emailLabel} type="email" placeholder="maria@empresa.com"
               value={contactForm.email}
               onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
               leftIcon={<Mail size={15}/>}/>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Notas</label>
-            <textarea rows={3} placeholder="Ej. Disponible solo por las mañanas..."
+            <label className="text-sm font-medium text-gray-700">{td.contactModal.notesLabel}</label>
+            <textarea rows={3} placeholder={td.contactModal.notesPlaceholder}
               value={contactForm.notes}
               onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
@@ -582,12 +589,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               className={`relative rounded-full transition-colors ${contactForm.is_primary ? 'bg-primary' : 'bg-gray-200'}`}>
               <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${contactForm.is_primary ? 'translate-x-6' : 'translate-x-1'}`}/>
             </button>
-            <span className="text-sm text-gray-700 select-none">Contacto principal <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
+            <span className="text-sm text-gray-700 select-none">{td.contactModal.primaryLabel} <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
           </div>
           <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setContactModal(false)} fullWidth>Cancelar</Button>
+            <Button variant="secondary" onClick={() => setContactModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={saveContact} loading={savingContact} disabled={!contactForm.name.trim()} fullWidth>
-              {editingContact ? 'Guardar cambios' : 'Agregar contacto'}
+              {editingContact ? tc.buttons.saveChanges : td.contactModal.addBtn}
             </Button>
           </div>
         </div>
