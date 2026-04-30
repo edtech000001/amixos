@@ -2,16 +2,21 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
-import { Plus, Clock, ClipboardList, Pencil, UserCheck, UserX, DollarSign } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { DollarSign } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
+import {
+  EmployeesScreen,
+  type EmployeeListItem,
+  type TimesheetListItem,
+} from '@amixos/shared/screens/dashboard/EmployeesScreen';
 
-interface Employee {
+interface RawEmployee {
   id: string;
   first_name: string;
   last_name: string;
@@ -22,7 +27,7 @@ interface Employee {
   active: boolean;
 }
 
-interface Timesheet {
+interface RawTimesheet {
   id: string;
   worker_name: string | null;
   work_date: string;
@@ -38,15 +43,13 @@ export default function EmpleadosPage() {
   const { t: full } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
-  const dateLocale = full.dashboard.dateLocale;
   const supabase = createSupabaseClient();
   const { business } = useApp();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
-  const [tab, setTab] = useState<'empleados' | 'horas' | 'nomina'>('empleados');
+  const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [empModal, setEmpModal] = useState<'add' | 'edit' | null>(null);
   const [tsModal, setTsModal] = useState(false);
-  const [selEmp, setSelEmp] = useState<Employee | null>(null);
+  const [selEmp, setSelEmp] = useState<RawEmployee | null>(null);
   const [empForm, setEmpForm] = useState(EMPTY_EMP);
   const [tsForm, setTsForm] = useState(EMPTY_TS);
   const [saving, setSaving] = useState(false);
@@ -55,14 +58,12 @@ export default function EmpleadosPage() {
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const ROLES: Record<string, string> = { owner: t.roles.owner, manager: t.roles.manager, worker: t.roles.worker };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
-  const PAY_UNIT_SHORT: Record<string, string> = { hourly: t.payRateUnitShort.hourly, salary: t.payRateUnitShort.salary, daily: t.payRateUnitShort.daily };
 
   const loadEmployees = async () => {
     if (!business) return;
     const { data } = await supabase.from('employees').select('*').eq('business_id', business.id).order('first_name');
     setEmployees(data ?? []);
   };
-
   const loadTimesheets = async () => {
     if (!business) return;
     const { data } = await supabase.from('timesheets').select('*').eq('business_id', business.id).order('work_date', { ascending: false }).limit(50);
@@ -71,9 +72,30 @@ export default function EmpleadosPage() {
 
   useEffect(() => { loadEmployees(); loadTimesheets(); }, [business]);
 
-  // Employee CRUD
+  const empList: EmployeeListItem[] = useMemo(() => employees.map(e => ({
+    id: e.id,
+    firstName: e.first_name,
+    lastName: e.last_name,
+    phone: e.phone,
+    role: e.role,
+    payType: e.pay_type,
+    payRate: e.pay_rate,
+    active: e.active,
+  })), [employees]);
+
+  const tsList: TimesheetListItem[] = useMemo(() => timesheets.map(ts => ({
+    id: ts.id,
+    workerName: ts.worker_name,
+    workDate: ts.work_date,
+    hoursWorked: ts.hours_worked,
+    jobDescription: ts.job_description,
+    employeeId: ts.employee_id,
+  })), [timesheets]);
+
   const openAddEmp = () => { setEmpForm(EMPTY_EMP); setError(''); setEmpModal('add'); };
-  const openEditEmp = (e: Employee) => {
+  const openEditEmpById = (id: string) => {
+    const e = employees.find(emp => emp.id === id);
+    if (!e) return;
     setSelEmp(e);
     setEmpForm({ first_name: e.first_name, last_name: e.last_name, phone: e.phone ?? '', role: e.role, pay_type: e.pay_type, pay_rate: e.pay_rate });
     setError(''); setEmpModal('edit');
@@ -88,12 +110,13 @@ export default function EmpleadosPage() {
     }
     await loadEmployees(); setSaving(false); setEmpModal(null);
   };
-  const toggleActive = async (e: Employee) => {
+  const toggleActive = async (id: string) => {
+    const e = employees.find(emp => emp.id === id);
+    if (!e) return;
     await supabase.from('employees').update({ active: !e.active }).eq('id', e.id);
     setEmployees(prev => prev.map(emp => emp.id === e.id ? { ...emp, active: !e.active } : emp));
   };
 
-  // Timesheet entry
   const saveTimesheet = async () => {
     if (!tsForm.hours_worked) { setError(t.timesheetModal.errorHoursRequired); return; }
     const name = tsForm.employee_id
@@ -112,163 +135,8 @@ export default function EmpleadosPage() {
     await loadTimesheets(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS);
   };
 
-  const activeCount = employees.filter(e => e.active).length;
-  const totalHoursThisWeek = (() => {
-    const now = new Date();
-    const start = new Date(now); start.setDate(now.getDate() - 7);
-    return timesheets.filter(t => new Date(t.work_date) >= start).reduce((s, t) => s + (t.hours_worked ?? 0), 0);
-  })();
-
-  // Payroll computation for nomina tab
-  const payrollRows = (() => {
-    const now = new Date();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthSheets = timesheets.filter(ts => new Date(ts.work_date) >= startMonth);
-    const byWorker: Record<string, { hours: number; emp?: typeof employees[0] }> = {};
-    monthSheets.forEach(ts => {
-      const key = ts.worker_name ?? t.payroll.unknownWorker;
-      if (!byWorker[key]) byWorker[key] = { hours: 0, emp: employees.find(e => e.id === ts.employee_id) };
-      byWorker[key].hours += ts.hours_worked ?? 0;
-    });
-    return Object.entries(byWorker);
-  })();
-  const payrollMonth = new Date().toLocaleDateString(dateLocale, { month: 'long', year: 'numeric' });
-  const payrollTotal = payrollRows.reduce((s, [, { hours, emp }]) => {
-    const rate = emp?.pay_rate ?? 0;
-    const pt = emp?.pay_type ?? 'hourly';
-    return s + (pt === 'hourly' ? hours * rate : pt === 'daily' ? Math.ceil(hours / 8) * rate : rate);
-  }, 0);
-
-  return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {t.summary.replace('{{active}}', String(activeCount)).replace('{{hours}}', String(totalHoursThisWeek))}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="md" onClick={() => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); }}>
-            <Clock size={15} className="mr-1.5"/> {t.logHours}
-          </Button>
-          <Button size="md" onClick={openAddEmp}>
-            <Plus size={15} className="mr-1.5"/> {t.addBtn}
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
-        {(['empleados', 'horas', 'nomina'] as const).map(tabKey => (
-          <button key={tabKey} onClick={() => setTab(tabKey)}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${tab === tabKey ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {t.tabs[tabKey]}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'empleados' ? (
-        // ── Employee list ──────────────────────────────────────────────────────
-        employees.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <UserCheck size={40} className="mx-auto mb-3 opacity-30"/>
-            <p className="text-sm">{t.emptyEmployees}</p>
-            <button onClick={openAddEmp} className="text-primary text-sm font-medium hover:underline mt-1">{t.addFirst}</button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {employees.map((e, i) => (
-              <div key={e.id} className={`flex items-center justify-between px-5 py-4 ${i < employees.length-1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors`}>
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${e.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-                    <span className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-gray-400'}`}>
-                      {e.first_name.charAt(0)}{e.last_name.charAt(0)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{e.first_name} {e.last_name}</p>
-                      {!e.active && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{t.inactiveBadge}</span>}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.pay_type]} ${e.pay_rate.toFixed(2)}
-                      {e.phone ? ` · ${e.phone}` : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 ml-4">
-                  <button onClick={() => openEditEmp(e)} className="p-2 rounded-lg hover:bg-gray-100"><Pencil size={14} className="text-gray-400"/></button>
-                  <button onClick={() => toggleActive(e)} className="p-2 rounded-lg hover:bg-gray-100">
-                    {e.active ? <UserX size={14} className="text-gray-400"/> : <UserCheck size={14} className="text-emerald-500"/>}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : tab === 'horas' ? (
-        // ── Timesheets ─────────────────────────────────────────────────────────
-        timesheets.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <ClipboardList size={40} className="mx-auto mb-3 opacity-30"/>
-            <p className="text-sm">{t.emptyTimesheets}</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-[1fr_100px_80px_120px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-3 border-b border-gray-50">
-              <span>{t.timesheetCols.worker}</span><span className="text-center">{t.timesheetCols.date}</span><span className="text-center">{t.timesheetCols.hours}</span><span>{t.timesheetCols.work}</span>
-            </div>
-            {timesheets.map((ts, i) => (
-              <div key={ts.id} className={`grid grid-cols-[1fr_100px_80px_120px] items-center px-5 py-3 text-sm ${i < timesheets.length-1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50`}>
-                <span className="text-gray-900 font-medium truncate">{ts.worker_name ?? '—'}</span>
-                <span className="text-center text-gray-500 text-xs">
-                  {new Date(ts.work_date).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
-                </span>
-                <span className="text-center font-semibold text-gray-900">{ts.hours_worked ?? '—'}</span>
-                <span className="text-gray-400 text-xs truncate">{ts.job_description ?? '—'}</span>
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        // ── Payroll summary ──────────────────────────────────────────────────
-        payrollRows.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <DollarSign size={40} className="mx-auto mb-3 opacity-30"/>
-            <p className="text-sm">{t.emptyPayroll}</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-50 text-xs font-semibold text-gray-400">
-              {t.payroll.summaryHeading.replace('{{month}}', payrollMonth)}
-            </div>
-            <div className="grid grid-cols-[1fr_80px_90px_110px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50">
-              <span>{t.payroll.colEmployee}</span><span className="text-center">{t.payroll.colHours}</span><span className="text-center">{t.payroll.colRate}</span><span className="text-right">{t.payroll.colTotal}</span>
-            </div>
-            {payrollRows.map(([name, { hours, emp }], i) => {
-              const rate = emp?.pay_rate ?? 0;
-              const payType = emp?.pay_type ?? 'hourly';
-              const pay = payType === 'hourly' ? hours * rate : payType === 'daily' ? Math.ceil(hours / 8) * rate : rate;
-              return (
-                <div key={name} className={`grid grid-cols-[1fr_80px_90px_110px] items-center px-5 py-3.5 text-sm ${i < payrollRows.length-1 ? 'border-b border-gray-50' : ''}`}>
-                  <span className="font-medium text-gray-900 truncate">{name}</span>
-                  <span className="text-center text-gray-600">{hours}</span>
-                  <span className="text-center text-gray-400 text-xs">${rate.toFixed(2)}/{PAY_UNIT_SHORT[payType]}</span>
-                  <span className="text-right font-bold text-gray-900">${pay.toFixed(2)}</span>
-                </div>
-              );
-            })}
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-between text-sm font-bold">
-              <span className="text-gray-700">{t.payroll.monthlyTotal}</span>
-              <span className="text-primary">${payrollTotal.toFixed(2)}</span>
-            </div>
-          </div>
-        )
-      )}
-
-      {/* Add/Edit Employee Modal */}
+  const modals = (
+    <>
       <Modal open={empModal !== null} onClose={() => setEmpModal(null)} title={empModal === 'add' ? t.modal.addTitle : t.modal.editTitle}>
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
@@ -299,7 +167,6 @@ export default function EmpleadosPage() {
         </div>
       </Modal>
 
-      {/* Log hours modal */}
       <Modal open={tsModal} onClose={() => setTsModal(false)} title={t.timesheetModal.title}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
@@ -324,6 +191,18 @@ export default function EmpleadosPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
+  );
+
+  return (
+    <EmployeesScreen
+      employees={empList}
+      timesheets={tsList}
+      onAddEmployee={openAddEmp}
+      onEditEmployee={openEditEmpById}
+      onToggleActive={toggleActive}
+      onLogHours={() => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); }}
+      modalsSlot={modals}
+    />
   );
 }
