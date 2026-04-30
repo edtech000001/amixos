@@ -1,4 +1,9 @@
-/** Bilingual labels for client-facing invoice documents. */
+/** Bilingual labels for client-facing invoice documents.
+ *
+ * NOTE: each invoice has its own `language` field (es | en) independent of
+ * the user's UI locale. A Spanish-speaking user can issue an English-language
+ * invoice to an English-speaking client and vice versa.
+ */
 
 export type InvoiceLang = 'es' | 'en';
 
@@ -38,7 +43,6 @@ const labels = {
 
 export type InvoiceLabelKey = keyof typeof labels;
 
-/** Get all labels for a given language. */
 export function getInvoiceLabels(lang: InvoiceLang) {
   const result = {} as Record<InvoiceLabelKey, string>;
   for (const key in labels) {
@@ -47,7 +51,6 @@ export function getInvoiceLabels(lang: InvoiceLang) {
   return result;
 }
 
-/** Get the date locale string for formatting. */
-export function getDateLocale(lang: InvoiceLang) {
+export function getInvoiceDateLocale(lang: InvoiceLang) {
   return lang === 'es' ? 'es-MX' : 'en-US';
 }

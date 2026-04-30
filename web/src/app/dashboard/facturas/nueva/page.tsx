@@ -9,7 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import type { InvoiceLang } from '@/lib/invoice-i18n';
+import type { InvoiceLang } from '@amixos/shared';
 import { useLang } from '@/i18n/LangProvider';
 
 interface LineItem { description: string; qty: number; rate: number; }

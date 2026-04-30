@@ -24,3 +24,6 @@ export type { CommonDict } from './dict/common';
 export type { DashboardDict } from './dict/dashboard';
 export type { ProposalDict } from './dict/proposal';
 export type { SplashDict, SplashSlide } from './dict/splash';
+
+export { getInvoiceLabels, getInvoiceDateLocale } from './invoice';
+export type { InvoiceLang, InvoiceLabelKey } from './invoice';
