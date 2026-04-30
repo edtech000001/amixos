@@ -2,16 +2,20 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Papa from 'papaparse';
-import { Plus, Search, Phone, Mail, Building2, MapPin, Pencil, Trash2, User, Upload, Download, CheckCircle2, X } from 'lucide-react';
+import { Building2, Phone, Mail, MapPin, Upload, Download, CheckCircle2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
+import {
+  ClientsListScreen,
+  type ClientListItem,
+} from '@amixos/shared/screens/dashboard/ClientsListScreen';
 
 interface FieldTemplate {
   id: string;
@@ -91,18 +95,11 @@ function fmtPhoneInput(raw: string): string {
   return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
 }
 
-function displayPhone(c: Client) {
-  const raw = c.phone_cell ?? c.phone ?? null;
-  return raw ? fmtPhone(raw) : null;
-}
-function displayEmail(c: Client) {
-  return c.email_office ?? c.email ?? null;
-}
-
 export default function ClientesPage() {
   const { t: full } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
+  const router = useRouter();
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const [clients, setClients] = useState<Client[]>([]);
@@ -151,7 +148,6 @@ export default function ClientesPage() {
     setError(''); setModal('edit');
   };
 
-  // Field labels for required-field validation messages
   const FIELD_LABELS: Record<string, string> = {
     first_name: t.fields.firstName,
     last_name: t.fields.lastName,
@@ -229,11 +225,33 @@ export default function ClientesPage() {
     });
   };
 
+  // Mapped list items for the universal screen
+  const listItems: ClientListItem[] = useMemo(() => clients.map(c => ({
+    id: c.id,
+    firstName: c.first_name,
+    lastName: c.last_name,
+    company: c.company,
+    phoneDisplay: (c.phone_cell ?? c.phone) ? fmtPhone(c.phone_cell ?? c.phone ?? '') : null,
+    emailDisplay: c.email_office ?? c.email,
+    city: c.city,
+    state: c.state,
+  })), [clients]);
+
+  const filteredIds = useMemo(() => {
+    const q = search.toLowerCase();
+    return new Set(
+      listItems
+        .filter(c => [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city]
+          .filter(Boolean).join(' ').toLowerCase().includes(q))
+        .map(c => c.id),
+    );
+  }, [listItems, search]);
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
+    if (selectedIds.size === filteredIds.size) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filtered.map(c => c.id)));
+      setSelectedIds(new Set(filteredIds));
     }
   };
 
@@ -253,15 +271,6 @@ export default function ClientesPage() {
     }
     setDeleting(false);
   };
-
-  const filtered = clients.filter(c => {
-    const q = search.toLowerCase();
-    return [
-      c.first_name, c.last_name, c.company,
-      c.phone_cell, c.phone, c.phone_office,
-      c.email_office, c.email, c.city,
-    ].filter(Boolean).join(' ').toLowerCase().includes(q);
-  });
 
   // ── Import state ──────────────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null);
@@ -393,111 +402,8 @@ export default function ClientesPage() {
   const isReq = (key: string) => !!(business?.client_field_required ?? {})[key];
   const rLabel = (key: string, base: string) => isReq(key) ? `${base} *` : base;
 
-  const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural).replace('{{count}}', String(selectedIds.size));
-
-  return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t.countTotal.replace('{{count}}', String(clients.length))}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="md" onClick={() => { setImportStep('upload'); setImportModal(true); }}>
-            <Upload size={15} className="mr-1.5"/> {t.importBtn}
-          </Button>
-          <Button onClick={openAdd} size="md">
-            <Plus size={15} className="mr-1.5"/> {t.newClient}
-          </Button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="mb-4">
-        <Input placeholder={t.searchPlaceholder} value={search}
-          onChange={e => { setSearch(e.target.value); setSelectedIds(new Set()); }} leftIcon={<Search size={16}/>}/>
-      </div>
-
-      {/* Bulk actions bar */}
-      {selectedIds.size > 0 && (
-        <div className="mb-4 flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
-          <button onClick={() => setSelectedIds(new Set())} className="p-1 rounded hover:bg-primary/10 transition-colors">
-            <X size={14} className="text-primary"/>
-          </button>
-          <span className="text-sm font-medium text-primary">
-            {selectedCountText}
-          </span>
-          <div className="flex-1"/>
-          <Button variant="danger" size="sm" onClick={bulkDelete} loading={deleting}>
-            <Trash2 size={14} className="mr-1.5"/> {t.bulkDelete}
-          </Button>
-        </div>
-      )}
-
-      {/* List */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <User size={40} className="mx-auto mb-3 opacity-30"/>
-          <p className="text-sm">{search ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search && <button onClick={openAdd} className="text-primary text-sm font-medium hover:underline mt-1">{t.addFirst}</button>}
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {filtered.length > 0 && (
-            <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-100 bg-gray-50/50">
-              <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer"/>
-              <span className="text-xs text-gray-400">{t.selectAll}</span>
-            </div>
-          )}
-          {filtered.map((c, i) => {
-            const phone = displayPhone(c);
-            const email = displayEmail(c);
-            const isChecked = selectedIds.has(c.id);
-            return (
-              <div key={c.id} className={`flex items-center justify-between px-5 py-4 ${i < filtered.length-1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors ${isChecked ? 'bg-primary/[0.03]' : ''}`}>
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(c.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer shrink-0"/>
-                <Link href={`/dashboard/clientes/${c.id}`} className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="text-primary text-sm font-bold">
-                      {c.first_name.charAt(0).toUpperCase()}{c.last_name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {c.first_name} {c.last_name}
-                      {c.company && <span className="text-gray-400 font-normal ml-1.5">· {c.company}</span>}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                      {phone && <span className="text-xs text-gray-400 flex items-center gap-1"><Phone size={11}/>{phone}</span>}
-                      {email && <span className="text-xs text-gray-400 flex items-center gap-1"><Mail size={11}/>{email}</span>}
-                      {c.city && <span className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={11}/>{c.city}{c.state ? `, ${c.state}` : ''}</span>}
-                    </div>
-                  </div>
-                </Link>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 ml-4">
-                  <button onClick={() => openEdit(c)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                    <Pencil size={14} className="text-gray-400"/>
-                  </button>
-                  <button onClick={() => remove(c.id)} className="p-2 rounded-lg hover:bg-red-50 transition-colors">
-                    <Trash2 size={14} className="text-red-400"/>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
+  const modals = (
+    <>
       {/* Add / Edit Modal */}
       <Modal open={modal !== null} onClose={() => setModal(null)}
         title={modal === 'add' ? t.modal.addTitle : t.modal.editTitle} size="lg">
@@ -623,7 +529,7 @@ export default function ClientesPage() {
       <input ref={fileRef} type="file" accept=".csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }}/>
 
-      {/* ── Import Modal ─────────────────────────────────────────────────── */}
+      {/* Import Modal */}
       <Modal open={importModal} onClose={resetImport}
         title={importStep === 'done' ? t.importModal.doneTitle : importStep === 'preview' ? t.importModal.previewTitle : importStep === 'map' ? t.importModal.mapTitle : t.importModal.title}
         size="lg">
@@ -751,7 +657,32 @@ export default function ClientesPage() {
           )}
         </div>
       </Modal>
+    </>
+  );
 
-    </div>
+  const editById = (id: string) => {
+    const c = clients.find(cl => cl.id === id);
+    if (c) openEdit(c);
+  };
+
+  return (
+    <ClientsListScreen
+      loading={loading}
+      clients={listItems}
+      search={search}
+      onSearchChange={(text) => { setSearch(text); setSelectedIds(new Set()); }}
+      selectedIds={selectedIds}
+      onToggleSelect={toggleSelect}
+      onToggleSelectAll={toggleSelectAll}
+      onClientPress={(id) => router.push(`/dashboard/clientes/${id}`)}
+      onEditPress={editById}
+      onDeletePress={remove}
+      onNewClientPress={openAdd}
+      onImportPress={() => { setImportStep('upload'); setImportModal(true); }}
+      onBulkDeletePress={bulkDelete}
+      onClearSelection={() => setSelectedIds(new Set())}
+      bulkDeleting={deleting}
+      bottomSlot={modals}
+    />
   );
 }
