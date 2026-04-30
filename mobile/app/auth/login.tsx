@@ -30,7 +30,7 @@ export default function LoginRoute() {
         needsOnboarding = !businesses || businesses.length === 0;
       }
 
-      router.replace(needsOnboarding ? '/onboarding' : '/(tabs)');
+      router.replace(needsOnboarding ? '/onboarding' : '/dashboard');
       return { ok: true, needsOnboarding };
     } catch (err) {
       console.error('Login error:', err);
