@@ -1,0 +1,362 @@
+import { useEffect, useState } from 'react';
+import { View, Text, TextInput } from 'react-native';
+import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
+import { useLang } from '../../i18n';
+import { Button } from '../../ui/Button';
+import { Input } from '../../ui/Input';
+import { Modal } from '../../ui/Modal';
+import { Select, type SelectOption } from '../../ui/Select';
+import { Toggle } from '../../ui/Toggle';
+import { DatePicker } from '../../ui/DatePicker';
+
+export interface ClientFieldTemplate {
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+}
+
+export interface ClientFormValues {
+  first_name: string;
+  last_name: string;
+  company: string;
+  phone_cell: string;
+  phone_office: string;
+  email_office: string;
+  email_home: string;
+  address: string;
+  address_line2: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  notes: string;
+  custom_fields: Record<string, string>;
+}
+
+const EMPTY: ClientFormValues = {
+  first_name: '', last_name: '', company: '',
+  phone_cell: '', phone_office: '',
+  email_office: '', email_home: '',
+  address: '', address_line2: '', city: '', state: '', zip_code: '',
+  notes: '',
+  custom_fields: {},
+};
+
+const US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
+  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
+  'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
+
+function fmtPhoneInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+}
+
+export interface ClientFormModalProps {
+  open: boolean;
+  mode: 'add' | 'edit';
+  initial?: Partial<ClientFormValues>;
+  templates: ClientFieldTemplate[];
+  /** Field-keyed map of `required` flags pulled from business config. */
+  requiredFlags: Record<string, boolean>;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (values: ClientFormValues) => Promise<void> | void;
+}
+
+export function ClientFormModal({
+  open,
+  mode,
+  initial,
+  templates,
+  requiredFlags,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: ClientFormModalProps) {
+  const { t: full } = useLang();
+  const t = full.dashboard.clients;
+  const tc = full.common;
+
+  const [form, setForm] = useState<ClientFormValues>(EMPTY);
+
+  useEffect(() => {
+    if (open) {
+      setForm({ ...EMPTY, ...initial, custom_fields: { ...(initial?.custom_fields ?? {}) } });
+    }
+  }, [open, initial]);
+
+  const isReq = (key: string) => !!requiredFlags[key];
+  const rLabel = (key: string, base: string) => (isReq(key) ? `${base} *` : base);
+  const set = <K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) =>
+    setForm(f => ({ ...f, [key]: value }));
+  const setCustom = (key: string, val: string) =>
+    setForm(f => ({ ...f, custom_fields: { ...f.custom_fields, [key]: val } }));
+
+  const stateOptions: SelectOption[] = [
+    { value: '', label: '—' },
+    ...US_STATES.map(s => ({ value: s, label: s })),
+  ];
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={mode === 'add' ? t.modal.addTitle : t.modal.editTitle}
+      size="lg"
+    >
+      <View className="gap-5 pb-2">
+        {/* Basic info */}
+        <View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            {t.sections.basicInfo}
+          </Text>
+          <View className="flex-col gap-3">
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Input
+                  label={rLabel('first_name', t.fields.firstName)}
+                  placeholder={t.fields.placeholders.firstName}
+                  value={form.first_name}
+                  onChangeText={v => set('first_name', v)}
+                />
+              </View>
+              <View className="flex-1">
+                <Input
+                  label={rLabel('last_name', t.fields.lastName)}
+                  placeholder={t.fields.placeholders.lastName}
+                  value={form.last_name}
+                  onChangeText={v => set('last_name', v)}
+                />
+              </View>
+            </View>
+            <Input
+              label={rLabel('company', t.fields.company)}
+              placeholder={t.fields.placeholders.company}
+              value={form.company}
+              onChangeText={v => set('company', v)}
+              leftIcon={<Building2 size={15} color="#9CA3AF" />}
+            />
+          </View>
+        </View>
+
+        {/* Phones */}
+        <View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            {t.sections.phones}
+          </Text>
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Input
+                label={rLabel('phone_cell', t.fields.phoneCell)}
+                placeholder={t.fields.placeholders.phone}
+                value={fmtPhoneInput(form.phone_cell)}
+                onChangeText={v => set('phone_cell', fmtPhoneInput(v))}
+                keyboardType="phone-pad"
+                leftIcon={<Phone size={15} color="#9CA3AF" />}
+              />
+            </View>
+            <View className="flex-1">
+              <Input
+                label={rLabel('phone_office', t.fields.phoneOffice)}
+                placeholder={t.fields.placeholders.phone}
+                value={fmtPhoneInput(form.phone_office)}
+                onChangeText={v => set('phone_office', fmtPhoneInput(v))}
+                keyboardType="phone-pad"
+                leftIcon={<Phone size={15} color="#9CA3AF" />}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Emails */}
+        <View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            {t.sections.emails}
+          </Text>
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Input
+                label={rLabel('email_office', t.fields.emailOffice)}
+                placeholder={t.fields.placeholders.emailOffice}
+                value={form.email_office}
+                onChangeText={v => set('email_office', v)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={<Mail size={15} color="#9CA3AF" />}
+              />
+            </View>
+            <View className="flex-1">
+              <Input
+                label={rLabel('email_home', t.fields.emailHome)}
+                placeholder={t.fields.placeholders.emailHome}
+                value={form.email_home}
+                onChangeText={v => set('email_home', v)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={<Mail size={15} color="#9CA3AF" />}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Address */}
+        <View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            {t.sections.address}
+          </Text>
+          <View className="flex-col gap-3">
+            <Input
+              label={rLabel('address', t.fields.addressLine1)}
+              placeholder={t.fields.placeholders.address}
+              value={form.address}
+              onChangeText={v => set('address', v)}
+              leftIcon={<MapPin size={15} color="#9CA3AF" />}
+            />
+            <Input
+              label={t.fields.addressLine2}
+              placeholder={t.fields.placeholders.addressLine2}
+              value={form.address_line2}
+              onChangeText={v => set('address_line2', v)}
+            />
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Input
+                  label={rLabel('city', t.fields.city)}
+                  placeholder={t.fields.placeholders.city}
+                  value={form.city}
+                  onChangeText={v => set('city', v)}
+                />
+              </View>
+              <View className="w-24">
+                <Select
+                  label={rLabel('state', t.fields.state)}
+                  value={form.state}
+                  onValueChange={v => set('state', v)}
+                  options={stateOptions}
+                />
+              </View>
+              <View className="w-28">
+                <Input
+                  label={rLabel('zip_code', t.fields.zipCode)}
+                  placeholder={t.fields.placeholders.zipCode}
+                  value={form.zip_code}
+                  onChangeText={v => set('zip_code', v)}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Custom fields */}
+        {templates.length > 0 ? (
+          <View>
+            <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+              {t.sections.customFields}
+            </Text>
+            <View className="flex-row flex-wrap gap-3">
+              {templates.map(tpl => {
+                const value = form.custom_fields[tpl.field_key] ?? '';
+                const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+
+                if (tpl.field_type === 'select' && tpl.field_options) {
+                  return (
+                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
+                      <Select
+                        label={labelText}
+                        value={value}
+                        onValueChange={v => setCustom(tpl.field_key, v)}
+                        options={[
+                          { value: '', label: '—' },
+                          ...tpl.field_options.map(o => ({ value: o, label: o })),
+                        ]}
+                      />
+                    </View>
+                  );
+                }
+                if (tpl.field_type === 'boolean') {
+                  return (
+                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
+                      <Text className="text-sm font-medium text-gray-700 mb-1.5">{labelText}</Text>
+                      <Toggle
+                        value={value === 'true'}
+                        onValueChange={v => setCustom(tpl.field_key, v ? 'true' : 'false')}
+                        hint={value === 'true' ? tc.states.yes : tc.states.no}
+                      />
+                    </View>
+                  );
+                }
+                if (tpl.field_type === 'date') {
+                  return (
+                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
+                      <DatePicker
+                        label={labelText}
+                        value={value}
+                        onChange={v => setCustom(tpl.field_key, v)}
+                      />
+                    </View>
+                  );
+                }
+                return (
+                  <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
+                    <Input
+                      label={labelText}
+                      value={value}
+                      onChangeText={v => setCustom(tpl.field_key, v)}
+                      keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Notes */}
+        <View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            {t.sections.notes}
+          </Text>
+          <View className="rounded-xl border border-gray-200 bg-white px-4 py-1">
+            <TextInput
+              multiline
+              numberOfLines={3}
+              placeholder={t.fields.placeholders.notes}
+              placeholderTextColor="#9CA3AF"
+              value={form.notes}
+              onChangeText={v => set('notes', v)}
+              className="text-sm text-gray-900 py-2"
+              style={{ textAlignVertical: 'top', minHeight: 60 }}
+            />
+          </View>
+        </View>
+
+        {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
+
+        <View className="flex-row gap-3 pt-1">
+          <View className="flex-1">
+            <Button variant="secondary" onPress={onClose} fullWidth>
+              {tc.buttons.cancel}
+            </Button>
+          </View>
+          <View className="flex-1">
+            <Button
+              onPress={() => onSubmit(form)}
+              loading={saving}
+              fullWidth
+            >
+              {t.modal.saveBtn}
+            </Button>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}

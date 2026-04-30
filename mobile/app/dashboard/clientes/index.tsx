@@ -8,6 +8,17 @@ import {
   ClientsListScreen,
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
+import {
+  ClientFormModal,
+  type ClientFormValues,
+  type ClientFieldTemplate,
+} from '@amixos/shared/screens/dashboard/ClientFormModal';
+import { useLang } from '@/lib/i18n/LangProvider';
+
+interface FieldTemplate extends ClientFieldTemplate {
+  id: string;
+  sort_order: number;
+}
 
 interface Client {
   id: string;
@@ -16,10 +27,17 @@ interface Client {
   company: string | null;
   phone: string | null;
   phone_cell: string | null;
+  phone_office: string | null;
   email: string | null;
   email_office: string | null;
+  email_home: string | null;
+  address: string | null;
+  address_line2: string | null;
   city: string | null;
   state: string | null;
+  zip_code: string | null;
+  notes: string | null;
+  custom_fields: Record<string, string> | null;
 }
 
 function fmtPhone(raw: string): string {
@@ -30,24 +48,38 @@ function fmtPhone(raw: string): string {
   return raw;
 }
 
+const FIELD_LABEL_KEYS: (keyof ClientFormValues)[] = [
+  'first_name', 'last_name', 'company', 'phone_cell', 'phone_office',
+  'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
+];
+
 export default function ClientesTab() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.clients;
+
   const [clients, setClients] = useState<Client[]>([]);
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
+  const [selected, setSelected] = useState<Client | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
   const load = async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('business_id', business.id)
-      .order('created_at', { ascending: false });
-    setClients(data ?? []);
+    const [{ data: cl }, { data: tpl }] = await Promise.all([
+      supabase.from('clients').select('*').eq('business_id', business.id).order('created_at', { ascending: false }),
+      supabase.from('client_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
+    ]);
+    setClients(cl ?? []);
+    setTemplates(tpl ?? []);
     setLoading(false);
   };
 
@@ -81,17 +113,78 @@ export default function ClientesTab() {
       return n;
     });
   };
-
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredIds.size) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredIds));
+    if (selectedIds.size === filteredIds.size) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredIds));
+  };
+
+  const FIELD_LABELS: Record<string, string> = {
+    first_name: t.fields.firstName,
+    last_name: t.fields.lastName,
+    company: t.fields.company,
+    phone_cell: t.fields.phoneCell,
+    phone_office: t.fields.phoneOffice,
+    email_office: t.fields.emailOffice,
+    email_home: t.fields.emailHome,
+    address: t.fields.addressLine1,
+    city: t.fields.city,
+    state: t.fields.state,
+    zip_code: t.fields.zipCode,
+  };
+
+  const openAdd = () => { setSelected(null); setError(''); setFormMode('add'); };
+  const openEditById = (id: string) => {
+    const c = clients.find(cl => cl.id === id);
+    if (c) { setSelected(c); setError(''); setFormMode('edit'); }
+  };
+
+  const save = async (form: ClientFormValues) => {
+    setSaving(true); setError('');
+    const req = business?.client_field_required ?? {};
+    const missing: string[] = [];
+    for (const key of FIELD_LABEL_KEYS) {
+      if (!req[key]) continue;
+      const val = form[key] as string;
+      if (!val || !val.trim()) missing.push(FIELD_LABELS[key] ?? key);
     }
+    for (const tpl of templates) {
+      if (tpl.required && !form.custom_fields[tpl.field_key]?.trim()) {
+        missing.push(tpl.field_label);
+      }
+    }
+    if (missing.length > 0) {
+      setError(t.modal.requiredError.replace('{{fields}}', missing.join(', ')));
+      setSaving(false);
+      return;
+    }
+    const payload = {
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      company: form.company.trim() || null,
+      phone_cell: form.phone_cell.trim() || null,
+      phone_office: form.phone_office.trim() || null,
+      email_office: form.email_office.trim() || null,
+      email_home: form.email_home.trim() || null,
+      address: form.address.trim() || null,
+      address_line2: form.address_line2.trim() || null,
+      city: form.city.trim() || null,
+      state: form.state.trim() || null,
+      zip_code: form.zip_code.trim() || null,
+      notes: form.notes.trim() || null,
+      custom_fields: Object.keys(form.custom_fields).length > 0 ? form.custom_fields : null,
+    };
+    if (formMode === 'add') {
+      const { error: e } = await supabase.from('clients').insert({ ...payload, business_id: business!.id });
+      if (e) { setError(t.modal.saveError); setSaving(false); return; }
+    } else if (formMode === 'edit' && selected) {
+      const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
+      if (e) { setError(t.modal.saveError); setSaving(false); return; }
+    }
+    await load(); setSaving(false); setFormMode(null);
   };
 
   const remove = (id: string) => {
-    Alert.alert('Eliminar cliente', '¿Estás seguro?', [
+    Alert.alert('Eliminar cliente', t.confirmDeleteSingle, [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Eliminar',
@@ -109,7 +202,7 @@ export default function ClientesTab() {
     if (selectedIds.size === 0) return;
     Alert.alert(
       'Eliminar clientes',
-      `¿Eliminar ${selectedIds.size} cliente(s)?`,
+      t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)),
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -130,6 +223,26 @@ export default function ClientesTab() {
     );
   };
 
+  const initialForEdit: Partial<ClientFormValues> | undefined =
+    formMode === 'edit' && selected
+      ? {
+          first_name: selected.first_name,
+          last_name: selected.last_name,
+          company: selected.company ?? '',
+          phone_cell: selected.phone_cell ?? selected.phone ?? '',
+          phone_office: selected.phone_office ?? '',
+          email_office: selected.email_office ?? selected.email ?? '',
+          email_home: selected.email_home ?? '',
+          address: selected.address ?? '',
+          address_line2: selected.address_line2 ?? '',
+          city: selected.city ?? '',
+          state: selected.state ?? '',
+          zip_code: selected.zip_code ?? '',
+          notes: selected.notes ?? '',
+          custom_fields: selected.custom_fields ?? {},
+        }
+      : undefined;
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <ClientsListScreen
@@ -141,13 +254,25 @@ export default function ClientesTab() {
         onToggleSelect={toggleSelect}
         onToggleSelectAll={toggleSelectAll}
         onClientPress={(id) => Alert.alert('Detail view', `Client ${id} detail not yet built on mobile`)}
-        onEditPress={() => Alert.alert('Coming soon', 'Edit client from mobile not yet built')}
+        onEditPress={openEditById}
         onDeletePress={remove}
-        onNewClientPress={() => Alert.alert('Coming soon', 'Add client from mobile not yet built')}
-        // No CSV import on mobile.
+        onNewClientPress={openAdd}
         onBulkDeletePress={bulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
+        bottomSlot={
+          <ClientFormModal
+            open={formMode !== null}
+            mode={formMode ?? 'add'}
+            initial={initialForEdit}
+            templates={templates}
+            requiredFlags={business?.client_field_required ?? {}}
+            saving={saving}
+            error={error}
+            onClose={() => setFormMode(null)}
+            onSubmit={save}
+          />
+        }
       />
     </SafeAreaView>
   );

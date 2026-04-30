@@ -41,7 +41,7 @@ export function Select({
       {label ? <Text className="text-sm font-medium text-gray-700">{label}</Text> : null}
 
       {Platform.OS === 'web' ? (
-        // @ts-expect-error - native HTML select for web accessibility/keyboard support.
+        // Native HTML select for web accessibility/keyboard support.
         <select
           value={value}
           onChange={(e: any) => onValueChange(e.target.value)}

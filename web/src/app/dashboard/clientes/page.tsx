@@ -5,25 +5,24 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Papa from 'papaparse';
-import { Building2, Phone, Mail, MapPin, Upload, Download, CheckCircle2 } from 'lucide-react';
+import { Upload, Download, CheckCircle2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import {
   ClientsListScreen,
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
+import {
+  ClientFormModal,
+  type ClientFormValues,
+  type ClientFieldTemplate,
+} from '@amixos/shared/screens/dashboard/ClientFormModal';
 
-interface FieldTemplate {
+interface FieldTemplate extends ClientFieldTemplate {
   id: string;
-  field_key: string;
-  field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
-  field_options: string[] | null;
-  required: boolean;
   sort_order: number;
 }
 
@@ -48,20 +47,6 @@ interface Client {
   created_at: string;
   updated_at: string;
 }
-
-const EMPTY_FORM = {
-  first_name: '', last_name: '', company: '',
-  phone_cell: '', phone_office: '',
-  email_office: '', email_home: '',
-  address: '', address_line2: '', city: '', state: '', zip_code: '',
-  notes: '',
-};
-
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
-  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
-  'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
-];
 
 const STATE_NAME_TO_ABBR: Record<string, string> = {
   'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
@@ -88,12 +73,10 @@ function fmtPhone(raw: string): string {
   return raw;
 }
 
-function fmtPhoneInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
-}
+const FIELD_LABEL_KEYS: (keyof ClientFormValues)[] = [
+  'first_name', 'last_name', 'company', 'phone_cell', 'phone_office',
+  'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
+];
 
 export default function ClientesPage() {
   const { t: full } = useLang();
@@ -106,10 +89,8 @@ export default function ClientesPage() {
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<'add' | 'edit' | null>(null);
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Client | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -128,25 +109,8 @@ export default function ClientesPage() {
 
   useEffect(() => { load(); }, [business]);
 
-  const openAdd = () => {
-    setForm({ ...EMPTY_FORM });
-    setCustomVals({});
-    setError(''); setModal('add');
-  };
-
-  const openEdit = (c: Client) => {
-    setSelected(c);
-    setForm({
-      first_name: c.first_name, last_name: c.last_name, company: c.company ?? '',
-      phone_cell: c.phone_cell ?? c.phone ?? '', phone_office: c.phone_office ?? '',
-      email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
-      address: c.address ?? '', address_line2: c.address_line2 ?? '',
-      city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
-      notes: c.notes ?? '',
-    });
-    setCustomVals(c.custom_fields ?? {});
-    setError(''); setModal('edit');
-  };
+  const openAdd = () => { setSelected(null); setError(''); setFormMode('add'); };
+  const openEdit = (c: Client) => { setSelected(c); setError(''); setFormMode('edit'); };
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: t.fields.firstName,
@@ -162,18 +126,18 @@ export default function ClientesPage() {
     zip_code: t.fields.zipCode,
   };
 
-  const save = async () => {
+  const save = async (form: ClientFormValues) => {
     setSaving(true); setError('');
 
     const req = business?.client_field_required ?? {};
     const missing: string[] = [];
-    for (const [key, isReq] of Object.entries(req)) {
-      if (!isReq) continue;
-      const val = (form as any)[key];
+    for (const key of FIELD_LABEL_KEYS) {
+      if (!req[key]) continue;
+      const val = form[key] as string;
       if (!val || !val.trim()) missing.push(FIELD_LABELS[key] ?? key);
     }
     for (const tpl of templates) {
-      if (tpl.required && !customVals[tpl.field_key]?.trim()) {
+      if (tpl.required && !form.custom_fields[tpl.field_key]?.trim()) {
         missing.push(tpl.field_label);
       }
     }
@@ -197,17 +161,17 @@ export default function ClientesPage() {
       state: form.state.trim() || null,
       zip_code: form.zip_code.trim() || null,
       notes: form.notes.trim() || null,
-      custom_fields: Object.keys(customVals).length > 0 ? customVals : null,
+      custom_fields: Object.keys(form.custom_fields).length > 0 ? form.custom_fields : null,
     };
 
-    if (modal === 'add') {
+    if (formMode === 'add') {
       const { error: e } = await supabase.from('clients').insert({ ...payload, business_id: business!.id });
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
-    } else if (modal === 'edit' && selected) {
+    } else if (formMode === 'edit' && selected) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
     }
-    await load(); setSaving(false); setModal(null);
+    await load(); setSaving(false); setFormMode(null);
   };
 
   const remove = async (id: string) => {
@@ -225,7 +189,6 @@ export default function ClientesPage() {
     });
   };
 
-  // Mapped list items for the universal screen
   const listItems: ClientListItem[] = useMemo(() => clients.map(c => ({
     id: c.id,
     firstName: c.first_name,
@@ -248,11 +211,8 @@ export default function ClientesPage() {
   }, [listItems, search]);
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredIds.size) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredIds));
-    }
+    if (selectedIds.size === filteredIds.size) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredIds));
   };
 
   const bulkDelete = async () => {
@@ -399,137 +359,49 @@ export default function ClientesPage() {
     setImportResult({ success: 0, errors: 0 }); setImportModal(false);
   };
 
-  const isReq = (key: string) => !!(business?.client_field_required ?? {})[key];
-  const rLabel = (key: string, base: string) => isReq(key) ? `${base} *` : base;
+  const editById = (id: string) => {
+    const c = clients.find(cl => cl.id === id);
+    if (c) openEdit(c);
+  };
+
+  const initialForEdit: Partial<ClientFormValues> | undefined =
+    formMode === 'edit' && selected
+      ? {
+          first_name: selected.first_name,
+          last_name: selected.last_name,
+          company: selected.company ?? '',
+          phone_cell: selected.phone_cell ?? selected.phone ?? '',
+          phone_office: selected.phone_office ?? '',
+          email_office: selected.email_office ?? selected.email ?? '',
+          email_home: selected.email_home ?? '',
+          address: selected.address ?? '',
+          address_line2: selected.address_line2 ?? '',
+          city: selected.city ?? '',
+          state: selected.state ?? '',
+          zip_code: selected.zip_code ?? '',
+          notes: selected.notes ?? '',
+          custom_fields: selected.custom_fields ?? {},
+        }
+      : undefined;
 
   const modals = (
     <>
-      {/* Add / Edit Modal */}
-      <Modal open={modal !== null} onClose={() => setModal(null)}
-        title={modal === 'add' ? t.modal.addTitle : t.modal.editTitle} size="lg">
-        <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
+      <ClientFormModal
+        open={formMode !== null}
+        mode={formMode ?? 'add'}
+        initial={initialForEdit}
+        templates={templates}
+        requiredFlags={business?.client_field_required ?? {}}
+        saving={saving}
+        error={error}
+        onClose={() => setFormMode(null)}
+        onSubmit={save}
+      />
 
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.basicInfo}</p>
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Input label={rLabel('first_name', t.fields.firstName)} placeholder={t.fields.placeholders.firstName} value={form.first_name}
-                  onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
-                <Input label={rLabel('last_name', t.fields.lastName)} placeholder={t.fields.placeholders.lastName} value={form.last_name}
-                  onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
-              </div>
-              <Input label={rLabel('company', t.fields.company)} placeholder={t.fields.placeholders.company} value={form.company}
-                onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
-                leftIcon={<Building2 size={15}/>}/>
-            </div>
-          </section>
-
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.phones}</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input label={rLabel('phone_cell', t.fields.phoneCell)} placeholder={t.fields.placeholders.phone} value={fmtPhoneInput(form.phone_cell)}
-                onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))}
-                leftIcon={<Phone size={15}/>}/>
-              <Input label={rLabel('phone_office', t.fields.phoneOffice)} placeholder={t.fields.placeholders.phone} value={fmtPhoneInput(form.phone_office)}
-                onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))}
-                leftIcon={<Phone size={15}/>}/>
-            </div>
-          </section>
-
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.emails}</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input label={rLabel('email_office', t.fields.emailOffice)} type="email" placeholder={t.fields.placeholders.emailOffice} value={form.email_office}
-                onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))}
-                leftIcon={<Mail size={15}/>}/>
-              <Input label={rLabel('email_home', t.fields.emailHome)} type="email" placeholder={t.fields.placeholders.emailHome} value={form.email_home}
-                onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))}
-                leftIcon={<Mail size={15}/>}/>
-            </div>
-          </section>
-
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.address}</p>
-            <div className="flex flex-col gap-3">
-              <Input label={rLabel('address', t.fields.addressLine1)} placeholder={t.fields.placeholders.address} value={form.address}
-                onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                leftIcon={<MapPin size={15}/>}/>
-              <Input label={t.fields.addressLine2} placeholder={t.fields.placeholders.addressLine2} value={form.address_line2}
-                onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
-              <div className="grid grid-cols-[1fr_100px_110px] gap-3">
-                <Input label={rLabel('city', t.fields.city)} placeholder={t.fields.placeholders.city} value={form.city}
-                  onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{rLabel('state', t.fields.state)}</label>
-                  <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                    <option value="">—</option>
-                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <Input label={rLabel('zip_code', t.fields.zipCode)} placeholder={t.fields.placeholders.zipCode} value={form.zip_code}
-                  onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
-              </div>
-            </div>
-          </section>
-
-          {templates.length > 0 && (
-            <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</p>
-              <div className="grid grid-cols-2 gap-3">
-                {templates.map(tpl => (
-                  <div key={tpl.field_key} className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-gray-700">
-                      {tpl.field_label}{tpl.required && ' *'}
-                    </label>
-                    {tpl.field_type === 'select' && tpl.field_options ? (
-                      <select value={customVals[tpl.field_key] ?? ''}
-                        onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                        <option value="">—</option>
-                        {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : tpl.field_type === 'boolean' ? (
-                      <div className="flex items-center gap-3 h-[42px]">
-                        <button type="button" onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: v[tpl.field_key] === 'true' ? 'false' : 'true' }))}
-                          className={`relative w-11 h-6 rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
-                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
-                        </button>
-                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? tc.states.yes : tc.states.no}</span>
-                      </div>
-                    ) : (
-                      <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
-                        value={customVals[tpl.field_key] ?? ''}
-                        onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent"/>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.notes}</p>
-            <textarea rows={3} placeholder={t.fields.placeholders.notes} value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
-          </section>
-
-          {error && <p className="text-xs text-red-500">{error}</p>}
-
-          <div className="flex gap-3 pt-1 pb-2">
-            <Button variant="secondary" onClick={() => setModal(null)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={save} loading={saving} fullWidth>{t.modal.saveBtn}</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Hidden file input */}
+      {/* Hidden file input + CSV import wizard (web-only) */}
       <input ref={fileRef} type="file" accept=".csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }}/>
 
-      {/* Import Modal */}
       <Modal open={importModal} onClose={resetImport}
         title={importStep === 'done' ? t.importModal.doneTitle : importStep === 'preview' ? t.importModal.previewTitle : importStep === 'map' ? t.importModal.mapTitle : t.importModal.title}
         size="lg">
@@ -659,11 +531,6 @@ export default function ClientesPage() {
       </Modal>
     </>
   );
-
-  const editById = (id: string) => {
-    const c = clients.find(cl => cl.id === id);
-    if (c) openEdit(c);
-  };
 
   return (
     <ClientsListScreen
