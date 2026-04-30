@@ -5,6 +5,7 @@ import { onboarding, OnboardingDict } from './onboarding';
 import { common, CommonDict } from './common';
 import { dashboard, DashboardDict } from './dashboard';
 import { proposal, ProposalDict } from './proposal';
+import { splash, SplashDict } from './splash';
 
 export type Dictionary = {
   landing: LandingDict;
@@ -13,6 +14,7 @@ export type Dictionary = {
   common: CommonDict;
   dashboard: DashboardDict;
   proposal: ProposalDict;
+  splash: SplashDict;
 };
 
 export const dictionaries: Record<Locale, Dictionary> = LOCALES.reduce((acc, locale) => {
@@ -23,6 +25,7 @@ export const dictionaries: Record<Locale, Dictionary> = LOCALES.reduce((acc, loc
     common: common[locale],
     dashboard: dashboard[locale],
     proposal: proposal[locale],
+    splash: splash[locale],
   };
   return acc;
 }, {} as Record<Locale, Dictionary>);

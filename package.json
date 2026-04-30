@@ -15,11 +15,13 @@
     "build:api": "cd api && npm run build",
     "build:web": "cd web && npm run build",
     "lint": "eslint . --ext .ts,.tsx",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
     "lucide-react-native": "^0.378.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.2.5",
     "react-native": "0.74.5",
     "react-native-svg": "15.2.0",

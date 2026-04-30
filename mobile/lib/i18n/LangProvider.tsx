@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { NativeModules, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   dictionaries,
@@ -15,6 +16,21 @@ import {
 // Re-export the shared hook so screens can `import { useLang } from '@/lib/i18n/LangProvider'`.
 export { useLang } from '@amixos/shared';
 
+// Read the device's preferred locale without pulling in expo-localization
+// (avoids a native rebuild). Falls back to DEFAULT_LOCALE if the platform
+// doesn't expose anything usable.
+function getDeviceLocale(): Locale {
+  let raw = '';
+  if (Platform.OS === 'ios') {
+    const settings = NativeModules.SettingsManager?.settings;
+    raw = settings?.AppleLocale || settings?.AppleLanguages?.[0] || '';
+  } else {
+    raw = NativeModules.I18nManager?.localeIdentifier || '';
+  }
+  const code = String(raw).toLowerCase().split(/[_-]/)[0];
+  return isLocale(code) ? (code as Locale) : DEFAULT_LOCALE;
+}
+
 interface LangProviderProps {
   children: ReactNode;
 }
@@ -28,9 +44,15 @@ export function LangProvider({ children }: LangProviderProps) {
 
   useEffect(() => {
     AsyncStorage.getItem(LOCALE_STORAGE_KEY).then(stored => {
-      if (isLocale(stored)) setLocaleState(stored);
+      if (isLocale(stored)) {
+        setLocaleState(stored);
+      } else {
+        // First launch: seed from device locale so users see their language.
+        setLocaleState(getDeviceLocale());
+      }
       setHydrated(true);
     }).catch(() => {
+      setLocaleState(getDeviceLocale());
       setHydrated(true);
     });
   }, []);
