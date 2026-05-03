@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Linking } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
+import { OAuthButtons } from '@/components/OAuthButtons';
 
 export default function RegisterRoute() {
   const router = useRouter();
@@ -28,12 +29,27 @@ export default function RegisterRoute() {
   // production marketing-site URLs when available.
   const openExternal = (url: string) => Linking.openURL(url).catch(() => {});
 
+  const handleOAuthSuccess = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    let needsOnboarding = false;
+    if (session) {
+      const { data: businesses } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('owner_id', session.user.id)
+        .limit(1);
+      needsOnboarding = !businesses || businesses.length === 0;
+    }
+    router.replace(needsOnboarding ? '/onboarding' : '/(tabs)');
+  };
+
   return (
     <RegisterScreen
       onRegister={handleRegister}
       onLoginPress={() => router.push('/auth/login')}
       onTermsPress={() => openExternal('https://amixos.app/terms')}
       onPrivacyPress={() => openExternal('https://amixos.app/privacy')}
+      oauthSlot={<OAuthButtons onSuccess={handleOAuthSuccess} />}
     />
   );
 }

@@ -88,7 +88,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin }: ForgotPass
                         autoCapitalize="none"
                         autoComplete="email"
                         placeholder={t.forgot.emailPlaceholder}
-                        leftIcon={<Mail size={16} color="#9CA3AF" />}
+                        leftIcon={<Mail size={18} color="#9CA3AF" />}
                         error={errors.email?.message}
                         value={value ?? ''}
                         onChangeText={onChange}

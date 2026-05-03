@@ -7,6 +7,7 @@ import { Mail, Lock, User } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { AuthBackground } from '../../ui/AuthBackground';
 
 export type RegisterAttemptResult =
   | { ok: true }
@@ -69,35 +70,36 @@ export function RegisterScreen({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-surface"
+      className="flex-1"
     >
+      <AuthBackground />
       <ScrollView
-        contentContainerClassName="flex-grow justify-center px-5 py-10"
+        contentContainerClassName="flex-grow justify-center px-6 py-10"
         keyboardShouldPersistTaps="handled"
       >
         <View className="w-full max-w-md mx-auto">
-          {/* Logo */}
           <View className="items-center mb-8">
-            <Text className="text-3xl font-bold text-primary">{t.brand.name}</Text>
-            <Text className="text-gray-500 mt-1 text-sm">{t.register.tagline}</Text>
+            <View
+              className="w-16 h-16 rounded-2xl bg-white items-center justify-center mb-4"
+              style={{
+                shadowColor: '#4F46E5',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.18,
+                shadowRadius: 16,
+                elevation: 6,
+              }}
+            >
+              <Text className="text-3xl font-extrabold text-primary">a</Text>
+            </View>
+            <Text className="text-3xl font-extrabold text-gray-900 tracking-tight">
+              {t.register.heading}
+            </Text>
+            <Text className="text-sm text-gray-500 mt-2 text-center">
+              {t.register.sub}
+            </Text>
           </View>
 
-          <View className="bg-white rounded-2xl border border-gray-100 p-8">
-            <Text className="text-xl font-semibold text-gray-900 mb-1">{t.register.heading}</Text>
-            <Text className="text-sm text-gray-400 mb-6">{t.register.sub}</Text>
-
-            {oauthSlot ? (
-              <>
-                {oauthSlot}
-                <View className="flex-row items-center gap-3 my-6">
-                  <View className="flex-1 h-px bg-gray-100" />
-                  <Text className="text-xs text-gray-400">{t.register.dividerEmail}</Text>
-                  <View className="flex-1 h-px bg-gray-100" />
-                </View>
-              </>
-            ) : null}
-
-            <View className="flex-col gap-4">
+          <View className="flex-col gap-4">
               <View className="flex-row gap-3">
                 <View className="flex-1">
                   <Controller
@@ -107,7 +109,7 @@ export function RegisterScreen({
                       <Input
                         label={t.register.firstName}
                         placeholder={t.register.firstNamePlaceholder}
-                        leftIcon={<User size={16} color="#9CA3AF" />}
+                        leftIcon={<User size={18} color="#9CA3AF" />}
                         error={errors.firstName?.message}
                         value={value ?? ''}
                         onChangeText={onChange}
@@ -144,7 +146,7 @@ export function RegisterScreen({
                     autoCapitalize="none"
                     autoComplete="email"
                     placeholder={t.register.emailPlaceholder}
-                    leftIcon={<Mail size={16} color="#9CA3AF" />}
+                    leftIcon={<Mail size={18} color="#9CA3AF" />}
                     error={errors.email?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -161,7 +163,7 @@ export function RegisterScreen({
                     label={t.register.password}
                     secureTextEntry
                     placeholder={t.register.passwordPlaceholder}
-                    leftIcon={<Lock size={16} color="#9CA3AF" />}
+                    leftIcon={<Lock size={18} color="#9CA3AF" />}
                     error={errors.password?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -178,7 +180,7 @@ export function RegisterScreen({
                     label={t.register.confirmPassword}
                     secureTextEntry
                     placeholder={t.register.confirmPasswordPlaceholder}
-                    leftIcon={<Lock size={16} color="#9CA3AF" />}
+                    leftIcon={<Lock size={18} color="#9CA3AF" />}
                     error={errors.confirmPassword?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -207,10 +209,20 @@ export function RegisterScreen({
                 {' '}{t.register.termsAnd}{' '}
                 <Text onPress={onPrivacyPress} className="text-primary">{t.register.privacy}</Text>
               </Text>
-            </View>
-          </View>
 
-          <View className="flex-row justify-center mt-6">
+              {oauthSlot ? (
+                <View className="mt-2">
+                  <View className="flex-row items-center gap-3 mb-5">
+                    <View className="flex-1 h-px bg-gray-100" />
+                    <Text className="text-xs text-gray-400">{t.register.dividerEmail}</Text>
+                    <View className="flex-1 h-px bg-gray-100" />
+                  </View>
+                  {oauthSlot}
+                </View>
+              ) : null}
+            </View>
+
+          <View className="flex-row justify-center mt-8">
             <Text className="text-sm text-gray-500">{t.register.alreadyAccount} </Text>
             <Pressable onPress={onLoginPress}>
               <Text className="text-sm text-primary font-medium">{t.register.loginHere}</Text>

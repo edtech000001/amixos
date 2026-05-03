@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { LoginScreen, type LoginAttemptResult } from '@amixos/shared/screens/auth/LoginScreen';
+import { OAuthButtons } from '@/components/OAuthButtons';
 
 export default function LoginRoute() {
   const router = useRouter();
@@ -37,11 +38,26 @@ export default function LoginRoute() {
     }
   };
 
+  const handleOAuthSuccess = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    let needsOnboarding = false;
+    if (session) {
+      const { data: businesses } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('owner_id', session.user.id)
+        .limit(1);
+      needsOnboarding = !businesses || businesses.length === 0;
+    }
+    router.replace(needsOnboarding ? '/onboarding' : '/(tabs)');
+  };
+
   return (
     <LoginScreen
       onLogin={handleLogin}
       onForgotPasswordPress={() => router.push('/auth/forgot-password')}
       onRegisterPress={() => router.push('/auth/register')}
+      oauthSlot={<OAuthButtons onSuccess={handleOAuthSuccess} />}
     />
   );
 }

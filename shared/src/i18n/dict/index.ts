@@ -5,7 +5,9 @@ import { onboarding, OnboardingDict } from './onboarding';
 import { common, CommonDict } from './common';
 import { dashboard, DashboardDict } from './dashboard';
 import { proposal, ProposalDict } from './proposal';
-import { splash, SplashDict } from './splash';
+import { splash, SplashDict, SplashSlide } from './splash';
+
+export type { SplashSlide };
 
 export type Dictionary = {
   landing: LandingDict;
