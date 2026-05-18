@@ -110,7 +110,7 @@ export function EmployeesScreen({
   }, 0);
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-6">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
         <View>

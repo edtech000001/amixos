@@ -94,7 +94,7 @@ export function CalendarScreen({
     events.filter(e => sameDay(new Date(e.startTime), d));
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-6">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-6">
         <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>

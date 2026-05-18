@@ -586,6 +586,7 @@ export type DashboardDict = {
       trabajos: string;
       clientes: string;
       cuenta: string;
+      conexiones: string;
     };
     fieldTypes: {
       text: string;
@@ -667,6 +668,22 @@ export type DashboardDict = {
       errorMinLength: string;
       errorPrefix: string;
       successMsg: string;
+    };
+    google: {
+      heading: string;
+      subtitle: string;
+      connectBtn: string;
+      reconnectBtn: string;
+      disconnectBtn: string;
+      connected: string;
+      disconnected: string;
+      reconnectNeeded: string;
+      contactGroupLabel: string;
+      contactGroupNoneOption: string;
+      lastSyncedAt: string;
+      lastSyncError: string;
+      connectError: string;
+      cancelled: string;
     };
   };
   reports: {
@@ -1332,6 +1349,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Trabajos',
         clientes: 'Clientes',
         cuenta: 'Cuenta',
+        conexiones: 'Conexiones',
       },
       fieldTypes: {
         text: 'Texto',
@@ -1413,6 +1431,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorMinLength: 'Mínimo 6 caracteres',
         errorPrefix: 'Error: {{message}}',
         successMsg: '¡Contraseña actualizada!',
+      },
+      google: {
+        heading: 'Sincronizar con Google Contactos',
+        subtitle: 'Cuando agregas un cliente, también se guarda en tus contactos de Google para que aparezca su nombre cuando te llamen.',
+        connectBtn: 'Conectar con Google',
+        reconnectBtn: 'Reconectar con Google',
+        disconnectBtn: 'Desconectar',
+        connected: 'Conectado',
+        disconnected: 'Desconectado',
+        reconnectNeeded: 'Reconexión requerida',
+        contactGroupLabel: 'Grupo de contactos',
+        contactGroupNoneOption: 'Mis contactos (predeterminado)',
+        lastSyncedAt: 'Última sincronización',
+        lastSyncError: 'Último error',
+        connectError: 'No se pudo conectar con Google. Intenta de nuevo.',
+        cancelled: 'Conexión cancelada.',
       },
     },
     reports: {
@@ -2075,6 +2109,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Jobs',
         clientes: 'Clients',
         cuenta: 'Account',
+        conexiones: 'Connections',
       },
       fieldTypes: {
         text: 'Text',
@@ -2156,6 +2191,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorMinLength: 'At least 6 characters',
         errorPrefix: 'Error: {{message}}',
         successMsg: 'Password updated!',
+      },
+      google: {
+        heading: 'Sync with Google Contacts',
+        subtitle: 'When you add a client, they\'re also saved to your Google Contacts so their name shows up when they call you.',
+        connectBtn: 'Connect Google',
+        reconnectBtn: 'Reconnect Google',
+        disconnectBtn: 'Disconnect',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        reconnectNeeded: 'Reconnect required',
+        contactGroupLabel: 'Contact group',
+        contactGroupNoneOption: 'My Contacts (default)',
+        lastSyncedAt: 'Last synced',
+        lastSyncError: 'Last error',
+        connectError: 'Couldn\'t connect to Google. Try again.',
+        cancelled: 'Connection cancelled.',
       },
     },
     reports: {

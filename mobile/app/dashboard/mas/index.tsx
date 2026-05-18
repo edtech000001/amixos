@@ -5,6 +5,7 @@ import {
   Briefcase,
   Calendar,
   Package,
+  Settings,
   ChevronRight,
   LogOut,
   type LucideIcon,
@@ -30,6 +31,7 @@ export default function MasMenu() {
     { key: 'empleados', label: sb.empleados, icon: Briefcase, path: '/dashboard/mas/empleados' },
     { key: 'calendario', label: sb.calendario, icon: Calendar, path: '/dashboard/mas/calendario' },
     { key: 'inventario', label: sb.inventario, icon: Package, path: '/dashboard/mas/inventario' },
+    { key: 'ajustes', label: sb.ajustes, icon: Settings, path: '/dashboard/mas/ajustes' },
   ];
 
   const confirmSignOut = () => {

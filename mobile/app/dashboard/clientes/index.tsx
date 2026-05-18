@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -14,6 +14,9 @@ import {
   type ClientFieldTemplate,
 } from '@amixos/shared/screens/dashboard/ClientFormModal';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { ImportClientsModal } from '@/components/ImportClientsModal';
+import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate extends ClientFieldTemplate {
   id: string;
@@ -71,6 +74,7 @@ export default function ClientesTab() {
   const [selected, setSelected] = useState<Client | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     if (!business) return;
@@ -174,8 +178,22 @@ export default function ClientesTab() {
       custom_fields: Object.keys(form.custom_fields).length > 0 ? form.custom_fields : null,
     };
     if (formMode === 'add') {
-      const { error: e } = await supabase.from('clients').insert({ ...payload, business_id: business!.id });
+      const { data: created, error: e } = await supabase
+        .from('clients')
+        .insert({ ...payload, business_id: business!.id })
+        .select('id')
+        .single();
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
+      // Fire-and-forget Google sync (no-op if user isn't connected).
+      if (created?.id) {
+        void (async () => {
+          const apiBaseUrl = getApiBaseUrl();
+          const jwt = await getJwt();
+          if (apiBaseUrl && jwt) {
+            triggerGoogleSync('create', created.id, { apiBaseUrl, jwt });
+          }
+        })();
+      }
     } else if (formMode === 'edit' && selected) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
@@ -257,21 +275,36 @@ export default function ClientesTab() {
         onEditPress={openEditById}
         onDeletePress={remove}
         onNewClientPress={openAdd}
+        onImportPress={() => setImportOpen(true)}
         onBulkDeletePress={bulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
         bottomSlot={
-          <ClientFormModal
-            open={formMode !== null}
-            mode={formMode ?? 'add'}
-            initial={initialForEdit}
-            templates={templates}
-            requiredFlags={business?.client_field_required ?? {}}
-            saving={saving}
-            error={error}
-            onClose={() => setFormMode(null)}
-            onSubmit={save}
-          />
+          <View>
+            <ClientFormModal
+              open={formMode !== null}
+              mode={formMode ?? 'add'}
+              initial={initialForEdit}
+              templates={templates}
+              requiredFlags={business?.client_field_required ?? {}}
+              saving={saving}
+              error={error}
+              onClose={() => setFormMode(null)}
+              onSubmit={save}
+            />
+            {business ? (
+              <ImportClientsModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                businessId={business.id}
+                templates={templates.map(tpl => ({
+                  field_key: tpl.field_key,
+                  field_label: tpl.field_label,
+                }))}
+                onImportComplete={load}
+              />
+            ) : null}
+          </View>
         }
       />
     </SafeAreaView>

@@ -426,6 +426,8 @@ export default function AjustesPage() {
               {/* Language */}
               <LanguageCard />
 
+              {/* Google Contacts sync */}
+              <GoogleSyncCard />
 
               {/* Password */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -567,6 +569,208 @@ function LanguageCard() {
         </select>
       </div>
       <p className="text-xs text-gray-400 mt-3">{t.savedNote}</p>
+    </div>
+  );
+}
+
+// ─── Google Contacts sync card ────────────────────────────────────────────
+interface GoogleStatusData {
+  connected: boolean;
+  enabled?: boolean;
+  contactGroupId?: string | null;
+  contactGroupName?: string | null;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+}
+
+function GoogleSyncCard() {
+  const supabase = createSupabaseClient();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings.google;
+
+  const [status, setStatus] = useState<GoogleStatusData>({ connected: false });
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
+
+  const fetchStatus = async () => {
+    if (!apiBaseUrl) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData.session?.access_token ?? '';
+      const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/status`, {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setStatus(json.data ?? { connected: false });
+      }
+    } catch {
+      setStatus({ connected: false });
+    }
+    setLoading(false);
+  };
+
+  const fetchGroups = async () => {
+    if (!apiBaseUrl) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData.session?.access_token ?? '';
+      const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/contact-groups`, {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setGroups(json.data ?? []);
+      }
+    } catch {
+      setGroups([]);
+    }
+  };
+
+  useEffect(() => {
+    void fetchStatus();
+    // If we just got back from an OAuth link flow, the URL has ?google_synced=1.
+    // Status is fetched fresh anyway — strip the param to keep the URL clean.
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('google_synced')) {
+      params.delete('google_synced');
+      const qs = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status.connected) void fetchGroups();
+  }, [status.connected]);
+
+  const onConnect = async () => {
+    setBusy(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const hasGoogle = sessionData.session?.user?.identities?.some(i => i.provider === 'google');
+
+    const oauthOptions = {
+      redirectTo: `${window.location.origin}/auth/callback?google_link=1`,
+      scopes: 'openid email profile https://www.googleapis.com/auth/contacts',
+      queryParams: { access_type: 'offline', prompt: 'consent' },
+    };
+
+    // linkIdentity isn't on every Supabase TS surface; cast to access it.
+    const supabaseAny = supabase as unknown as {
+      auth: {
+        linkIdentity: (args: { provider: 'google'; options: typeof oauthOptions }) => Promise<{ data: { url?: string }; error: { message: string } | null }>;
+      };
+    };
+
+    if (hasGoogle) {
+      await supabase.auth.signInWithOAuth({ provider: 'google', options: oauthOptions });
+    } else {
+      await supabaseAny.auth.linkIdentity({ provider: 'google', options: oauthOptions });
+    }
+    // Page redirects — busy state will reset on full reload after callback.
+  };
+
+  const onDisconnect = async () => {
+    if (!confirm('Disconnect Google Contacts sync?')) return;
+    setBusy(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const jwt = sessionData.session?.access_token ?? '';
+    try {
+      await fetch(`${apiBaseUrl}/api/v1/google-sync/disconnect`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+    } catch {
+      // ignore
+    }
+    await fetchStatus();
+    setBusy(false);
+  };
+
+  const onGroupChange = async (groupId: string) => {
+    const found = groups.find(g => g.id === groupId);
+    setBusy(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const jwt = sessionData.session?.access_token ?? '';
+    try {
+      await fetch(`${apiBaseUrl}/api/v1/google-sync/contact-group`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          contact_group_id: groupId || null,
+          contact_group_name: found?.name ?? null,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+    await fetchStatus();
+    setBusy(false);
+  };
+
+  const statusLabel = !status.connected
+    ? t.disconnected
+    : status.enabled === false
+      ? t.reconnectNeeded
+      : t.connected;
+  const statusColor = !status.connected
+    ? 'text-gray-500'
+    : status.enabled === false
+      ? 'text-amber-600'
+      : 'text-emerald-600';
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <h2 className="text-base font-semibold text-gray-900 mb-1">{t.heading}</h2>
+      <p className="text-xs text-gray-400 mb-4">{t.subtitle}</p>
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className={`text-sm font-semibold ${statusColor}`}>
+            {loading ? '…' : statusLabel}
+          </p>
+          {status.lastSyncAt ? (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {t.lastSyncedAt}: {new Date(status.lastSyncAt).toLocaleString()}
+            </p>
+          ) : null}
+          {status.lastSyncError ? (
+            <p className="text-xs text-red-500 mt-0.5">
+              {t.lastSyncError}: {status.lastSyncError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {status.connected && status.enabled !== false ? (
+        <div className="max-w-xs flex flex-col gap-1.5 mb-4">
+          <label className="text-sm font-medium text-gray-700">{t.contactGroupLabel}</label>
+          <select
+            value={status.contactGroupId ?? ''}
+            onChange={e => onGroupChange(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+          >
+            <option value="">{t.contactGroupNoneOption}</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {!status.connected || status.enabled === false ? (
+        <Button onClick={onConnect} loading={busy}>
+          {status.enabled === false ? t.reconnectBtn : t.connectBtn}
+        </Button>
+      ) : (
+        <Button variant="secondary" onClick={onDisconnect} loading={busy}>
+          {t.disconnectBtn}
+        </Button>
+      )}
     </div>
   );
 }

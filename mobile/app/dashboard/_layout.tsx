@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Home, Briefcase, Users, FileText, MoreHorizontal } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { AnimatedDock } from '@/components/AnimatedDock';
 
 export default function DashboardLayout() {
   const { t } = useLang();
@@ -8,17 +9,9 @@ export default function DashboardLayout() {
 
   return (
     <Tabs
+      tabBar={props => <AnimatedDock {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#4F46E5',
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          borderTopColor: '#F3F4F6',
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tabs.Screen
@@ -29,17 +22,17 @@ export default function DashboardLayout() {
         }}
       />
       <Tabs.Screen
-        name="trabajos/index"
-        options={{
-          title: sb.trabajos,
-          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="clientes/index"
         options={{
           title: sb.clientes,
           tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="trabajos/index"
+        options={{
+          title: sb.trabajos,
+          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -63,6 +56,8 @@ export default function DashboardLayout() {
       <Tabs.Screen name="mas/empleados" options={{ href: null }} />
       <Tabs.Screen name="mas/inventario" options={{ href: null }} />
       <Tabs.Screen name="mas/calendario" options={{ href: null }} />
+      {/* ajustes/ is a Stack with its own _layout — register the folder once. */}
+      <Tabs.Screen name="mas/ajustes" options={{ href: null }} />
     </Tabs>
   );
 }

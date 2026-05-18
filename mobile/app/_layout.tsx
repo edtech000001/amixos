@@ -3,18 +3,45 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
-import { AppProvider } from '@/lib/AppContext';
+import { useProtectedRoute } from '@/lib/auth/gate';
+// Importing the auth store at module load wires up the single
+// onAuthStateChange listener and the safety timeout.
+import '@/lib/auth/store';
+
+// expo-router calls SplashScreen._internal_preventAutoHideAsync() at startup.
+// If the native splash isn't registered (happens when ios/ hasn't been rebuilt
+// after adding the splash plugin), that native call throws and surfaces as
+// an unhandled promise rejection on every cold launch. Wrap it to swallow
+// that specific error — other splash errors still propagate.
+const _orig = (SplashScreen as { _internal_preventAutoHideAsync?: () => Promise<unknown> })._internal_preventAutoHideAsync;
+if (_orig) {
+  (SplashScreen as { _internal_preventAutoHideAsync: () => Promise<unknown> })._internal_preventAutoHideAsync = async () => {
+    try {
+      return await _orig();
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message ?? '';
+      if (msg.includes('No native splash screen')) return;
+      throw e;
+    }
+  };
+}
+
+// Sub-component so useProtectedRoute can access expo-router's segments + router
+// (those hooks must be called inside the router tree).
+function AuthAwareApp() {
+  useProtectedRoute();
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <LangProvider>
-          <AppProvider>
-            <StatusBar style="auto" />
-            <Stack screenOptions={{ headerShown: false }} />
-          </AppProvider>
+          <StatusBar style="auto" />
+          <AuthAwareApp />
         </LangProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

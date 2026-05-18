@@ -8,6 +8,8 @@ import Papa from 'papaparse';
 import { Upload, Download, CheckCircle2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
@@ -165,8 +167,22 @@ export default function ClientesPage() {
     };
 
     if (formMode === 'add') {
-      const { error: e } = await supabase.from('clients').insert({ ...payload, business_id: business!.id });
+      const { data: created, error: e } = await supabase
+        .from('clients')
+        .insert({ ...payload, business_id: business!.id })
+        .select('id')
+        .single();
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
+      // Fire-and-forget Google sync (no-op if user isn't connected).
+      if (created?.id) {
+        void (async () => {
+          const apiBaseUrl = getApiBaseUrl();
+          const jwt = await getJwt();
+          if (apiBaseUrl && jwt) {
+            triggerGoogleSync('create', created.id, { apiBaseUrl, jwt });
+          }
+        })();
+      }
     } else if (formMode === 'edit' && selected) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
@@ -326,10 +342,28 @@ export default function ClientesPage() {
       if (!entry.last_name) entry.last_name = '';
       batch.push(entry);
     }
+    const insertedIds: string[] = [];
     for (let i = 0; i < batch.length; i += 50) {
-      const { error } = await supabase.from('clients').insert(batch.slice(i, i + 50));
-      if (error) errors += Math.min(50, batch.length - i);
-      else success += Math.min(50, batch.length - i);
+      const slice = batch.slice(i, i + 50);
+      const { data, error } = await supabase.from('clients').insert(slice).select('id');
+      if (error) {
+        errors += slice.length;
+      } else {
+        success += slice.length;
+        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
+      }
+    }
+    // Fire-and-forget Google sync for each newly imported client.
+    if (insertedIds.length > 0) {
+      void (async () => {
+        const apiBaseUrl = getApiBaseUrl();
+        const jwt = await getJwt();
+        if (apiBaseUrl && jwt) {
+          for (const id of insertedIds) {
+            triggerGoogleSync('create', id, { apiBaseUrl, jwt });
+          }
+        }
+      })();
     }
     setImportResult({ success, errors });
     await load();
