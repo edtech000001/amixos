@@ -118,24 +118,18 @@ export function ClientFormModal({
             {t.sections.basicInfo}
           </Text>
           <View className="flex-col gap-3">
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Input
-                  label={rLabel('first_name', t.fields.firstName)}
-                  placeholder={t.fields.placeholders.firstName}
-                  value={form.first_name}
-                  onChangeText={v => set('first_name', v)}
-                />
-              </View>
-              <View className="flex-1">
-                <Input
-                  label={rLabel('last_name', t.fields.lastName)}
-                  placeholder={t.fields.placeholders.lastName}
-                  value={form.last_name}
-                  onChangeText={v => set('last_name', v)}
-                />
-              </View>
-            </View>
+            <Input
+              label={rLabel('first_name', t.fields.firstName)}
+              placeholder={t.fields.placeholders.firstName}
+              value={form.first_name}
+              onChangeText={v => set('first_name', v)}
+            />
+            <Input
+              label={rLabel('last_name', t.fields.lastName)}
+              placeholder={t.fields.placeholders.lastName}
+              value={form.last_name}
+              onChangeText={v => set('last_name', v)}
+            />
             <Input
               label={rLabel('company', t.fields.company)}
               placeholder={t.fields.placeholders.company}
@@ -151,27 +145,23 @@ export function ClientFormModal({
           <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
             {t.sections.phones}
           </Text>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Input
-                label={rLabel('phone_cell', t.fields.phoneCell)}
-                placeholder={t.fields.placeholders.phone}
-                value={fmtPhoneInput(form.phone_cell)}
-                onChangeText={v => set('phone_cell', fmtPhoneInput(v))}
-                keyboardType="phone-pad"
-                leftIcon={<Phone size={15} color="#9CA3AF" />}
-              />
-            </View>
-            <View className="flex-1">
-              <Input
-                label={rLabel('phone_office', t.fields.phoneOffice)}
-                placeholder={t.fields.placeholders.phone}
-                value={fmtPhoneInput(form.phone_office)}
-                onChangeText={v => set('phone_office', fmtPhoneInput(v))}
-                keyboardType="phone-pad"
-                leftIcon={<Phone size={15} color="#9CA3AF" />}
-              />
-            </View>
+          <View className="flex-col gap-3">
+            <Input
+              label={rLabel('phone_cell', t.fields.phoneCell)}
+              placeholder={t.fields.placeholders.phone}
+              value={fmtPhoneInput(form.phone_cell)}
+              onChangeText={v => set('phone_cell', fmtPhoneInput(v))}
+              keyboardType="phone-pad"
+              leftIcon={<Phone size={15} color="#9CA3AF" />}
+            />
+            <Input
+              label={rLabel('phone_office', t.fields.phoneOffice)}
+              placeholder={t.fields.placeholders.phone}
+              value={fmtPhoneInput(form.phone_office)}
+              onChangeText={v => set('phone_office', fmtPhoneInput(v))}
+              keyboardType="phone-pad"
+              leftIcon={<Phone size={15} color="#9CA3AF" />}
+            />
           </View>
         </View>
 
@@ -180,29 +170,25 @@ export function ClientFormModal({
           <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
             {t.sections.emails}
           </Text>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Input
-                label={rLabel('email_office', t.fields.emailOffice)}
-                placeholder={t.fields.placeholders.emailOffice}
-                value={form.email_office}
-                onChangeText={v => set('email_office', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                leftIcon={<Mail size={15} color="#9CA3AF" />}
-              />
-            </View>
-            <View className="flex-1">
-              <Input
-                label={rLabel('email_home', t.fields.emailHome)}
-                placeholder={t.fields.placeholders.emailHome}
-                value={form.email_home}
-                onChangeText={v => set('email_home', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                leftIcon={<Mail size={15} color="#9CA3AF" />}
-              />
-            </View>
+          <View className="flex-col gap-3">
+            <Input
+              label={rLabel('email_office', t.fields.emailOffice)}
+              placeholder={t.fields.placeholders.emailOffice}
+              value={form.email_office}
+              onChangeText={v => set('email_office', v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={15} color="#9CA3AF" />}
+            />
+            <Input
+              label={rLabel('email_home', t.fields.emailHome)}
+              placeholder={t.fields.placeholders.emailHome}
+              value={form.email_home}
+              onChangeText={v => set('email_home', v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={15} color="#9CA3AF" />}
+            />
           </View>
         </View>
 
@@ -225,33 +211,25 @@ export function ClientFormModal({
               value={form.address_line2}
               onChangeText={v => set('address_line2', v)}
             />
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Input
-                  label={rLabel('city', t.fields.city)}
-                  placeholder={t.fields.placeholders.city}
-                  value={form.city}
-                  onChangeText={v => set('city', v)}
-                />
-              </View>
-              <View className="w-24">
-                <Select
-                  label={rLabel('state', t.fields.state)}
-                  value={form.state}
-                  onValueChange={v => set('state', v)}
-                  options={stateOptions}
-                />
-              </View>
-              <View className="w-28">
-                <Input
-                  label={rLabel('zip_code', t.fields.zipCode)}
-                  placeholder={t.fields.placeholders.zipCode}
-                  value={form.zip_code}
-                  onChangeText={v => set('zip_code', v)}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
-            </View>
+            <Input
+              label={rLabel('city', t.fields.city)}
+              placeholder={t.fields.placeholders.city}
+              value={form.city}
+              onChangeText={v => set('city', v)}
+            />
+            <Select
+              label={rLabel('state', t.fields.state)}
+              value={form.state}
+              onValueChange={v => set('state', v)}
+              options={stateOptions}
+            />
+            <Input
+              label={rLabel('zip_code', t.fields.zipCode)}
+              placeholder={t.fields.placeholders.zipCode}
+              value={form.zip_code}
+              onChangeText={v => set('zip_code', v)}
+              keyboardType="numbers-and-punctuation"
+            />
           </View>
         </View>
 
@@ -261,29 +239,28 @@ export function ClientFormModal({
             <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
               {t.sections.customFields}
             </Text>
-            <View className="flex-row flex-wrap gap-3">
+            <View className="flex-col gap-3">
               {templates.map(tpl => {
                 const value = form.custom_fields[tpl.field_key] ?? '';
                 const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
 
                 if (tpl.field_type === 'select' && tpl.field_options) {
                   return (
-                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
-                      <Select
-                        label={labelText}
-                        value={value}
-                        onValueChange={v => setCustom(tpl.field_key, v)}
-                        options={[
-                          { value: '', label: '—' },
-                          ...tpl.field_options.map(o => ({ value: o, label: o })),
-                        ]}
-                      />
-                    </View>
+                    <Select
+                      key={tpl.field_key}
+                      label={labelText}
+                      value={value}
+                      onValueChange={v => setCustom(tpl.field_key, v)}
+                      options={[
+                        { value: '', label: '—' },
+                        ...tpl.field_options.map(o => ({ value: o, label: o })),
+                      ]}
+                    />
                   );
                 }
                 if (tpl.field_type === 'boolean') {
                   return (
-                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
+                    <View key={tpl.field_key}>
                       <Text className="text-sm font-medium text-gray-700 mb-1.5">{labelText}</Text>
                       <Toggle
                         value={value === 'true'}
@@ -295,24 +272,22 @@ export function ClientFormModal({
                 }
                 if (tpl.field_type === 'date') {
                   return (
-                    <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
-                      <DatePicker
-                        label={labelText}
-                        value={value}
-                        onChange={v => setCustom(tpl.field_key, v)}
-                      />
-                    </View>
+                    <DatePicker
+                      key={tpl.field_key}
+                      label={labelText}
+                      value={value}
+                      onChange={v => setCustom(tpl.field_key, v)}
+                    />
                   );
                 }
                 return (
-                  <View key={tpl.field_key} className="w-[48%] min-w-[180px]">
-                    <Input
-                      label={labelText}
-                      value={value}
-                      onChangeText={v => setCustom(tpl.field_key, v)}
-                      keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
-                    />
-                  </View>
+                  <Input
+                    key={tpl.field_key}
+                    label={labelText}
+                    value={value}
+                    onChangeText={v => setCustom(tpl.field_key, v)}
+                    keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+                  />
                 );
               })}
             </View>

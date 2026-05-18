@@ -111,6 +111,87 @@ function parseUrlFragment(url: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(url.substring(hashIndex + 1)));
 }
 
+const GOOGLE_CONTACTS_SCOPE = 'openid email profile https://www.googleapis.com/auth/contacts';
+
+export type LinkGoogleResult =
+  | { ok: true; refresh_token: string; scopes: string[] }
+  | { ok: false; reason: 'cancelled' | 'no_refresh_token' | 'generic'; message?: string };
+
+/**
+ * Connect Google Contacts to the current user's account, regardless of how
+ * they originally signed in (email, Apple, or Google). Requests the contacts
+ * scope and returns the Google refresh_token so the API can call People API
+ * on the user's behalf.
+ *
+ * `access_type=offline` + `prompt=consent` are critical — without them
+ * Google omits the refresh_token on subsequent grants.
+ */
+export async function linkGoogleContacts(): Promise<LinkGoogleResult> {
+  console.log('[link-google] start');
+  const supabase = createSupabaseClient();
+  const redirectTo = getRedirectUri();
+  console.log('[link-google] redirectTo:', redirectTo);
+
+  // Look at the current session to decide between linkIdentity (no Google
+  // attached yet) and signInWithOAuth (already linked, just need re-consent
+  // for the new scope). Both flows produce the same redirect with tokens.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const hasGoogle = sessionData.session?.user?.identities?.some(
+    (i) => i.provider === 'google',
+  );
+  console.log('[link-google] hasGoogle identity:', hasGoogle);
+
+  // Note: Supabase's TS types may not surface `linkIdentity` on all versions;
+  // it's available at runtime. Use a typed cast to avoid TS errors without
+  // affecting runtime behavior.
+  const supabaseAny = supabase as unknown as {
+    auth: {
+      linkIdentity: (args: {
+        provider: 'google';
+        options: { redirectTo: string; skipBrowserRedirect: boolean; scopes: string; queryParams: Record<string, string> };
+      }) => Promise<{ data: { url?: string }; error: { message: string } | null }>;
+    };
+  };
+
+  const oauthOptions = {
+    redirectTo,
+    skipBrowserRedirect: true,
+    scopes: GOOGLE_CONTACTS_SCOPE,
+    queryParams: { access_type: 'offline', prompt: 'consent' },
+  };
+
+  const { data, error } = hasGoogle
+    ? await supabase.auth.signInWithOAuth({ provider: 'google', options: oauthOptions })
+    : await supabaseAny.auth.linkIdentity({ provider: 'google', options: oauthOptions });
+
+  console.log('[link-google] OAuth call result. hasUrl:', !!data?.url, 'error:', error?.message);
+
+  if (error || !data?.url) {
+    return { ok: false, reason: 'generic', message: error?.message };
+  }
+
+  console.log('[link-google] opening browser to:', data.url.slice(0, 80) + '...');
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  console.log('[link-google] browser result:', result.type, 'urlPresent:', 'url' in result ? !!result.url : false);
+
+  if (result.type === 'cancel' || result.type === 'dismiss') {
+    return { ok: false, reason: 'cancelled' };
+  }
+  if (result.type !== 'success' || !result.url) {
+    return { ok: false, reason: 'generic' };
+  }
+
+  const params = parseUrlFragment(result.url);
+  console.log('[link-google] redirect params keys:', Object.keys(params));
+  const refresh_token = params.provider_refresh_token ?? params.provider_token;
+  console.log('[link-google] refresh_token present:', !!refresh_token);
+  if (!refresh_token) {
+    return { ok: false, reason: 'no_refresh_token' };
+  }
+
+  return { ok: true, refresh_token, scopes: GOOGLE_CONTACTS_SCOPE.split(' ') };
+}
+
 function mapOAuthError(message?: string): OAuthResult {
   if (!message) return { ok: false, reason: 'generic' };
   if (message.toLowerCase().includes('provider is not enabled')) {

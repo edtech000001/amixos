@@ -27,6 +27,38 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        // Google Contacts link flow: the user just granted the contacts scope.
+        // session.provider_refresh_token is populated for THIS request only —
+        // forward it to our API which stores it for future People API calls.
+        const googleLink = params.get('google_link') === '1';
+        if (googleLink) {
+          const sessionAny = data.session as { access_token: string; provider_refresh_token?: string };
+          const refreshToken = sessionAny.provider_refresh_token;
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
+          if (refreshToken && apiBaseUrl) {
+            try {
+              await fetch(`${apiBaseUrl}/api/v1/google-sync/connect`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${sessionAny.access_token}`,
+                },
+                body: JSON.stringify({
+                  refresh_token: refreshToken,
+                  scopes: [
+                    'openid', 'email', 'profile',
+                    'https://www.googleapis.com/auth/contacts',
+                  ],
+                }),
+              });
+            } catch {
+              // Surfaced in ajustes via /status — don't block the redirect.
+            }
+          }
+          window.location.href = '/dashboard/ajustes?google_synced=1';
+          return;
+        }
+
         // Check if user has a business already
         const { data: businesses } = await supabase
           .from('businesses')

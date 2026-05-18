@@ -265,7 +265,7 @@ export function JobsListScreen({
   };
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-6">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-1">
