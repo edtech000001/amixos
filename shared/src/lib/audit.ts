@@ -40,14 +40,16 @@ export type EntityType =
   | 'invite'
   | 'business';
 
-interface SupabaseLike {
-  from: (table: string) => {
-    insert: (row: unknown) => Promise<{ error: unknown }>;
-  };
-}
+// Accept any Supabase client variant — web and mobile create slightly
+// different generic instantiations and the strict shape pinning was tripping
+// callers up. We only ever call .from('audit_log').insert(...).
+type AnySupabase = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from: (table: string) => any;
+};
 
 export async function logAudit(
-  supabase: SupabaseLike,
+  supabase: AnySupabase,
   businessId: string,
   action: AuditAction,
   entityType: EntityType | null,

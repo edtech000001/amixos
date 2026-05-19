@@ -602,6 +602,8 @@ export type DashboardDict = {
       clientes: string;
       cuenta: string;
       conexiones: string;
+      equipo: string;
+      actividad: string;
     };
     fieldTypes: {
       text: string;
@@ -699,6 +701,49 @@ export type DashboardDict = {
       lastSyncError: string;
       connectError: string;
       cancelled: string;
+    };
+    team: {
+      heading: string;
+      subtitle: string;
+      membersHeading: string;
+      invitesHeading: string;
+      inviteBtn: string;
+      inviteModalTitle: string;
+      emailLabel: string;
+      emailPlaceholder: string;
+      roleLabel: string;
+      sendInviteBtn: string;
+      sending: string;
+      copyLinkBtn: string;
+      linkCopied: string;
+      pendingBadge: string;
+      expiredBadge: string;
+      acceptedBadge: string;
+      revokeBtn: string;
+      removeBtn: string;
+      changeRoleBtn: string;
+      youSuffix: string;
+      ownerSuffix: string;
+      noMembersYet: string;
+      noPendingInvites: string;
+      inviteSentToast: string;
+      inviteFailedToast: string;
+      confirmRemove: string;
+      confirmRevoke: string;
+      errorInviteSelf: string;
+      errorAlreadyMember: string;
+      errorAlreadyInvited: string;
+    };
+    activity: {
+      heading: string;
+      subtitle: string;
+      emptyState: string;
+      loadMore: string;
+      unknownUser: string;
+      timeJustNow: string;
+      timeMinutesAgo: string;
+      timeHoursAgo: string;
+      timeDaysAgo: string;
     };
   };
   reports: {
@@ -1380,6 +1425,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientes: 'Clientes',
         cuenta: 'Cuenta',
         conexiones: 'Conexiones',
+        equipo: 'Equipo',
+        actividad: 'Actividad',
       },
       fieldTypes: {
         text: 'Texto',
@@ -1477,6 +1524,49 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lastSyncError: 'Último error',
         connectError: 'No se pudo conectar con Google. Intenta de nuevo.',
         cancelled: 'Conexión cancelada.',
+      },
+      team: {
+        heading: 'Equipo',
+        subtitle: 'Invita a tu equipo y administra sus permisos',
+        membersHeading: 'Miembros',
+        invitesHeading: 'Invitaciones pendientes',
+        inviteBtn: 'Invitar miembro',
+        inviteModalTitle: 'Invitar a un miembro',
+        emailLabel: 'Correo electrónico',
+        emailPlaceholder: 'correo@ejemplo.com',
+        roleLabel: 'Rol',
+        sendInviteBtn: 'Enviar invitación',
+        sending: 'Enviando...',
+        copyLinkBtn: 'Copiar enlace',
+        linkCopied: 'Enlace copiado',
+        pendingBadge: 'Pendiente',
+        expiredBadge: 'Expirada',
+        acceptedBadge: 'Aceptada',
+        revokeBtn: 'Revocar',
+        removeBtn: 'Quitar',
+        changeRoleBtn: 'Cambiar rol',
+        youSuffix: '(tú)',
+        ownerSuffix: '(propietario)',
+        noMembersYet: 'Aún no hay miembros además de ti.',
+        noPendingInvites: 'No hay invitaciones pendientes.',
+        inviteSentToast: 'Invitación enviada a {{email}}.',
+        inviteFailedToast: 'No se pudo enviar la invitación.',
+        confirmRemove: '¿Quitar a {{name}} del negocio?',
+        confirmRevoke: '¿Revocar la invitación para {{email}}?',
+        errorInviteSelf: 'No puedes invitarte a ti mismo.',
+        errorAlreadyMember: 'Esta persona ya es miembro.',
+        errorAlreadyInvited: 'Ya hay una invitación pendiente para este correo.',
+      },
+      activity: {
+        heading: 'Actividad',
+        subtitle: 'Registro de cambios importantes en este negocio',
+        emptyState: 'Aún no hay actividad registrada.',
+        loadMore: 'Cargar más',
+        unknownUser: 'Usuario desconocido',
+        timeJustNow: 'ahora mismo',
+        timeMinutesAgo: 'hace {{n}} min',
+        timeHoursAgo: 'hace {{n}} h',
+        timeDaysAgo: 'hace {{n}} d',
       },
     },
     reports: {
@@ -2155,6 +2245,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientes: 'Clients',
         cuenta: 'Account',
         conexiones: 'Connections',
+        equipo: 'Team',
+        actividad: 'Activity',
       },
       fieldTypes: {
         text: 'Text',
@@ -2252,6 +2344,49 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lastSyncError: 'Last error',
         connectError: 'Couldn\'t connect to Google. Try again.',
         cancelled: 'Connection cancelled.',
+      },
+      team: {
+        heading: 'Team',
+        subtitle: 'Invite your team and manage their permissions',
+        membersHeading: 'Members',
+        invitesHeading: 'Pending invites',
+        inviteBtn: 'Invite member',
+        inviteModalTitle: 'Invite a member',
+        emailLabel: 'Email',
+        emailPlaceholder: 'name@example.com',
+        roleLabel: 'Role',
+        sendInviteBtn: 'Send invite',
+        sending: 'Sending...',
+        copyLinkBtn: 'Copy link',
+        linkCopied: 'Link copied',
+        pendingBadge: 'Pending',
+        expiredBadge: 'Expired',
+        acceptedBadge: 'Accepted',
+        revokeBtn: 'Revoke',
+        removeBtn: 'Remove',
+        changeRoleBtn: 'Change role',
+        youSuffix: '(you)',
+        ownerSuffix: '(owner)',
+        noMembersYet: 'No members yet besides you.',
+        noPendingInvites: 'No pending invites.',
+        inviteSentToast: 'Invite sent to {{email}}.',
+        inviteFailedToast: 'Could not send invite.',
+        confirmRemove: 'Remove {{name}} from the business?',
+        confirmRevoke: 'Revoke the invite for {{email}}?',
+        errorInviteSelf: "You can't invite yourself.",
+        errorAlreadyMember: 'This person is already a member.',
+        errorAlreadyInvited: 'There is already a pending invite for this email.',
+      },
+      activity: {
+        heading: 'Activity',
+        subtitle: 'Log of important changes in this business',
+        emptyState: 'No activity recorded yet.',
+        loadMore: 'Load more',
+        unknownUser: 'Unknown user',
+        timeJustNow: 'just now',
+        timeMinutesAgo: '{{n}} min ago',
+        timeHoursAgo: '{{n}} h ago',
+        timeDaysAgo: '{{n}} d ago',
       },
     },
     reports: {

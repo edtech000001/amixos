@@ -395,6 +395,51 @@ returns table(
   limit 1;
 $$;
 
+-- List business members (joined with auth.users for email + display name).
+-- PostgREST can't read the auth schema directly, so we wrap the join in a
+-- SECURITY DEFINER function gated by membership.
+create or replace function public.list_business_members(b_id uuid)
+returns table(
+  id uuid,
+  user_id uuid,
+  role text,
+  email text,
+  display_name text,
+  joined_at timestamptz
+) language sql security definer stable as $$
+  select bm.id, bm.user_id, bm.role,
+         u.email,
+         coalesce(u.raw_user_meta_data->>'display_name', u.raw_user_meta_data->>'name') as display_name,
+         bm.created_at as joined_at
+  from public.business_members bm
+  join auth.users u on u.id = bm.user_id
+  where bm.business_id = b_id
+    and public.is_business_member(b_id);
+$$;
+
+-- List audit log entries with user email resolved. Same access pattern.
+create or replace function public.list_audit_log(b_id uuid, page_size int default 50, before timestamptz default null)
+returns table(
+  id uuid,
+  user_id uuid,
+  user_email text,
+  action text,
+  entity_type text,
+  entity_id uuid,
+  details jsonb,
+  created_at timestamptz
+) language sql security definer stable as $$
+  select a.id, a.user_id, u.email as user_email,
+         a.action, a.entity_type, a.entity_id, a.details, a.created_at
+  from public.audit_log a
+  left join auth.users u on u.id = a.user_id
+  where a.business_id = b_id
+    and public.is_business_member(b_id)
+    and (before is null or a.created_at < before)
+  order by a.created_at desc
+  limit page_size;
+$$;
+
 -- Accept an invite. SECURITY DEFINER so it can both INSERT into
 -- business_members and UPDATE the invite. Validates email match and expiry.
 create or replace function public.accept_invite(invite_token text)

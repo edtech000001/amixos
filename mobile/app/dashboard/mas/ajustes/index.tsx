@@ -9,9 +9,13 @@ import {
   Users,
   User as UserIcon,
   Cloud,
+  UserPlus,
+  Activity,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface SettingsItem {
   key: string;
@@ -24,6 +28,7 @@ interface SettingsItem {
 export default function AjustesIndex() {
   const router = useRouter();
   const { t: full } = useLang();
+  const { currentRole } = useApp();
   const t = full.dashboard.settings;
 
   const items: SettingsItem[] = [
@@ -48,6 +53,20 @@ export default function AjustesIndex() {
       icon: Users,
       path: '/dashboard/mas/ajustes/clientes',
     },
+    {
+      key: 'equipo',
+      label: t.tabs.equipo,
+      description: t.team.subtitle,
+      icon: UserPlus,
+      path: '/dashboard/mas/ajustes/equipo',
+    },
+    ...(can.seeAuditLog(currentRole) ? [{
+      key: 'actividad',
+      label: t.tabs.actividad,
+      description: t.activity.subtitle,
+      icon: Activity,
+      path: '/dashboard/mas/ajustes/actividad',
+    }] : []),
     {
       key: 'cuenta',
       label: t.tabs.cuenta,

@@ -1,0 +1,127 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ArrowLeft, Activity } from 'lucide-react';
+import { createSupabaseClient } from '@/lib/supabase';
+import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
+import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+
+interface AuditRow {
+  id: string;
+  user_id: string | null;
+  user_email: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+const PAGE_SIZE = 50;
+
+function relTime(iso: string, t: ReturnType<typeof useLang>['t']['dashboard']['settings']['activity']): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return t.timeJustNow;
+  if (diff < 3600) return t.timeMinutesAgo.replace('{{n}}', String(Math.floor(diff / 60)));
+  if (diff < 86400) return t.timeHoursAgo.replace('{{n}}', String(Math.floor(diff / 3600)));
+  if (diff < 86400 * 14) return t.timeDaysAgo.replace('{{n}}', String(Math.floor(diff / 86400)));
+  return new Date(iso).toLocaleDateString();
+}
+
+function describe(row: AuditRow, lang: 'es' | 'en'): string {
+  const label = AUDIT_ACTION_LABEL[row.action as AuditAction]?.[lang] ?? row.action;
+  const d = row.details ?? {};
+  const bits: string[] = [];
+  if (d.from && d.to) bits.push(`${d.from} → ${d.to}`);
+  if (d.email) bits.push(String(d.email));
+  if (d.target_business_name) bits.push(String(d.target_business_name));
+  return bits.length ? `${label} — ${bits.join(' · ')}` : label;
+}
+
+export default function ActividadPage() {
+  const supabase = createSupabaseClient();
+  const { business } = useApp();
+  const { t: full, locale } = useLang();
+  const t = full.dashboard.settings.activity;
+  const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reachedEnd, setReachedEnd] = useState(false);
+
+  const load = useCallback(async (before?: string) => {
+    if (!business) return;
+    setLoading(true);
+    const { data } = await supabase.rpc('list_audit_log', {
+      b_id: business.id,
+      page_size: PAGE_SIZE,
+      before: before ?? null,
+    });
+    const next = (data as AuditRow[] | null) ?? [];
+    setRows(prev => before ? [...prev, ...next] : next);
+    setReachedEnd(next.length < PAGE_SIZE);
+    setLoading(false);
+  }, [business, supabase]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Link href="/dashboard/ajustes" className="p-2 -ml-2 rounded-lg hover:bg-gray-100">
+          <ArrowLeft size={18} className="text-gray-600" />
+        </Link>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Activity size={18} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{t.heading}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
+          </div>
+        </div>
+
+        {loading && rows.length === 0 ? (
+          <div className="py-10 flex justify-center">
+            <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: `${i*0.15}s`}}/>)}</div>
+          </div>
+        ) : rows.length === 0 ? (
+          <p className="py-10 text-center text-sm text-gray-400">{t.emptyState}</p>
+        ) : (
+          <div className="flex flex-col">
+            {rows.map((row, i) => (
+              <div key={row.id} className={`flex items-start gap-3 py-3 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-gray-500">
+                    {(row.user_email ?? '?').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900">{describe(row, lang)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {row.user_email ?? t.unknownUser} · {relTime(row.created_at, t)}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {!reachedEnd && (
+              <button
+                onClick={() => load(rows[rows.length - 1]?.created_at)}
+                disabled={loading}
+                className="mt-4 text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                {loading ? '...' : t.loadMore}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -12,6 +12,7 @@ import { clientRouter } from './routes/client';
 import { timesheetRouter } from './routes/timesheet';
 import { dashboardRouter } from './routes/dashboard';
 import { googleSyncRouter } from './routes/googleSync';
+import { invitesRouter } from './routes/invites';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -39,6 +40,7 @@ app.use('/api/v1/clients', clientRouter);
 app.use('/api/v1/timesheet', timesheetRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/google-sync', googleSyncRouter);
+app.use('/api/v1/invites', invitesRouter);
 
 // Error handling
 app.use(notFound);

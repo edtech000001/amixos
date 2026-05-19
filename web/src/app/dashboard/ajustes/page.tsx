@@ -3,13 +3,15 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase, Globe } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase, Globe, UserPlus, Activity } from 'lucide-react';
+import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface FieldTemplate {
   id: string;
@@ -32,7 +34,7 @@ const DEFAULT_CLIENT_FIELD_KEYS = [
 
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
-  const { business, user, refetchBusiness } = useApp();
+  const { business, user, refetchBusiness, currentRole } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.settings;
   const tc = full.common;
@@ -269,6 +271,18 @@ export default function AjustesPage() {
                 </button>
               );
             })}
+            <Link href="/dashboard/ajustes/equipo"
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
+              <UserPlus size={16} className="text-gray-400"/>
+              {t.tabs.equipo}
+            </Link>
+            {can.seeAuditLog(currentRole) && (
+              <Link href="/dashboard/ajustes/actividad"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
+                <Activity size={16} className="text-gray-400"/>
+                {t.tabs.actividad}
+              </Link>
+            )}
           </div>
         </nav>
 

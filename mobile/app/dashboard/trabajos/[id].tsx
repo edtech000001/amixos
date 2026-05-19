@@ -26,6 +26,8 @@ import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
+import { logAudit } from '@amixos/shared/lib/audit';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface Job {
   id: string;
@@ -107,6 +109,7 @@ export default function JobDetailRoute() {
 
   const businesses = useAuthStore((s) => s.businesses);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
+  const currentRole = useAuthStore((s) => s.currentRole);
   const tw = full.dashboard.workspaces;
 
   const PROPOSAL_PIPELINE: PipelineStep[] = [
@@ -155,6 +158,7 @@ export default function JobDetailRoute() {
 
   const updateStatus = async (newStatus: string) => {
     if (!job) return;
+    const prevStatus = job.status;
     setUpdatingStatus(true);
     const update: Record<string, string | null> = { status: newStatus };
     if (newStatus === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
@@ -164,6 +168,9 @@ export default function JobDetailRoute() {
     if (newStatus === 'cancelled') update.cancelled_at = new Date().toISOString();
     await supabase.from('jobs').update(update).eq('id', job.id);
     setJob((prev) => (prev ? ({ ...prev, ...update } as Job) : prev));
+    void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
+      from: prevStatus, to: newStatus, job_title: job.title,
+    });
     setUpdatingStatus(false);
   };
 
@@ -269,6 +276,9 @@ export default function JobDetailRoute() {
         style: 'destructive',
         onPress: async () => {
           if (!job) return;
+          void logAudit(supabase, job.business_id, 'job.deleted', 'job', job.id, {
+            job_title: job.title, estimate_number: job.estimate_number,
+          });
           await supabase.from('job_items').delete().eq('job_id', job.id);
           await supabase.from('job_assignments').delete().eq('job_id', job.id);
           const { error } = await supabase.from('jobs').delete().eq('id', job.id);
@@ -337,7 +347,7 @@ export default function JobDetailRoute() {
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <View className="flex-row gap-1">
-          {businesses.length > 1 && !job.delegated_to_business_id ? (
+          {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) ? (
             <Pressable
               onPress={() => setDelegateOpen(true)}
               hitSlop={8}
@@ -346,20 +356,24 @@ export default function JobDetailRoute() {
               <Share2 size={18} color="#4F46E5" />
             </Pressable>
           ) : null}
-          <Pressable
-            onPress={() => router.push(`/dashboard/trabajos/nuevo?edit=${job.id}` as never)}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-gray-100"
-          >
-            <Pencil size={18} color="#6B7280" />
-          </Pressable>
-          <Pressable
-            onPress={confirmDelete}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-red-50"
-          >
-            <Trash2 size={18} color="#EF4444" />
-          </Pressable>
+          {can.editJobMetadata(currentRole) ? (
+            <Pressable
+              onPress={() => router.push(`/dashboard/trabajos/nuevo?edit=${job.id}` as never)}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-gray-100"
+            >
+              <Pencil size={18} color="#6B7280" />
+            </Pressable>
+          ) : null}
+          {can.deleteJob(currentRole) ? (
+            <Pressable
+              onPress={confirmDelete}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-red-50"
+            >
+              <Trash2 size={18} color="#EF4444" />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 

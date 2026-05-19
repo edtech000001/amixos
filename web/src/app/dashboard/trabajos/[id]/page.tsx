@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
+import { logAudit } from '@amixos/shared/lib/audit';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface Job {
   id: string; business_id: string;
@@ -48,7 +50,7 @@ function fmt(n: number) {
 export default function TrabajoDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const supabase = createSupabaseClient();
-  const { business, user, businesses, setActiveBusiness } = useApp();
+  const { business, user, businesses, setActiveBusiness, currentRole } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
@@ -118,6 +120,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   useEffect(() => { load(); }, [id, business]);
 
   const updateStatus = async (newStatus: string) => {
+    if (!job || !business) return;
+    const prevStatus = job.status;
     setUpdatingStatus(true);
     const update: any = { status: newStatus };
     if (newStatus === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
@@ -127,6 +131,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (newStatus === 'cancelled') update.cancelled_at = new Date().toISOString();
     await supabase.from('jobs').update(update).eq('id', id);
     setJob(prev => prev ? { ...prev, ...update } : prev);
+    void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
+      from: prevStatus, to: newStatus, job_title: job.title,
+    });
     setUpdatingStatus(false);
   };
 
@@ -203,7 +210,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   };
 
   const deleteJob = async () => {
+    if (!job || !business) return;
     setDeleting(true);
+    // Audit first — once the row is gone we can still reference it by id.
+    void logAudit(supabase, business.id, 'job.deleted', 'job', id, {
+      job_title: job.title, estimate_number: job.estimate_number,
+    });
     // Delete related records first, then the job
     await supabase.from('job_items').delete().eq('job_id', id);
     await supabase.from('job_assignments').delete().eq('job_id', id);
@@ -338,7 +350,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </button>
             </>
           )}
-          {businesses.length > 1 && !job.delegated_to_business_id && (
+          {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) && (
             <button
               onClick={() => setDelegateModal(true)}
               className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
@@ -346,18 +358,22 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <Building2 size={16}/>
             </button>
           )}
-          <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
-            className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-            title={td.editTooltip}>
-            <Pencil size={16}/>
-          </Link>
-          <button
-            onClick={() => setDeleteModal(true)}
-            className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-            title={td.deleteTooltip}
-          >
-            <Trash2 size={16}/>
-          </button>
+          {can.editJobMetadata(currentRole) && (
+            <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
+              className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+              title={td.editTooltip}>
+              <Pencil size={16}/>
+            </Link>
+          )}
+          {can.deleteJob(currentRole) && (
+            <button
+              onClick={() => setDeleteModal(true)}
+              className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title={td.deleteTooltip}
+            >
+              <Trash2 size={16}/>
+            </button>
+          )}
         </div>
       </div>
 

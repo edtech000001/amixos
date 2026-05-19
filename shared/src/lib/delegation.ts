@@ -178,5 +178,43 @@ export async function delegateJob(
     })
     .eq('id', jobId);
 
+  // 6. Audit log — write on BOTH sides so each business has a record of the
+  // movement. Best-effort: don't fail the operation if logging fails.
+  const { data: targetBiz } = await supabase
+    .from('businesses').select('name').eq('id', targetBusinessId).single();
+  const { data: sourceBiz } = await supabase
+    .from('businesses').select('name').eq('id', job.business_id).single();
+  const targetName = (targetBiz as { name: string } | null)?.name ?? null;
+  const sourceName = (sourceBiz as { name: string } | null)?.name ?? null;
+
+  await Promise.all([
+    supabase.from('audit_log').insert({
+      business_id: job.business_id,
+      action: 'job.delegated',
+      entity_type: 'job',
+      entity_id: jobId,
+      details: {
+        direction: 'out',
+        target_business_id: targetBusinessId,
+        target_business_name: targetName,
+        new_job_id: newJobId,
+        job_title: job.title,
+      },
+    }),
+    supabase.from('audit_log').insert({
+      business_id: targetBusinessId,
+      action: 'job.delegated',
+      entity_type: 'job',
+      entity_id: newJobId,
+      details: {
+        direction: 'in',
+        source_business_id: job.business_id,
+        source_business_name: sourceName,
+        source_job_id: jobId,
+        job_title: job.title,
+      },
+    }),
+  ]);
+
   return { ok: true, newJobId, newClientId };
 }
