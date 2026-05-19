@@ -26,6 +26,8 @@ interface RawJob {
   estimate_number: string | null;
   issue_date: string | null;
   expiry_date: string | null;
+  delegated_to_business_id: string | null;
+  delegated_from_business_id: string | null;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   job_assignments: {
@@ -37,7 +39,7 @@ interface RawJob {
 export default function TrabajosTab() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, businesses } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,14 +90,20 @@ export default function TrabajosTab() {
     workerNames: j.job_assignments
       .map(a => a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name)
       .filter((s): s is string => !!s),
-  })), [rawJobs]);
+    delegatedToBusinessName: j.delegated_to_business_id
+      ? businesses.find(b => b.id === j.delegated_to_business_id)?.name ?? null
+      : null,
+    delegatedFromBusinessName: j.delegated_from_business_id
+      ? businesses.find(b => b.id === j.delegated_from_business_id)?.name ?? null
+      : null,
+  })), [rawJobs, businesses]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <JobsListScreen
         loading={loading}
         jobs={jobs}
-        onJobPress={(id) => Alert.alert('Detail view', `Job ${id} detail not yet built on mobile`)}
+        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
         onUpdateStatus={updateStatus}
         onGenerateInvoice={() => Alert.alert('Coming soon', 'Generate invoice from mobile not yet built')}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}

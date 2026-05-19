@@ -11,6 +11,7 @@ export type DashboardDict = {
     inventario: string;
     reportes: string;
     ajustes: string;
+    mas: string;
     logout: string;
   };
   home: {
@@ -579,6 +580,20 @@ export type DashboardDict = {
       closeBtn: string;
     };
   };
+  workspaces: {
+    switcherLabel: string;
+    switchedToast: string;
+    delegateBtn: string;
+    delegateModalTitle: string;
+    delegateChooseTarget: string;
+    delegateConfirm: string;
+    delegatedBadge: string;
+    delegateSuccess: string;
+    delegateError: string;
+    delegateAlreadyDone: string;
+    switchToTarget: string;
+    delegatedFilterTab: string;
+  };
   settings: {
     title: string;
     tabs: {
@@ -782,6 +797,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       inventario: 'Inventario',
       reportes: 'Reportes',
       ajustes: 'Ajustes',
+      mas: 'Más',
       logout: 'Cerrar sesión',
     },
     home: {
@@ -1342,6 +1358,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         closeBtn: 'Cerrar',
       },
     },
+    workspaces: {
+      switcherLabel: 'Cambiar negocio',
+      switchedToast: 'Cambiado a {{name}}',
+      delegateBtn: 'Delegar a…',
+      delegateModalTitle: 'Delegar trabajo',
+      delegateChooseTarget: 'Elige a qué negocio mandar este trabajo.',
+      delegateConfirm: 'Delegar',
+      delegatedBadge: '→ Delegado a {{name}}',
+      delegateSuccess: '¡Listo! Delegado a {{name}}.',
+      delegateError: 'No se pudo delegar. Intenta de nuevo.',
+      delegateAlreadyDone: 'Este trabajo ya fue delegado.',
+      switchToTarget: 'Cambiar a {{name}}',
+      delegatedFilterTab: 'Delegados',
+    },
     settings: {
       title: 'Ajustes',
       tabs: {
@@ -1542,6 +1572,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       inventario: 'Inventory',
       reportes: 'Reports',
       ajustes: 'Settings',
+      mas: 'More',
       logout: 'Sign out',
     },
     home: {
@@ -2101,6 +2132,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveBtn: 'Save event',
         closeBtn: 'Close',
       },
+    },
+    workspaces: {
+      switcherLabel: 'Switch business',
+      switchedToast: 'Switched to {{name}}',
+      delegateBtn: 'Delegate to…',
+      delegateModalTitle: 'Delegate job',
+      delegateChooseTarget: 'Pick which business should take over this job.',
+      delegateConfirm: 'Delegate',
+      delegatedBadge: '→ Delegated to {{name}}',
+      delegateSuccess: 'Delegated to {{name}}.',
+      delegateError: 'Couldn\'t delegate. Try again.',
+      delegateAlreadyDone: 'This job has already been delegated.',
+      switchToTarget: 'Switch to {{name}}',
+      delegatedFilterTab: 'Delegated',
     },
     settings: {
       title: 'Settings',

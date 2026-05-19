@@ -37,6 +37,14 @@ export type LoginResult =
 
 interface AuthStore {
   user: AppUser | null;
+  // All businesses the user is a member of. Loaded on every SIGNED_IN.
+  businesses: Business[];
+  // Which business is the "active workspace" — used to scope every dashboard
+  // query. Persisted across sessions so the user lands back on the same one.
+  activeBusinessId: string | null;
+  // `business` is the currently active business — derived from
+  // (businesses, activeBusinessId). Kept on the store so existing consumers
+  // of useApp().business don't break.
   business: Business | null;
   businessLoaded: boolean;
   status: AuthStatus;
@@ -45,6 +53,9 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refetchBusiness: () => Promise<void>;
+  // Switch the active workspace. Re-derives `business` and writes the new
+  // id to persistence so it survives reloads.
+  setActiveBusiness: (businessId: string) => void;
 
   _handleAuthEvent: (event: AuthChangeEvent, session: Session | null) => Promise<void>;
   _setHydrated: () => void;
@@ -56,6 +67,8 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
+      businesses: [],
+      activeBusinessId: null,
       business: null,
       businessLoaded: false,
       status: 'unknown',
@@ -96,20 +109,38 @@ export const useAuthStore = create<AuthStore>()(
       refetchBusiness: async () => {
         const u = get().user;
         if (!u) {
-          set({ business: null, businessLoaded: true });
+          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null });
           return;
         }
         try {
+          // Fetch all businesses the user is a member of (RLS lets the join
+          // through because the user is in business_members for each).
           const { data } = await supabase
             .from('businesses')
-            .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled')
-            .eq('owner_id', u.id)
-            .limit(1)
-            .maybeSingle();
-          set({ business: (data as Business | null) ?? null, businessLoaded: true });
+            .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled');
+          const list = ((data as Business[] | null) ?? []);
+          // Active business: prefer the persisted id if it's still in the
+          // list; otherwise default to the first one.
+          const stored = get().activeBusinessId;
+          const activeId =
+            stored && list.some((b) => b.id === stored) ? stored : list[0]?.id ?? null;
+          const active = list.find((b) => b.id === activeId) ?? null;
+          set({
+            businesses: list,
+            activeBusinessId: activeId,
+            business: active,
+            businessLoaded: true,
+          });
         } catch {
-          set({ business: null, businessLoaded: true });
+          set({ businesses: [], business: null, businessLoaded: true });
         }
+      },
+
+      setActiveBusiness: (businessId) => {
+        const list = get().businesses;
+        const next = list.find((b) => b.id === businessId);
+        if (!next) return;
+        set({ activeBusinessId: businessId, business: next });
       },
 
       _handleAuthEvent: async (event, session) => {
@@ -167,7 +198,10 @@ export const useAuthStore = create<AuthStore>()(
       // status must be derived from a live Supabase session check on every
       // launch, not from cached state. Persisting status causes "logged in"
       // flashes when the session is actually expired.
-      partialize: (state) => ({ user: state.user }),
+      partialize: (state) => ({
+        user: state.user,
+        activeBusinessId: state.activeBusinessId,
+      }),
       onRehydrateStorage: () => () => {
         setTimeout(() => useAuthStore.getState()._setHydrated(), 0);
       },
@@ -196,11 +230,23 @@ setTimeout(() => {
 export function useApp() {
   const user = useAuthStore((s) => s.user);
   const business = useAuthStore((s) => s.business);
+  const businesses = useAuthStore((s) => s.businesses);
+  const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
+  const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
   const status = useAuthStore((s) => s.status);
   const refetchBusiness = useAuthStore((s) => s.refetchBusiness);
   const logout = useAuthStore((s) => s.logout);
 
   const loading = status === 'unknown' || status === 'loading';
 
-  return { user, business, loading, refetchBusiness, signOut: logout };
+  return {
+    user,
+    business,
+    businesses,
+    activeBusinessId,
+    setActiveBusiness,
+    loading,
+    refetchBusiness,
+    signOut: logout,
+  };
 }

@@ -8,6 +8,7 @@ import {
   type DashboardStats,
   type DashboardRecentInvoice,
 } from '@amixos/shared/screens/dashboard/DashboardHomeScreen';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
 interface RawRecentInvoice {
   id: string;
@@ -98,6 +99,7 @@ export default function DashboardHome() {
       <DashboardHomeScreen
         loading={appLoading || loading}
         businessName={business?.name ?? ''}
+        businessSlot={<BusinessSwitcher />}
         stats={stats}
         recent={recent}
         onNewInvoicePress={() => router.push('/dashboard/facturas')}

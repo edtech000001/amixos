@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Send,
   ChevronDown,
+  Building2,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -36,10 +37,12 @@ export interface JobListItem {
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
+  delegatedToBusinessName?: string | null;
+  delegatedFromBusinessName?: string | null;
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
-const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export interface JobsListScreenProps {
@@ -120,6 +123,7 @@ export function JobsListScreen({
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
 
+  const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
     propuestas: t.tabs.proposals,
@@ -128,11 +132,13 @@ export function JobsListScreen({
     completed: t.tabs.completed,
     invoiced: t.tabs.invoiced,
     cancelled: t.tabs.cancelled,
+    delegated: tw.delegatedFilterTab,
   };
 
   const matchesTab = (j: JobListItem) => {
     if (tab === 'all') return true;
     if (tab === 'propuestas') return PROPOSAL_STATUSES.includes(j.status);
+    if (tab === 'delegated') return !!j.delegatedToBusinessName;
     return j.status === tab;
   };
 
@@ -150,6 +156,7 @@ export function JobsListScreen({
     TAB_KEYS.reduce((acc, k) => {
       if (k === 'all') acc[k] = jobs.length;
       else if (k === 'propuestas') acc[k] = jobs.filter(j => PROPOSAL_STATUSES.includes(j.status)).length;
+      else if (k === 'delegated') acc[k] = jobs.filter(j => !!j.delegatedToBusinessName).length;
       else acc[k] = jobs.filter(j => j.status === k).length;
       return acc;
     }, {} as Record<TabKey, number>),
@@ -484,6 +491,14 @@ export function JobsListScreen({
                         <Text className="text-xs font-bold text-gray-700">
                           {fmt(job.totalAmount)}
                         </Text>
+                      ) : null}
+                      {job.delegatedToBusinessName ? (
+                        <View className="flex-row items-center gap-1">
+                          <Building2 size={12} color="#9333EA" />
+                          <Text className="text-xs font-semibold text-purple-600">
+                            {tw.delegatedBadge.replace('{{name}}', job.delegatedToBusinessName)}
+                          </Text>
+                        </View>
                       ) : null}
                     </View>
                   </View>

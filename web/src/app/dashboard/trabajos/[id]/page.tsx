@@ -8,13 +8,14 @@ import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil,
-  Share2, Download, RotateCcw,
+  Share2, Download, RotateCcw, Building2,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
+import { delegateJob } from '@amixos/shared/lib/delegation';
 
 interface Job {
   id: string; business_id: string;
@@ -28,6 +29,7 @@ interface Job {
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
   share_token: string | null; created_by: string | null; cancelled_at: string | null;
+  delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
   created_at: string; updated_at: string;
   clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null } | null;
 }
@@ -46,7 +48,7 @@ function fmt(n: number) {
 export default function TrabajoDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, businesses, setActiveBusiness } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
@@ -87,6 +89,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [taxRate, setTaxRate] = useState(0);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [delegateModal, setDelegateModal] = useState(false);
+  const [delegating, setDelegating] = useState(false);
+  const tw = full.dashboard.workspaces;
 
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('action') === 'invoice') {
@@ -170,6 +175,30 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       window.location.href = `/dashboard/facturas/${invoice.id}`;
     } else {
       setInvoicing(false);
+    }
+  };
+
+  const runDelegate = async (targetBusinessId: string) => {
+    if (!job) return;
+    setDelegating(true);
+    const result = await delegateJob(supabase, job.id, targetBusinessId);
+    setDelegating(false);
+    setDelegateModal(false);
+    if (!result.ok) {
+      alert(tw.delegateError);
+      return;
+    }
+    const targetBiz = businesses.find(b => b.id === targetBusinessId);
+    const switchAndGo = confirm(
+      tw.delegateSuccess.replace('{{name}}', targetBiz?.name ?? '') +
+        '\n\n' + tw.switchToTarget.replace('{{name}}', targetBiz?.name ?? '') + '?',
+    );
+    if (switchAndGo && targetBiz) {
+      setActiveBusiness(targetBusinessId);
+      window.location.href = `/dashboard/trabajos/${result.newJobId}`;
+    } else {
+      // Stay on the source-side view; reload to pick up the new delegated_to_business_id badge
+      await load();
     }
   };
 
@@ -309,6 +338,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </button>
             </>
           )}
+          {businesses.length > 1 && !job.delegated_to_business_id && (
+            <button
+              onClick={() => setDelegateModal(true)}
+              className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+              title={tw.delegateBtn}>
+              <Building2 size={16}/>
+            </button>
+          )}
           <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
             className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
             title={td.editTooltip}>
@@ -414,6 +451,36 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       )}
+
+      {/* Delegated banner */}
+      {job.delegated_to_business_id && (() => {
+        const target = businesses.find(b => b.id === job.delegated_to_business_id);
+        return (
+          <div className="rounded-2xl p-4 mb-5 border bg-primary/5 border-primary/20 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Building2 size={16} className="text-primary"/>
+              <div>
+                <p className="text-sm font-semibold text-primary">
+                  {tw.delegatedBadge.replace('{{name}}', target?.name ?? '—')}
+                </p>
+                {job.delegated_at && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {new Date(job.delegated_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            </div>
+            {target && (
+              <Button variant="secondary" size="sm" onClick={() => {
+                setActiveBusiness(target.id);
+                window.location.href = '/dashboard/trabajos';
+              }}>
+                {tw.switchToTarget.replace('{{name}}', target.name)}
+              </Button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Cancelled / Declined banner */}
       {(job.status === 'cancelled' || job.status === 'declined') && (
@@ -718,6 +785,41 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             <Button onClick={generateInvoice} loading={invoicing} fullWidth>
               {td.createInvoiceBtn}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delegate Modal */}
+      <Modal open={delegateModal} onClose={() => setDelegateModal(false)} title={tw.delegateModalTitle} size="sm">
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-gray-500">{tw.delegateChooseTarget}</p>
+          <div className="flex flex-col gap-2">
+            {businesses
+              .filter(b => b.id !== job.business_id)
+              .map(b => (
+                <button
+                  key={b.id}
+                  onClick={() => runDelegate(b.id)}
+                  disabled={delegating}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Building2 size={18} className="text-primary"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
+                    {b.city && (
+                      <p className="text-xs text-gray-500 truncate">
+                        {b.city}{b.state ? `, ${b.state}` : ''}
+                      </p>
+                    )}
+                  </div>
+                  <ArrowRight size={16} className="text-gray-300 shrink-0"/>
+                </button>
+              ))}
+          </div>
+          <div className="flex">
+            <Button variant="secondary" onClick={() => setDelegateModal(false)} fullWidth>{tc.buttons.cancel}</Button>
           </div>
         </div>
       </Modal>

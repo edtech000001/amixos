@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
 const NAV_ITEMS = [
   { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
@@ -41,23 +42,9 @@ export function Sidebar() {
 
   const NavContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
+      {/* Business switcher (replaces the read-only logo + name block) */}
       <div className="px-6 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          {business?.logo_url ? (
-            <img src={business.logo_url} alt="logo" className="w-8 h-8 rounded-lg object-contain bg-gray-50" />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-white text-xs font-bold">
-                {business?.name?.charAt(0)?.toUpperCase() ?? 'A'}
-              </span>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{business?.name ?? 'Amixos'}</p>
-            <p className="text-xs text-gray-400 truncate">{business?.city}{business?.state ? `, ${business.state}` : ''}</p>
-          </div>
-        </div>
+        <BusinessSwitcher />
       </div>
 
       {/* Nav items */}

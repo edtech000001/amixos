@@ -31,6 +31,13 @@ export interface DashboardRecentInvoice {
 export interface DashboardHomeScreenProps {
   loading: boolean;
   businessName: string;
+  /**
+   * Optional UI rendered in place of the plain business name in the header.
+   * Mobile passes <BusinessSwitcher />, web passes its own dropdown — when
+   * the user has multiple businesses they can switch right from the home
+   * header. When this slot is set, businessName is ignored.
+   */
+  businessSlot?: import('react').ReactNode;
   stats: DashboardStats | null;
   recent: DashboardRecentInvoice[];
   onNewInvoicePress: () => void;
@@ -66,6 +73,7 @@ function formatCurrency(n: number): string {
 export function DashboardHomeScreen({
   loading,
   businessName,
+  businessSlot,
   stats,
   recent,
   onNewInvoicePress,
@@ -158,9 +166,13 @@ export function DashboardHomeScreen({
     <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="mb-8 flex-row items-center justify-between">
-        <View>
+        <View className="flex-1 mr-3">
           <Text className="text-2xl font-bold text-gray-900">{t.home.welcome}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">{businessName}</Text>
+          {businessSlot ? (
+            <View className="mt-1.5">{businessSlot}</View>
+          ) : (
+            <Text className="text-sm text-gray-500 mt-0.5">{businessName}</Text>
+          )}
         </View>
         <Pressable
           onPress={onNewInvoicePress}

@@ -28,18 +28,20 @@ interface RawJob {
   estimate_number: string | null;
   issue_date: string | null;
   expiry_date: string | null;
+  delegated_to_business_id: string | null;
+  delegated_from_business_id: string | null;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   job_assignments: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }[];
 }
 
-const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
 export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, businesses } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialTab, setInitialTab] = useState<TabKey>('all');
@@ -98,7 +100,13 @@ export default function TrabajosPage() {
     workerNames: j.job_assignments
       .map(a => a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name)
       .filter((s): s is string => !!s),
-  })), [rawJobs]);
+    delegatedToBusinessName: j.delegated_to_business_id
+      ? businesses.find(b => b.id === j.delegated_to_business_id)?.name ?? null
+      : null,
+    delegatedFromBusinessName: j.delegated_from_business_id
+      ? businesses.find(b => b.id === j.delegated_from_business_id)?.name ?? null
+      : null,
+  })), [rawJobs, businesses]);
 
   return (
     <JobsListScreen

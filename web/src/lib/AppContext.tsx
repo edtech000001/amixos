@@ -21,46 +21,82 @@ export interface AppUser {
 
 interface AppContextValue {
   user: AppUser | null;
+  businesses: Business[];
   business: Business | null;
+  activeBusinessId: string | null;
   loading: boolean;
   refetchBusiness: () => Promise<void>;
+  setActiveBusiness: (businessId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue>({
   user: null,
+  businesses: [],
   business: null,
+  activeBusinessId: null,
   loading: true,
   refetchBusiness: async () => {},
+  setActiveBusiness: () => {},
 });
+
+// Cookie name for persisting the active business id across reloads.
+const ACTIVE_BIZ_COOKIE = 'amixos-active-business';
+
+function readActiveCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(/(?:^|; )amixos-active-business=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function writeActiveCookie(id: string | null) {
+  if (typeof document === 'undefined') return;
+  if (id) {
+    document.cookie = `${ACTIVE_BIZ_COOKIE}=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax`;
+  } else {
+    document.cookie = `${ACTIVE_BIZ_COOKIE}=; path=/; max-age=0`;
+  }
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const supabase = createSupabaseClient();
   const [user, setUser] = useState<AppUser | null>(null);
-  const [business, setBusiness] = useState<Business | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchBusiness = async (userId: string) => {
+  // Derived: the currently-active business object. Memoized via state to avoid
+  // recomputing on every render.
+  const business = businesses.find((b) => b.id === activeBusinessId) ?? null;
+
+  const fetchBusinesses = async () => {
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled')
-      .eq('owner_id', userId)
-      .limit(1)
-      .single();
-    if (data) setBusiness(data);
+      .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled');
+    const list = (data as Business[] | null) ?? [];
+    setBusinesses(list);
+
+    const cookieId = readActiveCookie();
+    const nextActive =
+      cookieId && list.some((b) => b.id === cookieId) ? cookieId : list[0]?.id ?? null;
+    setActiveBusinessIdState(nextActive);
+    if (nextActive !== cookieId) writeActiveCookie(nextActive);
   };
 
   const refetchBusiness = async () => {
-    if (user) await fetchBusiness(user.id);
+    if (user) await fetchBusinesses();
+  };
+
+  const setActiveBusiness = (id: string) => {
+    if (!businesses.some((b) => b.id === id)) return;
+    setActiveBusinessIdState(id);
+    writeActiveCookie(id);
   };
 
   useEffect(() => {
     const init = async () => {
-      // Middleware refreshes the token via cookies on each request.
-      // getSession() reads the cookie-stored session.
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setUser({ id: session.user.id, email: session.user.email ?? '' });
-        await fetchBusiness(session.user.id);
+        await fetchBusinesses();
       } else if (window.location.pathname.startsWith('/dashboard')) {
         window.location.href = '/auth/login';
         return;
@@ -69,21 +105,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     init();
 
-    // Handle sign-out from other tabs or explicit sign-out
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event) => {
         if (event === 'SIGNED_OUT') {
           setUser(null);
-          setBusiness(null);
+          setBusinesses([]);
+          setActiveBusinessIdState(null);
+          writeActiveCookie(null);
           window.location.href = '/auth/login';
         }
-      }
+      },
     );
     return () => subscription.unsubscribe();
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, business, loading, refetchBusiness }}>
+    <AppContext.Provider
+      value={{
+        user,
+        businesses,
+        business,
+        activeBusinessId,
+        loading,
+        refetchBusiness,
+        setActiveBusiness,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
