@@ -9,7 +9,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "eas build --platform android",
-    "build:ios": "eas build --platform ios"
+    "build:ios": "eas build --platform ios",
+    "build:preview": "eas build --platform ios --profile preview",
+    "update:preview": "eas update --channel preview"
   },
   "dependencies": {
     "@amixos/shared": "*",
