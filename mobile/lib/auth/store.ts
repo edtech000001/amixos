@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { Role } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '../supabase';
 
 // The auth state machine. Booleans hide intermediate states (logging in,
@@ -46,6 +47,11 @@ interface AuthStore {
   // (businesses, activeBusinessId). Kept on the store so existing consumers
   // of useApp().business don't break.
   business: Business | null;
+  // Map of business_id → caller's role in that business. Populated alongside
+  // `businesses` on every SIGNED_IN / refetchBusiness.
+  roles: Record<string, Role>;
+  // Convenience: caller's role in the active business.
+  currentRole: Role | null;
   businessLoaded: boolean;
   status: AuthStatus;
   error: string | null;
@@ -70,6 +76,8 @@ export const useAuthStore = create<AuthStore>()(
       businesses: [],
       activeBusinessId: null,
       business: null,
+      roles: {},
+      currentRole: null,
       businessLoaded: false,
       status: 'unknown',
       error: null,
@@ -109,16 +117,27 @@ export const useAuthStore = create<AuthStore>()(
       refetchBusiness: async () => {
         const u = get().user;
         if (!u) {
-          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null });
+          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, roles: {}, currentRole: null });
           return;
         }
         try {
           // Fetch all businesses the user is a member of (RLS lets the join
-          // through because the user is in business_members for each).
-          const { data } = await supabase
-            .from('businesses')
-            .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled');
-          const list = ((data as Business[] | null) ?? []);
+          // through because the user is in business_members for each). The
+          // member row also gives us this user's role per business.
+          const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
+            supabase
+              .from('businesses')
+              .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled'),
+            supabase
+              .from('business_members')
+              .select('business_id, role')
+              .eq('user_id', u.id),
+          ]);
+          const list = ((bizRows as Business[] | null) ?? []);
+          const roleMap: Record<string, Role> = {};
+          for (const m of (memberRows ?? []) as Array<{ business_id: string; role: string }>) {
+            roleMap[m.business_id] = m.role as Role;
+          }
           // Active business: prefer the persisted id if it's still in the
           // list; otherwise default to the first one.
           const stored = get().activeBusinessId;
@@ -129,6 +148,8 @@ export const useAuthStore = create<AuthStore>()(
             businesses: list,
             activeBusinessId: activeId,
             business: active,
+            roles: roleMap,
+            currentRole: activeId ? roleMap[activeId] ?? null : null,
             businessLoaded: true,
           });
         } catch {
@@ -140,7 +161,12 @@ export const useAuthStore = create<AuthStore>()(
         const list = get().businesses;
         const next = list.find((b) => b.id === businessId);
         if (!next) return;
-        set({ activeBusinessId: businessId, business: next });
+        const roleMap = get().roles;
+        set({
+          activeBusinessId: businessId,
+          business: next,
+          currentRole: roleMap[businessId] ?? null,
+        });
       },
 
       _handleAuthEvent: async (event, session) => {
@@ -233,6 +259,7 @@ export function useApp() {
   const businesses = useAuthStore((s) => s.businesses);
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
+  const currentRole = useAuthStore((s) => s.currentRole);
   const status = useAuthStore((s) => s.status);
   const refetchBusiness = useAuthStore((s) => s.refetchBusiness);
   const logout = useAuthStore((s) => s.logout);
@@ -245,6 +272,7 @@ export function useApp() {
     businesses,
     activeBusinessId,
     setActiveBusiness,
+    currentRole,
     loading,
     refetchBusiness,
     signOut: logout,

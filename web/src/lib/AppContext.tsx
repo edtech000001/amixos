@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
+import type { Role } from '@amixos/shared/lib/permissions';
 
 export interface Business {
   id: string;
@@ -24,6 +25,8 @@ interface AppContextValue {
   businesses: Business[];
   business: Business | null;
   activeBusinessId: string | null;
+  roles: Record<string, Role>;
+  currentRole: Role | null;
   loading: boolean;
   refetchBusiness: () => Promise<void>;
   setActiveBusiness: (businessId: string) => void;
@@ -34,6 +37,8 @@ const AppContext = createContext<AppContextValue>({
   businesses: [],
   business: null,
   activeBusinessId: null,
+  roles: {},
+  currentRole: null,
   loading: true,
   refetchBusiness: async () => {},
   setActiveBusiness: () => {},
@@ -61,18 +66,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Record<string, Role>>({});
   const [loading, setLoading] = useState(true);
 
-  // Derived: the currently-active business object. Memoized via state to avoid
-  // recomputing on every render.
+  // Derived state — recomputed on every render, fine here since the maps are small.
   const business = businesses.find((b) => b.id === activeBusinessId) ?? null;
+  const currentRole = activeBusinessId ? roles[activeBusinessId] ?? null : null;
 
-  const fetchBusinesses = async () => {
-    const { data } = await supabase
-      .from('businesses')
-      .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled');
-    const list = (data as Business[] | null) ?? [];
+  const fetchBusinesses = async (currentUserId: string) => {
+    const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
+      supabase
+        .from('businesses')
+        .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled'),
+      supabase
+        .from('business_members')
+        .select('business_id, role')
+        .eq('user_id', currentUserId),
+    ]);
+    const list = (bizRows as Business[] | null) ?? [];
+    const roleMap: Record<string, Role> = {};
+    for (const m of ((memberRows ?? []) as Array<{ business_id: string; role: string }>)) {
+      roleMap[m.business_id] = m.role as Role;
+    }
     setBusinesses(list);
+    setRoles(roleMap);
 
     const cookieId = readActiveCookie();
     const nextActive =
@@ -82,7 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const refetchBusiness = async () => {
-    if (user) await fetchBusinesses();
+    if (user) await fetchBusinesses(user.id);
   };
 
   const setActiveBusiness = (id: string) => {
@@ -95,8 +112,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        setUser({ id: session.user.id, email: session.user.email ?? '' });
-        await fetchBusinesses();
+        const u = { id: session.user.id, email: session.user.email ?? '' };
+        setUser(u);
+        await fetchBusinesses(u.id);
       } else if (window.location.pathname.startsWith('/dashboard')) {
         window.location.href = '/auth/login';
         return;
@@ -110,6 +128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setBusinesses([]);
+          setRoles({});
           setActiveBusinessIdState(null);
           writeActiveCookie(null);
           window.location.href = '/auth/login';
@@ -126,6 +145,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businesses,
         business,
         activeBusinessId,
+        roles,
+        currentRole,
         loading,
         refetchBusiness,
         setActiveBusiness,
