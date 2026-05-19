@@ -21,6 +21,23 @@ alter table public.business_members
   check (role in ('owner', 'admin', 'manager', 'office', 'field', 'viewer'));
 
 
+-- ─── 1b. Link employees ↔ auth users ──────────────────────────────────────
+-- Pre-022 the `employees` table was a pure record of "someone who works for
+-- this business" (name, pay, etc.) with no connection to a Supabase auth
+-- account. To support field-worker access ("a logged-in user sees only the
+-- jobs assigned to them"), an employees row needs to know which auth user
+-- it represents — when one exists. Nullable: most employees still won't
+-- have an app login, and that's fine.
+alter table public.employees
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+-- At most one employee per (business, user). Allow multiple rows with
+-- user_id IS NULL (the common case).
+create unique index if not exists idx_employees_business_user_unique
+  on public.employees(business_id, user_id)
+  where user_id is not null;
+
+
 -- ─── 2. Role helper functions ─────────────────────────────────────────────
 -- All SECURITY DEFINER so they can read business_members regardless of the
 -- caller's row-level visibility. STABLE so Postgres can cache within a query.
