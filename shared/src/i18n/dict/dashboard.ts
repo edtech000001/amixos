@@ -368,6 +368,7 @@ export type DashboardDict = {
       dateLabel: string;
       timeStartLabel: string;
       timeEndLabel: string;
+      totalTimeLabel: string;
       workersHeading: string;
       additionalWorkersLabel: string;
       workerNumberPlaceholder: string;
@@ -1197,6 +1198,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         dateLabel: 'Fecha',
         timeStartLabel: 'Hora inicio',
         timeEndLabel: 'Hora fin',
+        totalTimeLabel: 'Tiempo total',
         workersHeading: 'Trabajadores asignados',
         additionalWorkersLabel: 'Trabajadores adicionales (manual)',
         workerNumberPlaceholder: 'Trabajador {{count}}',
@@ -2023,6 +2025,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         dateLabel: 'Date',
         timeStartLabel: 'Start time',
         timeEndLabel: 'End time',
+        totalTimeLabel: 'Total time',
         workersHeading: 'Assigned workers',
         additionalWorkersLabel: 'Additional workers (manual)',
         workerNumberPlaceholder: 'Worker {{count}}',

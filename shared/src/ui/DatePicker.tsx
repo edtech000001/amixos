@@ -80,13 +80,13 @@ function NativePicker({
   const DateTimePicker = DateTimePickerModule.default;
   const DateTimePickerAndroid = DateTimePickerModule.DateTimePickerAndroid;
 
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const tc = t.common.buttons;
 
   const [iosOpen, setIosOpen] = useState(false);
   const [iosDraft, setIosDraft] = useState<Date | null>(null);
 
-  const displayText = useMemo(() => formatForDisplay(value, mode), [value, mode]);
+  const displayText = useMemo(() => formatForDisplay(value, mode, locale), [value, mode, locale]);
 
   const open = () => {
     const current = parseValueToDate(value, mode);
@@ -250,11 +250,30 @@ function formatDateToValue(date: Date, mode: Mode): string {
   return `${y}-${mo}-${d}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatForDisplay(value: string, mode: Mode): string {
+// Locale-aware month abbreviations. Format manually so we control casing
+// and punctuation (some locales return "may" lowercase or "p. m." with
+// periods, which doesn't match the iOS-native look we want).
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+function formatForDisplay(value: string, mode: Mode, locale?: string): string {
   if (!value) return '';
   const d = parseValueToDate(value, mode);
+
   if (mode === 'time') {
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    // Always "1:00 PM" / "10:30 AM" — uppercase, no periods, no extra spaces.
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${pad(m)} ${ampm}`;
   }
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+  const isEs = (locale ?? '').toLowerCase().startsWith('es');
+  const months = isEs ? MONTHS_ES : MONTHS_EN;
+  const monthName = months[d.getMonth()];
+  // ES: "23 May 2026" — EN: "May 23, 2026"
+  return isEs
+    ? `${d.getDate()} ${monthName} ${d.getFullYear()}`
+    : `${monthName} ${d.getDate()}, ${d.getFullYear()}`;
 }

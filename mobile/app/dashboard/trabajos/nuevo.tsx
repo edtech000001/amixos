@@ -652,24 +652,27 @@ export default function NuevoTrabajoRoute() {
               </View>
 
               {!allDay ? (
-                <View className="flex-row gap-3 mt-3">
-                  <View className="flex-1">
-                    <DatePicker
-                      label={t.timeStartLabel}
-                      mode="time"
-                      value={timeStart}
-                      onChange={setTimeStart}
-                    />
+                <>
+                  <View className="flex-row gap-3 mt-3">
+                    <View className="flex-1">
+                      <DatePicker
+                        label={t.timeStartLabel}
+                        mode="time"
+                        value={timeStart}
+                        onChange={setTimeStart}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <DatePicker
+                        label={t.timeEndLabel}
+                        mode="time"
+                        value={timeEnd}
+                        onChange={setTimeEnd}
+                      />
+                    </View>
                   </View>
-                  <View className="flex-1">
-                    <DatePicker
-                      label={t.timeEndLabel}
-                      mode="time"
-                      value={timeEnd}
-                      onChange={setTimeEnd}
-                    />
-                  </View>
-                </View>
+                  <TotalTimeLine start={timeStart} end={timeEnd} label={t.totalTimeLabel} />
+                </>
               ) : null}
             </Section>
           )}
@@ -916,6 +919,26 @@ export default function NuevoTrabajoRoute() {
         </Pressable>
       </RNModal>
     </SafeAreaView>
+  );
+}
+
+function TotalTimeLine({ start, end, label }: { start: string; end: string; label: string }) {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return null;
+  const diffMin = eh * 60 + em - (sh * 60 + sm);
+  if (diffMin <= 0) return null;
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}min`);
+  return (
+    <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
+      <Text className="text-xs text-gray-500">{label}:</Text>
+      <Text className="text-sm font-semibold text-primary">{parts.join(' ')}</Text>
+    </View>
   );
 }
 
