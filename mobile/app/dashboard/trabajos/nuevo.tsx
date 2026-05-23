@@ -91,6 +91,12 @@ export default function NuevoTrabajoRoute() {
   // job loads (estimate_number === proposal).
   const [isProposal, setIsProposal] = useState(modo === 'propuesta');
 
+  // expo-router params can hydrate after first render — keep isProposal in
+  // sync with ?modo= so the heading + form layout reflect the URL.
+  useEffect(() => {
+    if (!editId) setIsProposal(modo === 'propuesta');
+  }, [editId, modo]);
+
   // Form — shared
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
