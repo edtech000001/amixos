@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, Clock, Calendar,
-  Package, Settings, LogOut, ChevronLeft, Menu, X, Briefcase, BarChart3,
+  Package, Settings, LogOut, ChevronLeft, Menu, X, ClipboardList, BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -15,7 +15,7 @@ import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
 const NAV_ITEMS = [
   { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/trabajos', key: 'trabajos' as const, icon: Briefcase },
+  { href: '/dashboard/trabajos', key: 'trabajos' as const, icon: ClipboardList },
   { href: '/dashboard/clientes', key: 'clientes' as const, icon: Users },
   { href: '/dashboard/facturas', key: 'facturas' as const, icon: FileText },
   { href: '/dashboard/empleados', key: 'empleados' as const, icon: Clock },

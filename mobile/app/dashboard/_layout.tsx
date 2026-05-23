@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Briefcase, Users, FileText, MoreHorizontal } from 'lucide-react-native';
+import { Home, ClipboardList, Users, FileText, MoreHorizontal } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AnimatedDock } from '@/components/AnimatedDock';
 
@@ -32,7 +32,7 @@ export default function DashboardLayout() {
         name="trabajos/index"
         options={{
           title: sb.trabajos,
-          tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size} />,
         }}
       />
       <Tabs.Screen

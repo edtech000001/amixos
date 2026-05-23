@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-nativ
 import {
   Plus,
   Search,
-  Briefcase,
+  ClipboardList,
   Calendar,
   MapPin,
   ChevronRight,
@@ -368,7 +368,7 @@ export function JobsListScreen({
         </View>
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
-          <Briefcase size={40} color="#D1D5DB" />
+          <ClipboardList size={40} color="#D1D5DB" />
           <Text className="text-sm text-gray-400 mt-3">
             {search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}
           </Text>
@@ -529,7 +529,7 @@ export function JobsListScreen({
               onPress={() => { setNewMenuOpen(false); onNewJob(); }}
               className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-50 border-b border-gray-50"
             >
-              <Briefcase size={18} color="#6B7280" />
+              <ClipboardList size={18} color="#6B7280" />
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-gray-900">{t.newDropdown.jobOption}</Text>
                 <Text className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</Text>

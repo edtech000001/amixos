@@ -8,7 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  TrendingUp, TrendingDown, DollarSign, Users, Briefcase,
+  TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
   FileText, Clock, Package, BarChart3,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -326,7 +326,7 @@ export default function ReportesPage() {
           sub={paidSubLabel}/>
         <KpiCard icon={<FileText size={16}/>} label={t.kpis.pendingToCollect} value={fmt(pendingRevenue + overdueRevenue)} color="amber"
           sub={overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(overdueRevenue)) : undefined}/>
-        <KpiCard icon={<Briefcase size={16}/>} label={t.kpis.avgJobValue} value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
+        <KpiCard icon={<ClipboardList size={16}/>} label={t.kpis.avgJobValue} value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
           sub={t.kpis.completedJobsCount.replace('{{count}}', String(completedJobs.length))}/>
         <KpiCard icon={<Clock size={16}/>} label={t.kpis.hoursLogged} value={totalHours.toFixed(1)} color="purple"
           sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(totalPayroll))}/>
@@ -405,7 +405,7 @@ export default function ReportesPage() {
           {filteredJobs.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400">
               <div className="text-center">
-                <Briefcase size={32} className="mx-auto mb-2 opacity-30"/>
+                <ClipboardList size={32} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{t.empty.jobs}</p>
               </div>
             </div>

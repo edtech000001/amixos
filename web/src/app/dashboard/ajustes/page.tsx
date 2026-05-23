@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, Briefcase, Globe, UserPlus, Activity } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -72,7 +72,7 @@ export default function AjustesPage() {
 
   const TABS: { key: Tab; label: string; icon: any }[] = [
     { key: 'negocio', label: t.tabs.negocio, icon: Building2 },
-    { key: 'trabajos', label: t.tabs.trabajos, icon: Briefcase },
+    { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
     { key: 'clientes', label: t.tabs.clientes, icon: Users },
     { key: 'cuenta', label: t.tabs.cuenta, icon: User },
   ];
