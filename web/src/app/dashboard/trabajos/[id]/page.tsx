@@ -18,6 +18,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
+import { formatTime12h } from '@amixos/shared/lib/format';
 
 interface Job {
   id: string; business_id: string;
@@ -571,7 +572,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     </p>
                     {(job.time_start || job.time_end) && (
                       <p className="text-xs text-gray-400">
-                        {job.time_start?.slice(0,5)}{job.time_end ? ` — ${job.time_end.slice(0,5)}` : ''}
+                        {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
                       </p>
                     )}
                   </div>

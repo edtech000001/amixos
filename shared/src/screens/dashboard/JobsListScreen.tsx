@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { formatTime12h } from '../../lib/format';
 
 export interface JobListItem {
   id: string;
@@ -465,7 +466,7 @@ export function JobsListScreen({
                               month: 'short',
                               year: 'numeric',
                             })}
-                            {job.timeStart ? ` · ${job.timeStart.slice(0, 5)}` : ''}
+                            {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
                           </Text>
                         </View>
                       ) : null}

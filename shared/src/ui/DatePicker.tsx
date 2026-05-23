@@ -3,6 +3,7 @@ import { View, Text, Pressable, Modal as RNModal, Platform } from 'react-native'
 import { Calendar, Clock } from 'lucide-react-native';
 import { clsx } from 'clsx';
 import { useLang } from '../i18n/context';
+import { formatTime12h } from '../lib/format';
 
 type Mode = 'date' | 'time' | 'datetime-local';
 
@@ -260,20 +261,12 @@ function formatForDisplay(value: string, mode: Mode, locale?: string): string {
   if (!value) return '';
   const d = parseValueToDate(value, mode);
 
-  if (mode === 'time') {
-    // Always "1:00 PM" / "10:30 AM" — uppercase, no periods, no extra spaces.
-    let h = d.getHours();
-    const m = d.getMinutes();
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12 || 12;
-    return `${h}:${pad(m)} ${ampm}`;
-  }
+  if (mode === 'time') return formatTime12h(d);
 
+  // Always "Month Day, Year" in both languages — Spanish just swaps in
+  // Spanish month abbreviations (e.g. "May 23, 2026" in EN, "May 23, 2026"
+  // with "Abr" / "Ago" / "Dic" in ES).
   const isEs = (locale ?? '').toLowerCase().startsWith('es');
   const months = isEs ? MONTHS_ES : MONTHS_EN;
-  const monthName = months[d.getMonth()];
-  // ES: "23 May 2026" — EN: "May 23, 2026"
-  return isEs
-    ? `${d.getDate()} ${monthName} ${d.getFullYear()}`
-    : `${monthName} ${d.getDate()}, ${d.getFullYear()}`;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
