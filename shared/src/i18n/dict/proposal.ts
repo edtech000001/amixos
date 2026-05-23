@@ -30,11 +30,11 @@ export type ProposalDict = {
 
 export const proposal: Record<Locale, ProposalDict> = {
   es: {
-    notFound: 'Propuesta no encontrada',
+    notFound: 'Cotización no encontrada',
     notFoundSub: 'El enlace puede haber expirado o ser incorrecto.',
     loadingLabel: 'Cargando',
     defaultBizName: 'Empresa',
-    proposalLabel: 'Propuesta',
+    proposalLabel: 'Cotización',
     client: 'Cliente',
     noClient: 'Sin cliente',
     issueDate: 'Fecha de emisión',
@@ -56,11 +56,11 @@ export const proposal: Record<Locale, ProposalDict> = {
     dateLocale: 'es-MX',
   },
   en: {
-    notFound: 'Proposal not found',
+    notFound: 'Estimate not found',
     notFoundSub: 'The link may have expired or be incorrect.',
     loadingLabel: 'Loading',
     defaultBizName: 'Business',
-    proposalLabel: 'Proposal',
+    proposalLabel: 'Estimate',
     client: 'Client',
     noClient: 'No client',
     issueDate: 'Issue date',

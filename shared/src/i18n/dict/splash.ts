@@ -48,7 +48,7 @@ export const splash: Record<Locale, SplashDict> = {
         key: 'more',
         title: 'Y mucho más',
         subtitle:
-          'Calendario, inventario, propuestas y más herramientas — todas diseñadas para tu negocio.',
+          'Calendario, inventario, cotizaciones y más herramientas — todas diseñadas para tu negocio.',
       },
     ],
     login: 'Iniciar sesión',
@@ -89,7 +89,7 @@ export const splash: Record<Locale, SplashDict> = {
         key: 'more',
         title: 'And so much more',
         subtitle:
-          'Calendar, inventory, proposals, and more tools — all built for the way you actually work.',
+          'Calendar, inventory, estimates, and more tools — all built for the way you actually work.',
       },
     ],
     login: 'Log in',
