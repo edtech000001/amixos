@@ -282,7 +282,7 @@ export default function JobDetailRoute() {
           await supabase.from('job_items').delete().eq('job_id', job.id);
           await supabase.from('job_assignments').delete().eq('job_id', job.id);
           const { error } = await supabase.from('jobs').delete().eq('id', job.id);
-          if (!error) router.back();
+          if (!error) router.replace('/dashboard/trabajos' as never);
         },
       },
     ]);
@@ -340,7 +340,7 @@ export default function JobDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.replace('/dashboard/trabajos' as never)}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >

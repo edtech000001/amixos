@@ -442,12 +442,23 @@ export default function NuevoTrabajoRoute() {
     ? tc.buttons.saveChanges
     : (isProposal ? t.submitCreateProposal : t.submitCreateJob);
 
+  // expo-router tabs don't push tab switches onto history, so router.back()
+  // from a hidden tab screen often lands on the very first tab (home) rather
+  // than the trabajos list. Navigate explicitly to the right destination.
+  const goBack = () => {
+    if (editId) {
+      router.replace(`/dashboard/trabajos/${editId}` as never);
+    } else {
+      router.replace('/dashboard/trabajos' as never);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >
@@ -896,7 +907,7 @@ export default function NuevoTrabajoRoute() {
         >
           <View className="flex-row gap-3">
             <View className="flex-1">
-              <Button variant="secondary" onPress={() => router.back()} fullWidth>
+              <Button variant="secondary" onPress={goBack} fullWidth>
                 {tc.buttons.cancel}
               </Button>
             </View>
