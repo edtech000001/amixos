@@ -53,6 +53,7 @@ export default function DashboardLayout() {
       {/* Hidden routes (accessed via push, not via tab bar) */}
       <Tabs.Screen name="facturas/[id]" options={{ href: null }} />
       <Tabs.Screen name="trabajos/[id]" options={{ href: null }} />
+      <Tabs.Screen name="trabajos/nuevo" options={{ href: null }} />
       <Tabs.Screen name="mas/empleados" options={{ href: null }} />
       <Tabs.Screen name="mas/inventario" options={{ href: null }} />
       <Tabs.Screen name="mas/calendario" options={{ href: null }} />

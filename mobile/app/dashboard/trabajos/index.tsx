@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -60,6 +60,9 @@ export default function TrabajosTab() {
 
   useEffect(() => { load(); }, [business]);
 
+  // Refresh when returning from create/edit so the new/updated job appears.
+  useFocusEffect(useCallback(() => { load(); }, [business?.id]));
+
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
     if (status === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
@@ -107,7 +110,7 @@ export default function TrabajosTab() {
         onUpdateStatus={updateStatus}
         onGenerateInvoice={() => Alert.alert('Coming soon', 'Generate invoice from mobile not yet built')}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
-        onNewJob={() => Alert.alert('Coming soon', 'Create job from mobile not yet built')}
+        onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => Alert.alert('Coming soon', 'Create proposal from mobile not yet built')}
       />
     </SafeAreaView>
