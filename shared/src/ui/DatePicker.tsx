@@ -206,6 +206,11 @@ function NativePicker({
                   display={iosDisplay}
                   accentColor="#4F46E5"
                   themeVariant="light"
+                  // Force English locale on the time wheel so AM/PM renders
+                  // uppercase ("AM"/"PM") instead of Spanish "a. m." / "p. m.".
+                  // Date mode keeps the system locale so the inline calendar
+                  // still shows Spanish month/day names when the OS is in ES.
+                  locale={mode === 'time' ? 'en-US' : undefined}
                   onChange={(_e: unknown, d?: Date) => {
                     if (d) setIosDraft(d);
                   }}
