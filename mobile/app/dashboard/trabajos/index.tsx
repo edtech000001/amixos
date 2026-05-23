@@ -111,7 +111,7 @@ export default function TrabajosTab() {
         onGenerateInvoice={() => Alert.alert('Coming soon', 'Generate invoice from mobile not yet built')}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
-        onNewProposal={() => Alert.alert('Coming soon', 'Create proposal from mobile not yet built')}
+        onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
       />
     </SafeAreaView>
   );

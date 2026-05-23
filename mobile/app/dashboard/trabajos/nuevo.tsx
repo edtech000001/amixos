@@ -7,7 +7,6 @@ import {
   TextInput,
   Modal as RNModal,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -20,6 +19,7 @@ import {
   X,
   Trash2,
   MapPin,
+  Link2,
   Calendar as CalendarIcon,
   Users as UsersIcon,
   DollarSign,
@@ -65,13 +65,18 @@ const US_STATES = [
 
 const newId = () => Math.random().toString(36).slice(2);
 const newLaborItem = (): LineItem => ({ id: newId(), item_type: 'labor', description: '', quantity: 1, unit_price: 0 });
+const newOtherItem = (): LineItem => ({ id: newId(), item_type: 'other', description: '', quantity: 1, unit_price: 0 });
+
+const todayISO = () => new Date().toISOString().split('T')[0];
+const plusDaysISO = (days: number) =>
+  new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
-  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const { edit, modo } = useLocalSearchParams<{ edit?: string; modo?: string }>();
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const { t: full } = useLang();
@@ -82,9 +87,11 @@ export default function NuevoTrabajoRoute() {
 
   const editId = edit ?? null;
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
-  const [isProposal, setIsProposal] = useState(false);
+  // For new mode the URL drives this; for edit mode we overwrite once the
+  // job loads (estimate_number === proposal).
+  const [isProposal, setIsProposal] = useState(modo === 'propuesta');
 
-  // Form
+  // Form — shared
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
   const [status, setStatus] = useState<'scheduled' | 'in_progress'>('scheduled');
@@ -97,9 +104,22 @@ export default function NuevoTrabajoRoute() {
   const [timeEnd, setTimeEnd] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
-  const [items, setItems] = useState<LineItem[]>([newLaborItem()]);
+  const [items, setItems] = useState<LineItem[]>([
+    modo === 'propuesta' ? newOtherItem() : newLaborItem(),
+  ]);
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
+
+  // Form — proposal only
+  const [clientNotes, setClientNotes] = useState('');
+  const [issueDate, setIssueDate] = useState(todayISO());
+  const [expiryDate, setExpiryDate] = useState(plusDaysISO(30));
+  const [taxRate, setTaxRate] = useState(0);
+  const [discount, setDiscount] = useState(0);
+
+  // Location auto-fill from map link
+  const [mapLink, setMapLink] = useState('');
+  const [mapLinkUnrecognized, setMapLinkUnrecognized] = useState(false);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -139,7 +159,8 @@ export default function NuevoTrabajoRoute() {
         ]);
         if (cancelled) return;
         if (job) {
-          setIsProposal(!!job.estimate_number);
+          const proposal = !!job.estimate_number;
+          setIsProposal(proposal);
           setTitle(job.title ?? '');
           setClientId(job.client_id ?? '');
           setStatus(job.status === 'in_progress' ? 'in_progress' : 'scheduled');
@@ -152,6 +173,13 @@ export default function NuevoTrabajoRoute() {
           setTimeEnd(job.time_end ?? '');
           setDescription(job.description ?? '');
           setInternalNotes(job.internal_notes ?? '');
+          if (proposal) {
+            setClientNotes(job.notes ?? '');
+            setIssueDate(job.issue_date ?? todayISO());
+            setExpiryDate(job.expiry_date ?? '');
+            setTaxRate(job.tax_rate ?? 0);
+            setDiscount(job.discount ?? 0);
+          }
         }
         if (jobItems && jobItems.length > 0) {
           setItems(
@@ -185,9 +213,35 @@ export default function NuevoTrabajoRoute() {
   useEffect(() => {
     if (items.length === 0) return;
     if (items.every((i) => i.description.trim() !== '')) {
-      setItems((prev) => [...prev, newLaborItem()]);
+      setItems((prev) => [...prev, isProposal ? newOtherItem() : newLaborItem()]);
     }
-  }, [items.map((i) => i.description).join('|')]);
+  }, [items.map((i) => i.description).join('|'), isProposal]);
+
+  // Parse Google/Apple Maps URLs and auto-fill address fields.
+  const parseMapLink = (link: string) => {
+    setMapLink(link);
+    if (!link.trim()) {
+      setMapLinkUnrecognized(false);
+      return;
+    }
+    const placeMatch = link.match(/\/place\/([^/@]+)/);
+    if (placeMatch) {
+      const parts = decodeURIComponent(placeMatch[1])
+        .replace(/\+/g, ' ')
+        .split(',')
+        .map((s) => s.trim());
+      if (parts.length >= 1 && !address) setAddress(parts[0]);
+      if (parts.length >= 2 && !city) setCity(parts[1]);
+      if (parts.length >= 3 && !state) {
+        const st = parts[2].replace(/\d/g, '').trim();
+        if (st.length === 2) setState(st.toUpperCase());
+      }
+      setMapLinkUnrecognized(false);
+      return;
+    }
+    const known = /google\.|goo\.gl|apple\.|maps\.app\.goo\.gl/i.test(link);
+    setMapLinkUnrecognized(!known);
+  };
 
   const selectedClient = clients.find((c) => c.id === clientId) ?? null;
 
@@ -219,6 +273,8 @@ export default function NuevoTrabajoRoute() {
   const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const taxAmt = subtotal * (taxRate / 100);
+  const total = isProposal ? subtotal + taxAmt - discount : subtotal;
 
   const ITEM_TYPE_OPTIONS = [
     { value: 'labor', label: t.itemTypeLabor },
@@ -230,44 +286,95 @@ export default function NuevoTrabajoRoute() {
   const save = async () => {
     if (!business) return;
     if (!title.trim()) {
-      setError(t.errorTitleRequiredJob);
+      setError(isProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob);
+      return;
+    }
+    const validItems = items.filter((i) => i.description.trim());
+    if (isProposal && validItems.length === 0) {
+      setError(t.errorAtLeastOneItem);
       return;
     }
     setSaving(true);
     setError('');
     try {
-      const validItems = items.filter((i) => i.description.trim());
-      const jobData = {
-        client_id: clientId || null,
-        title: title.trim(),
-        description: description.trim() || null,
-        priority,
-        job_address: address.trim() || null,
-        job_city: city.trim() || null,
-        job_state: state || null,
-        scheduled_date: scheduledDate || null,
-        time_start: timeStart || null,
-        time_end: timeEnd || null,
-        internal_notes: internalNotes.trim() || null,
-        total_amount: subtotal,
-      };
-
       let jobId: string;
-      if (editId) {
-        const { error: upErr } = await supabase.from('jobs').update(jobData).eq('id', editId);
-        if (upErr) throw new Error(upErr.message);
-        jobId = editId;
+
+      if (isProposal) {
+        const proposalData = {
+          client_id: clientId || null,
+          title: title.trim(),
+          description: description.trim() || null,
+          notes: clientNotes.trim() || null,
+          internal_notes: internalNotes.trim() || null,
+          issue_date: issueDate,
+          expiry_date: expiryDate || null,
+          subtotal_amount: +subtotal.toFixed(2),
+          tax_rate: taxRate,
+          tax_amount: +taxAmt.toFixed(2),
+          discount: +discount.toFixed(2),
+          total_amount: +total.toFixed(2),
+          scheduled_date: scheduledDate || null,
+        };
+
+        if (editId) {
+          const { error: upErr } = await supabase.from('jobs').update(proposalData).eq('id', editId);
+          if (upErr) throw new Error(upErr.message);
+          jobId = editId;
+        } else {
+          // Auto-number: COT-XXXX, based on count of existing proposals in this business.
+          const { count } = await supabase
+            .from('jobs')
+            .select('*', { count: 'exact', head: true })
+            .eq('business_id', business.id)
+            .not('estimate_number', 'is', null);
+          const estNum = `COT-${String((count ?? 0) + 1).padStart(4, '0')}`;
+          const { data: created, error: insErr } = await supabase
+            .from('jobs')
+            .insert({
+              business_id: business.id,
+              status: 'proposal',
+              priority: 'normal',
+              estimate_number: estNum,
+              created_by: user?.id ?? null,
+              ...proposalData,
+            })
+            .select()
+            .single();
+          if (insErr || !created) throw new Error(insErr?.message ?? t.errorSaveGeneric);
+          jobId = created.id;
+        }
       } else {
-        const { data: created, error: insErr } = await supabase
-          .from('jobs')
-          .insert({ business_id: business.id, status, created_by: user?.id ?? null, ...jobData })
-          .select()
-          .single();
-        if (insErr || !created) throw new Error(insErr?.message ?? t.errorSaveGeneric);
-        jobId = created.id;
+        const jobData = {
+          client_id: clientId || null,
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+          job_address: address.trim() || null,
+          job_city: city.trim() || null,
+          job_state: state || null,
+          scheduled_date: scheduledDate || null,
+          time_start: timeStart || null,
+          time_end: timeEnd || null,
+          internal_notes: internalNotes.trim() || null,
+          total_amount: subtotal,
+        };
+
+        if (editId) {
+          const { error: upErr } = await supabase.from('jobs').update(jobData).eq('id', editId);
+          if (upErr) throw new Error(upErr.message);
+          jobId = editId;
+        } else {
+          const { data: created, error: insErr } = await supabase
+            .from('jobs')
+            .insert({ business_id: business.id, status, created_by: user?.id ?? null, ...jobData })
+            .select()
+            .single();
+          if (insErr || !created) throw new Error(insErr?.message ?? t.errorSaveGeneric);
+          jobId = created.id;
+        }
       }
 
-      // Replace items
+      // Replace items (both modes)
       if (editId) await supabase.from('job_items').delete().eq('job_id', jobId);
       if (validItems.length > 0) {
         await supabase.from('job_items').insert(
@@ -281,25 +388,27 @@ export default function NuevoTrabajoRoute() {
         );
       }
 
-      // Replace assignments
-      if (editId) await supabase.from('job_assignments').delete().eq('job_id', jobId);
-      const assignments: { job_id: string; employee_id?: string; worker_name: string }[] = [];
-      assignedEmployees.forEach((empId) => {
-        const emp = employees.find((e) => e.id === empId);
-        if (emp) {
-          assignments.push({
-            job_id: jobId,
-            employee_id: empId,
-            worker_name: `${emp.first_name} ${emp.last_name}`,
-          });
+      // Replace assignments (jobs only — proposals don't carry crew yet)
+      if (!isProposal) {
+        if (editId) await supabase.from('job_assignments').delete().eq('job_id', jobId);
+        const assignments: { job_id: string; employee_id?: string; worker_name: string }[] = [];
+        assignedEmployees.forEach((empId) => {
+          const emp = employees.find((e) => e.id === empId);
+          if (emp) {
+            assignments.push({
+              job_id: jobId,
+              employee_id: empId,
+              worker_name: `${emp.first_name} ${emp.last_name}`,
+            });
+          }
+        });
+        manualWorkers
+          .map((w) => w.trim())
+          .filter(Boolean)
+          .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
+        if (assignments.length > 0) {
+          await supabase.from('job_assignments').insert(assignments);
         }
-      });
-      manualWorkers
-        .map((w) => w.trim())
-        .filter(Boolean)
-        .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
-      if (assignments.length > 0) {
-        await supabase.from('job_assignments').insert(assignments);
       }
 
       router.replace(`/dashboard/trabajos/${jobId}` as never);
@@ -309,25 +418,6 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
-  // If we're editing a proposal, the mobile form doesn't yet support that surface.
-  // Bounce the user back rather than corrupt the proposal-specific fields.
-  if (editId && isProposal) {
-    return (
-      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-          <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-            <ChevronLeft size={22} color="#111827" />
-          </Pressable>
-        </View>
-        <View className="flex-1 items-center justify-center px-8">
-          <Text className="text-base text-gray-700 text-center">
-            La edición de propuestas aún no está disponible en móvil. Usa la versión web.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   if (loadingEdit) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
@@ -336,8 +426,15 @@ export default function NuevoTrabajoRoute() {
     );
   }
 
-  const heading = editId ? t.headingEditJob : t.headingNewJob;
-  const subtitle = editId ? t.subtitleEdit : t.subtitleNewJob;
+  const heading = editId
+    ? (isProposal ? t.headingEditProposal : t.headingEditJob)
+    : (isProposal ? t.headingNewProposal : t.headingNewJob);
+  const subtitle = editId
+    ? t.subtitleEdit
+    : (isProposal ? t.subtitleNewProposal : t.subtitleNewJob);
+  const submitLabel = editId
+    ? tc.buttons.saveChanges
+    : (isProposal ? t.submitCreateProposal : t.submitCreateJob);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -368,7 +465,7 @@ export default function NuevoTrabajoRoute() {
           {/* General info */}
           <Section title={t.generalInfo}>
             <Input
-              label={t.titleLabelJob}
+              label={isProposal ? t.titleLabelProposal : t.titleLabelJob}
               placeholder={t.titlePlaceholder}
               value={title}
               onChangeText={setTitle}
@@ -402,34 +499,46 @@ export default function NuevoTrabajoRoute() {
               </Pressable>
             </View>
 
-            <View className="flex-row gap-3 mt-3">
-              <View className="flex-1">
-                <Select
-                  label={t.statusLabel}
-                  value={status}
-                  onValueChange={(v) => setStatus(v as 'scheduled' | 'in_progress')}
-                  options={[
-                    { value: 'scheduled', label: tStatuses.scheduled },
-                    { value: 'in_progress', label: tStatuses.in_progress },
-                  ]}
+            {isProposal ? (
+              <View className="mt-3 gap-3">
+                <DatePicker label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
+                <DatePicker label={t.expiryDateLabel} value={expiryDate} onChange={setExpiryDate} />
+                <DatePicker
+                  label={t.projectStartLabel}
+                  value={scheduledDate}
+                  onChange={setScheduledDate}
                 />
               </View>
-              <View className="flex-1">
-                <Select
-                  label={t.priorityLabel}
-                  value={priority}
-                  onValueChange={(v) =>
-                    setPriority(v as 'low' | 'normal' | 'high' | 'urgent')
-                  }
-                  options={[
-                    { value: 'low', label: tPriorities.low },
-                    { value: 'normal', label: tPriorities.normal },
-                    { value: 'high', label: tPriorities.high },
-                    { value: 'urgent', label: tPriorities.urgent },
-                  ]}
-                />
+            ) : (
+              <View className="flex-row gap-3 mt-3">
+                <View className="flex-1">
+                  <Select
+                    label={t.statusLabel}
+                    value={status}
+                    onValueChange={(v) => setStatus(v as 'scheduled' | 'in_progress')}
+                    options={[
+                      { value: 'scheduled', label: tStatuses.scheduled },
+                      { value: 'in_progress', label: tStatuses.in_progress },
+                    ]}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Select
+                    label={t.priorityLabel}
+                    value={priority}
+                    onValueChange={(v) =>
+                      setPriority(v as 'low' | 'normal' | 'high' | 'urgent')
+                    }
+                    options={[
+                      { value: 'low', label: tPriorities.low },
+                      { value: 'normal', label: tPriorities.normal },
+                      { value: 'high', label: tPriorities.high },
+                      { value: 'urgent', label: tPriorities.urgent },
+                    ]}
+                  />
+                </View>
               </View>
-            </View>
+            )}
 
             <View className="flex flex-col gap-2 mt-3">
               <Text className="text-sm font-semibold text-gray-700">{t.descriptionLabel}</Text>
@@ -446,160 +555,200 @@ export default function NuevoTrabajoRoute() {
             </View>
           </Section>
 
-          {/* Location */}
-          <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
-            <Input
-              label={t.addressLabel}
-              placeholder={t.addressPlaceholder}
-              value={address}
-              onChangeText={setAddress}
-            />
-            <View className="flex-row gap-3 mt-3">
-              <View className="flex-1">
-                <Input
-                  label={t.cityLabel}
-                  placeholder={t.cityPlaceholder}
-                  value={city}
-                  onChangeText={setCity}
+          {/* Location (job mode only) */}
+          {!isProposal && (
+            <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
+              {/* Map link paste — auto-fills address/city/state */}
+              <View className="flex flex-col gap-2">
+                <View className="flex-row items-center gap-1.5">
+                  <Link2 size={13} color="#9CA3AF" />
+                  <Text className="text-sm font-semibold text-gray-700">{t.mapLinkLabel}</Text>
+                </View>
+                <TextInput
+                  value={mapLink}
+                  onChangeText={parseMapLink}
+                  placeholder={t.mapLinkPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
                 />
+                {mapLinkUnrecognized ? (
+                  <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
+                ) : null}
               </View>
-              <View style={{ width: 110 }}>
-                <Select
-                  label={t.stateLabel}
-                  value={state}
-                  onValueChange={setState}
-                  placeholder={t.stateNone}
-                  options={US_STATES.map((s) => ({ value: s, label: s }))}
-                />
+              <View className="h-3" />
+              <Input
+                label={t.addressLabel}
+                placeholder={t.addressPlaceholder}
+                value={address}
+                onChangeText={setAddress}
+              />
+              <View className="flex-row gap-3 mt-3">
+                <View className="flex-1">
+                  <Input
+                    label={t.cityLabel}
+                    placeholder={t.cityPlaceholder}
+                    value={city}
+                    onChangeText={setCity}
+                  />
+                </View>
+                <View style={{ width: 110 }}>
+                  <Select
+                    label={t.stateLabel}
+                    value={state}
+                    onValueChange={setState}
+                    placeholder={t.stateNone}
+                    options={US_STATES.map((s) => ({ value: s, label: s }))}
+                  />
+                </View>
               </View>
-            </View>
-          </Section>
+            </Section>
+          )}
 
-          {/* Schedule */}
-          <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
-            <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
-            <View className="flex-row gap-3 mt-3">
-              <View className="flex-1">
-                <DatePicker
-                  label={t.timeStartLabel}
-                  mode="time"
-                  value={timeStart}
-                  onChange={setTimeStart}
-                />
+          {/* Schedule (job mode only) */}
+          {!isProposal && (
+            <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
+              <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
+              <View className="flex-row gap-3 mt-3">
+                <View className="flex-1">
+                  <DatePicker
+                    label={t.timeStartLabel}
+                    mode="time"
+                    value={timeStart}
+                    onChange={setTimeStart}
+                  />
+                </View>
+                <View className="flex-1">
+                  <DatePicker
+                    label={t.timeEndLabel}
+                    mode="time"
+                    value={timeEnd}
+                    onChange={setTimeEnd}
+                  />
+                </View>
               </View>
-              <View className="flex-1">
-                <DatePicker
-                  label={t.timeEndLabel}
-                  mode="time"
-                  value={timeEnd}
-                  onChange={setTimeEnd}
-                />
-              </View>
-            </View>
-          </Section>
+            </Section>
+          )}
 
-          {/* Workers */}
-          <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
-            {employees.length > 0 ? (
-              <View className="flex-row flex-wrap gap-2">
-                {employees.map((emp) => {
-                  const on = assignedEmployees.includes(emp.id);
-                  return (
-                    <Pressable
-                      key={emp.id}
-                      onPress={() => toggleEmployee(emp.id)}
-                      className={`flex-row items-center gap-2 px-3 py-2 rounded-xl border-2 ${
-                        on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <View
-                        className={`w-7 h-7 rounded-full items-center justify-center ${
-                          on ? 'bg-primary' : 'bg-gray-100'
+          {/* Workers (job mode only) */}
+          {!isProposal && (
+            <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
+              {employees.length > 0 ? (
+                <View className="flex-row flex-wrap gap-2">
+                  {employees.map((emp) => {
+                    const on = assignedEmployees.includes(emp.id);
+                    return (
+                      <Pressable
+                        key={emp.id}
+                        onPress={() => toggleEmployee(emp.id)}
+                        className={`flex-row items-center gap-2 px-3 py-2 rounded-xl border-2 ${
+                          on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
                         }`}
                       >
-                        <Text
-                          className={`text-xs font-bold ${
-                            on ? 'text-white' : 'text-gray-500'
+                        <View
+                          className={`w-7 h-7 rounded-full items-center justify-center ${
+                            on ? 'bg-primary' : 'bg-gray-100'
                           }`}
                         >
-                          {emp.first_name.charAt(0)}
-                          {emp.last_name.charAt(0)}
+                          <Text
+                            className={`text-xs font-bold ${
+                              on ? 'text-white' : 'text-gray-500'
+                            }`}
+                          >
+                            {emp.first_name.charAt(0)}
+                            {emp.last_name.charAt(0)}
+                          </Text>
+                        </View>
+                        <Text
+                          className={`text-sm font-medium ${
+                            on ? 'text-primary' : 'text-gray-700'
+                          }`}
+                        >
+                          {emp.first_name} {emp.last_name}
                         </Text>
-                      </View>
-                      <Text
-                        className={`text-sm font-medium ${
-                          on ? 'text-primary' : 'text-gray-700'
-                        }`}
-                      >
-                        {emp.first_name} {emp.last_name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-
-            <View className="mt-4">
-              <Text className="text-xs text-gray-400 mb-2">{t.additionalWorkersLabel}</Text>
-              {manualWorkers.map((w, i) => (
-                <View key={i} className="flex-row items-center gap-2 mb-2">
-                  <TextInput
-                    value={w}
-                    onChangeText={(v) =>
-                      setManualWorkers((prev) => prev.map((x, j) => (j === i ? v : x)))
-                    }
-                    placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))}
-                    placeholderTextColor="#9CA3AF"
-                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
-                  />
-                  {manualWorkers.length > 1 ? (
-                    <Pressable
-                      onPress={() =>
-                        setManualWorkers((prev) => prev.filter((_, j) => j !== i))
-                      }
-                      hitSlop={8}
-                      className="p-2 rounded-xl active:bg-red-50"
-                    >
-                      <Trash2 size={16} color="#EF4444" />
-                    </Pressable>
-                  ) : null}
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              ))}
-              <Pressable
-                onPress={() => setManualWorkers((prev) => [...prev, ''])}
-                hitSlop={8}
-              >
-                <Text className="text-sm font-semibold text-primary">{t.addWorker}</Text>
-              </Pressable>
-            </View>
-          </Section>
+              ) : null}
+
+              <View className="mt-4">
+                <Text className="text-xs text-gray-400 mb-2">{t.additionalWorkersLabel}</Text>
+                {manualWorkers.map((w, i) => (
+                  <View key={i} className="flex-row items-center gap-2 mb-2">
+                    <TextInput
+                      value={w}
+                      onChangeText={(v) =>
+                        setManualWorkers((prev) => prev.map((x, j) => (j === i ? v : x)))
+                      }
+                      placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))}
+                      placeholderTextColor="#9CA3AF"
+                      className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
+                    />
+                    {manualWorkers.length > 1 ? (
+                      <Pressable
+                        onPress={() =>
+                          setManualWorkers((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        hitSlop={8}
+                        className="p-2 rounded-xl active:bg-red-50"
+                      >
+                        <Trash2 size={16} color="#EF4444" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+                <Pressable
+                  onPress={() => setManualWorkers((prev) => [...prev, ''])}
+                  hitSlop={8}
+                >
+                  <Text className="text-sm font-semibold text-primary">{t.addWorker}</Text>
+                </Pressable>
+              </View>
+            </Section>
+          )}
 
           {/* Items */}
-          <Section title={t.itemsHeadingJob} icon={<DollarSign size={14} color="#4F46E5" />}>
+          <Section
+            title={isProposal ? t.itemsHeadingProposal : t.itemsHeadingJob}
+            icon={<DollarSign size={14} color="#4F46E5" />}
+          >
             <View className="flex flex-col gap-3">
               {items.map((item) => (
                 <View
                   key={item.id}
                   className="bg-gray-50 rounded-2xl p-3 border border-gray-100"
                 >
-                  <View className="flex-row gap-2">
-                    <View style={{ width: 130 }}>
-                      <Select
-                        value={item.item_type}
-                        onValueChange={(v) => updateItem(item.id, 'item_type', v as ItemType)}
-                        options={ITEM_TYPE_OPTIONS}
-                      />
+                  {isProposal ? (
+                    <TextInput
+                      value={item.description}
+                      onChangeText={(v) => updateItem(item.id, 'description', v)}
+                      placeholder={t.itemDescriptionPlaceholderProposal}
+                      placeholderTextColor="#9CA3AF"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
+                    />
+                  ) : (
+                    <View className="flex-row gap-2">
+                      <View style={{ width: 130 }}>
+                        <Select
+                          value={item.item_type}
+                          onValueChange={(v) => updateItem(item.id, 'item_type', v as ItemType)}
+                          options={ITEM_TYPE_OPTIONS}
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <TextInput
+                          value={item.description}
+                          onChangeText={(v) => updateItem(item.id, 'description', v)}
+                          placeholder={t.itemDescriptionPlaceholderJob}
+                          placeholderTextColor="#9CA3AF"
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
+                        />
+                      </View>
                     </View>
-                    <View className="flex-1">
-                      <TextInput
-                        value={item.description}
-                        onChangeText={(v) => updateItem(item.id, 'description', v)}
-                        placeholder={t.itemDescriptionPlaceholderJob}
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
-                      />
-                    </View>
-                  </View>
+                  )}
 
                   <View className="flex-row items-center gap-2 mt-2">
                     <View className="flex-1">
@@ -651,22 +800,74 @@ export default function NuevoTrabajoRoute() {
                 </View>
               ))}
 
-              <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
-                <Text className="text-sm text-gray-500">{t.totalEstimated}</Text>
-                <Text className="text-lg font-bold text-gray-900">{fmtMoney(subtotal)}</Text>
-              </View>
+              {isProposal ? (
+                <View className="pt-2 border-t border-gray-100 gap-2">
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-sm text-gray-500">{t.subtotal}</Text>
+                    <Text className="text-sm font-medium text-gray-900">{fmtMoney(subtotal)}</Text>
+                  </View>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-sm text-gray-500">{t.taxPercent}</Text>
+                    <TextInput
+                      value={taxRate ? String(taxRate) : ''}
+                      onChangeText={(v) => setTaxRate(parseFloat(v) || 0)}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 text-right"
+                    />
+                  </View>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-sm text-gray-500">{t.discountAmount}</Text>
+                    <TextInput
+                      value={discount ? String(discount) : ''}
+                      onChangeText={(v) => setDiscount(parseFloat(v) || 0)}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 text-right"
+                    />
+                  </View>
+                  <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
+                    <Text className="text-base font-bold text-gray-900">{t.total}</Text>
+                    <Text className="text-lg font-bold text-primary">{fmtMoney(total)}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
+                  <Text className="text-sm text-gray-500">{t.totalEstimated}</Text>
+                  <Text className="text-lg font-bold text-gray-900">{fmtMoney(subtotal)}</Text>
+                </View>
+              )}
             </View>
           </Section>
 
           {/* Notes */}
           <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
+            {isProposal ? (
+              <View className="mb-3">
+                <Text className="text-sm font-semibold text-gray-700 mb-2">
+                  {t.clientNoteLabel}
+                </Text>
+                <TextInput
+                  value={clientNotes}
+                  onChangeText={setClientNotes}
+                  placeholder={t.clientNotePlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                  style={{ textAlignVertical: 'top' }}
+                />
+              </View>
+            ) : null}
             <Text className="text-sm font-semibold text-gray-700 mb-2">
-              {t.internalNoteLabelJob}
+              {isProposal ? t.internalNoteLabelProposal : t.internalNoteLabelJob}
             </Text>
             <TextInput
               value={internalNotes}
               onChangeText={setInternalNotes}
-              placeholder={t.internalNotePlaceholderJob}
+              placeholder={isProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
               placeholderTextColor="#9CA3AF"
               multiline
               numberOfLines={4}
@@ -695,7 +896,7 @@ export default function NuevoTrabajoRoute() {
             </View>
             <View className="flex-[2]">
               <Button onPress={save} loading={saving} fullWidth>
-                {editId ? tc.buttons.saveChanges : t.submitCreateJob}
+                {submitLabel}
               </Button>
             </View>
           </View>
