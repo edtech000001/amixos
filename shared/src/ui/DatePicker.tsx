@@ -256,11 +256,17 @@ function formatDateToValue(date: Date, mode: Mode): string {
   return `${y}-${mo}-${d}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-// Locale-aware month abbreviations. Format manually so we control casing
-// and punctuation (some locales return "may" lowercase or "p. m." with
-// periods, which doesn't match the iOS-native look we want).
-const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+// Full month names so the displayed locale is unambiguous. Spanish
+// abbreviations like "May" / "Jun" / "Jul" collide with English, which
+// made the field look like it wasn't translated.
+const MONTHS_EN = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
 
 function formatForDisplay(value: string, mode: Mode, locale?: string): string {
   if (!value) return '';
@@ -268,9 +274,8 @@ function formatForDisplay(value: string, mode: Mode, locale?: string): string {
 
   if (mode === 'time') return formatTime12h(d);
 
-  // Always "Month Day, Year" in both languages — Spanish just swaps in
-  // Spanish month abbreviations (e.g. "May 23, 2026" in EN, "May 23, 2026"
-  // with "Abr" / "Ago" / "Dic" in ES).
+  // Always "Month Day, Year" in both languages — Spanish swaps in Spanish
+  // month names (e.g. "May 29, 2026" → "Mayo 29, 2026").
   const isEs = (locale ?? '').toLowerCase().startsWith('es');
   const months = isEs ? MONTHS_ES : MONTHS_EN;
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
