@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal, Platform } from 'react-native';
 import { Calendar, Clock } from 'lucide-react-native';
 import { clsx } from 'clsx';
+import { useLang } from '../i18n/context';
 
 type Mode = 'date' | 'time' | 'datetime-local';
 
@@ -50,7 +51,7 @@ export function DatePicker({
           )}
         />
       ) : (
-        <NativePicker value={value} onChange={onChange} mode={mode} placeholder={placeholder} error={error} />
+        <NativePicker value={value} onChange={onChange} mode={mode} label={label} placeholder={placeholder} error={error} />
       )}
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
@@ -62,12 +63,14 @@ function NativePicker({
   value,
   onChange,
   mode,
+  label,
   placeholder,
   error,
 }: {
   value: string;
   onChange: (v: string) => void;
   mode: Mode;
+  label?: string;
   placeholder?: string;
   error?: string;
 }) {
@@ -76,6 +79,9 @@ function NativePicker({
   const DateTimePickerModule = require('@react-native-community/datetimepicker');
   const DateTimePicker = DateTimePickerModule.default;
   const DateTimePickerAndroid = DateTimePickerModule.DateTimePickerAndroid;
+
+  const { t } = useLang();
+  const tc = t.common.buttons;
 
   const [iosOpen, setIosOpen] = useState(false);
   const [iosDraft, setIosDraft] = useState<Date | null>(null);
@@ -120,6 +126,11 @@ function NativePicker({
 
   const Icon = mode === 'time' ? Clock : Calendar;
 
+  // iOS picker style: inline calendar for dates, scroll-wheel spinner for times.
+  // Inline needs ~340px of vertical space; spinner is fine at ~220px.
+  const iosDisplay = mode === 'time' ? 'spinner' : 'inline';
+  const iosPickerHeight = mode === 'time' ? 220 : 360;
+
   return (
     <>
       <Pressable
@@ -129,22 +140,22 @@ function NativePicker({
           error ? 'border-red-300' : 'border-gray-200',
         )}
       >
-        <Icon size={16} color="#9CA3AF" />
         <Text
           className={clsx(
-            'flex-1 pl-2 text-sm',
+            'flex-1 text-sm',
             displayText ? 'text-gray-900' : 'text-gray-400',
           )}
         >
-          {displayText || placeholder || (mode === 'time' ? 'Hora' : 'Fecha')}
+          {displayText || placeholder || (mode === 'time' ? '--:--' : '--/--/----')}
         </Text>
+        <Icon size={16} color="#9CA3AF" />
       </Pressable>
 
       {Platform.OS === 'ios' ? (
         <RNModal
           visible={iosOpen}
           transparent
-          animationType="fade"
+          animationType="slide"
           onRequestClose={() => setIosOpen(false)}
         >
           <Pressable
@@ -153,12 +164,30 @@ function NativePicker({
           >
             <Pressable
               onPress={(e) => e.stopPropagation()}
-              className="bg-white rounded-t-3xl"
+              className="bg-white rounded-t-3xl pt-3"
             >
-              <View className="flex-row justify-between items-center px-5 pt-4 pb-1">
-                <Pressable onPress={() => setIosOpen(false)} hitSlop={8}>
-                  <Text className="text-base text-gray-500">Cancelar</Text>
-                </Pressable>
+              {/* Drag-handle */}
+              <View className="items-center mb-1">
+                <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              </View>
+              {/* Header: title on left, Clear next to it, Done on right */}
+              <View className="flex-row items-center justify-between px-5 pt-3 pb-3 border-b border-gray-100">
+                <View className="flex-row items-center gap-3 flex-1">
+                  <Text className="text-2xl font-extrabold text-gray-900">
+                    {label || (mode === 'time' ? 'Hora' : 'Fecha')}
+                  </Text>
+                  {value ? (
+                    <Pressable
+                      onPress={() => {
+                        onChange('');
+                        setIosOpen(false);
+                      }}
+                      hitSlop={8}
+                    >
+                      <Text className="text-base text-gray-400">{tc.clear}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
                 <Pressable
                   onPress={() => {
                     if (iosDraft) onChange(formatDateToValue(iosDraft, mode));
@@ -166,18 +195,22 @@ function NativePicker({
                   }}
                   hitSlop={8}
                 >
-                  <Text className="text-base font-semibold text-primary">Listo</Text>
+                  <Text className="text-base font-semibold text-primary">{tc.done}</Text>
                 </Pressable>
               </View>
-              <DateTimePicker
-                value={iosDraft ?? new Date()}
-                mode={mode === 'datetime-local' ? 'datetime' : mode}
-                display="spinner"
-                onChange={(_e: unknown, d?: Date) => {
-                  if (d) setIosDraft(d);
-                }}
-                style={{ height: 220 }}
-              />
+              <View style={{ paddingHorizontal: 8 }}>
+                <DateTimePicker
+                  value={iosDraft ?? new Date()}
+                  mode={mode === 'datetime-local' ? 'datetime' : mode}
+                  display={iosDisplay}
+                  accentColor="#4F46E5"
+                  themeVariant="light"
+                  onChange={(_e: unknown, d?: Date) => {
+                    if (d) setIosDraft(d);
+                  }}
+                  style={{ height: iosPickerHeight }}
+                />
+              </View>
               <View style={{ height: 24 }} />
             </Pressable>
           </Pressable>

@@ -21,6 +21,8 @@ export type CommonDict = {
     add: string;
     remove: string;
     close: string;
+    done: string;
+    clear: string;
   };
   states: {
     loading: string;
@@ -53,6 +55,8 @@ export const common: Record<Locale, CommonDict> = {
       add: 'Agregar',
       remove: 'Quitar',
       close: 'Cerrar',
+      done: 'Listo',
+      clear: 'Borrar',
     },
     states: {
       loading: 'Cargando',
@@ -83,6 +87,8 @@ export const common: Record<Locale, CommonDict> = {
       add: 'Add',
       remove: 'Remove',
       close: 'Close',
+      done: 'Done',
+      clear: 'Clear',
     },
     states: {
       loading: 'Loading',
