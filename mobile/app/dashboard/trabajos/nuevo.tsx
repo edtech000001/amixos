@@ -450,6 +450,16 @@ export default function NuevoTrabajoRoute() {
           <Text className="text-lg font-bold text-gray-900">{heading}</Text>
           <Text className="text-xs text-gray-400">{subtitle}</Text>
         </View>
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          hitSlop={8}
+          className={`px-3.5 py-1.5 rounded-full ${saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'}`}
+        >
+          <Text className="text-sm font-semibold text-white">
+            {saving ? '…' : tc.buttons.save}
+          </Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
