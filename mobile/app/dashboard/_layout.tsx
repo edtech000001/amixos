@@ -45,14 +45,14 @@ export default function DashboardLayout() {
       <Tabs.Screen
         name="mas/index"
         options={{
-          // Translation key for "more" doesn't exist yet — use a literal that works in both langs.
-          title: 'Más',
+          title: sb.mas,
           tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} />,
         }}
       />
 
       {/* Hidden routes (accessed via push, not via tab bar) */}
       <Tabs.Screen name="facturas/[id]" options={{ href: null }} />
+      <Tabs.Screen name="trabajos/[id]" options={{ href: null }} />
       <Tabs.Screen name="mas/empleados" options={{ href: null }} />
       <Tabs.Screen name="mas/inventario" options={{ href: null }} />
       <Tabs.Screen name="mas/calendario" options={{ href: null }} />

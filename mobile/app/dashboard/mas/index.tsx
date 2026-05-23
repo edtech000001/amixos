@@ -44,7 +44,7 @@ export default function MasMenu() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <ScrollView contentContainerClassName="p-6">
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Más</Text>
+        <Text className="text-2xl font-bold text-gray-900 mb-1">{sb.mas}</Text>
         {business?.name ? (
           <Text className="text-sm text-gray-500 mb-6">{business.name}</Text>
         ) : null}

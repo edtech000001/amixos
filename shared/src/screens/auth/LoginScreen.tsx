@@ -80,22 +80,32 @@ export function LoginScreen({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       className="flex-1"
-      style={{ backgroundColor: '#5B5BD6' }}
+      // Match the hero gradient's bottom stop so the area below the floating
+      // card blends seamlessly with the gradient above it.
+      style={{ backgroundColor: '#8B5CF6' }}
     >
       <ScrollView
         contentContainerClassName="flex-grow"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <HeroHeader onRegisterPress={onRegisterPress} cta={t.login.noAccount} ctaAction={t.login.registerHere} />
+        <HeroHeader />
 
         <View
-          className="bg-white px-6 pt-8 pb-10"
+          className="bg-white"
           style={{
-            borderTopLeftRadius: 36,
-            borderTopRightRadius: 36,
-            marginTop: -28,
-            minHeight: 480,
+            marginHorizontal: 12,
+            marginTop: -36,
+            marginBottom: 24,
+            paddingHorizontal: 24,
+            paddingTop: 32,
+            paddingBottom: 28,
+            borderRadius: 28,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.12,
+            shadowRadius: 24,
+            elevation: 12,
           }}
         >
           <View className="w-full max-w-md mx-auto">
@@ -170,6 +180,13 @@ export function LoginScreen({
                 {oauthSlot}
               </View>
             ) : null}
+
+            <View className="mt-8 pt-6 border-t border-gray-100 flex-row justify-center items-center">
+              <Text className="text-sm text-gray-500">{t.login.noAccount} </Text>
+              <Pressable onPress={onRegisterPress} hitSlop={8}>
+                <Text className="text-sm text-primary font-semibold">{t.login.registerHere}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -177,53 +194,46 @@ export function LoginScreen({
   );
 }
 
-interface HeroHeaderProps {
-  onRegisterPress: () => void;
-  cta: string;
-  ctaAction: string;
-}
-
-function HeroHeader({ onRegisterPress, cta, ctaAction }: HeroHeaderProps) {
+function HeroHeader() {
   return (
-    <View style={{ height: 280, position: 'relative' }}>
+    <View style={{ height: 300, position: 'relative' }}>
+      {/* Deeper, more sophisticated gradient — three stops for a softer transition
+          (deep indigo → indigo → violet). Reads more "premium financial app"
+          than the previous two-stop punchy purple. */}
       <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="xMidYMid slice" pointerEvents="none">
         <Defs>
           <SvgLinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#6366F1" />
+            <Stop offset="0%" stopColor="#4338CA" />
+            <Stop offset="55%" stopColor="#6366F1" />
             <Stop offset="100%" stopColor="#8B5CF6" />
           </SvgLinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#heroGrad)" />
       </Svg>
 
-      <View className="flex-1 px-6 pt-14">
-        <View className="flex-row items-center justify-end">
-          <Text className="text-white/80 text-xs mr-2">{cta}</Text>
-          <Pressable
-            onPress={onRegisterPress}
-            hitSlop={8}
-            style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            className="px-3.5 py-1.5 rounded-full"
-          >
-            <Text className="text-white text-xs font-semibold">{ctaAction}</Text>
-          </Pressable>
+      <View className="flex-1 items-center justify-center pb-12 pt-10">
+        <View
+          className="w-20 h-20 rounded-3xl bg-white items-center justify-center mb-4"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+        >
+          <Text className="text-4xl font-extrabold text-primary">a</Text>
         </View>
-
-        <View className="flex-1 items-center justify-center pb-6">
-          <View
-            className="w-16 h-16 rounded-2xl bg-white items-center justify-center mb-3"
-            style={{
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 16,
-              elevation: 8,
-            }}
-          >
-            <Text className="text-3xl font-extrabold text-primary">a</Text>
-          </View>
-          <Text className="text-white text-2xl font-extrabold tracking-tight">Amixos</Text>
-        </View>
+        <Text
+          className="text-white text-3xl font-extrabold tracking-tight"
+          style={{
+            textShadowColor: 'rgba(0,0,0,0.15)',
+            textShadowOffset: { width: 0, height: 2 },
+            textShadowRadius: 8,
+          }}
+        >
+          Amixos
+        </Text>
       </View>
     </View>
   );
