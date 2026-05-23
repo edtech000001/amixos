@@ -354,6 +354,9 @@ export type DashboardDict = {
       mapLinkLabel: string;
       mapLinkPlaceholder: string;
       mapLinkHint: string;
+      coordinatesLabel: string;
+      coordinatesPlaceholder: string;
+      coordinatesInvalid: string;
       addressLabel: string;
       addressPlaceholder: string;
       cityLabel: string;
@@ -361,6 +364,7 @@ export type DashboardDict = {
       stateLabel: string;
       stateNone: string;
       scheduleHeading: string;
+      allDayLabel: string;
       dateLabel: string;
       timeStartLabel: string;
       timeEndLabel: string;
@@ -393,6 +397,8 @@ export type DashboardDict = {
       internalNoteLabelJob: string;
       internalNotePlaceholderProposal: string;
       internalNotePlaceholderJob: string;
+      workerNoteLabel: string;
+      workerNotePlaceholder: string;
       errorTitleRequiredJob: string;
       errorTitleRequiredProposal: string;
       errorAtLeastOneItem: string;
@@ -1177,6 +1183,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         mapLinkLabel: 'Pegar enlace de mapa',
         mapLinkPlaceholder: 'https://maps.google.com/... o https://maps.apple.com/...',
         mapLinkHint: 'Pega un enlace de Google Maps o Apple Maps para auto-llenar la dirección',
+        coordinatesLabel: 'Coordenadas (lat, lng)',
+        coordinatesPlaceholder: 'ej. 40.7128, -74.0060',
+        coordinatesInvalid: 'Formato inválido. Usa "lat, lng" — ej. 40.7128, -74.0060',
         addressLabel: 'Dirección',
         addressPlaceholder: '123 County Road',
         cityLabel: 'Ciudad',
@@ -1184,6 +1193,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateLabel: 'Estado',
         stateNone: '—',
         scheduleHeading: 'Fecha y hora',
+        allDayLabel: 'Todo el día',
         dateLabel: 'Fecha',
         timeStartLabel: 'Hora inicio',
         timeEndLabel: 'Hora fin',
@@ -1216,6 +1226,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNoteLabelJob: 'Notas internas',
         internalNotePlaceholderProposal: 'Notas privadas (no visibles para el cliente)...',
         internalNotePlaceholderJob: 'Instrucciones especiales, detalles del sitio, acceso...',
+        workerNoteLabel: 'Notas para el trabajador',
+        workerNotePlaceholder: 'Instrucciones específicas para el equipo asignado...',
         errorTitleRequiredJob: 'El título del trabajo es requerido',
         errorTitleRequiredProposal: 'El título es requerido',
         errorAtLeastOneItem: 'Agrega al menos un ítem',
@@ -1997,6 +2009,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         mapLinkLabel: 'Paste map link',
         mapLinkPlaceholder: 'https://maps.google.com/... or https://maps.apple.com/...',
         mapLinkHint: 'Paste a Google Maps or Apple Maps link to auto-fill the address',
+        coordinatesLabel: 'Coordinates (lat, lng)',
+        coordinatesPlaceholder: 'e.g. 40.7128, -74.0060',
+        coordinatesInvalid: 'Invalid format. Use "lat, lng" — e.g. 40.7128, -74.0060',
         addressLabel: 'Address',
         addressPlaceholder: '123 County Road',
         cityLabel: 'City',
@@ -2004,6 +2019,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateLabel: 'State',
         stateNone: '—',
         scheduleHeading: 'Date and time',
+        allDayLabel: 'All day',
         dateLabel: 'Date',
         timeStartLabel: 'Start time',
         timeEndLabel: 'End time',
@@ -2036,6 +2052,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNoteLabelJob: 'Internal notes',
         internalNotePlaceholderProposal: 'Private notes (not visible to the client)...',
         internalNotePlaceholderJob: 'Special instructions, site details, access...',
+        workerNoteLabel: 'Notes for the worker',
+        workerNotePlaceholder: 'Specific instructions for the assigned crew...',
         errorTitleRequiredJob: 'Job title is required',
         errorTitleRequiredProposal: 'Title is required',
         errorAtLeastOneItem: 'Add at least one item',

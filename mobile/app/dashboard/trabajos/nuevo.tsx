@@ -20,16 +20,16 @@ import {
   Trash2,
   MapPin,
   Link2,
+  Navigation,
   Calendar as CalendarIcon,
   Users as UsersIcon,
-  DollarSign,
   FileText,
   Check,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
+import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 
 interface Client {
   id: string;
@@ -47,32 +47,31 @@ interface Employee {
   role: string;
 }
 
-type ItemType = 'labor' | 'material' | 'equipment' | 'other';
-
-interface LineItem {
-  id: string;
-  item_type: ItemType;
-  description: string;
-  quantity: number;
-  unit_price: number;
-}
-
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
   'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-const newId = () => Math.random().toString(36).slice(2);
-const newLaborItem = (): LineItem => ({ id: newId(), item_type: 'labor', description: '', quantity: 1, unit_price: 0 });
-const newOtherItem = (): LineItem => ({ id: newId(), item_type: 'other', description: '', quantity: 1, unit_price: 0 });
-
 const todayISO = () => new Date().toISOString().split('T')[0];
 const plusDaysISO = (days: number) =>
   new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
 
-const fmtMoney = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+/**
+ * Accept "lat, lng" or "lat lng" with optional surrounding whitespace.
+ * Returns null if not a valid lat/lng pair.
+ */
+function parseCoords(input: string): { lat: number; lng: number } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const m = trimmed.match(/^(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
 
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
@@ -106,13 +105,12 @@ export default function NuevoTrabajoRoute() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [allDay, setAllDay] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
-  const [items, setItems] = useState<LineItem[]>([
-    modo === 'propuesta' ? newOtherItem() : newLaborItem(),
-  ]);
+  const [workerNotes, setWorkerNotes] = useState('');
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
 
@@ -120,12 +118,14 @@ export default function NuevoTrabajoRoute() {
   const [clientNotes, setClientNotes] = useState('');
   const [issueDate, setIssueDate] = useState(todayISO());
   const [expiryDate, setExpiryDate] = useState(plusDaysISO(30));
-  const [taxRate, setTaxRate] = useState(0);
-  const [discount, setDiscount] = useState(0);
 
-  // Location auto-fill from map link
+  // Location auto-fill from map link / coords
   const [mapLink, setMapLink] = useState('');
   const [mapLinkUnrecognized, setMapLinkUnrecognized] = useState(false);
+  const [coordsText, setCoordsText] = useState('');
+  const [coordsInvalid, setCoordsInvalid] = useState(false);
+  const [jobLat, setJobLat] = useState<number | null>(null);
+  const [jobLng, setJobLng] = useState<number | null>(null);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -158,9 +158,8 @@ export default function NuevoTrabajoRoute() {
       setEmployees((emp ?? []) as Employee[]);
 
       if (editId) {
-        const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
+        const [{ data: job }, { data: assigns }] = await Promise.all([
           supabase.from('jobs').select('*').eq('id', editId).single(),
-          supabase.from('job_items').select('*').eq('job_id', editId).order('created_at'),
           supabase.from('job_assignments').select('*').eq('job_id', editId),
         ]);
         if (cancelled) return;
@@ -175,28 +174,22 @@ export default function NuevoTrabajoRoute() {
           setCity(job.job_city ?? '');
           setState(job.job_state ?? '');
           setScheduledDate(job.scheduled_date ?? '');
+          setAllDay(!!job.all_day);
           setTimeStart(job.time_start ?? '');
           setTimeEnd(job.time_end ?? '');
           setDescription(job.description ?? '');
           setInternalNotes(job.internal_notes ?? '');
+          setWorkerNotes(job.worker_notes ?? '');
+          if (job.job_lat != null && job.job_lng != null) {
+            setJobLat(job.job_lat);
+            setJobLng(job.job_lng);
+            setCoordsText(`${job.job_lat}, ${job.job_lng}`);
+          }
           if (proposal) {
             setClientNotes(job.notes ?? '');
             setIssueDate(job.issue_date ?? todayISO());
             setExpiryDate(job.expiry_date ?? '');
-            setTaxRate(job.tax_rate ?? 0);
-            setDiscount(job.discount ?? 0);
           }
-        }
-        if (jobItems && jobItems.length > 0) {
-          setItems(
-            jobItems.map((i: any) => ({
-              id: i.id,
-              item_type: (i.item_type ?? 'other') as ItemType,
-              description: i.description ?? '',
-              quantity: i.quantity ?? 1,
-              unit_price: i.unit_price ?? 0,
-            })),
-          );
         }
         if (assigns) {
           setAssignedEmployees(
@@ -215,13 +208,26 @@ export default function NuevoTrabajoRoute() {
     };
   }, [business?.id, editId]);
 
-  // Auto-append a blank row when the last item has a description.
-  useEffect(() => {
-    if (items.length === 0) return;
-    if (items.every((i) => i.description.trim() !== '')) {
-      setItems((prev) => [...prev, isProposal ? newOtherItem() : newLaborItem()]);
+  // Parse pasted coordinates ("lat, lng") and store as numeric lat/lng.
+  const onCoordsChange = (text: string) => {
+    setCoordsText(text);
+    if (!text.trim()) {
+      setCoordsInvalid(false);
+      setJobLat(null);
+      setJobLng(null);
+      return;
     }
-  }, [items.map((i) => i.description).join('|'), isProposal]);
+    const parsed = parseCoords(text);
+    if (parsed) {
+      setJobLat(parsed.lat);
+      setJobLng(parsed.lng);
+      setCoordsInvalid(false);
+    } else {
+      setJobLat(null);
+      setJobLng(null);
+      setCoordsInvalid(true);
+    }
+  };
 
   // Parse Google/Apple Maps URLs and auto-fill address fields.
   const parseMapLink = (link: string) => {
@@ -273,31 +279,14 @@ export default function NuevoTrabajoRoute() {
   const toggleEmployee = (id: string) =>
     setAssignedEmployees((prev) => (prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]));
 
-  const updateItem = <K extends keyof LineItem>(id: string, field: K, value: LineItem[K]) =>
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
-
-  const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
-
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
-  const taxAmt = subtotal * (taxRate / 100);
-  const total = isProposal ? subtotal + taxAmt - discount : subtotal;
-
-  const ITEM_TYPE_OPTIONS = [
-    { value: 'labor', label: t.itemTypeLabor },
-    { value: 'material', label: t.itemTypeMaterial },
-    { value: 'equipment', label: t.itemTypeEquipment },
-    { value: 'other', label: t.itemTypeOther },
-  ];
-
   const save = async () => {
     if (!business) return;
     if (!title.trim()) {
       setError(isProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob);
       return;
     }
-    const validItems = items.filter((i) => i.description.trim());
-    if (isProposal && validItems.length === 0) {
-      setError(t.errorAtLeastOneItem);
+    if (coordsText.trim() && coordsInvalid) {
+      setError(t.coordinatesInvalid);
       return;
     }
     setSaving(true);
@@ -305,20 +294,28 @@ export default function NuevoTrabajoRoute() {
     try {
       let jobId: string;
 
+      // Shared location/notes fields — populated for both modes so coords and
+      // worker notes work everywhere. Items/pricing are intentionally NOT
+      // touched here; those live on the detail page now.
+      const locationAndNotes = {
+        job_address: address.trim() || null,
+        job_city: city.trim() || null,
+        job_state: state || null,
+        job_lat: jobLat,
+        job_lng: jobLng,
+        internal_notes: internalNotes.trim() || null,
+        worker_notes: workerNotes.trim() || null,
+      };
+
       if (isProposal) {
         const proposalData = {
+          ...locationAndNotes,
           client_id: clientId || null,
           title: title.trim(),
           description: description.trim() || null,
           notes: clientNotes.trim() || null,
-          internal_notes: internalNotes.trim() || null,
           issue_date: issueDate,
           expiry_date: expiryDate || null,
-          subtotal_amount: +subtotal.toFixed(2),
-          tax_rate: taxRate,
-          tax_amount: +taxAmt.toFixed(2),
-          discount: +discount.toFixed(2),
-          total_amount: +total.toFixed(2),
           scheduled_date: scheduledDate || null,
         };
 
@@ -351,18 +348,15 @@ export default function NuevoTrabajoRoute() {
         }
       } else {
         const jobData = {
+          ...locationAndNotes,
           client_id: clientId || null,
           title: title.trim(),
           description: description.trim() || null,
           priority,
-          job_address: address.trim() || null,
-          job_city: city.trim() || null,
-          job_state: state || null,
           scheduled_date: scheduledDate || null,
-          time_start: timeStart || null,
-          time_end: timeEnd || null,
-          internal_notes: internalNotes.trim() || null,
-          total_amount: subtotal,
+          all_day: allDay,
+          time_start: allDay ? null : (timeStart || null),
+          time_end: allDay ? null : (timeEnd || null),
         };
 
         if (editId) {
@@ -380,21 +374,9 @@ export default function NuevoTrabajoRoute() {
         }
       }
 
-      // Replace items (both modes)
-      if (editId) await supabase.from('job_items').delete().eq('job_id', jobId);
-      if (validItems.length > 0) {
-        await supabase.from('job_items').insert(
-          validItems.map((i) => ({
-            job_id: jobId,
-            item_type: i.item_type,
-            description: i.description,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-          })),
-        );
-      }
-
-      // Replace assignments (jobs only — proposals don't carry crew yet)
+      // Replace assignments (jobs only — proposals don't carry crew yet).
+      // Existing job_items are intentionally preserved; we no longer manage
+      // line items from this form (moved to detail page).
       if (!isProposal) {
         if (editId) await supabase.from('job_assignments').delete().eq('job_id', jobId);
         const assignments: { job_id: string; employee_id?: string; worker_name: string }[] = [];
@@ -595,6 +577,31 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
                 ) : null}
               </View>
+
+              {/* Coordinates — lat, lng */}
+              <View className="h-3" />
+              <View className="flex flex-col gap-2">
+                <View className="flex-row items-center gap-1.5">
+                  <Navigation size={13} color="#9CA3AF" />
+                  <Text className="text-sm font-semibold text-gray-700">{t.coordinatesLabel}</Text>
+                </View>
+                <TextInput
+                  value={coordsText}
+                  onChangeText={onCoordsChange}
+                  placeholder={t.coordinatesPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="numbers-and-punctuation"
+                  className={`rounded-2xl border bg-white px-4 py-3 text-base text-gray-900 ${
+                    coordsInvalid ? 'border-red-300' : 'border-gray-200'
+                  }`}
+                />
+                {coordsInvalid ? (
+                  <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
+                ) : null}
+              </View>
+
               <View className="h-3" />
               <Input
                 label={t.addressLabel}
@@ -628,24 +635,32 @@ export default function NuevoTrabajoRoute() {
           {!isProposal && (
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
               <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
-              <View className="flex-row gap-3 mt-3">
-                <View className="flex-1">
-                  <DatePicker
-                    label={t.timeStartLabel}
-                    mode="time"
-                    value={timeStart}
-                    onChange={setTimeStart}
-                  />
-                </View>
-                <View className="flex-1">
-                  <DatePicker
-                    label={t.timeEndLabel}
-                    mode="time"
-                    value={timeEnd}
-                    onChange={setTimeEnd}
-                  />
-                </View>
+
+              <View className="mt-4 flex-row items-center justify-between">
+                <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
+                <Toggle value={allDay} onValueChange={setAllDay} />
               </View>
+
+              {!allDay ? (
+                <View className="flex-row gap-3 mt-3">
+                  <View className="flex-1">
+                    <DatePicker
+                      label={t.timeStartLabel}
+                      mode="time"
+                      value={timeStart}
+                      onChange={setTimeStart}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <DatePicker
+                      label={t.timeEndLabel}
+                      mode="time"
+                      value={timeEnd}
+                      onChange={setTimeEnd}
+                    />
+                  </View>
+                </View>
+              ) : null}
             </Section>
           )}
 
@@ -727,137 +742,8 @@ export default function NuevoTrabajoRoute() {
             </Section>
           )}
 
-          {/* Items */}
-          <Section
-            title={isProposal ? t.itemsHeadingProposal : t.itemsHeadingJob}
-            icon={<DollarSign size={14} color="#4F46E5" />}
-          >
-            <View className="flex flex-col gap-3">
-              {items.map((item) => (
-                <View
-                  key={item.id}
-                  className="bg-gray-50 rounded-2xl p-3 border border-gray-100"
-                >
-                  {isProposal ? (
-                    <TextInput
-                      value={item.description}
-                      onChangeText={(v) => updateItem(item.id, 'description', v)}
-                      placeholder={t.itemDescriptionPlaceholderProposal}
-                      placeholderTextColor="#9CA3AF"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
-                    />
-                  ) : (
-                    <View className="flex-row gap-2">
-                      <View style={{ width: 130 }}>
-                        <Select
-                          value={item.item_type}
-                          onValueChange={(v) => updateItem(item.id, 'item_type', v as ItemType)}
-                          options={ITEM_TYPE_OPTIONS}
-                        />
-                      </View>
-                      <View className="flex-1">
-                        <TextInput
-                          value={item.description}
-                          onChangeText={(v) => updateItem(item.id, 'description', v)}
-                          placeholder={t.itemDescriptionPlaceholderJob}
-                          placeholderTextColor="#9CA3AF"
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
-                        />
-                      </View>
-                    </View>
-                  )}
-
-                  <View className="flex-row items-center gap-2 mt-2">
-                    <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">{t.colQty}</Text>
-                      <TextInput
-                        value={item.quantity ? String(item.quantity) : ''}
-                        onChangeText={(v) =>
-                          updateItem(item.id, 'quantity', parseFloat(v) || 0)
-                        }
-                        keyboardType="decimal-pad"
-                        placeholder="0"
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 text-center"
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">{t.colUnitPrice}</Text>
-                      <TextInput
-                        value={item.unit_price ? String(item.unit_price) : ''}
-                        onChangeText={(v) =>
-                          updateItem(item.id, 'unit_price', parseFloat(v) || 0)
-                        }
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 text-right"
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">{t.colTotal}</Text>
-                      <View className="rounded-xl bg-white px-3 py-2 border border-gray-100">
-                        <Text className="text-sm font-semibold text-gray-900 text-right">
-                          {fmtMoney(item.quantity * item.unit_price)}
-                        </Text>
-                      </View>
-                    </View>
-                    {items.length > 1 ? (
-                      <Pressable
-                        onPress={() => removeItem(item.id)}
-                        hitSlop={8}
-                        className="p-2 rounded-xl active:bg-red-50 self-end"
-                      >
-                        <Trash2 size={16} color="#EF4444" />
-                      </Pressable>
-                    ) : (
-                      <View style={{ width: 32 }} />
-                    )}
-                  </View>
-                </View>
-              ))}
-
-              {isProposal ? (
-                <View className="pt-2 border-t border-gray-100 gap-2">
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{t.subtotal}</Text>
-                    <Text className="text-sm font-medium text-gray-900">{fmtMoney(subtotal)}</Text>
-                  </View>
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{t.taxPercent}</Text>
-                    <TextInput
-                      value={taxRate ? String(taxRate) : ''}
-                      onChangeText={(v) => setTaxRate(parseFloat(v) || 0)}
-                      keyboardType="decimal-pad"
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 text-right"
-                    />
-                  </View>
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{t.discountAmount}</Text>
-                    <TextInput
-                      value={discount ? String(discount) : ''}
-                      onChangeText={(v) => setDiscount(parseFloat(v) || 0)}
-                      keyboardType="decimal-pad"
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 text-right"
-                    />
-                  </View>
-                  <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
-                    <Text className="text-base font-bold text-gray-900">{t.total}</Text>
-                    <Text className="text-lg font-bold text-primary">{fmtMoney(total)}</Text>
-                  </View>
-                </View>
-              ) : (
-                <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
-                  <Text className="text-sm text-gray-500">{t.totalEstimated}</Text>
-                  <Text className="text-lg font-bold text-gray-900">{fmtMoney(subtotal)}</Text>
-                </View>
-              )}
-            </View>
-          </Section>
+          {/* Items section removed — pricing/line items are managed on the
+             detail page now so this form stays focused on scheduling. */}
 
           {/* Notes */}
           <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
@@ -891,6 +777,22 @@ export default function NuevoTrabajoRoute() {
               className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[100px]"
               style={{ textAlignVertical: 'top' }}
             />
+
+            <View className="mt-4">
+              <Text className="text-sm font-semibold text-gray-700 mb-2">
+                {t.workerNoteLabel}
+              </Text>
+              <TextInput
+                value={workerNotes}
+                onChangeText={setWorkerNotes}
+                placeholder={t.workerNotePlaceholder}
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                style={{ textAlignVertical: 'top' }}
+              />
+            </View>
           </Section>
 
           {error ? (
