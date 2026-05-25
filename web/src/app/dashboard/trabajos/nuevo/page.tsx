@@ -227,26 +227,11 @@ function NuevoTrabajoContent() {
 
   const parseMapLink = (link: string) => {
     setMapLink(link);
-    if (!link.trim()) return;
-    // Try to extract coordinates from Google/Apple Maps URLs
-    // Google Maps: @lat,lng or ?q=lat,lng or place/.../@lat,lng
-    // Apple Maps: ll=lat,lng or q=lat,lng
-    const coordMatch = link.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
-      link.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/) ||
-      link.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
-
-    // Try to extract place name / address from Google Maps URL
-    // e.g. /place/123+Main+St,+City,+State/
-    const placeMatch = link.match(/\/place\/([^/@]+)/);
-    if (placeMatch) {
-      const parts = decodeURIComponent(placeMatch[1]).replace(/\+/g, ' ').split(',').map(s => s.trim());
-      if (parts.length >= 1 && !address) setAddress(parts[0]);
-      if (parts.length >= 2 && !city) setCity(parts[1]);
-      if (parts.length >= 3 && !state) {
-        const st = parts[2].replace(/\d/g, '').trim();
-        if (st.length === 2) setState(st.toUpperCase());
-      }
-    }
+    // No autofill — Google's /place/ slug puts business name, address, city,
+    // state, country in unpredictable order, so guessing by comma-split was
+    // misaligning fields. Mobile captures the coordinates (job_lat / job_lng);
+    // web's form doesn't surface a coords field yet, so we just store the
+    // raw link and let the user type the address.
   };
 
   const toggleEmployee = (id: string) => {

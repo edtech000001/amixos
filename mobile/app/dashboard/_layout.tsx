@@ -52,11 +52,34 @@ export default function DashboardLayout() {
 
       {/* Hidden routes (accessed via push, not via tab bar) */}
       <Tabs.Screen name="facturas/[id]" options={{ href: null }} />
+      <Tabs.Screen
+        name="facturas/nueva"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+          unmountOnBlur: true,
+        }}
+      />
+      <Tabs.Screen name="clientes/[id]" options={{ href: null }} />
+      <Tabs.Screen
+        name="clientes/nuevo"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+          unmountOnBlur: true,
+        }}
+      />
       <Tabs.Screen name="trabajos/[id]" options={{ href: null }} />
-      {/* Form screen — hide the dock so the sticky save footer isn't covered. */}
+      {/* Form screen — hide the dock so the sticky save footer isn't covered.
+         unmountOnBlur clears form state when the user navigates away so the
+         next "+ Nuevo trabajo" tap starts fresh (edit-mode reloads from DB). */}
       <Tabs.Screen
         name="trabajos/nuevo"
-        options={{ href: null, tabBarStyle: { display: 'none' } }}
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+          unmountOnBlur: true,
+        }}
       />
       <Tabs.Screen name="mas/empleados" options={{ href: null }} />
       <Tabs.Screen name="mas/inventario" options={{ href: null }} />

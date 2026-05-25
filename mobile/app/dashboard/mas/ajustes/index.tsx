@@ -54,6 +54,13 @@ export default function AjustesIndex() {
       path: '/dashboard/mas/ajustes/clientes',
     },
     {
+      key: 'empleados',
+      label: t.tabs.empleados,
+      description: t.employeesSection.subtitle,
+      icon: Briefcase,
+      path: '/dashboard/mas/ajustes/empleados',
+    },
+    {
       key: 'equipo',
       label: t.tabs.equipo,
       description: t.team.subtitle,

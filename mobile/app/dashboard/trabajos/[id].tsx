@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  Linking,
+  Share,
+  Modal as RNModal,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,9 +27,13 @@ import {
   RotateCcw,
   Share2,
   Building2,
+  Navigation,
+  User,
+  Mail,
+  MessageSquare,
+  X,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Modal as RNModal } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
@@ -28,6 +42,7 @@ import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
+import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface Job {
   id: string;
@@ -41,10 +56,14 @@ interface Job {
   job_address: string | null;
   job_city: string | null;
   job_state: string | null;
+  job_lat: number | null;
+  job_lng: number | null;
   scheduled_date: string | null;
   completed_date: string | null;
+  all_day: boolean | null;
   total_amount: number;
   internal_notes: string | null;
+  worker_notes: string | null;
   estimate_number: string | null;
   notes: string | null;
   issue_date: string | null;
@@ -60,6 +79,7 @@ interface Job {
   delegated_to_business_id: string | null;
   delegated_from_business_id: string | null;
   delegated_at: string | null;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
   clients: {
@@ -68,6 +88,14 @@ interface Job {
     last_name: string;
     company: string | null;
     phone_cell: string | null;
+    phone_office: string | null;
+    email_office: string | null;
+    email_home: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+    custom_fields: Record<string, string> | null;
   } | null;
 }
 
@@ -98,6 +126,7 @@ export default function JobDetailRoute() {
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
+  const tc = full.common;
   const dateLoc = full.dashboard.dateLocale;
 
   const [job, setJob] = useState<Job | null>(null);
@@ -106,6 +135,8 @@ export default function JobDetailRoute() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [delegateOpen, setDelegateOpen] = useState(false);
   const [delegating, setDelegating] = useState(false);
+  const [clientModalOpen, setClientModalOpen] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const businesses = useAuthStore((s) => s.businesses);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
@@ -142,7 +173,9 @@ export default function JobDetailRoute() {
     const [{ data: j }, { data: it }] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(id, first_name, last_name, company, phone_cell)')
+        .select(
+          '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, custom_fields)',
+        )
         .eq('id', id)
         .single(),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
@@ -155,6 +188,51 @@ export default function JobDetailRoute() {
   useEffect(() => {
     void load();
   }, [id, business?.id]);
+
+  // Generate (or reuse) the public share token + open the iOS/Android share
+  // sheet with the proposal URL. Returns true if the share sheet opened.
+  const shareProposal = async (): Promise<boolean> => {
+    if (!job) return false;
+    let token = job.share_token;
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      await supabase.from('jobs').update({ share_token: token }).eq('id', job.id);
+      setJob((prev) => (prev ? { ...prev, share_token: token } : prev));
+    }
+    const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? '';
+    const url = webUrl ? `${webUrl}/propuesta/${token}` : `/propuesta/${token}`;
+    try {
+      const result = await Share.share({
+        message: `${job.title}${webUrl ? `\n${url}` : ''}`,
+        url, // iOS picks this up natively in addition to message
+      });
+      return result.action !== Share.dismissedAction;
+    } catch {
+      Alert.alert('', td.shareError);
+      return false;
+    }
+  };
+
+  // Opens the action sheet for "Enviar cotización" — lets the user share the
+  // link to the client (and auto-mark as sent) or just mark as sent without
+  // sending anything. Mirrors the web's share + mark-sent flow.
+  const sendProposalAction = () => {
+    if (!job) return;
+    Alert.alert(td.sendAction, td.sendActionMessage, [
+      { text: tc.buttons.cancel, style: 'cancel' },
+      {
+        text: td.markOnly,
+        onPress: () => updateStatus('sent'),
+      },
+      {
+        text: td.shareAndMark,
+        onPress: async () => {
+          const shared = await shareProposal();
+          if (shared) void updateStatus('sent');
+        },
+      },
+    ]);
+  };
 
   const updateStatus = async (newStatus: string) => {
     if (!job) return;
@@ -316,24 +394,44 @@ export default function JobDetailRoute() {
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const total = isProposal && job.total_amount > 0 ? job.total_amount : itemSubtotal;
 
+  // Date-only display ("Mayo 24, 2026") — used for scheduled_date, cancelled_at, etc.
   const fmtDate = (d: string | null) => {
     if (!d) return null;
-    return new Date(d.includes('T') ? d : d + 'T12:00:00').toLocaleDateString(dateLoc, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    return formatDateLong(d, dateLoc);
+  };
+  // Date + time ("Mayo 24, 2026, 9:30 PM") — used for created / updated_at metadata.
+  const fmtDateTime = (d: string | null) => {
+    if (!d) return '';
+    return formatDateTimeLong(d, dateLoc);
   };
 
   // Determine which actions are available based on current status
+  // The forward action. For `proposal`, we use a verb ("Enviar cotización")
+  // that opens an action sheet — the user can share the link OR just mark
+  // sent without sending anything. For everything else it's a simple
+  // status nudge to the next step in the pipeline.
   const nextStatusAction = (() => {
     if (isCancelled) return null;
-    if (job.status === 'proposal') return { label: t.statuses.sent, next: 'sent' };
-    if (job.status === 'sent') return { label: t.statuses.accepted, next: 'accepted' };
-    if (job.status === 'accepted') return { label: t.statuses.scheduled, next: 'scheduled' };
-    if (job.status === 'scheduled') return { label: t.statuses.in_progress, next: 'in_progress' };
-    if (job.status === 'in_progress') return { label: t.statuses.completed, next: 'completed' };
+    if (job.status === 'proposal') {
+      return { label: td.sendAction, onPress: sendProposalAction };
+    }
+    if (job.status === 'sent') return { label: t.statuses.accepted, onPress: () => updateStatus('accepted') };
+    if (job.status === 'accepted') return { label: t.statuses.scheduled, onPress: () => updateStatus('scheduled') };
+    if (job.status === 'scheduled') return { label: t.statuses.in_progress, onPress: () => updateStatus('in_progress') };
+    if (job.status === 'in_progress') return { label: t.statuses.completed, onPress: () => updateStatus('completed') };
     return null;
+  })();
+
+  // One-step back. Walks the visible pipeline so "Programado → En progreso"
+  // can be undone by tapping ←. Hidden at the first step, during cancellation,
+  // and once invoiced (the invoice would need to be deleted first).
+  const prevStatusAction = (() => {
+    if (isCancelled) return null;
+    if (job.status === 'invoiced') return null;
+    const idx = pipeline.findIndex((s) => s.key === job.status);
+    if (idx <= 0) return null;
+    const prev = pipeline[idx - 1];
+    return { label: prev.label, next: prev.key };
   })();
 
   return (
@@ -347,6 +445,15 @@ export default function JobDetailRoute() {
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <View className="flex-row gap-1">
+          {isProposal ? (
+            <Pressable
+              onPress={shareProposal}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-primary/10"
+            >
+              <Send size={18} color="#4F46E5" />
+            </Pressable>
+          ) : null}
           {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) ? (
             <Pressable
               onPress={() => setDelegateOpen(true)}
@@ -378,24 +485,23 @@ export default function JobDetailRoute() {
       </View>
 
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
-        {/* Title + client */}
+        {/* Title + client + created date */}
         <View className="mb-6">
           {isProposal ? (
             <Text className="text-xs font-mono text-gray-400 mb-1">{job.estimate_number}</Text>
           ) : null}
           <Text className="text-2xl font-bold text-gray-900">{job.title}</Text>
           {clientName ? (
-            <Pressable
-              onPress={() =>
-                job.client_id && router.push(`/dashboard/clientes/${job.client_id}` as never)
-              }
-            >
+            <Pressable onPress={() => setClientModalOpen(true)}>
               <Text className="text-sm text-primary font-medium mt-1">
                 {clientName}
                 {job.clients?.company ? ` · ${job.clients.company}` : ''}
               </Text>
             </Pressable>
           ) : null}
+          <Text className="text-[11px] text-gray-400 mt-1.5">
+            {td.createdOn.replace('{{date}}', fmtDateTime(job.created_at))}
+          </Text>
         </View>
 
         {/* Cancelled / declined banner */}
@@ -408,7 +514,7 @@ export default function JobDetailRoute() {
               </Text>
               {job.cancelled_at ? (
                 <Text className="text-xs text-red-600 mt-0.5">
-                  {td.cancelledOn} {fmtDate(job.cancelled_at)}
+                  {td.cancelledOn} {fmtDateTime(job.cancelled_at)}
                 </Text>
               ) : null}
               <Pressable
@@ -425,39 +531,7 @@ export default function JobDetailRoute() {
 
         {/* Status pipeline */}
         {!isCancelled ? (
-          <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5">
-            <View className="flex-row justify-between">
-              {pipeline.map((s, i) => {
-                const Icon = s.icon;
-                const isPast = i < pipelineIdx;
-                const isCurrent = i === pipelineIdx;
-                return (
-                  <View key={s.key} className="flex-1 items-center">
-                    <View
-                      className="w-9 h-9 rounded-full items-center justify-center"
-                      style={{
-                        backgroundColor: isCurrent ? `${s.color}1A` : isPast ? '#F3F4F6' : '#F9FAFB',
-                        borderWidth: isCurrent ? 2 : 0,
-                        borderColor: isCurrent ? s.color : 'transparent',
-                      }}
-                    >
-                      <Icon
-                        size={16}
-                        color={isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB'}
-                      />
-                    </View>
-                    <Text
-                      className="text-[10px] font-semibold mt-1 text-center"
-                      style={{ color: isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB' }}
-                      numberOfLines={1}
-                    >
-                      {s.label}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+          <PipelineStrip pipeline={pipeline} currentIdx={pipelineIdx} />
         ) : null}
 
         {/* Primary actions */}
@@ -479,14 +553,30 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {nextStatusAction ? (
-            <Pressable
-              onPress={() => updateStatus(nextStatusAction.next)}
-              disabled={updatingStatus}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary/10 border border-primary/20 active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-primary">→ {nextStatusAction.label}</Text>
-            </Pressable>
+          {nextStatusAction || prevStatusAction ? (
+            <View className="flex-row gap-2">
+              {prevStatusAction ? (
+                <Pressable
+                  onPress={() => updateStatus(prevStatusAction.next)}
+                  disabled={updatingStatus}
+                  className={`${nextStatusAction ? '' : 'flex-1 '}flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-gray-100 border border-gray-200 active:opacity-80`}
+                >
+                  <Text className="text-sm font-semibold text-gray-600">← {prevStatusAction.label}</Text>
+                </Pressable>
+              ) : null}
+              {nextStatusAction ? (
+                <Pressable
+                  onPress={nextStatusAction.onPress}
+                  disabled={updatingStatus}
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary/10 border border-primary/20 active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-primary">
+                    {job.status === 'proposal' ? '' : '→ '}
+                    {nextStatusAction.label}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
 
@@ -506,25 +596,28 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
 
-          {job.job_address ? (
-            <View className="flex-row items-start gap-3">
+          {(job.job_address || job.job_lat != null) ? (
+            <Pressable
+              onPress={() => setLocationModalOpen(true)}
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+            >
               <MapPin size={16} color="#6B7280" />
               <View className="flex-1">
                 <Text className="text-xs text-gray-500">{td.location}</Text>
-                <Text className="text-sm text-gray-900">
-                  {job.job_address}
-                  {job.job_city ? `, ${job.job_city}` : ''}
-                  {job.job_state ? ` ${job.job_state}` : ''}
+                <Text className="text-sm text-primary">
+                  {job.job_address
+                    ? `${job.job_address}${job.job_city ? `, ${job.job_city}` : ''}${
+                        job.job_state ? ` ${job.job_state}` : ''
+                      }`
+                    : `${job.job_lat?.toFixed(5)}, ${job.job_lng?.toFixed(5)}`}
                 </Text>
               </View>
-            </View>
+            </Pressable>
           ) : null}
 
           {clientPhone ? (
             <Pressable
-              onPress={() => {
-                /* TODO: implement tel: link with Linking */
-              }}
+              onPress={() => Linking.openURL(`tel:${clientPhone.replace(/\D/g, '')}`)}
               className="flex-row items-center gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Phone size={16} color="#6B7280" />
@@ -546,6 +639,15 @@ export default function JobDetailRoute() {
             <View>
               <Text className="text-xs text-gray-500 mb-1">{td.internalNote}</Text>
               <Text className="text-sm text-gray-700">{job.internal_notes}</Text>
+            </View>
+          ) : null}
+
+          {job.worker_notes ? (
+            <View>
+              <Text className="text-xs text-gray-500 mb-1">
+                {full.dashboard.jobs.new.workerNoteLabel}
+              </Text>
+              <Text className="text-sm text-gray-700">{job.worker_notes}</Text>
             </View>
           ) : null}
         </View>
@@ -605,10 +707,10 @@ export default function JobDetailRoute() {
           )}
         </View>
 
-        {/* Metadata */}
+        {/* Metadata — last edited (created moved to top) */}
         <View className="gap-1 px-1">
           <Text className="text-[10px] text-gray-400">
-            {td.createdOn} {fmtDate(job.created_at)}
+            {td.lastEditedOn.replace('{{date}}', fmtDateTime(job.updated_at))}
           </Text>
           {job.delegated_to_business_id ? (
             <Text className="text-[10px] text-primary mt-1">
@@ -628,14 +730,12 @@ export default function JobDetailRoute() {
         animationType="fade"
         onRequestClose={() => setDelegateOpen(false)}
       >
-        <Pressable
-          onPress={() => setDelegateOpen(false)}
-          className="flex-1 bg-black/40 justify-end"
-        >
+        <View className="flex-1 justify-end">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="bg-white rounded-t-3xl px-4 pb-8 pt-4"
-          >
+            onPress={() => setDelegateOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <View className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -674,9 +774,315 @@ export default function JobDetailRoute() {
                   </Pressable>
                 ))}
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Client details modal */}
+      <RNModal
+        visible={clientModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setClientModalOpen(false)}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setClientModalOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <View
+            className="bg-white rounded-t-3xl pt-3"
+            style={{ maxHeight: '85%' }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
+              <Text className="text-lg font-bold text-gray-900">{td.clientModalTitle}</Text>
+              <Pressable onPress={() => setClientModalOpen(false)} hitSlop={8}>
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerClassName="px-5 py-5 pb-12">
+              {job.clients ? (
+                <ClientModalBody
+                  client={job.clients}
+                  onCallPress={(num) => Linking.openURL(`tel:${num.replace(/\D/g, '')}`)}
+                  onSmsPress={(num) => Linking.openURL(`sms:${num.replace(/\D/g, '')}`)}
+                  onEmailPress={(addr) => Linking.openURL(`mailto:${addr}`)}
+                  onOpenFullPress={() =>
+                    job.client_id && router.push(`/dashboard/clientes/${job.client_id}` as never)
+                  }
+                  goToClientLabel={full.dashboard.clients.title}
+                  noCustomFieldsLabel={td.noCustomFields}
+                />
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Location details modal */}
+      <RNModal
+        visible={locationModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLocationModalOpen(false)}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setLocationModalOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <View
+            className="bg-white rounded-t-3xl pt-3"
+            style={{ maxHeight: '85%' }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
+              <Text className="text-lg font-bold text-gray-900">{td.locationModalTitle}</Text>
+              <Pressable onPress={() => setLocationModalOpen(false)} hitSlop={8}>
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
+            </View>
+            <View className="px-5 py-5 pb-8 gap-4">
+              {job.job_address ? (
+                <View>
+                  <Text className="text-xs text-gray-500">{td.location}</Text>
+                  <Text className="text-base text-gray-900 mt-1">
+                    {job.job_address}
+                    {job.job_city ? `\n${job.job_city}` : ''}
+                    {job.job_state ? `, ${job.job_state}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+
+              {job.job_lat != null && job.job_lng != null ? (
+                <View>
+                  <Text className="text-xs text-gray-500">{td.coordinates}</Text>
+                  <Text className="text-base text-gray-900 mt-1 font-mono">
+                    {job.job_lat}, {job.job_lng}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                onPress={() => {
+                  // Prefer coords for accuracy; fall back to address.
+                  if (job.job_lat != null && job.job_lng != null) {
+                    Linking.openURL(`https://maps.google.com/?q=${job.job_lat},${job.job_lng}`);
+                  } else if (job.job_address) {
+                    const q = encodeURIComponent(
+                      `${job.job_address} ${job.job_city ?? ''} ${job.job_state ?? ''}`.trim(),
+                    );
+                    Linking.openURL(`https://maps.google.com/?q=${q}`);
+                  }
+                }}
+                className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-80"
+              >
+                <Navigation size={16} color="#FFFFFF" />
+                <Text className="text-white font-semibold text-sm">{td.openInMaps}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </RNModal>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Horizontal scrollable status pipeline. Each step gets a fixed footprint
+ * (icon + label) so labels render in full instead of "Cotiza..." truncation.
+ * Auto-scrolls to keep the current step visible.
+ */
+function PipelineStrip({
+  pipeline,
+  currentIdx,
+}: {
+  pipeline: PipelineStep[];
+  currentIdx: number;
+}) {
+  const STEP_WIDTH = 84;
+  const CONNECTOR_WIDTH = 18;
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (currentIdx < 0) return;
+    // Center the current step in the visible area (rough — RN's
+    // contentOffset.x is from the left edge, so subtract half a viewport
+    // width's worth of step. Works well in practice across phone widths.)
+    const offset = Math.max(0, currentIdx * (STEP_WIDTH + CONNECTOR_WIDTH) - 80);
+    scrollRef.current?.scrollTo({ x: offset, animated: false });
+  }, [currentIdx]);
+
+  return (
+    <View className="bg-white rounded-2xl border border-gray-100 mb-5">
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerClassName="py-4 px-3"
+      >
+        {pipeline.map((s, i) => {
+          const Icon = s.icon;
+          const isPast = i < currentIdx;
+          const isCurrent = i === currentIdx;
+          const isLast = i === pipeline.length - 1;
+          return (
+            <View key={s.key} className="flex-row items-start">
+              <View style={{ width: STEP_WIDTH }} className="items-center">
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{
+                    backgroundColor: isCurrent ? `${s.color}1A` : isPast ? '#F3F4F6' : '#F9FAFB',
+                    borderWidth: isCurrent ? 2 : 0,
+                    borderColor: isCurrent ? s.color : 'transparent',
+                  }}
+                >
+                  <Icon
+                    size={18}
+                    color={isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB'}
+                  />
+                </View>
+                <Text
+                  className="text-[11px] font-semibold mt-1.5 text-center"
+                  style={{ color: isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB' }}
+                  numberOfLines={1}
+                >
+                  {s.label}
+                </Text>
+              </View>
+              {!isLast ? (
+                <View
+                  style={{
+                    width: CONNECTOR_WIDTH,
+                    height: 2,
+                    marginTop: 19,
+                    backgroundColor: isPast ? '#D1D5DB' : '#F3F4F6',
+                  }}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ClientModalBody({
+  client,
+  onCallPress,
+  onSmsPress,
+  onEmailPress,
+  onOpenFullPress,
+  goToClientLabel,
+  noCustomFieldsLabel,
+}: {
+  client: NonNullable<Job['clients']>;
+  onCallPress: (num: string) => void;
+  onSmsPress: (num: string) => void;
+  onEmailPress: (addr: string) => void;
+  onOpenFullPress: () => void;
+  goToClientLabel: string;
+  noCustomFieldsLabel: string;
+}) {
+  const phones = [client.phone_cell, client.phone_office].filter(Boolean) as string[];
+  const emails = [client.email_office, client.email_home].filter(Boolean) as string[];
+  const addressLines = [
+    client.address,
+    [client.city, client.state, client.zip_code].filter(Boolean).join(' '),
+  ].filter((s) => s && s.trim());
+  const customEntries = client.custom_fields
+    ? Object.entries(client.custom_fields).filter(([, v]) => v && String(v).trim())
+    : [];
+
+  return (
+    <View className="gap-4">
+      <View>
+        <Text className="text-2xl font-bold text-gray-900">
+          {client.first_name} {client.last_name}
+        </Text>
+        {client.company ? (
+          <Text className="text-sm text-gray-500 mt-0.5">{client.company}</Text>
+        ) : null}
+      </View>
+
+      {phones.length > 0 ? (
+        <View className="gap-2">
+          {phones.map((p) => (
+            <View key={p} className="flex-row items-center -mx-2">
+              <Pressable
+                onPress={() => onCallPress(p)}
+                className="flex-row items-center gap-3 flex-1 px-2 py-2 rounded-lg active:bg-gray-50"
+              >
+                <Phone size={16} color="#6B7280" />
+                <Text className="text-sm text-primary flex-1">{p}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onSmsPress(p)}
+                hitSlop={8}
+                className="px-2 py-2 rounded-lg active:bg-gray-50"
+              >
+                <MessageSquare size={16} color="#4F46E5" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {emails.length > 0 ? (
+        <View className="gap-2">
+          {emails.map((e) => (
+            <Pressable
+              key={e}
+              onPress={() => onEmailPress(e)}
+              className="flex-row items-center gap-3 -mx-2 px-2 py-2 rounded-lg active:bg-gray-50"
+            >
+              <Mail size={16} color="#6B7280" />
+              <Text className="text-sm text-primary flex-1">{e}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {addressLines.length > 0 ? (
+        <View className="flex-row items-start gap-3">
+          <MapPin size={16} color="#6B7280" />
+          <View className="flex-1">
+            {addressLines.map((line, i) => (
+              <Text key={i} className="text-sm text-gray-900">
+                {line}
+              </Text>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {/* Custom fields */}
+      <View className="border-t border-gray-100 pt-4">
+        <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
+          {/* Reusing the noCustomFields key for the label too — short and works */}
+          {customEntries.length === 0 ? noCustomFieldsLabel : ''}
+        </Text>
+        {customEntries.map(([key, val]) => (
+          <View key={key} className="mb-2">
+            <Text className="text-xs text-gray-500">{key}</Text>
+            <Text className="text-sm text-gray-900">{String(val)}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Pressable
+        onPress={onOpenFullPress}
+        className="flex-row items-center justify-center gap-2 bg-gray-100 py-3 rounded-2xl active:bg-gray-200 mt-2"
+      >
+        <User size={16} color="#374151" />
+        <Text className="text-sm font-semibold text-gray-700">{goToClientLabel} →</Text>
+      </Pressable>
+    </View>
   );
 }

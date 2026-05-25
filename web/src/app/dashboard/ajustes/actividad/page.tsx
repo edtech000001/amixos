@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface AuditRow {
   id: string;
@@ -23,13 +24,17 @@ interface AuditRow {
 
 const PAGE_SIZE = 50;
 
-function relTime(iso: string, t: ReturnType<typeof useLang>['t']['dashboard']['settings']['activity']): string {
+function relTime(
+  iso: string,
+  t: ReturnType<typeof useLang>['t']['dashboard']['settings']['activity'],
+  locale: string,
+): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return t.timeJustNow;
   if (diff < 3600) return t.timeMinutesAgo.replace('{{n}}', String(Math.floor(diff / 60)));
   if (diff < 86400) return t.timeHoursAgo.replace('{{n}}', String(Math.floor(diff / 3600)));
   if (diff < 86400 * 14) return t.timeDaysAgo.replace('{{n}}', String(Math.floor(diff / 86400)));
-  return new Date(iso).toLocaleDateString();
+  return formatDateTimeLong(iso, locale);
 }
 
 function describe(row: AuditRow, lang: 'es' | 'en'): string {
@@ -105,7 +110,7 @@ export default function ActividadPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-900">{describe(row, lang)}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {row.user_email ?? t.unknownUser} · {relTime(row.created_at, t)}
+                    {row.user_email ?? t.unknownUser} · {relTime(row.created_at, t, locale)}
                   </p>
                 </div>
               </div>

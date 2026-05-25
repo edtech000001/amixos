@@ -18,7 +18,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
-import { formatTime12h } from '../../lib/format';
+import { formatDateLong, formatTime12h } from '../../lib/format';
 
 export interface JobListItem {
   id: string;
@@ -447,12 +447,9 @@ export function JobsListScreen({
                         <View className="flex-row items-center gap-1">
                           <Calendar size={12} color="#9CA3AF" />
                           <Text className="text-xs text-gray-400">
-                            {new Date(job.issueDate + 'T12:00:00').toLocaleDateString(dateLoc, {
-                              day: 'numeric',
-                              month: 'short',
-                            })}
+                            {formatDateLong(job.issueDate, dateLoc)}
                             {job.expiryDate
-                              ? ` · ${t.dueShort.replace('{{date}}', new Date(job.expiryDate + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short' }))}`
+                              ? ` · ${t.dueShort.replace('{{date}}', formatDateLong(job.expiryDate, dateLoc))}`
                               : ''}
                           </Text>
                         </View>
@@ -461,11 +458,7 @@ export function JobsListScreen({
                         <View className="flex-row items-center gap-1">
                           <Calendar size={12} color="#9CA3AF" />
                           <Text className="text-xs text-gray-400">
-                            {new Date(job.scheduledDate + 'T12:00:00').toLocaleDateString(dateLoc, {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
+                            {formatDateLong(job.scheduledDate, dateLoc)}
                             {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
                           </Text>
                         </View>

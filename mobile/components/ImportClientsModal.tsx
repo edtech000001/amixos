@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as Contacts from 'expo-contacts';
 import Papa from 'papaparse';
-import { Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users } from 'lucide-react-native';
 import { Modal, Button, Select } from '@amixos/shared/ui';
 import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -82,6 +84,114 @@ export function ImportClientsModal({
     setFilename('');
     setError('');
     setResult({ success: 0, errors: 0 });
+  };
+
+  // Build a sample CSV (headers + one example row) and share it via the
+  // OS share sheet so the user can save it to Files / email / etc. and use
+  // it as a template. Same column names as the web template — so a file
+  // built on one platform imports cleanly on the other.
+  const downloadTemplate = async () => {
+    const headers = CLIENT_FIELD_KEYS.map(k => FIELD_LABELS[k]).join(',');
+    const example = [
+      'Juan', 'Pérez', 'Pérez Construcción',
+      '(555) 123-4567', '(555) 987-6543',
+      'juan@perez.com', '',
+      '123 Main St', 'Omaha', 'NE', '68102',
+      'Cliente nuevo',
+    ].join(',');
+    const csv = `${headers}\n${example}\n`;
+    const path = `${FileSystem.cacheDirectory}${t.importModal.templateFilename}`;
+    await FileSystem.writeAsStringAsync(path, csv, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(path, {
+        mimeType: 'text/csv',
+        dialogTitle: t.importModal.templateBtn,
+        UTI: 'public.comma-separated-values-text',
+      });
+    }
+  };
+
+  // Read phone contacts (with permission), let the user pick a subset, and
+  // insert them as clients directly — no CSV mapping step required.
+  const importFromContacts = async () => {
+    setError('');
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('', t.importModal.contactsPermissionDenied);
+      return;
+    }
+    // Present the system contact picker. On iOS this is a multi-select
+    // overlay; on Android the equivalent flow uses the same API.
+    const picked = await Contacts.presentContactPickerAsync();
+    if (!picked) return;
+    const contactsList = Array.isArray(picked) ? picked : [picked];
+
+    setImporting(true);
+    let success = 0;
+    let errors = 0;
+    const insertedIds: string[] = [];
+
+    const batch = contactsList
+      .map(c => {
+        const firstName = c.firstName?.trim() || c.name?.trim() || '';
+        const lastName = c.lastName?.trim() || '';
+        if (!firstName && !lastName) return null;
+        const phoneCell = c.phoneNumbers?.find(p => /mobile|cell|móvil/i.test(p.label ?? ''))?.number
+          ?? c.phoneNumbers?.[0]?.number
+          ?? null;
+        const phoneOffice = c.phoneNumbers?.find(p => /work|office|trabajo|oficina/i.test(p.label ?? ''))?.number
+          ?? null;
+        const emailOffice = c.emails?.find(e => /work|office|trabajo|oficina/i.test(e.label ?? ''))?.email
+          ?? c.emails?.[0]?.email
+          ?? null;
+        const emailHome = c.emails?.find(e => /home|personal|casa/i.test(e.label ?? ''))?.email ?? null;
+        const addr = c.addresses?.[0];
+        return {
+          business_id: businessId,
+          first_name: firstName,
+          last_name: lastName,
+          company: c.company?.trim() || null,
+          phone_cell: phoneCell,
+          phone_office: phoneOffice !== phoneCell ? phoneOffice : null,
+          email_office: emailOffice,
+          email_home: emailHome !== emailOffice ? emailHome : null,
+          address: addr?.street ?? null,
+          city: addr?.city ?? null,
+          state: addr?.region ? normalizeState(addr.region) : null,
+          zip_code: addr?.postalCode ?? null,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    for (let i = 0; i < batch.length; i += 50) {
+      const slice = batch.slice(i, i + 50);
+      const { data, error: err } = await supabase.from('clients').insert(slice).select('id');
+      if (err) errors += slice.length;
+      else {
+        success += slice.length;
+        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
+      }
+    }
+
+    // Fire-and-forget Google sync mirror of the CSV path.
+    if (insertedIds.length > 0) {
+      void (async () => {
+        const apiBaseUrl = getApiBaseUrl();
+        const jwt = await getJwt();
+        if (apiBaseUrl && jwt) {
+          for (const id of insertedIds) {
+            triggerGoogleSync('create', id, { apiBaseUrl, jwt });
+          }
+        }
+      })();
+    }
+
+    setResult({ success, errors });
+    setImporting(false);
+    setStep('done');
+    onImportComplete();
   };
 
   const close = () => {
@@ -255,16 +365,12 @@ export function ImportClientsModal({
   return (
     <Modal open={open} onClose={close} title={t.importBtn}>
       {step === 'upload' ? (
-        <View className="gap-4">
-          <Text className="text-sm text-gray-600 leading-5">
-            Selecciona un archivo CSV con tus clientes. La primera fila debe tener
-            los nombres de las columnas (Nombre, Apellido, Correo, etc.).
-          </Text>
-
+        <View className="gap-3">
+          {/* CSV file picker — primary action */}
           <Pressable
             onPress={pickFile}
-            disabled={parsing}
-            className="border-2 border-dashed border-gray-200 rounded-2xl py-8 items-center active:bg-gray-50"
+            disabled={parsing || importing}
+            className="border-2 border-dashed border-gray-200 rounded-2xl py-6 items-center active:bg-gray-50"
           >
             {parsing ? (
               <>
@@ -273,15 +379,51 @@ export function ImportClientsModal({
               </>
             ) : (
               <>
-                <View className="w-12 h-12 rounded-2xl bg-primary/10 items-center justify-center mb-3">
+                <View className="w-11 h-11 rounded-2xl bg-primary/10 items-center justify-center mb-2">
                   <Upload size={20} color="#4F46E5" />
                 </View>
                 <Text className="text-sm font-semibold text-gray-900">
-                  Seleccionar archivo CSV
+                  {t.importModal.pickFileBtn}
                 </Text>
-                <Text className="text-xs text-gray-500 mt-1">.csv</Text>
+                <Text className="text-xs text-gray-500 mt-0.5">
+                  {t.importModal.pickFileHint}
+                </Text>
               </>
             )}
+          </Pressable>
+
+          {/* Contacts picker — secondary action */}
+          <Pressable
+            onPress={importFromContacts}
+            disabled={importing}
+            className="flex-row items-center gap-3 rounded-2xl border border-gray-200 px-4 py-3.5 active:bg-gray-50"
+          >
+            <View className="w-9 h-9 rounded-xl bg-emerald-50 items-center justify-center">
+              {importing ? (
+                <ActivityIndicator size="small" color="#059669" />
+              ) : (
+                <Users size={18} color="#059669" />
+              )}
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-gray-900">
+                {t.importModal.importContactsBtn}
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                {t.importModal.importContactsHint}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Template download — tertiary action */}
+          <Pressable
+            onPress={downloadTemplate}
+            className="flex-row items-center gap-2 self-start px-2 py-2 active:opacity-70"
+          >
+            <Download size={14} color="#4F46E5" />
+            <Text className="text-xs font-semibold text-primary">
+              {t.importModal.templateBtn}
+            </Text>
           </Pressable>
 
           {error ? (

@@ -6,7 +6,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  Pencil,
   Trash2,
   User,
   Upload,
@@ -252,20 +251,11 @@ export function ClientsListScreen({
                     </View>
                   </Pressable>
                 </View>
-                <View className="flex-row items-center gap-1">
-                  <Pressable
-                    onPress={() => onEditPress(c.id)}
-                    className="p-2 rounded-lg active:bg-gray-100"
-                  >
-                    <Pencil size={14} color="#9CA3AF" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onDeletePress(c.id)}
-                    className="p-2 rounded-lg active:bg-red-50"
-                  >
-                    <Trash2 size={14} color="#F87171" />
-                  </Pressable>
-                </View>
+                {/* Row-level edit/delete icons removed — those actions live
+                   on the client detail page now, which keeps the list
+                   compact. onEditPress/onDeletePress props are still on
+                   the interface for callers that need them (e.g. bulk
+                   select), they just no longer render here. */}
               </View>
             );
           })}

@@ -18,7 +18,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatTime12h } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
 
 interface Job {
   id: string; business_id: string;
@@ -273,6 +273,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const fullPipeline = isProposal ? PROPOSAL_PIPELINE : WORK_PIPELINE;
   const pipeline = fullPipeline.filter(s => !disabled[s.key]);
   const pipelineIdx = pipeline.findIndex(s => s.key === job.status);
+  // Back one step in the visible pipeline. Hidden at index 0, once invoiced,
+  // and during cancellation. Lets the user undo an accidental click.
+  const prevStep =
+    pipelineIdx > 0 && job.status !== 'invoiced' && job.status !== 'cancelled' && job.status !== 'declined'
+      ? pipeline[pipelineIdx - 1]
+      : null;
 
   // Map pipeline steps to their timestamps
   const stepTimestamp: Record<string, string | null> = {
@@ -284,10 +290,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     completed: job.completed_date,
     invoiced: job.invoice_id ? job.updated_at : null,
   };
-  const fmtDate = (d: string | null) => {
-    if (!d) return null;
-    return new Date(d.includes('T') ? d : d + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'short' });
-  };
+  const fmtDate = (d: string | null) => (d ? formatDateLong(d, dateLoc) : null);
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
@@ -459,6 +462,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </Button>
             )}
 
+            {/* One-step back — undo an accidental status click */}
+            {prevStep && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => updateStatus(prevStep.key)}
+                loading={updatingStatus}
+              >
+                ← {prevStep.label}
+              </Button>
+            )}
+
             {/* Cancel (available in all non-terminal states) */}
             {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
               <Button variant="secondary" size="sm" onClick={() => updateStatus('cancelled')} loading={updatingStatus}>
@@ -482,7 +497,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 </p>
                 {job.delegated_at && (
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {new Date(job.delegated_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {formatDateTimeLong(job.delegated_at, dateLoc)}
                   </p>
                 )}
               </div>
@@ -510,7 +525,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             </p>
             {job.status === 'cancelled' && job.cancelled_at && (
               <p className="text-xs text-gray-400 mt-0.5">
-                {td.cancelledOn.replace('{{date}}', new Date(job.cancelled_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' }))}
+                {td.cancelledOn.replace('{{date}}', formatDateTimeLong(job.cancelled_at, dateLoc))}
               </p>
             )}
           </div>
@@ -537,7 +552,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <div>
                       <p className="text-xs text-gray-400">{td.issuedAt}</p>
                       <p className="font-medium text-gray-900">
-                        {new Date(job.issue_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {formatDateLong(job.issue_date, dateLoc)}
                       </p>
                     </div>
                   </div>
@@ -548,7 +563,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <div>
                       <p className="text-xs text-gray-400">{td.validUntil}</p>
                       <p className={`font-medium ${isExpired ? 'text-orange-600' : 'text-gray-900'}`}>
-                        {new Date(job.expiry_date + 'T12:00:00').toLocaleDateString(dateLoc, { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {formatDateLong(job.expiry_date, dateLoc)}
                         {isExpired && ` ${t.expired}`}
                       </p>
                     </div>
@@ -568,7 +583,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <div>
                     <p className="text-xs text-gray-400">{td.scheduledDate}</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {new Date(job.scheduled_date + 'T12:00:00').toLocaleDateString(dateLoc, { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {formatDateLong(job.scheduled_date, dateLoc)}
                     </p>
                     {(job.time_start || job.time_end) && (
                       <p className="text-xs text-gray-400">
@@ -620,13 +635,20 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             </div>
           )}
 
-          {/* Created by */}
-          <div className="px-1 flex items-center gap-1.5 text-xs text-gray-400">
-            <Clock size={11}/>
-            <span>
-              {td.createdOn.replace('{{date}}', new Date(job.created_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'short', year: 'numeric' }))}
-              {job.created_by && user && job.created_by === user.id && ` ${td.createdBy.replace('{{name}}', user.email ?? '')}`}
-            </span>
+          {/* Created + last edited */}
+          <div className="px-1 flex flex-col gap-0.5 text-xs text-gray-400">
+            <div className="flex items-center gap-1.5">
+              <Clock size={11}/>
+              <span>
+                {td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}
+                {job.created_by && user && job.created_by === user.id && ` ${td.createdBy.replace('{{name}}', user.email ?? '')}`}
+              </span>
+            </div>
+            {job.updated_at && job.updated_at !== job.created_at ? (
+              <div className="flex items-center gap-1.5 pl-[18px]">
+                <span>{td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Workers card */}

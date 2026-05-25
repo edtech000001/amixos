@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
-import { Trash2, ArrowLeft, X, Send } from 'lucide-react';
+import { Suspense, useEffect, useState } from 'react';
+import { Trash2, ArrowLeft, X } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -27,10 +28,20 @@ function genInvoiceNumber() {
 }
 
 export default function NuevaFacturaPage() {
+  return (
+    <Suspense fallback={<div className="p-6">…</div>}>
+      <NuevaFacturaContent />
+    </Suspense>
+  );
+}
+
+function NuevaFacturaContent() {
   const { t: full } = useLang();
   const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
   const [clients, setClients] = useState<Client[]>([]);
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
@@ -43,12 +54,41 @@ export default function NuevaFacturaPage() {
   const [lines, setLines] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
   useEffect(() => {
     if (!business) return;
     supabase.from('clients').select('id, first_name, last_name').eq('business_id', business.id)
       .order('first_name').then(({ data }) => setClients(data ?? []));
   }, [business]);
+
+  // Edit mode: hydrate form from the existing invoice.
+  useEffect(() => {
+    if (!editId || !business) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: inv }, { data: links }] = await Promise.all([
+        supabase.from('invoices').select('*').eq('id', editId).single(),
+        supabase.from('invoice_clients').select('client_id').eq('invoice_id', editId),
+      ]);
+      if (cancelled) return;
+      if (inv) {
+        setInvoiceNumber(inv.invoice_number ?? '');
+        setIssueDate(inv.issue_date ?? new Date().toISOString().split('T')[0]);
+        setDueDate(inv.due_date ?? '');
+        setNotes(inv.notes ?? '');
+        setTaxRate(inv.tax_rate ?? 0);
+        setLanguage((inv.language as InvoiceLang) ?? 'es');
+        const lineItems = (inv.line_items as LineItem[] | null) ?? [];
+        setLines(lineItems.length > 0 ? [...lineItems, { ...EMPTY_LINE }] : [{ ...EMPTY_LINE }]);
+        const idsFromLinks = (links ?? []).map((r: { client_id: string }) => r.client_id);
+        if (idsFromLinks.length > 0) setClientIds(idsFromLinks);
+        else if (inv.client_id) setClientIds([inv.client_id]);
+      }
+      setLoadingEdit(false);
+    })();
+    return () => { cancelled = true; };
+  }, [editId, business]);
 
   const updateLine = (i: number, field: keyof LineItem, value: string | number) => {
     setLines(prev => {
@@ -73,11 +113,9 @@ export default function NuevaFacturaPage() {
 
     const validLines = lines.filter(l => l.description.trim());
 
-    const { data, error: e } = await supabase.from('invoices').insert({
-      business_id: business.id,
+    const payload = {
       client_id: clientIds[0] || null,
       invoice_number: invoiceNumber,
-      status,
       issue_date: issueDate,
       due_date: dueDate || null,
       line_items: validLines,
@@ -87,28 +125,57 @@ export default function NuevaFacturaPage() {
       total_amount: total,
       notes: notes || null,
       language,
-    }).select().single();
+    };
 
-    if (e) { setError(t.errorSave); setSaving(false); return; }
+    let invoiceId: string;
+    if (editId) {
+      // Update: don't override status on save (keep current state). User
+      // can advance status via Mark Sent / Mark Paid on the detail page.
+      const { error: upErr } = await supabase.from('invoices').update(payload).eq('id', editId);
+      if (upErr) { setError(t.errorSave); setSaving(false); return; }
+      invoiceId = editId;
+    } else {
+      const { data, error: e } = await supabase.from('invoices')
+        .insert({ business_id: business.id, status, ...payload })
+        .select()
+        .single();
+      if (e || !data) { setError(t.errorSave); setSaving(false); return; }
+      invoiceId = data.id;
+    }
 
+    // Replace client links so add/remove on edit also works.
+    if (editId) await supabase.from('invoice_clients').delete().eq('invoice_id', invoiceId);
     if (clientIds.length > 0) {
       await supabase.from('invoice_clients').insert(
-        clientIds.map(cid => ({ invoice_id: data.id, client_id: cid }))
+        clientIds.map(cid => ({ invoice_id: invoiceId, client_id: cid }))
       );
     }
 
-    window.location.href = `/dashboard/facturas/${data.id}`;
+    window.location.href = `/dashboard/facturas/${invoiceId}`;
   };
+
+  if (loadingEdit) {
+    return (
+      <div className="p-6 max-w-4xl">
+        <p className="text-sm text-gray-400">…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/dashboard/facturas" className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+        <Link
+          href={editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'}
+          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+        >
           <ArrowLeft size={18} className="text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.heading}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {editId ? t.headingEdit : t.heading}
+          </h1>
           <p className="text-sm text-gray-400">{invoiceNumber}</p>
         </div>
       </div>
@@ -246,12 +313,20 @@ export default function NuevaFacturaPage() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => save('draft')} loading={saving} fullWidth size="lg">
-            Guardar borrador
-          </Button>
-          <Button onClick={() => save('sent')} loading={saving} fullWidth size="lg">
-            Crear y enviar
-          </Button>
+          {editId ? (
+            <Button onClick={() => save('draft')} loading={saving} fullWidth size="lg">
+              {full.common.buttons.saveChanges}
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={() => save('draft')} loading={saving} fullWidth size="lg">
+                {t.saveDraft}
+              </Button>
+              <Button onClick={() => save('sent')} loading={saving} fullWidth size="lg">
+                {t.sendInvoice}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

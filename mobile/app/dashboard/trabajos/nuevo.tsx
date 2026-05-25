@@ -229,28 +229,49 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
-  // Parse Google/Apple Maps URLs and auto-fill address fields.
-  const parseMapLink = (link: string) => {
+  // Try to pull coords from a map URL. Returns true when successful.
+  // Address / city / state are NOT auto-filled — Google's /place/ slug puts
+  // a business name, address, city, state, country in unpredictable order,
+  // so guessing by comma-split was misaligning fields.
+  const extractCoords = (link: string): boolean => {
+    const m =
+      link.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+      link.match(/[?&](?:q|ll)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+      link.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+    if (!m) return false;
+    const lat = parseFloat(m[1]);
+    const lng = parseFloat(m[2]);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return false;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
+    setJobLat(lat);
+    setJobLng(lng);
+    setCoordsText(`${lat}, ${lng}`);
+    setCoordsInvalid(false);
+    setMapLinkUnrecognized(false);
+    return true;
+  };
+
+  const parseMapLink = async (link: string) => {
     setMapLink(link);
     if (!link.trim()) {
       setMapLinkUnrecognized(false);
       return;
     }
-    const placeMatch = link.match(/\/place\/([^/@]+)/);
-    if (placeMatch) {
-      const parts = decodeURIComponent(placeMatch[1])
-        .replace(/\+/g, ' ')
-        .split(',')
-        .map((s) => s.trim());
-      if (parts.length >= 1 && !address) setAddress(parts[0]);
-      if (parts.length >= 2 && !city) setCity(parts[1]);
-      if (parts.length >= 3 && !state) {
-        const st = parts[2].replace(/\d/g, '').trim();
-        if (st.length === 2) setState(st.toUpperCase());
+    if (extractCoords(link)) return;
+
+    // Shortened links (maps.app.goo.gl, goo.gl/maps, apple.co) don't carry
+    // coords directly. Follow the redirect; React Native's fetch follows
+    // 30x by default and exposes the final URL on response.url.
+    const isShortlink = /maps\.app\.goo\.gl|goo\.gl\/maps|apple\.co/i.test(link);
+    if (isShortlink) {
+      try {
+        const res = await fetch(link, { method: 'GET' });
+        if (res.url && res.url !== link && extractCoords(res.url)) return;
+      } catch {
+        // Network/CORS failure — fall through to the hint.
       }
-      setMapLinkUnrecognized(false);
-      return;
     }
+
     const known = /google\.|goo\.gl|apple\.|maps\.app\.goo\.gl/i.test(link);
     setMapLinkUnrecognized(!known);
   };
@@ -269,11 +290,8 @@ export default function NuevoTrabajoRoute() {
     setClientId(id);
     setClientPickerOpen(false);
     setClientSearch('');
-    const c = clients.find((x) => x.id === id);
-    if (c) {
-      if (c.city && !city) setCity(c.city);
-      if (c.state && !state) setState(c.state);
-    }
+    // Don't auto-fill city/state from the client record — the job's location
+    // is the worksite, which often differs from the client's mailing address.
   };
 
   const toggleEmployee = (id: string) =>
@@ -634,7 +652,11 @@ export default function NuevoTrabajoRoute() {
                     value={state}
                     onValueChange={setState}
                     placeholder={t.stateNone}
-                    options={US_STATES.map((s) => ({ value: s, label: s }))}
+                    options={[
+                      // "—" first so a previously-picked state can be cleared.
+                      { value: '', label: t.stateNone },
+                      ...US_STATES.map((s) => ({ value: s, label: s })),
+                    ]}
                   />
                 </View>
               </View>
@@ -842,12 +864,12 @@ export default function NuevoTrabajoRoute() {
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >
-        <Pressable
-          onPress={() => setClientPickerOpen(false)}
-          className="flex-1 bg-black/40 justify-end"
-        >
+        <View className="flex-1 justify-end">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            onPress={() => setClientPickerOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <View
             className="bg-white rounded-t-3xl pt-3 pb-8"
             style={{ maxHeight: '85%' }}
           >
@@ -915,8 +937,8 @@ export default function NuevoTrabajoRoute() {
                 </View>
               ) : null}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </SafeAreaView>
   );

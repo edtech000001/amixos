@@ -7,6 +7,8 @@ import {
   DollarSign,
   Calendar,
   FileText,
+  Pencil,
+  Trash2,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import {
@@ -14,6 +16,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
+import { formatDateLong } from '../../lib/format';
 
 export interface InvoiceDetailClient {
   firstName: string;
@@ -54,6 +57,10 @@ export interface InvoiceDetailScreenProps {
   onUpdateStatus: (status: 'sent' | 'paid') => Promise<void> | void;
   /** Web-only: print/download. Hidden if not provided. */
   onPrint?: () => void;
+  /** Optional: open the edit form. Pencil icon hidden when not provided. */
+  onEdit?: () => void;
+  /** Optional: trigger delete (caller handles confirm). Trash hidden when not provided. */
+  onDelete?: () => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -84,6 +91,8 @@ export function InvoiceDetailScreen({
   onBack,
   onUpdateStatus,
   onPrint,
+  onEdit,
+  onDelete,
 }: InvoiceDetailScreenProps) {
   const { t: ui } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -117,8 +126,10 @@ export function InvoiceDetailScreen({
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
 
-  const formatDate = (iso: string, opts: Intl.DateTimeFormatOptions) =>
-    new Date(iso).toLocaleDateString(dateLoc, opts);
+  // All invoice dates render as "Mayo 24, 2026" for consistency with the
+  // rest of the app. Locale comes from the invoice's printed-language
+  // setting (es-MX / en-US) so the PDF view matches.
+  const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
@@ -137,12 +148,7 @@ export function InvoiceDetailScreen({
             </View>
             {invoice.dueDate ? (
               <Text className="text-xs text-gray-400 mt-0.5">
-                {t.expires}:{' '}
-                {formatDate(invoice.dueDate, {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
+                {t.expires}: {formatDate(invoice.dueDate)}
               </Text>
             ) : null}
           </View>
@@ -173,6 +179,16 @@ export function InvoiceDetailScreen({
               <Printer size={18} color="#6B7280" />
             </Pressable>
           ) : null}
+          {onEdit ? (
+            <Pressable onPress={onEdit} className="p-2 rounded-xl active:bg-gray-100">
+              <Pencil size={18} color="#6B7280" />
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-50">
+              <Trash2 size={18} color="#EF4444" />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -194,7 +210,7 @@ export function InvoiceDetailScreen({
           <View>
             <Text className="text-xs text-gray-400 font-medium">{t.issueDate}</Text>
             <Text className="text-sm font-semibold text-gray-900">
-              {formatDate(invoice.issueDate, { year: 'numeric', month: 'short', day: 'numeric' })}
+              {formatDate(invoice.issueDate)}
             </Text>
           </View>
         </View>
@@ -205,9 +221,7 @@ export function InvoiceDetailScreen({
           <View>
             <Text className="text-xs text-gray-400 font-medium">{t.dueDate}</Text>
             <Text className="text-sm font-semibold text-gray-900">
-              {invoice.dueDate
-                ? formatDate(invoice.dueDate, { year: 'numeric', month: 'short', day: 'numeric' })
-                : '—'}
+              {invoice.dueDate ? formatDate(invoice.dueDate) : '—'}
             </Text>
           </View>
         </View>

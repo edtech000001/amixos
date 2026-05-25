@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
+import { formatDateLong } from '@amixos/shared/lib/format';
 
 interface ProposalData {
   id: string;
@@ -103,8 +104,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
   const clientName = client ? `${client.first_name} ${client.last_name}` : null;
   const hasFinancials = proposal.tax_rate > 0 || proposal.discount > 0;
 
-  const fmtDateLong = (d: string) =>
-    new Date(d + 'T12:00:00').toLocaleDateString(t.dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtDateLong = (d: string) => formatDateLong(d, t.dateLocale);
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">

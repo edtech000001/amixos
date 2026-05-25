@@ -29,6 +29,11 @@ export interface Business {
   city: string;
   state: string;
   client_field_required: Record<string, boolean>;
+  client_field_order: string[] | null;
+  employee_field_required: Record<string, boolean>;
+  employee_field_order: string[] | null;
+  job_field_required: Record<string, boolean>;
+  job_field_order: string[] | null;
   job_pipeline_disabled: Record<string, boolean>;
 }
 
@@ -127,7 +132,7 @@ export const useAuthStore = create<AuthStore>()(
           const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, client_field_required, job_pipeline_disabled'),
+              .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled'),
             supabase
               .from('business_members')
               .select('business_id, role')

@@ -14,7 +14,7 @@ import {
   CalendarScreen,
   type CalendarEvent as ScreenEvent,
 } from '@amixos/shared/screens/dashboard/CalendarScreen';
-import { formatTime12h } from '@amixos/shared/lib/format';
+import { formatDateLong, formatTime12h } from '@amixos/shared/lib/format';
 
 interface CalEvent {
   id: string;
@@ -163,7 +163,7 @@ export default function CalendarioPage() {
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-gray-400 shrink-0"/>
               <span>
-                {new Date(detailEvent.start_time).toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' })}
+                {formatDateLong(new Date(detailEvent.start_time), dateLocale)}
                 {' · '}
                 {formatTime12h(new Date(detailEvent.start_time))}
                 {detailEvent.end_time && ` — ${formatTime12h(new Date(detailEvent.end_time))}`}

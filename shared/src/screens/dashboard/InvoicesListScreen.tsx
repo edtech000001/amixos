@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Plus, FileText, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { formatDateLong } from '../../lib/format';
 
 export interface InvoiceListItem {
   id: string;
@@ -168,12 +169,7 @@ export function InvoicesListScreen({
             const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-gray-100';
             const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-gray-500';
             const client = inv.clientNames ?? t.noClient;
-            const due = inv.dueDate
-              ? new Date(inv.dueDate).toLocaleDateString(t.dateLocale, {
-                  day: 'numeric',
-                  month: 'short',
-                })
-              : null;
+            const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
             return (
               <View
                 key={inv.id}

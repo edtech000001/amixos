@@ -159,14 +159,12 @@ function NativePicker({
           animationType="slide"
           onRequestClose={() => setIosOpen(false)}
         >
-          <Pressable
-            onPress={() => setIosOpen(false)}
-            className="flex-1 bg-black/40 justify-end"
-          >
+          <View className="flex-1 justify-end">
             <Pressable
-              onPress={(e) => e.stopPropagation()}
-              className="bg-white rounded-t-3xl pt-3"
-            >
+              onPress={() => setIosOpen(false)}
+              className="absolute inset-0 bg-black/40"
+            />
+            <View className="bg-white rounded-t-3xl pt-3">
               {/* Drag-handle */}
               <View className="items-center mb-1">
                 <View className="w-10 h-1 bg-gray-200 rounded-full" />
@@ -218,8 +216,8 @@ function NativePicker({
                 />
               </View>
               <View style={{ height: 24 }} />
-            </Pressable>
-          </Pressable>
+            </View>
+          </View>
         </RNModal>
       ) : null}
     </>

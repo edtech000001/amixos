@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface AuditRow {
   id: string;
@@ -55,7 +56,7 @@ export default function ActividadPage() {
     if (diff < 3600) return t.timeMinutesAgo.replace('{{n}}', String(Math.floor(diff / 60)));
     if (diff < 86400) return t.timeHoursAgo.replace('{{n}}', String(Math.floor(diff / 3600)));
     if (diff < 86400 * 14) return t.timeDaysAgo.replace('{{n}}', String(Math.floor(diff / 86400)));
-    return new Date(iso).toLocaleDateString();
+    return formatDateTimeLong(iso, locale);
   };
 
   const describe = (row: AuditRow): string => {

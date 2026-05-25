@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -57,6 +56,9 @@ export default function FacturasTab() {
 
   useEffect(() => { load(); }, [business]);
 
+  // Refresh on focus so newly created/edited invoices appear after returning.
+  useFocusEffect(useCallback(() => { load(); }, [business?.id]));
+
   const updateStatus = async (id: string, status: 'sent' | 'paid') => {
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
@@ -71,7 +73,7 @@ export default function FacturasTab() {
         loading={loading}
         invoices={invoices}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
-        onNewInvoicePress={() => Alert.alert('Coming soon', 'Create invoice from mobile not yet built')}
+        onNewInvoicePress={() => router.push('/dashboard/facturas/nueva' as never)}
         onUpdateStatus={updateStatus}
       />
     </SafeAreaView>
