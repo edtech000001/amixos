@@ -30,7 +30,10 @@ export type AuditAction =
   | 'invite.accepted'
   // Business
   | 'business.updated'
-  | 'business.deleted';
+  | 'business.deleted'
+  // Modules (Addon Store)
+  | 'module.enabled'
+  | 'module.disabled';
 
 export type EntityType =
   | 'job'
@@ -38,7 +41,8 @@ export type EntityType =
   | 'client'
   | 'member'
   | 'invite'
-  | 'business';
+  | 'business'
+  | 'module';
 
 // Accept any Supabase client variant — web and mobile create slightly
 // different generic instantiations and the strict shape pinning was tripping
@@ -94,4 +98,6 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'invite.accepted':     { es: 'Invitación aceptada',       en: 'Invite accepted' },
   'business.updated':    { es: 'Negocio actualizado',       en: 'Business updated' },
   'business.deleted':    { es: 'Negocio eliminado',         en: 'Business deleted' },
+  'module.enabled':      { es: 'Módulo activado',           en: 'Module enabled' },
+  'module.disabled':     { es: 'Módulo desactivado',        en: 'Module disabled' },
 };

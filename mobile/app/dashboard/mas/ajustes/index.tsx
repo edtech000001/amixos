@@ -11,6 +11,7 @@ import {
   Cloud,
   UserPlus,
   Activity,
+  Store as StoreIcon,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -66,6 +67,13 @@ export default function AjustesIndex() {
       description: t.team.subtitle,
       icon: UserPlus,
       path: '/dashboard/mas/ajustes/equipo',
+    },
+    {
+      key: 'tienda',
+      label: t.tabs.tienda,
+      description: t.store.subtitle,
+      icon: StoreIcon,
+      path: '/dashboard/mas/ajustes/tienda',
     },
     ...(can.seeAuditLog(currentRole) ? [{
       key: 'actividad',

@@ -684,6 +684,7 @@ export type DashboardDict = {
       conexiones: string;
       equipo: string;
       actividad: string;
+      tienda: string;
     };
     employeesSection: {
       title: string;
@@ -850,6 +851,29 @@ export type DashboardDict = {
       timeMinutesAgo: string;
       timeHoursAgo: string;
       timeDaysAgo: string;
+    };
+    store: {
+      heading: string;
+      subtitle: string;
+      statusAvailable: string;
+      statusComingSoon: string;
+      enabledBadge: string;
+      enable: string;
+      disable: string;
+    };
+  };
+  modules: {
+    placeholder: {
+      heading: string;
+      body: string;
+    };
+    list: {
+      mechanic: { name: string; description: string };
+      salon: { name: string; description: string };
+      landscaping: { name: string; description: string };
+      restaurant: { name: string; description: string };
+      cleaning: { name: string; description: string };
+      construction: { name: string; description: string };
     };
   };
   reports: {
@@ -1608,6 +1632,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         conexiones: 'Conexiones',
         equipo: 'Equipo',
         actividad: 'Actividad',
+        tienda: 'Tienda de módulos',
       },
       employeesSection: {
         title: 'Campos de empleados',
@@ -1774,6 +1799,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         timeMinutesAgo: 'hace {{n}} min',
         timeHoursAgo: 'hace {{n}} h',
         timeDaysAgo: 'hace {{n}} d',
+      },
+      store: {
+        heading: 'Tienda de módulos',
+        subtitle: 'Activa o desactiva los módulos para tu negocio.',
+        statusAvailable: 'Disponible',
+        statusComingSoon: 'Próximamente',
+        enabledBadge: 'Activo',
+        enable: 'Activar',
+        disable: 'Desactivar',
+      },
+    },
+    modules: {
+      placeholder: {
+        heading: 'Próximamente',
+        body: 'Este módulo aún está en desarrollo. Pronto podrás usarlo aquí.',
+      },
+      list: {
+        mechanic:     { name: 'Mecánico',     description: 'Órdenes de trabajo, VIN, partes, diagnóstico' },
+        salon:        { name: 'Salón',        description: 'Citas, comisiones de estilistas, menú de servicios' },
+        landscaping:  { name: 'Jardinería',   description: 'Propiedades, calendario estacional, equipo' },
+        restaurant:   { name: 'Restaurante',  description: 'Mesas, menú, pedidos, inventario de cocina' },
+        cleaning:     { name: 'Limpieza',     description: 'Rutas, listas de tareas, productos' },
+        construction: { name: 'Construcción', description: 'Permisos, planos, mediciones, subcontratistas' },
       },
     },
     reports: {
@@ -2529,6 +2577,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         conexiones: 'Connections',
         equipo: 'Team',
         actividad: 'Activity',
+        tienda: 'Module Store',
       },
       employeesSection: {
         title: 'Employee fields',
@@ -2695,6 +2744,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         timeMinutesAgo: '{{n}} min ago',
         timeHoursAgo: '{{n}} h ago',
         timeDaysAgo: '{{n}} d ago',
+      },
+      store: {
+        heading: 'Module Store',
+        subtitle: 'Enable or disable modules for your business.',
+        statusAvailable: 'Available',
+        statusComingSoon: 'Coming soon',
+        enabledBadge: 'Active',
+        enable: 'Enable',
+        disable: 'Disable',
+      },
+    },
+    modules: {
+      placeholder: {
+        heading: 'Coming soon',
+        body: "This module is still in development. You'll be able to use it here shortly.",
+      },
+      list: {
+        mechanic:     { name: 'Mechanic',     description: 'Work orders, VIN, parts, diagnostics' },
+        salon:        { name: 'Salon',        description: 'Appointments, stylist commissions, service menu' },
+        landscaping:  { name: 'Landscaping',  description: 'Properties, seasonal scheduling, equipment' },
+        restaurant:   { name: 'Restaurant',   description: 'Tables, menu, orders, kitchen inventory' },
+        cleaning:     { name: 'Cleaning',     description: 'Routes, task lists, supplies' },
+        construction: { name: 'Construction', description: 'Permits, blueprints, measurements, subcontractors' },
       },
     },
     reports: {

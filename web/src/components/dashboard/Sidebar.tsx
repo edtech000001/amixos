@@ -12,6 +12,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 const NAV_ITEMS = [
   { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
@@ -29,8 +30,11 @@ export function Sidebar() {
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
+  const modulesDict = full.dashboard.modules.list;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
+  // Dynamic nav: each enabled module gets a sidebar entry under /dashboard/modulos/<id>.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
@@ -65,6 +69,31 @@ export function Sidebar() {
             >
               <Icon size={18} />
               {t[key]}
+            </Link>
+          );
+        })}
+        {/* Enabled industry modules appended after core nav. Disabled modules
+            don't render — they're only visible inside Ajustes → Tienda. */}
+        {enabledModules.map(m => {
+          const href = `/dashboard/modulos/${m.id}`;
+          const active = isActive(href);
+          const Icon = m.icon;
+          const entry = (modulesDict as unknown as Record<string, { name: string } | undefined>)[m.i18nKey];
+          const name = entry?.name ?? m.id;
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                active
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+              )}
+            >
+              <Icon size={18} color={active ? '#FFFFFF' : m.color} />
+              {name}
             </Link>
           );
         })}
