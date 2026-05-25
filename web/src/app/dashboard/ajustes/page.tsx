@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, Store as StoreIcon } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -637,11 +637,6 @@ export default function AjustesPage() {
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
               <UserPlus size={16} className="text-gray-400"/>
               {t.tabs.equipo}
-            </Link>
-            <Link href="/dashboard/ajustes/tienda"
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
-              <StoreIcon size={16} className="text-gray-400"/>
-              {t.tabs.tienda}
             </Link>
             {can.seeAuditLog(currentRole) && (
               <Link href="/dashboard/ajustes/actividad"

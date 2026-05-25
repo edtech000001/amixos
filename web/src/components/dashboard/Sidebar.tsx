@@ -6,13 +6,13 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, Clock, Calendar,
   Package, Settings, LogOut, ChevronLeft, Menu, X, ClipboardList, BarChart3,
+  Store as StoreIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
-import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 const NAV_ITEMS = [
   { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
@@ -30,11 +30,9 @@ export function Sidebar() {
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
-  const modulesDict = full.dashboard.modules.list;
+  const store = full.dashboard.settings.store;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
-  // Dynamic nav: each enabled module gets a sidebar entry under /dashboard/modulos/<id>.
-  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
@@ -51,7 +49,9 @@ export function Sidebar() {
         <BusinessSwitcher />
       </div>
 
-      {/* Nav items */}
+      {/* Nav items. The core list never grows with enabled modules —
+          modules are reached through the Tienda page (each card opens
+          the module). Keeps this sidebar stable across businesses. */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ href, key, icon: Icon, exact }) => {
           const active = isActive(href, exact);
@@ -72,35 +72,23 @@ export function Sidebar() {
             </Link>
           );
         })}
-        {/* Enabled industry modules appended after core nav. Disabled modules
-            don't render — they're only visible inside Ajustes → Tienda. */}
-        {enabledModules.map(m => {
-          const href = `/dashboard/modulos/${m.id}`;
-          const active = isActive(href);
-          const Icon = m.icon;
-          const entry = (modulesDict as unknown as Record<string, { name: string } | undefined>)[m.i18nKey];
-          const name = entry?.name ?? m.id;
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setOpen(false)}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                active
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-              )}
-            >
-              <Icon size={18} color={active ? '#FFFFFF' : m.color} />
-              {name}
-            </Link>
-          );
-        })}
       </nav>
 
-      {/* Bottom */}
+      {/* Bottom — Tienda + Ajustes + Logout grouped as admin-ish surfaces. */}
       <div className="px-3 py-4 border-t border-gray-100 flex flex-col gap-0.5">
+        <Link
+          href="/dashboard/ajustes/tienda"
+          onClick={() => setOpen(false)}
+          className={clsx(
+            'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+            isActive('/dashboard/ajustes/tienda')
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+          )}
+        >
+          <StoreIcon size={18} />
+          {store.heading}
+        </Link>
         <Link
           href="/dashboard/ajustes"
           onClick={() => setOpen(false)}

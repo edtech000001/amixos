@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -12,6 +13,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 
 export default function TiendaPage() {
   const supabase = createSupabaseClient();
+  const router = useRouter();
   const { business, currentRole } = useApp();
 
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
@@ -71,6 +73,7 @@ export default function TiendaPage() {
           currentRole={currentRole}
           loading={loading}
           onToggle={onToggle}
+          onOpen={(id) => router.push(`/dashboard/modulos/${id}`)}
         />
       </div>
     </div>

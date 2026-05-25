@@ -6,14 +6,13 @@ import {
   Calendar,
   Package,
   Settings,
+  Store as StoreIcon,
   ChevronRight,
   LogOut,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
-import { createSupabaseClient } from '@/lib/supabase';
-import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 interface MenuItem {
   key: string;
@@ -28,29 +27,17 @@ export default function MasMenu() {
   const { t } = useLang();
   const { signOut, business } = useApp();
   const sb = t.dashboard.sidebar;
-  const modulesDict = t.dashboard.modules.list;
-  const supabase = createSupabaseClient();
-  // Dynamic nav: every enabled module gets a card in the Más menu just
-  // alongside Empleados / Calendario / etc.
-  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const store = t.dashboard.settings.store;
 
-  // Modules slot in between Inventario and Ajustes so the "core nav" stays
-  // recognizable and admin/settings entries stay grouped at the bottom.
-  const moduleItems: MenuItem[] = enabledModules.map(m => {
-    const entry = (modulesDict as unknown as Record<string, { name: string } | undefined>)[m.i18nKey];
-    return {
-      key: `module-${m.id}`,
-      label: entry?.name ?? m.id,
-      icon: m.icon,
-      path: `/dashboard/mas/modulos/${m.id}`,
-    };
-  });
-
+  // The Más menu intentionally does NOT auto-add enabled modules. Modules
+  // are reached through the Tienda page directly (tap a card → open the
+  // module). Keeps this surface stable regardless of which modules a
+  // business has on.
   const items: MenuItem[] = [
     { key: 'empleados', label: sb.empleados, icon: Briefcase, path: '/dashboard/mas/empleados' },
     { key: 'calendario', label: sb.calendario, icon: Calendar, path: '/dashboard/mas/calendario' },
     { key: 'inventario', label: sb.inventario, icon: Package, path: '/dashboard/mas/inventario' },
-    ...moduleItems,
+    { key: 'tienda', label: store.heading, icon: StoreIcon, path: '/dashboard/mas/ajustes/tienda' },
     { key: 'ajustes', label: sb.ajustes, icon: Settings, path: '/dashboard/mas/ajustes' },
   ];
 
