@@ -10,23 +10,24 @@
 --
 -- Idempotent: safe to re-run.
 
--- Step 1: clear stale rows that don't have business_id yet.
+-- Step 1: add the business_id column FIRST (nullable for now) — we need it
+-- to exist before any DELETE / ALTER referencing it can succeed.
+alter table public.user_oauth_credentials
+  add column if not exists business_id uuid references public.businesses(id) on delete cascade;
+
+-- Step 2: clear stale rows that don't have a valid business_id. After this,
+-- the table is guaranteed to have only rows with a real business_id, so
+-- we can safely make the column NOT NULL below.
 delete from public.user_oauth_credentials
   where business_id is null
      or business_id not in (select id from public.businesses);
-
--- Step 2: add business_id column. Nullable for the alter (we already cleared
--- the table), then NOT NULL after we adjust the PK.
-alter table public.user_oauth_credentials
-  add column if not exists business_id uuid references public.businesses(id) on delete cascade;
 
 -- Step 3: switch the primary key from (user_id) alone to (user_id, business_id).
 -- The old PK is named user_oauth_credentials_pkey by Postgres default.
 alter table public.user_oauth_credentials
   drop constraint if exists user_oauth_credentials_pkey;
 
--- After dropping, set business_id NOT NULL — there should be zero rows at
--- this point so no rows will fail the constraint.
+-- All remaining rows now have a non-null business_id (or the table is empty).
 alter table public.user_oauth_credentials
   alter column business_id set not null;
 
