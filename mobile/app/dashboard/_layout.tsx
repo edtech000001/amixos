@@ -86,6 +86,10 @@ export default function DashboardLayout() {
       <Tabs.Screen name="mas/calendario" options={{ href: null }} />
       {/* ajustes/ is a Stack with its own _layout — register the folder once. */}
       <Tabs.Screen name="mas/ajustes" options={{ href: null }} />
+      {/* Module routes — dynamic [moduleId] page. Without href:null Expo
+         Router auto-discovers it and gives it a tab slot (showed up as an
+         empty 5th button on the dock). */}
+      <Tabs.Screen name="mas/modulos/[moduleId]" options={{ href: null }} />
     </Tabs>
   );
 }
