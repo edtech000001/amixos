@@ -2,7 +2,6 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  ChevronLeft,
   ChevronRight,
   Building2,
   Briefcase,
@@ -92,18 +91,11 @@ export default function AjustesIndex() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
-        >
-          <ChevronLeft size={22} color="#111827" />
-        </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900">{t.title}</Text>
-      </View>
-
+      {/* No back arrow — Ajustes is a top-level Más item, reached via the
+         dock. To go back the user taps the Más tab (same pattern as
+         Empleados / Calendario / Inventario / Tienda). */}
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
+        <Text className="text-2xl font-bold text-gray-900 mb-5">{t.title}</Text>
         <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           {items.map((item, i) => {
             const Icon = item.icon;

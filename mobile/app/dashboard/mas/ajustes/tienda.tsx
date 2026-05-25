@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AddonStoreScreen } from '@amixos/shared/screens/dashboard/AddonStoreScreen';
+import { getModuleById } from '@amixos/shared/modules/registry';
 import { logAudit } from '@amixos/shared/lib/audit';
 
 export default function TiendaPage() {
@@ -15,6 +15,8 @@ export default function TiendaPage() {
   const { business, currentRole } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.settings.store;
+  const modulesDict = full.dashboard.modules.list;
+  const commonButtons = full.common.buttons;
 
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,8 @@ export default function TiendaPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const onToggle = async (moduleId: string, enable: boolean) => {
+  // Persist the toggle + audit log. Called only AFTER the user confirms.
+  const persistToggle = async (moduleId: string, enable: boolean) => {
     if (!business) return;
     await supabase
       .from('business_modules')
@@ -57,23 +60,40 @@ export default function TiendaPage() {
     await load();
   };
 
+  // Wrap the toggle action with a native confirmation dialog. Modules are
+  // optional features — the user might tap by accident — so confirmation
+  // prevents accidental enable/disable. Messaging emphasizes that data is
+  // preserved and the action is reversible.
+  const onToggle = (moduleId: string, enable: boolean) => {
+    const def = getModuleById(moduleId);
+    const entry = def
+      ? (modulesDict as unknown as Record<string, { name: string } | undefined>)[def.i18nKey]
+      : undefined;
+    const name = entry?.name ?? moduleId;
+
+    const title = (enable ? t.enableConfirmTitle : t.disableConfirmTitle).replace('{{name}}', name);
+    const body = enable ? t.enableConfirmBody : t.disableConfirmBody;
+
+    Alert.alert(title, body, [
+      { text: commonButtons.cancel, style: 'cancel' },
+      {
+        text: enable ? t.enable : t.disable,
+        style: enable ? 'default' : 'destructive',
+        onPress: () => {
+          void persistToggle(moduleId, enable);
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
-        >
-          <ChevronLeft size={22} color="#111827" />
-        </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900">{t.heading}</Text>
-      </View>
       <AddonStoreScreen
         enabledIds={enabledIds}
         currentRole={currentRole}
         loading={loading}
         onToggle={onToggle}
+        onOpen={(id) => router.push(`/dashboard/mas/modulos/${id}` as never)}
       />
     </SafeAreaView>
   );

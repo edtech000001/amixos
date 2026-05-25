@@ -3,18 +3,21 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/i18n/LangProvider';
 import { AddonStoreScreen } from '@amixos/shared/screens/dashboard/AddonStoreScreen';
+import { getModuleById } from '@amixos/shared/modules/registry';
 import { logAudit } from '@amixos/shared/lib/audit';
 
 export default function TiendaPage() {
   const supabase = createSupabaseClient();
   const router = useRouter();
   const { business, currentRole } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings.store;
+  const modulesDict = full.dashboard.modules.list;
 
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -34,11 +37,9 @@ export default function TiendaPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const onToggle = async (moduleId: string, enable: boolean) => {
+  // Persist the toggle + audit log. Called only AFTER the user confirms.
+  const persistToggle = async (moduleId: string, enable: boolean) => {
     if (!business) return;
-    // Upsert: business_modules has a unique (business_id, module_key) index,
-    // so upsert with onConflict on that pair flips is_active without losing
-    // any module-specific settings stored in the JSONB column.
     await supabase
       .from('business_modules')
       .upsert(
@@ -60,13 +61,30 @@ export default function TiendaPage() {
     await load();
   };
 
+  // Wrap the toggle action with a confirmation dialog. Modules are optional
+  // features and the action is reversible — but a tap may have been
+  // accidental, so the confirm step prevents data confusion when modules
+  // are first built out.
+  const onToggle = (moduleId: string, enable: boolean) => {
+    const def = getModuleById(moduleId);
+    const entry = def
+      ? (modulesDict as unknown as Record<string, { name: string } | undefined>)[def.i18nKey]
+      : undefined;
+    const name = entry?.name ?? moduleId;
+
+    const title = (enable ? t.enableConfirmTitle : t.disableConfirmTitle).replace('{{name}}', name);
+    const body = enable ? t.enableConfirmBody : t.disableConfirmBody;
+
+    // window.confirm has no styling/buttons control but it's universally
+    // available; if/when we add a global Modal/AlertDialog primitive we
+    // can swap this for a styled prompt without touching the screen.
+    const ok = typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`);
+    if (!ok) return;
+    void persistToggle(moduleId, enable);
+  };
+
   return (
     <div className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Link href="/dashboard/ajustes" className="p-2 -ml-2 rounded-lg hover:bg-gray-100">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </Link>
-      </div>
       <div className="bg-white rounded-2xl border border-gray-100">
         <AddonStoreScreen
           enabledIds={enabledIds}

@@ -869,6 +869,12 @@ export type DashboardDict = {
       enabledBadge: string;
       enable: string;
       disable: string;
+      // Confirmation dialog when toggling. {{name}} is replaced with the
+      // localized module name.
+      enableConfirmTitle: string;
+      enableConfirmBody: string;
+      disableConfirmTitle: string;
+      disableConfirmBody: string;
     };
   };
   modules: {
@@ -1824,6 +1830,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         enabledBadge: 'Activo',
         enable: 'Activar',
         disable: 'Desactivar',
+        enableConfirmTitle: '¿Activar {{name}}?',
+        enableConfirmBody: 'Estos módulos no son necesarios — agregan funciones extra para tu negocio. Puedes desactivarlo en cualquier momento.',
+        disableConfirmTitle: '¿Desactivar {{name}}?',
+        disableConfirmBody: 'Perderás acceso a las funciones de este módulo. Tus datos se conservan y puedes volver a activarlo cuando quieras.',
       },
     },
     modules: {
@@ -2776,6 +2786,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         enabledBadge: 'Active',
         enable: 'Enable',
         disable: 'Disable',
+        enableConfirmTitle: 'Enable {{name}}?',
+        enableConfirmBody: "These modules aren't required — they add extra features for your business. You can disable it anytime.",
+        disableConfirmTitle: 'Disable {{name}}?',
+        disableConfirmBody: "You'll lose access to this module's features. Your data stays and you can turn it back on whenever you want.",
       },
     },
     modules: {
