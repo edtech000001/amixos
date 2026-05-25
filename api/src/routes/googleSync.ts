@@ -45,6 +45,145 @@ async function loadCreds(userId: string, businessId: string): Promise<OAuthCreds
 }
 
 /**
+ * POST /api/v1/google-sync/exchange-code
+ * Body: { business_id: string, code: string, redirect_uri: string }
+ *
+ * Server-side authorization-code exchange for the WEB OAuth flow. Web
+ * cannot do PKCE without leaking the client_secret to the browser, so we
+ * keep the secret here and do the exchange on the server.
+ *
+ * Flow:
+ *   1. Browser kicks off Google's OAuth screen with our Web client_id and
+ *      redirect_uri = `${origin}/auth/google-callback`.
+ *   2. Google redirects back to that callback with ?code=...&state=...
+ *   3. Callback page POSTs { code, business_id, redirect_uri } here.
+ *   4. We swap the code for tokens at Google's token endpoint, write the
+ *      refresh_token into user_oauth_credentials (scoped to business_id),
+ *      and auto-create the Amixos group as the default sync target.
+ *
+ * The redirect_uri sent here must MATCH exactly what was sent to Google
+ * in step 1 — that's an OAuth security requirement.
+ */
+googleSyncRouter.post('/exchange-code', async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
+
+  const { business_id, code, redirect_uri } = req.body ?? {};
+  if (!business_id || typeof business_id !== 'string') {
+    return res.status(400).json({ success: false, message: 'business_id required' });
+  }
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ success: false, message: 'code required' });
+  }
+  if (!redirect_uri || typeof redirect_uri !== 'string') {
+    return res.status(400).json({ success: false, message: 'redirect_uri required' });
+  }
+
+  // Membership check — same as /connect.
+  const { data: membership } = await supabase
+    .from('business_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('business_id', business_id)
+    .maybeSingle();
+  if (!membership) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
+  }
+
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return res.status(500).json({
+      success: false,
+      message: 'GOOGLE_OAUTH_CLIENT_ID/SECRET not configured',
+    });
+  }
+
+  // Exchange code → tokens.
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri,
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+
+  if (!tokenRes.ok) {
+    const errText = await tokenRes.text().catch(() => '');
+    return res.status(400).json({
+      success: false,
+      message: 'token_exchange_failed',
+      details: errText.slice(0, 500),
+    });
+  }
+
+  const tokens = (await tokenRes.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+
+  if (!tokens.refresh_token) {
+    // Google omits refresh_token when the user has previously granted
+    // access and we didn't request a fresh consent. The browser flow sets
+    // prompt=consent so this shouldn't happen — but guard anyway.
+    return res.status(400).json({ success: false, message: 'no_refresh_token' });
+  }
+
+  // Store the credential, same shape as /connect would.
+  const { error } = await supabase
+    .from('user_oauth_credentials')
+    .upsert({
+      user_id: userId,
+      business_id,
+      provider: 'google',
+      refresh_token: tokens.refresh_token,
+      client_id: clientId,
+      scopes: tokens.scope?.split(' ') ?? [],
+      enabled: true,
+      contact_group_id: null,
+      last_sync_error: null,
+      updated_at: new Date().toISOString(),
+    });
+  if (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+
+  // Auto-create / find the Amixos label as the default sync target.
+  let resolvedGroupId: string | null = null;
+  let resolvedGroupName: string | null = null;
+  const creds = await loadCreds(userId, business_id);
+  if (creds) {
+    const group = await findOrCreateContactGroup(creds, DEFAULT_GROUP_NAME);
+    if (group) {
+      resolvedGroupId = group.id;
+      resolvedGroupName = group.name;
+      await supabase
+        .from('user_oauth_credentials')
+        .update({
+          contact_group_id: group.id,
+          contact_group_name: group.name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('business_id', business_id);
+    }
+  }
+
+  return res.json({
+    success: true,
+    status: 'connected',
+    contactGroupId: resolvedGroupId,
+    contactGroupName: resolvedGroupName,
+  });
+});
+
+/**
  * POST /api/v1/google-sync/connect
  * Body: { business_id: string, refresh_token: string, scopes: string[], client_id: string, contact_group_id?: string }
  * Stores the refresh token, scoped to one business. Called by client after

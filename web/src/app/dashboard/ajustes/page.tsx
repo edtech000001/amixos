@@ -1488,29 +1488,39 @@ function GoogleSyncCard() {
   const onConnect = async () => {
     if (!businessId) return;
     setBusy(true);
-    const { data: sessionData } = await supabase.auth.getSession();
-    const hasGoogle = sessionData.session?.user?.identities?.some(i => i.provider === 'google');
 
-    // Encode the active business id into the redirect_uri so the callback
-    // page knows which business this connection should be attached to.
-    const oauthOptions = {
-      redirectTo: `${window.location.origin}/auth/callback?google_link=1&business_id=${encodeURIComponent(businessId)}`,
-      scopes: 'openid email profile https://www.googleapis.com/auth/contacts',
-      queryParams: { access_type: 'offline', prompt: 'consent' },
-    };
-
-    // linkIdentity isn't on every Supabase TS surface; cast to access it.
-    const supabaseAny = supabase as unknown as {
-      auth: {
-        linkIdentity: (args: { provider: 'google'; options: typeof oauthOptions }) => Promise<{ data: { url?: string }; error: { message: string } | null }>;
-      };
-    };
-
-    if (hasGoogle) {
-      await supabase.auth.signInWithOAuth({ provider: 'google', options: oauthOptions });
-    } else {
-      await supabaseAny.auth.linkIdentity({ provider: 'google', options: oauthOptions });
+    // Direct OAuth against Google — bypasses Supabase's linkIdentity flow,
+    // same reasoning as mobile (Supabase strips refresh_token on relink).
+    // The Web OAuth client_id is public; the secret stays on the API
+    // server and is only used in the /exchange-code endpoint we hit from
+    // /auth/google-callback.
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    if (!googleClientId) {
+      setBusy(false);
+      // eslint-disable-next-line no-alert
+      alert('NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in web/.env.local');
+      return;
     }
+
+    // CSRF protection: random nonce stored in sessionStorage; the callback
+    // verifies the state param matches. business_id is encoded in the
+    // same state blob so the callback knows which business to attach to.
+    const nonce = crypto.randomUUID();
+    sessionStorage.setItem('amixos-google-oauth-state', nonce);
+    const state = btoa(JSON.stringify({ nonce, business_id: businessId }));
+    const redirectUri = `${window.location.origin}/auth/google-callback`;
+
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', googleClientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/contacts');
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('prompt', 'consent');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('include_granted_scopes', 'true');
+
+    window.location.href = authUrl.toString();
     // Page redirects — busy state will reset on full reload after callback.
   };
 

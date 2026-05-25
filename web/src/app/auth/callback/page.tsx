@@ -27,41 +27,10 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // Google Contacts link flow: the user just granted the contacts scope.
-        // session.provider_refresh_token is populated for THIS request only —
-        // forward it to our API which stores it for future People API calls.
-        // The business_id was round-tripped through the redirect URL so we
-        // know which workspace this connection should attach to.
-        const googleLink = params.get('google_link') === '1';
-        const businessIdParam = params.get('business_id');
-        if (googleLink) {
-          const sessionAny = data.session as { access_token: string; provider_refresh_token?: string };
-          const refreshToken = sessionAny.provider_refresh_token;
-          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-          if (refreshToken && apiBaseUrl && businessIdParam) {
-            try {
-              await fetch(`${apiBaseUrl}/api/v1/google-sync/connect`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${sessionAny.access_token}`,
-                },
-                body: JSON.stringify({
-                  business_id: businessIdParam,
-                  refresh_token: refreshToken,
-                  scopes: [
-                    'openid', 'email', 'profile',
-                    'https://www.googleapis.com/auth/contacts',
-                  ],
-                }),
-              });
-            } catch {
-              // Surfaced in ajustes via /status — don't block the redirect.
-            }
-          }
-          window.location.href = '/dashboard/ajustes?google_synced=1';
-          return;
-        }
+        // Note: the Google Contacts link flow used to be handled here via
+        // ?google_link=1. It now goes through /auth/google-callback (direct
+        // OAuth, see web/src/app/auth/google-callback/page.tsx) — this
+        // callback is purely for Supabase sign-in / sign-up.
 
         // Check if user has a business already
         const { data: businesses } = await supabase
