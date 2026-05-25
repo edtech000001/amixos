@@ -13,6 +13,15 @@ export type DashboardDict = {
     ajustes: string;
     mas: string;
     logout: string;
+    // Short one-liners shown under each label on mobile's Más list. Keeps
+    // that menu visually consistent with Ajustes (card with description).
+    descriptions: {
+      empleados: string;
+      calendario: string;
+      inventario: string;
+      tienda: string;
+      ajustes: string;
+    };
   };
   home: {
     welcome: string;
@@ -974,6 +983,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
       ajustes: 'Ajustes',
       mas: 'Más',
       logout: 'Cerrar sesión',
+      descriptions: {
+        empleados: 'Gestiona tu equipo, horarios y pagos.',
+        calendario: 'Citas, trabajos programados y horarios.',
+        inventario: 'Productos, partes y materiales.',
+        tienda: 'Activa o desactiva módulos para tu negocio.',
+        ajustes: 'Configura tu negocio, equipo y conexiones.',
+      },
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -1919,6 +1935,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
       ajustes: 'Settings',
       mas: 'More',
       logout: 'Sign out',
+      descriptions: {
+        empleados: 'Manage your team, schedules, and pay.',
+        calendario: 'Appointments, scheduled jobs, and hours.',
+        inventario: 'Products, parts, and materials.',
+        tienda: 'Enable or disable modules for your business.',
+        ajustes: 'Configure your business, team, and connections.',
+      },
     },
     home: {
       welcome: 'Welcome 👋',

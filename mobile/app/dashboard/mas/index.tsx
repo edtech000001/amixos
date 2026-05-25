@@ -17,6 +17,7 @@ import { useApp } from '@/lib/AppContext';
 interface MenuItem {
   key: string;
   label: string;
+  description: string;
   icon: LucideIcon;
   path?: string;
   onPress?: () => void;
@@ -34,11 +35,41 @@ export default function MasMenu() {
   // module). Keeps this surface stable regardless of which modules a
   // business has on.
   const items: MenuItem[] = [
-    { key: 'empleados', label: sb.empleados, icon: Briefcase, path: '/dashboard/mas/empleados' },
-    { key: 'calendario', label: sb.calendario, icon: Calendar, path: '/dashboard/mas/calendario' },
-    { key: 'inventario', label: sb.inventario, icon: Package, path: '/dashboard/mas/inventario' },
-    { key: 'tienda', label: store.heading, icon: StoreIcon, path: '/dashboard/mas/ajustes/tienda' },
-    { key: 'ajustes', label: sb.ajustes, icon: Settings, path: '/dashboard/mas/ajustes' },
+    {
+      key: 'empleados',
+      label: sb.empleados,
+      description: sb.descriptions.empleados,
+      icon: Briefcase,
+      path: '/dashboard/mas/empleados',
+    },
+    {
+      key: 'calendario',
+      label: sb.calendario,
+      description: sb.descriptions.calendario,
+      icon: Calendar,
+      path: '/dashboard/mas/calendario',
+    },
+    {
+      key: 'inventario',
+      label: sb.inventario,
+      description: sb.descriptions.inventario,
+      icon: Package,
+      path: '/dashboard/mas/inventario',
+    },
+    {
+      key: 'tienda',
+      label: store.heading,
+      description: sb.descriptions.tienda,
+      icon: StoreIcon,
+      path: '/dashboard/mas/ajustes/tienda',
+    },
+    {
+      key: 'ajustes',
+      label: sb.ajustes,
+      description: sb.descriptions.ajustes,
+      icon: Settings,
+      path: '/dashboard/mas/ajustes',
+    },
   ];
 
   const confirmSignOut = () => {
@@ -56,6 +87,10 @@ export default function MasMenu() {
           <Text className="text-sm text-gray-500 mb-6">{business.name}</Text>
         ) : null}
 
+        {/* Card group — matches the Ajustes index layout exactly: 10×10
+            icon tile in primary tint, bold name on top, small description
+            below, chevron on the right. Padding + dividers mirror that
+            page so the two feel like one surface. */}
         <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           {items.map((item, i) => {
             const Icon = item.icon;
@@ -66,15 +101,20 @@ export default function MasMenu() {
                   if (item.path) router.push(item.path as any);
                   else item.onPress?.();
                 }}
-                className={`flex-row items-center gap-3 px-5 py-4 active:bg-gray-50 ${
+                className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
                   i < items.length - 1 ? 'border-b border-gray-50' : ''
                 }`}
               >
-                <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                  <Icon size={18} className="text-primary" />
+                <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+                  <Icon size={18} color="#4F46E5" />
                 </View>
-                <Text className="flex-1 text-sm font-medium text-gray-900">{item.label}</Text>
-                <ChevronRight size={16} color="#9CA3AF" />
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-gray-900">{item.label}</Text>
+                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </View>
+                <ChevronRight size={18} color="#9CA3AF" />
               </Pressable>
             );
           })}
@@ -82,12 +122,12 @@ export default function MasMenu() {
 
         <Pressable
           onPress={confirmSignOut}
-          className="flex-row items-center gap-3 px-5 py-4 mt-4 bg-white rounded-2xl border border-gray-100 active:bg-red-50"
+          className="flex-row items-center gap-3 px-4 py-4 mt-4 bg-white rounded-2xl border border-gray-100 active:bg-red-50"
         >
-          <View className="w-9 h-9 rounded-xl bg-red-50 items-center justify-center">
+          <View className="w-10 h-10 rounded-xl bg-red-50 items-center justify-center">
             <LogOut size={18} color="#EF4444" />
           </View>
-          <Text className="flex-1 text-sm font-medium text-red-600">{sb.logout}</Text>
+          <Text className="flex-1 text-base font-semibold text-red-600">{sb.logout}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
