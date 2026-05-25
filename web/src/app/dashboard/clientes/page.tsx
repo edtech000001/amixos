@@ -192,6 +192,11 @@ export default function ClientesPage() {
 
   const remove = async (id: string) => {
     if (!confirm(t.confirmDeleteSingle)) return;
+    // Sync to Google BEFORE local delete so the API can read the
+    // client's google_resource_name.
+    const apiBaseUrl = getApiBaseUrl();
+    const jwt = await getJwt();
+    if (apiBaseUrl && jwt) await triggerGoogleSync('delete', id, { apiBaseUrl, jwt });
     await supabase.from('clients').delete().eq('id', id);
     setClients(prev => prev.filter(c => c.id !== id));
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
@@ -236,6 +241,15 @@ export default function ClientesPage() {
     if (!confirm(t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)))) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
+    // Sync deletes to Google BEFORE local delete. Parallel per id so bulk
+    // deletes don't get serially slow.
+    const apiBaseUrl = getApiBaseUrl();
+    const jwt = await getJwt();
+    if (apiBaseUrl && jwt) {
+      await Promise.all(
+        ids.map(cid => triggerGoogleSync('delete', cid, { apiBaseUrl, jwt })),
+      );
+    }
     let hasError = false;
     for (let i = 0; i < ids.length; i += 50) {
       const { error: e } = await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));

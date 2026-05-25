@@ -30,12 +30,15 @@ export default function AuthCallbackPage() {
         // Google Contacts link flow: the user just granted the contacts scope.
         // session.provider_refresh_token is populated for THIS request only —
         // forward it to our API which stores it for future People API calls.
+        // The business_id was round-tripped through the redirect URL so we
+        // know which workspace this connection should attach to.
         const googleLink = params.get('google_link') === '1';
+        const businessIdParam = params.get('business_id');
         if (googleLink) {
           const sessionAny = data.session as { access_token: string; provider_refresh_token?: string };
           const refreshToken = sessionAny.provider_refresh_token;
           const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-          if (refreshToken && apiBaseUrl) {
+          if (refreshToken && apiBaseUrl && businessIdParam) {
             try {
               await fetch(`${apiBaseUrl}/api/v1/google-sync/connect`, {
                 method: 'POST',
@@ -44,6 +47,7 @@ export default function AuthCallbackPage() {
                   Authorization: `Bearer ${sessionAny.access_token}`,
                 },
                 body: JSON.stringify({
+                  business_id: businessIdParam,
                   refresh_token: refreshToken,
                   scopes: [
                     'openid', 'email', 'profile',

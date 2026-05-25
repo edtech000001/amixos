@@ -15,21 +15,54 @@ export interface TriggerGoogleSyncOptions {
   jwt: string;
 }
 
+/**
+ * Mirror a client_contact mutation to Google Contacts. Each client_contact
+ * becomes its own Google contact whose organization is the parent client's
+ * company and whose biography links it back to that client.
+ *
+ * Same await semantics as triggerGoogleSync — caller can fire-and-forget
+ * for create/update, or `await` for delete so the API can read the
+ * google_resource_name before the local row is dropped.
+ */
+export function triggerClientContactGoogleSync(
+  action: GoogleSyncAction,
+  contactId: string,
+  { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
+): Promise<void> {
+  return fetch(`${apiBaseUrl}/api/v1/google-sync/client-contact`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ action, contactId }),
+  })
+    .then(() => undefined)
+    .catch(() => {
+      // Same swallow behavior as triggerGoogleSync.
+    });
+}
+
 export function triggerGoogleSync(
   action: GoogleSyncAction,
   clientId: string,
   { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
-): void {
-  // Don't await — UI should never wait on this.
-  fetch(`${apiBaseUrl}/api/v1/google-sync/contact`, {
+): Promise<void> {
+  // Returns a Promise so callers that NEED ordering (delete: must run before
+  // the local row is dropped, otherwise the API can't look up its
+  // google_resource_name) can await. Existing create/update callers don't
+  // await — they remain fire-and-forget. Either pattern is supported.
+  return fetch(`${apiBaseUrl}/api/v1/google-sync/contact`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${jwt}`,
     },
     body: JSON.stringify({ action, clientId }),
-  }).catch(() => {
-    // Swallow — sync failures should not surface as errors to the user.
-    // The API logs the actual error and the settings page surfaces it.
-  });
+  })
+    .then(() => undefined)
+    .catch(() => {
+      // Swallow — sync failures should not surface as errors to the user.
+      // The API logs the actual error and the settings page surfaces it.
+    });
 }

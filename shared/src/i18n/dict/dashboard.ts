@@ -68,8 +68,16 @@ export type DashboardDict = {
     markSent: string;
     markPaid: string;
     notFound: string;
+    editTitle: string;
+    deleteTitle: string;
+    deleteConfirm: string;
+    deleting: string;
+    errorDelete: string;
     new: {
       heading: string;
+      headingEdit: string;
+      subtitleNew: string;
+      subtitleEdit: string;
       generalInfo: string;
       clientsLabel: string;
       selectClient: string;
@@ -162,6 +170,9 @@ export type DashboardDict = {
       contactPeople: string;
       noContacts: string;
       addContact: string;
+      actionCall: string;
+      actionText: string;
+      actionEmail: string;
       summary: string;
       totalPaid: string;
       pending: string;
@@ -213,6 +224,13 @@ export type DashboardDict = {
       errorsExplanation: string;
       goToList: string;
       templateFilename: string;
+      // Mobile-only entry points on the upload step
+      pickFileBtn: string;
+      pickFileHint: string;
+      importContactsBtn: string;
+      importContactsHint: string;
+      contactsPermissionDenied: string;
+      contactsImportedCount: string;
     };
   };
   jobs: {
@@ -279,6 +297,11 @@ export type DashboardDict = {
       printTooltip: string;
       editTooltip: string;
       deleteTooltip: string;
+      sendAction: string;
+      sendActionMessage: string;
+      shareAndMark: string;
+      markOnly: string;
+      shareError: string;
       generateInvoiceBtn: string;
       viewInvoiceBtn: string;
       // Pipeline action buttons (detail-specific phrasing)
@@ -302,6 +325,12 @@ export type DashboardDict = {
       internalNote: string;
       createdOn: string;
       createdBy: string;
+      lastEditedOn: string;
+      clientModalTitle: string;
+      locationModalTitle: string;
+      openInMaps: string;
+      noCustomFields: string;
+      coordinates: string;
       workersHeading: string;
       // Line items
       itemsHeadingProposal: string;
@@ -471,6 +500,31 @@ export type DashboardDict = {
       payTypeLabel: string;
       payRateLabel: string;
       errorFirstNameRequired: string;
+      // New standard fields
+      emailLabel: string;
+      emailPlaceholder: string;
+      birthdayLabel: string;
+      hireDateLabel: string;
+      addressLabel: string;
+      addressPlaceholder: string;
+      cityLabel: string;
+      cityPlaceholder: string;
+      stateLabel: string;
+      stateNone: string;
+      zipLabel: string;
+      zipPlaceholder: string;
+      emergencyContactHeading: string;
+      emergencyNameLabel: string;
+      emergencyNamePlaceholder: string;
+      emergencyPhoneLabel: string;
+      emergencyPhonePlaceholder: string;
+      // Custom fields
+      customFieldsHeading: string;
+      noCustomFields: string;
+      // Section headings inside the form
+      basicInfoHeading: string;
+      personalHeading: string;
+      employmentHeading: string;
     };
     timesheetModal: {
       title: string;
@@ -484,6 +538,24 @@ export type DashboardDict = {
       jobDescriptionLabel: string;
       jobDescriptionPlaceholder: string;
       errorHoursRequired: string;
+    };
+    history: {
+      title: string;
+      openBtn: string;
+      empty: string;
+      events: {
+        hired: string;
+        payChange: string;       // "Cambio de pago"
+        roleChange: string;      // "Cambio de rol"
+        terminated: string;
+        rehired: string;
+        note: string;
+      };
+      // Summaries — use {{from}}, {{to}}, etc. placeholders.
+      payChangeSummary: string;          // "{{from}} → {{to}}"
+      payChangeTypeSummary: string;      // "{{fromType}} → {{toType}}"
+      roleChangeSummary: string;
+      hiredSummary: string;              // "Iniciado como {{role}} · {{rate}}"
     };
   };
   inventory: {
@@ -607,11 +679,24 @@ export type DashboardDict = {
       negocio: string;
       trabajos: string;
       clientes: string;
+      empleados: string;
       cuenta: string;
       conexiones: string;
       equipo: string;
       actividad: string;
     };
+    employeesSection: {
+      title: string;
+      subtitle: string;
+      customFieldsSubtitle: string;
+    };
+    jobsSection: {
+      title: string;
+      subtitle: string;
+    };
+    unsavedChangesTitle: string;
+    unsavedChangesMessage: string;
+    discardBtn: string;
     fieldTypes: {
       text: string;
       number: string;
@@ -708,6 +793,20 @@ export type DashboardDict = {
       lastSyncError: string;
       connectError: string;
       cancelled: string;
+      disconnectTitle: string;
+      disconnectBody: string;
+      disconnectCountGeneric: string;
+      disconnectCountWithNumber: string;
+      disconnectKeepBtn: string;
+      disconnectDeleteBtn: string;
+      backfillTitle: string;
+      backfillBody: string;
+      backfillSyncBtn: string;
+      backfillSkipBtn: string;
+      backfillProgress: string;
+      backfillDoneTitle: string;
+      backfillDoneBody: string;
+      backfillFailedToast: string;
     };
     team: {
       heading: string;
@@ -906,8 +1005,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markSent: 'Marcar enviada',
       markPaid: 'Marcar pagada',
       notFound: 'Factura no encontrada.',
+      editTitle: 'Editar factura',
+      deleteTitle: 'Eliminar factura',
+      deleteConfirm: '¿Eliminar la factura <strong>{{number}}</strong>? Esta acción no se puede deshacer.',
+      deleting: 'Eliminando...',
+      errorDelete: 'No se pudo eliminar la factura.',
       new: {
         heading: 'Nueva factura',
+        headingEdit: 'Editar factura',
+        subtitleNew: 'Completa los detalles de la factura',
+        subtitleEdit: 'Actualiza los detalles de la factura',
         generalInfo: 'Información general',
         clientsLabel: 'Clientes',
         selectClient: 'Seleccionar cliente...',
@@ -999,6 +1106,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         contactPeople: 'Personas de contacto',
         noContacts: 'Sin contactos agregados.',
         addContact: '+ Agregar contacto',
+        actionCall: 'Llamar',
+        actionText: 'Mensaje',
+        actionEmail: 'Correo',
         summary: 'Resumen',
         totalPaid: 'Total pagado',
         pending: 'Pendiente',
@@ -1036,7 +1146,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         uploadSecondary: 'O arrastra y suelta aquí',
         templatePromptTitle: '¿Tienes el formato correcto?',
         templatePromptSub: 'Descarga la plantilla de ejemplo',
-        templateBtn: 'Plantilla CSV',
+        templateBtn: 'Ejemplo CSV',
         mapDetected: '{{count}} filas detectadas',
         mapInstruction: 'Asigna cada campo de Amixos a la columna de tu archivo.',
         customLabel: 'personalizado',
@@ -1050,6 +1160,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorsExplanation: 'Las filas con error no tenían "Nombre" o fallaron al guardar.',
         goToList: 'Ver clientes',
         templateFilename: 'plantilla_clientes.csv',
+        pickFileBtn: 'Seleccionar archivo CSV',
+        pickFileHint: 'Sube un .csv con encabezados',
+        importContactsBtn: 'Importar desde contactos',
+        importContactsHint: 'Elige contactos del teléfono',
+        contactsPermissionDenied: 'Permiso denegado. Activa el acceso a contactos en Ajustes para usar esta función.',
+        contactsImportedCount: '{{count}} contacto(s) importado(s)',
       },
     },
     jobs: {
@@ -1112,6 +1228,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       detail: {
         shareTooltip: 'Copiar enlace para compartir',
         shareCopied: 'Enlace copiado',
+        sendAction: 'Enviar cotización',
+        sendActionMessage: 'Comparte el enlace con tu cliente, o solo márcala como enviada.',
+        shareAndMark: 'Compartir y marcar enviada',
+        markOnly: 'Solo marcar enviada',
+        shareError: 'No se pudo compartir',
         printTooltip: 'Descargar PDF',
         editTooltip: 'Editar trabajo',
         deleteTooltip: 'Eliminar trabajo',
@@ -1135,6 +1256,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNote: '📝 Nota interna',
         createdOn: 'Creado el {{date}}',
         createdBy: 'por {{name}}',
+        lastEditedOn: 'Última edición {{date}}',
+        clientModalTitle: 'Cliente',
+        locationModalTitle: 'Ubicación',
+        openInMaps: 'Abrir en Mapas',
+        noCustomFields: 'Sin campos personalizados.',
+        coordinates: 'Coordenadas',
         workersHeading: 'Trabajadores',
         itemsHeadingProposal: 'Detalle de servicios',
         itemsHeadingJob: 'Materiales y mano de obra',
@@ -1183,7 +1310,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         locationHeading: 'Ubicación del trabajo',
         mapLinkLabel: 'Pegar enlace de mapa',
         mapLinkPlaceholder: 'https://maps.google.com/... o https://maps.apple.com/...',
-        mapLinkHint: 'Pega un enlace de Google Maps o Apple Maps para auto-llenar la dirección',
+        mapLinkHint: 'Pega un enlace de Google Maps o Apple Maps para capturar las coordenadas',
         coordinatesLabel: 'Coordenadas (lat, lng)',
         coordinatesPlaceholder: 'ej. 40.7128, -74.0060',
         coordinatesInvalid: 'Formato inválido. Usa "lat, lng" — ej. 40.7128, -74.0060',
@@ -1301,6 +1428,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payTypeLabel: 'Tipo de pago',
         payRateLabel: 'Tarifa ({{unit}})',
         errorFirstNameRequired: 'El nombre es requerido',
+        emailLabel: 'Correo personal',
+        emailPlaceholder: 'juan@ejemplo.com',
+        birthdayLabel: 'Fecha de nacimiento',
+        hireDateLabel: 'Fecha de contratación',
+        addressLabel: 'Dirección',
+        addressPlaceholder: '123 Main St',
+        cityLabel: 'Ciudad',
+        cityPlaceholder: 'Omaha',
+        stateLabel: 'Estado',
+        stateNone: '—',
+        zipLabel: 'Código postal',
+        zipPlaceholder: '68102',
+        emergencyContactHeading: 'Contacto de emergencia',
+        emergencyNameLabel: 'Nombre',
+        emergencyNamePlaceholder: 'María Pérez',
+        emergencyPhoneLabel: 'Teléfono',
+        emergencyPhonePlaceholder: '+1 (555) 000-0000',
+        customFieldsHeading: 'Campos personalizados',
+        noCustomFields: 'No hay campos personalizados. Configúralos en Ajustes → Empleados.',
+        basicInfoHeading: 'Información básica',
+        personalHeading: 'Información personal',
+        employmentHeading: 'Empleo y pago',
       },
       timesheetModal: {
         title: 'Registrar horas',
@@ -1314,6 +1463,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobDescriptionLabel: 'Descripción del trabajo',
         jobDescriptionPlaceholder: 'Instalación de pivote, Sección Norte',
         errorHoursRequired: 'Las horas son requeridas',
+      },
+      history: {
+        title: 'Historial',
+        openBtn: 'Ver historial',
+        empty: 'Sin cambios registrados todavía.',
+        events: {
+          hired: 'Contratado',
+          payChange: 'Cambio de pago',
+          roleChange: 'Cambio de puesto',
+          terminated: 'Inactivado',
+          rehired: 'Reactivado',
+          note: 'Nota',
+        },
+        payChangeSummary: '{{from}} → {{to}}',
+        payChangeTypeSummary: '{{fromType}} → {{toType}}',
+        roleChangeSummary: '{{from}} → {{to}}',
+        hiredSummary: 'Iniciado como {{role}} · {{rate}}',
       },
     },
     inventory: {
@@ -1437,11 +1603,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         negocio: 'Negocio',
         trabajos: 'Trabajos',
         clientes: 'Clientes',
+        empleados: 'Empleados',
         cuenta: 'Cuenta',
         conexiones: 'Conexiones',
         equipo: 'Equipo',
         actividad: 'Actividad',
       },
+      employeesSection: {
+        title: 'Campos de empleados',
+        subtitle: 'Configura campos personalizados para tus empleados.',
+        customFieldsSubtitle: 'Campos extra que aparecerán en el formulario de cada empleado.',
+      },
+      jobsSection: {
+        title: 'Campos del trabajo',
+        subtitle: 'Reordena los campos, marca cuáles son requeridos, y agrega campos personalizados.',
+      },
+      unsavedChangesTitle: 'Cambios sin guardar',
+      unsavedChangesMessage: '¿Descartar los cambios? Esta acción no se puede deshacer.',
+      discardBtn: 'Descartar',
       fieldTypes: {
         text: 'Texto',
         number: 'Número',
@@ -1538,6 +1717,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lastSyncError: 'Último error',
         connectError: 'No se pudo conectar con Google. Intenta de nuevo.',
         cancelled: 'Conexión cancelada.',
+        disconnectTitle: 'Desconectar Google Contactos',
+        disconnectBody: 'Tus clientes de Amixos ya no se sincronizarán con Google.',
+        disconnectCountGeneric: '¿Qué quieres hacer con los contactos que Amixos agregó a Google?',
+        disconnectCountWithNumber: '¿Qué quieres hacer con los {{count}} contactos que Amixos agregó a Google?',
+        disconnectKeepBtn: 'Mantener en Google',
+        disconnectDeleteBtn: 'Eliminar de Google',
+        backfillTitle: 'Sincronizar clientes existentes',
+        backfillBody: 'Tienes {{count}} clientes en Amixos que aún no están en Google. ¿Quieres agregarlos a tus contactos de Google ahora?',
+        backfillSyncBtn: 'Sí, sincronizar',
+        backfillSkipBtn: 'No, gracias',
+        backfillProgress: 'Sincronizando {{count}} contactos...',
+        backfillDoneTitle: '¡Sincronización completa!',
+        backfillDoneBody: '{{created}} agregados, {{linked}} vinculados.',
+        backfillFailedToast: 'No se pudo completar la sincronización.',
       },
       team: {
         heading: 'Equipo',
@@ -1733,8 +1926,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markSent: 'Mark sent',
       markPaid: 'Mark paid',
       notFound: 'Invoice not found.',
+      editTitle: 'Edit invoice',
+      deleteTitle: 'Delete invoice',
+      deleteConfirm: 'Delete invoice <strong>{{number}}</strong>? This cannot be undone.',
+      deleting: 'Deleting...',
+      errorDelete: 'Could not delete the invoice.',
       new: {
         heading: 'New invoice',
+        headingEdit: 'Edit invoice',
+        subtitleNew: 'Fill in the invoice details',
+        subtitleEdit: 'Update the invoice details',
         generalInfo: 'General info',
         clientsLabel: 'Clients',
         selectClient: 'Select client...',
@@ -1826,6 +2027,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         contactPeople: 'Contact people',
         noContacts: 'No contacts added.',
         addContact: '+ Add contact',
+        actionCall: 'Call',
+        actionText: 'Text',
+        actionEmail: 'Email',
         summary: 'Summary',
         totalPaid: 'Total paid',
         pending: 'Pending',
@@ -1863,7 +2067,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         uploadSecondary: 'Or drag and drop here',
         templatePromptTitle: 'Need the right format?',
         templatePromptSub: 'Download the example template',
-        templateBtn: 'CSV template',
+        templateBtn: 'CSV example',
         mapDetected: '{{count}} rows detected',
         mapInstruction: 'Map each Amixos field to a column from your file.',
         customLabel: 'custom',
@@ -1877,6 +2081,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorsExplanation: 'Rows with errors were missing a "Name" or failed to save.',
         goToList: 'View clients',
         templateFilename: 'clients_template.csv',
+        pickFileBtn: 'Select CSV file',
+        pickFileHint: 'Upload a .csv with headers',
+        importContactsBtn: 'Import from contacts',
+        importContactsHint: 'Pick from your phone contacts',
+        contactsPermissionDenied: 'Permission denied. Enable contacts access in Settings to use this.',
+        contactsImportedCount: '{{count}} contact(s) imported',
       },
     },
     jobs: {
@@ -1939,6 +2149,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       detail: {
         shareTooltip: 'Copy share link',
         shareCopied: 'Link copied',
+        sendAction: 'Send estimate',
+        sendActionMessage: 'Share the link with your client, or just mark it as sent.',
+        shareAndMark: 'Share and mark sent',
+        markOnly: 'Mark sent only',
+        shareError: 'Could not share',
         printTooltip: 'Download PDF',
         editTooltip: 'Edit job',
         deleteTooltip: 'Delete job',
@@ -1962,6 +2177,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNote: '📝 Internal note',
         createdOn: 'Created on {{date}}',
         createdBy: 'by {{name}}',
+        lastEditedOn: 'Last edited {{date}}',
+        clientModalTitle: 'Client',
+        locationModalTitle: 'Location',
+        openInMaps: 'Open in Maps',
+        noCustomFields: 'No custom fields.',
+        coordinates: 'Coordinates',
         workersHeading: 'Workers',
         itemsHeadingProposal: 'Service details',
         itemsHeadingJob: 'Materials and labor',
@@ -2010,7 +2231,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         locationHeading: 'Job location',
         mapLinkLabel: 'Paste map link',
         mapLinkPlaceholder: 'https://maps.google.com/... or https://maps.apple.com/...',
-        mapLinkHint: 'Paste a Google Maps or Apple Maps link to auto-fill the address',
+        mapLinkHint: 'Paste a Google Maps or Apple Maps link to capture coordinates',
         coordinatesLabel: 'Coordinates (lat, lng)',
         coordinatesPlaceholder: 'e.g. 40.7128, -74.0060',
         coordinatesInvalid: 'Invalid format. Use "lat, lng" — e.g. 40.7128, -74.0060',
@@ -2128,6 +2349,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payTypeLabel: 'Pay type',
         payRateLabel: 'Rate ({{unit}})',
         errorFirstNameRequired: 'First name is required',
+        emailLabel: 'Personal email',
+        emailPlaceholder: 'john@example.com',
+        birthdayLabel: 'Date of birth',
+        hireDateLabel: 'Hire date',
+        addressLabel: 'Address',
+        addressPlaceholder: '123 Main St',
+        cityLabel: 'City',
+        cityPlaceholder: 'Omaha',
+        stateLabel: 'State',
+        stateNone: '—',
+        zipLabel: 'ZIP code',
+        zipPlaceholder: '68102',
+        emergencyContactHeading: 'Emergency contact',
+        emergencyNameLabel: 'Name',
+        emergencyNamePlaceholder: 'Mary Doe',
+        emergencyPhoneLabel: 'Phone',
+        emergencyPhonePlaceholder: '+1 (555) 000-0000',
+        customFieldsHeading: 'Custom fields',
+        noCustomFields: 'No custom fields. Configure them in Settings → Employees.',
+        basicInfoHeading: 'Basic info',
+        personalHeading: 'Personal info',
+        employmentHeading: 'Employment & pay',
       },
       timesheetModal: {
         title: 'Log hours',
@@ -2141,6 +2384,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobDescriptionLabel: 'Job description',
         jobDescriptionPlaceholder: 'Pivot installation, North section',
         errorHoursRequired: 'Hours are required',
+      },
+      history: {
+        title: 'History',
+        openBtn: 'View history',
+        empty: 'No changes logged yet.',
+        events: {
+          hired: 'Hired',
+          payChange: 'Pay change',
+          roleChange: 'Role change',
+          terminated: 'Deactivated',
+          rehired: 'Reactivated',
+          note: 'Note',
+        },
+        payChangeSummary: '{{from}} → {{to}}',
+        payChangeTypeSummary: '{{fromType}} → {{toType}}',
+        roleChangeSummary: '{{from}} → {{to}}',
+        hiredSummary: 'Started as {{role}} · {{rate}}',
       },
     },
     inventory: {
@@ -2264,11 +2524,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         negocio: 'Business',
         trabajos: 'Jobs',
         clientes: 'Clients',
+        empleados: 'Employees',
         cuenta: 'Account',
         conexiones: 'Connections',
         equipo: 'Team',
         actividad: 'Activity',
       },
+      employeesSection: {
+        title: 'Employee fields',
+        subtitle: 'Configure custom fields for your employees.',
+        customFieldsSubtitle: 'Extra fields shown on every employee form.',
+      },
+      jobsSection: {
+        title: 'Job fields',
+        subtitle: 'Reorder fields, mark which are required, and add custom ones.',
+      },
+      unsavedChangesTitle: 'Unsaved changes',
+      unsavedChangesMessage: 'Discard your changes? This cannot be undone.',
+      discardBtn: 'Discard',
       fieldTypes: {
         text: 'Text',
         number: 'Number',
@@ -2365,6 +2638,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lastSyncError: 'Last error',
         connectError: 'Couldn\'t connect to Google. Try again.',
         cancelled: 'Connection cancelled.',
+        disconnectTitle: 'Disconnect Google Contacts',
+        disconnectBody: "Your Amixos clients won't sync to Google anymore.",
+        disconnectCountGeneric: 'What about the contacts Amixos added to Google?',
+        disconnectCountWithNumber: 'What about the {{count}} contacts Amixos added to Google?',
+        disconnectKeepBtn: 'Keep in Google',
+        disconnectDeleteBtn: 'Remove from Google',
+        backfillTitle: 'Sync existing clients',
+        backfillBody: "You have {{count}} clients in Amixos that aren't in Google yet. Add them to your Google contacts now?",
+        backfillSyncBtn: 'Yes, sync them',
+        backfillSkipBtn: 'No thanks',
+        backfillProgress: 'Syncing {{count}} contacts...',
+        backfillDoneTitle: 'Sync complete!',
+        backfillDoneBody: '{{created}} added, {{linked}} linked.',
+        backfillFailedToast: "Couldn't complete the sync.",
       },
       team: {
         heading: 'Team',

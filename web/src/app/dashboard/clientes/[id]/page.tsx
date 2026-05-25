@@ -11,6 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useLang } from '@/i18n/LangProvider';
+import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -169,6 +172,13 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     };
     await supabase.from('clients').update(payload).eq('id', id);
     setClient(prev => prev ? { ...prev, ...payload } : prev);
+    // Mirror the edit to Google Contacts (fire-and-forget — sync is
+    // best-effort and shouldn't slow the modal close).
+    void (async () => {
+      const apiBaseUrl = getApiBaseUrl();
+      const jwt = await getJwt();
+      if (apiBaseUrl && jwt) triggerGoogleSync('update', id, { apiBaseUrl, jwt });
+    })();
     setSaving(false); setEditModal(false);
   };
 
@@ -200,20 +210,46 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', id);
     }
 
+    let syncContactId: string | null = null;
+    let syncAction: 'create' | 'update' = 'update';
     if (editingContact) {
       await supabase.from('client_contacts').update(payload).eq('id', editingContact.id);
+      syncContactId = editingContact.id;
     } else {
-      await supabase.from('client_contacts').insert({ ...payload, client_id: id, business_id: business!.id });
+      const { data: inserted } = await supabase
+        .from('client_contacts')
+        .insert({ ...payload, client_id: id, business_id: business!.id })
+        .select('id')
+        .single();
+      syncContactId = (inserted as { id: string } | null)?.id ?? null;
+      syncAction = 'create';
     }
 
     const { data } = await supabase.from('client_contacts').select('*').eq('client_id', id).order('is_primary', { ascending: false });
     setContacts(data ?? []);
     setSavingContact(false);
     setContactModal(false);
+
+    if (syncContactId) {
+      void (async () => {
+        const apiBaseUrl = getApiBaseUrl();
+        const jwt = await getJwt();
+        if (apiBaseUrl && jwt) {
+          triggerClientContactGoogleSync(syncAction, syncContactId!, { apiBaseUrl, jwt });
+        }
+      })();
+    }
   };
 
   const removeContact = async (ctId: string) => {
     if (!confirm(td.contactModal.confirmDelete)) return;
+    // Sync delete BEFORE local delete so the API can resolve the contact's
+    // google_resource_name.
+    const apiBaseUrl = getApiBaseUrl();
+    const jwt = await getJwt();
+    if (apiBaseUrl && jwt) {
+      await triggerClientContactGoogleSync('delete', ctId, { apiBaseUrl, jwt });
+    }
     await supabase.from('client_contacts').delete().eq('id', ctId);
     setContacts(prev => prev.filter(c => c.id !== ctId));
   };
@@ -397,12 +433,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               </div>
               <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
                 <span className="text-gray-400 text-xs">{td.addedAt}</span>
-                <span className="text-xs text-gray-500">{new Date(client.created_at).toLocaleDateString(dateLoc, { day:'numeric', month:'short', year:'numeric' })}</span>
+                <span className="text-xs text-gray-500">{formatDateTimeLong(client.created_at, dateLoc)}</span>
               </div>
               {client.updated_at && client.updated_at !== client.created_at && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400 text-xs">{td.modifiedAt}</span>
-                  <span className="text-xs text-gray-500">{new Date(client.updated_at).toLocaleDateString(dateLoc, { day:'numeric', month:'short', year:'numeric' })}</span>
+                  <span className="text-xs text-gray-500">{formatDateTimeLong(client.updated_at, dateLoc)}</span>
                 </div>
               )}
             </div>
@@ -436,8 +472,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                       <div>
                         <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>
                         <p className="text-xs text-gray-400">
-                          {new Date(inv.created_at).toLocaleDateString(dateLoc, { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {inv.due_date && ` · ${td.dueShort.replace('{{date}}', new Date(inv.due_date).toLocaleDateString(dateLoc, { day:'numeric', month:'short' }))}`}
+                          {formatDateTimeLong(inv.created_at, dateLoc)}
+                          {inv.due_date && ` · ${td.dueShort.replace('{{date}}', formatDateLong(inv.due_date, dateLoc))}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">

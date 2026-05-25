@@ -111,85 +111,146 @@ function parseUrlFragment(url: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(url.substring(hashIndex + 1)));
 }
 
-const GOOGLE_CONTACTS_SCOPE = 'openid email profile https://www.googleapis.com/auth/contacts';
+const GOOGLE_CONTACTS_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/contacts',
+];
+
+// Direct OAuth against Google — bypasses Supabase entirely for the contacts
+// permission. Supabase's linkIdentity / signInWithOAuth wrappers strip or
+// override OAuth params on the relink path, which prevented the refresh
+// token from being returned on the second connect. Doing the flow ourselves
+// gives us full control: PKCE handles security (no client_secret embedded in
+// the app), `access_type=offline + prompt=consent` always come through, and
+// disconnect/reconnect Just Works because we can revoke at Google's
+// revocation endpoint without touching Supabase identities.
+const GOOGLE_DISCOVERY: AuthSession.DiscoveryDocument = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
 
 export type LinkGoogleResult =
-  | { ok: true; refresh_token: string; scopes: string[] }
+  | { ok: true; refresh_token: string; client_id: string; scopes: string[] }
   | { ok: false; reason: 'cancelled' | 'no_refresh_token' | 'generic'; message?: string };
 
 /**
- * Connect Google Contacts to the current user's account, regardless of how
- * they originally signed in (email, Apple, or Google). Requests the contacts
- * scope and returns the Google refresh_token so the API can call People API
- * on the user's behalf.
- *
- * `access_type=offline` + `prompt=consent` are critical — without them
- * Google omits the refresh_token on subsequent grants.
+ * Build the iOS-style Google redirect URI from the iOS client ID. For
+ * `<id>.apps.googleusercontent.com` the URI is
+ * `com.googleusercontent.apps.<id>:/oauthredirect`. This is the format
+ * Google accepts for iOS OAuth clients, and ASWebAuthenticationSession (used
+ * internally by WebBrowser.openAuthSessionAsync on iOS) intercepts it
+ * without needing the URL scheme to be registered in Info.plist.
+ */
+function getGoogleIosRedirectUri(clientId: string): string {
+  const idPart = clientId.replace('.apps.googleusercontent.com', '');
+  return `com.googleusercontent.apps.${idPart}:/oauthredirect`;
+}
+
+/**
+ * Connect Google Contacts to the current Amixos user. Returns a Google
+ * refresh_token that the backend stores in `user_oauth_credentials` and uses
+ * to call People API on the user's behalf. The refresh_token is the only
+ * piece of state we need to persist — everything else is derivable.
  */
 export async function linkGoogleContacts(): Promise<LinkGoogleResult> {
-  console.log('[link-google] start');
-  const supabase = createSupabaseClient();
-  const redirectTo = getRedirectUri();
-  console.log('[link-google] redirectTo:', redirectTo);
+  console.log('[google-oauth] start');
 
-  // Look at the current session to decide between linkIdentity (no Google
-  // attached yet) and signInWithOAuth (already linked, just need re-consent
-  // for the new scope). Both flows produce the same redirect with tokens.
-  const { data: sessionData } = await supabase.auth.getSession();
-  const hasGoogle = sessionData.session?.user?.identities?.some(
-    (i) => i.provider === 'google',
-  );
-  console.log('[link-google] hasGoogle identity:', hasGoogle);
-
-  // Note: Supabase's TS types may not surface `linkIdentity` on all versions;
-  // it's available at runtime. Use a typed cast to avoid TS errors without
-  // affecting runtime behavior.
-  const supabaseAny = supabase as unknown as {
-    auth: {
-      linkIdentity: (args: {
-        provider: 'google';
-        options: { redirectTo: string; skipBrowserRedirect: boolean; scopes: string; queryParams: Record<string, string> };
-      }) => Promise<{ data: { url?: string }; error: { message: string } | null }>;
-    };
-  };
-
-  const oauthOptions = {
-    redirectTo,
-    skipBrowserRedirect: true,
-    scopes: GOOGLE_CONTACTS_SCOPE,
-    queryParams: { access_type: 'offline', prompt: 'consent' },
-  };
-
-  const { data, error } = hasGoogle
-    ? await supabase.auth.signInWithOAuth({ provider: 'google', options: oauthOptions })
-    : await supabaseAny.auth.linkIdentity({ provider: 'google', options: oauthOptions });
-
-  console.log('[link-google] OAuth call result. hasUrl:', !!data?.url, 'error:', error?.message);
-
-  if (error || !data?.url) {
-    return { ok: false, reason: 'generic', message: error?.message };
+  const clientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  if (!clientId) {
+    console.log('[google-oauth] EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID missing');
+    return { ok: false, reason: 'generic', message: 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID not set' };
   }
 
-  console.log('[link-google] opening browser to:', data.url.slice(0, 80) + '...');
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  console.log('[link-google] browser result:', result.type, 'urlPresent:', 'url' in result ? !!result.url : false);
+  const redirectUri = getGoogleIosRedirectUri(clientId);
+  console.log('[google-oauth] redirectUri:', redirectUri);
+
+  const request = new AuthSession.AuthRequest({
+    clientId,
+    scopes: GOOGLE_CONTACTS_SCOPES,
+    redirectUri,
+    responseType: AuthSession.ResponseType.Code,
+    usePKCE: true,
+    extraParams: { access_type: 'offline', prompt: 'consent' },
+  });
+
+  try {
+    await request.makeAuthUrlAsync(GOOGLE_DISCOVERY);
+  } catch (err) {
+    console.log('[google-oauth] makeAuthUrlAsync threw:', err);
+    return { ok: false, reason: 'generic', message: String(err) };
+  }
+
+  const result = await request.promptAsync(GOOGLE_DISCOVERY);
+  console.log('[google-oauth] prompt result:', result.type);
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     return { ok: false, reason: 'cancelled' };
   }
-  if (result.type !== 'success' || !result.url) {
-    return { ok: false, reason: 'generic' };
+  if (result.type === 'error') {
+    return { ok: false, reason: 'generic', message: result.error?.message ?? 'auth_error' };
+  }
+  if (result.type !== 'success' || !result.params.code) {
+    return { ok: false, reason: 'generic', message: `unexpected result type: ${result.type}` };
   }
 
-  const params = parseUrlFragment(result.url);
-  console.log('[link-google] redirect params keys:', Object.keys(params));
-  const refresh_token = params.provider_refresh_token ?? params.provider_token;
-  console.log('[link-google] refresh_token present:', !!refresh_token);
-  if (!refresh_token) {
-    return { ok: false, reason: 'no_refresh_token' };
-  }
+  // Exchange the authorization code for tokens. Public client + PKCE so
+  // there's no client_secret to ship in the app — Google verifies the
+  // code_verifier we generated and proves the same client that started
+  // the flow is finishing it.
+  console.log('[google-oauth] exchanging code...');
+  try {
+    const tokenResult = await AuthSession.exchangeCodeAsync(
+      {
+        clientId,
+        code: result.params.code,
+        redirectUri,
+        extraParams: { code_verifier: request.codeVerifier ?? '' },
+      },
+      GOOGLE_DISCOVERY,
+    );
+    console.log(
+      '[google-oauth] tokens received. refresh_token present:',
+      !!tokenResult.refreshToken,
+      'scope:',
+      tokenResult.scope,
+    );
 
-  return { ok: true, refresh_token, scopes: GOOGLE_CONTACTS_SCOPE.split(' ') };
+    if (!tokenResult.refreshToken) {
+      // This should not happen with prompt=consent + access_type=offline on
+      // a fresh PKCE flow, but guard anyway.
+      return { ok: false, reason: 'no_refresh_token' };
+    }
+
+    return {
+      ok: true,
+      refresh_token: tokenResult.refreshToken,
+      client_id: clientId,
+      scopes: tokenResult.scope?.split(' ') ?? GOOGLE_CONTACTS_SCOPES,
+    };
+  } catch (err) {
+    console.log('[google-oauth] exchangeCodeAsync threw:', err);
+    return { ok: false, reason: 'generic', message: String(err) };
+  }
+}
+
+/**
+ * Revoke a Google refresh_token. Best-effort — failures are silent. Call
+ * from the disconnect flow so the user can cleanly reconnect later without
+ * having to visit myaccount.google.com/permissions.
+ */
+export async function revokeGoogleToken(refreshToken: string): Promise<void> {
+  try {
+    await fetch(
+      `${GOOGLE_DISCOVERY.revocationEndpoint}?token=${encodeURIComponent(refreshToken)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    );
+  } catch {
+    // Swallow — disconnect should always succeed locally even if the
+    // network revoke call fails. The token will eventually expire.
+  }
 }
 
 function mapOAuthError(message?: string): OAuthResult {
