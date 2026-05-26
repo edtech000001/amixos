@@ -51,7 +51,7 @@ export const MODULE_REGISTRY: ModuleDef[] = [
   { id: 'landscaping',  icon: Trees,     color: '#10B981', status: 'coming_soon', i18nKey: 'landscaping' },
   { id: 'restaurant',   icon: Utensils,  color: '#F59E0B', status: 'coming_soon', i18nKey: 'restaurant' },
   { id: 'cleaning',     icon: Sparkles,  color: '#8B5CF6', status: 'coming_soon', i18nKey: 'cleaning' },
-  { id: 'construction', icon: Hammer,    color: '#EF4444', status: 'coming_soon', i18nKey: 'construction' },
+  { id: 'construction', icon: Hammer,    color: '#F97316', status: 'coming_soon', i18nKey: 'construction' },
 ];
 
 export function getModuleById(id: string): ModuleDef | null {
