@@ -255,21 +255,29 @@ export function ImportClientsModal({
       setFilename(file.name);
       setParsing(true);
 
-      // Use fetch() to read the file contents. On iOS, FileSystem
-      // .readAsStringAsync sometimes can't access files DocumentPicker
-      // dropped in its sandboxed Library/Caches/DocumentPicker folder
-      // ("Calling the 'readAsStringAsync' function has failed"). fetch()
-      // has different permission semantics and reads the file URI cleanly
-      // on both iOS and Android. We fall back to FileSystem only if
-      // fetch fails — covers older Expo SDKs and edge cases.
+      // Read the CSV via a temp copy in our own documents directory.
+      // DocumentPicker drops files into Library/Caches/DocumentPicker on
+      // iOS — the URI it returns is sometimes inaccessible to JS APIs
+      // (FileSystem.readAsStringAsync throws on simulator; fetch()
+      // returns a malformed Response). Copying to FileSystem.document
+      // Directory first lands the file in a path our app definitely
+      // owns and can read.
+      const docDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+      if (!docDir) {
+        throw new Error('No writable directory available');
+      }
+      // Unique temp name so concurrent imports (unlikely but safe) don't
+      // clobber each other.
+      const tempUri = `${docDir}import_${Date.now()}.csv`;
+      await FileSystem.copyAsync({ from: file.uri, to: tempUri });
       let csv: string;
       try {
-        const resp = await fetch(file.uri);
-        csv = await resp.text();
-      } catch {
-        csv = await FileSystem.readAsStringAsync(file.uri, {
+        csv = await FileSystem.readAsStringAsync(tempUri, {
           encoding: FileSystem.EncodingType.UTF8,
         });
+      } finally {
+        // Clean up regardless of read success.
+        await FileSystem.deleteAsync(tempUri, { idempotent: true });
       }
 
       const parsed = Papa.parse<Record<string, string>>(csv, {
