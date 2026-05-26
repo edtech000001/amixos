@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
+import MapView, { Marker, type Region } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Users, Briefcase, UserCircle2, X } from 'lucide-react-native';
@@ -240,9 +240,12 @@ export default function MapScreen() {
           </View>
         ) : (
           <MapView
-            // PROVIDER_GOOGLE forces Google Maps tiles + behavior on both
-            // platforms (iOS would default to Apple Maps otherwise).
-            provider={PROVIDER_GOOGLE}
+            // No `provider` prop → react-native-maps uses the platform
+            // default: Apple Maps on iOS (free, no extra native SDK), Google
+            // Maps on Android (its built-in default). The web map uses
+            // Google for the recognizable look. Switching iOS to Google
+            // would require manually installing the GoogleMaps iOS pod via
+            // a config plugin or post-prebuild step — out of scope for v1.
             style={{ flex: 1 }}
             initialRegion={initialRegion}
           >

@@ -13,6 +13,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 const NAV_ITEMS = [
   { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
@@ -31,8 +32,15 @@ export function Sidebar() {
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
   const store = full.dashboard.settings.store;
+  const modulesDict = full.dashboard.modules.list;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
+
+  // Enabled + available modules show up as their own sidebar entries
+  // after the core nav. Coming-soon modules are filtered out even if
+  // pre-enabled in the DB — they have nothing real to navigate to.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const liveModules = enabledModules.filter(m => m.status === 'available');
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
@@ -49,9 +57,9 @@ export function Sidebar() {
         <BusinessSwitcher />
       </div>
 
-      {/* Nav items. The core list never grows with enabled modules —
-          modules are reached through the Tienda page (each card opens
-          the module). Keeps this sidebar stable across businesses. */}
+      {/* Nav items. Core list first, then any enabled+available modules.
+          Coming-soon modules don't appear here even if pre-enabled in DB —
+          gated by useEnabledModules + filter on status. */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ href, key, icon: Icon, exact }) => {
           const active = isActive(href, exact);
@@ -69,6 +77,29 @@ export function Sidebar() {
             >
               <Icon size={18} />
               {t[key]}
+            </Link>
+          );
+        })}
+        {liveModules.map(m => {
+          const href = `/dashboard/modulos/${m.id}`;
+          const active = isActive(href);
+          const Icon = m.icon;
+          const entry = (modulesDict as unknown as Record<string, { name: string } | undefined>)[m.i18nKey];
+          const name = entry?.name ?? m.id;
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                active
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+              )}
+            >
+              <Icon size={18} color={active ? '#FFFFFF' : m.color} />
+              {name}
             </Link>
           );
         })}

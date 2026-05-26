@@ -13,6 +13,8 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
+import { createSupabaseClient } from '@/lib/supabase';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 interface MenuItem {
   key: string;
@@ -29,11 +31,27 @@ export default function MasMenu() {
   const { signOut, business } = useApp();
   const sb = t.dashboard.sidebar;
   const store = t.dashboard.settings.store;
+  const modulesDict = t.dashboard.modules.list;
+  const supabase = createSupabaseClient();
 
-  // The Más menu intentionally does NOT auto-add enabled modules. Modules
-  // are reached through the Tienda page directly (tap a card → open the
-  // module). Keeps this surface stable regardless of which modules a
-  // business has on.
+  // Enabled + AVAILABLE modules show up as cards in the Más list (so
+  // they're one tap from anywhere, not buried behind Tienda). Coming-soon
+  // modules are filtered out even if their business_modules row is on —
+  // they have nothing usable to open yet.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const liveModules = enabledModules.filter(m => m.status === 'available');
+
+  const moduleItems: MenuItem[] = liveModules.map(m => {
+    const entry = (modulesDict as unknown as Record<string, { name: string; description: string } | undefined>)[m.i18nKey];
+    return {
+      key: `module-${m.id}`,
+      label: entry?.name ?? m.id,
+      description: entry?.description ?? '',
+      icon: m.icon,
+      path: `/dashboard/mas/modulos/${m.id}`,
+    };
+  });
+
   const items: MenuItem[] = [
     {
       key: 'empleados',
@@ -56,6 +74,10 @@ export default function MasMenu() {
       icon: Package,
       path: '/dashboard/mas/inventario',
     },
+    // Enabled modules slot in between core nav and Tienda/Ajustes so the
+    // "what's on" group is contiguous. Empty when no modules are active —
+    // the list reads identically to before in that case.
+    ...moduleItems,
     {
       key: 'tienda',
       label: store.heading,
