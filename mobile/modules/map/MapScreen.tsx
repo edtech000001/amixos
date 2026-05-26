@@ -79,6 +79,9 @@ export default function MapScreen() {
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
+  // Module name comes from the same shared dict as everything else so
+  // the header label stays in sync if the module is ever renamed.
+  const moduleName = full.dashboard.modules.list.map.name;
 
   const [pins, setPins] = useState<PinsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -194,7 +197,7 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
@@ -202,6 +205,7 @@ export default function MapScreen() {
         >
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
+        <Text className="ml-1 text-lg font-semibold text-gray-900">{moduleName}</Text>
       </View>
 
       {/* Layer toggle pills — three colored chips at the top. Tapping
