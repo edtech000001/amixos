@@ -16,7 +16,7 @@
     "build:web": "cd web && npm run build",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
-    "postinstall": "patch-package"
+    "postinstall": "npx --no-install patch-package"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
