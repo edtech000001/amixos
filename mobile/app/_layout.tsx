@@ -1,4 +1,5 @@
 import '../global.css';
+import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -11,10 +12,22 @@ import { useProtectedRoute } from '@/lib/auth/gate';
 import '@/lib/auth/store';
 
 // expo-router calls SplashScreen._internal_preventAutoHideAsync() at startup.
-// If the native splash isn't registered (happens when ios/ hasn't been rebuilt
-// after adding the splash plugin), that native call throws and surfaces as
-// an unhandled promise rejection on every cold launch. Wrap it to swallow
-// that specific error — other splash errors still propagate.
+// The native call throws "No native splash screen registered" because the
+// dev client doesn't always have one wired — harmless functionally, but
+// shows up as an unhandled-rejection warning in dev. Two-pronged swallow:
+//   1. Wrap the public internal so OUR code path catches it.
+//   2. Tell React Native's LogBox to ignore the warning by message, since
+//      the rejection bubbles up from inside the expo-splash-screen module
+//      via a code path our wrap can't reach.
+LogBox.ignoreLogs([
+  // Plain text form (when the throw is caught + logged directly).
+  'No native splash screen registered',
+  // Rejection-envelope form. RegExp scoped to this specific cause so we
+  // don't accidentally silence ALL unhandled rejections (which would hide
+  // real bugs).
+  /Possible unhandled promise rejection.*No native splash screen/,
+]);
+
 const _orig = (SplashScreen as { _internal_preventAutoHideAsync?: () => Promise<unknown> })._internal_preventAutoHideAsync;
 if (_orig) {
   (SplashScreen as { _internal_preventAutoHideAsync: () => Promise<unknown> })._internal_preventAutoHideAsync = async () => {
