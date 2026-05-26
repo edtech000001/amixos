@@ -66,10 +66,15 @@ export function AddonStoreScreen({
         <View className="flex-row flex-wrap justify-between">
           {MODULE_REGISTRY.map(m => {
             const Icon = m.icon;
-            const enabled = enabledIds.has(m.id);
+            const dbEnabled = enabledIds.has(m.id);
             const isComingSoon = m.status === 'coming_soon';
+            // Visual "enabled" state ignores DB state for coming-soon
+            // modules. A leftover business_modules row from when a module
+            // was prematurely enabled shouldn't make the card pretend it's
+            // active — the user can't use the module yet either way.
+            const enabled = dbEnabled && !isComingSoon;
             const { name, description } = labelFor(m);
-            const canOpen = enabled && !isComingSoon && !!onOpen;
+            const canOpen = enabled && !!onOpen;
 
             // Button label + style change based on state. We show the
             // action the button performs (Activar when off, Desactivar
