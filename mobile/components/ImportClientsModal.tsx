@@ -255,28 +255,34 @@ export function ImportClientsModal({
       setFilename(file.name);
       setParsing(true);
 
-      // Read the CSV via a temp copy in our own documents directory.
-      // DocumentPicker drops files into Library/Caches/DocumentPicker on
-      // iOS — the URI it returns is sometimes inaccessible to JS APIs
-      // (FileSystem.readAsStringAsync throws on simulator; fetch()
-      // returns a malformed Response). Copying to FileSystem.document
-      // Directory first lands the file in a path our app definitely
-      // owns and can read.
+      // Read the CSV via a temp copy + Base64 decode. Background on each
+      // workaround:
+      //   1. Copy DocumentPicker's sandboxed cache file into our app's
+      //      documentDirectory — direct reads from the picker cache fail
+      //      on iOS simulator.
+      //   2. Read with EncodingType.Base64 — UTF8 reads sometimes throw on
+      //      iOS even when the file is right there ("readAsStringAsync
+      //      has failed"). Base64 just hands us raw bytes which always
+      //      works; we decode to text in JS.
       const docDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
       if (!docDir) {
         throw new Error('No writable directory available');
       }
-      // Unique temp name so concurrent imports (unlikely but safe) don't
-      // clobber each other.
       const tempUri = `${docDir}import_${Date.now()}.csv`;
       await FileSystem.copyAsync({ from: file.uri, to: tempUri });
       let csv: string;
       try {
-        csv = await FileSystem.readAsStringAsync(tempUri, {
-          encoding: FileSystem.EncodingType.UTF8,
+        const b64 = await FileSystem.readAsStringAsync(tempUri, {
+          encoding: FileSystem.EncodingType.Base64,
         });
+        // Decode Base64 → UTF-8 string. atob gives us the raw bytes as a
+        // binary string; TextDecoder properly interprets multi-byte UTF-8
+        // sequences (CSVs from Mac apps often have accented Spanish chars).
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        csv = new TextDecoder('utf-8').decode(bytes);
       } finally {
-        // Clean up regardless of read success.
         await FileSystem.deleteAsync(tempUri, { idempotent: true });
       }
 
