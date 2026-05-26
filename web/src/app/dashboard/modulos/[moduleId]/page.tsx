@@ -3,23 +3,23 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
+import nextDynamic from 'next/dynamic';
 import { ArrowLeft, Construction } from 'lucide-react';
-// Note for future contributors: real module components register here.
-// Each entry should use Next.js `dynamic()` so the chunk only downloads
-// when the route is visited — that's the whole "Addon Store keeps the app
-// light" promise on web.
+// Module components register here. `next/dynamic` keeps each module's
+// code in its own chunk so it only downloads when visited — initial
+// bundle stays small regardless of how many modules ship over time.
 //
-// Example (when the mechanic module ships):
-//   const Mechanic = dynamic(() => import('@/modules/mechanic'), { ssr: false });
-//   const MODULE_COMPONENTS: Record<string, ComponentType> = { mechanic: Mechanic };
-//
-// While no real modules exist, this map is empty and every module renders
-// the Coming Soon placeholder.
+// ssr: false because react-google-maps and friends touch window/document
+// during init.
 import type { ComponentType } from 'react';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { useLang } from '@/i18n/LangProvider';
 
-const MODULE_COMPONENTS: Record<string, ComponentType> = {};
+const MapModule = nextDynamic(() => import('@/modules/map'), { ssr: false });
+
+const MODULE_COMPONENTS: Record<string, ComponentType> = {
+  map: MapModule,
+};
 
 export default function ModulePage({ params }: { params: { moduleId: string } }) {
   const { t: full } = useLang();

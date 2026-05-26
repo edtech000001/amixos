@@ -5,16 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Construction } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { getModuleById } from '@amixos/shared/modules/registry';
+import MapScreen from '@/modules/map/MapScreen';
 
 // Real module components register here. Unlike web, mobile can't lazy-
 // download chunks — Apple/Google forbid remote JS — so every module is
 // bundled. This map gates which modules actually render their own UI vs
 // fall through to the placeholder.
-//
-// Example (when the mechanic module ships):
-//   import { MechanicScreen } from '@/modules/mechanic';
-//   const MODULE_COMPONENTS: Record<string, ComponentType> = { mechanic: MechanicScreen };
-const MODULE_COMPONENTS: Record<string, ComponentType> = {};
+const MODULE_COMPONENTS: Record<string, ComponentType> = {
+  map: MapScreen,
+};
 
 export default function ModuleRoute() {
   const router = useRouter();
