@@ -883,12 +883,33 @@ export type DashboardDict = {
       body: string;
     };
     list: {
+      map: { name: string; description: string };
       mechanic: { name: string; description: string };
       salon: { name: string; description: string };
       landscaping: { name: string; description: string };
       restaurant: { name: string; description: string };
       cleaning: { name: string; description: string };
       construction: { name: string; description: string };
+    };
+    // Map-specific UI strings — layer toggles, pin popups, geocoding
+    // progress. Lives under `modules` because it's owned by the map
+    // module, not core settings.
+    map: {
+      layers: {
+        clients: string;
+        jobs: string;
+        employees: string;
+      };
+      // Status footer / empty states
+      noPinsYet: string;
+      geocodeMissing: string;
+      geocodeRunning: string;
+      geocodeDone: string;
+      // Pin popup
+      openRecord: string;
+      noClient: string;
+      noAddress: string;
+      assignedToJob: string;
     };
   };
   reports: {
@@ -1842,12 +1863,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         body: 'Este módulo aún está en desarrollo. Pronto podrás usarlo aquí.',
       },
       list: {
+        map:          { name: 'Mapa',         description: 'Visualiza clientes, trabajos y empleados en un mapa' },
         mechanic:     { name: 'Mecánico',     description: 'Órdenes de trabajo, VIN, partes, diagnóstico' },
         salon:        { name: 'Salón',        description: 'Citas, comisiones de estilistas, menú de servicios' },
         landscaping:  { name: 'Jardinería',   description: 'Propiedades, calendario estacional, equipo' },
         restaurant:   { name: 'Restaurante',  description: 'Mesas, menú, pedidos, inventario de cocina' },
         cleaning:     { name: 'Limpieza',     description: 'Rutas, listas de tareas, productos' },
         construction: { name: 'Construcción', description: 'Permisos, planos, mediciones, subcontratistas' },
+      },
+      map: {
+        layers: {
+          clients: 'Clientes',
+          jobs: 'Trabajos',
+          employees: 'Empleados',
+        },
+        noPinsYet: 'Aún no hay pines para mostrar.',
+        geocodeMissing: '{{count}} clientes sin coordenadas. Toca para localizarlos.',
+        geocodeRunning: 'Localizando clientes...',
+        geocodeDone: 'Listo. {{count}} clientes localizados.',
+        openRecord: 'Abrir',
+        noClient: 'Sin cliente',
+        noAddress: 'Sin dirección',
+        assignedToJob: 'Asignado a',
       },
     },
     reports: {
@@ -2798,12 +2835,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         body: "This module is still in development. You'll be able to use it here shortly.",
       },
       list: {
+        map:          { name: 'Map',          description: 'See clients, jobs, and employees on a map' },
         mechanic:     { name: 'Mechanic',     description: 'Work orders, VIN, parts, diagnostics' },
         salon:        { name: 'Salon',        description: 'Appointments, stylist commissions, service menu' },
         landscaping:  { name: 'Landscaping',  description: 'Properties, seasonal scheduling, equipment' },
         restaurant:   { name: 'Restaurant',   description: 'Tables, menu, orders, kitchen inventory' },
         cleaning:     { name: 'Cleaning',     description: 'Routes, task lists, supplies' },
         construction: { name: 'Construction', description: 'Permits, blueprints, measurements, subcontractors' },
+      },
+      map: {
+        layers: {
+          clients: 'Clients',
+          jobs: 'Jobs',
+          employees: 'Employees',
+        },
+        noPinsYet: 'No pins to show yet.',
+        geocodeMissing: '{{count}} clients without coordinates. Tap to locate them.',
+        geocodeRunning: 'Locating clients...',
+        geocodeDone: 'Done. {{count}} clients located.',
+        openRecord: 'Open',
+        noClient: 'No client',
+        noAddress: 'No address',
+        assignedToJob: 'Assigned to',
       },
     },
     reports: {

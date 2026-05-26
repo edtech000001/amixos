@@ -22,6 +22,7 @@ import {
   Utensils,
   Sparkles,
   Hammer,
+  MapPin,
 } from 'lucide-react-native';
 
 export type ModuleStatus = 'available' | 'coming_soon';
@@ -46,6 +47,10 @@ export interface ModuleDef {
 }
 
 export const MODULE_REGISTRY: ModuleDef[] = [
+  // Map is the first real module — a universally useful surface (every
+  // business benefits from seeing their pins on a map) so it leads the
+  // list. Mechanic/Salon/etc. are industry-specific placeholders.
+  { id: 'map',          icon: MapPin,    color: '#0EA5E9', status: 'available',   i18nKey: 'map' },
   { id: 'mechanic',     icon: Wrench,    color: '#3B82F6', status: 'coming_soon', i18nKey: 'mechanic' },
   { id: 'salon',        icon: Scissors,  color: '#EC4899', status: 'coming_soon', i18nKey: 'salon' },
   { id: 'landscaping',  icon: Trees,     color: '#10B981', status: 'coming_soon', i18nKey: 'landscaping' },
