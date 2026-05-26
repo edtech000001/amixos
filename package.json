@@ -16,17 +16,15 @@
     "build:web": "cd web && npm run build",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
-    "postinstall": "npx --no-install patch-package"
+    "postinstall": "node -e \"process.exit(process.env.VERCEL ? 0 : 1)\" || patch-package"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
     "lucide-react-native": "^0.378.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.2.5",
     "react-native": "0.74.5",
     "react-native-svg": "15.2.0",
     "typescript": "^5.4.5"
-  },
-  "dependencies": {
-    "patch-package": "^8.0.1"
   }
 }
