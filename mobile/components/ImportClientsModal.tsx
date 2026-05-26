@@ -255,9 +255,22 @@ export function ImportClientsModal({
       setFilename(file.name);
       setParsing(true);
 
-      const csv = await FileSystem.readAsStringAsync(file.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      // Use fetch() to read the file contents. On iOS, FileSystem
+      // .readAsStringAsync sometimes can't access files DocumentPicker
+      // dropped in its sandboxed Library/Caches/DocumentPicker folder
+      // ("Calling the 'readAsStringAsync' function has failed"). fetch()
+      // has different permission semantics and reads the file URI cleanly
+      // on both iOS and Android. We fall back to FileSystem only if
+      // fetch fails — covers older Expo SDKs and edge cases.
+      let csv: string;
+      try {
+        const resp = await fetch(file.uri);
+        csv = await resp.text();
+      } catch {
+        csv = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      }
 
       const parsed = Papa.parse<Record<string, string>>(csv, {
         header: true,
