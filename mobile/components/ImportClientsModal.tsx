@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -7,10 +7,9 @@ import * as Contacts from 'expo-contacts';
 import Papa from 'papaparse';
 import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users } from 'lucide-react-native';
 import { Modal, Button, Select } from '@amixos/shared/ui';
-import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
-import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -63,6 +62,7 @@ export function ImportClientsModal({
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
+  const syncBanner = useGoogleSyncBanner();
 
   const [step, setStep] = useState<Step>('upload');
   const [parsing, setParsing] = useState(false);
@@ -72,7 +72,11 @@ export function ImportClientsModal({
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState('');
   const [error, setError] = useState('');
-  const [result, setResult] = useState({ success: 0, errors: 0 });
+  const [result, setResult] = useState<{
+    success: number;
+    failedRows: { label: string; reason: string }[];
+  }>({ success: 0, failedRows: [] });
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
 
   const reset = () => {
     setStep('upload');
@@ -83,7 +87,78 @@ export function ImportClientsModal({
     setColMap({});
     setFilename('');
     setError('');
-    setResult({ success: 0, errors: 0 });
+    setResult({ success: 0, failedRows: [] });
+    setShowErrorDetails(false);
+  };
+
+  // Display label for a failed row. Always leads with the CSV line
+  // number (matching what the user sees in Excel/Numbers, where row 1
+  // is the header and data starts at row 2) so they can find it.
+  // Falls through several identifier sources so the user gets something
+  // useful even when they didn't map name/phone/email columns.
+  const rowLabel = (
+    entry: Record<string, unknown>,
+    originalRow: Record<string, string> | null,
+    csvLine: number,
+  ): string => {
+    const name = [entry.first_name, entry.last_name].filter(Boolean).join(' ').trim();
+    const candidate =
+      name ||
+      (entry.company as string | undefined) ||
+      (entry.phone_cell as string | undefined) ||
+      (entry.email_office as string | undefined);
+    if (candidate) return `Fila ${csvLine} · ${candidate}`;
+    if (originalRow) {
+      const nonEmpty = Object.entries(originalRow)
+        .filter(([, v]) => v && String(v).trim())
+        .slice(0, 2)
+        .map(([k, v]) => `${k}: ${String(v).trim()}`);
+      if (nonEmpty.length > 0) return `Fila ${csvLine} · ${nonEmpty.join(', ')}`;
+    }
+    return `Fila ${csvLine} (vacía)`;
+  };
+
+  // Batch-insert with per-row retry on failure. The fast path is a single
+  // 50-row insert; if Supabase rejects the whole batch (e.g. a duplicate
+  // or constraint violation makes the transaction roll back), we fall
+  // back to one-by-one inserts on that slice so we can identify the
+  // specific bad row and capture its error reason.
+  const insertBatchWithRetry = async (
+    batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string> }[],
+  ): Promise<{
+    success: number;
+    insertedIds: string[];
+    failedRows: { label: string; reason: string }[];
+  }> => {
+    let success = 0;
+    const insertedIds: string[] = [];
+    const failedRows: { label: string; reason: string }[] = [];
+    for (let i = 0; i < batch.length; i += 50) {
+      const slice = batch.slice(i, i + 50);
+      const { data, error: err } = await supabase
+        .from('clients')
+        .insert(slice.map(b => b.entry))
+        .select('id');
+      if (err) {
+        for (const b of slice) {
+          const { data: d2, error: e2 } = await supabase
+            .from('clients')
+            .insert(b.entry)
+            .select('id')
+            .single();
+          if (e2) {
+            failedRows.push({ label: rowLabel(b.entry, b.originalRow, b.csvLine), reason: e2.message });
+          } else {
+            success++;
+            if (d2?.id) insertedIds.push(d2.id);
+          }
+        }
+      } else {
+        success += slice.length;
+        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
+      }
+    }
+    return { success, insertedIds, failedRows };
   };
 
   // Build a sample CSV (headers + one example row) and share it via the
@@ -129,12 +204,12 @@ export function ImportClientsModal({
     const contactsList = Array.isArray(picked) ? picked : [picked];
 
     setImporting(true);
-    let success = 0;
-    let errors = 0;
-    const insertedIds: string[] = [];
 
+    // For contacts-import the "CSV line" isn't meaningful — use the
+    // picker position as a stand-in so failures still point at "the Nth
+    // contact you picked".
     const batch = contactsList
-      .map(c => {
+      .map((c, idx) => {
         const firstName = c.firstName?.trim() || c.name?.trim() || '';
         const lastName = c.lastName?.trim() || '';
         if (!firstName && !lastName) return null;
@@ -148,7 +223,7 @@ export function ImportClientsModal({
           ?? null;
         const emailHome = c.emails?.find(e => /home|personal|casa/i.test(e.label ?? ''))?.email ?? null;
         const addr = c.addresses?.[0];
-        return {
+        const entry: Record<string, unknown> = {
           business_id: businessId,
           first_name: firstName,
           last_name: lastName,
@@ -162,33 +237,23 @@ export function ImportClientsModal({
           state: addr?.region ? normalizeState(addr.region) : null,
           zip_code: addr?.postalCode ?? null,
         };
+        return { entry, csvLine: idx + 1, originalRow: {} as Record<string, string> };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    for (let i = 0; i < batch.length; i += 50) {
-      const slice = batch.slice(i, i + 50);
-      const { data, error: err } = await supabase.from('clients').insert(slice).select('id');
-      if (err) errors += slice.length;
-      else {
-        success += slice.length;
-        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
-      }
+    const {
+      success,
+      insertedIds: batchInsertedIds,
+      failedRows,
+    } = await insertBatchWithRetry(batch);
+
+    // Hand off to the banner provider — it owns throttling, persistence,
+    // and auto-resume if the app is killed mid-batch.
+    if (batchInsertedIds.length > 0) {
+      syncBanner.runCreateBatch(batchInsertedIds);
     }
 
-    // Fire-and-forget Google sync mirror of the CSV path.
-    if (insertedIds.length > 0) {
-      void (async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const jwt = await getJwt();
-        if (apiBaseUrl && jwt) {
-          for (const id of insertedIds) {
-            triggerGoogleSync('create', id, { apiBaseUrl, jwt });
-          }
-        }
-      })();
-    }
-
-    setResult({ success, errors });
+    setResult({ success, failedRows });
     setImporting(false);
     setStep('done');
     onImportComplete();
@@ -225,7 +290,14 @@ export function ImportClientsModal({
 
   const autoMapColumns = (headers: string[]): Record<string, string> => {
     const auto: Record<string, string> = {};
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+    // Lowercase, strip diacritics (NFD decomposes "ó" → "o" + combining
+    // accent, which we then drop), then keep only letters/digits. Lets
+    // "Código postal" match "Codigo postal", "phone-1" match "phone1", etc.
+    const norm = (s: string) =>
+      s.toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]/g, '');
     allImportFields.forEach(field => {
       const fNorm = norm(field.label);
       const fKey = norm(field.key.replace('custom:', ''));
@@ -275,13 +347,23 @@ export function ImportClientsModal({
         const b64 = await FileSystem.readAsStringAsync(tempUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        // Decode Base64 → UTF-8 string. atob gives us the raw bytes as a
-        // binary string; TextDecoder properly interprets multi-byte UTF-8
-        // sequences (CSVs from Mac apps often have accented Spanish chars).
+        // atob gives a "binary string" where each char's code IS the raw
+        // byte value (0–255). Try UTF-8 first; fall back to Latin-1.
+        // Most CSVs are one of these two encodings — Excel on Mac/Windows
+        // defaults to Windows-1252, "Save as UTF-8 CSV" gives UTF-8.
         const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        csv = new TextDecoder('utf-8').decode(bytes);
+        try {
+          // eslint-disable-next-line deprecation/deprecation
+          csv = decodeURIComponent(escape(binary));
+        } catch {
+          // Bytes aren't valid UTF-8 → treat as Latin-1, where each
+          // byte already maps 1:1 to its codepoint.
+          csv = binary;
+        }
+        // Strip UTF-8 BOM if present — Excel/Numbers sometimes adds one,
+        // which would otherwise show up as an invisible char prefixing
+        // the first column header.
+        if (csv.charCodeAt(0) === 0xFEFF) csv = csv.slice(1);
       } finally {
         await FileSystem.deleteAsync(tempUri, { idempotent: true });
       }
@@ -314,11 +396,12 @@ export function ImportClientsModal({
 
   const runImport = async () => {
     setImporting(true);
-    let success = 0;
-    let errors = 0;
-    const batch: Record<string, unknown>[] = [];
+    const batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string> }[] = [];
+    const failedRows: { label: string; reason: string }[] = [];
 
-    for (const row of rows) {
+    rows.forEach((row, idx) => {
+      // CSV line: header is line 1, data starts at line 2.
+      const csvLine = idx + 2;
       const entry: Record<string, unknown> = { business_id: businessId };
       const customFields: Record<string, string> = {};
 
@@ -343,45 +426,31 @@ export function ImportClientsModal({
         entry.custom_fields = customFields;
       }
 
-      // Skip rows that have nothing identifiable.
+      // Skip rows that have nothing identifiable — track which CSV line
+      // it was so the user can open the file and check that row.
       if (!entry.first_name && !entry.last_name && !entry.company) {
-        errors++;
-        continue;
+        failedRows.push({
+          label: rowLabel(entry, row, csvLine),
+          reason: 'Sin nombre, apellido o empresa',
+        });
+        return;
       }
       if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
       if (!entry.last_name) entry.last_name = '';
-      batch.push(entry);
-    }
+      batch.push({ entry, csvLine, originalRow: row });
+    });
 
-    const insertedIds: string[] = [];
-    for (let i = 0; i < batch.length; i += 50) {
-      const slice = batch.slice(i, i + 50);
-      const { data, error: err } = await supabase
-        .from('clients')
-        .insert(slice)
-        .select('id');
-      if (err) {
-        errors += slice.length;
-      } else {
-        success += slice.length;
-        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
-      }
-    }
+    const { success, insertedIds, failedRows: dbFailures } =
+      await insertBatchWithRetry(batch);
+    failedRows.push(...dbFailures);
 
-    // Fire-and-forget Google sync for each newly imported client.
+    // Hand off to the banner provider — it owns throttling, persistence,
+    // and auto-resume if the app is killed mid-batch.
     if (insertedIds.length > 0) {
-      void (async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const jwt = await getJwt();
-        if (apiBaseUrl && jwt) {
-          for (const id of insertedIds) {
-            triggerGoogleSync('create', id, { apiBaseUrl, jwt });
-          }
-        }
-      })();
+      syncBanner.runCreateBatch(insertedIds);
     }
 
-    setResult({ success, errors });
+    setResult({ success, failedRows });
     setImporting(false);
     setStep('done');
     onImportComplete();
@@ -472,7 +541,8 @@ export function ImportClientsModal({
               </Text>
               <Text className="text-xs text-gray-500 mt-0.5">
                 {rows.length} fila{rows.length !== 1 ? 's' : ''} · {matchedCount}{' '}
-                de {allImportFields.length} mapeada
+                de {allImportFields.length} columna
+                {allImportFields.length !== 1 ? 's' : ''} mapeada
                 {matchedCount !== 1 ? 's' : ''}
               </Text>
             </View>
@@ -494,6 +564,7 @@ export function ImportClientsModal({
                   key={f.key}
                   label={f.label}
                   value={colMap[f.key] ?? SKIP}
+                  highlight={!colMap[f.key]}
                   onValueChange={v => {
                     setColMap(prev => {
                       const next = { ...prev };
@@ -508,18 +579,20 @@ export function ImportClientsModal({
             })}
           </View>
 
-          <View className="flex-row gap-2">
+          <View className="flex-row items-center justify-between pt-2">
             <Pressable
-              onPress={() => setStep('upload')}
-              className="flex-1 py-3 rounded-xl border border-gray-200 items-center active:bg-gray-50"
+              onPress={close}
+              className="px-3 py-2 rounded-lg active:bg-gray-100"
             >
-              <Text className="text-sm font-semibold text-gray-700">Atrás</Text>
+              <Text className="text-sm font-semibold text-gray-700">Cancelar</Text>
             </Pressable>
-            <View className="flex-1">
-              <Button onPress={() => setStep('preview')} fullWidth disabled={matchedCount === 0}>
-                <Text className="text-white font-semibold">Continuar</Text>
-              </Button>
-            </View>
+            <Pressable
+              onPress={() => setStep('preview')}
+              disabled={matchedCount === 0}
+              className={`px-4 py-2 rounded-lg ${matchedCount === 0 ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
+            >
+              <Text className="text-sm font-semibold text-white">Continuar</Text>
+            </Pressable>
           </View>
         </View>
       ) : null}
@@ -534,55 +607,80 @@ export function ImportClientsModal({
               </Text>
               <Text className="text-xs text-gray-500 mt-0.5">
                 {rows.length} fila{rows.length !== 1 ? 's' : ''} · {matchedCount}{' '}
-                campo{matchedCount !== 1 ? 's' : ''} mapeado
+                columna{matchedCount !== 1 ? 's' : ''} mapeada
                 {matchedCount !== 1 ? 's' : ''}
               </Text>
             </View>
           </View>
 
+          {/* First 5 rows of mapped data — horizontal scroll keeps every
+              column visible on a narrow phone screen. Mirrors the table the
+              web preview shows. */}
           <View>
             <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
-              Mapeo final
+              Vista previa · primeras {Math.min(5, rows.length)} de {rows.length}
             </Text>
-            <View className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-              {allImportFields
-                .filter(f => colMap[f.key])
-                .map((f, i, arr) => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator
+              className="border border-gray-100 rounded-xl bg-white"
+            >
+              <View>
+                {/* Header row */}
+                <View className="flex-row bg-gray-50 border-b border-gray-100">
+                  {allImportFields.filter(f => colMap[f.key]).map(f => (
+                    <View key={f.key} style={{ width: 140 }} className="px-3 py-2">
+                      <Text className="text-xs font-semibold text-gray-500" numberOfLines={1}>
+                        {f.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {/* Data rows */}
+                {rows.slice(0, 5).map((row, ri) => (
                   <View
-                    key={f.key}
-                    className={`flex-row items-center justify-between px-4 py-2.5 ${
-                      i < arr.length - 1 ? 'border-b border-gray-50' : ''
-                    }`}
+                    key={ri}
+                    className={`flex-row ${ri < Math.min(5, rows.length) - 1 ? 'border-b border-gray-50' : ''}`}
                   >
-                    <Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>
-                      {f.label}
-                    </Text>
-                    <Text className="text-xs text-gray-500 ml-2" numberOfLines={1}>
-                      ← {colMap[f.key]}
-                    </Text>
+                    {allImportFields.filter(f => colMap[f.key]).map(f => {
+                      const val = row[colMap[f.key]];
+                      return (
+                        <View key={f.key} style={{ width: 140 }} className="px-3 py-2">
+                          <Text
+                            className={`text-xs ${val ? 'text-gray-700' : 'text-gray-300'}`}
+                            numberOfLines={1}
+                          >
+                            {val || '—'}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 ))}
-            </View>
+              </View>
+            </ScrollView>
           </View>
 
           <Text className="text-xs text-gray-500 leading-5">
             Las filas sin nombre, apellido o empresa serán omitidas.
           </Text>
 
-          <View className="flex-row gap-2">
+          <View className="flex-row items-center justify-between pt-2">
             <Pressable
-              onPress={() => setStep('map')}
-              className="flex-1 py-3 rounded-xl border border-gray-200 items-center active:bg-gray-50"
+              onPress={close}
+              className="px-3 py-2 rounded-lg active:bg-gray-100"
             >
-              <Text className="text-sm font-semibold text-gray-700">Atrás</Text>
+              <Text className="text-sm font-semibold text-gray-700">Cancelar</Text>
             </Pressable>
-            <View className="flex-1">
-              <Button onPress={runImport} loading={importing} fullWidth>
-                <Text className="text-white font-semibold">
-                  Importar {rows.length}
-                </Text>
-              </Button>
-            </View>
+            <Pressable
+              onPress={runImport}
+              disabled={importing}
+              className={`px-4 py-2 rounded-lg ${importing ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
+            >
+              <Text className="text-sm font-semibold text-white">
+                {importing ? 'Importando…' : `Importar ${rows.length}`}
+              </Text>
+            </Pressable>
           </View>
         </View>
       ) : null}
@@ -598,13 +696,61 @@ export function ImportClientsModal({
               <Text className="text-sm text-gray-600">Importados</Text>
               <Text className="text-base font-bold text-green-600">{result.success}</Text>
             </View>
-            {result.errors > 0 ? (
+            {result.failedRows.length > 0 ? (
               <View className="flex-row justify-between items-center">
                 <Text className="text-sm text-gray-600">Errores</Text>
-                <Text className="text-base font-bold text-red-600">{result.errors}</Text>
+                <Text className="text-base font-bold text-red-600">{result.failedRows.length}</Text>
               </View>
             ) : null}
           </View>
+
+          {/* Per-row failure breakdown — collapsed by default. Lets the
+              user see which contacts didn't import and why (duplicate,
+              missing field, validation error from the DB, etc.). */}
+          {result.failedRows.length > 0 ? (
+            <View className="w-full">
+              <Pressable
+                onPress={() => setShowErrorDetails(v => !v)}
+                className="flex-row items-center justify-center gap-1 py-2"
+              >
+                <Text className="text-sm font-medium text-primary">
+                  {showErrorDetails ? 'Ocultar detalles' : 'Ver detalles'}
+                </Text>
+                <Text className="text-sm text-primary">
+                  {showErrorDetails ? '▴' : '▾'}
+                </Text>
+              </Pressable>
+              {showErrorDetails ? (
+                <View className="bg-red-50 border border-red-100 rounded-xl overflow-hidden">
+                  {result.failedRows.slice(0, 20).map((f, i) => (
+                    <View
+                      key={i}
+                      className={`px-4 py-2.5 ${
+                        i < Math.min(20, result.failedRows.length) - 1
+                          ? 'border-b border-red-100/60'
+                          : ''
+                      }`}
+                    >
+                      <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
+                        {f.label}
+                      </Text>
+                      <Text className="text-xs text-red-700 mt-0.5" numberOfLines={2}>
+                        {f.reason}
+                      </Text>
+                    </View>
+                  ))}
+                  {result.failedRows.length > 20 ? (
+                    <View className="px-4 py-2.5 bg-red-100/40">
+                      <Text className="text-xs text-gray-600 text-center">
+                        + {result.failedRows.length - 20} más
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <Button onPress={close} fullWidth>
             <Text className="text-white font-semibold">Cerrar</Text>
           </Button>

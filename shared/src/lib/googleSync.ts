@@ -29,40 +29,112 @@ export function triggerClientContactGoogleSync(
   contactId: string,
   { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
 ): Promise<void> {
-  return fetch(`${apiBaseUrl}/api/v1/google-sync/client-contact`, {
+  return doClientContactGoogleSyncRequest(action, contactId, { apiBaseUrl, jwt }).catch(() => {});
+}
+
+/**
+ * Same as triggerClientContactGoogleSync but throws on non-2xx so the batch
+ * runner can surface failures. Used by the GoogleSyncBanner queue when it
+ * reapplies the note template across both clients AND client_contacts.
+ */
+export function triggerClientContactGoogleSyncOrThrow(
+  action: GoogleSyncAction,
+  contactId: string,
+  opts: TriggerGoogleSyncOptions,
+): Promise<void> {
+  return doClientContactGoogleSyncRequest(action, contactId, opts);
+}
+
+async function doClientContactGoogleSyncRequest(
+  action: GoogleSyncAction,
+  contactId: string,
+  { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
+): Promise<void> {
+  const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/client-contact`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${jwt}`,
     },
     body: JSON.stringify({ action, contactId }),
-  })
-    .then(() => undefined)
-    .catch(() => {
-      // Same swallow behavior as triggerGoogleSync.
-    });
+  });
+  if (!res.ok) {
+    throw new Error(`Google sync (contact) failed (${res.status})`);
+  }
 }
 
-export function triggerGoogleSync(
+/**
+ * Internal raw request — throws on network failure OR non-2xx response.
+ * Used by the batch runner and the new error-reporting variant so failures
+ * can be surfaced to the user via the GoogleSyncBanner. The fire-and-forget
+ * variants below wrap this with a catch.
+ */
+async function doGoogleSyncRequest(
   action: GoogleSyncAction,
   clientId: string,
   { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
 ): Promise<void> {
-  // Returns a Promise so callers that NEED ordering (delete: must run before
-  // the local row is dropped, otherwise the API can't look up its
-  // google_resource_name) can await. Existing create/update callers don't
-  // await — they remain fire-and-forget. Either pattern is supported.
-  return fetch(`${apiBaseUrl}/api/v1/google-sync/contact`, {
+  const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/contact`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${jwt}`,
     },
     body: JSON.stringify({ action, clientId }),
-  })
-    .then(() => undefined)
-    .catch(() => {
-      // Swallow — sync failures should not surface as errors to the user.
-      // The API logs the actual error and the settings page surfaces it.
-    });
+  });
+  if (!res.ok) {
+    throw new Error(`Google sync failed (${res.status})`);
+  }
 }
+
+export function triggerGoogleSync(
+  action: GoogleSyncAction,
+  clientId: string,
+  opts: TriggerGoogleSyncOptions,
+): Promise<void> {
+  // Fire-and-forget — swallows errors. Use this for callers that don't
+  // want to surface sync failures to the user.
+  return doGoogleSyncRequest(action, clientId, opts).catch(() => {});
+}
+
+/**
+ * Same as triggerGoogleSync, but throws on failure so the caller can
+ * report the error (e.g. via the GoogleSyncBanner). Use for single-op
+ * mutations (add/edit/delete one client) where the user should know if
+ * the Google mirror didn't go through.
+ */
+export function triggerGoogleSyncOrThrow(
+  action: GoogleSyncAction,
+  clientId: string,
+  opts: TriggerGoogleSyncOptions,
+): Promise<void> {
+  return doGoogleSyncRequest(action, clientId, opts);
+}
+
+/**
+ * Delete a Google contact by resourceName — used by the bulk-delete
+ * queue runner once the local Amixos row is gone (so we can't go
+ * through the clientId endpoint anymore). Throws on failure.
+ */
+export async function triggerGoogleSyncDeleteOrphan(
+  businessId: string,
+  resourceName: string,
+  { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
+): Promise<void> {
+  const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/contact/delete-orphan`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ businessId, resourceName }),
+  });
+  if (!res.ok) {
+    throw new Error(`Google sync delete-orphan failed (${res.status})`);
+  }
+}
+
+// Bulk batch runner moved into GoogleSyncBannerProvider — it owns
+// throttling + persistence + auto-resume. Callers should use
+// `syncBanner.runCreateBatch(ids)` (or `runDeleteBatch` for orphan
+// cleanup) instead — the provider owns throttling + persistence.

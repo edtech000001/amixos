@@ -34,6 +34,7 @@ export interface ClientRow {
   notes: string | null;
   custom_fields: Record<string, string> | null;
   google_resource_name: string | null;
+  google_etag: string | null;
 }
 
 // A secondary person attached to a client (foreman, project manager, etc).
@@ -125,20 +126,137 @@ async function refreshAccessToken(
 
 /**
  * Look up the human-readable labels for a business's client custom field
- * templates. Returns a Map<field_key, field_label> we pass into
- * buildContactPayload so Google sees "Cumpleaños: 2024-08-15" instead of
- * "birthday: 2024-08-15". Empty map on lookup failure — falls back to keys.
+ * templates AND the business's notes-template (used to stuff custom field
+ * values into the Google Contacts biography for visibility in iPhone
+ * Contacts, which doesn't display userDefined fields).
+ *
+ * Returns labels map (field_key → field_label) and notesTemplate (or null).
  */
-async function loadClientFieldLabels(businessId: string): Promise<Map<string, string>> {
+async function loadBusinessSyncConfig(
+  businessId: string,
+): Promise<{ labels: Map<string, string>; notesTemplate: string | null }> {
   const labels = new Map<string, string>();
-  const { data } = await supabase
-    .from('client_field_templates')
-    .select('field_key, field_label')
-    .eq('business_id', businessId);
-  for (const t of ((data ?? []) as Array<{ field_key: string; field_label: string }>)) {
+  const [{ data: templateRows }, { data: bizRow }] = await Promise.all([
+    supabase
+      .from('client_field_templates')
+      .select('field_key, field_label')
+      .eq('business_id', businessId),
+    supabase
+      .from('businesses')
+      .select('google_sync_notes_template')
+      .eq('id', businessId)
+      .maybeSingle(),
+  ]);
+  for (const t of ((templateRows ?? []) as Array<{ field_key: string; field_label: string }>)) {
     labels.set(t.field_key, t.field_label);
   }
-  return labels;
+  const notesTemplate = (bizRow as { google_sync_notes_template: string | null } | null)
+    ?.google_sync_notes_template ?? null;
+  return { labels, notesTemplate };
+}
+
+// Built-in field labels (both Spanish and English) → resolver function.
+// Matches what users see in Ajustes / their CSV column headers so they
+// can write {{Empresa}} or {{Company}} in the template interchangeably.
+function getBuiltinFieldValue(label: string, client: ClientRow): string | null {
+  const key = label.toLowerCase().trim();
+  const map: Record<string, () => string | null | undefined> = {
+    'nombre':              () => client.first_name,
+    'first name':          () => client.first_name,
+    'apellido':            () => client.last_name,
+    'last name':           () => client.last_name,
+    'empresa':             () => client.company,
+    'company':             () => client.company,
+    'celular':             () => client.phone_cell,
+    'teléfono celular':    () => client.phone_cell,
+    'mobile':              () => client.phone_cell,
+    'cell phone':          () => client.phone_cell,
+    'teléfono oficina':    () => client.phone_office,
+    'work phone':          () => client.phone_office,
+    'office phone':        () => client.phone_office,
+    'correo':              () => client.email_office,
+    'correo oficina':      () => client.email_office,
+    'email':               () => client.email_office,
+    'work email':          () => client.email_office,
+    'correo personal':     () => client.email_home,
+    'home email':          () => client.email_home,
+    'dirección':           () => client.address,
+    'address':             () => client.address,
+    'calle y número':      () => client.address,
+    'ciudad':              () => client.city,
+    'city':                () => client.city,
+    'estado':              () => client.state,
+    'state':               () => client.state,
+    'código postal':       () => client.zip_code,
+    'zip':                 () => client.zip_code,
+    'zip code':            () => client.zip_code,
+    // The notes placeholder lets the user position their own notes anywhere
+    // in the template (e.g. above the custom-field block). When present,
+    // buildContactPayload skips the auto-append so they're not duplicated.
+    'notas':               () => client.notes,
+    'notes':               () => client.notes,
+    'note':                () => client.notes,
+  };
+  const fn = map[key];
+  const val = fn ? fn() : null;
+  return val ?? null;
+}
+
+/**
+ * Render the notes template against a client. Syntax:
+ *   - `{{Field Label}}` placeholders are replaced with the value of the
+ *     matching custom field (by label) or built-in field.
+ *   - If a line contains placeholders AND every placeholder resolves to
+ *     empty, the whole line is dropped (so users without a Grain Bin Brand
+ *     don't get a dangling "Grain Bin Brand: " line).
+ *   - Lines with no placeholders are kept as-is (allows section headers).
+ *
+ * Returns the rendered string (may be empty if every line dropped).
+ */
+function renderNotesTemplate(
+  template: string,
+  client: ClientRow,
+  customLabels: Map<string, string>,
+): string {
+  // Build reverse map: lowercased label → field_key for custom field lookup.
+  const labelToKey = new Map<string, string>();
+  for (const [key, label] of customLabels) {
+    labelToKey.set(label.toLowerCase().trim(), key);
+  }
+
+  const resolve = (label: string): string | null => {
+    const lookupKey = label.toLowerCase().trim();
+    const customKey = labelToKey.get(lookupKey);
+    if (customKey) {
+      const raw = client.custom_fields?.[customKey];
+      if (raw != null && String(raw).trim() !== '') return String(raw);
+      return null;
+    }
+    return getBuiltinFieldValue(label, client);
+  };
+
+  const placeholderRegex = /\{\{([^}]+)\}\}/g;
+  const renderedLines: string[] = [];
+
+  for (const line of template.split('\n')) {
+    const matches = [...line.matchAll(placeholderRegex)];
+    if (matches.length === 0) {
+      renderedLines.push(line);
+      continue;
+    }
+    let allEmpty = true;
+    const rendered = line.replace(placeholderRegex, (_, label) => {
+      const value = resolve(label);
+      if (value && value.trim()) {
+        allEmpty = false;
+        return value;
+      }
+      return '';
+    });
+    if (!allEmpty) renderedLines.push(rendered);
+  }
+
+  return renderedLines.join('\n');
 }
 
 /**
@@ -154,6 +272,7 @@ function buildContactPayload(
   client: ClientRow,
   contactGroupId: string | null,
   customLabels: Map<string, string>,
+  notesTemplate: string | null,
 ) {
   const fullAddress = [client.address, client.address_line2, client.city, client.state, client.zip_code]
     .filter(Boolean)
@@ -190,15 +309,44 @@ function buildContactPayload(
 
   if (fullAddress) payload.addresses = [{ type: 'work', formattedValue: fullAddress }];
   if (client.company) payload.organizations = [{ name: client.company }];
-  // Always include an "Amixos" source tag in the biography so the user can
-  // tell at a glance which Google contacts came from this app. The client's
-  // own notes follow on a new paragraph if present.
-  const clientBio = client.notes ? `Amixos: ${client.notes}` : 'Amixos';
-  payload.biographies = [{ value: clientBio }];
-
-  if (contactGroupId) {
-    payload.memberships = [{ contactGroupMembership: { contactGroupResourceName: `contactGroups/${contactGroupId}` } }];
+  // Biography layout: "Amixos" tag (source marker) → rendered template
+  // (custom fields, possibly including the user's own notes via the
+  // {{Notas}} placeholder) → fallback auto-appended notes IF the template
+  // didn't already reference them. This gives the user three options:
+  //   1. No template set → bare notes appear after "Amixos" (legacy default).
+  //   2. Template without {{Notas}} → template renders, then notes append.
+  //   3. Template with {{Notas}} → notes appear exactly where placed.
+  const notesPlaceholderRe = /\{\{\s*(notas|notes|note)\s*\}\}/i;
+  const bioSections: string[] = ['Amixos'];
+  if (notesTemplate) {
+    const rendered = renderNotesTemplate(notesTemplate, client, customLabels);
+    if (rendered.trim()) bioSections.push(rendered);
+    if (
+      client.notes &&
+      client.notes.trim() &&
+      !notesPlaceholderRe.test(notesTemplate)
+    ) {
+      bioSections.push(client.notes);
+    }
+  } else if (client.notes && client.notes.trim()) {
+    bioSections.push(client.notes);
   }
+  payload.biographies = [{ value: bioSections.join('\n\n') }];
+
+  // ALWAYS include myContacts so the contact appears in the user's
+  // main Google Contacts view. Without it, contacts only show up under
+  // the label/group and iPhone Contacts / autocomplete don't see them.
+  // The Amixos label (if configured) is added on top so they show in
+  // both places.
+  const memberships: Array<{ contactGroupMembership: { contactGroupResourceName: string } }> = [
+    { contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } },
+  ];
+  if (contactGroupId) {
+    memberships.push({
+      contactGroupMembership: { contactGroupResourceName: `contactGroups/${contactGroupId}` },
+    });
+  }
+  payload.memberships = memberships;
 
   return payload;
 }
@@ -260,8 +408,8 @@ export async function createGoogleContact(
     return { error: 'reconnect_required' };
   }
 
-  const labels = await loadClientFieldLabels(client.business_id);
-  const payload = buildContactPayload(client, creds.contact_group_id, labels);
+  const { labels, notesTemplate } = await loadBusinessSyncConfig(client.business_id);
+  const payload = buildContactPayload(client, creds.contact_group_id, labels, notesTemplate);
   const res = await fetch(`${PEOPLE_API_BASE}/people:createContact`, {
     method: 'POST',
     headers: {
@@ -281,16 +429,20 @@ export async function createGoogleContact(
     return { error: `people_api_error:${res.status}` };
   }
 
-  const json = (await res.json()) as { resourceName?: string };
+  const json = (await res.json()) as { resourceName?: string; etag?: string };
   if (!json.resourceName) {
     await recordSyncError(creds.user_id, 'People API returned no resourceName');
     return { error: 'no_resource_name' };
   }
 
-  // Persist the resourceName so future updates/deletes can target this contact.
+  // Persist resourceName + etag. The etag lets later updates skip the
+  // GET-for-etag round-trip and PATCH directly.
   await supabase
     .from('clients')
-    .update({ google_resource_name: json.resourceName })
+    .update({
+      google_resource_name: json.resourceName,
+      google_etag: json.etag ?? null,
+    })
     .eq('id', client.id);
 
   await recordSyncSuccess(creds.user_id);
@@ -307,11 +459,20 @@ export async function createGoogleContact(
  * Name parsing: client_contacts.name is a single text field. Split on the
  * first whitespace — first token = givenName, rest = familyName. If there's
  * no whitespace it all goes into givenName.
+ *
+ * Bio composition (in order):
+ *   1. "Amixos: Employee of {parent name}" — source tag + parent link
+ *   2. Parent client's rendered notes template — so contact people see the
+ *      same enriched info as their parent client (custom fields, pivot
+ *      brand, etc.). Single template covers both surfaces.
+ *   3. Contact's own free-text notes (if any).
  */
 function buildClientContactPayload(
   contact: ClientContactRow,
-  parent: ParentClientRef,
+  parent: ClientRow,
   contactGroupId: string | null,
+  notesTemplate: string | null,
+  customLabels: Map<string, string>,
 ): Record<string, unknown> {
   const parts = (contact.name ?? '').trim().split(/\s+/);
   const givenName = parts[0] ?? contact.name;
@@ -322,11 +483,11 @@ function buildClientContactPayload(
   const parentName = `${parent.first_name} ${parent.last_name}`.trim();
   const orgName = parent.company?.trim() || parentName;
 
-  // Biography: lead with "Amixos:" source tag and the parent-client link
-  // ("Employee of {client name}"), then the contact's own notes on a new
-  // paragraph if present. Matches the clients format so every Google
-  // contact synced from Amixos is recognizable at a glance.
   const biographyLines = [`Amixos: Employee of ${parentName}`];
+  if (notesTemplate) {
+    const rendered = renderNotesTemplate(notesTemplate, parent, customLabels);
+    if (rendered.trim()) biographyLines.push(rendered);
+  }
   if (contact.notes) biographyLines.push(contact.notes);
   const biographyValue = biographyLines.join('\n\n');
 
@@ -352,18 +513,24 @@ function buildClientContactPayload(
   if (contact.phone) {
     payload.phoneNumbers = [{ type: 'mobile', value: contact.phone }];
   }
+  // Same myContacts-membership rule as buildContactPayload — without it
+  // these people-of-clients don't appear in the main Google Contacts view.
+  const memberships: Array<{ contactGroupMembership: { contactGroupResourceName: string } }> = [
+    { contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } },
+  ];
   if (contactGroupId) {
-    payload.memberships = [{
+    memberships.push({
       contactGroupMembership: { contactGroupResourceName: `contactGroups/${contactGroupId}` },
-    }];
+    });
   }
+  payload.memberships = memberships;
 
   return payload;
 }
 
 export async function createClientContactGoogleContact(
   contact: ClientContactRow,
-  parent: ParentClientRef,
+  parent: ClientRow,
   creds: OAuthCreds,
 ): Promise<{ resourceName: string } | { error: string }> {
   if (contact.google_resource_name) {
@@ -377,7 +544,10 @@ export async function createClientContactGoogleContact(
     return { error: 'reconnect_required' };
   }
 
-  const payload = buildClientContactPayload(contact, parent, creds.contact_group_id);
+  // Load the SAME notes template + labels the parent client uses, so the
+  // contact's bio gets the same rendered enrichment.
+  const { labels, notesTemplate } = await loadBusinessSyncConfig(contact.business_id);
+  const payload = buildClientContactPayload(contact, parent, creds.contact_group_id, notesTemplate, labels);
   const res = await fetch(`${PEOPLE_API_BASE}/people:createContact`, {
     method: 'POST',
     headers: {
@@ -413,7 +583,7 @@ export async function createClientContactGoogleContact(
 
 export async function updateClientContactGoogleContact(
   contact: ClientContactRow,
-  parent: ParentClientRef,
+  parent: ClientRow,
   creds: OAuthCreds,
 ): Promise<{ resourceName: string } | { error: string }> {
   if (!contact.google_resource_name) {
@@ -453,8 +623,9 @@ export async function updateClientContactGoogleContact(
   const current = (await getRes.json()) as { etag?: string };
   if (!current.etag) return { error: 'no_etag' };
 
+  const { labels, notesTemplate } = await loadBusinessSyncConfig(contact.business_id);
   const payload = {
-    ...buildClientContactPayload(contact, parent, creds.contact_group_id),
+    ...buildClientContactPayload(contact, parent, creds.contact_group_id, notesTemplate, labels),
     etag: current.etag,
   };
   const updateRes = await fetch(
@@ -550,66 +721,118 @@ export async function updateGoogleContact(
     return { error: 'reconnect_required' };
   }
 
-  // 1. Fetch current etag. Without it the update is rejected.
-  const getRes = await fetch(
-    `${PEOPLE_API_BASE}/${client.google_resource_name}?personFields=metadata`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const { labels, notesTemplate } = await loadBusinessSyncConfig(client.business_id);
+  const basePayload = buildContactPayload(client, creds.contact_group_id, labels, notesTemplate);
 
-  if (getRes.status === 404) {
-    // Contact was deleted on Google's side. Wipe our reference so the next
-    // sync action re-creates it instead of erroring forever.
+  // Inner helper — does one PATCH with a given etag. Caller decides
+  // whether to fetch the etag fresh first or use the cached one.
+  const doPatch = async (etag: string) => {
+    return fetch(
+      `${PEOPLE_API_BASE}/${client.google_resource_name}:updateContact?updatePersonFields=${encodeURIComponent(UPDATE_PERSON_FIELDS)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ ...basePayload, etag }),
+      },
+    );
+  };
+
+  // Inner helper — GET the contact's current etag. Also handles 404
+  // (contact deleted server-side) and 401 (token revoked).
+  const fetchEtag = async (): Promise<{ etag: string } | { error: string } | { recreate: true }> => {
+    const getRes = await fetch(
+      `${PEOPLE_API_BASE}/${client.google_resource_name}?personFields=metadata`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (getRes.status === 404) return { recreate: true };
+    if (getRes.status === 401) {
+      await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+      return { error: 'reconnect_required' };
+    }
+    if (!getRes.ok) {
+      const text = await getRes.text().catch(() => '');
+      await recordSyncError(creds.user_id, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
+      return { error: `people_api_error:${getRes.status}` };
+    }
+    const current = (await getRes.json()) as { etag?: string };
+    if (!current.etag) return { error: 'no_etag' };
+    return { etag: current.etag };
+  };
+
+  // Persist the response's new etag for the next update so we keep the
+  // single-API-call fast path going.
+  const finalize = async (updateRes: Response): Promise<{ resourceName: string } | { error: string }> => {
+    if (updateRes.status === 401) {
+      await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+      return { error: 'reconnect_required' };
+    }
+    if (!updateRes.ok) {
+      const text = await updateRes.text().catch(() => '');
+      await recordSyncError(creds.user_id, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
+      return { error: `people_api_error:${updateRes.status}` };
+    }
+    const updated = (await updateRes.json()) as { resourceName?: string; etag?: string };
+    // Cache the new etag so the next update can skip the GET again.
+    if (updated.etag) {
+      await supabase
+        .from('clients')
+        .update({ google_etag: updated.etag })
+        .eq('id', client.id);
+    }
+    await recordSyncSuccess(creds.user_id);
+    return { resourceName: updated.resourceName ?? client.google_resource_name! };
+  };
+
+  // Fast path — we have a cached etag. PATCH directly. If Google says
+  // the etag is stale (412 Precondition Failed) OR rejects the request
+  // for any 4xx that smells like a concurrency issue (400 with
+  // FAILED_PRECONDITION), fall back to the GET+PATCH dance once.
+  if (client.google_etag) {
+    const patchRes = await doPatch(client.google_etag);
+    if (patchRes.status === 404) {
+      await supabase
+        .from('clients')
+        .update({ google_resource_name: null, google_etag: null })
+        .eq('id', client.id);
+      const fresh: ClientRow = { ...client, google_resource_name: null, google_etag: null };
+      return createGoogleContact(fresh, creds);
+    }
+    if (patchRes.status === 412 || patchRes.status === 400) {
+      // Cached etag is stale — refresh + retry once.
+      const etagResult = await fetchEtag();
+      if ('error' in etagResult) return { error: etagResult.error };
+      if ('recreate' in etagResult) {
+        await supabase
+          .from('clients')
+          .update({ google_resource_name: null, google_etag: null })
+          .eq('id', client.id);
+        const fresh: ClientRow = { ...client, google_resource_name: null, google_etag: null };
+        return createGoogleContact(fresh, creds);
+      }
+      const retryRes = await doPatch(etagResult.etag);
+      return finalize(retryRes);
+    }
+    return finalize(patchRes);
+  }
+
+  // Slow path — first update since we added etag caching, or a client
+  // synced before migration 037. Do the original GET+PATCH; finalize()
+  // populates google_etag for next time.
+  const etagResult = await fetchEtag();
+  if ('error' in etagResult) return { error: etagResult.error };
+  if ('recreate' in etagResult) {
     await supabase
       .from('clients')
-      .update({ google_resource_name: null })
+      .update({ google_resource_name: null, google_etag: null })
       .eq('id', client.id);
-    // Recreate so the user's update flows through immediately.
-    const fresh: ClientRow = { ...client, google_resource_name: null };
+    const fresh: ClientRow = { ...client, google_resource_name: null, google_etag: null };
     return createGoogleContact(fresh, creds);
   }
-  if (getRes.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
-  if (!getRes.ok) {
-    const text = await getRes.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
-    return { error: `people_api_error:${getRes.status}` };
-  }
-
-  const current = (await getRes.json()) as { etag?: string };
-  if (!current.etag) {
-    return { error: 'no_etag' };
-  }
-
-  // 2. PATCH with the new payload + etag.
-  const labels = await loadClientFieldLabels(client.business_id);
-  const payload = { ...buildContactPayload(client, creds.contact_group_id, labels), etag: current.etag };
-  const updateRes = await fetch(
-    `${PEOPLE_API_BASE}/${client.google_resource_name}:updateContact?updatePersonFields=${encodeURIComponent(UPDATE_PERSON_FIELDS)}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (updateRes.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
-  if (!updateRes.ok) {
-    const text = await updateRes.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
-    return { error: `people_api_error:${updateRes.status}` };
-  }
-
-  const updated = (await updateRes.json()) as { resourceName?: string };
-  await recordSyncSuccess(creds.user_id);
-  return { resourceName: updated.resourceName ?? client.google_resource_name };
+  const updateRes = await doPatch(etagResult.etag);
+  return finalize(updateRes);
 }
 
 /**
@@ -658,6 +881,45 @@ export async function deleteGoogleContact(
 }
 
 /**
+ * Delete a Google contact by its resourceName, without needing a local
+ * client row. Used by the bulk-delete flow: the caller pre-fetches each
+ * synced row's google_resource_name, drops the local rows immediately,
+ * then walks the resource_names through this helper at the per-user
+ * quota rate (~1.1s/call). 404 is treated as success (already gone).
+ */
+export async function deleteGoogleContactByResource(
+  resourceName: string,
+  creds: OAuthCreds,
+): Promise<{ ok: true } | { error: string }> {
+  if (!resourceName) return { ok: true };
+  if (!creds.enabled) return { error: 'sync_disabled' };
+
+  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
+  if (!accessToken) {
+    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    return { error: 'reconnect_required' };
+  }
+
+  const res = await fetch(`${PEOPLE_API_BASE}/${resourceName}:deleteContact`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (res.status === 401) {
+    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    return { error: 'reconnect_required' };
+  }
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text().catch(() => '');
+    await recordSyncError(creds.user_id, `People API delete ${res.status}: ${text.slice(0, 200)}`);
+    return { error: `people_api_error:${res.status}` };
+  }
+
+  await recordSyncSuccess(creds.user_id);
+  return { ok: true };
+}
+
+/**
  * Look up the user's Google Contact Groups (for the optional dropdown in
  * Ajustes). Returns an empty array if the user is disconnected.
  */
@@ -693,9 +955,9 @@ export async function listContactGroups(creds: OAuthCreds): Promise<{ id: string
 export async function listGroupContactsByIdNumber(
   creds: OAuthCreds,
   contactGroupId: string,
-): Promise<Map<string, string>> {
+): Promise<Map<string, { resourceName: string; etag: string | null }>> {
   const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  const idMap = new Map<string, string>();
+  const idMap = new Map<string, { resourceName: string; etag: string | null }>();
   if (!accessToken) return idMap;
 
   let pageToken: string | undefined;
@@ -735,6 +997,7 @@ export async function listGroupContactsByIdNumber(
         responses?: Array<{
           person?: {
             resourceName?: string;
+            etag?: string;
             userDefined?: Array<{ key?: string; value?: string }>;
           };
         }>;
@@ -743,7 +1006,11 @@ export async function listGroupContactsByIdNumber(
         const rn = r.person?.resourceName;
         const idEntry = (r.person?.userDefined ?? []).find(u => u.key === 'IDnumber');
         if (rn && idEntry?.value) {
-          idMap.set(idEntry.value, rn);
+          // Etag is returned at the top level of the Person resource
+          // regardless of personFields — store alongside resourceName
+          // so the backfill linker can persist both in one shot,
+          // avoiding the GET-for-etag round-trip on the first update.
+          idMap.set(idEntry.value, { resourceName: rn, etag: r.person?.etag ?? null });
         }
       }
     }
@@ -766,7 +1033,7 @@ export async function listGroupContactsByIdNumber(
 export async function searchGoogleContacts(
   creds: OAuthCreds,
   query: string,
-): Promise<Array<{ resourceName: string; emails: string[]; phones: string[] }>> {
+): Promise<Array<{ resourceName: string; etag: string | null; emails: string[]; phones: string[] }>> {
   const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
   if (!accessToken || !query.trim()) return [];
 
@@ -783,6 +1050,7 @@ export async function searchGoogleContacts(
     results?: Array<{
       person?: {
         resourceName?: string;
+        etag?: string;
         emailAddresses?: Array<{ value?: string }>;
         phoneNumbers?: Array<{ value?: string; canonicalForm?: string }>;
       };
@@ -791,6 +1059,7 @@ export async function searchGoogleContacts(
   return (json.results ?? [])
     .map(r => ({
       resourceName: r.person?.resourceName ?? '',
+      etag: r.person?.etag ?? null,
       emails: (r.person?.emailAddresses ?? [])
         .map(e => e.value?.toLowerCase().trim())
         .filter((v): v is string => !!v),

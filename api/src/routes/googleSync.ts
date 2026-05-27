@@ -5,6 +5,7 @@ import {
   createGoogleContact,
   updateGoogleContact,
   deleteGoogleContact,
+  deleteGoogleContactByResource,
   createClientContactGoogleContact,
   updateClientContactGoogleContact,
   deleteClientContactGoogleContact,
@@ -19,6 +20,7 @@ import {
   type ParentClientRef,
   type OAuthCreds,
 } from '../lib/googleSync';
+import { fetchAll } from '../lib/supabaseFetch';
 
 // Default contact group name Amixos creates / uses on the user's Google
 // account if they haven't picked one explicitly. Keeps synced contacts
@@ -398,18 +400,21 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
   }
 
   // Load every client in THIS business without a google_resource_name.
-  const { data: rows } = await supabase
-    .from('clients')
-    .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name')
-    .is('google_resource_name', null)
-    .eq('business_id', businessId);
-  const clients = (rows ?? []) as ClientRow[];
+  // Paginated because a backfill must include every unsynced row — the
+  // 1000-row PostgREST cap would leave the tail unsynced forever.
+  const clients = await fetchAll<ClientRow>((from, to) =>
+    supabase
+      .from('clients')
+      .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag')
+      .is('google_resource_name', null)
+      .eq('business_id', businessId)
+      .range(from, to));
 
   // Build the IDnumber map once. If the user has no contact_group_id set
   // we skip this step — there's nothing to dedup against.
   const idMap = creds.contact_group_id
     ? await listGroupContactsByIdNumber(creds, creds.contact_group_id)
-    : new Map<string, string>();
+    : new Map<string, { resourceName: string; etag: string | null }>();
 
   let created = 0;
   let linked = 0;
@@ -418,12 +423,13 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
 
   for (const client of clients) {
     // 1. IDnumber match — the contact still exists in Google from a
-    // previous sync. Just link.
-    const existingResource = idMap.get(client.id);
-    if (existingResource) {
+    // previous sync. Persist BOTH resourceName and etag so the very
+    // first update afterward takes the hot path (no GET-for-etag).
+    const existing = idMap.get(client.id);
+    if (existing) {
       await supabase
         .from('clients')
-        .update({ google_resource_name: existingResource })
+        .update({ google_resource_name: existing.resourceName, google_etag: existing.etag })
         .eq('id', client.id);
       linked++;
       continue;
@@ -432,14 +438,14 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
     // 2. Search by email or phone — catches clients the user manually
     // added to Google before connecting Amixos. Best-effort: a single
     // searchContacts call with whichever identifier is most unique.
-    let matched: string | null = null;
+    let matched: { resourceName: string; etag: string | null } | null = null;
     const searchQuery = client.email_office ?? client.email_home ?? client.phone_cell ?? client.phone_office;
     if (searchQuery) {
       const results = await searchGoogleContacts(creds, searchQuery);
       const needle = searchQuery.toLowerCase().trim();
       for (const r of results) {
         if (r.emails.some(e => e === needle) || r.phones.some(p => p.includes(searchQuery))) {
-          matched = r.resourceName;
+          matched = { resourceName: r.resourceName, etag: r.etag };
           break;
         }
       }
@@ -447,7 +453,7 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
     if (matched) {
       await supabase
         .from('clients')
-        .update({ google_resource_name: matched })
+        .update({ google_resource_name: matched.resourceName, google_etag: matched.etag })
         .eq('id', client.id);
       linked++;
       continue;
@@ -468,28 +474,31 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
   // After all clients are synced (so we can resolve parent organization
   // names cleanly), walk every unsynced client_contact and push it to
   // Google as its own contact. Dedup uses the same IDnumber map plus
-  // searchContacts by email/phone.
-  let cqContacts = supabase
-    .from('client_contacts')
-    .select(`
-      id, business_id, client_id, name, role, phone, email, notes, google_resource_name,
-      clients:client_id(first_name, last_name, company)
-    `)
-    .is('google_resource_name', null);
-  if (businessId) cqContacts = cqContacts.eq('business_id', businessId);
-  const { data: contactRows } = await cqContacts;
-  const contacts = ((contactRows ?? []) as unknown) as Array<
-    ClientContactRow & {
-      clients: { first_name: string; last_name: string; company: string | null } | null;
-    }
-  >;
+  // searchContacts by email/phone. Paginated for the same reason as the
+  // clients backfill above. Pull the FULL parent client row (not just
+  // name/company) so the notes-template renderer has every field +
+  // custom_fields available — same enrichment as the client itself.
+  type ContactWithClient = ClientContactRow & {
+    clients: ClientRow | null;
+  };
+  const contacts = await fetchAll<ContactWithClient>((from, to) =>
+    supabase
+      .from('client_contacts')
+      .select(`
+        id, business_id, client_id, name, role, phone, email, notes, google_resource_name,
+        clients:client_id(id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag)
+      `)
+      .is('google_resource_name', null)
+      .eq('business_id', businessId)
+      .range(from, to) as unknown as PromiseLike<{ data: ContactWithClient[] | null; error: { message: string } | null }>);
 
   for (const c of contacts) {
-    const parent: ParentClientRef = {
-      first_name: c.clients?.first_name ?? '',
-      last_name: c.clients?.last_name ?? '',
-      company: c.clients?.company ?? null,
-    };
+    if (!c.clients) {
+      failed++;
+      errors.push({ client_id: c.id, reason: 'parent_client_missing' });
+      continue;
+    }
+    const parent: ClientRow = c.clients;
 
     // IDnumber match — relink existing contact in Google.
     const existing = idMap.get(c.id);
@@ -580,21 +589,27 @@ googleSyncRouter.post('/disconnect', async (req: AuthRequest, res) => {
   let deletedCount = 0;
   if (delete_contacts === true && creds) {
     // Fetch BOTH clients and client_contacts in this business that were
-    // previously synced to Google.
-    const [{ data: clientRows }, { data: contactRows }] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id, google_resource_name, business_id')
-        .not('google_resource_name', 'is', null)
-        .eq('business_id', business_id),
-      supabase
-        .from('client_contacts')
-        .select('id, google_resource_name, business_id')
-        .not('google_resource_name', 'is', null)
-        .eq('business_id', business_id),
+    // previously synced to Google. Paginated because the disconnect path
+    // must wipe EVERY synced row — silently capping at 1000 would leave
+    // orphaned google_resource_name pointers behind that reconnect can't
+    // resolve.
+    type SyncedRow = { id: string; google_resource_name: string };
+    const [syncedClients, syncedContacts] = await Promise.all([
+      fetchAll<SyncedRow>((from, to) =>
+        supabase
+          .from('clients')
+          .select('id, google_resource_name, business_id')
+          .not('google_resource_name', 'is', null)
+          .eq('business_id', business_id)
+          .range(from, to)),
+      fetchAll<SyncedRow>((from, to) =>
+        supabase
+          .from('client_contacts')
+          .select('id, google_resource_name, business_id')
+          .not('google_resource_name', 'is', null)
+          .eq('business_id', business_id)
+          .range(from, to)),
     ]);
-    const syncedClients = (clientRows ?? []) as Array<{ id: string; google_resource_name: string }>;
-    const syncedContacts = (contactRows ?? []) as Array<{ id: string; google_resource_name: string }>;
 
     const allResourceNames = [
       ...syncedClients.map(c => c.google_resource_name),
@@ -606,18 +621,19 @@ googleSyncRouter.post('/disconnect', async (req: AuthRequest, res) => {
       deletedCount = result.deleted;
 
       // Wipe the local references on both tables so a reconnect re-creates.
-      if (syncedClients.length > 0) {
-        await supabase
-          .from('clients')
-          .update({ google_resource_name: null })
-          .in('id', syncedClients.map(c => c.id));
-      }
-      if (syncedContacts.length > 0) {
-        await supabase
-          .from('client_contacts')
-          .update({ google_resource_name: null })
-          .in('id', syncedContacts.map(c => c.id));
-      }
+      // Chunked because PostgREST URLs are length-limited; ~200 UUIDs per
+      // `.in()` keeps the URL well under the 8 KB ceiling.
+      const wipeIn = async (table: 'clients' | 'client_contacts', ids: string[]) => {
+        const chunkSize = 200;
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          await supabase
+            .from(table)
+            .update({ google_resource_name: null })
+            .in('id', ids.slice(i, i + chunkSize));
+        }
+      };
+      if (syncedClients.length > 0)  await wipeIn('clients',         syncedClients.map(c => c.id));
+      if (syncedContacts.length > 0) await wipeIn('client_contacts', syncedContacts.map(c => c.id));
     }
 
     // Now that all the synced contacts are gone, the Amixos label is empty
@@ -721,7 +737,7 @@ googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
   // BEFORE the local delete for the delete action).
   const { data: client } = await supabase
     .from('clients')
-    .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name')
+    .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag')
     .eq('id', clientId)
     .maybeSingle();
 
@@ -751,6 +767,50 @@ googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
 });
 
 /**
+ * POST /api/v1/google-sync/contact/delete-orphan
+ * Body: { businessId: string, resourceName: string }
+ *
+ * Delete a Google contact whose local Amixos row is already gone. Used
+ * by the bulk-delete flow: the client pre-fetches resource_names from
+ * the soon-to-be-deleted rows, deletes the local rows immediately, then
+ * walks the resource_names through this endpoint at the People-API
+ * quota rate. No DB lookup is needed here since the caller provides
+ * the resource_name directly.
+ */
+googleSyncRouter.post('/contact/delete-orphan', async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
+
+  const { businessId, resourceName } = req.body ?? {};
+  if (!businessId || typeof businessId !== 'string') {
+    return res.status(400).json({ success: false, message: 'businessId required' });
+  }
+  if (!resourceName || typeof resourceName !== 'string') {
+    return res.status(400).json({ success: false, message: 'resourceName required' });
+  }
+
+  // Membership gate — caller must belong to this business, otherwise
+  // someone could probe arbitrary resource_names with their own token.
+  const { data: membership } = await supabase
+    .from('business_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (!membership) {
+    return res.status(403).json({ success: false, message: 'not a member of this business' });
+  }
+
+  const creds = await loadCreds(userId, businessId);
+  if (!creds || !creds.enabled) {
+    return res.json({ success: true, data: { skipped: 'sync_disabled' } });
+  }
+
+  const result = await deleteGoogleContactByResource(resourceName, creds);
+  return res.json({ success: true, data: result });
+});
+
+/**
  * POST /api/v1/google-sync/client-contact
  * Body: { action: 'create' | 'update' | 'delete', contactId: string }
  *
@@ -776,7 +836,7 @@ googleSyncRouter.post('/client-contact', async (req: AuthRequest, res) => {
     .from('client_contacts')
     .select(`
       id, business_id, client_id, name, role, phone, email, notes, google_resource_name,
-      clients:client_id(first_name, last_name, company)
+      clients:client_id(id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag)
     `)
     .eq('id', contactId)
     .maybeSingle();
@@ -785,15 +845,15 @@ googleSyncRouter.post('/client-contact', async (req: AuthRequest, res) => {
     return res.status(404).json({ success: false, message: 'client_contact not found' });
   }
 
-  // Supabase nested select shape — flatten parent ref.
+  // Full parent ClientRow so the notes-template renderer has every field
+  // (including custom_fields) available — same enrichment as the client.
   const row = contactRow as unknown as ClientContactRow & {
-    clients: { first_name: string; last_name: string; company: string | null } | null;
+    clients: ClientRow | null;
   };
-  const parent: ParentClientRef = {
-    first_name: row.clients?.first_name ?? '',
-    last_name: row.clients?.last_name ?? '',
-    company: row.clients?.company ?? null,
-  };
+  if (!row.clients) {
+    return res.status(404).json({ success: false, message: 'parent client not found' });
+  }
+  const parent: ClientRow = row.clients;
 
   // Per-business sync: load the creds for THIS contact's business.
   const creds = await loadCreds(userId, row.business_id);
