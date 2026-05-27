@@ -7,6 +7,7 @@ export type DashboardDict = {
     clientes: string;
     facturas: string;
     empleados: string;
+    equipo: string;
     calendario: string;
     inventario: string;
     reportes: string;
@@ -17,11 +18,14 @@ export type DashboardDict = {
     // that menu visually consistent with Ajustes (card with description).
     descriptions: {
       empleados: string;
+      equipo: string;
       calendario: string;
       inventario: string;
       tienda: string;
       ajustes: string;
+      misTrabajos: string;
     };
+    misTrabajos: string;
   };
   home: {
     welcome: string;
@@ -119,6 +123,7 @@ export type DashboardDict = {
     countTotal: string;
     newClient: string;
     importBtn: string;
+    importHint: string;
     searchPlaceholder: string;
     selectAll: string;
     selectedCountSingle: string;
@@ -193,6 +198,13 @@ export type DashboardDict = {
       noInvoices: string;
       createFirstInvoice: string;
       dueShort: string;
+      shareTitle: string;
+      sharePdfBtn: string;
+      shareCsvBtn: string;
+      shareDialogTitle: string;
+      shareDialogBasic: string;
+      shareDialogAll: string;
+      shareError: string;
       contactModal: {
         addTitle: string;
         editTitle: string;
@@ -411,6 +423,8 @@ export type DashboardDict = {
       additionalWorkersLabel: string;
       workerNumberPlaceholder: string;
       addWorker: string;
+      leadBadge: string;
+      markAsLead: string;
       itemsHeadingProposal: string;
       itemsHeadingJob: string;
       colType: string;
@@ -444,6 +458,21 @@ export type DashboardDict = {
       errorSaveGeneric: string;
       submitCreateJob: string;
       submitCreateProposal: string;
+    };
+    actuals: {
+      heading: string;
+      subtitle: string;
+      hoursWorkedLabel: string;
+      hoursWorkedPlaceholder: string;
+      saveBtn: string;
+      markCompleteBtn: string;
+      saveSuccess: string;
+      saveError: string;
+    };
+    myJobs: {
+      title: string;
+      subtitle: string;
+      emptyAll: string;
     };
   };
   employees: {
@@ -704,6 +733,24 @@ export type DashboardDict = {
       title: string;
       subtitle: string;
     };
+    crewMode: {
+      heading: string;
+      subtitle: string;
+      saveBtn: string;
+      saveSuccess: string;
+      saveError: string;
+    };
+    assignmentFieldsSection: {
+      title: string;
+      subtitle: string;
+    };
+    contactsStats: {
+      heading: string;
+      clientsLabel: string;
+      contactsLabel: string;
+      totalLabel: string;
+      googleHint: string;
+    };
     unsavedChangesTitle: string;
     unsavedChangesMessage: string;
     discardBtn: string;
@@ -794,6 +841,7 @@ export type DashboardDict = {
       connectBtn: string;
       reconnectBtn: string;
       disconnectBtn: string;
+      forceSyncBtn: string;
       connected: string;
       disconnected: string;
       reconnectNeeded: string;
@@ -817,6 +865,19 @@ export type DashboardDict = {
       backfillDoneTitle: string;
       backfillDoneBody: string;
       backfillFailedToast: string;
+      templateTitle: string;
+      templateHint: string;
+      templatePlaceholder: string;
+      templateAvailable: string;
+      templateSaveBtn: string;
+      templateSaving: string;
+      templateSaved: string;
+      templateSaveError: string;
+      templateReapplyBtn: string;
+      templateReapplyEmpty: string;
+      templateReapplyConfirmTitle: string;
+      templateReapplyConfirmBody: string;
+      templateReapplyConfirmBtn: string;
     };
     team: {
       heading: string;
@@ -875,6 +936,11 @@ export type DashboardDict = {
       enableConfirmBody: string;
       disableConfirmTitle: string;
       disableConfirmBody: string;
+      searchPlaceholder: string;
+      categoryAll: string;
+      categoryTools: string;
+      categoryIndustry: string;
+      noResults: string;
     };
   };
   modules: {
@@ -900,16 +966,182 @@ export type DashboardDict = {
         jobs: string;
         employees: string;
       };
+      // Search + layer-toggle hint
+      searchPlaceholder: string;
+      searchNoResults: string;
+      searchResultsCount: string;
+      layerToggleHint: string;
       // Status footer / empty states
       noPinsYet: string;
       geocodeMissing: string;
       geocodeRunning: string;
       geocodeDone: string;
+      geocodeProgress: string;
+      geocodeBreakdown: string;
+      geocodeBreakdownNoAddress: string;
+      geocodeBreakdownUnresolved: string;
+      geocodeBreakdownPending: string;
+      geocodeNoneLeft: string;
+      // Unresolved-clients list modal (opened from the banner)
+      geocodeListTitle: string;
+      geocodeListSectionNoAddress: string;
+      geocodeListSectionUnresolved: string;
+      geocodeListSectionPending: string;
+      geocodeListEmpty: string;
+      geocodeListNoAddressHint: string;
+      geocodeListUnresolvedHint: string;
+      geocodeListRetryBtn: string;
+      geocodeListOpenClient: string;
+      geocodeListUnnamed: string;
+      // Settings sheet
+      settingsTitle: string;
+      mapTypeLabel: string;
+      mapTypeStandard: string;
+      mapTypeSatellite: string;
+      mapTypeHybrid: string;
+      mapTypeTerrain: string;
+      clusteringLabel: string;
+      clusteringSubtitle: string;
+      pinSizeLabel: string;
+      pinSizeSmall: string;
+      pinSizeMedium: string;
+      pinSizeLarge: string;
+      pinRulesHeading: string;
+      pinRulesSubtitle: string;
+      pinLayerClients: string;
+      pinLayerJobs: string;
+      pinLayerEmployees: string;
+      defaultStyleLabel: string;
+      colorByFieldLabel: string;
+      noFieldOption: string;
+      addRuleBtn: string;
+      rulesEmpty: string;
+      ruleValueLabel: string;
+      ruleValuePlaceholder: string;
+      // (Legacy shape names — kept for callers still importing them.)
+      pinShapePin: string;
+      pinShapeCircle: string;
+      pinShapeSquare: string;
+      pinShapeTriangle: string;
+      pinShapeStar: string;
+      // New picker UI
+      modeLabel: string;
+      modeNoRule: string;
+      modeCustom: string;
+      applyRuleToLabel: string;
+      ruleFieldPlaceholder: string;
+      editStylePinHint: string;
+      stylePickerTitle: string;
+      colorLabel: string;
+      iconColorLabel: string;
+      iconLabel: string;
+      iconCategories: {
+        location: string;
+        buildings: string;
+        agriculture: string;
+        weather: string;
+        tools: string;
+        vehicles: string;
+        people: string;
+        status: string;
+        commerce: string;
+        tech: string;
+      };
+      iconSearchPlaceholder: string;
+      iconSearchNoResults: string;
+      // Rule match-count chip (shown above each rule row)
+      ruleMatchCount: string;
+      ruleMatchCountSingle: string;
+      ruleMatchCountZero: string;
+      // Rule operator picker labels
+      operatorEquals: string;
+      operatorNotEquals: string;
+      operatorHasValue: string;
+      operatorContains: string;
+      operatorGt: string;
+      operatorGte: string;
+      operatorLt: string;
+      operatorLte: string;
+      anyValuePlaceholder: string;
+      // Hide-pins toggle
+      ruleHideTooltip: string;
+      ruleHiddenCount: string;
+      ruleHiddenCountSingle: string;
+      ruleOrderNote: string;
+      saveBtn: string;
+      saveSuccess: string;
+      saveError: string;
       // Pin popup
       openRecord: string;
       noClient: string;
       noAddress: string;
       assignedToJob: string;
+      // Weather (alpha — gated by business id)
+      weather: {
+        sectionTitle: string;
+        sectionSubtitle: string;
+        enabledLabel: string;
+        enabledSubtitle: string;
+        retentionLabel: string;
+        retentionSubtitle: string;
+        proximityRadiusLabel: string;
+        proximityRadiusSubtitle: string;
+        focusModeOn: string;     // toggle label when off (tap to enable)
+        focusModeOff: string;    // toggle label when on (tap to disable)
+        focusModeBadge: string;  // pill shown on the map when focus is on
+        excludedStatesLabel: string;
+        excludedStatesPlaceholder: string;
+        eventsHeading: string;
+        eventsSubtitle: string;
+        addEventBtn: string;
+        eventsEmpty: string;
+        eventNameLabel: string;
+        eventNamePlaceholder: string;
+        eventPickerTitle: string;
+        eventPickerSearchPlaceholder: string;
+        eventPickerNoResults: string;
+        eventCategories: {
+          severe: string;
+          wind: string;
+          flood: string;
+          winter: string;
+          temperature: string;
+          tropical: string;
+          fire: string;
+          tsunami: string;
+          general: string;
+        };
+        minWindLabel: string;
+        minWindHint: string;
+        layerName: string;
+        layerToggleHint: string;
+        refreshingNow: string;
+        refreshLastAt: string;
+        refreshError: string;
+        alertCount: string;
+        alertCountSingle: string;
+        alertCountZero: string;
+        pinPopupExpires: string;
+        pinPopupArea: string;
+        pinPopupSeverity: string;
+        pinPopupOpenNws: string;
+        // Per-field labels in the alert detail popup
+        pinPopupHeadline: string;
+        pinPopupEvent: string;
+        pinPopupCity: string;
+        pinPopupState: string;
+        pinPopupStarts: string;
+        pinPopupEnds: string;
+        pinPopupSent: string;
+        pinPopupAdded: string;
+        pinPopupDescription: string;
+        // List of other alerts at the same location (shown when a county
+        // has multiple alerts cached). Tapping one swaps the popup detail.
+        pinPopupOtherAlerts: string;
+        saveBtn: string;
+        saveSuccess: string;
+        saveError: string;
+      };
     };
   };
   reports: {
@@ -1004,6 +1236,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       clientes: 'Clientes',
       facturas: 'Facturas',
       empleados: 'Empleados',
+      equipo: 'Equipo',
       calendario: 'Calendario',
       inventario: 'Inventario',
       reportes: 'Reportes',
@@ -1012,11 +1245,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       logout: 'Cerrar sesión',
       descriptions: {
         empleados: 'Gestiona tu equipo, horarios y pagos.',
+        equipo: 'Invita usuarios y gestiona roles de acceso.',
         calendario: 'Citas, trabajos programados y horarios.',
         inventario: 'Productos, partes y materiales.',
         tienda: 'Activa o desactiva módulos para tu negocio.',
         ajustes: 'Configura tu negocio, equipo y conexiones.',
+        misTrabajos: 'Trabajos donde eres líder.',
       },
+      misTrabajos: 'Mis Trabajos',
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -1112,7 +1348,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Clientes',
       countTotal: '{{count}} en total',
       newClient: 'Nuevo cliente',
-      importBtn: 'Importar',
+      importBtn: 'Importar clientes desde CSV',
+      importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
       searchPlaceholder: 'Buscar por nombre, empresa, teléfono, ciudad...',
       selectAll: 'Seleccionar todos',
       selectedCountSingle: '{{count}} seleccionado',
@@ -1187,6 +1424,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noInvoices: 'Sin facturas aún.',
         createFirstInvoice: 'Crear primera factura →',
         dueShort: 'Vence {{date}}',
+        shareTitle: 'Compartir',
+        sharePdfBtn: 'Imprimir / PDF',
+        shareCsvBtn: 'Compartir como CSV',
+        shareDialogTitle: '¿Qué incluir?',
+        shareDialogBasic: 'Solo datos básicos',
+        shareDialogAll: 'Todos los campos',
+        shareError: 'No se pudo compartir. Intenta de nuevo.',
         contactModal: {
           addTitle: 'Nuevo contacto',
           editTitle: 'Editar contacto',
@@ -1346,7 +1590,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         draftStatusNote: 'La factura se creará en estado <strong>Borrador</strong>. Puedes editarla antes de enviarla.',
         createInvoiceBtn: 'Crear factura →',
         deleteJobTitle: 'Eliminar trabajo',
-        deleteJobConfirm: '¿Estás seguro de que deseas eliminar <strong>{{name}}</strong>? Esta acción no se puede deshacer.',
+        deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
         deleting: 'Eliminando...',
         deleteBtn: 'Eliminar',
       },
@@ -1397,6 +1641,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         additionalWorkersLabel: 'Trabajadores adicionales (manual)',
         workerNumberPlaceholder: 'Trabajador {{count}}',
         addWorker: '+ Agregar trabajador',
+        leadBadge: 'Líder',
+        markAsLead: 'Marcar como líder',
         itemsHeadingProposal: 'Servicios',
         itemsHeadingJob: 'Materiales y mano de obra',
         colType: 'Tipo',
@@ -1430,6 +1676,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorSaveGeneric: 'Error al guardar',
         submitCreateJob: 'Crear trabajo',
         submitCreateProposal: 'Crear cotización',
+      },
+      actuals: {
+        heading: 'Registrar trabajo',
+        subtitle: 'Horas y datos por trabajador.',
+        hoursWorkedLabel: 'Horas trabajadas',
+        hoursWorkedPlaceholder: '0.0',
+        saveBtn: 'Guardar registro',
+        markCompleteBtn: 'Marcar como completado',
+        saveSuccess: 'Registro guardado.',
+        saveError: 'No se pudo guardar el registro.',
+      },
+      myJobs: {
+        title: 'Mis Trabajos',
+        subtitle: 'Trabajos donde eres líder.',
+        emptyAll: 'No tienes trabajos asignados como líder.',
       },
     },
     employees: {
@@ -1686,6 +1947,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Campos del trabajo',
         subtitle: 'Reordena los campos, marca cuáles son requeridos, y agrega campos personalizados.',
       },
+      crewMode: {
+        heading: 'Modo cuadrilla',
+        subtitle: 'Activa para registrar líder y horas por trabajador.',
+        saveBtn: 'Guardar modo cuadrilla',
+        saveSuccess: 'Modo cuadrilla guardado.',
+        saveError: 'No se pudo guardar.',
+      },
+      assignmentFieldsSection: {
+        title: 'Campos por trabajador',
+        subtitle: 'Campos que el líder llenará para cada trabajador.',
+      },
+      contactsStats: {
+        heading: 'Resumen de contactos',
+        clientsLabel: 'Clientes',
+        contactsLabel: 'Personas de contacto',
+        totalLabel: 'Total',
+        googleHint: 'Los clientes y sus personas de contacto se sincronizan con Google Contacts cuando la sincronización está activa.',
+      },
       unsavedChangesTitle: 'Cambios sin guardar',
       unsavedChangesMessage: '¿Descartar los cambios? Esta acción no se puede deshacer.',
       discardBtn: 'Descartar',
@@ -1776,6 +2055,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         connectBtn: 'Conectar con Google',
         reconnectBtn: 'Reconectar con Google',
         disconnectBtn: 'Desconectar',
+        forceSyncBtn: 'Forzar sincronización manual',
         connected: 'Conectado',
         disconnected: 'Desconectado',
         reconnectNeeded: 'Reconexión requerida',
@@ -1799,6 +2079,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         backfillDoneTitle: '¡Sincronización completa!',
         backfillDoneBody: '{{created}} agregados, {{linked}} vinculados.',
         backfillFailedToast: 'No se pudo completar la sincronización.',
+        templateTitle: 'Plantilla de notas',
+        templateHint: 'Personaliza el campo "Notas" de Google Contacts. Algunos campos personalizados no se ven en dispositivos que no usan Google Contacts de forma nativa. Usa {{Etiqueta del campo}} para insertar el valor. Las líneas con campos vacíos se omiten automáticamente.',
+        templatePlaceholder: 'Ej.\nMarca de Pivot: {{Marca de Pivot}}\nMarca de Granero: {{Marca de Granero}}',
+        templateAvailable: 'Disponibles',
+        templateSaveBtn: 'Guardar plantilla',
+        templateSaving: 'Guardando…',
+        templateSaved: 'Plantilla guardada. Se aplicará al próximo sync.',
+        templateSaveError: 'No se pudo guardar la plantilla. Intenta de nuevo.',
+        templateReapplyBtn: 'Aplicar a contactos existentes',
+        templateReapplyEmpty: 'No hay contactos sincronizados a los que aplicar la plantilla todavía.',
+        templateReapplyConfirmTitle: '¿Aplicar la plantilla a contactos existentes?',
+        templateReapplyConfirmBody: 'Se actualizarán {{count}} contactos sincronizados con Google. Tomará varios minutos. Puedes cancelar en cualquier momento.',
+        templateReapplyConfirmBtn: 'Aplicar',
       },
       team: {
         heading: 'Equipo',
@@ -1855,6 +2148,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         enableConfirmBody: 'Estos módulos no son necesarios — agregan funciones extra para tu negocio. Puedes desactivarlo en cualquier momento.',
         disableConfirmTitle: '¿Desactivar {{name}}?',
         disableConfirmBody: 'Perderás acceso a las funciones de este módulo. Tus datos se conservan y puedes volver a activarlo cuando quieras.',
+        searchPlaceholder: 'Buscar módulo...',
+        categoryAll: 'Todos',
+        categoryTools: 'Herramientas',
+        categoryIndustry: 'Industria',
+        noResults: 'No se encontraron módulos.',
       },
     },
     modules: {
@@ -1877,14 +2175,168 @@ export const dashboard: Record<Locale, DashboardDict> = {
           jobs: 'Trabajos',
           employees: 'Empleados',
         },
+        searchPlaceholder: 'Buscar por nombre, ciudad, estado...',
+        searchNoResults: 'Sin resultados.',
+        searchResultsCount: '{{count}} resultados',
+        layerToggleHint: 'Toca para mostrar / ocultar',
         noPinsYet: 'Aún no hay pines para mostrar.',
         geocodeMissing: '{{count}} clientes sin coordenadas. Toca para localizarlos.',
         geocodeRunning: 'Localizando clientes...',
         geocodeDone: 'Listo. {{count}} clientes localizados.',
+        geocodeProgress: 'Localizando: {{done}} de {{total}}…',
+        geocodeBreakdown: '{{noAddr}} sin dirección · {{unresolved}} no encontrados · {{pending}} pendientes',
+        geocodeBreakdownNoAddress: '{{count}} sin dirección',
+        geocodeBreakdownUnresolved: '{{count}} no encontrados',
+        geocodeBreakdownPending: '{{count}} pendientes',
+        geocodeNoneLeft: 'No quedan clientes para localizar.',
+        geocodeListTitle: 'Clientes sin coordenadas',
+        geocodeListSectionNoAddress: 'Sin dirección',
+        geocodeListSectionUnresolved: 'No encontrados',
+        geocodeListSectionPending: 'Pendientes',
+        geocodeListEmpty: 'No hay clientes sin coordenadas.',
+        geocodeListNoAddressHint: 'Agrega calle, ciudad y estado en el detalle del cliente.',
+        geocodeListUnresolvedHint: 'Google no pudo encontrar esta dirección. Verifica y corrige los campos.',
+        geocodeListRetryBtn: 'Reintentar pendientes',
+        geocodeListOpenClient: 'Abrir cliente',
+        geocodeListUnnamed: 'Sin nombre',
+        settingsTitle: 'Ajustes del mapa',
+        mapTypeLabel: 'Tipo de mapa',
+        mapTypeStandard: 'Estándar',
+        mapTypeSatellite: 'Satélite',
+        mapTypeHybrid: 'Híbrido',
+        mapTypeTerrain: 'Terreno',
+        clusteringLabel: 'Agrupar pines cercanos',
+        clusteringSubtitle: 'Junta los pines en grupos cuando estén apilados.',
+        pinSizeLabel: 'Tamaño del pin',
+        pinSizeSmall: 'Pequeño',
+        pinSizeMedium: 'Mediano',
+        pinSizeLarge: 'Grande',
+        pinRulesHeading: 'Estilos por capa',
+        pinRulesSubtitle: 'Color y forma del pin según el valor de un campo.',
+        pinLayerClients: 'Clientes',
+        pinLayerJobs: 'Trabajos',
+        pinLayerEmployees: 'Empleados',
+        defaultStyleLabel: 'Estilo por defecto',
+        colorByFieldLabel: 'Colorear según el campo',
+        noFieldOption: 'Sin regla (usar estilo por defecto)',
+        addRuleBtn: 'Agregar regla',
+        rulesEmpty: 'Sin reglas. Agrega una para colorear según un valor.',
+        ruleValueLabel: 'Valor',
+        ruleValuePlaceholder: 'Ej. Valley',
+        pinShapePin: 'Pin',
+        pinShapeCircle: 'Círculo',
+        pinShapeSquare: 'Cuadrado',
+        pinShapeTriangle: 'Triángulo',
+        pinShapeStar: 'Estrella',
+        modeLabel: 'Modo',
+        modeNoRule: 'Sin regla',
+        modeCustom: 'Regla personalizada',
+        applyRuleToLabel: 'Aplicar regla al campo',
+        ruleFieldPlaceholder: 'Elige un campo',
+        editStylePinHint: 'Editar estilo',
+        stylePickerTitle: 'Color e icono',
+        colorLabel: 'Color del pin',
+        iconColorLabel: 'Color del icono',
+        iconLabel: 'Icono',
+        iconCategories: {
+          location: 'Ubicación',
+          buildings: 'Edificios',
+          agriculture: 'Agricultura',
+          weather: 'Clima',
+          tools: 'Herramientas',
+          vehicles: 'Vehículos',
+          people: 'Personas',
+          status: 'Estado',
+          commerce: 'Comercio',
+          tech: 'Tecnología',
+        },
+        iconSearchPlaceholder: 'Buscar icono… (ej. tornado, droplets)',
+        iconSearchNoResults: 'No hay iconos que coincidan.',
+        ruleMatchCount: '{{count}} coincidencias',
+        ruleMatchCountSingle: '1 coincidencia',
+        ruleMatchCountZero: 'Sin coincidencias',
+        operatorEquals: 'Igual a',
+        operatorNotEquals: 'Diferente de',
+        operatorHasValue: 'Tiene cualquier valor',
+        operatorContains: 'Contiene',
+        operatorGt: 'Mayor que',
+        operatorGte: 'Mayor o igual a',
+        operatorLt: 'Menor que',
+        operatorLte: 'Menor o igual a',
+        anyValuePlaceholder: '(cualquier valor)',
+        ruleHideTooltip: 'Ocultar pines que coincidan',
+        ruleHiddenCount: '{{count}} ocultos',
+        ruleHiddenCountSingle: '1 oculto',
+        ruleOrderNote: 'El orden importa: la primera regla que coincide gana.',
+        saveBtn: 'Guardar',
+        saveSuccess: 'Ajustes guardados.',
+        saveError: 'No se pudieron guardar los ajustes.',
         openRecord: 'Abrir',
         noClient: 'Sin cliente',
         noAddress: 'Sin dirección',
         assignedToJob: 'Asignado a',
+        weather: {
+          sectionTitle: 'Alertas de clima',
+          sectionSubtitle: 'Activa para mostrar alertas del NWS (api.weather.gov) en el mapa.',
+          enabledLabel: 'Activar alertas de clima',
+          enabledSubtitle: 'Se mostrarán las alertas activas que coincidan con tus eventos.',
+          retentionLabel: 'Retención de alertas (días)',
+          retentionSubtitle: 'Las alertas vencidas se mantienen en caché este número de días antes de eliminarse.',
+          proximityRadiusLabel: 'Radio de enfoque (millas)',
+          proximityRadiusSubtitle: 'Distancia para filtrar clientes/trabajos/empleados cerca de una alerta cuando se activa el "Enfoque tormentas" en el mapa.',
+          focusModeOn: 'Enfoque tormentas',
+          focusModeOff: 'Quitar enfoque',
+          focusModeBadge: 'Solo cerca de tormentas',
+          excludedStatesLabel: 'Estados excluidos',
+          excludedStatesPlaceholder: 'Ej: AK, HI, CA',
+          eventsHeading: 'Tipos de alerta',
+          eventsSubtitle: 'Sólo se mostrarán alertas cuyo "event" coincida con esta lista.',
+          addEventBtn: 'Agregar Alerta',
+          eventsEmpty: 'Sin tipos configurados.',
+          eventNameLabel: 'Nombre del evento',
+          eventNamePlaceholder: 'Selecciona un tipo',
+          eventPickerTitle: 'Seleccionar tipo de alerta',
+          eventPickerSearchPlaceholder: 'Buscar tipo...',
+          eventPickerNoResults: 'Ningún tipo coincide.',
+          eventCategories: {
+            severe: 'Tormentas severas',
+            wind: 'Viento',
+            flood: 'Inundación',
+            winter: 'Invierno',
+            temperature: 'Temperatura',
+            tropical: 'Tropical',
+            fire: 'Fuego y aire',
+            tsunami: 'Tsunami',
+            general: 'General',
+          },
+          minWindLabel: 'Viento mínimo (mph)',
+          minWindHint: 'Opcional. Filtra la alerta por velocidad de ráfaga reportada.',
+          layerName: 'Clima',
+          layerToggleHint: 'Toca para mostrar u ocultar las alertas activas.',
+          refreshingNow: 'Actualizando alertas...',
+          refreshLastAt: 'Actualizado {{when}}',
+          refreshError: 'No se pudieron actualizar las alertas.',
+          alertCount: '{{count}} alertas activas',
+          alertCountSingle: '1 alerta activa',
+          alertCountZero: 'Sin alertas activas',
+          pinPopupExpires: 'Vence',
+          pinPopupArea: 'Área',
+          pinPopupSeverity: 'Severidad',
+          pinPopupOpenNws: 'Abrir en NWS',
+          pinPopupHeadline: 'Alerta',
+          pinPopupEvent: 'Evento',
+          pinPopupCity: 'Condado',
+          pinPopupState: 'Estado',
+          pinPopupStarts: 'Inicio',
+          pinPopupEnds: 'Fin',
+          pinPopupSent: 'Enviada NWS',
+          pinPopupAdded: 'Agregada',
+          pinPopupDescription: 'Descripción',
+          pinPopupOtherAlerts: 'Otras alertas en esta ubicación',
+          saveBtn: 'Guardar clima',
+          saveSuccess: 'Configuración de clima guardada.',
+          saveError: 'No se pudo guardar la configuración de clima.',
+        },
       },
     },
     reports: {
@@ -1976,6 +2428,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       clientes: 'Clients',
       facturas: 'Invoices',
       empleados: 'Employees',
+      equipo: 'Team',
       calendario: 'Calendar',
       inventario: 'Inventory',
       reportes: 'Reports',
@@ -1984,11 +2437,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       logout: 'Sign out',
       descriptions: {
         empleados: 'Manage your team, schedules, and pay.',
+        equipo: 'Invite users and manage access roles.',
         calendario: 'Appointments, scheduled jobs, and hours.',
         inventario: 'Products, parts, and materials.',
         tienda: 'Enable or disable modules for your business.',
         ajustes: 'Configure your business, team, and connections.',
+        misTrabajos: "Jobs where you're the lead.",
       },
+      misTrabajos: 'My Jobs',
     },
     home: {
       welcome: 'Welcome 👋',
@@ -2084,7 +2540,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Clients',
       countTotal: '{{count}} total',
       newClient: 'New client',
-      importBtn: 'Import',
+      importBtn: 'Import clients from CSV',
+      importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
       searchPlaceholder: 'Search by name, company, phone, city...',
       selectAll: 'Select all',
       selectedCountSingle: '{{count}} selected',
@@ -2159,6 +2616,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noInvoices: 'No invoices yet.',
         createFirstInvoice: 'Create first invoice →',
         dueShort: 'Due {{date}}',
+        shareTitle: 'Share',
+        sharePdfBtn: 'Print / PDF',
+        shareCsvBtn: 'Share as CSV',
+        shareDialogTitle: 'What to include?',
+        shareDialogBasic: 'Basic info only',
+        shareDialogAll: 'All fields',
+        shareError: "Couldn't share. Try again.",
         contactModal: {
           addTitle: 'New contact',
           editTitle: 'Edit contact',
@@ -2318,7 +2782,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         draftStatusNote: 'The invoice will be created as a <strong>Draft</strong>. You can edit it before sending.',
         createInvoiceBtn: 'Create invoice →',
         deleteJobTitle: 'Delete job',
-        deleteJobConfirm: 'Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone.',
+        deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
         deleting: 'Deleting...',
         deleteBtn: 'Delete',
       },
@@ -2369,6 +2833,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         additionalWorkersLabel: 'Additional workers (manual)',
         workerNumberPlaceholder: 'Worker {{count}}',
         addWorker: '+ Add worker',
+        leadBadge: 'Lead',
+        markAsLead: 'Mark as lead',
         itemsHeadingProposal: 'Services',
         itemsHeadingJob: 'Materials and labor',
         colType: 'Type',
@@ -2402,6 +2868,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorSaveGeneric: 'Save error',
         submitCreateJob: 'Create job',
         submitCreateProposal: 'Create estimate',
+      },
+      actuals: {
+        heading: 'Log job',
+        subtitle: 'Hours and data per worker.',
+        hoursWorkedLabel: 'Hours worked',
+        hoursWorkedPlaceholder: '0.0',
+        saveBtn: 'Save log',
+        markCompleteBtn: 'Mark as completed',
+        saveSuccess: 'Log saved.',
+        saveError: 'Could not save log.',
+      },
+      myJobs: {
+        title: 'My Jobs',
+        subtitle: "Jobs where you're the lead.",
+        emptyAll: "You don't have any jobs as lead.",
       },
     },
     employees: {
@@ -2658,6 +3139,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Job fields',
         subtitle: 'Reorder fields, mark which are required, and add custom ones.',
       },
+      crewMode: {
+        heading: 'Crew mode',
+        subtitle: 'Enable to mark a lead and log per-worker hours.',
+        saveBtn: 'Save crew mode',
+        saveSuccess: 'Crew mode saved.',
+        saveError: 'Could not save.',
+      },
+      assignmentFieldsSection: {
+        title: 'Per-worker fields',
+        subtitle: 'Fields the lead fills out for each worker.',
+      },
+      contactsStats: {
+        heading: 'Contacts summary',
+        clientsLabel: 'Clients',
+        contactsLabel: 'Contact persons',
+        totalLabel: 'Total',
+        googleHint: 'Clients and their contact persons sync to Google Contacts when sync is enabled.',
+      },
       unsavedChangesTitle: 'Unsaved changes',
       unsavedChangesMessage: 'Discard your changes? This cannot be undone.',
       discardBtn: 'Discard',
@@ -2748,6 +3247,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         connectBtn: 'Connect Google',
         reconnectBtn: 'Reconnect Google',
         disconnectBtn: 'Disconnect',
+        forceSyncBtn: 'Force manual sync',
         connected: 'Connected',
         disconnected: 'Disconnected',
         reconnectNeeded: 'Reconnect required',
@@ -2771,6 +3271,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         backfillDoneTitle: 'Sync complete!',
         backfillDoneBody: '{{created}} added, {{linked}} linked.',
         backfillFailedToast: "Couldn't complete the sync.",
+        templateTitle: 'Notes template',
+        templateHint: 'Customize the Google Contacts "Notes" field. Some custom fields don\'t appear on devices that don\'t use Google Contacts natively. Use {{Field Label}} to insert a value. Lines with empty fields are skipped automatically.',
+        templatePlaceholder: 'e.g.\nPivot Brand: {{Pivot Brand}}\nGrain Bin Brand: {{Grain Bin Brand}}',
+        templateAvailable: 'Available',
+        templateSaveBtn: 'Save template',
+        templateSaving: 'Saving…',
+        templateSaved: 'Template saved. It applies on the next sync.',
+        templateSaveError: "Couldn't save the template. Try again.",
+        templateReapplyBtn: 'Apply to existing contacts',
+        templateReapplyEmpty: "No synced contacts to apply the template to yet.",
+        templateReapplyConfirmTitle: 'Apply template to existing contacts?',
+        templateReapplyConfirmBody: '{{count}} synced Google contacts will be updated. Takes a few minutes. You can cancel anytime.',
+        templateReapplyConfirmBtn: 'Apply',
       },
       team: {
         heading: 'Team',
@@ -2827,6 +3340,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         enableConfirmBody: "These modules aren't required — they add extra features for your business. You can disable it anytime.",
         disableConfirmTitle: 'Disable {{name}}?',
         disableConfirmBody: "You'll lose access to this module's features. Your data stays and you can turn it back on whenever you want.",
+        searchPlaceholder: 'Search modules...',
+        categoryAll: 'All',
+        categoryTools: 'Tools',
+        categoryIndustry: 'Industry',
+        noResults: 'No modules found.',
       },
     },
     modules: {
@@ -2849,14 +3367,168 @@ export const dashboard: Record<Locale, DashboardDict> = {
           jobs: 'Jobs',
           employees: 'Employees',
         },
+        searchPlaceholder: 'Search by name, city, state...',
+        searchNoResults: 'No results.',
+        searchResultsCount: '{{count}} results',
+        layerToggleHint: 'Tap to show / hide',
         noPinsYet: 'No pins to show yet.',
         geocodeMissing: '{{count}} clients without coordinates. Tap to locate them.',
         geocodeRunning: 'Locating clients...',
         geocodeDone: 'Done. {{count}} clients located.',
+        geocodeProgress: 'Locating: {{done}} of {{total}}…',
+        geocodeBreakdown: '{{noAddr}} no address · {{unresolved}} not found · {{pending}} pending',
+        geocodeBreakdownNoAddress: '{{count}} no address',
+        geocodeBreakdownUnresolved: '{{count}} not found',
+        geocodeBreakdownPending: '{{count}} pending',
+        geocodeNoneLeft: 'No clients left to locate.',
+        geocodeListTitle: 'Clients without coordinates',
+        geocodeListSectionNoAddress: 'No address',
+        geocodeListSectionUnresolved: 'Not found',
+        geocodeListSectionPending: 'Pending',
+        geocodeListEmpty: 'No clients without coordinates.',
+        geocodeListNoAddressHint: 'Add street, city, and state on the client detail page.',
+        geocodeListUnresolvedHint: 'Google could not find this address. Verify and correct the fields.',
+        geocodeListRetryBtn: 'Retry pending',
+        geocodeListOpenClient: 'Open client',
+        geocodeListUnnamed: 'Unnamed',
+        settingsTitle: 'Map settings',
+        mapTypeLabel: 'Map type',
+        mapTypeStandard: 'Standard',
+        mapTypeSatellite: 'Satellite',
+        mapTypeHybrid: 'Hybrid',
+        mapTypeTerrain: 'Terrain',
+        clusteringLabel: 'Cluster nearby pins',
+        clusteringSubtitle: 'Group pins that overlap into a single bubble.',
+        pinSizeLabel: 'Pin size',
+        pinSizeSmall: 'Small',
+        pinSizeMedium: 'Medium',
+        pinSizeLarge: 'Large',
+        pinRulesHeading: 'Layer styles',
+        pinRulesSubtitle: 'Color and shape based on a field value.',
+        pinLayerClients: 'Clients',
+        pinLayerJobs: 'Jobs',
+        pinLayerEmployees: 'Employees',
+        defaultStyleLabel: 'Default style',
+        colorByFieldLabel: 'Color by field',
+        noFieldOption: 'No rule (use default style)',
+        addRuleBtn: 'Add rule',
+        rulesEmpty: 'No rules yet. Add one to color by value.',
+        ruleValueLabel: 'Value',
+        ruleValuePlaceholder: 'e.g. Valley',
+        pinShapePin: 'Pin',
+        pinShapeCircle: 'Circle',
+        pinShapeSquare: 'Square',
+        pinShapeTriangle: 'Triangle',
+        pinShapeStar: 'Star',
+        modeLabel: 'Mode',
+        modeNoRule: 'No rule',
+        modeCustom: 'Custom rule',
+        applyRuleToLabel: 'Apply rule to field',
+        ruleFieldPlaceholder: 'Choose a field',
+        editStylePinHint: 'Edit style',
+        stylePickerTitle: 'Color and icon',
+        colorLabel: 'Pin color',
+        iconColorLabel: 'Icon color',
+        iconLabel: 'Icon',
+        iconCategories: {
+          location: 'Location',
+          buildings: 'Buildings',
+          agriculture: 'Agriculture',
+          weather: 'Weather',
+          tools: 'Tools',
+          vehicles: 'Vehicles',
+          people: 'People',
+          status: 'Status',
+          commerce: 'Commerce',
+          tech: 'Tech',
+        },
+        iconSearchPlaceholder: 'Search icon… (e.g. tornado, droplets)',
+        iconSearchNoResults: 'No icons match.',
+        ruleMatchCount: '{{count}} matches',
+        ruleMatchCountSingle: '1 match',
+        ruleMatchCountZero: 'No matches',
+        operatorEquals: 'Equals',
+        operatorNotEquals: 'Not equals',
+        operatorHasValue: 'Has any value',
+        operatorContains: 'Contains',
+        operatorGt: 'Greater than',
+        operatorGte: 'Greater than or equal',
+        operatorLt: 'Less than',
+        operatorLte: 'Less than or equal',
+        anyValuePlaceholder: '(any value)',
+        ruleHideTooltip: 'Hide matching pins',
+        ruleHiddenCount: '{{count}} hidden',
+        ruleHiddenCountSingle: '1 hidden',
+        ruleOrderNote: 'Order matters: the first matching rule wins.',
+        saveBtn: 'Save',
+        saveSuccess: 'Settings saved.',
+        saveError: 'Could not save settings.',
         openRecord: 'Open',
         noClient: 'No client',
         noAddress: 'No address',
         assignedToJob: 'Assigned to',
+        weather: {
+          sectionTitle: 'Weather alerts',
+          sectionSubtitle: 'Turn on to show active NWS alerts (api.weather.gov) on the map.',
+          enabledLabel: 'Enable weather alerts',
+          enabledSubtitle: "Active alerts matching your event types will be shown.",
+          retentionLabel: 'Alert retention (days)',
+          retentionSubtitle: 'Expired alerts are kept in the cache for this many days before being deleted.',
+          proximityRadiusLabel: 'Focus radius (miles)',
+          proximityRadiusSubtitle: 'Distance used to filter clients/jobs/employees near an alert when the map’s "Storm focus" mode is on.',
+          focusModeOn: 'Storm focus',
+          focusModeOff: 'Clear focus',
+          focusModeBadge: 'Showing pins near storms only',
+          excludedStatesLabel: 'Excluded states',
+          excludedStatesPlaceholder: 'e.g. AK, HI, CA',
+          eventsHeading: 'Alert types',
+          eventsSubtitle: 'Only alerts whose "event" matches this list are shown.',
+          addEventBtn: 'Add Alert',
+          eventsEmpty: 'No alert types yet.',
+          eventNameLabel: 'Event name',
+          eventNamePlaceholder: 'Select a type',
+          eventPickerTitle: 'Select alert type',
+          eventPickerSearchPlaceholder: 'Search type...',
+          eventPickerNoResults: 'No types match.',
+          eventCategories: {
+            severe: 'Severe storms',
+            wind: 'Wind',
+            flood: 'Flood',
+            winter: 'Winter',
+            temperature: 'Temperature',
+            tropical: 'Tropical',
+            fire: 'Fire & air',
+            tsunami: 'Tsunami',
+            general: 'General',
+          },
+          minWindLabel: 'Min wind (mph)',
+          minWindHint: 'Optional. Filters the alert by reported gust speed.',
+          layerName: 'Weather',
+          layerToggleHint: 'Tap to show or hide active alerts.',
+          refreshingNow: 'Refreshing alerts...',
+          refreshLastAt: 'Updated {{when}}',
+          refreshError: 'Could not refresh alerts.',
+          alertCount: '{{count}} active alerts',
+          alertCountSingle: '1 active alert',
+          alertCountZero: 'No active alerts',
+          pinPopupExpires: 'Expires',
+          pinPopupArea: 'Area',
+          pinPopupSeverity: 'Severity',
+          pinPopupOpenNws: 'Open in NWS',
+          pinPopupHeadline: 'Alert',
+          pinPopupEvent: 'Event',
+          pinPopupCity: 'County',
+          pinPopupState: 'State',
+          pinPopupStarts: 'Starts',
+          pinPopupEnds: 'Ends',
+          pinPopupSent: 'NWS sent',
+          pinPopupAdded: 'Added',
+          pinPopupDescription: 'Description',
+          pinPopupOtherAlerts: 'Other alerts at this location',
+          saveBtn: 'Save weather',
+          saveSuccess: 'Weather settings saved.',
+          saveError: 'Could not save weather settings.',
+        },
       },
     },
     reports: {

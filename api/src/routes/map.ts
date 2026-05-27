@@ -6,6 +6,10 @@ import { geocodeMissingClients } from '../lib/geocoding';
 export const mapRouter = Router();
 mapRouter.use(authenticate);
 
+// Each pin returns the raw fields the client needs to apply pin-style
+// rules locally (see shared/lib/mapPinResolve.ts). The API no longer
+// resolves colors/icons — that lives on the client so rule changes don't
+// require a redeploy of the API.
 interface ClientPin {
   id: string;
   type: 'client';
@@ -14,6 +18,16 @@ interface ClientPin {
   first_name: string;
   last_name: string;
   company: string | null;
+  // Standard fields that rules can match on.
+  phone_cell: string | null;
+  phone_office: string | null;
+  email_office: string | null;
+  email_home: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  custom_fields: Record<string, unknown> | null;
 }
 
 interface JobPin {
@@ -25,6 +39,13 @@ interface JobPin {
   status: string;
   scheduled_date: string | null;
   client_name: string | null;
+  // Standard rule-matchable fields.
+  description: string | null;
+  priority: string;
+  job_address: string | null;
+  job_city: string | null;
+  job_state: string | null;
+  custom_fields: Record<string, unknown> | null;
 }
 
 interface EmployeePin {
@@ -41,6 +62,8 @@ interface EmployeePin {
   // ABC for Client X").
   job_id: string | null;
   job_title: string | null;
+  // Rule-matchable employee fields.
+  role: string | null;
 }
 
 /**
@@ -53,6 +76,11 @@ interface EmployeePin {
  *   - jobs:    every job (excluding cancelled/declined) with non-null job_lat/job_lng
  *   - employees: every employee assigned to a job scheduled TODAY, pinned
  *     at that job's location. No GPS — purely schedule-derived.
+ *
+ * Pin styling (color + icon) is NOT computed here — the client applies
+ * `shared/lib/mapPinResolve.ts` to each pin at render time using the
+ * business's `map_pin_config`. That keeps all rule logic in one place
+ * and means new operators don't require an API redeploy.
  *
  * If clients are missing coordinates, they don't appear here. The UI
  * surfaces a "X clients need geocoding" hint that calls the backfill
@@ -80,13 +108,13 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   const [clientsRes, jobsRes, assignmentsRes] = await Promise.all([
     supabase
       .from('clients')
-      .select('id, first_name, last_name, company, lat, lng')
+      .select('id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, lat, lng, custom_fields')
       .eq('business_id', businessId)
       .not('lat', 'is', null)
       .not('lng', 'is', null),
     supabase
       .from('jobs')
-      .select('id, title, status, scheduled_date, job_lat, job_lng, clients(first_name, last_name)')
+      .select('id, title, description, status, priority, scheduled_date, job_address, job_city, job_state, job_lat, job_lng, custom_fields, clients(first_name, last_name)')
       .eq('business_id', businessId)
       .not('job_lat', 'is', null)
       .not('job_lng', 'is', null)
@@ -95,7 +123,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     // joins employees → assignments → jobs so we have everything in hand.
     supabase
       .from('job_assignments')
-      .select('id, employees(id, first_name, last_name), jobs(id, title, job_lat, job_lng, scheduled_date, business_id)')
+      .select('id, employees(id, first_name, last_name, role), jobs(id, title, job_lat, job_lng, scheduled_date, business_id)')
       .eq('jobs.business_id', businessId)
       .eq('jobs.scheduled_date', today),
   ]);
@@ -105,8 +133,17 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     first_name: string;
     last_name: string;
     company: string | null;
+    phone_cell: string | null;
+    phone_office: string | null;
+    email_office: string | null;
+    email_home: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
     lat: number;
     lng: number;
+    custom_fields: Record<string, unknown> | null;
   }>).map(c => ({
     id: c.id,
     type: 'client',
@@ -115,15 +152,30 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     first_name: c.first_name,
     last_name: c.last_name,
     company: c.company,
+    phone_cell: c.phone_cell,
+    phone_office: c.phone_office,
+    email_office: c.email_office,
+    email_home: c.email_home,
+    address: c.address,
+    city: c.city,
+    state: c.state,
+    zip_code: c.zip_code,
+    custom_fields: c.custom_fields,
   }));
 
   const jobs: JobPin[] = ((jobsRes.data ?? []) as unknown as Array<{
     id: string;
     title: string;
+    description: string | null;
     status: string;
+    priority: string;
     scheduled_date: string | null;
+    job_address: string | null;
+    job_city: string | null;
+    job_state: string | null;
     job_lat: number;
     job_lng: number;
+    custom_fields: Record<string, unknown> | null;
     clients: { first_name: string; last_name: string } | null;
   }>).map(j => ({
     id: j.id,
@@ -134,6 +186,12 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     status: j.status,
     scheduled_date: j.scheduled_date,
     client_name: j.clients ? `${j.clients.first_name} ${j.clients.last_name}` : null,
+    description: j.description,
+    priority: j.priority,
+    job_address: j.job_address,
+    job_city: j.job_city,
+    job_state: j.job_state,
+    custom_fields: j.custom_fields,
   }));
 
   // Employee pins: dedup by employee id (an employee assigned to two
@@ -142,7 +200,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   const seen = new Set<string>();
   const employees: EmployeePin[] = [];
   for (const row of ((assignmentsRes.data ?? []) as unknown as Array<{
-    employees: { id: string; first_name: string; last_name: string } | null;
+    employees: { id: string; first_name: string; last_name: string; role: string | null } | null;
     jobs: { id: string; title: string; job_lat: number | null; job_lng: number | null; business_id: string; scheduled_date: string | null } | null;
   }>)) {
     const e = row.employees;
@@ -160,16 +218,44 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
       last_name: e.last_name,
       job_id: j.id,
       job_title: j.title,
+      role: e.role,
     });
   }
 
-  // How many clients in this business still need geocoding? The UI uses
-  // this to surface a "Locate X clients" prompt.
-  const { count: needsGeocoding } = await supabase
-    .from('clients')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', businessId)
-    .is('lat', null);
+  // Geocoding breakdown — UI surfaces this so the user understands why
+  // some clients aren't on the map.
+  //   - noAddress:    no address fields filled in (need to edit the client)
+  //   - unresolved:   address exists but Google couldn't find it (or returned http/parse error)
+  //   - pending:      address exists, never attempted yet (will geocode on next tap)
+  // Total `needsGeocoding` = noAddress + unresolved + pending; it's the
+  // count of all rows with NULL lat regardless of attempt history.
+  const [{ count: needsGeocoding }, { count: noAddress }, { count: unresolved }] = await Promise.all([
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .is('lat', null),
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .is('lat', null)
+      .is('address', null)
+      .is('city', null)
+      .is('state', null)
+      .is('zip_code', null),
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .is('lat', null)
+      .not('lat_lookup_attempted_at', 'is', null),
+  ]);
+
+  const total = needsGeocoding ?? 0;
+  const noAddrCount = noAddress ?? 0;
+  const unresolvedCount = Math.max(0, (unresolved ?? 0) - 0);
+  const pendingCount = Math.max(0, total - noAddrCount - unresolvedCount);
 
   return res.json({
     success: true,
@@ -177,7 +263,12 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
       clients,
       jobs,
       employees,
-      needsGeocoding: needsGeocoding ?? 0,
+      needsGeocoding: total,
+      geocodeBreakdown: {
+        noAddress: noAddrCount,
+        unresolved: unresolvedCount,
+        pending: pendingCount,
+      },
     },
   });
 });
@@ -213,3 +304,8 @@ mapRouter.post('/geocode-clients', async (req: AuthRequest, res) => {
 
   return res.json({ success: true, data: result });
 });
+
+// Note: rule match counts are computed client-side via direct Supabase
+// queries — see mobile/modules/map/MapSettingsSheet.tsx and
+// web/src/modules/map/MapSettingsPanel.tsx. RLS scopes to the business
+// so no API round-trip is needed.

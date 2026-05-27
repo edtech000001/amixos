@@ -14,6 +14,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { googleSyncRouter } from './routes/googleSync';
 import { invitesRouter } from './routes/invites';
 import { mapRouter } from './routes/map';
+import { weatherRouter } from './routes/weather';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -43,6 +44,7 @@ app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/google-sync', googleSyncRouter);
 app.use('/api/v1/invites', invitesRouter);
 app.use('/api/v1/map', mapRouter);
+app.use('/api/v1/weather', weatherRouter);
 
 // Error handling
 app.use(notFound);

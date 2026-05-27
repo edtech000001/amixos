@@ -27,6 +27,12 @@ import {
 
 export type ModuleStatus = 'available' | 'coming_soon';
 
+// Broad grouping so the addon-store filter chips stay short. Add a new
+// category here when the catalog grows enough to justify it (e.g.
+// 'finance', 'marketing', 'communication'). Keep them mutually
+// exclusive — a module picks one.
+export type ModuleCategory = 'tools' | 'industry';
+
 export interface ModuleDef {
   // Stable canonical key. Also the URL segment
   // (/dashboard/modulos/<id> on web, /dashboard/mas/modulos/<id> on mobile).
@@ -44,19 +50,21 @@ export interface ModuleDef {
   // Same value as `id` for simplicity, but kept as a separate field in case
   // we ever want to rename an id without invalidating i18n.
   i18nKey: string;
+  // Drives the category-filter chips in the addon store.
+  category: ModuleCategory;
 }
 
 export const MODULE_REGISTRY: ModuleDef[] = [
   // Map is the first real module — a universally useful surface (every
   // business benefits from seeing their pins on a map) so it leads the
   // list. Mechanic/Salon/etc. are industry-specific placeholders.
-  { id: 'map',          icon: MapPin,    color: '#0EA5E9', status: 'available',   i18nKey: 'map' },
-  { id: 'mechanic',     icon: Wrench,    color: '#3B82F6', status: 'coming_soon', i18nKey: 'mechanic' },
-  { id: 'salon',        icon: Scissors,  color: '#EC4899', status: 'coming_soon', i18nKey: 'salon' },
-  { id: 'landscaping',  icon: Trees,     color: '#10B981', status: 'coming_soon', i18nKey: 'landscaping' },
-  { id: 'restaurant',   icon: Utensils,  color: '#F59E0B', status: 'coming_soon', i18nKey: 'restaurant' },
-  { id: 'cleaning',     icon: Sparkles,  color: '#8B5CF6', status: 'coming_soon', i18nKey: 'cleaning' },
-  { id: 'construction', icon: Hammer,    color: '#F97316', status: 'coming_soon', i18nKey: 'construction' },
+  { id: 'map',          icon: MapPin,    color: '#0EA5E9', status: 'available',   i18nKey: 'map',          category: 'tools' },
+  { id: 'mechanic',     icon: Wrench,    color: '#3B82F6', status: 'coming_soon', i18nKey: 'mechanic',     category: 'industry' },
+  { id: 'salon',        icon: Scissors,  color: '#EC4899', status: 'coming_soon', i18nKey: 'salon',        category: 'industry' },
+  { id: 'landscaping',  icon: Trees,     color: '#10B981', status: 'coming_soon', i18nKey: 'landscaping',  category: 'industry' },
+  { id: 'restaurant',   icon: Utensils,  color: '#F59E0B', status: 'coming_soon', i18nKey: 'restaurant',   category: 'industry' },
+  { id: 'cleaning',     icon: Sparkles,  color: '#8B5CF6', status: 'coming_soon', i18nKey: 'cleaning',     category: 'industry' },
+  { id: 'construction', icon: Hammer,    color: '#F97316', status: 'coming_soon', i18nKey: 'construction', category: 'industry' },
 ];
 
 export function getModuleById(id: string): ModuleDef | null {

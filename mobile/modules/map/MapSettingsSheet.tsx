@@ -1,0 +1,1166 @@
+// Map settings sheet — full-screen page with all customization controls:
+//   - Map type (standard / satellite / hybrid / terrain)
+//   - Clustering toggle
+//   - Pin size (S / M / L)
+//   - Per-layer pin style:
+//       Default style (always shown) — single clickable pin badge
+//       Mode: "Sin regla" or "Regla personalizada"
+//       If custom: field picker + rules list (each rule has its own pin badge)
+//
+// Persistence:
+//   - Device prefs (map type, clustering, pin size) — caller owns these
+//     via deviceSettings + onDeviceSettingsChange.
+//   - Pin config (default style + rules) — saved to businesses.map_pin_config
+//     when "Guardar" is tapped.
+
+import { useEffect, useState } from 'react';
+import {
+  Modal as RNModal,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
+import { Plus, Trash2, ChevronDown, ChevronLeft, Check, Search, X, Eye, EyeOff } from 'lucide-react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useApp } from '@/lib/AppContext';
+import { useLang } from '@/lib/i18n/LangProvider';
+import { createSupabaseClient } from '@/lib/supabase';
+import {
+  PIN_COLORS,
+  ALL_PIN_ICONS,
+  PIN_ICON_CATEGORIES,
+  STANDARD_FIELDS_BY_LAYER,
+  type MapPinIcon,
+  type PinIconCategory,
+} from '@amixos/shared/lib/mapPinPresets';
+import type {
+  MapPinConfig,
+  MapPinLayerConfig,
+  MapPinRule,
+} from '@/lib/auth/store';
+import { PinIcon, PinBadge } from '@/lib/mapPinIcons';
+import { WeatherSettingsSection } from './WeatherSettingsSection';
+import {
+  DEFAULT_WEATHER_CONFIG,
+  isWeatherFeatureEnabled,
+  normalizeWeatherConfig,
+  type WeatherConfig,
+} from '@amixos/shared/lib/weather';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+
+export type MapType = 'standard' | 'satellite' | 'hybrid' | 'terrain';
+export type PinSize = 'small' | 'medium' | 'large';
+
+export interface DeviceMapSettings {
+  mapType: MapType;
+  clustering: boolean;
+  pinSize: PinSize;
+}
+
+interface FieldOption { key: string; label: string; }
+
+type Layer = 'clients' | 'jobs' | 'employees' | 'weather';
+const BASE_LAYERS: Layer[] = ['clients', 'jobs', 'employees'];
+
+const DEFAULT_LAYER_CONFIG: Record<Layer, MapPinLayerConfig> = {
+  clients:   { default_color: '#0EA5E9', default_icon: 'map-pin',          field_key: null, rules: [] },
+  jobs:      { default_color: '#10B981', default_icon: 'map-pin',          field_key: null, rules: [] },
+  employees: { default_color: '#F59E0B', default_icon: 'map-pin',          field_key: null, rules: [] },
+  weather:   { default_color: '#DC2626', default_icon: 'cloud-lightning',  field_key: null, rules: [] },
+};
+
+// Map a Layer key → the Supabase table that backs its match-count query.
+// Same for all standard layers; weather points at the alerts cache.
+const LAYER_TABLE: Record<Layer, string> = {
+  clients: 'clients',
+  jobs: 'jobs',
+  employees: 'employees',
+  weather: 'weather_alerts',
+};
+
+export function MapSettingsSheet({
+  open,
+  onClose,
+  deviceSettings,
+  onDeviceSettingsChange,
+  onPinConfigSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  deviceSettings: DeviceMapSettings;
+  onDeviceSettingsChange: (next: DeviceMapSettings) => void;
+  onPinConfigSaved: () => void;
+}) {
+  const { business, refetchBusiness } = useApp();
+  const supabase = createSupabaseClient();
+  const { t: full } = useLang();
+  const t = full.dashboard.modules.map;
+
+  const [config, setConfig] = useState<Required<MapPinConfig>>({
+    clients: { ...DEFAULT_LAYER_CONFIG.clients },
+    jobs: { ...DEFAULT_LAYER_CONFIG.jobs },
+    employees: { ...DEFAULT_LAYER_CONFIG.employees },
+    weather: { ...DEFAULT_LAYER_CONFIG.weather },
+  });
+  const [fieldOptionsByLayer, setFieldOptionsByLayer] = useState<Record<Layer, FieldOption[]>>({
+    clients: [], jobs: [], employees: [], weather: [],
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  // Layers collapsed by default — opening the sheet shouldn't dump a
+  // wall of expanded rules in the user's face. They tap a layer header
+  // to expand it.
+  const [openLayer, setOpenLayer] = useState<Layer | null>(null);
+  // Combined color+icon picker target. ruleIdx 'default' edits the layer's
+  // default style; a number edits the rule at that index.
+  const [picker, setPicker] = useState<
+    | { layer: Layer; ruleIdx: number | 'default' }
+    | null
+  >(null);
+  // Per-rule live match counts. Indexed by layer, then by rule index.
+  // null means "loading" or "not yet fetched"; a number is the resolved
+  // count. Fetched (debounced) whenever the rule list of any layer
+  // changes — see the effect below.
+  const [matchCounts, setMatchCounts] = useState<Record<Layer, (number | null)[]>>({
+    clients: [], jobs: [], employees: [], weather: [],
+  });
+  // Weather config — only meaningful when the business is in the alpha
+  // gate. Saved alongside pin config on the single Guardar tap below.
+  const weatherGated = isWeatherFeatureEnabled(business?.id);
+  const [weatherConfig, setWeatherConfig] = useState<WeatherConfig>(DEFAULT_WEATHER_CONFIG);
+  // Staged device settings — radios + toggles inside the sheet edit this
+  // local copy; only on Save do we commit upward via onDeviceSettingsChange.
+  // Closing the sheet without saving discards the changes.
+  const [stagedDeviceSettings, setStagedDeviceSettings] = useState<DeviceMapSettings>(deviceSettings);
+
+  useEffect(() => {
+    if (!open || !business) return;
+    const fromDb = (business.map_pin_config ?? {}) as MapPinConfig;
+    setConfig({
+      clients:   { ...DEFAULT_LAYER_CONFIG.clients,   ...(fromDb.clients ?? {}),   rules: fromDb.clients?.rules ?? [] },
+      jobs:      { ...DEFAULT_LAYER_CONFIG.jobs,      ...(fromDb.jobs ?? {}),      rules: fromDb.jobs?.rules ?? [] },
+      employees: { ...DEFAULT_LAYER_CONFIG.employees, ...(fromDb.employees ?? {}), rules: fromDb.employees?.rules ?? [] },
+      weather:   { ...DEFAULT_LAYER_CONFIG.weather,   ...(fromDb.weather ?? {}),   rules: fromDb.weather?.rules ?? [] },
+    });
+    setMsg(null);
+    // Weather config hydrate (normalizer guards against missing fields /
+    // legacy shapes).
+    if (weatherGated) {
+      setWeatherConfig(normalizeWeatherConfig(business.weather_config));
+    }
+    // Snapshot the persisted device settings into local staging state
+    // so edits in the sheet don't take effect until Save.
+    setStagedDeviceSettings(deviceSettings);
+    // Always start with all layer cards collapsed so the sheet doesn't
+    // open to a wall of rules on the second+ visit.
+    setOpenLayer(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, business?.id, business?.map_pin_config, business?.weather_config]);
+
+  useEffect(() => {
+    if (!open || !business) return;
+    let cancelled = false;
+    (async () => {
+      const tFields = full.dashboard.clients.fields;
+      const tJobsNew = full.dashboard.jobs.new;
+      const tEmpModal = full.dashboard.employees.modal;
+      // Full label map keyed by `${layer}.${field_key}`. Falls back to
+      // the raw key if we missed one — better than crashing.
+      const standardLabel = (layer: Layer, key: string): string => {
+        if (layer === 'clients') {
+          switch (key) {
+            case 'first_name':   return tFields.firstName;
+            case 'last_name':    return tFields.lastName;
+            case 'company':      return tFields.company;
+            case 'phone_cell':   return tFields.phoneCell;
+            case 'phone_office': return tFields.phoneOffice;
+            case 'email_office': return tFields.emailOffice;
+            case 'email_home':   return tFields.emailHome;
+            case 'address':      return tFields.addressLine1;
+            case 'city':         return tFields.city;
+            case 'state':        return tFields.state;
+            case 'zip_code':     return tFields.zipCode;
+          }
+        }
+        if (layer === 'jobs') {
+          switch (key) {
+            case 'title':          return tJobsNew.titleLabelJob;
+            case 'description':    return tJobsNew.descriptionLabel;
+            case 'status':         return tJobsNew.statusLabel;
+            case 'priority':       return tJobsNew.priorityLabel;
+            case 'job_address':    return tJobsNew.addressLabel;
+            case 'job_city':       return tJobsNew.cityLabel;
+            case 'job_state':      return tJobsNew.stateLabel;
+            case 'scheduled_date': return tJobsNew.dateLabel;
+          }
+        }
+        if (layer === 'weather') {
+          // Just title-case the column names — weather field labels are
+          // close enough to their column names that translation would feel
+          // forced (event="Event", severity="Severity", etc.).
+          switch (key) {
+            case 'event':      return 'Event';
+            case 'severity':   return 'Severity';
+            case 'headline':   return 'Headline';
+            case 'area_desc':  return 'Area';
+            case 'county':     return 'County';
+            case 'state':      return 'State';
+          }
+        }
+        if (layer === 'employees') {
+          switch (key) {
+            case 'first_name': return tEmpModal.firstNameLabel.replace(' *', '');
+            case 'last_name':  return tEmpModal.lastNameLabel;
+            case 'role':       return tEmpModal.roleLabel;
+            case 'phone':      return tEmpModal.phoneLabel;
+            case 'email':      return tEmpModal.emailLabel;
+            case 'address':    return tEmpModal.addressLabel;
+            case 'city':       return tEmpModal.cityLabel;
+            case 'state':      return tEmpModal.stateLabel;
+            case 'zip_code':   return tEmpModal.zipLabel;
+            case 'pay_type':   return tEmpModal.payTypeLabel;
+            case 'hire_date':  return tEmpModal.hireDateLabel;
+          }
+        }
+        return key;
+      };
+      type Custom = { field_key: string; field_label: string };
+      const [cl, jb, em] = await Promise.all([
+        supabase.from('client_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
+        supabase.from('job_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
+        supabase.from('employee_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
+      ]);
+      if (cancelled) return;
+      const build = (layer: Layer, customs: Custom[]): FieldOption[] => {
+        const std = STANDARD_FIELDS_BY_LAYER[layer].map(key => ({ key, label: standardLabel(layer, key) }));
+        return [...std, ...customs.map(c => ({ key: c.field_key, label: c.field_label }))];
+      };
+      setFieldOptionsByLayer({
+        clients:   build('clients',   (cl.data ?? []) as Custom[]),
+        jobs:      build('jobs',      (jb.data ?? []) as Custom[]),
+        employees: build('employees', (em.data ?? []) as Custom[]),
+        // Weather has no per-business custom fields — just the standard
+        // alert columns from NOAA.
+        weather:   build('weather', []),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [open, business?.id]);
+
+  // Debounced per-rule match counts. Runs DIRECT Supabase queries —
+  // RLS already scopes to the business so no server round-trip needed.
+  // 500ms debounce so typing in a value field doesn't fire on every keystroke.
+  useEffect(() => {
+    if (!open || !business) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const activeLayers: Layer[] = weatherGated ? [...BASE_LAYERS, 'weather'] : BASE_LAYERS;
+        for (const layer of activeLayers) {
+          const rules = config[layer].rules;
+          if (rules.length === 0) {
+            setMatchCounts(prev => ({ ...prev, [layer]: [] }));
+            continue;
+          }
+          const standardCols = STANDARD_FIELDS_BY_LAYER[layer] ?? [];
+          const counts = await Promise.all(rules.map(async (r) => {
+            const fieldKey = r.field_key ?? config[layer].field_key ?? null;
+            const op = r.operator ?? 'equals';
+            if (!fieldKey) return 0;
+            // Operators that require a value: skip if the user hasn't
+            // typed one yet (avoids matching everything).
+            const valueRequired = op !== 'has_value';
+            if (valueRequired && (typeof r.value !== 'string' || !r.value.trim())) return 0;
+            const value = r.value?.trim() ?? '';
+            // weather_alerts has no custom_fields column — fall back to the
+            // raw key (rules on unknown columns will just return 0).
+            const column = standardCols.includes(fieldKey)
+              ? fieldKey
+              : (layer === 'weather' ? fieldKey : `custom_fields->>${fieldKey}`);
+            let q = supabase.from(LAYER_TABLE[layer]).select('id', { count: 'exact', head: true })
+              .eq('business_id', business.id);
+            if (layer === 'jobs') {
+              q = q.not('status', 'in', '("cancelled","declined")');
+            }
+            switch (op) {
+              case 'equals':
+                q = q.ilike(column, value);
+                break;
+              case 'not_equals':
+                // Supabase doesn't have a built-in case-insensitive neq;
+                // fall back to case-sensitive — close enough for counts.
+                q = q.neq(column, value);
+                break;
+              case 'has_value':
+                q = q.not(column, 'is', null).neq(column, '');
+                break;
+              case 'contains':
+                q = q.ilike(column, `%${value}%`);
+                break;
+              case 'gt':  q = q.gt(column, value);  break;
+              case 'gte': q = q.gte(column, value); break;
+              case 'lt':  q = q.lt(column, value);  break;
+              case 'lte': q = q.lte(column, value); break;
+            }
+            const { count } = await q;
+            return count ?? 0;
+          }));
+          setMatchCounts(prev => ({ ...prev, [layer]: counts }));
+        }
+      })();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, business?.id, JSON.stringify(config)]);
+
+  const updateLayer = (layer: Layer, patch: Partial<MapPinLayerConfig>) =>
+    setConfig(prev => ({ ...prev, [layer]: { ...prev[layer], ...patch } }));
+  const updateRule = (layer: Layer, idx: number, patch: Partial<MapPinRule>) =>
+    setConfig(prev => ({
+      ...prev,
+      [layer]: { ...prev[layer], rules: prev[layer].rules.map((r, i) => i === idx ? { ...r, ...patch } : r) },
+    }));
+  const addRule = (layer: Layer) =>
+    setConfig(prev => ({
+      ...prev,
+      [layer]: {
+        ...prev[layer],
+        rules: [
+          ...prev[layer].rules,
+          {
+            // Per-rule field — default to the first available field on
+            // the layer so the dropdown isn't empty out of the gate. Falls
+            // back to '' if there are no fields (rare).
+            field_key: fieldOptionsByLayer[layer][0]?.key ?? '',
+            value: '',
+            color: prev[layer].default_color,
+            icon: prev[layer].default_icon,
+          },
+        ],
+      },
+    }));
+  const removeRule = (layer: Layer, idx: number) =>
+    setConfig(prev => ({
+      ...prev,
+      [layer]: { ...prev[layer], rules: prev[layer].rules.filter((_, i) => i !== idx) },
+    }));
+
+  const onSave = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+
+    // Pin config save — direct Supabase write (RLS handles auth).
+    const { error: pinErr } = await supabase
+      .from('businesses')
+      .update({ map_pin_config: config })
+      .eq('id', business.id);
+    if (pinErr) {
+      setSaving(false);
+      setMsg({ text: t.saveError, isError: true });
+      return;
+    }
+
+    // Weather config save — routes through API so the alpha gate is
+    // enforced server-side. Skipped when not gated for this business.
+    if (weatherGated) {
+      const apiBaseUrl = getApiBaseUrl();
+      if (apiBaseUrl) {
+        try {
+          const jwt = await getJwt();
+          const r = await fetch(`${apiBaseUrl}/api/v1/weather/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+            body: JSON.stringify({ business_id: business.id, config: weatherConfig }),
+          });
+          if (!r.ok) {
+            setSaving(false);
+            setMsg({ text: t.saveError, isError: true });
+            return;
+          }
+        } catch {
+          setSaving(false);
+          setMsg({ text: t.saveError, isError: true });
+          return;
+        }
+      }
+    }
+
+    setSaving(false);
+    // Commit the staged device settings (map type / clustering / pin size)
+    // now — that's what makes them "stick" to AsyncStorage in the parent.
+    onDeviceSettingsChange(stagedDeviceSettings);
+    await refetchBusiness();
+    onPinConfigSaved();
+    // Bounce back to the map so the user sees the result of their edits
+    // immediately. Sheet stays usable on re-open.
+    onClose();
+  };
+
+  const layerLabel: Record<Layer, string> = {
+    clients: t.pinLayerClients,
+    jobs: t.pinLayerJobs,
+    employees: t.pinLayerEmployees,
+    weather: t.weather.layerName,
+  };
+  // Render order — weather only shown to alpha-gated businesses, appended
+  // after the standard three so it doesn't push core layers down.
+  const visibleLayers: Layer[] = weatherGated ? [...BASE_LAYERS, 'weather'] : BASE_LAYERS;
+  const mapTypeOptions: { key: MapType; label: string }[] = [
+    { key: 'standard',  label: t.mapTypeStandard },
+    { key: 'satellite', label: t.mapTypeSatellite },
+    { key: 'hybrid',    label: t.mapTypeHybrid },
+    { key: 'terrain',   label: t.mapTypeTerrain },
+  ];
+  const pinSizeOptions: { key: PinSize; label: string }[] = [
+    { key: 'small',  label: t.pinSizeSmall },
+    { key: 'medium', label: t.pinSizeMedium },
+    { key: 'large',  label: t.pinSizeLarge },
+  ];
+
+  return (
+    <RNModal
+      visible={open}
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="fullScreen"
+    >
+      {/* SafeAreaProvider required inside the modal — iOS modals with
+         presentationStyle="fullScreen" render in a new window context. */}
+      <SafeAreaProvider>
+        <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100 bg-white">
+            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
+              <ChevronLeft size={22} color="#111827" />
+            </Pressable>
+            <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{t.settingsTitle}</Text>
+          </View>
+
+          <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+            {/* Map type */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.mapTypeLabel}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {mapTypeOptions.map(opt => {
+                  const on = stagedDeviceSettings.mapType === opt.key;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => setStagedDeviceSettings(prev => ({ ...prev, mapType: opt.key }))}
+                      className={`px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                    >
+                      <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Clustering */}
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-sm font-semibold text-gray-900">{t.clusteringLabel}</Text>
+                <Text className="text-xs text-gray-500 mt-0.5">{t.clusteringSubtitle}</Text>
+              </View>
+              <Pressable
+                onPress={() => setStagedDeviceSettings(prev => ({ ...prev, clustering: !prev.clustering }))}
+                style={{ width: 44, height: 24 }}
+                className={`relative rounded-full ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-gray-200'}`}
+              >
+                <View
+                  className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                  style={{ transform: [{ translateX: stagedDeviceSettings.clustering ? 24 : 4 }] }}
+                />
+              </Pressable>
+            </View>
+
+            {/* Pin size */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.pinSizeLabel}</Text>
+              <View className="flex-row gap-2">
+                {pinSizeOptions.map(opt => {
+                  const on = stagedDeviceSettings.pinSize === opt.key;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => setStagedDeviceSettings(prev => ({ ...prev, pinSize: opt.key }))}
+                      className={`flex-1 px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                    >
+                      <Text className={`text-sm font-medium text-center ${on ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Layer style cards */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.pinRulesHeading}</Text>
+              <Text className="text-xs text-gray-500 mb-3">{t.pinRulesSubtitle}</Text>
+
+              <View className="gap-2">
+                {visibleLayers.map(layer => {
+                  const cfg = config[layer];
+                  const expanded = openLayer === layer;
+                  const fieldOpts = fieldOptionsByLayer[layer];
+                  // Custom mode = any rule exists OR the legacy layer-level
+                  // field_key is set (pre-existing rows). Clearing either
+                  // returns the layer to "Sin regla".
+                  const ruleMode: 'none' | 'custom' = (cfg.rules.length > 0 || cfg.field_key) ? 'custom' : 'none';
+                  return (
+                    <View key={layer} className="bg-gray-50 rounded-2xl overflow-hidden">
+                      <Pressable
+                        onPress={() => setOpenLayer(expanded ? null : layer)}
+                        className="flex-row items-center gap-4 px-4 py-3"
+                      >
+                        <View className="w-7 h-9 items-center justify-center">
+                          <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={24} />
+                        </View>
+                        <Text className="flex-1 text-sm font-semibold text-gray-900">{layerLabel[layer]}</Text>
+                        {ruleMode === 'custom' ? (
+                          <Text className="text-xs text-gray-500 mr-2">
+                            {fieldOpts.find(f => f.key === cfg.field_key)?.label ?? cfg.field_key} · {cfg.rules.length}
+                          </Text>
+                        ) : null}
+                        <ChevronDown
+                          size={16}
+                          color="#6B7280"
+                          style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}
+                        />
+                      </Pressable>
+
+                      {expanded ? (
+                        <View className="px-4 pb-4 gap-3 border-t border-gray-100">
+                          {/* Default style — single clickable pin badge. */}
+                          <View className="mt-3">
+                            <Text className="text-xs text-gray-500 mb-2">{t.defaultStyleLabel}</Text>
+                            <Pressable
+                              onPress={() => setPicker({ layer, ruleIdx: 'default' })}
+                              className="self-start flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white active:bg-gray-50"
+                            >
+                              <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={26} />
+                              <Text className="text-xs text-gray-500">{t.editStylePinHint}</Text>
+                            </Pressable>
+                          </View>
+
+                          {/* Mode toggle */}
+                          <View>
+                            <Text className="text-xs text-gray-500 mb-2">{t.modeLabel}</Text>
+                            <View className="flex-row gap-2">
+                              <Pressable
+                                onPress={() => updateLayer(layer, { field_key: null, rules: [] })}
+                                className={`flex-1 px-3 py-2 rounded-xl border ${
+                                  ruleMode === 'none' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                                }`}
+                              >
+                                <Text className={`text-sm font-medium text-center ${ruleMode === 'none' ? 'text-primary' : 'text-gray-700'}`}>
+                                  {t.modeNoRule}
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => {
+                                  // Switching INTO custom mode: seed with one
+                                  // empty rule so the editor isn't blank. The
+                                  // rule's field_key defaults to the first
+                                  // available field. Layer-level field_key
+                                  // stays null — that's the legacy path.
+                                  if (ruleMode !== 'custom') addRule(layer);
+                                }}
+                                className={`flex-1 px-3 py-2 rounded-xl border ${
+                                  ruleMode === 'custom' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                                }`}
+                              >
+                                <Text className={`text-sm font-medium text-center ${ruleMode === 'custom' ? 'text-primary' : 'text-gray-700'}`}>
+                                  {t.modeCustom}
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+
+                          {ruleMode === 'custom' ? (
+                            <View className="gap-2">
+                              {/* Order-matters note — short reminder that
+                                 first-match-wins. Placed once at the top
+                                 of the rule list so it's seen but not
+                                 repeated per row. */}
+                              <View className="flex-row items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
+                                <Text className="text-[10px] text-amber-700 leading-4 flex-1">
+                                  💡 {t.ruleOrderNote}
+                                </Text>
+                              </View>
+                              <Text className="text-xs text-gray-500">{t.applyRuleToLabel}</Text>
+                              {cfg.rules.length === 0 ? (
+                                <Text className="text-xs text-gray-400 italic">{t.rulesEmpty}</Text>
+                              ) : (
+                                cfg.rules.map((rule, idx) => {
+                                  // Resolve effective field for this rule —
+                                  // per-rule wins; fall back to legacy layer
+                                  // field_key for pre-existing rows.
+                                  const effectiveField = rule.field_key ?? cfg.field_key ?? '';
+                                  const count = matchCounts[layer]?.[idx];
+                                  const isLoading = count == null;
+                                  const isHide = !!rule.hide;
+                                  // Chip text + color depends on three states:
+                                  // loading / hide-mode / normal match.
+                                  const countText = isLoading
+                                    ? '…'
+                                    : isHide
+                                      ? count === 1
+                                        ? t.ruleHiddenCountSingle
+                                        : t.ruleHiddenCount.replace('{{count}}', String(count))
+                                      : count === 0
+                                        ? t.ruleMatchCountZero
+                                        : count === 1
+                                          ? t.ruleMatchCountSingle
+                                          : t.ruleMatchCount.replace('{{count}}', String(count));
+                                  const chipBg = isLoading
+                                    ? 'bg-gray-100'
+                                    : isHide && count && count > 0
+                                      ? 'bg-amber-50'
+                                      : count && count > 0
+                                        ? 'bg-emerald-50'
+                                        : 'bg-gray-100';
+                                  const chipText = isLoading
+                                    ? 'text-gray-400'
+                                    : isHide && count && count > 0
+                                      ? 'text-amber-700'
+                                      : count && count > 0
+                                        ? 'text-emerald-700'
+                                        : 'text-gray-500';
+                                  return (
+                                    <View key={idx} className="gap-1">
+                                      <View className="flex-row ml-1">
+                                        <View className={`px-2 py-0.5 rounded-full ${chipBg}`}>
+                                          <Text className={`text-[10px] font-semibold ${chipText}`}>
+                                            {countText}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      {/* Two-line layout: action row on top
+                                         (pin, field, op, eye, trash), value
+                                         input full-width on bottom. Gives
+                                         the value field all the horizontal
+                                         room it needs for long values. */}
+                                      <View className="gap-2 bg-white rounded-xl border border-gray-100 p-2">
+                                        <View className="flex-row items-center gap-2">
+                                          <Pressable
+                                            onPress={() => setPicker({ layer, ruleIdx: idx })}
+                                            className="items-center justify-center"
+                                            hitSlop={6}
+                                          >
+                                            <PinBadge iconKey={rule.icon} color={rule.color} iconColor={rule.icon_color ?? cfg.default_icon_color ?? '#FFFFFF'} size={28} />
+                                          </Pressable>
+                                          <View className="flex-1">
+                                            <FieldDropdown
+                                              value={effectiveField}
+                                              options={fieldOpts}
+                                              placeholder={t.ruleFieldPlaceholder}
+                                              onChange={(key) => updateRule(layer, idx, { field_key: key })}
+                                            />
+                                          </View>
+                                          <OperatorPicker
+                                            value={rule.operator ?? 'equals'}
+                                            onChange={(op) => updateRule(layer, idx, { operator: op })}
+                                            labels={{
+                                              equals: t.operatorEquals,
+                                              not_equals: t.operatorNotEquals,
+                                              has_value: t.operatorHasValue,
+                                              contains: t.operatorContains,
+                                              gt: t.operatorGt,
+                                              gte: t.operatorGte,
+                                              lt: t.operatorLt,
+                                              lte: t.operatorLte,
+                                            }}
+                                          />
+                                          <Pressable
+                                            onPress={() => updateRule(layer, idx, { hide: !rule.hide })}
+                                            hitSlop={6}
+                                            className={`p-2 rounded-lg ${
+                                              rule.hide ? 'bg-amber-50 active:bg-amber-100' : 'active:bg-gray-100'
+                                            }`}
+                                          >
+                                            {rule.hide
+                                              ? <EyeOff size={14} color="#D97706" />
+                                              : <Eye size={14} color="#6B7280" />}
+                                          </Pressable>
+                                          <Pressable
+                                            onPress={() => removeRule(layer, idx)}
+                                            hitSlop={6}
+                                            className="p-2 rounded-lg active:bg-red-50"
+                                          >
+                                            <Trash2 size={14} color="#EF4444" />
+                                          </Pressable>
+                                        </View>
+                                        {/* Value row — hidden when operator is
+                                           has_value (no value needed). Otherwise
+                                           full-width input below the action row. */}
+                                        {(rule.operator ?? 'equals') === 'has_value' ? null : (
+                                          <TextInput
+                                            value={rule.value}
+                                            onChangeText={v => updateRule(layer, idx, { value: v })}
+                                            placeholder={t.ruleValuePlaceholder}
+                                            placeholderTextColor="#9CA3AF"
+                                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                                          />
+                                        )}
+                                      </View>
+                                    </View>
+                                  );
+                                })
+                              )}
+                              <Pressable
+                                onPress={() => addRule(layer)}
+                                className="flex-row items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-gray-300 active:bg-gray-100"
+                              >
+                                <Plus size={14} color="#4F46E5" />
+                                <Text className="text-sm text-primary font-semibold">{t.addRuleBtn}</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Weather alerts — alpha feature. Renders nothing unless the
+               business is in WEATHER_ALPHA_BUSINESS_IDS. State lives in the
+               parent so the single Guardar below saves both pin + weather. */}
+            <WeatherSettingsSection config={weatherConfig} onChange={setWeatherConfig} />
+
+            {msg ? (
+              <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
+            ) : null}
+            <Pressable
+              onPress={onSave}
+              disabled={saving}
+              className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-primary active:opacity-80"
+            >
+              {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+              <Text className="text-white font-semibold text-sm">{t.saveBtn}</Text>
+            </Pressable>
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
+
+      {/* Combined color + icon picker. Stays open until user taps Done so
+         they can change both color and icon in a single interaction. */}
+      {picker ? (
+        <StylePickerModal
+          picker={picker}
+          config={config}
+          onClose={() => setPicker(null)}
+          onSelectColor={(color) => {
+            if (picker.ruleIdx === 'default') updateLayer(picker.layer, { default_color: color });
+            else updateRule(picker.layer, picker.ruleIdx, { color });
+          }}
+          onSelectIcon={(icon) => {
+            if (picker.ruleIdx === 'default') updateLayer(picker.layer, { default_icon: icon });
+            else updateRule(picker.layer, picker.ruleIdx, { icon });
+          }}
+          onSelectIconColor={(iconColor) => {
+            if (picker.ruleIdx === 'default') updateLayer(picker.layer, { default_icon_color: iconColor });
+            else updateRule(picker.layer, picker.ruleIdx, { icon_color: iconColor });
+          }}
+        />
+      ) : null}
+    </RNModal>
+  );
+}
+
+// ─── Combined color + icon picker ───────────────────────────────────────
+// Full-screen modal with the same SafeAreaProvider trick as the parent.
+// Shows current preview, color row, category tabs, icon grid. Selections
+// apply immediately to the underlying state via callbacks; Done just
+// closes the modal.
+function StylePickerModal({
+  picker,
+  config,
+  onClose,
+  onSelectColor,
+  onSelectIcon,
+  onSelectIconColor,
+}: {
+  picker: { layer: Layer; ruleIdx: number | 'default' };
+  config: Required<MapPinConfig>;
+  onClose: () => void;
+  onSelectColor: (c: string) => void;
+  onSelectIcon: (i: MapPinIcon) => void;
+  onSelectIconColor: (c: string) => void;
+}) {
+  const { t: full } = useLang();
+  const t = full.dashboard.modules.map;
+
+  const layerCfg = config[picker.layer];
+  const currentColor =
+    picker.ruleIdx === 'default'
+      ? layerCfg.default_color
+      : layerCfg.rules[picker.ruleIdx]?.color ?? layerCfg.default_color;
+  const currentIcon =
+    picker.ruleIdx === 'default'
+      ? layerCfg.default_icon
+      : layerCfg.rules[picker.ruleIdx]?.icon ?? layerCfg.default_icon;
+  const currentIconColor =
+    picker.ruleIdx === 'default'
+      ? (layerCfg.default_icon_color ?? '#FFFFFF')
+      : (layerCfg.rules[picker.ruleIdx]?.icon_color ?? layerCfg.default_icon_color ?? '#FFFFFF');
+
+  // Icon color palette = white + black (most common) + the standard pin
+  // palette. White is the default so it's first.
+  // White + near-black up front (most common icon colors), then the rest of
+  // the palette. Dedupe by lowercased hex so adding #FFFFFF to PIN_COLORS
+  // (or any future overlap) doesn't trip React's duplicate-key warning.
+  const ICON_COLOR_PALETTE = Array.from(
+    new Map(
+      ['#FFFFFF', '#111827', ...PIN_COLORS].map((c) => [c.toLowerCase(), c]),
+    ).values(),
+  );
+
+  const [activeCategory, setActiveCategory] = useState<PinIconCategory>(() => {
+    // Default to the category that contains the current icon, so the
+    // user sees their selection highlighted on open.
+    return PIN_ICON_CATEGORIES.find(c => c.icons.includes(currentIcon as MapPinIcon)) ?? PIN_ICON_CATEGORIES[0];
+  });
+  // Substring search across all icons. When non-empty, the category tabs
+  // are ignored and the grid shows everything that matches the query.
+  const [query, setQuery] = useState('');
+  const filteredIcons = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return ALL_PIN_ICONS.filter(k => k.includes(q));
+  })();
+  const visibleIcons = filteredIcons ?? activeCategory.icons;
+
+  const categoryLabel = (i18nKey: PinIconCategory['i18nKey']): string => {
+    const map = t.iconCategories;
+    return map[i18nKey];
+  };
+
+  return (
+    <RNModal visible animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
+      <SafeAreaProvider>
+        <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100 bg-white">
+            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
+              <ChevronLeft size={22} color="#111827" />
+            </Pressable>
+            <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{t.stylePickerTitle}</Text>
+            <Pressable
+              onPress={onClose}
+              className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary active:opacity-80"
+            >
+              <Check size={14} color="#FFFFFF" />
+              <Text className="text-white text-xs font-semibold">{full.common.buttons.done}</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+            {/* Preview */}
+            <View className="items-center py-4 bg-gray-50 rounded-2xl">
+              <PinBadge iconKey={currentIcon} color={currentColor} iconColor={currentIconColor} size={56} />
+            </View>
+
+            {/* Pin color */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.colorLabel}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {PIN_COLORS.map(c => (
+                  <Pressable
+                    key={c}
+                    onPress={() => onSelectColor(c)}
+                    style={{ backgroundColor: c, width: 36, height: 36 }}
+                    // White swatch needs a visible border so it's not lost
+                    // against the picker's white panel background.
+                    className={`rounded-xl border-2 ${
+                      currentColor.toLowerCase() === c.toLowerCase()
+                        ? 'border-gray-900'
+                        : c.toLowerCase() === '#ffffff' ? 'border-gray-200' : 'border-transparent'
+                    }`}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Icon color — white default, can switch to dark or any palette
+               color when white contrast is poor (e.g. on yellow pins). */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconColorLabel}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {ICON_COLOR_PALETTE.map(c => (
+                  <Pressable
+                    key={c}
+                    onPress={() => onSelectIconColor(c)}
+                    style={{ backgroundColor: c, width: 36, height: 36 }}
+                    className={`rounded-xl border-2 ${
+                      currentIconColor.toLowerCase() === c.toLowerCase()
+                        ? 'border-gray-900'
+                        : c === '#FFFFFF' ? 'border-gray-200' : 'border-transparent'
+                    }`}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Icon search + categories + grid */}
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconLabel}</Text>
+              {/* Search box — substring match against the icon key. Typing
+                 hides the category tabs and shows all matching icons. */}
+              <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white mb-3">
+                <Search size={14} color="#9CA3AF" />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={t.iconSearchPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  className="flex-1 text-sm text-gray-900"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                {query ? (
+                  <Pressable onPress={() => setQuery('')} hitSlop={6}>
+                    <X size={14} color="#9CA3AF" />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Category tabs — hidden during search since results span all categories. */}
+              {!query ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                  {PIN_ICON_CATEGORIES.map(cat => {
+                    const on = activeCategory.i18nKey === cat.i18nKey;
+                    return (
+                      <Pressable
+                        key={cat.i18nKey}
+                        onPress={() => setActiveCategory(cat)}
+                        className={`px-3 py-1.5 rounded-full border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                      >
+                        <Text className={`text-xs ${on ? 'text-primary font-semibold' : 'text-gray-700'}`}>
+                          {categoryLabel(cat.i18nKey)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
+
+              {/* Icon grid — visibleIcons is either the active category or the search results. */}
+              {visibleIcons.length === 0 ? (
+                <Text className="text-xs text-gray-400 italic mt-3">{t.iconSearchNoResults}</Text>
+              ) : (
+                <View className="flex-row flex-wrap gap-2 mt-3">
+                  {visibleIcons.map(icon => {
+                    const on = currentIcon === icon;
+                    return (
+                      <Pressable
+                        key={icon}
+                        onPress={() => onSelectIcon(icon)}
+                        style={{ width: 56, height: 56 }}
+                        className={`rounded-xl border items-center justify-center ${
+                          on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <PinIcon iconKey={icon} color={currentColor} size={26} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </RNModal>
+  );
+}
+
+// ─── Per-rule operator picker ───────────────────────────────────────────
+// Compact button shows the operator glyph; tapping opens a list with all
+// 8 comparison operators. Default is `equals`.
+type Operator =
+  | 'equals' | 'not_equals' | 'has_value' | 'contains'
+  | 'gt' | 'gte' | 'lt' | 'lte';
+
+const OPERATOR_GLYPHS: Record<Operator, string> = {
+  equals: '=',
+  not_equals: '≠',
+  has_value: '∗',
+  contains: '⊃',
+  gt: '>',
+  gte: '≥',
+  lt: '<',
+  lte: '≤',
+};
+
+function OperatorPicker({
+  value,
+  onChange,
+  labels,
+}: {
+  value: Operator;
+  onChange: (op: Operator) => void;
+  labels: Record<Operator, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const orderedOps: Operator[] = ['equals', 'not_equals', 'contains', 'has_value', 'gt', 'gte', 'lt', 'lte'];
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        hitSlop={6}
+        className={`w-7 h-7 rounded-lg border items-center justify-center ${
+          value !== 'equals' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+        }`}
+      >
+        <Text className={`text-sm font-bold ${value !== 'equals' ? 'text-primary' : 'text-gray-600'}`}>
+          {OPERATOR_GLYPHS[value]}
+        </Text>
+      </Pressable>
+      <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden"
+          >
+            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 12 }}>
+              {orderedOps.map((op, i) => {
+                const on = op === value;
+                return (
+                  <Pressable
+                    key={op}
+                    onPress={() => { onChange(op); setOpen(false); }}
+                    className={`flex-row items-center gap-3 px-4 py-3 ${
+                      i < orderedOps.length - 1 ? 'border-b border-gray-50' : ''
+                    } ${on ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                  >
+                    <View className="w-7 h-7 rounded-lg border border-gray-200 items-center justify-center">
+                      <Text className="text-sm font-bold text-gray-700">{OPERATOR_GLYPHS[op]}</Text>
+                    </View>
+                    <Text className={`flex-1 text-sm ${on ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                      {labels[op]}
+                    </Text>
+                    {on ? <Check size={14} color="#4F46E5" /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </RNModal>
+    </>
+  );
+}
+
+// ─── Per-rule field dropdown ────────────────────────────────────────────
+// Lightweight dropdown: opens a nested modal listing fields. Compact
+// trigger so the rule row stays single-line on phones.
+function FieldDropdown({
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  options: FieldOption[];
+  placeholder: string;
+  onChange: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { t: full } = useLang();
+  const tMap = full.dashboard.modules.map;
+  const selected = options.find(o => o.key === value);
+  // Show fade affordance only when there's enough content to scroll.
+  // Threshold matches roughly the visible area at maxHeight 340 / row ~50px.
+  const isScrollable = options.length > 7;
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        className="flex-row items-center gap-1 px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+      >
+        <Text className="text-xs text-gray-700 flex-1" numberOfLines={1}>
+          {selected?.label ?? placeholder}
+        </Text>
+        <ChevronDown size={12} color="#6B7280" />
+      </Pressable>
+      <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden"
+            style={{
+              shadowColor: '#000',
+              shadowOpacity: 0.15,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 10,
+            }}
+          >
+            {/* Header — clearly distinct from the list rows below.
+               Larger type, bolder weight, and a subtle gray background
+               so it reads as a sheet title, not "row 0". */}
+            <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-gray-50 border-b border-gray-200">
+              <Text className="text-lg font-bold text-gray-900">{tMap.applyRuleToLabel}</Text>
+              <Pressable
+                onPress={() => setOpen(false)}
+                hitSlop={8}
+                className="p-1.5 rounded-lg active:bg-gray-200"
+              >
+                <X size={20} color="#374151" />
+              </Pressable>
+            </View>
+
+            {/* List + bottom fade. ScrollView shows the native iOS scrollbar
+               on touch; the fade is a permanent visual hint that there's
+               more below. Wrap in a relative View so the fade can absolute
+               on top of the bottom of the list. */}
+            <View style={{ position: 'relative' }}>
+              <ScrollView
+                style={{ maxHeight: 340 }}
+                // Extra bottom padding so the last item sits above the
+                // fade gradient + the modal's rounded bottom edge.
+                contentContainerStyle={{ paddingBottom: 28 }}
+                showsVerticalScrollIndicator
+                indicatorStyle="black"
+              >
+                {options.map((opt, i) => {
+                  const on = opt.key === value;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => { onChange(opt.key); setOpen(false); }}
+                      className={`flex-row items-center justify-between px-4 py-3 ${
+                        i < options.length - 1 ? 'border-b border-gray-50' : ''
+                      } ${on ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                    >
+                      <Text className={`text-sm ${on ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                        {opt.label}
+                      </Text>
+                      {on ? <Check size={14} color="#4F46E5" /> : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {/* Faked linear gradient — three stacked translucent views.
+                 No extra dependency needed; effect is subtle but clear. */}
+              {isScrollable ? (
+                <View
+                  pointerEvents="none"
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}
+                >
+                  <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.35)' }} />
+                  <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.65)' }} />
+                  <View style={{ height: 10, backgroundColor: 'rgba(255,255,255,0.95)' }} />
+                </View>
+              ) : null}
+            </View>
+          </Pressable>
+        </Pressable>
+      </RNModal>
+    </>
+  );
+}

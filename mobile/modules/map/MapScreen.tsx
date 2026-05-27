@@ -7,18 +7,121 @@
 // banner appears at the bottom inviting the user to backfill them via
 // the API. One-tap → backfill → reload.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
+import ClusteredMapView from 'react-native-map-clustering';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Users, Briefcase, UserCircle2, X } from 'lucide-react-native';
+import {
+  ChevronLeft, Users, Briefcase, UserCircle2, X, Settings as SettingsIcon,
+  Phone, MessageSquare, Mail, MapPin as MapPinIconLucide, Calendar,
+  ArrowRight, Search as SearchIcon, CloudLightning, ExternalLink, Crosshair,
+} from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import type { MapPinIcon } from '@amixos/shared/lib/mapPinPresets';
+import { resolvePinStyle } from '@amixos/shared/lib/mapPinResolve';
+import {
+  isWeatherFeatureEnabled,
+  groupWeatherAlertsBySameCode,
+  haversineMiles,
+  normalizeWeatherConfig,
+} from '@amixos/shared/lib/weather';
+import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/usStates';
+import { PinBadge } from '@/lib/mapPinIcons';
+import { createSupabaseClient } from '@/lib/supabase';
+import {
+  MapSettingsSheet,
+  type DeviceMapSettings,
+} from './MapSettingsSheet';
+
+const DEVICE_SETTINGS_KEY = 'map_device_settings_v1';
+const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
+  mapType: 'standard',
+  clustering: true,
+  pinSize: 'medium',
+};
+
+const PIN_SIZE_PX: Record<DeviceMapSettings['pinSize'], number> = {
+  small: 18,
+  medium: 26,
+  large: 34,
+};
 
 type Layer = 'clients' | 'jobs' | 'employees';
 
+// Weather alerts come from a separate endpoint (api.weather.gov via our API).
+// Their pins live alongside the standard layers but use a fixed style — no
+// per-business rules apply.
+interface WeatherPin {
+  id: string;
+  type: 'weather';
+  alert_id: string;
+  event: string;
+  severity: string | null;
+  headline: string | null;
+  description: string | null;
+  area_desc: string | null;
+  same_code: string;
+  county: string | null;
+  state: string | null;
+  lat: number;
+  lng: number;
+  expires_at: string | null;
+  effective_at: string | null;
+  ends_at: string | null;
+  sent_at: string | null;
+  fetched_at: string | null;
+  nws_url?: string | null;
+}
+const WEATHER_LAYER_COLOR = '#DC2626'; // red-600 — visually loud + intent matches
+// Per-event tinting (most-common NOAA events). Falls back to red.
+const WEATHER_EVENT_COLOR: Record<string, string> = {
+  'tornado warning':            '#7C2D12',
+  'tornado watch':              '#B91C1C',
+  'severe thunderstorm warning':'#DC2626',
+  'severe thunderstorm watch':  '#EA580C',
+  'high wind warning':          '#D97706',
+  'high wind watch':            '#F59E0B',
+  'flood warning':              '#1D4ED8',
+  'flash flood warning':        '#1E40AF',
+  'winter storm warning':       '#0EA5E9',
+  'blizzard warning':           '#0369A1',
+};
+function weatherPinColor(event: string): string {
+  return WEATHER_EVENT_COLOR[event.toLowerCase()] ?? WEATHER_LAYER_COLOR;
+}
+
+// True if the alert's expires_at is in the past. Alerts with no expires
+// (rare for NOAA) are treated as active.
+function isWeatherExpired(p: { expires_at?: string | null }): boolean {
+  if (!p.expires_at) return false;
+  return new Date(p.expires_at).getTime() < Date.now();
+}
+
+// Short, locale-aware relative-duration label. Returns "5m" / "3h" / "2d"
+// style strings — fed into the {{n}} placeholder in dashboard i18n.
+function formatRelativeAgo(
+  fromIso: string,
+  labels: { now: string; minutes: string; hours: string; days: string },
+): string {
+  const diffMs = Date.now() - new Date(fromIso).getTime();
+  if (diffMs < 60_000) return labels.now;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return labels.minutes.replace('{{n}}', String(mins));
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return labels.hours.replace('{{n}}', String(hrs));
+  const days = Math.floor(hrs / 24);
+  return labels.days.replace('{{n}}', String(days));
+}
+
+// Pin payload — includes all the raw rule-matchable fields so the client
+// can apply pin-style rules locally via resolvePinStyle (no server-side
+// color/icon stamping). Old API responses without these fields just
+// fall back to the layer's default color/icon.
 interface ClientPin {
   id: string;
   type: 'client';
@@ -27,6 +130,19 @@ interface ClientPin {
   first_name: string;
   last_name: string;
   company: string | null;
+  phone_cell?: string | null;
+  phone_office?: string | null;
+  email_office?: string | null;
+  email_home?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  custom_fields?: Record<string, unknown> | null;
+  // Legacy fields from the pre-refactor API — ignored when present, the
+  // client always resolves locally now.
+  color?: string;
+  icon?: MapPinIcon;
 }
 interface JobPin {
   id: string;
@@ -37,6 +153,14 @@ interface JobPin {
   status: string;
   scheduled_date: string | null;
   client_name: string | null;
+  description?: string | null;
+  priority?: string;
+  job_address?: string | null;
+  job_city?: string | null;
+  job_state?: string | null;
+  custom_fields?: Record<string, unknown> | null;
+  color?: string;
+  icon?: MapPinIcon;
 }
 interface EmployeePin {
   id: string;
@@ -47,14 +171,25 @@ interface EmployeePin {
   last_name: string;
   job_id: string | null;
   job_title: string | null;
+  role?: string | null;
+  color?: string;
+  icon?: MapPinIcon;
 }
-type AnyPin = ClientPin | JobPin | EmployeePin;
+type AnyPin = ClientPin | JobPin | EmployeePin | WeatherPin;
+
+interface GeocodeBreakdown {
+  noAddress: number;
+  unresolved: number;
+  pending: number;
+}
 
 interface PinsResponse {
   clients: ClientPin[];
   jobs: JobPin[];
   employees: EmployeePin[];
   needsGeocoding: number;
+  // Older API builds may not include this — UI guards with `?.`.
+  geocodeBreakdown?: GeocodeBreakdown;
 }
 
 // Layer accent colors. Used both for the pill toggle (when active) and
@@ -64,6 +199,48 @@ const LAYER_COLORS: Record<Layer, string> = {
   jobs:      '#10B981', // emerald
   employees: '#F59E0B', // amber
 };
+
+// Substring search across every text field on a pin (standard cols +
+// custom_fields values). Case-insensitive. Caller pre-lowercases the
+// query; we just check inclusion.
+function pinMatchesQuery(p: AnyPin, q: string): boolean {
+  const fields: (string | null | undefined)[] = [];
+  if (p.type === 'client') {
+    fields.push(
+      p.first_name, p.last_name, p.company,
+      p.phone_cell, p.phone_office,
+      p.email_office, p.email_home,
+      p.address, p.city, p.state, p.zip_code,
+    );
+  } else if (p.type === 'job') {
+    fields.push(
+      p.title, p.description, p.status, p.priority, p.client_name,
+      p.job_address, p.job_city, p.job_state,
+    );
+  } else if (p.type === 'employee') {
+    fields.push(p.first_name, p.last_name, p.role, p.job_title);
+  } else if (p.type === 'weather') {
+    fields.push(p.event, p.headline, p.area_desc, p.county, p.state, p.severity);
+  }
+  // Custom fields — iterate values (key matching is rarely useful for
+  // map search). Works for clients and jobs; employees don't carry them.
+  const cf = (p as { custom_fields?: Record<string, unknown> | null }).custom_fields;
+  if (cf && typeof cf === 'object') {
+    for (const v of Object.values(cf)) {
+      if (v != null) fields.push(String(v));
+    }
+  }
+  // Expand state-name queries to also match abbreviations ("Nebraska" → "NE")
+  // since addresses are stored abbreviated. Word-boundary matching on
+  // 2-letter terms via haystackMatchesWithStates — keeps "ne" from
+  // hitting "Stone" / "Larned" / etc.
+  const stateTerms = expandStateQuery(q);
+  for (const f of fields) {
+    if (typeof f !== 'string') continue;
+    if (haystackMatchesWithStates(f, q, stateTerms)) return true;
+  }
+  return false;
+}
 
 // Fallback when no pins exist — center on the continental US so the map
 // at least shows context.
@@ -86,14 +263,42 @@ export default function MapScreen() {
   const [pins, setPins] = useState<PinsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [geocoding, setGeocoding] = useState(false);
+  // Live progress during the auto-loop: { done: X, total: Y } where Y is
+  // captured at loop start so the denominator doesn't shift as rows get
+  // marked unresolved.
+  const [geocodeProgress, setGeocodeProgress] = useState<{ done: number; total: number } | null>(null);
+  // Per-device map prefs (map type, clustering, pin size) — persisted to
+  // AsyncStorage on every change. Pin styling rules live in the business
+  // DB instead and are read off `business.map_pin_config`.
+  const [deviceSettings, setDeviceSettings] = useState<DeviceMapSettings>(DEFAULT_DEVICE_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [layers, setLayers] = useState<Record<Layer, boolean>>({
     clients: true,
     jobs: true,
     employees: true,
   });
+  const [weatherLayerOn, setWeatherLayerOn] = useState(true);
+  const [weatherPins, setWeatherPins] = useState<WeatherPin[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  // "Storm focus" mode — when on, hide every pin EXCEPT weather alerts
+  // and non-weather pins within `proximity_radius_miles` of any alert.
+  const [stormFocus, setStormFocus] = useState(false);
+  // Modal listing every client with missing lat/lng — opened from the
+  // geocode banner so the user can see WHICH clients failed and jump
+  // straight to their detail page to fix the address.
+  const [unresolvedOpen, setUnresolvedOpen] = useState(false);
+  // Hides the "X clients without coords" banner for this map view session
+  // ("deal with these later" use case). Resets when the screen unmounts /
+  // user returns to the map, so they get prompted again next visit.
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [selected, setSelected] = useState<AnyPin | null>(null);
+  // Free-text search across the pin's identifying fields. Filters
+  // `visiblePins` and auto-fits the map to the matching subset.
+  const [search, setSearch] = useState('');
+  const mapRef = useRef<MapView | null>(null);
 
   const apiBaseUrl = getApiBaseUrl();
+  const weatherEnabled = isWeatherFeatureEnabled(business?.id);
 
   const load = useCallback(async () => {
     if (!business || !apiBaseUrl) {
@@ -119,6 +324,58 @@ export default function MapScreen() {
   }, [business, apiBaseUrl]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Weather alerts — only fetched when the alpha business gate is on.
+  // Posts to /weather/refresh first (server skips the NWS call if cache
+  // is fresh) then reads the cache.
+  const loadWeather = useCallback(async () => {
+    if (!business || !apiBaseUrl || !weatherEnabled) return;
+    setWeatherLoading(true);
+    try {
+      const jwt = await getJwt();
+      // Best-effort refresh; if disabled in config, the server returns
+      // skipped=disabled and we'll just read whatever's cached (likely empty).
+      await fetch(`${apiBaseUrl}/api/v1/weather/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ business_id: business.id }),
+      });
+      const r = await fetch(`${apiBaseUrl}/api/v1/weather/alerts?business_id=${business.id}`, {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const alerts = (j?.data?.alerts ?? []) as Array<Omit<WeatherPin, 'type' | 'id'> & { id: string }>;
+        setWeatherPins(alerts.map((a) => ({ ...a, type: 'weather' as const })));
+      } else {
+        setWeatherPins([]);
+      }
+    } catch {
+      setWeatherPins([]);
+    }
+    setWeatherLoading(false);
+  }, [business, apiBaseUrl, weatherEnabled]);
+
+  useEffect(() => { void loadWeather(); }, [loadWeather]);
+
+  // Hydrate device settings on mount; persist on every change.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DEVICE_SETTINGS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<DeviceMapSettings>;
+          setDeviceSettings({ ...DEFAULT_DEVICE_SETTINGS, ...parsed });
+        }
+      } catch {
+        // ignore — fall back to defaults
+      }
+    })();
+  }, []);
+  const updateDeviceSettings = (next: DeviceMapSettings) => {
+    setDeviceSettings(next);
+    void AsyncStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(next));
+  };
 
   // Derive an initial region that frames every visible pin. If there are
   // no pins yet, fall back to the continental US default so the map at
@@ -148,50 +405,143 @@ export default function MapScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins]);
 
+  // Weather pins are grouped by SAME code so each county/state renders
+  // exactly one marker (with a "+N" badge when there are sibling alerts
+  // at the same location). The group's primary is the most-recently-sent
+  // alert; siblings appear in the popup card's list.
+  const weatherGroups = useMemo(() => {
+    if (!weatherEnabled || !weatherLayerOn) return [];
+    const groups = groupWeatherAlertsBySameCode(weatherPins);
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    // Keep the group when ANY of its alerts matches the search, so
+    // siblings are still discoverable via search.
+    return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
+  }, [weatherEnabled, weatherLayerOn, weatherPins, search]);
+
+  // O(1) lookup from a weather pin's id → its sibling list. Used when the
+  // user taps a weather marker to pass siblings to the card.
+  const siblingsByWeatherId = useMemo(() => {
+    const map = new Map<string, WeatherPin[]>();
+    for (const g of weatherGroups) {
+      for (const a of g.all) {
+        map.set(a.id, g.all.filter(s => s.id !== a.id));
+      }
+    }
+    return map;
+  }, [weatherGroups]);
+
   const visiblePins: AnyPin[] = useMemo(() => {
     if (!pins) return [];
-    return [
+    let nonWeather: AnyPin[] = [
       ...(layers.clients ? pins.clients : []),
       ...(layers.jobs ? pins.jobs : []),
       ...(layers.employees ? pins.employees : []),
     ];
-  }, [pins, layers]);
+    // Only the group primaries enter the flat list — the markers each get
+    // one render, and siblings are reached via the popup.
+    const weatherPrimaries: AnyPin[] = weatherGroups.map(g => g.primary);
+
+    // Storm-focus mode: drop any non-weather pin that isn't within
+    // `proximity_radius_miles` of an alert (haversine distance). Skipped
+    // when there are no weather pins at all — otherwise focus would
+    // hide everything.
+    if (stormFocus && weatherEnabled && weatherPins.length > 0) {
+      const radius = normalizeWeatherConfig(business?.weather_config).proximity_radius_miles;
+      // Use ALL weather pins for the radius check (not just primaries) so
+      // every alert location anchors a circle, even ones grouped behind a
+      // sibling badge.
+      const anchors = weatherPins.map(w => ({ lat: w.lat, lng: w.lng }));
+      nonWeather = nonWeather.filter(p =>
+        anchors.some(a => haversineMiles(a, { lat: p.lat, lng: p.lng }) <= radius),
+      );
+    }
+
+    const all = [...nonWeather, ...weatherPrimaries];
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    // Non-weather still gets the per-pin filter; weather already filtered
+    // at the group level above.
+    return [...nonWeather.filter(p => pinMatchesQuery(p, q)), ...weatherPrimaries];
+  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, weatherPins, business?.weather_config]);
+
+  // When a search narrows the result set, fit the map to those pins so
+  // the user lands on them without panning. Skip when no search (so the
+  // user's manual pan/zoom isn't reset on layer toggles).
+  useEffect(() => {
+    if (!search.trim() || visiblePins.length === 0) return;
+    const coords = visiblePins.map(p => ({ latitude: p.lat, longitude: p.lng }));
+    if (coords.length === 1) {
+      mapRef.current?.animateToRegion({
+        latitude: coords[0].latitude,
+        longitude: coords[0].longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 400);
+    } else {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 80, right: 60, bottom: 120, left: 60 },
+        animated: true,
+      });
+    }
+  }, [search, visiblePins]);
 
   const onGeocode = async () => {
     if (!business || !apiBaseUrl) return;
     setGeocoding(true);
+    // Total = "pending" only (rows that can still be geocoded). The
+    // breakdown counts unresolved + no-address separately; those don't
+    // get retried this round, so they shouldn't inflate the denominator.
+    const initialPending = pins?.geocodeBreakdown?.pending ?? pins?.needsGeocoding ?? 0;
+    let totalGeocoded = 0;
+    setGeocodeProgress({ done: 0, total: initialPending });
+
     try {
       const jwt = await getJwt();
-      const r = await fetch(`${apiBaseUrl}/api/v1/map/geocode-clients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-        body: JSON.stringify({ business_id: business.id }),
-      });
-      if (r.ok) {
+      // Loop until no progress. Safety cap: 50 batches × 100 rows = 5000
+      // clients per session — protects against an unforeseen bug where
+      // the server returns nonzero attempted but zero failures forever.
+      for (let i = 0; i < 50; i++) {
+        const r = await fetch(`${apiBaseUrl}/api/v1/map/geocode-clients`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+          body: JSON.stringify({ business_id: business.id }),
+        });
+        if (!r.ok) break;
         const j = await r.json();
-        const { geocoded = 0 } = j?.data ?? {};
-        Alert.alert('', t.geocodeDone.replace('{{count}}', String(geocoded)));
-        await load();
+        const { attempted = 0, geocoded = 0 } = j?.data ?? {};
+        totalGeocoded += geocoded;
+        setGeocodeProgress({ done: totalGeocoded, total: initialPending });
+        // Server returned 0 rows to try → we're done (everything was
+        // either resolved, marked failed within the cooldown, or has
+        // no address).
+        if (attempted === 0) break;
       }
+      Alert.alert('', t.geocodeDone.replace('{{count}}', String(totalGeocoded)));
+      await load();
     } catch {
       // ignore
     }
     setGeocoding(false);
+    setGeocodeProgress(null);
   };
 
   const openSelected = () => {
     if (!selected) return;
     const id = selected.id;
     setSelected(null);
+    // ?from=map so the detail screen's back arrow returns here instead
+    // of falling into the clientes/trabajos tab stack (expo-router
+    // switches tab context when pushing to a sibling tab route).
     if (selected.type === 'client') {
-      router.push(`/dashboard/clientes/${id}` as never);
+      router.push(`/dashboard/clientes/${id}?from=map` as never);
     } else if (selected.type === 'job') {
-      router.push(`/dashboard/trabajos/${id}` as never);
+      router.push(`/dashboard/trabajos/${id}?from=map` as never);
     } else if (selected.type === 'employee') {
       // Employees pin where the JOB is — opening goes to that job, not
       // an employee detail screen (we don't have one in core yet).
       const jobId = selected.job_id;
-      if (jobId) router.push(`/dashboard/trabajos/${jobId}` as never);
+      if (jobId) router.push(`/dashboard/trabajos/${jobId}?from=map` as never);
     }
   };
 
@@ -205,36 +555,117 @@ export default function MapScreen() {
         >
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900">{moduleName}</Text>
+        <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{moduleName}</Text>
+        {/* Storm focus toggle — only shown when the alpha business has
+           weather enabled, since it's useless otherwise. */}
+        {weatherEnabled ? (
+          <Pressable
+            onPress={() => setStormFocus(v => !v)}
+            hitSlop={12}
+            className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${stormFocus ? 'bg-red-50' : ''}`}
+          >
+            <Crosshair size={20} color={stormFocus ? '#DC2626' : '#374151'} />
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={() => setSettingsOpen(true)}
+          hitSlop={12}
+          className="p-2 -mr-2 rounded-lg active:bg-gray-100"
+        >
+          <SettingsIcon size={20} color="#374151" />
+        </Pressable>
       </View>
 
-      {/* Layer toggle pills — three colored chips at the top. Tapping
-          toggles visibility of that pin set on the map. */}
-      <View className="flex-row px-4 pb-3 gap-2">
-        <LayerPill
-          icon={Users}
-          label={t.layers.clients}
-          color={LAYER_COLORS.clients}
-          active={layers.clients}
-          count={pins?.clients.length ?? 0}
-          onPress={() => setLayers(l => ({ ...l, clients: !l.clients }))}
-        />
-        <LayerPill
-          icon={Briefcase}
-          label={t.layers.jobs}
-          color={LAYER_COLORS.jobs}
-          active={layers.jobs}
-          count={pins?.jobs.length ?? 0}
-          onPress={() => setLayers(l => ({ ...l, jobs: !l.jobs }))}
-        />
-        <LayerPill
-          icon={UserCircle2}
-          label={t.layers.employees}
-          color={LAYER_COLORS.employees}
-          active={layers.employees}
-          count={pins?.employees.length ?? 0}
-          onPress={() => setLayers(l => ({ ...l, employees: !l.employees }))}
-        />
+      {/* Layer toggle pills — horizontal-scrollable so a 4th pill (weather)
+         doesn't get clipped off the right edge on narrow phones. */}
+      <View className="pb-2">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          <LayerPill
+            icon={Users}
+            label={t.layers.clients}
+            color={LAYER_COLORS.clients}
+            active={layers.clients}
+            count={pins?.clients.length ?? 0}
+            onPress={() => setLayers(l => ({ ...l, clients: !l.clients }))}
+          />
+          <LayerPill
+            icon={Briefcase}
+            label={t.layers.jobs}
+            color={LAYER_COLORS.jobs}
+            active={layers.jobs}
+            count={pins?.jobs.length ?? 0}
+            onPress={() => setLayers(l => ({ ...l, jobs: !l.jobs }))}
+          />
+          <LayerPill
+            icon={UserCircle2}
+            label={t.layers.employees}
+            color={LAYER_COLORS.employees}
+            active={layers.employees}
+            count={pins?.employees.length ?? 0}
+            onPress={() => setLayers(l => ({ ...l, employees: !l.employees }))}
+          />
+          {weatherEnabled ? (
+            <LayerPill
+              icon={CloudLightning}
+              label={t.weather.layerName}
+              color={WEATHER_LAYER_COLOR}
+              active={weatherLayerOn}
+              count={weatherPins.length}
+              onPress={() => setWeatherLayerOn(v => !v)}
+            />
+          ) : null}
+        </ScrollView>
+        {/* Tiny hint so users know the chips toggle visibility — wasn't
+           obvious from styling alone. */}
+        <Text className="text-[10px] text-gray-400 mt-1 px-4">
+          {t.layerToggleHint}
+        </Text>
+      </View>
+
+      {/* Search bar — filters visible pins across all text fields
+         (name, company, city, state, custom fields, etc.). Map auto-fits
+         to the matching subset so the user lands on the results. */}
+      <View className="px-4 pb-3">
+        <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white">
+          <SearchIcon size={14} color="#9CA3AF" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t.searchPlaceholder}
+            placeholderTextColor="#9CA3AF"
+            className="flex-1 text-sm text-gray-900"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search ? (
+            <>
+              <Text className="text-[10px] text-gray-500">
+                {t.searchResultsCount.replace('{{count}}', String(visiblePins.length))}
+              </Text>
+              <Pressable onPress={() => setSearch('')} hitSlop={6}>
+                <X size={14} color="#9CA3AF" />
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+        {/* Storm-focus active banner — sits right under the search bar so
+           the context of "what's being filtered" lives in the same visual
+           group as the other filter inputs. */}
+        {stormFocus && weatherEnabled ? (
+          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-100">
+            <Crosshair size={12} color="#DC2626" />
+            <Text className="text-[11px] font-semibold text-red-700 flex-1">
+              {t.weather.focusModeBadge}
+            </Text>
+            <Pressable onPress={() => setStormFocus(false)} hitSlop={6}>
+              <X size={12} color="#DC2626" />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       <View className="flex-1">
@@ -243,7 +674,7 @@ export default function MapScreen() {
             <ActivityIndicator color="#4F46E5" />
           </View>
         ) : (
-          <MapView
+          <ClusteredMapView
             // No `provider` prop → react-native-maps uses the platform
             // default: Apple Maps on iOS (free, no extra native SDK), Google
             // Maps on Android (its built-in default). The web map uses
@@ -252,24 +683,78 @@ export default function MapScreen() {
             // a config plugin or post-prebuild step — out of scope for v1.
             style={{ flex: 1 }}
             initialRegion={initialRegion}
+            // Capture the underlying MapView ref so we can call
+            // fitToCoordinates() when search narrows the result set.
+            mapRef={(ref) => { mapRef.current = ref as unknown as MapView; }}
+            mapType={deviceSettings.mapType}
+            clusteringEnabled={deviceSettings.clustering}
+            clusterColor="#4F46E5"
+            clusterTextColor="#FFFFFF"
+            // Off-by-default in the lib, but the lib's animation glitches
+            // when used with a lot of markers — leave it off for now.
+            animationEnabled={false}
           >
-            {visiblePins.map(p => (
-              <Marker
-                key={`${p.type}-${p.id}`}
-                coordinate={{ latitude: p.lat, longitude: p.lng }}
-                pinColor={LAYER_COLORS[p.type === 'client' ? 'clients' : p.type === 'job' ? 'jobs' : 'employees']}
-                onPress={() => setSelected(p)}
-                tracksViewChanges={false}
-              />
-            ))}
-          </MapView>
+            {visiblePins.map(p => {
+              // Resolve color + icon LOCALLY using the business's pin
+              // config. Returns null when a hide rule matched — skip
+              // those pins entirely so they don't render at all. Weather
+              // pins use the same resolver so per-event rules (e.g.
+              // event = 'Tornado Warning' → red tornado icon) apply.
+              const layerKey =
+                p.type === 'client'  ? 'clients'  as const :
+                p.type === 'job'     ? 'jobs'     as const :
+                p.type === 'weather' ? 'weather'  as const :
+                                       'employees' as const;
+              const layerCfg = business?.map_pin_config?.[layerKey];
+              const style = resolvePinStyle(
+                layerKey,
+                layerCfg,
+                p as unknown as Record<string, unknown>,
+              );
+              if (style === null) return null;
+              // For weather primaries, look up how many siblings share
+              // this location so the badge shows "+N".
+              const siblingCount =
+                p.type === 'weather' ? (siblingsByWeatherId.get(p.id)?.length ?? 0) : 0;
+              return (
+                <Marker
+                  key={`${p.type}-${p.id}`}
+                  coordinate={{ latitude: p.lat, longitude: p.lng }}
+                  onPress={() => setSelected(p)}
+                  // Anchor the pin tip (bottom-center of the PinBadge view)
+                  // at the lat/lng. Without this the badge centers on the
+                  // location and looks like it's floating above it.
+                  anchor={{ x: 0.5, y: 1 }}
+                  // Custom child node → native pin styling is bypassed.
+                  // tracksViewChanges:false after first render is critical
+                  // for perf at 200+ markers.
+                  tracksViewChanges={false}
+                >
+                  <PinBadge
+                    iconKey={style.icon}
+                    color={style.color}
+                    iconColor={style.iconColor}
+                    size={PIN_SIZE_PX[deviceSettings.pinSize]}
+                    countBadge={siblingCount > 0 ? siblingCount : undefined}
+                  />
+                </Marker>
+              );
+            })}
+          </ClusteredMapView>
         )}
 
         {/* Geocode banner — only when there are clients still missing
-            coordinates. Tap-to-backfill saves a settings detour. */}
-        {!loading && pins && pins.needsGeocoding > 0 ? (
+            coordinates. Tap-to-backfill saves a settings detour. Now
+            auto-loops until count hits 0 or no progress is made, and
+            shows a breakdown so the user knows why some won't resolve. */}
+        {!loading && pins && pins.needsGeocoding > 0 && !bannerDismissed ? (
           <Pressable
-            onPress={onGeocode}
+            // Tap opens the unresolved-clients list so the user can SEE
+            // which clients are affected. The list has its own "Reintentar"
+            // button for batch geocoding. Tapping the banner used to fire
+            // geocoding blindly which gave the user no actionable info
+            // when it returned "0 located".
+            onPress={() => setUnresolvedOpen(true)}
             disabled={geocoding}
             className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
             style={{
@@ -283,79 +768,92 @@ export default function MapScreen() {
             <View className="w-8 h-8 rounded-full bg-sky-100 items-center justify-center">
               <Users size={16} color="#0EA5E9" />
             </View>
-            <Text className="flex-1 text-sm text-gray-900">
-              {geocoding
-                ? t.geocodeRunning
-                : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
-            </Text>
+            <View className="flex-1">
+              <Text className="text-sm text-gray-900">
+                {geocoding && geocodeProgress
+                  ? t.geocodeProgress
+                      .replace('{{done}}', String(geocodeProgress.done))
+                      .replace('{{total}}', String(geocodeProgress.total))
+                  : geocoding
+                    ? t.geocodeRunning
+                    : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
+              </Text>
+              {!geocoding && pins.geocodeBreakdown ? (
+                <Text className="text-xs text-gray-500 mt-0.5">
+                  {t.geocodeBreakdown
+                    .replace('{{noAddr}}', String(pins.geocodeBreakdown.noAddress))
+                    .replace('{{unresolved}}', String(pins.geocodeBreakdown.unresolved))
+                    .replace('{{pending}}', String(pins.geocodeBreakdown.pending))}
+                </Text>
+              ) : null}
+            </View>
             {geocoding ? <ActivityIndicator size="small" color="#4F46E5" /> : null}
+            {/* Dismiss for this session — banner re-shows when the user
+               returns to the map. stopPropagation so the surrounding
+               Pressable's onPress (open list) doesn't also fire. */}
+            <Pressable
+              onPress={(e) => { e.stopPropagation(); setBannerDismissed(true); }}
+              hitSlop={10}
+              className="p-1.5 -mr-1 rounded-lg active:bg-gray-100"
+            >
+              <X size={16} color="#9CA3AF" />
+            </Pressable>
           </Pressable>
         ) : null}
 
-        {/* Selected pin sheet — single tap on a marker; bottom sheet
-            shows name + Open button. Modeled after the existing job
-            assignment sheet to keep visual language consistent. */}
+        {/* Selected pin sheet — centered modal with a backdrop. Shows
+           identifying info + quick-action buttons (call/text/email for
+           clients) + a "Ver detalles" button that pushes to the full
+           record. Back from there returns to the map automatically via
+           expo-router's history stack. */}
         {selected ? (
-          <View
-            className="absolute bottom-0 left-0 right-0 bg-white px-5 pt-4 pb-8 rounded-t-3xl"
-            style={{
-              shadowColor: '#000',
-              shadowOpacity: 0.12,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: -2 },
-              elevation: 8,
-            }}
-          >
-            <View className="flex-row items-start gap-3 mb-3">
-              <View
-                className="w-12 h-12 rounded-2xl items-center justify-center"
-                style={{ backgroundColor: `${
-                  selected.type === 'client'
-                    ? LAYER_COLORS.clients
-                    : selected.type === 'job'
-                      ? LAYER_COLORS.jobs
-                      : LAYER_COLORS.employees
-                }15` }}
-              >
-                {selected.type === 'client' ? (
-                  <Users size={20} color={LAYER_COLORS.clients} />
-                ) : selected.type === 'job' ? (
-                  <Briefcase size={20} color={LAYER_COLORS.jobs} />
-                ) : (
-                  <UserCircle2 size={20} color={LAYER_COLORS.employees} />
-                )}
-              </View>
-              <View className="flex-1 min-w-0">
-                <Text className="text-base font-semibold text-gray-900" numberOfLines={1}>
-                  {selected.type === 'client'
-                    ? `${selected.first_name} ${selected.last_name}`
-                    : selected.type === 'job'
-                      ? selected.title
-                      : `${selected.first_name} ${selected.last_name}`}
-                </Text>
-                {selected.type === 'client' && selected.company ? (
-                  <Text className="text-xs text-gray-500" numberOfLines={1}>{selected.company}</Text>
-                ) : selected.type === 'job' && selected.client_name ? (
-                  <Text className="text-xs text-gray-500" numberOfLines={1}>{selected.client_name}</Text>
-                ) : selected.type === 'employee' && selected.job_title ? (
-                  <Text className="text-xs text-gray-500" numberOfLines={1}>
-                    {t.assignedToJob}: {selected.job_title}
-                  </Text>
-                ) : null}
-              </View>
-              <Pressable onPress={() => setSelected(null)} hitSlop={8} className="p-1 -mr-1">
-                <X size={18} color="#6B7280" />
-              </Pressable>
-            </View>
-            <Pressable
-              onPress={openSelected}
-              className="rounded-xl bg-primary py-3 items-center active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-white">{t.openRecord}</Text>
-            </Pressable>
-          </View>
+          selected.type === 'weather' ? (
+            <WeatherPinCard
+              selected={selected}
+              siblings={siblingsByWeatherId.get(selected.id) ?? []}
+              onClose={() => setSelected(null)}
+              labels={t.weather}
+            />
+          ) : (
+            <SelectedPinCard
+              selected={selected}
+              onClose={() => setSelected(null)}
+              onOpenRecord={openSelected}
+              openRecordLabel={t.openRecord}
+              assignedToLabel={t.assignedToJob}
+              callsClient={full.dashboard.clients.detail}
+            />
+          )
         ) : null}
       </View>
+
+      {/* Settings sheet — gear icon in header triggers this. Pin rules
+         save to DB; map type/clustering/size persist to AsyncStorage. */}
+      <MapSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        deviceSettings={deviceSettings}
+        onDeviceSettingsChange={updateDeviceSettings}
+        onPinConfigSaved={() => void load()}
+      />
+
+      {/* Unresolved-clients list — opened by tapping the geocode banner.
+         Lets the user see WHICH clients are missing coordinates + why,
+         and jump to a client's detail page to fix the address. */}
+      {unresolvedOpen ? (
+        <UnresolvedClientsModal
+          onClose={() => setUnresolvedOpen(false)}
+          onOpenClient={(id) => {
+            setUnresolvedOpen(false);
+            router.push(`/dashboard/clientes/${id}?from=map` as never);
+          }}
+          onRetry={async () => {
+            setUnresolvedOpen(false);
+            await onGeocode();
+          }}
+          retrying={geocoding}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -395,4 +893,592 @@ function LayerPill({ icon: Icon, label, color, active, count, onPress }: LayerPi
       </View>
     </Pressable>
   );
+}
+
+// ─── Selected-pin card ──────────────────────────────────────────────────
+// Centered modal with backdrop. Tap a pin → card shows identifying info
+// + quick contact actions (call/text/email for clients) + an "Open record"
+// button that pushes to the full detail screen.
+function SelectedPinCard({
+  selected,
+  onClose,
+  onOpenRecord,
+  openRecordLabel,
+  assignedToLabel,
+  callsClient,
+}: {
+  selected: ClientPin | JobPin | EmployeePin;
+  onClose: () => void;
+  onOpenRecord: () => void;
+  openRecordLabel: string;
+  assignedToLabel: string;
+  callsClient: { actionCall: string; actionText: string; actionEmail: string };
+}) {
+  const layerColor =
+    selected.type === 'client'
+      ? LAYER_COLORS.clients
+      : selected.type === 'job'
+        ? LAYER_COLORS.jobs
+        : LAYER_COLORS.employees;
+
+  const displayName =
+    selected.type === 'client'
+      ? `${selected.first_name} ${selected.last_name}`
+      : selected.type === 'job'
+        ? selected.title
+        : `${selected.first_name} ${selected.last_name}`;
+
+  const subtitle =
+    selected.type === 'client'
+      ? selected.company
+      : selected.type === 'job'
+        ? selected.client_name
+        : selected.job_title
+          ? `${assignedToLabel}: ${selected.job_title}`
+          : null;
+
+  // Client-only: phone/email/address from the pin payload. Falls back
+  // across the cell/office variants like the client detail page does.
+  const phone =
+    selected.type === 'client'
+      ? selected.phone_cell ?? selected.phone_office ?? null
+      : null;
+  const email =
+    selected.type === 'client'
+      ? selected.email_office ?? selected.email_home ?? null
+      : null;
+  const addressLine =
+    selected.type === 'client'
+      ? [selected.address, selected.city, selected.state].filter(Boolean).join(', ')
+      : selected.type === 'job'
+        ? [selected.job_address, selected.job_city, selected.job_state].filter(Boolean).join(', ')
+        : '';
+
+  return (
+    <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        className="flex-1 bg-black/40 items-center justify-center px-6"
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          className="bg-white rounded-3xl w-full max-w-sm p-5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 12,
+          }}
+        >
+          {/* Header — icon + name + close */}
+          <View className="flex-row items-start gap-3 mb-4">
+            <View
+              className="w-12 h-12 rounded-2xl items-center justify-center"
+              style={{ backgroundColor: `${layerColor}15` }}
+            >
+              {selected.type === 'client' ? (
+                <Users size={22} color={layerColor} />
+              ) : selected.type === 'job' ? (
+                <Briefcase size={22} color={layerColor} />
+              ) : (
+                <UserCircle2 size={22} color={layerColor} />
+              )}
+            </View>
+            <View className="flex-1 min-w-0 pt-0.5">
+              <Text className="text-base font-bold text-gray-900" numberOfLines={1}>
+                {displayName}
+              </Text>
+              {subtitle ? (
+                <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={onClose} hitSlop={8} className="p-1 -mr-1 -mt-1">
+              <X size={20} color="#9CA3AF" />
+            </Pressable>
+          </View>
+
+          {/* Info rows */}
+          <View className="gap-2 mb-4">
+            {phone ? (
+              <InfoRow icon={<Phone size={14} color="#6B7280" />} text={fmtPhonePretty(phone)} />
+            ) : null}
+            {email ? (
+              <InfoRow icon={<Mail size={14} color="#6B7280" />} text={email} />
+            ) : null}
+            {addressLine ? (
+              <InfoRow icon={<MapPinIconLucide size={14} color="#6B7280" />} text={addressLine} />
+            ) : null}
+            {selected.type === 'job' && selected.scheduled_date ? (
+              <InfoRow icon={<Calendar size={14} color="#6B7280" />} text={selected.scheduled_date} />
+            ) : null}
+          </View>
+
+          {/* Quick contact actions — clients only, only if we have data */}
+          {selected.type === 'client' && (phone || email) ? (
+            <View className="flex-row gap-2 mb-3">
+              {phone ? (
+                <ActionButton
+                  icon={<Phone size={16} color="#4F46E5" />}
+                  label={callsClient.actionCall}
+                  onPress={() => Linking.openURL(`tel:${phone.replace(/\D/g, '')}`).catch(() => {})}
+                />
+              ) : null}
+              {phone ? (
+                <ActionButton
+                  icon={<MessageSquare size={16} color="#4F46E5" />}
+                  label={callsClient.actionText}
+                  onPress={() => Linking.openURL(`sms:${phone.replace(/\D/g, '')}`).catch(() => {})}
+                />
+              ) : null}
+              {email ? (
+                <ActionButton
+                  icon={<Mail size={16} color="#4F46E5" />}
+                  label={callsClient.actionEmail}
+                  onPress={() => Linking.openURL(`mailto:${email}`).catch(() => {})}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Open record */}
+          <Pressable
+            onPress={onOpenRecord}
+            className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
+          >
+            <Text className="text-sm font-semibold text-white">{openRecordLabel}</Text>
+            <ArrowRight size={14} color="#FFFFFF" />
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </RNModal>
+  );
+}
+
+// Two-column label/value row used in the weather alert detail card.
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row py-1.5 border-b border-gray-50" style={{ gap: 16 }}>
+      <Text
+        style={{ width: 100 }}
+        className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 pt-0.5"
+      >
+        {label}
+      </Text>
+      <Text className="flex-1 text-xs text-gray-800">{value}</Text>
+    </View>
+  );
+}
+
+function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <View className="flex-row items-start gap-2">
+      <View className="mt-0.5">{icon}</View>
+      <Text className="text-xs text-gray-700 flex-1" numberOfLines={2}>{text}</Text>
+    </View>
+  );
+}
+
+function ActionButton({ icon, label, onPress }: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-1 flex-col items-center justify-center gap-1 py-2.5 rounded-xl bg-primary/5 border border-primary/20 active:bg-primary/10"
+    >
+      {icon}
+      <Text className="text-[11px] font-semibold text-primary">{label}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Weather-pin card ───────────────────────────────────────────────────
+// Full NOAA alert detail. Shows every field the API stores so the user has
+// complete context. When multiple alerts share the same county (passed in
+// via `siblings`), a tappable list appears at the bottom so the user can
+// switch between them without closing the card.
+function WeatherPinCard({
+  selected,
+  siblings,
+  onClose,
+  labels,
+}: {
+  selected: WeatherPin;
+  siblings: WeatherPin[];
+  onClose: () => void;
+  labels: {
+    pinPopupExpires: string;
+    pinPopupArea: string;
+    pinPopupSeverity: string;
+    pinPopupOpenNws: string;
+    pinPopupHeadline: string;
+    pinPopupEvent: string;
+    pinPopupCity: string;
+    pinPopupState: string;
+    pinPopupStarts: string;
+    pinPopupEnds: string;
+    pinPopupSent: string;
+    pinPopupAdded: string;
+    pinPopupDescription: string;
+    pinPopupOtherAlerts: string;
+  };
+}) {
+  // Internal "current" alert — defaults to `selected` (the marker's
+  // primary) but the user can switch by tapping a sibling row. Reset
+  // when the parent passes a different `selected` (different marker tap).
+  const [current, setCurrent] = useState<WeatherPin>(selected);
+  useEffect(() => { setCurrent(selected); }, [selected.id]);
+
+  // All alerts at this location = current + siblings (minus current),
+  // sorted newest-first by sent_at. Used to render the switcher list.
+  const allAtLocation = useMemo(() => {
+    const others = siblings.filter(s => s.id !== current.id);
+    const restored = current.id === selected.id ? siblings : [...siblings, selected].filter(s => s.id !== current.id);
+    const list = [current, ...(current.id === selected.id ? others : restored)];
+    return list.sort((a, b) => {
+      const ta = new Date(a.sent_at ?? a.fetched_at ?? 0).getTime();
+      const tb = new Date(b.sent_at ?? b.fetched_at ?? 0).getTime();
+      return tb - ta;
+    });
+  }, [current, selected, siblings]);
+  const otherAlerts = allAtLocation.filter(a => a.id !== current.id);
+
+  const color = weatherPinColor(current.event);
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : null);
+  const nwsUrl = current.nws_url ?? (current.alert_id.startsWith('http') ? current.alert_id : null);
+  // Prefer ends_at when present (the actual event-end time), otherwise expires_at.
+  const endTime = fmt(current.ends_at ?? current.expires_at);
+  const startTime = fmt(current.effective_at);
+  const sentTime = fmt(current.sent_at);
+  const addedTime = fmt(current.fetched_at);
+
+  return (
+    <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
+      {/* Backdrop and card are SIBLINGS, not parent/child. Wrapping the
+         card in a Pressable (even with stopPropagation) hijacks vertical
+         pan gestures on iOS and prevents the ScrollView inside from
+         scrolling. Separating layers means the backdrop catches taps and
+         the card's ScrollView gets touch events cleanly. */}
+      <View className="flex-1 items-center justify-center px-6">
+        <Pressable
+          onPress={onClose}
+          className="absolute inset-0 bg-black/40"
+        />
+        <View
+          className="bg-white rounded-3xl w-full max-w-sm"
+          style={{
+            maxHeight: '85%',
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 12,
+          }}
+        >
+          {/* Header — sticky-feeling because it sits above the scroll body */}
+          <View className="flex-row items-start gap-3 p-5 pb-3 border-b border-gray-100">
+            <View
+              className="w-12 h-12 rounded-2xl items-center justify-center"
+              style={{ backgroundColor: `${color}15` }}
+            >
+              <CloudLightning size={22} color={color} />
+            </View>
+            <View className="flex-1 min-w-0 pt-0.5">
+              <Text className="text-base font-bold text-gray-900" numberOfLines={2}>
+                {current.event}
+              </Text>
+              {current.severity ? (
+                <Text className="text-[10px] uppercase tracking-wide font-semibold mt-0.5" style={{ color }}>
+                  {current.severity}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={onClose} hitSlop={8} className="p-1 -mr-1 -mt-1">
+              <X size={20} color="#9CA3AF" />
+            </Pressable>
+          </View>
+
+          {/* Scrollable body — full alert detail + sibling switcher.
+             `flexShrink: 1` is the key: the card itself sizes to content
+             normally (so short alerts stay small), and when content
+             exceeds the parent's `maxHeight: 85%`, the ScrollView shrinks
+             to fit + starts scrolling instead of clipping. Using `flex-1`
+             here collapses the card because flex-1 wants to FILL an
+             un-sized parent, not shrink to fit it. */}
+          <ScrollView
+            className="px-5 py-4"
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ paddingBottom: 12 }}
+          >
+            {current.headline ? (
+              <DetailRow label={labels.pinPopupHeadline} value={current.headline} />
+            ) : null}
+            <DetailRow label={labels.pinPopupEvent} value={current.event} />
+            {current.severity ? (
+              <DetailRow label={labels.pinPopupSeverity} value={current.severity} />
+            ) : null}
+            {current.county ? (
+              <DetailRow label={labels.pinPopupCity} value={current.county} />
+            ) : null}
+            {current.state ? (
+              <DetailRow label={labels.pinPopupState} value={current.state} />
+            ) : null}
+            {current.area_desc ? (
+              <DetailRow label={labels.pinPopupArea} value={current.area_desc} />
+            ) : null}
+            {startTime ? <DetailRow label={labels.pinPopupStarts} value={startTime} /> : null}
+            {endTime ? <DetailRow label={labels.pinPopupEnds} value={endTime} /> : null}
+            {sentTime ? <DetailRow label={labels.pinPopupSent} value={sentTime} /> : null}
+            {addedTime ? <DetailRow label={labels.pinPopupAdded} value={addedTime} /> : null}
+            {current.description ? (
+              <View className="mt-2">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                  {labels.pinPopupDescription}
+                </Text>
+                <Text className="text-xs text-gray-700 leading-5">{current.description}</Text>
+              </View>
+            ) : null}
+
+            {/* Other alerts at the same county — tap to swap the detail view */}
+            {otherAlerts.length > 0 ? (
+              <View className="mt-4">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
+                  {labels.pinPopupOtherAlerts}
+                </Text>
+                <View className="gap-1.5">
+                  {otherAlerts.map((alt) => {
+                    const altColor = weatherPinColor(alt.event);
+                    const altWhen = fmt(alt.sent_at) ?? '—';
+                    return (
+                      <Pressable
+                        key={alt.id}
+                        onPress={() => setCurrent(alt)}
+                        className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-gray-100"
+                      >
+                        <View
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: altColor }}
+                        />
+                        <View className="flex-1 min-w-0">
+                          <Text className="text-xs font-semibold text-gray-800" numberOfLines={1}>
+                            {alt.event}
+                          </Text>
+                          <Text className="text-[10px] text-gray-500" numberOfLines={1}>
+                            {alt.severity ? `${alt.severity} · ` : ''}{altWhen}
+                          </Text>
+                        </View>
+                        <ArrowRight size={12} color="#9CA3AF" />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          {nwsUrl ? (
+            <View className="p-5 pt-3 border-t border-gray-100">
+              <Pressable
+                onPress={() => Linking.openURL(nwsUrl).catch(() => {})}
+                className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
+              >
+                <Text className="text-sm font-semibold text-white">{labels.pinPopupOpenNws}</Text>
+                <ExternalLink size={14} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </RNModal>
+  );
+}
+
+// ─── Unresolved-clients modal ───────────────────────────────────────────
+// Lists every client with missing lat/lng so the user can see WHICH ones
+// failed and tap to fix the address manually. Grouped by failure reason:
+//   - no_address : client has no street/city/state at all
+//   - not_found  : geocoder couldn't resolve the address
+//   - pending    : never tried OR cooldown expired (eligible for retry)
+function UnresolvedClientsModal({
+  onClose,
+  onOpenClient,
+  onRetry,
+  retrying,
+}: {
+  onClose: () => void;
+  onOpenClient: (id: string) => void;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.modules.map;
+  const supabase = createSupabaseClient();
+  type Row = {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    company: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+    lat_lookup_attempted_at: string | null;
+    lat_lookup_failed_reason: string | null;
+  };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
+        .eq('business_id', business.id)
+        .is('lat', null)
+        .order('first_name', { ascending: true });
+      if (!cancelled) {
+        setRows((data ?? []) as Row[]);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [business?.id]);
+
+  const groups = useMemo(() => {
+    const noAddress: Row[] = [];
+    const notFound: Row[] = [];
+    const pending: Row[] = [];
+    for (const r of rows) {
+      const hasAnyAddress = !!(r.address || r.city || r.state || r.zip_code);
+      if (!hasAnyAddress || r.lat_lookup_failed_reason === 'no_address') {
+        noAddress.push(r);
+      } else if (r.lat_lookup_failed_reason && r.lat_lookup_failed_reason !== 'no_address') {
+        notFound.push(r);
+      } else {
+        pending.push(r);
+      }
+    }
+    return { noAddress, notFound, pending };
+  }, [rows]);
+
+  const renderRow = (r: Row, hint?: string) => {
+    const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
+    const addr = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
+    return (
+      <Pressable
+        key={r.id}
+        onPress={() => onOpenClient(r.id)}
+        className="px-4 py-3 border-b border-gray-100 active:bg-gray-50"
+      >
+        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
+        {r.company ? (
+          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
+        ) : null}
+        <Text className="text-xs text-gray-400 mt-1" numberOfLines={2}>
+          {addr || '—'}
+        </Text>
+        {hint ? (
+          <Text className="text-[10px] text-gray-400 italic mt-1" numberOfLines={2}>{hint}</Text>
+        ) : null}
+      </Pressable>
+    );
+  };
+
+  return (
+    <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View className="flex-1 items-center justify-center px-6">
+        <Pressable onPress={onClose} className="absolute inset-0 bg-black/40" />
+        <View
+          className="bg-white rounded-3xl w-full max-w-sm"
+          style={{
+            maxHeight: '85%',
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 12,
+          }}
+        >
+          <View className="flex-row items-center gap-3 p-5 pb-3 border-b border-gray-100">
+            <View className="w-10 h-10 rounded-2xl items-center justify-center bg-sky-100">
+              <Users size={20} color="#0EA5E9" />
+            </View>
+            <Text className="flex-1 text-base font-bold text-gray-900">{t.geocodeListTitle}</Text>
+            <Pressable onPress={onClose} hitSlop={8} className="p-1">
+              <X size={20} color="#9CA3AF" />
+            </Pressable>
+          </View>
+
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
+            {loading ? (
+              <View className="py-12 items-center">
+                <ActivityIndicator size="small" color="#4F46E5" />
+              </View>
+            ) : rows.length === 0 ? (
+              <Text className="text-xs text-gray-400 italic text-center py-8">
+                {t.geocodeListEmpty}
+              </Text>
+            ) : (
+              <>
+                {groups.pending.length > 0 ? (
+                  <View>
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                      {t.geocodeListSectionPending} ({groups.pending.length})
+                    </Text>
+                    {groups.pending.map((r) => renderRow(r))}
+                  </View>
+                ) : null}
+                {groups.notFound.length > 0 ? (
+                  <View>
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                      {t.geocodeListSectionUnresolved} ({groups.notFound.length})
+                    </Text>
+                    {groups.notFound.map((r) => renderRow(r, t.geocodeListUnresolvedHint))}
+                  </View>
+                ) : null}
+                {groups.noAddress.length > 0 ? (
+                  <View>
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                      {t.geocodeListSectionNoAddress} ({groups.noAddress.length})
+                    </Text>
+                    {groups.noAddress.map((r) => renderRow(r, t.geocodeListNoAddressHint))}
+                  </View>
+                ) : null}
+              </>
+            )}
+          </ScrollView>
+
+          {groups.pending.length > 0 ? (
+            <View className="p-5 pt-3 border-t border-gray-100">
+              <Pressable
+                onPress={onRetry}
+                disabled={retrying}
+                className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
+              >
+                {retrying ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+                <Text className="text-sm font-semibold text-white">{t.geocodeListRetryBtn}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </RNModal>
+  );
+}
+
+function fmtPhonePretty(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && digits[0] === '1')
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  return raw;
 }
