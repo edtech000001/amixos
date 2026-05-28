@@ -7,6 +7,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
 import { LoginScreen, type LoginAttemptResult } from '@amixos/shared/screens/auth/LoginScreen';
 import { useLang } from '@/i18n/LangProvider';
+import { userNeedsOnboarding } from '@/lib/onboardingGate';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,12 +45,7 @@ export default function LoginPage() {
       const { data: { session } } = await supabase.auth.getSession();
       let needsOnboarding = false;
       if (session) {
-        const { data: businesses } = await supabase
-          .from('businesses')
-          .select('id')
-          .eq('owner_id', session.user.id)
-          .limit(1);
-        needsOnboarding = !businesses || businesses.length === 0;
+        needsOnboarding = await userNeedsOnboarding(supabase, session.user.id);
       }
 
       // Hard navigate so SSR session cookies are read fresh on the next page.

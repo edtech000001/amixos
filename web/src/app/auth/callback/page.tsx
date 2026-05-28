@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
+import { userNeedsOnboarding } from '@/lib/onboardingGate';
 
 export default function AuthCallbackPage() {
   const { t } = useLang();
@@ -32,18 +33,10 @@ export default function AuthCallbackPage() {
         // OAuth, see web/src/app/auth/google-callback/page.tsx) — this
         // callback is purely for Supabase sign-in / sign-up.
 
-        // Check if user has a business already
-        const { data: businesses } = await supabase
-          .from('businesses')
-          .select('id')
-          .eq('owner_id', data.session.user.id)
-          .limit(1);
-
-        if (!businesses || businesses.length === 0) {
-          window.location.href = '/onboarding';
-        } else {
-          window.location.href = '/dashboard';
-        }
+        // Send members (owners + invited team) to the dashboard; only users
+        // who belong to no business at all go through create-business onboarding.
+        const needsOnboarding = await userNeedsOnboarding(supabase, data.session.user.id);
+        window.location.href = needsOnboarding ? '/onboarding' : '/dashboard';
         return;
       }
 
