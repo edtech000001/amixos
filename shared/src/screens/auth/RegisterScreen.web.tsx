@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Mail, Lock, User } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useLang } from '../../i18n';
 
 export type RegisterAttemptResult =
@@ -57,6 +57,8 @@ export function RegisterScreen({
   });
 
   const [error, setError] = useState<string | undefined>();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const onSubmit = handleSubmit(async (data) => {
     setError(undefined);
@@ -142,14 +144,23 @@ export function RegisterScreen({
             <div className="relative">
               <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder={t.register.passwordPlaceholder}
                 {...register('password')}
-                className={`w-full rounded-xl border bg-white pl-10 pr-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
+                className={`w-full rounded-xl border bg-white pl-10 pr-11 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
                   errors.password ? 'border-red-300' : 'border-gray-200'
                 }`}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
             {errors.password ? (
               <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>
@@ -161,14 +172,23 @@ export function RegisterScreen({
             <div className="relative">
               <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
-                type="password"
+                type={showConfirm ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder={t.register.confirmPasswordPlaceholder}
                 {...register('confirmPassword')}
-                className={`w-full rounded-xl border bg-white pl-10 pr-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
+                className={`w-full rounded-xl border bg-white pl-10 pr-11 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
                   errors.confirmPassword ? 'border-red-300' : 'border-gray-200'
                 }`}
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
             {errors.confirmPassword ? (
               <p className="text-xs text-red-500 mt-1">{errors.confirmPassword.message}</p>
