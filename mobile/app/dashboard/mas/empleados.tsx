@@ -387,7 +387,7 @@ export default function EmpleadosRoute() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           {/* Backdrop sits BEHIND the sheet so its Pressable doesn't eat the
              ScrollView's pan gestures. The previous nested-Pressable layout
@@ -661,7 +661,7 @@ export default function EmpleadosRoute() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           <View className="flex-1 justify-end">
             <Pressable

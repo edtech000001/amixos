@@ -70,7 +70,7 @@ export function RegisterScreen({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1"
+      style={{ flex: 1 }}
     >
       <AuthBackground />
       <ScrollView

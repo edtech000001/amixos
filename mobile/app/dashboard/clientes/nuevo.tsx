@@ -283,7 +283,7 @@ export default function NuevoClienteRoute() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerClassName="px-5 pt-5 pb-32"

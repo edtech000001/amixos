@@ -31,7 +31,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <View className="flex-1 bg-black/40 items-center justify-center p-4">
           {/* Backdrop press-to-close — sits BEHIND the card, so taps inside

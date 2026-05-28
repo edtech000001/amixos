@@ -79,10 +79,9 @@ export function LoginScreen({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1"
       // Match the hero gradient's bottom stop so the area below the floating
       // card blends seamlessly with the gradient above it.
-      style={{ backgroundColor: '#8B5CF6' }}
+      style={{ flex: 1, backgroundColor: '#8B5CF6' }}
     >
       <ScrollView
         contentContainerClassName="flex-grow"

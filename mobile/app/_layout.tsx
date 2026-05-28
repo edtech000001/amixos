@@ -3,13 +3,21 @@ import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { cssInterop } from 'nativewind';
 import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
 import { useProtectedRoute } from '@/lib/auth/gate';
 // Importing the auth store at module load wires up the single
 // onAuthStateChange listener and the safety timeout.
 import '@/lib/auth/store';
+
+// SafeAreaView from react-native-safe-area-context is a third-party component,
+// so NativeWind v4 does NOT auto-apply `className` to it. Screens using
+// `<SafeAreaView className="flex-1">` had the class silently dropped, collapsing
+// the root and leaving the body blank (forms, detail, and Más screens). Register
+// it once here so className → style works app-wide.
+cssInterop(SafeAreaView, { className: 'style' });
 
 // expo-router calls SplashScreen._internal_preventAutoHideAsync() at startup.
 // The native call throws "No native splash screen registered" because the
