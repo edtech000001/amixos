@@ -25,13 +25,19 @@ import {
   Building2,
   Star,
   UserPlus,
+  Share2,
 } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { buildClientCsv, buildClientHtml } from '@amixos/shared/lib/clientShare';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { Button, Input, Toggle } from '@amixos/shared/ui';
+import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
-import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate {
@@ -113,6 +119,14 @@ const fmtPhoneInput = (raw: string): string => {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 };
 
+// Linking.openURL throws an unhandled rejection on the iOS simulator (no
+// Mail/Phone app configured) and any device without a registered handler
+// for the scheme. Wrap so taps just no-op instead of surfacing a yellow
+// dev warning — a real device almost always has handlers.
+const openLink = (url: string) => {
+  Linking.openURL(url).catch(() => {});
+};
+
 const EMPTY_CONTACT = {
   name: '',
   role: '',
@@ -124,9 +138,20 @@ const EMPTY_CONTACT = {
 
 export default function ClienteDetailRoute() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  // Honor ?from=map so the back arrow returns to the map module instead
+  // of the clientes list. Same client detail page is reused from both
+  // entry points — this is the only place we differentiate.
+  const goBack = () => {
+    if (from === 'map') {
+      router.replace('/dashboard/mas/modulos/map' as never);
+    } else {
+      router.replace('/dashboard/clientes' as never);
+    }
+  };
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const syncBanner = useGoogleSyncBanner();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
   const td = t.detail;
@@ -144,6 +169,9 @@ export default function ClienteDetailRoute() {
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [savingContact, setSavingContact] = useState(false);
+  // Cache of distinct role values across this business — feeds the
+  // role-field autocomplete so previously-typed titles are one tap away.
+  const [roleSuggestions, setRoleSuggestions] = useState<string[]>([]);
 
   const load = async () => {
     if (!business || !id) return;
@@ -171,6 +199,24 @@ export default function ClienteDetailRoute() {
     setTemplates((tpl as FieldTemplate[] | null) ?? []);
     setContacts((cts as ClientContact[] | null) ?? []);
     setLoading(false);
+
+    // Background fetch of all roles across the business. Cheap query
+    // (single column, indexed) and the result feeds the AutocompleteInput
+    // in the contact modal. Deduped + sorted client-side.
+    const { data: roleRows } = await supabase
+      .from('client_contacts')
+      .select('role')
+      .eq('business_id', business.id)
+      .not('role', 'is', null)
+      .neq('role', '');
+    const unique = Array.from(
+      new Set(
+        ((roleRows as { role: string }[] | null) ?? [])
+          .map(r => r.role.trim())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, 'es'));
+    setRoleSuggestions(unique);
   };
 
   // useFocusEffect instead of useEffect: the screen re-loads every time it
@@ -202,6 +248,98 @@ export default function ClienteDetailRoute() {
   const fmtDateTime = (iso: string | null): string | null =>
     iso ? formatDateTimeLong(iso, dateLoc) : null;
 
+  // Build the label map used for both PDF rows and CSV headers — matches
+  // what the user already sees in the form labels so a shared CSV imports
+  // cleanly into the recipient's Amixos (same locale auto-maps without
+  // manual column picking).
+  const buildShareLabels = () => ({
+    first_name: t.fields.firstName,
+    last_name: t.fields.lastName,
+    company: t.fields.company,
+    phone_cell: t.fields.phoneCell,
+    phone_office: t.fields.phoneOffice,
+    email_office: t.fields.emailOffice,
+    email_home: t.fields.emailHome,
+    address: t.fields.addressLine1,
+    address_line2: t.fields.addressLine2 ?? 'Línea 2',
+    city: t.fields.city,
+    state: t.fields.state,
+    zip_code: t.fields.zipCode,
+    notes: t.fields.notes ?? 'Notas',
+  });
+
+  const onShareCsv = async () => {
+    if (!client) return;
+    try {
+      const csv = buildClientCsv(
+        client,
+        buildShareLabels(),
+        templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label })),
+      );
+      const safeName = [client.first_name, client.last_name]
+        .filter(Boolean)
+        .join('_')
+        .replace(/[^a-zA-Z0-9_-]/g, '') || 'cliente';
+      const path = `${FileSystem.cacheDirectory}${safeName}.csv`;
+      await FileSystem.writeAsStringAsync(path, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: td.shareTitle,
+          UTI: 'public.comma-separated-values-text',
+        });
+      }
+    } catch {
+      Alert.alert('', td.shareError);
+    }
+  };
+
+  const onSharePdf = () => {
+    if (!client) return;
+    Alert.alert(td.shareDialogTitle, undefined, [
+      { text: tc.buttons.cancel, style: 'cancel' },
+      { text: td.shareDialogBasic, onPress: () => runPdfShare(false) },
+      { text: td.shareDialogAll, onPress: () => runPdfShare(true) },
+    ]);
+  };
+
+  const runPdfShare = async (includeAll: boolean) => {
+    if (!client) return;
+    try {
+      const html = buildClientHtml(
+        client,
+        buildShareLabels(),
+        templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label })),
+        {
+          includeAll,
+          contacts: includeAll
+            ? contacts.map(c => ({
+                name: c.name,
+                role: c.role,
+                phone: c.phone,
+                email: c.email,
+              }))
+            : undefined,
+          contactsHeading: td.contactPeople,
+        },
+      );
+      // Render HTML → PDF on device, then surface the OS share sheet so
+      // the user can save / send / print from there.
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: td.shareTitle,
+          UTI: 'com.adobe.pdf',
+        });
+      }
+    } catch {
+      Alert.alert('', td.shareError);
+    }
+  };
+
   const confirmDelete = () => {
     if (!client) return;
     Alert.alert(t.confirmDeleteSingle, undefined, [
@@ -214,7 +352,13 @@ export default function ClienteDetailRoute() {
           // google_resource_name from the row to call People API).
           const apiBaseUrl = getApiBaseUrl();
           const jwt = await getJwt();
-          if (apiBaseUrl && jwt) await triggerGoogleSync('delete', client.id, { apiBaseUrl, jwt });
+          if (apiBaseUrl && jwt) {
+            try {
+              await triggerGoogleSyncOrThrow('delete', client.id, { apiBaseUrl, jwt });
+            } catch {
+              syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+            }
+          }
           await supabase.from('clients').delete().eq('id', client.id);
           router.replace('/dashboard/clientes' as never);
         },
@@ -350,13 +494,29 @@ export default function ClienteDetailRoute() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={() => router.replace('/dashboard/clientes' as never)}
+          onPress={goBack}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <View className="flex-row gap-1">
+          <Pressable
+            onPress={onSharePdf}
+            hitSlop={8}
+            className="p-2 rounded-lg active:bg-gray-100"
+            accessibilityLabel={td.sharePdfBtn}
+          >
+            <FileText size={18} color="#6B7280" />
+          </Pressable>
+          <Pressable
+            onPress={onShareCsv}
+            hitSlop={8}
+            className="p-2 rounded-lg active:bg-gray-100"
+            accessibilityLabel={td.shareCsvBtn}
+          >
+            <Share2 size={18} color="#6B7280" />
+          </Pressable>
           <Pressable
             onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
             hitSlop={8}
@@ -397,7 +557,7 @@ export default function ClienteDetailRoute() {
         <View className="flex-row gap-2 mb-3">
           <Pressable
             disabled={!primaryPhone}
-            onPress={() => primaryPhone && Linking.openURL(`tel:${primaryPhone}`)}
+            onPress={() => primaryPhone && openLink(`tel:${primaryPhone}`)}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -415,7 +575,7 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!primaryPhone}
-            onPress={() => primaryPhone && Linking.openURL(`sms:${primaryPhone}`)}
+            onPress={() => primaryPhone && openLink(`sms:${primaryPhone}`)}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -433,7 +593,7 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!primaryEmail}
-            onPress={() => primaryEmail && Linking.openURL(`mailto:${primaryEmail}`)}
+            onPress={() => primaryEmail && openLink(`mailto:${primaryEmail}`)}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryEmail
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -451,24 +611,37 @@ export default function ClienteDetailRoute() {
           </Pressable>
         </View>
 
-        <Pressable
-          onPress={() =>
-            router.push(`/dashboard/facturas/nueva?client=${client.id}` as never)
-          }
-          className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-primary active:opacity-80 mb-5"
-        >
-          <Plus size={16} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">
-            {full.dashboard.invoices.newInvoice}
-          </Text>
-        </Pressable>
+        <View className="flex-row gap-2 mb-5">
+          <Pressable
+            onPress={() =>
+              router.push(`/dashboard/facturas/nueva?client=${client.id}` as never)
+            }
+            className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-primary active:opacity-80"
+          >
+            <Plus size={16} color="#FFFFFF" />
+            <Text className="text-sm font-semibold text-white">
+              {full.dashboard.invoices.newInvoice}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              router.push(`/dashboard/trabajos/nuevo?client=${client.id}` as never)
+            }
+            className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary bg-white active:bg-primary/5"
+          >
+            <Plus size={16} color="#4F46E5" />
+            <Text className="text-sm font-semibold text-primary">
+              {full.dashboard.jobs.newDropdown.jobOption}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Contact card */}
         <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 gap-3">
           <Text className="text-xs font-semibold text-gray-400 uppercase">{td.contact}</Text>
           {primaryPhone ? (
             <Pressable
-              onPress={() => Linking.openURL(`tel:${primaryPhone}`)}
+              onPress={() => openLink(`tel:${primaryPhone}`)}
               className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Phone size={15} color="#9CA3AF" />
@@ -480,7 +653,7 @@ export default function ClienteDetailRoute() {
           ) : null}
           {officePhone ? (
             <Pressable
-              onPress={() => Linking.openURL(`tel:${officePhone}`)}
+              onPress={() => openLink(`tel:${officePhone}`)}
               className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Phone size={15} color="#9CA3AF" />
@@ -492,7 +665,7 @@ export default function ClienteDetailRoute() {
           ) : null}
           {primaryEmail ? (
             <Pressable
-              onPress={() => Linking.openURL(`mailto:${primaryEmail}`)}
+              onPress={() => openLink(`mailto:${primaryEmail}`)}
               className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Mail size={15} color="#9CA3AF" />
@@ -504,7 +677,7 @@ export default function ClienteDetailRoute() {
           ) : null}
           {homeEmail ? (
             <Pressable
-              onPress={() => Linking.openURL(`mailto:${homeEmail}`)}
+              onPress={() => openLink(`mailto:${homeEmail}`)}
               className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Mail size={15} color="#9CA3AF" />
@@ -602,7 +775,7 @@ export default function ClienteDetailRoute() {
                     <View className="flex-row gap-2 mt-2.5">
                       {ct.phone ? (
                         <Pressable
-                          onPress={() => Linking.openURL(`tel:${ct.phone}`)}
+                          onPress={() => openLink(`tel:${ct.phone}`)}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <Phone size={12} color="#4F46E5" />
@@ -611,7 +784,7 @@ export default function ClienteDetailRoute() {
                       ) : null}
                       {ct.phone ? (
                         <Pressable
-                          onPress={() => Linking.openURL(`sms:${ct.phone}`)}
+                          onPress={() => openLink(`sms:${ct.phone}`)}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <MessageSquare size={12} color="#4F46E5" />
@@ -620,7 +793,7 @@ export default function ClienteDetailRoute() {
                       ) : null}
                       {ct.email ? (
                         <Pressable
-                          onPress={() => Linking.openURL(`mailto:${ct.email}`)}
+                          onPress={() => openLink(`mailto:${ct.email}`)}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <Mail size={12} color="#4F46E5" />
@@ -810,11 +983,12 @@ export default function ClienteDetailRoute() {
                 value={contactForm.name}
                 onChangeText={v => setContactForm(f => ({ ...f, name: v }))}
               />
-              <Input
+              <AutocompleteInput
                 label={td.contactModal.roleLabel}
                 placeholder={td.contactModal.rolePlaceholder}
                 value={contactForm.role}
                 onChangeText={v => setContactForm(f => ({ ...f, role: v }))}
+                suggestions={roleSuggestions}
               />
               <Input
                 label={td.contactModal.phoneLabel}

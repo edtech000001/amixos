@@ -17,7 +17,8 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, Toggle, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
-import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate {
@@ -57,6 +58,7 @@ export default function NuevoClienteRoute() {
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const syncBanner = useGoogleSyncBanner();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
@@ -218,7 +220,9 @@ export default function NuevoClienteRoute() {
       void (async () => {
         const apiBaseUrl = getApiBaseUrl();
         const jwt = await getJwt();
-        if (apiBaseUrl && jwt) triggerGoogleSync('update', editId, { apiBaseUrl, jwt });
+        if (!apiBaseUrl || !jwt) return;
+        triggerGoogleSyncOrThrow('update', editId, { apiBaseUrl, jwt })
+          .catch(() => syncBanner.reportError('No se pudo actualizar el contacto en Google Contacts.'));
       })();
       router.replace(`/dashboard/clientes/${editId}` as never);
     } else {
@@ -235,7 +239,9 @@ export default function NuevoClienteRoute() {
       void (async () => {
         const apiBaseUrl = getApiBaseUrl();
         const jwt = await getJwt();
-        if (apiBaseUrl && jwt) triggerGoogleSync('create', created.id, { apiBaseUrl, jwt });
+        if (!apiBaseUrl || !jwt) return;
+        triggerGoogleSyncOrThrow('create', created.id, { apiBaseUrl, jwt })
+          .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
       })();
       router.replace(`/dashboard/clientes/${created.id}` as never);
     }

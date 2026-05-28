@@ -90,16 +90,28 @@ function buildAddressLine(c: ClientToGeocode): string {
  * Returns counts so the UI can show a useful summary. Caps at maxRows
  * per call so a runaway business with 10k clients doesn't blow the API
  * budget in a single click — caller can run multiple times to finish.
+ *
+ * Failures get a 30-day cooldown via clients.lat_lookup_attempted_at so
+ * a row Google can never resolve doesn't burn quota on every refresh.
+ * Address-fix edits should clear that timestamp if you want immediate
+ * retry — currently we rely on the 30-day window.
  */
+const RETRY_COOLDOWN_DAYS = 30;
+
 export async function geocodeMissingClients(
   businessId: string,
   maxRows: number = 100,
 ): Promise<{ attempted: number; geocoded: number; failed: number }> {
+  // Eligible rows = missing coords AND (never attempted OR last attempt
+  // was older than the cooldown). We pick a cutoff as ISO timestamp so
+  // Postgres can compare directly.
+  const cutoff = new Date(Date.now() - RETRY_COOLDOWN_DAYS * 86_400_000).toISOString();
   const { data } = await supabase
     .from('clients')
     .select('id, address, address_line2, city, state, zip_code')
     .eq('business_id', businessId)
     .is('lat', null)
+    .or(`lat_lookup_attempted_at.is.null,lat_lookup_attempted_at.lt.${cutoff}`)
     .limit(maxRows);
 
   const rows = (data ?? []) as ClientToGeocode[];
@@ -108,18 +120,38 @@ export async function geocodeMissingClients(
 
   for (const c of rows) {
     const line = buildAddressLine(c);
+    const nowIso = new Date().toISOString();
     if (!line) {
       failed++;
+      await supabase
+        .from('clients')
+        .update({
+          lat_lookup_attempted_at: nowIso,
+          lat_lookup_failed_reason: 'no_address',
+        })
+        .eq('id', c.id);
       continue;
     }
     const result = await geocodeAddress(line);
     if (!result.ok) {
       failed++;
+      await supabase
+        .from('clients')
+        .update({
+          lat_lookup_attempted_at: nowIso,
+          lat_lookup_failed_reason: result.reason,
+        })
+        .eq('id', c.id);
       continue;
     }
     await supabase
       .from('clients')
-      .update({ lat: result.lat, lng: result.lng })
+      .update({
+        lat: result.lat,
+        lng: result.lng,
+        lat_lookup_attempted_at: null,
+        lat_lookup_failed_reason: null,
+      })
       .eq('id', c.id);
     geocoded++;
   }

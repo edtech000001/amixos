@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { buildClientCsv } from '@amixos/shared/lib/clientShare';
 
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -128,6 +129,64 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [savingContact, setSavingContact] = useState(false);
+  // Distinct role values across this business — fed into the role
+  // field's autocomplete so previously-typed titles can be reused.
+  const [roleSuggestions, setRoleSuggestions] = useState<string[]>([]);
+
+  // Share / print dialog state. PDF rendering happens on a dedicated
+  // print route (window.print fires on mount) so we don't have to lug a
+  // PDF lib into the main bundle.
+  const [shareDialog, setShareDialog] = useState(false);
+
+  const buildShareLabels = () => ({
+    first_name: t.fields.firstName,
+    last_name: t.fields.lastName,
+    company: t.fields.company,
+    phone_cell: t.fields.phoneCell,
+    phone_office: t.fields.phoneOffice,
+    email_office: t.fields.emailOffice,
+    email_home: t.fields.emailHome,
+    address: t.fields.addressLine1,
+    address_line2: t.fields.addressLine2,
+    city: t.fields.city,
+    state: t.fields.state,
+    zip_code: t.fields.zipCode,
+    notes: t.fields.notes,
+  });
+
+  const onShareCsv = () => {
+    if (!client) return;
+    const csv = buildClientCsv(
+      client,
+      buildShareLabels(),
+      templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label })),
+    );
+    const safeName = [client.first_name, client.last_name]
+      .filter(Boolean)
+      .join('_')
+      .replace(/[^a-zA-Z0-9_-]/g, '') || 'cliente';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Opens the dedicated print route in a new tab. That page reads the
+  // ?fields=basic|all param, fetches the client itself, and calls
+  // window.print() on mount — browsers can then "Save as PDF" via the
+  // print dialog.
+  const openPrintView = (includeAll: boolean) => {
+    const params = new URLSearchParams({ fields: includeAll ? 'all' : 'basic' });
+    // /print/... lives outside the dashboard layout so the sidebar/banner
+    // don't bleed into the print output.
+    window.open(`/print/clientes/${id}?${params.toString()}`, '_blank');
+    setShareDialog(false);
+  };
 
   const load = async () => {
     if (!business) return;
@@ -154,6 +213,22 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setTemplates(tpl ?? []);
     setContacts(cts ?? []);
     setLoading(false);
+
+    // Background fetch of distinct role values across the business.
+    const { data: roleRows } = await supabase
+      .from('client_contacts')
+      .select('role')
+      .eq('business_id', business.id)
+      .not('role', 'is', null)
+      .neq('role', '');
+    const unique = Array.from(
+      new Set(
+        ((roleRows as { role: string }[] | null) ?? [])
+          .map(r => r.role.trim())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, 'es'));
+    setRoleSuggestions(unique);
   };
 
   useEffect(() => { load(); }, [id, business]);
@@ -303,9 +378,18 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setShareDialog(true)}>
+            <Printer size={14} className="mr-1.5"/> {td.sharePdfBtn}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onShareCsv}>
+            <Share2 size={14} className="mr-1.5"/> CSV
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setEditModal(true)}>
             <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
           </Button>
+          <Link href={`/dashboard/trabajos/nuevo?client=${id}`}>
+            <Button variant="secondary" size="sm"><Plus size={14} className="mr-1.5"/> {full.dashboard.jobs.newDropdown.jobOption}</Button>
+          </Link>
           <Link href={`/dashboard/facturas/nueva?client=${id}`}>
             <Button size="sm"><Plus size={14} className="mr-1.5"/> {full.dashboard.invoices.newInvoice}</Button>
           </Link>
@@ -489,6 +573,18 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
+      {/* ── Share/print dialog ────────────────────────────────────────────── */}
+      <Modal open={shareDialog} onClose={() => setShareDialog(false)} title={td.shareDialogTitle} size="sm">
+        <div className="flex flex-col gap-2">
+          <Button variant="secondary" onClick={() => openPrintView(false)} fullWidth>
+            {td.shareDialogBasic}
+          </Button>
+          <Button onClick={() => openPrintView(true)} fullWidth>
+            {td.shareDialogAll}
+          </Button>
+        </div>
+      </Modal>
+
       {/* ── Edit client modal ─────────────────────────────────────────────── */}
       <Modal open={editModal} onClose={() => setEditModal(false)} title={t.modal.editTitle} size="lg">
         <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
@@ -598,7 +694,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}/>
             <Input label={td.contactModal.roleLabel} placeholder={td.contactModal.rolePlaceholder}
               value={contactForm.role}
-              onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}/>
+              onChange={e => setContactForm(f => ({ ...f, role: e.target.value }))}
+              list="contact-role-suggestions"/>
+            <datalist id="contact-role-suggestions">
+              {roleSuggestions.map(r => <option key={r} value={r} />)}
+            </datalist>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label={td.contactModal.phoneLabel} type="tel" placeholder={t.fields.placeholders.phone}
