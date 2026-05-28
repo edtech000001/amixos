@@ -1,0 +1,31 @@
+# When this file exists, EAS uses it INSTEAD of .gitignore to decide what
+# to upload for builds. We mirror the root .gitignore minus the .env line
+# so EAS picks up our EXPO_PUBLIC_* vars (Google OAuth client ID, Supabase
+# URL/anon key, Cloud Run API URL, etc.) at build time. EXPO_PUBLIC_* vars
+# are public-by-design — they get inlined into the JS bundle and are safe
+# to ship in client code. Anything sensitive (Supabase service role key,
+# OAuth client SECRET) lives only in api/cloudrun.env.yaml on the server.
+
+node_modules/
+dist/
+build/
+.next/
+.expo/
+*.log
+.DS_Store
+coverage/
+*.tsbuildinfo
+
+# Pods + Xcode user data — regenerated on each native build.
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Android intermediates.
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/

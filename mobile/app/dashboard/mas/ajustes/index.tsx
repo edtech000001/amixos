@@ -8,7 +8,6 @@ import {
   Users,
   User as UserIcon,
   Cloud,
-  UserPlus,
   Activity,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -59,13 +58,8 @@ export default function AjustesIndex() {
       icon: Briefcase,
       path: '/dashboard/mas/ajustes/empleados',
     },
-    {
-      key: 'equipo',
-      label: t.tabs.equipo,
-      description: t.team.subtitle,
-      icon: UserPlus,
-      path: '/dashboard/mas/ajustes/equipo',
-    },
+    // Equipo (team) moved out of Ajustes — now lives as a top-level
+    // entry in Más under Empleados (see mas/index.tsx + mas/equipo.tsx).
     ...(can.seeAuditLog(currentRole) ? [{
       key: 'actividad',
       label: t.tabs.actividad,

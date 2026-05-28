@@ -1,0 +1,9 @@
+# Don't ship host artifacts to Cloud Build — the Dockerfile rebuilds
+# everything fresh inside the container.
+node_modules
+dist
+.env
+.env.*
+*.log
+npm-debug.log*
+.DS_Store

@@ -18,6 +18,45 @@ export interface Business {
   job_field_required: Record<string, boolean>;
   job_field_order: string[] | null;
   job_pipeline_disabled: Record<string, boolean>;
+  job_crew_mode: boolean;
+  assignment_field_required: Record<string, boolean>;
+  assignment_field_order: string[] | null;
+  map_pin_config: MapPinConfig;
+  // Weather alert config (alpha — only the gated business id sees this UI).
+  // Shape: see shared/src/lib/weather.ts (WeatherConfig).
+  weather_config: Record<string, unknown> | null;
+}
+
+// Map pin styling rules — synced via businesses.map_pin_config.
+// Icon is one of the curated lucide names — see shared/lib/mapPinPresets.
+export type MapPinIcon = string;
+
+export interface MapPinRule {
+  field_key?: string;     // per-rule field (each rule can target a different column)
+  // See mobile/lib/auth/store.ts for full operator semantics.
+  operator?: 'equals' | 'not_equals' | 'has_value' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte';
+  value: string;
+  color: string;
+  icon: MapPinIcon;
+  icon_color?: string;
+  hide?: boolean;
+}
+
+export interface MapPinLayerConfig {
+  default_color: string;
+  default_icon: MapPinIcon;
+  default_icon_color?: string;
+  field_key: string | null; // legacy — only used when rule.field_key is missing
+  rules: MapPinRule[];
+}
+
+export interface MapPinConfig {
+  clients?: MapPinLayerConfig;
+  jobs?: MapPinLayerConfig;
+  employees?: MapPinLayerConfig;
+  // Weather pin styling — alpha-gated. Only the businesses in
+  // WEATHER_ALPHA_BUSINESS_IDS see this in the settings UI.
+  weather?: MapPinLayerConfig;
 }
 
 export interface AppUser {
@@ -82,7 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled'),
+        .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, weather_config'),
       supabase
         .from('business_members')
         .select('business_id, role')

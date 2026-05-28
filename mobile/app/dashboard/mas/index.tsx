@@ -9,6 +9,8 @@ import {
   Store as StoreIcon,
   ChevronRight,
   LogOut,
+  HardHat,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -53,12 +55,28 @@ export default function MasMenu() {
   });
 
   const items: MenuItem[] = [
+    // "Mis Trabajos" — Project-Leader shortcut. Empty list for users who
+    // aren't the lead on any job (RLS-friendly), so safe to always show.
+    {
+      key: 'misTrabajos',
+      label: sb.misTrabajos,
+      description: sb.descriptions.misTrabajos,
+      icon: HardHat,
+      path: '/dashboard/trabajos/mis-trabajos',
+    },
     {
       key: 'empleados',
       label: sb.empleados,
       description: sb.descriptions.empleados,
       icon: Briefcase,
       path: '/dashboard/mas/empleados',
+    },
+    {
+      key: 'equipo',
+      label: sb.equipo,
+      description: sb.descriptions.equipo,
+      icon: UserPlus,
+      path: '/dashboard/mas/equipo',
     },
     {
       key: 'calendario',

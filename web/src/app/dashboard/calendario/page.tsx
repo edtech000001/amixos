@@ -15,6 +15,7 @@ import {
   type CalendarEvent as ScreenEvent,
 } from '@amixos/shared/screens/dashboard/CalendarScreen';
 import { formatDateLong, formatTime12h } from '@amixos/shared/lib/format';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface CalEvent {
   id: string;
@@ -78,18 +79,24 @@ export default function CalendarioPage() {
 
   const loadEvents = async () => {
     if (!business) return;
+    const businessId = business.id;
     const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1).toISOString();
     const end   = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59).toISOString();
-    const { data } = await supabase.from('calendar_events')
-      .select('*').eq('business_id', business.id)
-      .gte('start_time', start).lte('start_time', end)
-      .order('start_time');
-    setEvents(data ?? []);
+    const data = await fetchAll<CalEvent>((from, to) =>
+      supabase.from('calendar_events')
+        .select('*').eq('business_id', businessId)
+        .gte('start_time', start).lte('start_time', end)
+        .order('start_time').range(from, to));
+    setEvents(data);
   };
 
   useEffect(() => {
     if (!business) return;
-    supabase.from('clients').select('id, first_name, last_name').eq('business_id', business.id).then(({ data }) => setClients(data ?? []));
+    const businessId = business.id;
+    fetchAll<Client>((from, to) =>
+      supabase.from('clients').select('id, first_name, last_name')
+        .eq('business_id', businessId).range(from, to))
+      .then(data => setClients(data));
   }, [business]);
 
   useEffect(() => { loadEvents(); }, [business, cursor]);

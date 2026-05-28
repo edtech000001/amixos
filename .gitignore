@@ -3,6 +3,8 @@
 .env
 .env.local
 .env.*.local
+# Cloud Run env-vars file — contains secrets in plaintext, never commit.
+cloudrun.env.yaml
 
 node_modules/
 dist/
