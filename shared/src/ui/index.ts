@@ -3,6 +3,7 @@
 // (web: Tailwind CSS; native: NativeWind v4 jsx transform).
 export { Button } from './Button';
 export { Input } from './Input';
+export { AutocompleteInput } from './AutocompleteInput';
 export { Modal } from './Modal';
 export { Select } from './Select';
 export type { SelectOption } from './Select';

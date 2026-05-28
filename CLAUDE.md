@@ -48,6 +48,38 @@ Core handles universal business needs: clients, jobs/proposals, invoices, employ
   `proposal → sent → accepted → scheduled → in_progress → completed → invoiced`
 - Client contacts: multiple people per client with roles
 
+## Supabase Query Pagination (CRITICAL)
+
+Supabase / PostgREST silently caps `.select()` at **1000 rows by default**. A query that loads "all clients" or "all jobs" for a business will quietly truncate once that business grows past 1000 rows — data is missing with no error.
+
+**Rule:** any `.select()` that is meant to return *all* rows of a table (lists, reports, exports, sync jobs, calendar feeds, etc.) MUST use a pagination loop. Single-row fetches (`.single()`, `.eq('id', x)`, `.limit(1)`), small bounded fetches (`.limit(5)` for recent items), and `count`-only queries (`{ head: true, count: 'exact' }`) are exempt.
+
+**How to paginate:** loop with `.range(from, to)` in batches of 1000 until a returned page is shorter than the page size.
+
+```ts
+async function fetchAll<T>(
+  build: (from: number, to: number) => PostgrestFilterBuilder<any, any, T[]>
+): Promise<T[]> {
+  const pageSize = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await build(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    out.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return out;
+}
+```
+
+**When designing a new table or new list view, ask up front:**
+1. Could one business realistically have more than 1000 rows here over its lifetime? (clients, jobs, invoices, contacts, audit logs, geocoding attempts, timesheets, inventory transactions → yes)
+2. If yes: the read path must paginate (use the shared helper) OR be server-side filtered/paged with a visible UI page control. Never load "all rows" into the client without one of these.
+3. Reports / dashboards that aggregate across a whole table must paginate the underlying fetch, or push the aggregation into a database view / RPC so the 1000-row cap never applies.
+
+**Current state:** no shared `fetchAll` helper exists yet and several list pages (clients, jobs, employees, inventory, reports) currently load without pagination. Treat fixing these as in-scope whenever you touch one of those pages.
+
 ## Features Built
 
 - **Trabajos (Jobs):** create, edit, delete, status pipeline, generate invoice

@@ -1,8 +1,11 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Check, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
-import { MODULE_REGISTRY, type ModuleDef } from '../../modules/registry';
+import { MODULE_REGISTRY, type ModuleDef, type ModuleCategory } from '../../modules/registry';
 import { can, type Role } from '../../lib/permissions';
+
+type CategoryFilter = ModuleCategory | 'all';
 
 export interface AddonStoreScreenProps {
   // The set of currently-enabled module ids for the active business.
@@ -34,6 +37,9 @@ export function AddonStoreScreen({
   const modulesDict = full.dashboard.modules.list;
   const canManage = can.manageBusinessSettings(currentRole);
 
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<CategoryFilter>('all');
+
   const labelFor = (m: ModuleDef): { name: string; description: string } => {
     // i18n keys are aligned with module ids by convention. The dict shape
     // is a literal union, so cast through unknown for the lookup — if a
@@ -43,13 +49,75 @@ export function AddonStoreScreen({
     return entry ?? { name: m.id, description: '' };
   };
 
+  // Diacritic-stripping normalizer — matches the autocomplete trick used
+  // elsewhere so "industria" finds modules titled "Industría", etc.
+  const norm = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  const filtered = useMemo(() => {
+    const q = norm(search.trim());
+    return MODULE_REGISTRY.filter(m => {
+      if (category !== 'all' && m.category !== category) return false;
+      if (!q) return true;
+      const { name, description } = labelFor(m);
+      return norm(name).includes(q) || norm(description).includes(q);
+    });
+    // labelFor depends on the i18n dict — re-derive when the locale changes
+    // by keying on `modulesDict`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, category, modulesDict]);
+
+  const CATEGORIES: Array<{ key: CategoryFilter; label: string }> = [
+    { key: 'all',      label: t.categoryAll },
+    { key: 'tools',    label: t.categoryTools },
+    { key: 'industry', label: t.categoryIndustry },
+  ];
+
   return (
     <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
       {/* Heading */}
-      <View className="mb-5">
+      <View className="mb-4">
         <Text className="text-2xl font-bold text-gray-900">{t.heading}</Text>
         <Text className="text-sm text-gray-500 mt-0.5">{t.subtitle}</Text>
       </View>
+
+      {/* Search bar — diacritic-aware substring match against name + description. */}
+      <View className="flex-row items-center gap-2 mb-3 rounded-2xl bg-white border border-gray-200 px-4 py-2.5">
+        <Search size={16} color="#9CA3AF" />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder={t.searchPlaceholder}
+          placeholderTextColor="#9CA3AF"
+          className="flex-1 text-sm text-gray-900"
+        />
+      </View>
+
+      {/* Category filter chips. Horizontal scroll so we can grow the
+         categorization later without UI churn. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerClassName="gap-2 pb-1 pr-5"
+        className="mb-3 -mx-5 px-5"
+      >
+        {CATEGORIES.map(c => {
+          const active = category === c.key;
+          return (
+            <Pressable
+              key={c.key}
+              onPress={() => setCategory(c.key)}
+              className={`px-3.5 py-1.5 rounded-full ${
+                active ? 'bg-primary' : 'bg-white border border-gray-200'
+              }`}
+            >
+              <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
+                {c.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {loading ? (
         <View className="py-10 items-center">
@@ -60,11 +128,16 @@ export function AddonStoreScreen({
           </View>
         </View>
       ) : (
+        filtered.length === 0 ? (
+          <View className="py-10 items-center">
+            <Text className="text-sm text-gray-500">{t.noResults}</Text>
+          </View>
+        ) : (
         // 2-column grid. Each card uses width 48% so they pack side-by-side
         // with a tiny gutter; flex-wrap pushes the third card onto the next
         // row. Mobile and web (via react-native-web) both honor this.
         <View className="flex-row flex-wrap justify-between">
-          {MODULE_REGISTRY.map(m => {
+          {filtered.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
             const isComingSoon = m.status === 'coming_soon';
@@ -154,6 +227,7 @@ export function AddonStoreScreen({
             );
           })}
         </View>
+        )
       )}
     </ScrollView>
   );

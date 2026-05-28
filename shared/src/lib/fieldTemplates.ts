@@ -7,7 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type FieldTemplateTable =
   | 'client_field_templates'
   | 'employee_field_templates'
-  | 'job_field_templates';
+  | 'job_field_templates'
+  | 'job_assignment_field_templates';
 
 interface OrderedRow {
   id: string;

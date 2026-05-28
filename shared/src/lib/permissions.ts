@@ -79,6 +79,12 @@ export const can = {
 
   // Assignments — assigning workers to jobs is a manager+ act.
   assignWorkers: (role: Role | null) => isAny(role, MANAGERS),
+  // Per-worker custom-field templates for assignments (Ajustes → Trabajos).
+  manageAssignmentFields: (role: Role | null) => isAny(role, ADMINS),
+  // Logging actuals (hours, custom fields) on a job_assignment row. UI gate
+  // only — RLS enforces that field workers can only update rows on the job
+  // they lead, while writers can update any.
+  logJobActuals: (role: Role | null) => isAny(role, ['owner','admin','manager','office','field']),
 
   // Timesheets — field workers can write their own; managers+ see all.
   seeAllTimesheets:    (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),

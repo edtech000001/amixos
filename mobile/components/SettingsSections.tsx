@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, Alert } from 'react-native';
+import { View, Text, Pressable, Alert, TextInput } from 'react-native';
 import {
   Building2,
   User as UserIcon,
@@ -23,6 +23,8 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { Input, Button, Modal, Toggle, Select } from '@amixos/shared/ui';
 import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { ChevronUp, ChevronDown, Sparkles } from 'lucide-react-native';
@@ -525,6 +527,329 @@ export function TrabajosFieldsSection() {
   );
 }
 
+// ─── Crew mode toggle ─────────────────────────────────────────────────────
+// Single toggle that hides/shows the lead-picker + per-worker actuals across
+// the rest of the app. Solo-tech businesses (mechanic, salon) flip it off.
+export function CrewModeSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+
+  const initial = business?.job_crew_mode ?? true;
+  const [value, setValue] = useState<boolean>(initial);
+  const [saved, setSaved] = useState<boolean>(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = business.job_crew_mode ?? true;
+      setValue(fresh);
+      setSaved(fresh);
+    }
+  }, [business]);
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ job_crew_mode: value })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({
+      text: error ? t.crewMode.saveError : t.crewMode.saveSuccess,
+      isError: !!error,
+    });
+    if (!error) {
+      setSaved(value);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = value !== saved;
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Users size={18} color="#4F46E5" />}
+        title={t.crewMode.heading}
+        subtitle={t.crewMode.subtitle}
+      />
+      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+        <Text className="flex-1 text-sm text-gray-900">{t.crewMode.heading}</Text>
+        <Toggle value={value} onValueChange={setValue} />
+      </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
+// ─── Per-worker custom fields (assignment_field_templates) ─────────────────
+// Mirror of TrabajosFieldsSection but targets job_assignment_field_templates +
+// businesses.assignment_field_required / assignment_field_order. Standard
+// keys: 'hours_worked' (the universal core field every industry tracks).
+const DEFAULT_ASSIGNMENT_FIELD_KEYS = ['hours_worked'] as const;
+
+export function TrabajadorFieldsSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+  const tActuals = full.dashboard.jobs.actuals;
+
+  const FIELD_LABELS: Record<string, string> = {
+    hours_worked: tActuals.hoursWorkedLabel,
+  };
+
+  const [required, setRequired] = useState<Record<string, boolean>>(
+    business?.assignment_field_required ?? {},
+  );
+  const [savedRequired, setSavedRequired] = useState<Record<string, boolean>>(
+    business?.assignment_field_required ?? {},
+  );
+  const [savingReq, setSavingReq] = useState(false);
+  const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<FieldTemplate | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = business.assignment_field_required ?? {};
+      setRequired(fresh);
+      setSavedRequired(fresh);
+    }
+  }, [business]);
+
+  useEffect(() => {
+    if (!business) return;
+    void loadTemplates();
+  }, [business?.id]);
+
+  const loadTemplates = async () => {
+    if (!business) return;
+    const { data } = await supabase
+      .from('job_assignment_field_templates')
+      .select('*')
+      .eq('business_id', business.id)
+      .order('sort_order');
+    setTemplates((data as FieldTemplate[] | null) ?? []);
+  };
+
+  const toggleRequired = (key: string) => {
+    setRequired((prev) => ({ ...prev, [key]: !prev[key] }));
+    setReqMsg(null);
+  };
+
+  const saveRequired = async () => {
+    if (!business) return;
+    setSavingReq(true);
+    setReqMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ assignment_field_required: required })
+      .eq('id', business.id);
+    setSavingReq(false);
+    setReqMsg({
+      text: error ? t.requiredFields.saveError : t.requiredFields.saveSuccess,
+      isError: !!error,
+    });
+    if (!error) {
+      setSavedRequired(required);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = (() => {
+    const keys = new Set([...Object.keys(required), ...Object.keys(savedRequired)]);
+    for (const k of keys) if (!!required[k] !== !!savedRequired[k]) return true;
+    return false;
+  })();
+  useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
+
+  type UnifiedItem =
+    | { kind: 'standard'; key: string; label: string }
+    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
+
+  const items: UnifiedItem[] = (() => {
+    const standardItems: UnifiedItem[] = DEFAULT_ASSIGNMENT_FIELD_KEYS.map((k) => ({
+      kind: 'standard' as const,
+      key: k,
+      label: FIELD_LABELS[k] ?? k,
+    }));
+    const customItems: UnifiedItem[] = templates.map((tpl) => ({
+      kind: 'custom' as const,
+      key: `custom:${tpl.id}`,
+      label: tpl.field_label,
+      tpl,
+    }));
+    const all = [...standardItems, ...customItems];
+    const byKey = new Map(all.map((it) => [it.key, it]));
+
+    const saved = business?.assignment_field_order ?? null;
+    if (!Array.isArray(saved) || saved.length === 0) return all;
+
+    const ordered: UnifiedItem[] = [];
+    for (const k of saved) {
+      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+      if (item) ordered.push(item);
+    }
+    const used = new Set(ordered.map((i) => i.key));
+    return [...ordered, ...all.filter((i) => !used.has(i.key))];
+  })();
+
+  const moveItem = async (key: string, direction: 'up' | 'down') => {
+    if (!business) return;
+    const idx = items.findIndex((it) => it.key === key);
+    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
+    const next = [...items];
+    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
+    await supabase
+      .from('businesses')
+      .update({ assignment_field_order: next.map((i) => i.key) })
+      .eq('id', business.id);
+    await refetchBusiness();
+  };
+
+  const removeTemplate = (id: string) => {
+    Alert.alert('', t.customFields.confirmDelete, [
+      { text: full.common.buttons.cancel, style: 'cancel' },
+      {
+        text: full.common.buttons.delete,
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.from('job_assignment_field_templates').delete().eq('id', id);
+          setTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
+        },
+      },
+    ]);
+  };
+
+  return (
+    <View className="gap-4">
+      <View className="flex-row items-start justify-between">
+        <View className="flex-1 pr-3">
+          <SectionHeader
+            icon={<Sliders size={18} color="#4F46E5" />}
+            title={t.assignmentFieldsSection.title}
+            subtitle={t.assignmentFieldsSection.subtitle}
+          />
+        </View>
+        <Pressable
+          onPress={() => {
+            setEditing(null);
+            setModalOpen(true);
+          }}
+          className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl bg-primary active:opacity-80"
+        >
+          <Plus size={14} color="#FFFFFF" />
+          <Text className="text-white text-xs font-semibold">{t.customFields.addBtn}</Text>
+        </Pressable>
+      </View>
+
+      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        {items.map((item, i) => {
+          const isLast = i === items.length - 1;
+          return (
+            <View
+              key={item.key}
+              className={`flex-row items-center gap-2 px-4 py-3 ${
+                isLast ? '' : 'border-b border-gray-50'
+              }`}
+            >
+              <View className="flex-1">
+                <View className="flex-row items-center gap-1.5 flex-wrap">
+                  {item.kind === 'custom' ? (
+                    <Sparkles size={12} color="#4F46E5" />
+                  ) : null}
+                  <Text className="text-sm text-gray-900">{item.label}</Text>
+                  {item.kind === 'custom' && item.tpl.required ? (
+                    <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                      <Text className="text-[10px] text-orange-600 font-semibold">
+                        {t.customFields.requiredBadge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                {item.kind === 'custom' ? (
+                  <Text className="text-xs text-gray-400 mt-0.5">
+                    {t.fieldTypes[item.tpl.field_type]}
+                    {item.tpl.field_type === 'select' && item.tpl.field_options?.length
+                      ? ` · ${item.tpl.field_options.join(', ')}`
+                      : ''}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="flex-col">
+                <Pressable
+                  onPress={() => moveItem(item.key, 'up')}
+                  disabled={i === 0}
+                  className="px-1 active:opacity-60"
+                >
+                  <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
+                </Pressable>
+                <Pressable
+                  onPress={() => moveItem(item.key, 'down')}
+                  disabled={isLast}
+                  className="px-1 active:opacity-60"
+                >
+                  <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
+                </Pressable>
+              </View>
+
+              {item.kind === 'standard' ? (
+                <Toggle
+                  value={!!required[item.key]}
+                  onValueChange={() => toggleRequired(item.key)}
+                />
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      setEditing(item.tpl);
+                      setModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg active:bg-blue-50"
+                  >
+                    <Pencil size={14} color="#3B82F6" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => removeTemplate(item.tpl.id)}
+                    className="p-2 rounded-lg active:bg-red-50"
+                  >
+                    <Trash2 size={14} color="#EF4444" />
+                  </Pressable>
+                </>
+              )}
+            </View>
+          );
+        })}
+      </View>
+      <StatusMsg msg={reqMsg} />
+
+      <FieldTemplateModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        editing={editing}
+        templates={templates}
+        businessId={business?.id ?? null}
+        tableName="job_assignment_field_templates"
+        onSaved={() => {
+          setModalOpen(false);
+          void loadTemplates();
+        }}
+      />
+    </View>
+  );
+}
+
 export function ClientesSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
@@ -562,6 +887,17 @@ export function ClientesSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<FieldTemplate | null>(null);
 
+  // CSV import — lives here in Ajustes (instead of on the Clientes list)
+  // because it's a one-time-per-onboarding op, not a daily action. After
+  // import, refresh the counts so the user sees the new total.
+  const [importOpen, setImportOpen] = useState(false);
+
+  // Contacts summary — lets the user reconcile counts against Google Contacts.
+  // Counts both clients and client_contacts because both mirror to Google
+  // (one Google contact per row in each table). Employees do NOT sync.
+  const [clientsCount, setClientsCount] = useState<number | null>(null);
+  const [contactsCount, setContactsCount] = useState<number | null>(null);
+
   useEffect(() => {
     if (business) {
       const fresh = business.client_field_required ?? {};
@@ -573,6 +909,7 @@ export function ClientesSection() {
   useEffect(() => {
     if (!business) return;
     void loadTemplates();
+    void loadCounts();
   }, [business?.id]);
 
   const loadTemplates = async () => {
@@ -583,6 +920,22 @@ export function ClientesSection() {
       .eq('business_id', business.id)
       .order('sort_order');
     setTemplates((data as FieldTemplate[] | null) ?? []);
+  };
+
+  const loadCounts = async () => {
+    if (!business) return;
+    const [clientsRes, contactsRes] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', business.id),
+      supabase
+        .from('client_contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', business.id),
+    ]);
+    setClientsCount(clientsRes.count ?? 0);
+    setContactsCount(contactsRes.count ?? 0);
   };
 
   const toggleRequired = (key: string) => {
@@ -690,8 +1043,82 @@ export function ClientesSection() {
     ]);
   };
 
+  const totalCount =
+    clientsCount !== null && contactsCount !== null ? clientsCount + contactsCount : null;
+
   return (
     <View className="gap-4">
+      {/* Import CSV — lives at the top of Ajustes → Clientes since it's
+         an onboarding/migration action, not a daily one. */}
+      {business ? (
+        <View className="bg-white rounded-2xl border border-gray-100 p-4">
+          <Pressable
+            onPress={() => setImportOpen(true)}
+            className="flex-row items-center gap-3 active:opacity-70"
+          >
+            <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+              <Sparkles size={18} color="#4F46E5" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-gray-900">
+                {full.dashboard.clients.importBtn}
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                {full.dashboard.clients.importHint}
+              </Text>
+            </View>
+            <Text className="text-xl text-gray-400">›</Text>
+          </Pressable>
+          <ImportClientsModal
+            open={importOpen}
+            onClose={() => setImportOpen(false)}
+            businessId={business.id}
+            templates={templates.map(tpl => ({
+              field_key: tpl.field_key,
+              field_label: tpl.field_label,
+            }))}
+            onImportComplete={loadCounts}
+          />
+        </View>
+      ) : null}
+
+      {/* Contacts summary — total clients + employees so the user can
+         reconcile against their Google Contacts count when sync is on. */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-4">
+        <Text className="text-sm font-semibold text-gray-900 mb-3">
+          {t.contactsStats.heading}
+        </Text>
+        <View className="flex-row gap-3">
+          <View className="flex-1 bg-indigo-50 rounded-xl p-3 items-center">
+            <Text className="text-xs text-indigo-600 font-medium">
+              {t.contactsStats.clientsLabel}
+            </Text>
+            <Text className="text-2xl font-bold text-indigo-700 mt-1">
+              {clientsCount ?? '—'}
+            </Text>
+          </View>
+          <View className="flex-1 bg-emerald-50 rounded-xl p-3 items-center">
+            <Text className="text-xs text-emerald-600 font-medium text-center">
+              {t.contactsStats.contactsLabel}
+            </Text>
+            <Text className="text-2xl font-bold text-emerald-700 mt-1">
+              {contactsCount ?? '—'}
+            </Text>
+          </View>
+          <View className="flex-1 bg-gray-100 rounded-xl p-3 items-center">
+            <Text className="text-xs text-gray-600 font-medium">
+              {t.contactsStats.totalLabel}
+            </Text>
+            <Text className="text-2xl font-bold text-gray-900 mt-1">
+              {totalCount ?? '—'}
+            </Text>
+          </View>
+        </View>
+        <Text className="text-[11px] text-gray-500 mt-3 leading-4">
+          {t.contactsStats.googleHint}
+        </Text>
+      </View>
+
       {/* One header for the whole unified list. The user can interleave
          custom fields with standard ones via the up/down arrows below;
          custom items are marked with a Sparkles glyph. */}
@@ -1108,7 +1535,11 @@ function FieldTemplateModal({
   templates: FieldTemplate[];
   businessId: string | null;
   onSaved: () => void;
-  tableName?: 'client_field_templates' | 'employee_field_templates' | 'job_field_templates';
+  tableName?:
+    | 'client_field_templates'
+    | 'employee_field_templates'
+    | 'job_field_templates'
+    | 'job_assignment_field_templates';
 }) {
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
@@ -1394,6 +1825,15 @@ function GoogleSyncSection() {
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
+  // Notes-template state — lets the user stuff custom-field values into the
+  // Google biography for iPhone Contacts visibility.
+  const [notesTemplate, setNotesTemplate] = useState<string>('');
+  const [templateLoaded, setTemplateLoaded] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [availableFields, setAvailableFields] = useState<string[]>([]);
+
+  const supabase = createSupabaseClient();
   const apiBaseUrl = getApiBaseUrl();
   const businessId = business?.id ?? null;
 
@@ -1441,6 +1881,107 @@ function GoogleSyncSection() {
   useEffect(() => {
     if (status.connected) void fetchGroups();
   }, [status.connected, businessId]);
+
+  // Load the saved template + available custom field labels (so we can
+  // show the user which placeholders are valid). Runs once the business
+  // is known. Loading state lets us avoid wiping a user-typed value
+  // before the saved one comes back.
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: biz }, { data: tpl }] = await Promise.all([
+        supabase
+          .from('businesses')
+          .select('google_sync_notes_template')
+          .eq('id', businessId)
+          .maybeSingle(),
+        supabase
+          .from('client_field_templates')
+          .select('field_label')
+          .eq('business_id', businessId)
+          .order('sort_order'),
+      ]);
+      if (cancelled) return;
+      setNotesTemplate(((biz as { google_sync_notes_template: string | null } | null)
+        ?.google_sync_notes_template) ?? '');
+      setTemplateLoaded(true);
+      // {{Notas}} is always offered as a default placeholder so the user
+      // can position their own notes anywhere in the template. Show it
+      // first; custom-field labels follow.
+      const customLabels = ((tpl as { field_label: string }[] | null) ?? [])
+        .map(r => r.field_label)
+        .filter(Boolean);
+      setAvailableFields(['Notas', ...customLabels]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, supabase]);
+
+  const onSaveTemplate = async () => {
+    if (!businessId) return;
+    setSavingTemplate(true);
+    setTemplateMsg(null);
+    const trimmed = notesTemplate.trim();
+    const { error } = await supabase
+      .from('businesses')
+      .update({ google_sync_notes_template: trimmed === '' ? null : notesTemplate })
+      .eq('id', businessId);
+    setSavingTemplate(false);
+    if (error) {
+      // Show the underlying supabase error so missing columns / RLS denials
+      // are diagnosable instead of being lumped into a generic message.
+      setTemplateMsg({ text: `${t.templateSaveError} (${error.message})`, isError: true });
+    } else {
+      setTemplateMsg({ text: t.templateSaved, isError: false });
+    }
+  };
+
+  // Re-apply the current template to every already-synced Google contact.
+  // Queries the synced subset, confirms the count with the user, then
+  // hands the IDs to the banner's update queue — throttled, persisted,
+  // and cancellable just like the import flow.
+  const syncBanner = useGoogleSyncBanner();
+  const onReapplyTemplate = async () => {
+    if (!businessId) return;
+    // Pull synced clients AND synced client_contacts in parallel — the
+    // notes template now renders on both surfaces (the parent client's
+    // rendered template gets appended to each contact's bio), so the
+    // reapply flow has to cover both to keep them in sync.
+    const [clientsRes, contactsRes] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('id')
+        .eq('business_id', businessId)
+        .not('google_resource_name', 'is', null),
+      supabase
+        .from('client_contacts')
+        .select('id')
+        .eq('business_id', businessId)
+        .not('google_resource_name', 'is', null),
+    ]);
+    const clientIds = ((clientsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
+    const contactIds = ((contactsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
+    const total = clientIds.length + contactIds.length;
+    if (total === 0) {
+      setTemplateMsg({ text: t.templateReapplyEmpty, isError: false });
+      return;
+    }
+    Alert.alert(
+      t.templateReapplyConfirmTitle,
+      t.templateReapplyConfirmBody.replace('{{count}}', String(total)),
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: t.templateReapplyConfirmBtn,
+          onPress: () => {
+            syncBanner.runUpdateBatch(clientIds, contactIds);
+          },
+        },
+      ],
+    );
+  };
 
   // After connect, fetch the count of un-synced clients. If > 0, prompt
   // the user to backfill them now. Best-effort — failures are silent
@@ -1512,7 +2053,11 @@ function GoogleSyncSection() {
       if (result.reason === 'cancelled') {
         setMsg({ text: t.cancelled, isError: false });
       } else {
-        setMsg({ text: `${t.connectError} [${result.reason}]`, isError: true });
+        // Show the underlying message when present so we can see which
+        // branch of linkGoogleContacts threw — otherwise every failure
+        // surfaces as the unhelpful `[generic]`.
+        const detail = 'message' in result && result.message ? `: ${result.message}` : '';
+        setMsg({ text: `${t.connectError} [${result.reason}]${detail}`, isError: true });
       }
       return;
     }
@@ -1673,6 +2218,88 @@ function GoogleSyncSection() {
         />
       ) : null}
 
+      {/* Force-sync sits above Disconnect — same handler as the
+          "Apply to existing contacts" button down in the template card,
+          but surfaced near the connection controls where users naturally
+          look for sync actions. Re-pushes every synced client + contact
+          using the current template. */}
+      {status.connected && status.enabled !== false ? (
+        <>
+          <Pressable
+            onPress={onReapplyTemplate}
+            disabled={busy}
+            className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
+          >
+            <Text className="text-sm font-semibold text-white">{t.forceSyncBtn}</Text>
+          </Pressable>
+          <Pressable
+            onPress={onDisconnect}
+            disabled={busy}
+            className="py-3 rounded-2xl bg-white border border-gray-200 items-center active:bg-gray-50"
+          >
+            <Text className="text-sm font-semibold text-gray-700">{t.disconnectBtn}</Text>
+          </Pressable>
+        </>
+      ) : null}
+
+      {/* Notes template editor — only meaningful when connected. Lets the
+          user stuff custom-field values into the Google biography so they
+          show up on iPhone Contacts (which doesn't render userDefined fields). */}
+      {status.connected && status.enabled !== false && templateLoaded ? (
+        <View className="gap-2 bg-white rounded-2xl border border-gray-100 p-4">
+          <Text className="text-sm font-semibold text-gray-900">{t.templateTitle}</Text>
+          <Text className="text-xs text-gray-500 leading-5">{t.templateHint}</Text>
+          <TextInput
+            value={notesTemplate}
+            onChangeText={setNotesTemplate}
+            multiline
+            placeholder={t.templatePlaceholder}
+            placeholderTextColor="#9CA3AF"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 bg-white"
+            style={{ minHeight: 100, textAlignVertical: 'top' }}
+          />
+          {availableFields.length > 0 ? (
+            <View className="flex-row flex-wrap gap-1.5 pt-1">
+              <Text className="text-xs text-gray-500 mr-1">{t.templateAvailable}:</Text>
+              {availableFields.map(label => (
+                <Pressable
+                  key={label}
+                  onPress={() => setNotesTemplate(prev => {
+                    const sep = prev && !prev.endsWith('\n') ? '\n' : '';
+                    // Notas is multiline free-form text — drop a bare
+                    // placeholder. Custom fields render single-line so the
+                    // "Label: {{Label}}" shortcut is friendlier.
+                    const insertion = label === 'Notas'
+                      ? `{{${label}}}`
+                      : `${label}: {{${label}}}`;
+                    return `${prev}${sep}${insertion}`;
+                  })}
+                  className="px-2 py-0.5 rounded-md bg-gray-100 active:bg-gray-200"
+                >
+                  <Text className="text-xs text-gray-700">{`{{${label}}}`}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          <StatusMsg msg={templateMsg} />
+          <Pressable
+            onPress={onSaveTemplate}
+            disabled={savingTemplate}
+            className={`mt-1 py-2.5 rounded-xl items-center ${savingTemplate ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
+          >
+            <Text className="text-sm font-semibold text-white">
+              {savingTemplate ? t.templateSaving : t.templateSaveBtn}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onReapplyTemplate}
+            className="py-2.5 rounded-xl items-center border border-gray-200 bg-white active:bg-gray-50"
+          >
+            <Text className="text-sm font-semibold text-gray-700">{t.templateReapplyBtn}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <StatusMsg msg={msg} />
 
       {!status.connected || status.enabled === false ? (
@@ -1681,15 +2308,7 @@ function GoogleSyncSection() {
             {status.enabled === false ? t.reconnectBtn : t.connectBtn}
           </Text>
         </Button>
-      ) : (
-        <Pressable
-          onPress={onDisconnect}
-          disabled={busy}
-          className="py-3 rounded-2xl bg-white border border-gray-200 items-center active:bg-gray-50"
-        >
-          <Text className="text-sm font-semibold text-gray-700">{t.disconnectBtn}</Text>
-        </Pressable>
-      )}
+      ) : null}
     </View>
   );
 }

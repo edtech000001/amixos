@@ -15,6 +15,10 @@ interface SelectProps {
   options: SelectOption[];
   placeholder?: string;
   error?: string;
+  // Soft amber-tinted border — used for "needs your attention" states
+  // (e.g. CSV import field that didn't auto-match). Ignored if `error`
+  // is set, since red error wins over amber attention.
+  highlight?: boolean;
   containerClassName?: string;
 }
 
@@ -30,8 +34,14 @@ export function Select({
   options,
   placeholder,
   error,
+  highlight,
   containerClassName,
 }: SelectProps) {
+  const borderClass = error
+    ? 'border-red-300'
+    : highlight
+      ? 'border-amber-400 bg-amber-50'
+      : 'border-gray-200';
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.value === value);
   const displayText = selected?.label ?? placeholder ?? '';
@@ -46,8 +56,9 @@ export function Select({
           value={value}
           onChange={(e: any) => onValueChange(e.target.value)}
           className={clsx(
-            'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
-            error ? 'border-red-300' : 'border-gray-200',
+            'w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
+            borderClass,
+            !highlight && !error && 'bg-white',
           )}
         >
           {placeholder ? <option value="">{placeholder}</option> : null}
@@ -62,8 +73,9 @@ export function Select({
           <Pressable
             onPress={() => setOpen(true)}
             className={clsx(
-              'flex-row items-center justify-between rounded-xl border bg-white px-4 py-2.5',
-              error ? 'border-red-300' : 'border-gray-200',
+              'flex-row items-center justify-between rounded-xl border px-4 py-2.5',
+              borderClass,
+              !highlight && !error && 'bg-white',
             )}
           >
             <Text

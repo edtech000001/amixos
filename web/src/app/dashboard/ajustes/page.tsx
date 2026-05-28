@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/Modal';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 
 interface FieldTemplate {
   id: string;
@@ -118,6 +119,11 @@ export default function AjustesPage() {
   const [fieldsMsg, setFieldsMsg] = useState('');
   const [fieldsMsgIsError, setFieldsMsgIsError] = useState(false);
 
+  // ── Contacts summary — clients + client_contacts (what syncs to Google).
+  // Employees do NOT mirror to Google, so they're excluded from the count.
+  const [clientsCount, setClientsCount] = useState<number | null>(null);
+  const [contactsCount, setContactsCount] = useState<number | null>(null);
+
   // ── Custom field templates (clients)
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [addFieldModal, setAddFieldModal] = useState(false);
@@ -154,6 +160,18 @@ export default function AjustesPage() {
   }, [business]);
 
   useEffect(() => { loadTemplates(); }, [business]);
+
+  useEffect(() => {
+    if (!business) return;
+    void (async () => {
+      const [clientsRes, contactsRes] = await Promise.all([
+        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
+        supabase.from('client_contacts').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
+      ]);
+      setClientsCount(clientsRes.count ?? 0);
+      setContactsCount(contactsRes.count ?? 0);
+    })();
+  }, [business]);
 
   // ── Business
   const saveBusiness = async () => {
@@ -455,6 +473,162 @@ export default function AjustesPage() {
     await supabase
       .from('businesses')
       .update({ job_field_order: next.map(i => i.key) })
+      .eq('id', business.id);
+    await refetchBusiness();
+  };
+
+  // ── Crew mode + per-worker assignment field config ─────────────────────
+  // Mirrors the job-template UI but targets job_assignment_field_templates
+  // and businesses.assignment_field_required / assignment_field_order.
+  const DEFAULT_ASSIGNMENT_FIELD_KEYS = ['hours_worked'] as const;
+  const ASGN_FIELD_LABELS: Record<string, string> = {
+    hours_worked: full.dashboard.jobs.actuals.hoursWorkedLabel,
+  };
+
+  const [crewMode, setCrewMode] = useState<boolean>(business?.job_crew_mode ?? true);
+  const [savingCrewMode, setSavingCrewMode] = useState(false);
+  const [crewModeMsg, setCrewModeMsg] = useState('');
+  const [crewModeMsgIsError, setCrewModeMsgIsError] = useState(false);
+
+  const [asgnRequired, setAsgnRequired] = useState<Record<string, boolean>>(
+    business?.assignment_field_required ?? {}
+  );
+  const [savingAsgnRequired, setSavingAsgnRequired] = useState(false);
+  const [asgnReqMsg, setAsgnReqMsg] = useState('');
+  const [asgnReqMsgIsError, setAsgnReqMsgIsError] = useState(false);
+  const [asgnTemplates, setAsgnTemplates] = useState<FieldTemplate[]>([]);
+  const [addAsgnFieldModal, setAddAsgnFieldModal] = useState(false);
+  const [editAsgnFieldModal, setEditAsgnFieldModal] = useState(false);
+  const [editingAsgnTpl, setEditingAsgnTpl] = useState<FieldTemplate | null>(null);
+  const [asgnTplForm, setAsgnTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [savingAsgnTpl, setSavingAsgnTpl] = useState(false);
+  const [asgnTplError, setAsgnTplError] = useState('');
+
+  useEffect(() => {
+    if (business) {
+      setCrewMode(business.job_crew_mode ?? true);
+      setAsgnRequired(business.assignment_field_required ?? {});
+    }
+  }, [business]);
+
+  const loadAsgnTemplates = async () => {
+    if (!business) return;
+    const { data } = await supabase.from('job_assignment_field_templates').select('*')
+      .eq('business_id', business.id).order('sort_order');
+    setAsgnTemplates(data ?? []);
+  };
+  useEffect(() => { loadAsgnTemplates(); }, [business]);
+
+  const saveCrewMode = async () => {
+    if (!business) return;
+    setSavingCrewMode(true); setCrewModeMsg('');
+    const { error } = await supabase.from('businesses')
+      .update({ job_crew_mode: crewMode })
+      .eq('id', business.id);
+    setCrewModeMsgIsError(!!error);
+    setCrewModeMsg(error ? t.crewMode.saveError : t.crewMode.saveSuccess);
+    if (!error) await refetchBusiness();
+    setSavingCrewMode(false);
+  };
+
+  const toggleAsgnRequired = (key: string) => {
+    setAsgnRequired(prev => ({ ...prev, [key]: !prev[key] }));
+    setAsgnReqMsg('');
+  };
+
+  const saveAsgnRequired = async () => {
+    if (!business) return;
+    setSavingAsgnRequired(true); setAsgnReqMsg('');
+    const { error } = await supabase.from('businesses')
+      .update({ assignment_field_required: asgnRequired })
+      .eq('id', business.id);
+    setAsgnReqMsgIsError(!!error);
+    setAsgnReqMsg(error ? t.requiredFields.saveError : t.requiredFields.saveSuccess);
+    if (!error) await refetchBusiness();
+    setSavingAsgnRequired(false);
+  };
+
+  const addAsgnTemplate = async () => {
+    if (!asgnTplForm.field_label.trim()) { setAsgnTplError(t.customFields.errorNameRequired); return; }
+    const key = toKey(asgnTplForm.field_label);
+    if (asgnTemplates.some(tpl => tpl.field_key === key)) { setAsgnTplError(t.customFields.errorDuplicate); return; }
+    setSavingAsgnTpl(true); setAsgnTplError('');
+    const options = asgnTplForm.field_type === 'select'
+      ? asgnTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
+    const { error } = await supabase.from('job_assignment_field_templates').insert({
+      business_id: business!.id,
+      field_key: key, field_label: asgnTplForm.field_label.trim(),
+      field_type: asgnTplForm.field_type, field_options: options,
+      required: asgnTplForm.required, sort_order: asgnTemplates.length,
+    });
+    if (error) { setAsgnTplError(t.customFields.errorSave); setSavingAsgnTpl(false); return; }
+    await loadAsgnTemplates();
+    setAsgnTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setSavingAsgnTpl(false); setAddAsgnFieldModal(false);
+  };
+
+  const removeAsgnTemplate = async (id: string) => {
+    if (!confirm(t.customFields.confirmDelete)) return;
+    await supabase.from('job_assignment_field_templates').delete().eq('id', id);
+    setAsgnTemplates(prev => prev.filter(tpl => tpl.id !== id));
+  };
+
+  const openEditAsgnTemplate = (tpl: FieldTemplate) => {
+    setEditingAsgnTpl(tpl);
+    setAsgnTplForm({
+      field_label: tpl.field_label, field_type: tpl.field_type,
+      required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+    });
+    setAsgnTplError('');
+    setEditAsgnFieldModal(true);
+  };
+
+  const updateAsgnTemplate = async () => {
+    if (!editingAsgnTpl || !asgnTplForm.field_label.trim()) { setAsgnTplError(t.customFields.errorNameRequired); return; }
+    setSavingAsgnTpl(true); setAsgnTplError('');
+    const options = asgnTplForm.field_type === 'select'
+      ? asgnTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
+    const { error } = await supabase.from('job_assignment_field_templates').update({
+      field_label: asgnTplForm.field_label.trim(), field_type: asgnTplForm.field_type,
+      field_options: options, required: asgnTplForm.required,
+    }).eq('id', editingAsgnTpl.id);
+    if (error) { setAsgnTplError(t.customFields.errorSave); setSavingAsgnTpl(false); return; }
+    await loadAsgnTemplates();
+    setSavingAsgnTpl(false); setEditAsgnFieldModal(false); setEditingAsgnTpl(null);
+  };
+
+  const asgnItems: UnifiedItem[] = (() => {
+    const standardItems: UnifiedItem[] = DEFAULT_ASSIGNMENT_FIELD_KEYS.map((k) => ({
+      kind: 'standard', key: k, label: ASGN_FIELD_LABELS[k] ?? k,
+    }));
+    const customItems: UnifiedItem[] = asgnTemplates.map(tpl => ({
+      kind: 'custom', key: `custom:${tpl.id}`, label: tpl.field_label, tpl,
+    }));
+    const all = [...standardItems, ...customItems];
+    const byKey = new Map(all.map(it => [it.key, it]));
+
+    const saved = business?.assignment_field_order ?? null;
+    if (!Array.isArray(saved) || saved.length === 0) return all;
+
+    const ordered: UnifiedItem[] = [];
+    for (const k of saved) {
+      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+      if (item) ordered.push(item);
+    }
+    const used = new Set(ordered.map(i => i.key));
+    return [...ordered, ...all.filter(i => !used.has(i.key))];
+  })();
+
+  const moveAsgnItem = async (key: string, direction: 'up' | 'down') => {
+    if (!business) return;
+    const idx = asgnItems.findIndex(i => i.key === key);
+    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || otherIdx < 0 || otherIdx >= asgnItems.length) return;
+    const next = [...asgnItems];
+    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
+    await supabase
+      .from('businesses')
+      .update({ assignment_field_order: next.map(i => i.key) })
       .eq('id', business.id);
     await refetchBusiness();
   };
@@ -795,12 +969,174 @@ export default function AjustesPage() {
                   <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
               </div>
+
+              {/* Crew mode toggle — hides the per-worker fields card + the
+                 lead picker on the new-job form when off. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-gray-900">{t.crewMode.heading}</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.crewMode.subtitle}</p>
+                  </div>
+                  <button
+                    type="button" role="switch" aria-checked={crewMode}
+                    onClick={() => { setCrewMode(v => !v); setCrewModeMsg(''); }}
+                    style={{ width: '44px', height: '24px', flexShrink: 0 }}
+                    className={`relative rounded-full transition-colors ${crewMode ? 'bg-primary' : 'bg-gray-200'}`}>
+                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      crewMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}/>
+                  </button>
+                </div>
+                {crewModeMsg && <p className={`text-xs mt-3 ${crewModeMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{crewModeMsg}</p>}
+                {crewMode !== (business?.job_crew_mode ?? true) && (
+                  <div className="mt-4">
+                    <Button onClick={saveCrewMode} loading={savingCrewMode}>
+                      <Save size={14} className="mr-1.5"/> {t.crewMode.saveBtn}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Per-worker custom fields — what the lead fills out for each
+                 worker after the job. Hidden when crew mode is off. */}
+              {crewMode && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <h2 className="text-base font-semibold text-gray-900">{t.assignmentFieldsSection.title}</h2>
+                    <Button size="sm" variant="secondary" onClick={() => {
+                      setAsgnTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                      setAsgnTplError(''); setAddAsgnFieldModal(true);
+                    }}>
+                      <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-5">{t.assignmentFieldsSection.subtitle}</p>
+
+                  <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
+                    {asgnItems.map((item, i) => {
+                      const isLast = i === asgnItems.length - 1;
+                      return (
+                        <div key={item.key} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {item.kind === 'custom' && (
+                                <Sparkles size={12} className="text-primary shrink-0"/>
+                              )}
+                              <span className="text-sm text-gray-900">{item.label}</span>
+                              {item.kind === 'custom' && item.tpl.required && (
+                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                              )}
+                            </div>
+                            {item.kind === 'custom' && (
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {FIELD_TYPES[item.tpl.field_type]}
+                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col shrink-0">
+                            <button
+                              onClick={() => moveAsgnItem(item.key, 'up')}
+                              disabled={i === 0}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move up"
+                            >
+                              <ChevronUp size={14} className="text-gray-500"/>
+                            </button>
+                            <button
+                              onClick={() => moveAsgnItem(item.key, 'down')}
+                              disabled={isLast}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move down"
+                            >
+                              <ChevronDown size={14} className="text-gray-500"/>
+                            </button>
+                          </div>
+
+                          {item.kind === 'standard' ? (
+                            <button
+                              type="button" role="switch" aria-checked={!!asgnRequired[item.key]}
+                              onClick={() => toggleAsgnRequired(item.key)}
+                              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+                              className={`relative rounded-full transition-colors ${asgnRequired[item.key] ? 'bg-primary' : 'bg-gray-200'}`}>
+                              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                asgnRequired[item.key] ? 'translate-x-6' : 'translate-x-1'
+                              }`}/>
+                            </button>
+                          ) : (
+                            <>
+                              <button onClick={() => openEditAsgnTemplate(item.tpl)}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.edit}>
+                                <Pencil size={13} className="text-blue-400"/>
+                              </button>
+                              <button onClick={() => removeAsgnTemplate(item.tpl.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.delete}>
+                                <Trash2 size={13} className="text-red-400"/>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {asgnReqMsg && <p className={`text-xs mb-3 ${asgnReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{asgnReqMsg}</p>}
+                  <Button onClick={saveAsgnRequired} loading={savingAsgnRequired}>
+                    <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
           {/* ══ CLIENTES ═════════════════════════════════════════════ */}
           {tab === 'clientes' && (
             <div className="flex flex-col gap-5">
+              {/* Import CSV — lives here in Ajustes since it's an
+                 onboarding/migration action, not a daily one. Navigates
+                 to /dashboard/clientes?import=1 which auto-opens the
+                 existing import modal there. */}
+              <Link
+                href="/dashboard/clientes?import=1"
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Sparkles size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">{full.dashboard.clients.importBtn}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{full.dashboard.clients.importHint}</p>
+                </div>
+                <span className="text-xl text-gray-400">›</span>
+              </Link>
+
+              {/* Contacts summary — total clients + employees so the user can
+                 reconcile against their Google Contacts count when sync is on. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-4">{t.contactsStats.heading}</h2>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-indigo-50 rounded-xl p-4 flex flex-col items-center">
+                    <span className="text-xs text-indigo-600 font-medium">{t.contactsStats.clientsLabel}</span>
+                    <span className="text-2xl font-bold text-indigo-700 mt-1">{clientsCount ?? '—'}</span>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-4 flex flex-col items-center text-center">
+                    <span className="text-xs text-emerald-600 font-medium">{t.contactsStats.contactsLabel}</span>
+                    <span className="text-2xl font-bold text-emerald-700 mt-1">{contactsCount ?? '—'}</span>
+                  </div>
+                  <div className="bg-gray-100 rounded-xl p-4 flex flex-col items-center">
+                    <span className="text-xs text-gray-600 font-medium">{t.contactsStats.totalLabel}</span>
+                    <span className="text-2xl font-bold text-gray-900 mt-1">
+                      {clientsCount !== null && contactsCount !== null ? clientsCount + contactsCount : '—'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-3 leading-4">{t.contactsStats.googleHint}</p>
+              </div>
+
               {/* Unified client-fields list: standard + custom in one order.
                  Custom items are marked with a Sparkles glyph. Use the up/down
                  arrows to interleave them however you like. */}
@@ -1262,6 +1598,99 @@ export default function AjustesPage() {
         </div>
       </Modal>
 
+      {/* ── Add ASSIGNMENT (per-worker) field modal ────────────── */}
+      <Modal open={addAsgnFieldModal} onClose={() => setAddAsgnFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
+            value={asgnTplForm.field_label}
+            onChange={e => setAsgnTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          {asgnTplForm.field_label && (
+            <p className="text-xs text-gray-400 -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(asgnTplForm.field_label)}</code>
+            </p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <select value={asgnTplForm.field_type}
+              onChange={e => setAsgnTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          {asgnTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              </label>
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
+                value={asgnTplForm.options_raw}
+                onChange={e => setAsgnTplForm(f => ({ ...f, options_raw: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <button type="button" role="switch" aria-checked={asgnTplForm.required}
+              onClick={() => setAsgnTplForm(f => ({ ...f, required: !f.required }))}
+              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+              className={`relative rounded-full transition-colors ${asgnTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                asgnTplForm.required ? 'translate-x-6' : 'translate-x-1'
+              }`}/>
+            </button>
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+          </div>
+          {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" onClick={() => setAddAsgnFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={addAsgnTemplate} loading={savingAsgnTpl} fullWidth>{t.customFields.addFieldBtn}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Edit ASSIGNMENT field modal ────────────────────────── */}
+      <Modal open={editAsgnFieldModal} onClose={() => setEditAsgnFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
+            value={asgnTplForm.field_label}
+            onChange={e => setAsgnTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <select value={asgnTplForm.field_type}
+              onChange={e => setAsgnTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          {asgnTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              </label>
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
+                value={asgnTplForm.options_raw}
+                onChange={e => setAsgnTplForm(f => ({ ...f, options_raw: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <button type="button" role="switch" aria-checked={asgnTplForm.required}
+              onClick={() => setAsgnTplForm(f => ({ ...f, required: !f.required }))}
+              style={{ width: '44px', height: '24px', flexShrink: 0 }}
+              className={`relative rounded-full transition-colors ${asgnTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                asgnTplForm.required ? 'translate-x-6' : 'translate-x-1'
+              }`}/>
+            </button>
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+          </div>
+          {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" onClick={() => setEditAsgnFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={updateAsgnTemplate} loading={savingAsgnTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* ── Edit JOB field modal ────────────────────────────────── */}
       <Modal open={editJobFieldModal} onClose={() => setEditJobFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
@@ -1376,6 +1805,14 @@ function GoogleSyncCard() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: number; linked: number } | null>(null);
 
+  // Notes-template state — stuffs custom-field values into the Google
+  // biography so they show up on iPhone Contacts.
+  const [notesTemplate, setNotesTemplate] = useState('');
+  const [templateLoaded, setTemplateLoaded] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [availableFields, setAvailableFields] = useState<string[]>([]);
+
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
 
   const fetchStatus = async () => {
@@ -1412,6 +1849,80 @@ function GoogleSyncCard() {
     } catch {
       setGroups([]);
     }
+  };
+
+  // Load the saved template + available custom field labels so the
+  // template editor knows which placeholders are valid. Runs once we
+  // know which business we're in.
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: biz }, { data: tpl }] = await Promise.all([
+        supabase.from('businesses').select('google_sync_notes_template').eq('id', businessId).maybeSingle(),
+        supabase.from('client_field_templates').select('field_label').eq('business_id', businessId).order('sort_order'),
+      ]);
+      if (cancelled) return;
+      setNotesTemplate(((biz as { google_sync_notes_template: string | null } | null)?.google_sync_notes_template) ?? '');
+      setTemplateLoaded(true);
+      // {{Notas}} is always offered as a default placeholder so the user
+      // can position their own notes anywhere in the template.
+      const customLabels = ((tpl as { field_label: string }[] | null) ?? [])
+        .map(r => r.field_label)
+        .filter(Boolean);
+      setAvailableFields(['Notas', ...customLabels]);
+    })();
+    return () => { cancelled = true; };
+  }, [businessId, supabase]);
+
+  const onSaveTemplate = async () => {
+    if (!businessId) return;
+    setSavingTemplate(true);
+    setTemplateMsg(null);
+    const trimmed = notesTemplate.trim();
+    const { error } = await supabase
+      .from('businesses')
+      .update({ google_sync_notes_template: trimmed === '' ? null : notesTemplate })
+      .eq('id', businessId);
+    setSavingTemplate(false);
+    setTemplateMsg(
+      error
+        ? { text: `${t.templateSaveError} (${error.message})`, isError: true }
+        : { text: t.templateSaved, isError: false },
+    );
+  };
+
+  // Re-apply the current template to every already-synced Google contact.
+  // Throttled + cancellable via the banner's update queue.
+  const syncBanner = useGoogleSyncBanner();
+  const onReapplyTemplate = async () => {
+    if (!businessId) return;
+    // Synced clients AND synced client_contacts — see mobile equivalent
+    // for why both are needed (template renders on contact bios too).
+    const [clientsRes, contactsRes] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('id')
+        .eq('business_id', businessId)
+        .not('google_resource_name', 'is', null),
+      supabase
+        .from('client_contacts')
+        .select('id')
+        .eq('business_id', businessId)
+        .not('google_resource_name', 'is', null),
+    ]);
+    const clientIds = ((clientsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
+    const contactIds = ((contactsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
+    const total = clientIds.length + contactIds.length;
+    if (total === 0) {
+      setTemplateMsg({ text: t.templateReapplyEmpty, isError: false });
+      return;
+    }
+    const ok = window.confirm(
+      `${t.templateReapplyConfirmTitle}\n\n${t.templateReapplyConfirmBody.replace('{{count}}', String(total))}`,
+    );
+    if (!ok) return;
+    syncBanner.runUpdateBatch(clientIds, contactIds);
   };
 
   // Re-fetch status whenever the active business changes — connection state
@@ -1641,15 +2152,76 @@ function GoogleSyncCard() {
         </div>
       ) : null}
 
+      {/* Force-sync sits above Disconnect — same handler as the
+          "Apply to existing contacts" button down in the template card,
+          but surfaced near the connection controls where users naturally
+          look for sync actions. Re-pushes every synced client + contact
+          using the current template. */}
+      {status.connected && status.enabled !== false ? (
+        <div className="mb-4 flex flex-col gap-2">
+          <Button onClick={onReapplyTemplate}>{t.forceSyncBtn}</Button>
+          <Button variant="secondary" onClick={openDisconnectDialog} loading={busy}>
+            {t.disconnectBtn}
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Notes-template editor — visible when connected. Lets the user
+          stuff custom-field values into the Google biography so they
+          show on iPhone Contacts (which hides Google's userDefined fields). */}
+      {status.connected && status.enabled !== false && templateLoaded ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 flex flex-col gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">{t.templateTitle}</h3>
+          <p className="text-xs text-gray-500 leading-5">{t.templateHint}</p>
+          <textarea
+            value={notesTemplate}
+            onChange={e => setNotesTemplate(e.target.value)}
+            placeholder={t.templatePlaceholder}
+            rows={5}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+          />
+          {availableFields.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-xs text-gray-500 mr-1">{t.templateAvailable}:</span>
+              {availableFields.map(label => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setNotesTemplate(prev => {
+                    const sep = prev && !prev.endsWith('\n') ? '\n' : '';
+                    const insertion = label === 'Notas'
+                      ? `{{${label}}}`
+                      : `${label}: {{${label}}}`;
+                    return `${prev}${sep}${insertion}`;
+                  })}
+                  className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 font-mono"
+                >
+                  {`{{${label}}}`}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {templateMsg ? (
+            <p className={`text-xs ${templateMsg.isError ? 'text-red-600' : 'text-emerald-600'}`}>
+              {templateMsg.text}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onSaveTemplate} loading={savingTemplate}>
+              {savingTemplate ? t.templateSaving : t.templateSaveBtn}
+            </Button>
+            <Button variant="secondary" onClick={onReapplyTemplate}>
+              {t.templateReapplyBtn}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {!status.connected || status.enabled === false ? (
         <Button onClick={onConnect} loading={busy}>
           {status.enabled === false ? t.reconnectBtn : t.connectBtn}
         </Button>
-      ) : (
-        <Button variant="secondary" onClick={openDisconnectDialog} loading={busy}>
-          {t.disconnectBtn}
-        </Button>
-      )}
+      ) : null}
 
       <Modal open={disconnectModal} onClose={() => setDisconnectModal(false)} title={t.disconnectTitle} size="sm">
         <div className="flex flex-col gap-4">
