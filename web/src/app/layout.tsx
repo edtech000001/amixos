@@ -4,6 +4,7 @@ import './globals.css';
 import { LangProvider } from '@/i18n/LangProvider';
 import { getServerLocale } from '@/i18n/getServerLocale';
 import { dictionaries } from '@amixos/shared';
+import { MobileAppBanner } from '@/components/MobileAppBanner';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang={locale}>
       <body className={inter.className}>
-        <LangProvider initialLocale={locale}>{children}</LangProvider>
+        <LangProvider initialLocale={locale}>
+          <MobileAppBanner />
+          {children}
+        </LangProvider>
       </body>
     </html>
   );

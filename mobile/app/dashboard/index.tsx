@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -20,6 +21,7 @@ interface RawRecentInvoice {
 }
 
 export default function DashboardHome() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, loading: appLoading } = useApp();
@@ -95,7 +97,7 @@ export default function DashboardHome() {
   }, [business]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
       <DashboardHomeScreen
         loading={appLoading || loading}
         businessName={business?.name ?? ''}
@@ -107,6 +109,6 @@ export default function DashboardHome() {
         onViewAllInvoicesPress={() => router.push('/dashboard/facturas')}
         onCreateFirstInvoicePress={() => router.push('/dashboard/facturas')}
       />
-    </SafeAreaView>
+    </View>
   );
 }

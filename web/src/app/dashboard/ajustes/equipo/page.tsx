@@ -109,10 +109,20 @@ export default function EquipoPage() {
 
   const onRevokeInvite = async (inviteId: string) => {
     if (!confirm(t.confirmRevoke.replace('{{email}}', ''))) return;
-    await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getJwt()}` },
-    });
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${await getJwt()}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(`${body.message ?? 'Error'} (${res.status})`);
+        return;
+      }
+    } catch (e: any) {
+      alert(e?.message ?? 'Network error');
+      return;
+    }
     await load();
   };
 

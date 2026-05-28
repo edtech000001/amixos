@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -22,6 +23,7 @@ interface RawInvoice {
 }
 
 export default function FacturasTab() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business } = useApp();
@@ -71,7 +73,7 @@ export default function FacturasTab() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
       <InvoicesListScreen
         loading={loading}
         invoices={invoices}
@@ -79,6 +81,6 @@ export default function FacturasTab() {
         onNewInvoicePress={() => router.push('/dashboard/facturas/nueva' as never)}
         onUpdateStatus={updateStatus}
       />
-    </SafeAreaView>
+    </View>
   );
 }

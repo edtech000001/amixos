@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -38,6 +38,7 @@ interface RawJob {
 }
 
 export default function TrabajosTab() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, businesses } = useApp();
@@ -106,7 +107,7 @@ export default function TrabajosTab() {
   })), [rawJobs, businesses]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
       <JobsListScreen
         loading={loading}
         jobs={jobs}
@@ -117,6 +118,6 @@ export default function TrabajosTab() {
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
       />
-    </SafeAreaView>
+    </View>
   );
 }

@@ -184,6 +184,7 @@ function DashboardTabs() {
             }}
           />
           <Tabs.Screen name="mas/empleados" options={{ href: null }} />
+          <Tabs.Screen name="mas/equipo" options={{ href: null }} />
           <Tabs.Screen name="mas/inventario" options={{ href: null }} />
           <Tabs.Screen name="mas/calendario" options={{ href: null }} />
           {/* ajustes/ is a Stack with its own _layout — register the folder once. */}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -38,6 +38,7 @@ function fmtPhone(raw: string): string {
 }
 
 export default function ClientesTab() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business } = useApp();
@@ -197,8 +198,13 @@ export default function ClientesTab() {
     );
   };
 
+  // Manual safe-area padding via useSafeAreaInsets. SafeAreaView from
+  // react-native-safe-area-context@4.10.1 was rendering its children at
+  // zero height inside the dashboard tab layout (iOS 26 simulator quirk
+  // or interaction with the GoogleSyncBanner overlay wrap). Using a
+  // plain View + paddingTop sidesteps it.
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
       <ClientsListScreen
         loading={loading}
         clients={items}
@@ -218,6 +224,6 @@ export default function ClientesTab() {
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
       />
-    </SafeAreaView>
+    </View>
   );
 }

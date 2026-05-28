@@ -110,10 +110,20 @@ export default function EquipoPage() {
           text: t.revokeBtn,
           style: 'destructive',
           onPress: async () => {
-            await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${await getJwt()}` },
-            });
+            try {
+              const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${await getJwt()}` },
+              });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                Alert.alert('', `${body.message ?? 'Error'} (${res.status})`);
+                return;
+              }
+            } catch (e: any) {
+              Alert.alert('', e?.message ?? 'Network error');
+              return;
+            }
             await load();
           },
         },

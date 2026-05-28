@@ -1,18 +1,23 @@
 import { useRouter } from 'expo-router';
 import { Linking } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useLang } from '@/lib/i18n/LangProvider';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
 import { OAuthButtons } from '@/components/OAuthButtons';
 
 export default function RegisterRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
+  const { locale } = useLang();
 
   const handleRegister = async (data: { firstName: string; lastName: string; email: string; password: string }): Promise<RegisterAttemptResult> => {
     const { error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
-      options: { data: { first_name: data.firstName, last_name: data.lastName } },
+      // locale lands in raw_user_meta_data → readable as {{ .Data.locale }}
+      // in the Supabase email templates so confirm/reset emails can be
+      // sent in the user's language.
+      options: { data: { first_name: data.firstName, last_name: data.lastName, locale } },
     });
     if (error) {
       const m = error.message;

@@ -31,6 +31,11 @@ export type CommonDict = {
     no: string;
     optional: string;
   };
+  mobileAppBanner: {
+    title: string;
+    subtitle: string;
+    openBtn: string;
+  };
 };
 
 export const common: Record<Locale, CommonDict> = {
@@ -65,6 +70,11 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'opcional',
     },
+    mobileAppBanner: {
+      title: 'Amixos para iPhone',
+      subtitle: 'Mejor experiencia en la app.',
+      openBtn: 'Abrir',
+    },
   },
   en: {
     appMetadata: {
@@ -96,6 +106,11 @@ export const common: Record<Locale, CommonDict> = {
       yes: 'Yes',
       no: 'No',
       optional: 'optional',
+    },
+    mobileAppBanner: {
+      title: 'Amixos for iPhone',
+      subtitle: 'Better experience in the app.',
+      openBtn: 'Open',
     },
   },
 };
