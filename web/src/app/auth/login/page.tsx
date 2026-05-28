@@ -30,6 +30,17 @@ export default function LoginPage() {
         return { ok: false, reason: 'generic' };
       }
 
+      // Honor ?next= (invite links: /auth/login?next=/invitacion/TOKEN).
+      // Invited users are JOINING a business, so skip the create-business
+      // onboarding and send them straight to the destination.
+      const nextParam = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('next')
+        : null;
+      if (nextParam && nextParam.startsWith('/')) {
+        window.location.href = nextParam;
+        return { ok: true, needsOnboarding: false };
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       let needsOnboarding = false;
       if (session) {
@@ -50,12 +61,18 @@ export default function LoginPage() {
     }
   };
 
+  // Preserve ?next= when bouncing login → register so the invite context
+  // survives the toggle.
+  const nextSuffix = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('next')
+    ? `?next=${encodeURIComponent(new URLSearchParams(window.location.search).get('next')!)}`
+    : '';
+
   return (
     <LoginScreen
       onLogin={handleLogin}
       initialError={initialError}
       onForgotPasswordPress={() => router.push('/auth/forgot-password')}
-      onRegisterPress={() => router.push('/auth/register')}
+      onRegisterPress={() => router.push(`/auth/register${nextSuffix}`)}
       oauthSlot={<OAuthButtons />}
     />
   );

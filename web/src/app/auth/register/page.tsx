@@ -27,14 +27,26 @@ export default function RegisterPage() {
       }
       return { ok: false, reason: 'generic' };
     }
-    window.location.href = '/onboarding';
+    // Honor ?next= (invite links). An invited user is joining a business,
+    // not creating one — send them to the invite-accept page instead of
+    // onboarding. Falls back to onboarding for normal self-serve signups.
+    const np = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('next')
+      : null;
+    window.location.href = np && np.startsWith('/') ? np : '/onboarding';
     return { ok: true };
   };
+
+  // Preserve ?next= when bouncing register → login so the invite context
+  // survives the toggle.
+  const nextSuffix = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('next')
+    ? `?next=${encodeURIComponent(new URLSearchParams(window.location.search).get('next')!)}`
+    : '';
 
   return (
     <RegisterScreen
       onRegister={handleRegister}
-      onLoginPress={() => router.push('/auth/login')}
+      onLoginPress={() => router.push(`/auth/login${nextSuffix}`)}
       onTermsPress={() => router.push('/terms')}
       onPrivacyPress={() => router.push('/privacy')}
       oauthSlot={<OAuthButtons mode="register" />}
