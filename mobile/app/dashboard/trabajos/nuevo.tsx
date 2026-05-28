@@ -75,7 +75,7 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
 
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
-  const { edit, modo } = useLocalSearchParams<{ edit?: string; modo?: string }>();
+  const { edit, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; modo?: string; client?: string }>();
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const { t: full } = useLang();
@@ -98,7 +98,7 @@ export default function NuevoTrabajoRoute() {
 
   // Form — shared
   const [title, setTitle] = useState('');
-  const [clientId, setClientId] = useState('');
+  const [clientId, setClientId] = useState(clientParam ?? '');
   const [status, setStatus] = useState<'scheduled' | 'in_progress'>('scheduled');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
@@ -113,6 +113,7 @@ export default function NuevoTrabajoRoute() {
   const [workerNotes, setWorkerNotes] = useState('');
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
+  const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
 
   // Form — proposal only
   const [clientNotes, setClientNotes] = useState('');
@@ -199,6 +200,8 @@ export default function NuevoTrabajoRoute() {
             .filter((a: any) => !a.employee_id && a.worker_name)
             .map((a: any) => a.worker_name);
           if (manual.length > 0) setManualWorkers(manual);
+          const lead = assigns.find((a: any) => a.is_lead && a.employee_id);
+          if (lead) setLeadEmployeeId(lead.employee_id);
         }
         setLoadingEdit(false);
       }
@@ -294,8 +297,14 @@ export default function NuevoTrabajoRoute() {
     // is the worksite, which often differs from the client's mailing address.
   };
 
-  const toggleEmployee = (id: string) =>
-    setAssignedEmployees((prev) => (prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]));
+  const toggleEmployee = (id: string) => {
+    setAssignedEmployees((prev) => {
+      const next = prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id];
+      // If the lead was unassigned, drop the lead so the radio stays consistent.
+      if (!next.includes(id) && leadEmployeeId === id) setLeadEmployeeId(null);
+      return next;
+    });
+  };
 
   const save = async () => {
     if (!business) return;
@@ -397,7 +406,16 @@ export default function NuevoTrabajoRoute() {
       // line items from this form (moved to detail page).
       if (!isProposal) {
         if (editId) await supabase.from('job_assignments').delete().eq('job_id', jobId);
-        const assignments: { job_id: string; employee_id?: string; worker_name: string }[] = [];
+        // Only honor the lead pick if that employee is actually in the crew —
+        // toggleEmployee already clears it, but belt-and-suspenders for save.
+        const validLeadId =
+          leadEmployeeId && assignedEmployees.includes(leadEmployeeId) ? leadEmployeeId : null;
+        const assignments: {
+          job_id: string;
+          employee_id?: string;
+          worker_name: string;
+          is_lead?: boolean;
+        }[] = [];
         assignedEmployees.forEach((empId) => {
           const emp = employees.find((e) => e.id === empId);
           if (emp) {
@@ -405,6 +423,7 @@ export default function NuevoTrabajoRoute() {
               job_id: jobId,
               employee_id: empId,
               worker_name: `${emp.first_name} ${emp.last_name}`,
+              is_lead: empId === validLeadId,
             });
           }
         });
@@ -706,6 +725,7 @@ export default function NuevoTrabajoRoute() {
                 <View className="flex-row flex-wrap gap-2">
                   {employees.map((emp) => {
                     const on = assignedEmployees.includes(emp.id);
+                    const isLead = leadEmployeeId === emp.id;
                     return (
                       <Pressable
                         key={emp.id}
@@ -735,6 +755,31 @@ export default function NuevoTrabajoRoute() {
                         >
                           {emp.first_name} {emp.last_name}
                         </Text>
+                        {/* Lead radio appears only for selected employees and only
+                           when crew mode is on. Tapping toggles the lead role
+                           (single-select across all chips). */}
+                        {on && business?.job_crew_mode !== false ? (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setLeadEmployeeId(isLead ? null : emp.id);
+                            }}
+                            hitSlop={4}
+                            className={`ml-1 px-2 py-0.5 rounded-full border ${
+                              isLead
+                                ? 'bg-amber-100 border-amber-300'
+                                : 'bg-white border-gray-300'
+                            }`}
+                          >
+                            <Text
+                              className={`text-[10px] font-semibold ${
+                                isLead ? 'text-amber-700' : 'text-gray-400'
+                              }`}
+                            >
+                              {isLead ? t.leadBadge : t.markAsLead}
+                            </Text>
+                          </Pressable>
+                        ) : null}
                       </Pressable>
                     );
                   })}

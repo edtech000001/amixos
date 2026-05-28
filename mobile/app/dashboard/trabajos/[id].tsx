@@ -9,6 +9,7 @@ import {
   Linking,
   Share,
   Modal as RNModal,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,7 +39,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
-import { Button } from '@amixos/shared/ui';
+import { Button, Toggle } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
@@ -111,6 +112,12 @@ interface JobItem {
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
+// Swallow Linking.openURL rejections — simulator + devices without a
+// handler throw an unhandled-rejection warning otherwise.
+const openLink = (url: string) => {
+  Linking.openURL(url).catch(() => {});
+};
+
 interface PipelineStep {
   key: string;
   label: string;
@@ -120,7 +127,16 @@ interface PipelineStep {
 
 export default function JobDetailRoute() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  // ?from=map → back arrow returns to the map module. Otherwise default
+  // behavior (trabajos list).
+  const goBack = () => {
+    if (from === 'map') {
+      router.replace('/dashboard/mas/modulos/map' as never);
+    } else {
+      router.replace('/dashboard/trabajos' as never);
+    }
+  };
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const { t: full } = useLang();
@@ -438,7 +454,7 @@ export default function JobDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={() => router.replace('/dashboard/trabajos' as never)}
+          onPress={goBack}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >
@@ -617,7 +633,7 @@ export default function JobDetailRoute() {
 
           {clientPhone ? (
             <Pressable
-              onPress={() => Linking.openURL(`tel:${clientPhone.replace(/\D/g, '')}`)}
+              onPress={() => openLink(`tel:${clientPhone.replace(/\D/g, '')}`)}
               className="flex-row items-center gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
             >
               <Phone size={16} color="#6B7280" />
@@ -651,6 +667,18 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
         </View>
+
+        {/* Project Leader's actuals — only renders when crew mode is on AND
+           the current user is the lead on this job. Component handles its
+           own visibility check + DB loads. */}
+        <ActualsSection
+          jobId={job.id}
+          businessId={job.business_id}
+          crewModeOn={business?.job_crew_mode !== false}
+          assignmentFieldOrder={business?.assignment_field_order ?? null}
+          jobStatus={job.status}
+          onCompleted={() => updateStatus('completed')}
+        />
 
         {/* Items list */}
         <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5">
@@ -807,9 +835,9 @@ export default function JobDetailRoute() {
               {job.clients ? (
                 <ClientModalBody
                   client={job.clients}
-                  onCallPress={(num) => Linking.openURL(`tel:${num.replace(/\D/g, '')}`)}
-                  onSmsPress={(num) => Linking.openURL(`sms:${num.replace(/\D/g, '')}`)}
-                  onEmailPress={(addr) => Linking.openURL(`mailto:${addr}`)}
+                  onCallPress={(num) => openLink(`tel:${num.replace(/\D/g, '')}`)}
+                  onSmsPress={(num) => openLink(`sms:${num.replace(/\D/g, '')}`)}
+                  onEmailPress={(addr) => openLink(`mailto:${addr}`)}
                   onOpenFullPress={() =>
                     job.client_id && router.push(`/dashboard/clientes/${job.client_id}` as never)
                   }
@@ -872,12 +900,12 @@ export default function JobDetailRoute() {
                 onPress={() => {
                   // Prefer coords for accuracy; fall back to address.
                   if (job.job_lat != null && job.job_lng != null) {
-                    Linking.openURL(`https://maps.google.com/?q=${job.job_lat},${job.job_lng}`);
+                    openLink(`https://maps.google.com/?q=${job.job_lat},${job.job_lng}`);
                   } else if (job.job_address) {
                     const q = encodeURIComponent(
                       `${job.job_address} ${job.job_city ?? ''} ${job.job_state ?? ''}`.trim(),
                     );
-                    Linking.openURL(`https://maps.google.com/?q=${q}`);
+                    openLink(`https://maps.google.com/?q=${q}`);
                   }
                 }}
                 className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-80"
@@ -1086,3 +1114,251 @@ function ClientModalBody({
     </View>
   );
 }
+
+// ─── Project Leader actuals section ──────────────────────────────────────
+// Loads job_assignments + per-worker field templates and renders an editor
+// only when the current user is the lead on this job. RLS allows the lead
+// (field role) to update assignments via the "lead update job_assignments"
+// policy in migration 033.
+interface AssignmentRow {
+  id: string;
+  employee_id: string | null;
+  worker_name: string | null;
+  is_lead: boolean | null;
+  hours_worked: number | null;
+  custom_fields: Record<string, unknown> | null;
+  employees: { user_id: string | null } | null;
+}
+
+interface AssignmentFieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
+}
+
+function ActualsSection({
+  jobId,
+  businessId,
+  crewModeOn,
+  assignmentFieldOrder,
+  jobStatus,
+  onCompleted,
+}: {
+  jobId: string;
+  businessId: string;
+  crewModeOn: boolean;
+  assignmentFieldOrder: string[] | null;
+  jobStatus: string;
+  onCompleted: () => void;
+}) {
+  const supabase = createSupabaseClient();
+  const user = useAuthStore((s) => s.user);
+  const { t: full } = useLang();
+  const tA = full.dashboard.jobs.actuals;
+  const tc = full.common;
+
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [templates, setTemplates] = useState<AssignmentFieldTemplate[]>([]);
+  const [isLead, setIsLead] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  // Working copy — edits are buffered in state until "Guardar" is tapped.
+  const [draft, setDraft] = useState<Record<string, { hours: string; custom: Record<string, unknown> }>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: a }, { data: tpl }] = await Promise.all([
+        supabase
+          .from('job_assignments')
+          .select('id, employee_id, worker_name, is_lead, hours_worked, custom_fields, employees(user_id)')
+          .eq('job_id', jobId),
+        supabase
+          .from('job_assignment_field_templates')
+          .select('*')
+          .eq('business_id', businessId)
+          .order('sort_order'),
+      ]);
+      if (cancelled) return;
+      const rows = ((a ?? []) as unknown) as AssignmentRow[];
+      const tpls = ((tpl ?? []) as AssignmentFieldTemplate[]);
+      setAssignments(rows);
+      setTemplates(tpls);
+      const leadHere = rows.some(
+        (r) => r.is_lead === true && r.employees?.user_id === user.id,
+      );
+      setIsLead(leadHere);
+      // Seed draft from saved values.
+      const initial: typeof draft = {};
+      for (const r of rows) {
+        initial[r.id] = {
+          hours: r.hours_worked != null ? String(r.hours_worked) : '',
+          custom: { ...(r.custom_fields ?? {}) },
+        };
+      }
+      setDraft(initial);
+      setLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [jobId, businessId, user?.id]);
+
+  if (!crewModeOn || !loaded || !isLead) return null;
+
+  // Order templates by saved order then sort_order. Saved order entries
+  // look like "custom:<uuid>" — we extract the uuid to match templates.
+  const orderedTemplates = (() => {
+    const byId = new Map(templates.map((t) => [t.id, t]));
+    if (!Array.isArray(assignmentFieldOrder) || assignmentFieldOrder.length === 0) return templates;
+    const out: AssignmentFieldTemplate[] = [];
+    const used = new Set<string>();
+    for (const ref of assignmentFieldOrder) {
+      if (typeof ref !== 'string' || !ref.startsWith('custom:')) continue;
+      const tpl = byId.get(ref.slice('custom:'.length));
+      if (tpl) { out.push(tpl); used.add(tpl.id); }
+    }
+    return [...out, ...templates.filter((t) => !used.has(t.id))];
+  })();
+
+  const onSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      // Sequential updates — small N (one per worker) and Supabase upsert
+      // can't easily mix per-row partial updates here.
+      for (const row of assignments) {
+        const d = draft[row.id];
+        if (!d) continue;
+        const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
+        await supabase
+          .from('job_assignments')
+          .update({
+            hours_worked: Number.isFinite(hoursNum) ? hoursNum : null,
+            custom_fields: d.custom,
+            logged_at: new Date().toISOString(),
+            logged_by: user?.id ?? null,
+          })
+          .eq('id', row.id);
+      }
+      setMsg({ text: tA.saveSuccess, isError: false });
+    } catch {
+      setMsg({ text: tA.saveError, isError: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markComplete = async () => {
+    await onSave();
+    onCompleted();
+    void logAudit(supabase, businessId, 'job.completion_logged', 'job', jobId, {
+      lead_user_id: user?.id,
+      worker_count: assignments.length,
+      total_hours: assignments.reduce((s, a) => s + (Number(draft[a.id]?.hours) || 0), 0),
+    });
+  };
+
+  const setHours = (rowId: string, v: string) =>
+    setDraft((prev) => ({ ...prev, [rowId]: { ...prev[rowId], hours: v } }));
+  const setCustom = (rowId: string, key: string, v: unknown) =>
+    setDraft((prev) => ({
+      ...prev,
+      [rowId]: { ...prev[rowId], custom: { ...prev[rowId].custom, [key]: v } },
+    }));
+
+  return (
+    <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5">
+      <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{tA.heading}</Text>
+      <Text className="text-xs text-gray-500 mb-3">{tA.subtitle}</Text>
+
+      {assignments.map((row, i) => {
+        const d = draft[row.id] ?? { hours: '', custom: {} };
+        return (
+          <View
+            key={row.id}
+            className={`py-3 ${i < assignments.length - 1 ? 'border-b border-gray-50' : ''}`}
+          >
+            <Text className="text-sm font-semibold text-gray-900 mb-2">
+              {row.worker_name ?? '—'}
+            </Text>
+
+            {/* Hours worked — the universal core field. */}
+            <View className="mb-2">
+              <Text className="text-xs text-gray-500 mb-1">{tA.hoursWorkedLabel}</Text>
+              <TextInput
+                value={d.hours}
+                onChangeText={(v) => setHours(row.id, v)}
+                placeholder={tA.hoursWorkedPlaceholder}
+                placeholderTextColor="#9CA3AF"
+                keyboardType="decimal-pad"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
+              />
+            </View>
+
+            {/* Custom per-worker fields. */}
+            {orderedTemplates.map((tpl) => {
+              const value = d.custom[tpl.field_key];
+              if (tpl.field_type === 'boolean') {
+                return (
+                  <View key={tpl.id} className="mb-2 flex-row items-center justify-between">
+                    <Text className="text-xs text-gray-500 flex-1">{tpl.field_label}</Text>
+                    <Toggle
+                      value={value === true}
+                      onValueChange={(v) => setCustom(row.id, tpl.field_key, v)}
+                    />
+                  </View>
+                );
+              }
+              return (
+                <View key={tpl.id} className="mb-2">
+                  <Text className="text-xs text-gray-500 mb-1">{tpl.field_label}</Text>
+                  <TextInput
+                    value={value == null ? '' : String(value)}
+                    onChangeText={(v) =>
+                      setCustom(
+                        row.id,
+                        tpl.field_key,
+                        tpl.field_type === 'number'
+                          ? v.trim() === '' ? null : Number(v)
+                          : v,
+                      )
+                    }
+                    keyboardType={tpl.field_type === 'number' ? 'decimal-pad' : 'default'}
+                    placeholderTextColor="#9CA3AF"
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
+                  />
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+
+      {msg ? (
+        <Text className={`text-xs mt-2 ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>
+          {msg.text}
+        </Text>
+      ) : null}
+
+      <View className="mt-3 gap-2">
+        <Button onPress={onSave} loading={saving}>{tA.saveBtn}</Button>
+        {jobStatus !== 'completed' && jobStatus !== 'invoiced' ? (
+          <Pressable
+            onPress={markComplete}
+            disabled={saving}
+            className="flex-row items-center justify-center gap-2 bg-emerald-600 py-3 rounded-2xl active:opacity-80"
+          >
+            <CheckCircle2 size={16} color="#FFFFFF" />
+            <Text className="text-white font-semibold text-sm">{tA.markCompleteBtn}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+

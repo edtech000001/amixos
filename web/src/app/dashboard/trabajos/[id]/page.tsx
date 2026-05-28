@@ -38,7 +38,19 @@ interface Job {
 }
 interface Assignment {
   id: string; worker_name: string | null;
-  employees: { id: string; first_name: string; last_name: string } | null;
+  is_lead: boolean | null;
+  hours_worked: number | null;
+  custom_fields: Record<string, unknown> | null;
+  employees: { id: string; first_name: string; last_name: string; user_id: string | null } | null;
+}
+interface AssignmentFieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
 }
 interface JobItem {
   id: string; item_type: string; description: string; quantity: number; unit_price: number; total: number;
@@ -106,7 +118,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (!business) return;
     const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
-      supabase.from('job_assignments').select('*, employees(id, first_name, last_name)').eq('job_id', id),
+      supabase.from('job_assignments').select('*, employees(id, first_name, last_name, user_id)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
     ]);
     if (j) {
@@ -664,12 +676,31 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                         <span className="text-primary text-xs font-bold">{name.charAt(0)}</span>
                       </div>
                       <span className="text-sm text-gray-900 font-medium">{name}</span>
+                      {a.is_lead && (
+                        <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
+                          {full.dashboard.jobs.new.leadBadge}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
+
+          {/* Project Leader actuals — visible only when the current user is
+             the lead on this job AND crew mode is on. Component handles its
+             own visibility check + DB loads. */}
+          <ActualsSection
+            jobId={job.id}
+            businessId={job.business_id}
+            jobStatus={job.status}
+            crewModeOn={business?.job_crew_mode !== false}
+            assignmentFieldOrder={business?.assignment_field_order ?? null}
+            userId={user?.id ?? null}
+            assignments={assignments}
+            onCompleted={() => updateStatus('completed')}
+          />
         </div>
 
         {/* Right — Line items */}
@@ -866,10 +897,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Delete Confirmation Modal */}
       <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title={td.deleteJobTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <p
-            className="text-sm text-gray-600"
-            dangerouslySetInnerHTML={{ __html: td.deleteJobConfirm.replace('{{name}}', job.title) }}
-          />
+          <p className="text-sm text-gray-600">{td.deleteJobConfirm}</p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setDeleteModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <button
@@ -882,6 +910,209 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ─── Project Leader actuals section ──────────────────────────────────────
+// Visible only when crew mode is on AND the current user is the lead on this
+// job. RLS allows the lead (field role) to update assignments on their job
+// via the "lead update job_assignments" policy in migration 033.
+function ActualsSection({
+  jobId,
+  businessId,
+  jobStatus,
+  crewModeOn,
+  assignmentFieldOrder,
+  userId,
+  assignments,
+  onCompleted,
+}: {
+  jobId: string;
+  businessId: string;
+  jobStatus: string;
+  crewModeOn: boolean;
+  assignmentFieldOrder: string[] | null;
+  userId: string | null;
+  assignments: Assignment[];
+  onCompleted: () => void;
+}) {
+  const supabase = createSupabaseClient();
+  const { t: full } = useLang();
+  const tA = full.dashboard.jobs.actuals;
+
+  const [templates, setTemplates] = useState<AssignmentFieldTemplate[]>([]);
+  const [draft, setDraft] = useState<Record<string, { hours: string; custom: Record<string, unknown> }>>({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const isLead = !!userId && assignments.some(
+    (a) => a.is_lead === true && a.employees?.user_id === userId,
+  );
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('job_assignment_field_templates')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('sort_order');
+      if (cancelled) return;
+      setTemplates((data as AssignmentFieldTemplate[] | null) ?? []);
+      const initial: typeof draft = {};
+      for (const r of assignments) {
+        initial[r.id] = {
+          hours: r.hours_worked != null ? String(r.hours_worked) : '',
+          custom: { ...(r.custom_fields ?? {}) },
+        };
+      }
+      setDraft(initial);
+      setLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [businessId, jobId, assignments.length]);
+
+  if (!crewModeOn || !loaded || !isLead) return null;
+
+  const orderedTemplates = (() => {
+    const byId = new Map(templates.map((t) => [t.id, t]));
+    if (!Array.isArray(assignmentFieldOrder) || assignmentFieldOrder.length === 0) return templates;
+    const out: AssignmentFieldTemplate[] = [];
+    const used = new Set<string>();
+    for (const ref of assignmentFieldOrder) {
+      if (typeof ref !== 'string' || !ref.startsWith('custom:')) continue;
+      const tpl = byId.get(ref.slice('custom:'.length));
+      if (tpl) { out.push(tpl); used.add(tpl.id); }
+    }
+    return [...out, ...templates.filter((t) => !used.has(t.id))];
+  })();
+
+  const setHours = (rowId: string, v: string) =>
+    setDraft(prev => ({ ...prev, [rowId]: { ...prev[rowId], hours: v } }));
+  const setCustom = (rowId: string, key: string, v: unknown) =>
+    setDraft(prev => ({
+      ...prev,
+      [rowId]: { ...prev[rowId], custom: { ...prev[rowId].custom, [key]: v } },
+    }));
+
+  const onSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      for (const row of assignments) {
+        const d = draft[row.id];
+        if (!d) continue;
+        const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
+        await supabase
+          .from('job_assignments')
+          .update({
+            hours_worked: Number.isFinite(hoursNum) ? hoursNum : null,
+            custom_fields: d.custom,
+            logged_at: new Date().toISOString(),
+            logged_by: userId,
+          })
+          .eq('id', row.id);
+      }
+      setMsg({ text: tA.saveSuccess, isError: false });
+    } catch {
+      setMsg({ text: tA.saveError, isError: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markComplete = async () => {
+    await onSave();
+    onCompleted();
+    void logAudit(supabase, businessId, 'job.completion_logged', 'job', jobId, {
+      lead_user_id: userId,
+      worker_count: assignments.length,
+      total_hours: assignments.reduce((s, a) => s + (Number(draft[a.id]?.hours) || 0), 0),
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{tA.heading}</h2>
+      <p className="text-xs text-gray-500 mb-4">{tA.subtitle}</p>
+
+      <div className="flex flex-col divide-y divide-gray-50">
+        {assignments.map(row => {
+          const name = row.employees ? `${row.employees.first_name} ${row.employees.last_name}` : row.worker_name ?? '—';
+          const d = draft[row.id] ?? { hours: '', custom: {} };
+          return (
+            <div key={row.id} className="py-3 first:pt-0">
+              <p className="text-sm font-semibold text-gray-900 mb-2">{name}</p>
+
+              <div className="mb-2">
+                <label className="text-xs text-gray-500 block mb-1">{tA.hoursWorkedLabel}</label>
+                <input
+                  type="number" step="0.1" inputMode="decimal"
+                  value={d.hours}
+                  onChange={e => setHours(row.id, e.target.value)}
+                  placeholder={tA.hoursWorkedPlaceholder}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                />
+              </div>
+
+              {orderedTemplates.map(tpl => {
+                const value = d.custom[tpl.field_key];
+                if (tpl.field_type === 'boolean') {
+                  return (
+                    <div key={tpl.id} className="mb-2 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">{tpl.field_label}</span>
+                      <button
+                        type="button" role="switch" aria-checked={value === true}
+                        onClick={() => setCustom(row.id, tpl.field_key, value !== true)}
+                        style={{ width: '44px', height: '24px' }}
+                        className={`relative rounded-full transition-colors ${value === true ? 'bg-primary' : 'bg-gray-200'}`}>
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          value === true ? 'translate-x-6' : 'translate-x-1'
+                        }`}/>
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={tpl.id} className="mb-2">
+                    <label className="text-xs text-gray-500 block mb-1">{tpl.field_label}</label>
+                    <input
+                      type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
+                      value={value == null ? '' : String(value)}
+                      onChange={e =>
+                        setCustom(
+                          row.id,
+                          tpl.field_key,
+                          tpl.field_type === 'number'
+                            ? e.target.value.trim() === '' ? null : Number(e.target.value)
+                            : e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {msg && (
+        <p className={`text-xs mt-2 ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</p>
+      )}
+
+      <div className="mt-3 flex flex-col gap-2">
+        <Button onClick={onSave} loading={saving} fullWidth>{tA.saveBtn}</Button>
+        {jobStatus !== 'completed' && jobStatus !== 'invoiced' && (
+          <Button onClick={markComplete} loading={saving} variant="secondary" fullWidth>
+            <CheckCircle2 size={14} className="mr-1.5"/> {tA.markCompleteBtn}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

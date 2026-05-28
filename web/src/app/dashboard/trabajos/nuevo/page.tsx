@@ -11,6 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
@@ -96,6 +97,7 @@ function NuevoTrabajoContent() {
   const [items, setItems] = useState<LineItem[]>([]);
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
+  const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
 
   // Client search
   const [clientSearch, setClientSearch] = useState('');
@@ -129,12 +131,17 @@ function NuevoTrabajoContent() {
     if (clientParam) setClientId(clientParam);
 
     const loadData = async () => {
-      const [{ data: cl }, { data: emp }] = await Promise.all([
-        supabase.from('clients').select('id, first_name, last_name, company, address, city, state').eq('business_id', business.id).order('first_name'),
-        supabase.from('employees').select('id, first_name, last_name, role').eq('business_id', business.id).eq('active', true).order('first_name'),
+      const businessId = business.id;
+      const [cl, emp] = await Promise.all([
+        fetchAll<Client>((from, to) =>
+          supabase.from('clients').select('id, first_name, last_name, company, address, city, state')
+            .eq('business_id', businessId).order('first_name').range(from, to)),
+        fetchAll<Employee>((from, to) =>
+          supabase.from('employees').select('id, first_name, last_name, role')
+            .eq('business_id', businessId).eq('active', true).order('first_name').range(from, to)),
       ]);
-      setClients(cl ?? []);
-      setEmployees(emp ?? []);
+      setClients(cl);
+      setEmployees(emp);
 
       if (editId) {
         const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
@@ -178,6 +185,8 @@ function NuevoTrabajoContent() {
           setAssignedEmployees(assigns.filter((a: any) => a.employee_id).map((a: any) => a.employee_id));
           const manual = assigns.filter((a: any) => !a.employee_id && a.worker_name).map((a: any) => a.worker_name);
           if (manual.length > 0) setManualWorkers(manual);
+          const lead = assigns.find((a: any) => a.is_lead && a.employee_id);
+          if (lead) setLeadEmployeeId(lead.employee_id);
         }
         setLoadingEdit(false);
       }
@@ -235,7 +244,11 @@ function NuevoTrabajoContent() {
   };
 
   const toggleEmployee = (id: string) => {
-    setAssignedEmployees(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]);
+    setAssignedEmployees(prev => {
+      const next = prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id];
+      if (!next.includes(id) && leadEmployeeId === id) setLeadEmployeeId(null);
+      return next;
+    });
   };
 
   const updateItem = (id: string, field: keyof LineItem, value: any) =>
@@ -342,14 +355,18 @@ function NuevoTrabajoContent() {
           );
         }
 
-        // Replace assignments
+        // Replace assignments — include is_lead so the Project Leader is
+        // recorded for the post-job actuals flow.
         if (editId) await supabase.from('job_assignments').delete().eq('job_id', finalJobId);
+        const validLeadId =
+          leadEmployeeId && assignedEmployees.includes(leadEmployeeId) ? leadEmployeeId : null;
         const assignments: any[] = [];
         assignedEmployees.forEach(empId => {
           const emp = employees.find(e => e.id === empId);
           if (emp) assignments.push({
             job_id: finalJobId, employee_id: empId,
             worker_name: `${emp.first_name} ${emp.last_name}`,
+            is_lead: empId === validLeadId,
           });
         });
         manualWorkers.filter(w => w.trim()).forEach(name => {
@@ -560,24 +577,48 @@ function NuevoTrabajoContent() {
             </div>
             {employees.length > 0 && (
               <div className="grid grid-cols-2 gap-2 mb-3">
-                {employees.map(emp => (
-                  <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium transition-all text-left ${
-                      assignedEmployees.includes(emp.id)
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                      assignedEmployees.includes(emp.id) ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate">{emp.first_name} {emp.last_name}</p>
-                      <p className="text-xs text-gray-400 font-normal">{emp.role}</p>
-                    </div>
-                  </button>
-                ))}
+                {employees.map(emp => {
+                  const on = assignedEmployees.includes(emp.id);
+                  const isLead = leadEmployeeId === emp.id;
+                  return (
+                    <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium transition-all text-left ${
+                        on
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">{emp.first_name} {emp.last_name}</p>
+                        <p className="text-xs text-gray-400 font-normal">{emp.role}</p>
+                      </div>
+                      {/* Lead radio — visible only for selected workers and only
+                         when crew mode is on. Click toggles lead independently
+                         of the outer chip's onClick (stopPropagation). */}
+                      {on && business?.job_crew_mode !== false && (
+                        <span
+                          role="checkbox"
+                          aria-checked={isLead}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLeadEmployeeId(isLead ? null : emp.id);
+                          }}
+                          className={`ml-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold cursor-pointer shrink-0 ${
+                            isLead
+                              ? 'bg-amber-100 border-amber-300 text-amber-700'
+                              : 'bg-white border-gray-300 text-gray-400 hover:border-amber-300'
+                          }`}
+                        >
+                          {isLead ? t.leadBadge : t.markAsLead}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <div className="flex flex-col gap-2">
