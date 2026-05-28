@@ -25,6 +25,7 @@ import {
   diffEmployeeChanges,
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface RawEmployee {
   id: string;
@@ -159,12 +160,15 @@ export default function EmpleadosRoute() {
 
   const loadEmployees = async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('business_id', business.id)
-      .order('first_name');
-    setEmployees(data ?? []);
+    const businessId = business.id;
+    const data = await fetchAll<RawEmployee>((from, to) =>
+      supabase
+        .from('employees')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('first_name')
+        .range(from, to));
+    setEmployees(data);
   };
   const loadTimesheets = async () => {
     if (!business) return;

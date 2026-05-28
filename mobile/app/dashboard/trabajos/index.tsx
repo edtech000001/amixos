@@ -8,6 +8,7 @@ import {
   JobsListScreen,
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface RawJob {
   id: string;
@@ -45,16 +46,19 @@ export default function TrabajosTab() {
 
   const load = async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        clients(first_name, last_name, company),
-        job_assignments(worker_name, employees(first_name, last_name))
-      `)
-      .eq('business_id', business.id)
-      .order('created_at', { ascending: false });
-    setRawJobs((data ?? []) as RawJob[]);
+    const businessId = business.id;
+    const data = await fetchAll<RawJob>((from, to) =>
+      supabase
+        .from('jobs')
+        .select(`
+          *,
+          clients(first_name, last_name, company),
+          job_assignments(worker_name, employees(first_name, last_name))
+        `)
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .range(from, to));
+    setRawJobs(data);
     setLoading(false);
   };
 

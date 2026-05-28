@@ -3,13 +3,15 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
 import { Upload, Download, CheckCircle2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
-import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
@@ -85,8 +87,10 @@ export default function ClientesPage() {
   const t = full.dashboard.clients;
   const tc = full.common;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const syncBanner = useGoogleSyncBanner();
   const [clients, setClients] = useState<Client[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [search, setSearch] = useState('');
@@ -100,11 +104,16 @@ export default function ClientesPage() {
 
   const load = async () => {
     if (!business) return;
-    const [{ data: cl }, { data: tpl }] = await Promise.all([
-      supabase.from('clients').select('*').eq('business_id', business.id).order('created_at', { ascending: false }),
-      supabase.from('client_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
+    const businessId = business.id;
+    const [cl, { data: tpl }] = await Promise.all([
+      fetchAll<Client>((from, to) =>
+        supabase.from('clients').select('*').eq('business_id', businessId)
+          .order('created_at', { ascending: false }).range(from, to)),
+      // Field templates are bounded config (one row per custom field); a
+      // single page is always enough.
+      supabase.from('client_field_templates').select('*').eq('business_id', businessId).order('sort_order'),
     ]);
-    setClients(cl ?? []);
+    setClients(cl);
     setTemplates(tpl ?? []);
     setLoading(false);
   };
@@ -173,14 +182,15 @@ export default function ClientesPage() {
         .select('id')
         .single();
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
-      // Fire-and-forget Google sync (no-op if user isn't connected).
+      // Fire-and-forget Google sync. Silent on success; surfaces the
+      // failure via the banner if Google rejects the create.
       if (created?.id) {
         void (async () => {
           const apiBaseUrl = getApiBaseUrl();
           const jwt = await getJwt();
-          if (apiBaseUrl && jwt) {
-            triggerGoogleSync('create', created.id, { apiBaseUrl, jwt });
-          }
+          if (!apiBaseUrl || !jwt) return;
+          triggerGoogleSyncOrThrow('create', created.id, { apiBaseUrl, jwt })
+            .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
         })();
       }
     } else if (formMode === 'edit' && selected) {
@@ -193,10 +203,18 @@ export default function ClientesPage() {
   const remove = async (id: string) => {
     if (!confirm(t.confirmDeleteSingle)) return;
     // Sync to Google BEFORE local delete so the API can read the
-    // client's google_resource_name.
+    // client's google_resource_name. If Google rejects the delete we
+    // still proceed with the local delete — the banner notifies the user
+    // so they can clean up the orphan in Google manually.
     const apiBaseUrl = getApiBaseUrl();
     const jwt = await getJwt();
-    if (apiBaseUrl && jwt) await triggerGoogleSync('delete', id, { apiBaseUrl, jwt });
+    if (apiBaseUrl && jwt) {
+      try {
+        await triggerGoogleSyncOrThrow('delete', id, { apiBaseUrl, jwt });
+      } catch {
+        syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+      }
+    }
     await supabase.from('clients').delete().eq('id', id);
     setClients(prev => prev.filter(c => c.id !== id));
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
@@ -241,14 +259,21 @@ export default function ClientesPage() {
     if (!confirm(t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)))) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
-    // Sync deletes to Google BEFORE local delete. Parallel per id so bulk
-    // deletes don't get serially slow.
-    const apiBaseUrl = getApiBaseUrl();
-    const jwt = await getJwt();
-    if (apiBaseUrl && jwt) {
-      await Promise.all(
-        ids.map(cid => triggerGoogleSync('delete', cid, { apiBaseUrl, jwt })),
-      );
+    // Pre-fetch resource_names ONLY for clients that were actually synced
+    // to Google. Unsynced clients (google_resource_name IS NULL) skip the
+    // Google round-trip entirely. Local delete happens immediately for
+    // every selected row; orphan cleanup runs in the background queue.
+    let orphans: { businessId: string; resourceName: string }[] = [];
+    if (business?.id) {
+      const { data: syncedRows } = await supabase
+        .from('clients')
+        .select('google_resource_name')
+        .in('id', ids)
+        .not('google_resource_name', 'is', null);
+      orphans = (syncedRows ?? [])
+        .map((r: { google_resource_name: string | null }) => r.google_resource_name)
+        .filter((rn): rn is string => !!rn)
+        .map(rn => ({ businessId: business.id, resourceName: rn }));
     }
     let hasError = false;
     for (let i = 0; i < ids.length; i += 50) {
@@ -260,6 +285,10 @@ export default function ClientesPage() {
       setSelectedIds(new Set());
     }
     setDeleting(false);
+    // Hand orphans to the banner queue — throttled, persisted, resumable.
+    if (orphans.length > 0) {
+      syncBanner.runDeleteBatch(orphans);
+    }
   };
 
   // ── Import state ──────────────────────────────────────────────────────────
@@ -271,7 +300,26 @@ export default function ClientesPage() {
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [importResult, setImportResult] = useState({ success: 0, errors: 0 });
+  const [importResult, setImportResult] = useState<{
+    success: number;
+    failedRows: { label: string; reason: string }[];
+  }>({ success: 0, failedRows: [] });
+  const [showImportErrorDetails, setShowImportErrorDetails] = useState(false);
+
+  // The Import button now lives in Ajustes → Clientes. From there we
+  // navigate here with ?import=1 to auto-open the modal so the rest of
+  // the import flow stays where it already lives.
+  useEffect(() => {
+    if (searchParams.get('import') === '1') {
+      setImportStep('upload');
+      setImportModal(true);
+      // Strip the param so reloads / back-nav don't re-open the modal.
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('import');
+      const qs = params.toString();
+      router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
+    }
+  }, [searchParams, router]);
 
   const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [
     { key: 'first_name',   label: t.fields.firstName },
@@ -308,7 +356,14 @@ export default function ClientesPage() {
         setCsvHeaders(headers);
         setCsvRows(result.data);
         const auto: Record<string, string> = {};
-        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+        // Lowercase, strip diacritics (NFD decomposes "ó" → "o" + combining
+        // accent, which we then drop), then keep only letters/digits. Lets
+        // "Código postal" match "Codigo postal", "phone-1" match "phone1", etc.
+        const normalize = (s: string) =>
+          s.toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9]/g, '');
         allImportFields.forEach(field => {
           const fNorm = normalize(field.label);
           const fKey = normalize(field.key.replace('custom:', ''));
@@ -325,11 +380,34 @@ export default function ClientesPage() {
     });
   };
 
+  // Failure label: always leads with the CSV line number (Excel/Numbers
+  // shows the header as row 1, so data starts at row 2) so the user can
+  // open their file and find the bad row. Falls through several
+  // identifier sources for rows where name/phone/email weren't mapped.
+  const rowLabel = (
+    entry: any,
+    originalRow: Record<string, string> | null,
+    csvLine: number,
+  ): string => {
+    const name = [entry.first_name, entry.last_name].filter(Boolean).join(' ').trim();
+    const candidate = name || entry.company || entry.phone_cell || entry.email_office;
+    if (candidate) return `Fila ${csvLine} · ${candidate}`;
+    if (originalRow) {
+      const nonEmpty = Object.entries(originalRow)
+        .filter(([, v]) => v && String(v).trim())
+        .slice(0, 2)
+        .map(([k, v]) => `${k}: ${String(v).trim()}`);
+      if (nonEmpty.length > 0) return `Fila ${csvLine} · ${nonEmpty.join(', ')}`;
+    }
+    return `Fila ${csvLine} (vacía)`;
+  };
+
   const runImport = async () => {
     setImporting(true);
-    let success = 0; let errors = 0;
-    const batch: any[] = [];
-    for (const row of csvRows) {
+    const batch: { entry: any; csvLine: number; originalRow: Record<string, string> }[] = [];
+    const failedRows: { label: string; reason: string }[] = [];
+    csvRows.forEach((row, idx) => {
+      const csvLine = idx + 2;
       const entry: any = { business_id: business!.id };
       const customFields: Record<string, string> = {};
 
@@ -351,35 +429,43 @@ export default function ClientesPage() {
       });
 
       if (Object.keys(customFields).length > 0) entry.custom_fields = customFields;
-      if (!entry.first_name && !entry.last_name && !entry.company) { errors++; continue; }
+      if (!entry.first_name && !entry.last_name && !entry.company) {
+        failedRows.push({ label: rowLabel(entry, row, csvLine), reason: 'Sin nombre, apellido o empresa' });
+        return;
+      }
       if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
       if (!entry.last_name) entry.last_name = '';
-      batch.push(entry);
-    }
+      batch.push({ entry, csvLine, originalRow: row });
+    });
+    let success = 0;
     const insertedIds: string[] = [];
     for (let i = 0; i < batch.length; i += 50) {
       const slice = batch.slice(i, i + 50);
-      const { data, error } = await supabase.from('clients').insert(slice).select('id');
+      const { data, error } = await supabase.from('clients').insert(slice.map(b => b.entry)).select('id');
       if (error) {
-        errors += slice.length;
+        // Batch rolled back. Retry one-by-one so we can pinpoint which
+        // row(s) actually broke the transaction and capture each error.
+        for (const b of slice) {
+          const { data: d2, error: e2 } = await supabase
+            .from('clients').insert(b.entry).select('id').single();
+          if (e2) {
+            failedRows.push({ label: rowLabel(b.entry, b.originalRow, b.csvLine), reason: e2.message });
+          } else {
+            success++;
+            if (d2?.id) insertedIds.push(d2.id);
+          }
+        }
       } else {
         success += slice.length;
         if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
       }
     }
-    // Fire-and-forget Google sync for each newly imported client.
+    // Hand off to the banner provider — it owns throttling, persistence,
+    // and auto-resume if the browser is closed mid-batch.
     if (insertedIds.length > 0) {
-      void (async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const jwt = await getJwt();
-        if (apiBaseUrl && jwt) {
-          for (const id of insertedIds) {
-            triggerGoogleSync('create', id, { apiBaseUrl, jwt });
-          }
-        }
-      })();
+      syncBanner.runCreateBatch(insertedIds);
     }
-    setImportResult({ success, errors });
+    setImportResult({ success, failedRows });
     await load();
     setImporting(false);
     setImportStep('done');
@@ -404,7 +490,7 @@ export default function ClientesPage() {
 
   const resetImport = () => {
     setImportStep('upload'); setCsvHeaders([]); setCsvRows([]); setColMap({});
-    setImportResult({ success: 0, errors: 0 }); setImportModal(false);
+    setImportResult({ success: 0, failedRows: [] }); setShowImportErrorDetails(false); setImportModal(false);
   };
 
   const editById = (id: string) => {
@@ -493,22 +579,29 @@ export default function ClientesPage() {
                 <span className="font-medium text-gray-900">{t.importModal.mapDetected.replace('{{count}}', String(csvRows.length))}</span>. {t.importModal.mapInstruction}
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
-                {allImportFields.map(field => (
-                  <div key={field.key} className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
-                      {field.label}
-                      {field.required && <span className="text-red-400">*</span>}
-                      {field.isCustom && <span className="text-blue-400 text-[10px]">{t.importModal.customLabel}</span>}
-                    </label>
-                    <select
-                      value={colMap[field.key] ?? ''}
-                      onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                      <option value="">{t.importModal.noImport}</option>
-                      {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </div>
-                ))}
+                {allImportFields.map(field => {
+                  // Unmapped (or explicitly "no import") fields get a soft
+                  // amber border so the user can spot them at a glance.
+                  const unmapped = !colMap[field.key];
+                  return (
+                    <div key={field.key} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                        {field.label}
+                        {field.required && <span className="text-red-400">*</span>}
+                        {field.isCustom && <span className="text-blue-400 text-[10px]">{t.importModal.customLabel}</span>}
+                      </label>
+                      <select
+                        value={colMap[field.key] ?? ''}
+                        onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
+                        className={`w-full rounded-xl border px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
+                          unmapped ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'
+                        }`}>
+                        <option value="">{t.importModal.noImport}</option>
+                        {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-3 pt-1">
                 <Button variant="secondary" onClick={() => setImportStep('upload')} fullWidth>{tc.buttons.cancel}</Button>
@@ -566,12 +659,38 @@ export default function ClientesPage() {
                 <p className="text-lg font-bold text-gray-900">{t.importModal.importDone}</p>
                 <p className="text-sm text-gray-500 mt-1">
                   <span className="text-emerald-600 font-semibold">{t.importModal.importedCount.replace('{{count}}', String(importResult.success))}</span>
-                  {importResult.errors > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.errors))}</span>}
+                  {importResult.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.failedRows.length))}</span>}
                 </p>
-                {importResult.errors > 0 && (
+                {importResult.failedRows.length > 0 && (
                   <p className="text-xs text-gray-400 mt-1">{t.importModal.errorsExplanation}</p>
                 )}
               </div>
+              {importResult.failedRows.length > 0 && (
+                <div className="w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportErrorDetails(v => !v)}
+                    className="w-full text-sm font-medium text-primary py-1 hover:underline"
+                  >
+                    {showImportErrorDetails ? 'Ocultar detalles ▴' : 'Ver detalles ▾'}
+                  </button>
+                  {showImportErrorDetails && (
+                    <div className="mt-2 max-h-64 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
+                      {importResult.failedRows.slice(0, 50).map((f, i) => (
+                        <div key={i} className="px-4 py-2 border-b border-red-100/60 last:border-b-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
+                          <p className="text-xs text-red-700 truncate">{f.reason}</p>
+                        </div>
+                      ))}
+                      {importResult.failedRows.length > 50 && (
+                        <div className="px-4 py-2 text-xs text-gray-600 text-center bg-red-100/40">
+                          + {importResult.failedRows.length - 50} más
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <Button onClick={resetImport} fullWidth>{t.importModal.goToList}</Button>
             </div>
           )}
@@ -593,7 +712,6 @@ export default function ClientesPage() {
       onEditPress={editById}
       onDeletePress={remove}
       onNewClientPress={openAdd}
-      onImportPress={() => { setImportStep('upload'); setImportModal(true); }}
       onBulkDeletePress={bulkDelete}
       onClearSelection={() => setSelectedIds(new Set())}
       bulkDeleting={deleting}

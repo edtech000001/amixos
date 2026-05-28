@@ -9,19 +9,10 @@ import {
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { ImportClientsModal } from '@/components/ImportClientsModal';
-import { triggerGoogleSync } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
-
-interface FieldTemplate {
-  id: string;
-  field_key: string;
-  field_label: string;
-  field_type: string;
-  field_options: string[] | null;
-  required: boolean;
-  sort_order: number;
-}
 
 interface Client {
   id: string;
@@ -50,33 +41,27 @@ export default function ClientesTab() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const syncBanner = useGoogleSyncBanner();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
 
   const [clients, setClients] = useState<Client[]>([]);
-  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     if (!business) return;
-    const [{ data: cl }, { data: tpl }] = await Promise.all([
+    const businessId = business.id;
+    const cl = await fetchAll<Client>((from, to) =>
       supabase
         .from('clients')
         .select('*')
-        .eq('business_id', business.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('client_field_templates')
-        .select('*')
-        .eq('business_id', business.id)
-        .order('sort_order'),
-    ]);
-    setClients((cl as Client[] | null) ?? []);
-    setTemplates((tpl as FieldTemplate[] | null) ?? []);
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .range(from, to));
+    setClients(cl);
     setLoading(false);
   };
 
@@ -149,7 +134,13 @@ export default function ClientesTab() {
           // guaranteed; sync is fast and a tiny extra wait is fine on delete.
           const apiBaseUrl = getApiBaseUrl();
           const jwt = await getJwt();
-          if (apiBaseUrl && jwt) await triggerGoogleSync('delete', id, { apiBaseUrl, jwt });
+          if (apiBaseUrl && jwt) {
+            try {
+              await triggerGoogleSyncOrThrow('delete', id, { apiBaseUrl, jwt });
+            } catch {
+              syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+            }
+          }
           await supabase.from('clients').delete().eq('id', id);
           setClients(prev => prev.filter(c => c.id !== id));
           setSelectedIds(prev => {
@@ -175,14 +166,21 @@ export default function ClientesTab() {
           onPress: async () => {
             setBulkDeleting(true);
             const ids = Array.from(selectedIds);
-            const apiBaseUrl = getApiBaseUrl();
-            const jwt = await getJwt();
-            // Sync deletes BEFORE local delete. Run in parallel per id to keep
-            // bulk delete reasonable on large selections.
-            if (apiBaseUrl && jwt) {
-              await Promise.all(
-                ids.map(cid => triggerGoogleSync('delete', cid, { apiBaseUrl, jwt })),
-              );
+            // Pre-fetch resource_names for the subset that's actually
+            // synced to Google. Unsynced rows skip the Google round-trip.
+            // Locals delete immediately; orphan cleanup runs throttled
+            // in the background banner queue.
+            let orphans: { businessId: string; resourceName: string }[] = [];
+            if (business?.id) {
+              const { data: syncedRows } = await supabase
+                .from('clients')
+                .select('google_resource_name')
+                .in('id', ids)
+                .not('google_resource_name', 'is', null);
+              orphans = ((syncedRows ?? []) as { google_resource_name: string | null }[])
+                .map(r => r.google_resource_name)
+                .filter((rn): rn is string => !!rn)
+                .map(rn => ({ businessId: business.id, resourceName: rn }));
             }
             for (let i = 0; i < ids.length; i += 50) {
               await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));
@@ -190,6 +188,9 @@ export default function ClientesTab() {
             setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
             setSelectedIds(new Set());
             setBulkDeleting(false);
+            if (orphans.length > 0) {
+              syncBanner.runDeleteBatch(orphans);
+            }
           },
         },
       ],
@@ -213,26 +214,9 @@ export default function ClientesTab() {
         onEditPress={openEdit}
         onDeletePress={remove}
         onNewClientPress={openAdd}
-        onImportPress={() => setImportOpen(true)}
         onBulkDeletePress={bulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
-        bottomSlot={
-          business ? (
-            <View>
-              <ImportClientsModal
-                open={importOpen}
-                onClose={() => setImportOpen(false)}
-                businessId={business.id}
-                templates={templates.map(tpl => ({
-                  field_key: tpl.field_key,
-                  field_label: tpl.field_label,
-                }))}
-                onImportComplete={load}
-              />
-            </View>
-          ) : null
-        }
       />
     </SafeAreaView>
   );

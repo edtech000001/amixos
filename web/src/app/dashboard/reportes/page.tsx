@@ -14,6 +14,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Invoice {
@@ -135,23 +136,44 @@ export default function ReportesPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load all data once — filter client-side per range
+  // Load all data once — filter client-side per range.
+  // Each fetch paginates via fetchAll because reports must be accurate
+  // even when a business is past PostgREST's 1000-row default cap.
   useEffect(() => {
     if (!business) return;
+    const businessId = business.id;
     Promise.all([
-      supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date').eq('business_id', business.id),
-      supabase.from('jobs').select('id, status, total_amount, created_at, client_id').eq('business_id', business.id),
-      supabase.from('clients').select('id, created_at').eq('business_id', business.id),
-      supabase.from('timesheets').select('id, hours_worked, work_date, employee_id, worker_name').eq('business_id', business.id),
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type').eq('business_id', business.id),
-      supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', business.id),
+      fetchAll<Invoice>((from, to) =>
+        supabase.from('invoices')
+          .select('id, status, total_amount, paid_at, created_at, issue_date')
+          .eq('business_id', businessId).range(from, to)),
+      fetchAll<Job>((from, to) =>
+        supabase.from('jobs')
+          .select('id, status, total_amount, created_at, client_id')
+          .eq('business_id', businessId).range(from, to)),
+      fetchAll<Client>((from, to) =>
+        supabase.from('clients')
+          .select('id, created_at')
+          .eq('business_id', businessId).range(from, to)),
+      fetchAll<Timesheet>((from, to) =>
+        supabase.from('timesheets')
+          .select('id, hours_worked, work_date, employee_id, worker_name')
+          .eq('business_id', businessId).range(from, to)),
+      fetchAll<Employee>((from, to) =>
+        supabase.from('employees')
+          .select('id, first_name, last_name, pay_rate, pay_type')
+          .eq('business_id', businessId).range(from, to)),
+      fetchAll<InventoryItem>((from, to) =>
+        supabase.from('inventory_items')
+          .select('id, quantity, unit_cost')
+          .eq('business_id', businessId).range(from, to)),
     ]).then(([inv, j, cl, ts, emp, inv_items]) => {
-      setInvoices(inv.data ?? []);
-      setJobs(j.data ?? []);
-      setClients(cl.data ?? []);
-      setTimesheets(ts.data ?? []);
-      setEmployees(emp.data ?? []);
-      setInventory(inv_items.data ?? []);
+      setInvoices(inv);
+      setJobs(j);
+      setClients(cl);
+      setTimesheets(ts);
+      setEmployees(emp);
+      setInventory(inv_items);
       setLoading(false);
     });
   }, [business]);

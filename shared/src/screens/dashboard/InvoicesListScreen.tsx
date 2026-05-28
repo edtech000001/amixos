@@ -133,6 +133,8 @@ export function InvoicesListScreen({
           value={search}
           onChangeText={setSearch}
           leftIcon={<Search size={16} color="#9CA3AF" />}
+          autoCapitalize="none"
+          autoCorrect={false}
         />
       </View>
 

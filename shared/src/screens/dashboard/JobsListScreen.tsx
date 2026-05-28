@@ -19,6 +19,7 @@ import {
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { formatDateLong, formatTime12h } from '../../lib/format';
+import { searchMatches } from '../../lib/usStates';
 
 export interface JobListItem {
   id: string;
@@ -144,11 +145,13 @@ export function JobsListScreen({
   };
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
     return jobs.filter(j => {
-      const matchSearch = [
-        j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity,
-      ].filter(Boolean).join(' ').toLowerCase().includes(q);
+      const matchSearch = searchMatches(
+        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState]
+          .filter(Boolean)
+          .join(' '),
+        search,
+      );
       return matchSearch && matchesTab(j);
     });
   }, [jobs, search, tab]);
@@ -314,6 +317,8 @@ export function JobsListScreen({
           value={search}
           onChangeText={setSearch}
           leftIcon={<Search size={16} color="#9CA3AF" />}
+          autoCapitalize="none"
+          autoCorrect={false}
         />
         <ScrollView
           horizontal

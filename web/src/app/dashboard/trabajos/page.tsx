@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import {
   JobsListScreen,
   type JobListItem,
@@ -55,16 +56,19 @@ export default function TrabajosPage() {
 
   const load = async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        clients(first_name, last_name, company),
-        job_assignments(worker_name, employees(first_name, last_name))
-      `)
-      .eq('business_id', business.id)
-      .order('created_at', { ascending: false });
-    setRawJobs((data ?? []) as RawJob[]);
+    const businessId = business.id;
+    const data = await fetchAll<RawJob>((from, to) =>
+      supabase
+        .from('jobs')
+        .select(`
+          *,
+          clients(first_name, last_name, company),
+          job_assignments(worker_name, employees(first_name, last_name))
+        `)
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .range(from, to));
+    setRawJobs(data);
     setLoading(false);
   };
 

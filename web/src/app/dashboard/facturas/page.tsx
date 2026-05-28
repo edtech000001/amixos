@@ -10,6 +10,7 @@ import {
   InvoicesListScreen,
   type InvoiceListItem,
 } from '@amixos/shared/screens/dashboard/InvoicesListScreen';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface InvoiceClient { first_name: string; last_name: string }
 interface RawInvoice {
@@ -41,11 +42,13 @@ export default function FacturasPage() {
 
   const load = async () => {
     if (!business) return;
-    const { data } = await supabase.from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, created_at, clients(first_name, last_name), invoice_clients(clients(first_name, last_name))')
-      .eq('business_id', business.id)
-      .order('created_at', { ascending: false });
-    const raw = (data ?? []) as unknown as RawInvoice[];
+    const businessId = business.id;
+    const raw = await fetchAll<RawInvoice>((from, to) =>
+      supabase.from('invoices')
+        .select('id, invoice_number, status, total_amount, due_date, created_at, clients(first_name, last_name), invoice_clients(clients(first_name, last_name))')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .range(from, to));
     setInvoices(raw.map(inv => ({
       id: inv.id,
       invoiceNumber: inv.invoice_number,

@@ -14,6 +14,7 @@ import {
   InventoryScreen,
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface RawItem {
   id: string;
@@ -55,8 +56,11 @@ export default function InventarioPage() {
 
   const load = async () => {
     if (!business) return;
-    const { data } = await supabase.from('inventory_items').select('*').eq('business_id', business.id).order('name');
-    setItems(data ?? []);
+    const businessId = business.id;
+    const data = await fetchAll<RawItem>((from, to) =>
+      supabase.from('inventory_items').select('*').eq('business_id', businessId)
+        .order('name').range(from, to));
+    setItems(data);
     setLoading(false);
   };
 

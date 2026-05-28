@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { memo, useMemo, type ReactNode } from 'react';
+import { View, Text, Pressable, FlatList } from 'react-native';
 import {
   Plus,
   Search,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { searchMatches } from '../../lib/usStates';
 
 export interface ClientListItem {
   id: string;
@@ -67,20 +68,16 @@ export function ClientsListScreen({
   const t = full.dashboard.clients;
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
     return clients.filter(c =>
-      [
-        c.firstName,
-        c.lastName,
-        c.company,
-        c.phoneDisplay,
-        c.emailDisplay,
-        c.city,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q),
+      // searchMatches expands "Nebraska" → also match "NE" (and vice
+      // versa), so users can type either form. State is stored as the
+      // 2-letter abbr but the search input speaks both.
+      searchMatches(
+        [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city, c.state]
+          .filter(Boolean)
+          .join(' '),
+        search,
+      ),
     );
   }, [clients, search]);
 
@@ -89,9 +86,14 @@ export function ClientsListScreen({
     selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural
   ).replace('{{count}}', String(selectedIds.size));
 
-  return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
-      {/* Header */}
+  const showList = !loading && filtered.length > 0;
+  const lastFilteredId = filtered.length > 0 ? filtered[filtered.length - 1].id : null;
+
+  // Header content scrolls with the list (title, search, bulk-bar, select-all).
+  // FlatList carries a small paddingHorizontal — children render at that
+  // inset; no per-child px is needed.
+  const header = (
+    <View>
       <View className="flex-row items-center justify-between mb-6">
         <View>
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
@@ -119,17 +121,20 @@ export function ClientsListScreen({
         </View>
       </View>
 
-      {/* Search */}
       <View className="mb-4">
         <Input
           placeholder={t.searchPlaceholder}
           value={search}
           onChangeText={onSearchChange}
           leftIcon={<Search size={16} color="#9CA3AF" />}
+          // Search is case-insensitive — turn off iOS smart-capitalize +
+          // autocorrect so the input doesn't start each query with a
+          // capital letter or try to "correct" partial names.
+          autoCapitalize="none"
+          autoCorrect={false}
         />
       </View>
 
-      {/* Bulk action bar */}
       {selectedIds.size > 0 ? (
         <View className="flex-row items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-4">
           <Pressable onPress={onClearSelection} className="p-1 rounded">
@@ -148,7 +153,26 @@ export function ClientsListScreen({
         </View>
       ) : null}
 
-      {/* List */}
+      {showList ? (
+        <View className="bg-white rounded-t-2xl border border-b-0 border-gray-100 overflow-hidden">
+          <Pressable
+            onPress={onToggleSelectAll}
+            className="flex-row items-center gap-3 px-5 py-2 border-b border-gray-200 bg-gray-50/50 active:bg-gray-100"
+          >
+            <View
+              className={`w-4 h-4 rounded border ${
+                allSelected ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
+              } items-center justify-center`}
+            >
+              {allSelected ? (
+                <Text className="text-white text-[10px] font-bold">✓</Text>
+              ) : null}
+            </View>
+            <Text className="text-xs text-gray-400">{t.selectAll}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {loading ? (
         <View className="items-center py-20">
           <View className="flex-row gap-1">
@@ -169,100 +193,124 @@ export function ClientsListScreen({
             </Pressable>
           ) : null}
         </View>
-      ) : (
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          {/* Select all bar */}
-          <Pressable
-            onPress={onToggleSelectAll}
-            className="flex-row items-center gap-3 px-5 py-2 border-b border-gray-100 bg-gray-50/50 active:bg-gray-100"
-          >
-            <View
-              className={`w-4 h-4 rounded border ${
-                allSelected ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
-              } items-center justify-center`}
-            >
-              {allSelected ? (
-                <Text className="text-white text-[10px] font-bold">✓</Text>
-              ) : null}
-            </View>
-            <Text className="text-xs text-gray-400">{t.selectAll}</Text>
-          </Pressable>
+      ) : null}
+    </View>
+  );
 
-          {filtered.map((c, i) => {
-            const isChecked = selectedIds.has(c.id);
-            return (
-              <View
-                key={c.id}
-                className={`flex-row items-center justify-between px-5 py-4 ${
-                  i < filtered.length - 1 ? 'border-b border-gray-50' : ''
-                } ${isChecked ? 'bg-primary/5' : ''}`}
-              >
-                <View className="flex-row items-center gap-3 min-w-0 flex-1">
-                  <Pressable
-                    onPress={() => onToggleSelect(c.id)}
-                    className={`w-4 h-4 rounded border ${
-                      isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
-                    } items-center justify-center`}
-                  >
-                    {isChecked ? (
-                      <Text className="text-white text-[10px] font-bold">✓</Text>
-                    ) : null}
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onClientPress(c.id)}
-                    className="flex-row items-center gap-3 min-w-0 flex-1 active:opacity-70"
-                  >
-                    <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
-                      <Text className="text-primary text-sm font-bold">
-                        {c.firstName.charAt(0).toUpperCase()}
-                        {c.lastName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View className="min-w-0 flex-1">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                        {c.firstName} {c.lastName}
-                        {c.company ? (
-                          <Text className="text-gray-400 font-normal"> · {c.company}</Text>
-                        ) : null}
-                      </Text>
-                      <View className="flex-row flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                        {c.phoneDisplay ? (
-                          <View className="flex-row items-center gap-1">
-                            <Phone size={11} color="#9CA3AF" />
-                            <Text className="text-xs text-gray-400">{c.phoneDisplay}</Text>
-                          </View>
-                        ) : null}
-                        {c.emailDisplay ? (
-                          <View className="flex-row items-center gap-1">
-                            <Mail size={11} color="#9CA3AF" />
-                            <Text className="text-xs text-gray-400">{c.emailDisplay}</Text>
-                          </View>
-                        ) : null}
-                        {c.city ? (
-                          <View className="flex-row items-center gap-1">
-                            <MapPin size={11} color="#9CA3AF" />
-                            <Text className="text-xs text-gray-400">
-                              {c.city}
-                              {c.state ? `, ${c.state}` : ''}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                  </Pressable>
-                </View>
-                {/* Row-level edit/delete icons removed — those actions live
-                   on the client detail page now, which keeps the list
-                   compact. onEditPress/onDeletePress props are still on
-                   the interface for callers that need them (e.g. bulk
-                   select), they just no longer render here. */}
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {bottomSlot}
-    </ScrollView>
+  return (
+    <View className="flex-1 bg-surface">
+      <FlatList
+        data={showList ? filtered : []}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <ClientRow
+            client={item}
+            isChecked={selectedIds.has(item.id)}
+            isLast={item.id === lastFilteredId}
+            onToggleSelect={onToggleSelect}
+            onClientPress={onClientPress}
+          />
+        )}
+        ListHeaderComponent={header}
+        ListFooterComponent={
+          <>
+            {showList ? (
+              <View className="bg-white rounded-b-2xl border border-t-0 border-gray-100 h-2" />
+            ) : null}
+            {bottomSlot}
+          </>
+        }
+        // 12px inset (down from 24px) so rows are visibly wider than before
+        // but the card still has a small breathing margin from the screen
+        // edges.
+        contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 24, paddingBottom: 144 }}
+        // Tuning for long lists — keep the visible window small, recycle aggressively.
+        initialNumToRender={15}
+        windowSize={7}
+        maxToRenderPerBatch={10}
+        removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
+      />
+    </View>
   );
 }
+
+interface ClientRowProps {
+  client: ClientListItem;
+  isChecked: boolean;
+  isLast: boolean;
+  onToggleSelect: (id: string) => void;
+  onClientPress: (id: string) => void;
+}
+
+const ClientRow = memo(function ClientRow({
+  client: c,
+  isChecked,
+  isLast,
+  onToggleSelect,
+  onClientPress,
+}: ClientRowProps) {
+  return (
+    <View
+      // Row sits inside the white card; border-x continues the card frame.
+      // border-b-gray-200 keeps the divider readable (the original gray-50
+      // was nearly invisible against the white card).
+      className={`flex-row items-center justify-between px-5 py-4 bg-white border-x ${
+        isLast ? '' : 'border-b border-b-gray-200'
+      } border-x-gray-100 ${isChecked ? 'bg-primary/5' : ''}`}
+    >
+      <View className="flex-row items-center gap-3 min-w-0 flex-1">
+        <Pressable
+          onPress={() => onToggleSelect(c.id)}
+          className={`w-4 h-4 rounded border ${
+            isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
+          } items-center justify-center`}
+        >
+          {isChecked ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
+        </Pressable>
+        <Pressable
+          onPress={() => onClientPress(c.id)}
+          className="flex-row items-center gap-3 min-w-0 flex-1 active:opacity-70"
+        >
+          <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
+            <Text className="text-primary text-sm font-bold">
+              {c.firstName.charAt(0).toUpperCase()}
+              {c.lastName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+              {c.firstName} {c.lastName}
+              {c.company ? (
+                <Text className="text-gray-400 font-normal"> · {c.company}</Text>
+              ) : null}
+            </Text>
+            <View className="flex-row flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+              {c.phoneDisplay ? (
+                <View className="flex-row items-center gap-1">
+                  <Phone size={11} color="#9CA3AF" />
+                  <Text className="text-xs text-gray-400">{c.phoneDisplay}</Text>
+                </View>
+              ) : null}
+              {c.emailDisplay ? (
+                <View className="flex-row items-center gap-1">
+                  <Mail size={11} color="#9CA3AF" />
+                  <Text className="text-xs text-gray-400">{c.emailDisplay}</Text>
+                </View>
+              ) : null}
+              {c.city ? (
+                <View className="flex-row items-center gap-1">
+                  <MapPin size={11} color="#9CA3AF" />
+                  <Text className="text-xs text-gray-400">
+                    {c.city}
+                    {c.state ? `, ${c.state}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
+      </View>
+    </View>
+  );
+});
