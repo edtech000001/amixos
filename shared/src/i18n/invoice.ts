@@ -30,6 +30,9 @@ const labels = {
   // Notes
   notes:          { es: 'Notas',                 en: 'Notes' },
 
+  // Custom fields
+  customFields:   { es: 'Detalles adicionales',  en: 'Additional details' },
+
   // Status badges (client-facing)
   draft:          { es: 'Borrador',              en: 'Draft' },
   sent:           { es: 'Enviada',               en: 'Sent' },

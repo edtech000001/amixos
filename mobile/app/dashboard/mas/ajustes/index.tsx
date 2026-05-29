@@ -7,6 +7,7 @@ import {
   Briefcase,
   Users,
   User as UserIcon,
+  FileText,
   Cloud,
   Activity,
   type LucideIcon,
@@ -57,6 +58,13 @@ export default function AjustesIndex() {
       description: t.employeesSection.subtitle,
       icon: Briefcase,
       path: '/dashboard/mas/ajustes/empleados',
+    },
+    {
+      key: 'facturas',
+      label: t.tabs.facturas,
+      description: t.invoices.subtitle,
+      icon: FileText,
+      path: '/dashboard/mas/ajustes/facturas',
     },
     // Equipo (team) moved out of Ajustes — now lives as a top-level
     // entry in Más under Empleados (see mas/index.tsx + mas/equipo.tsx).

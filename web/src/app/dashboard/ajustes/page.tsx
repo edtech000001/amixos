@@ -36,7 +36,7 @@ interface FieldTemplate {
   sort_order: number;
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'conexiones' | 'cuenta';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'conexiones' | 'cuenta';
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -101,6 +101,17 @@ export default function AjustesPage() {
     select: t.fieldTypes.select,
   };
 
+  // Standard invoice fields that can be toggled required. Order = display
+  // order; the new/edit invoice form enforces the flags on save.
+  const tInvNew = full.dashboard.invoices.new;
+  const DEFAULT_INVOICE_FIELDS: { key: string; label: string }[] = [
+    { key: 'invoice_number', label: tInvNew.invoiceNumberLabel },
+    { key: 'client', label: tInvNew.clientsLabel },
+    { key: 'issue_date', label: tInvNew.issueDateLabel },
+    { key: 'due_date', label: tInvNew.dueDateLabel },
+    { key: 'notes', label: tInvNew.notesLabel },
+  ];
+
   const ALL_PIPELINE_STEPS = PIPELINE_STEP_KEYS.map(key => ({
     key,
     label: t.pipelineSteps[key].label,
@@ -119,6 +130,30 @@ export default function AjustesPage() {
   const [bizTaxId, setBizTaxId] = useState(business?.tax_id ?? '');
   const [bizLicense, setBizLicense] = useState(business?.license_number ?? '');
   const [bizInvoiceNotes, setBizInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
+  const [invoiceDueDays, setInvoiceDueDays] = useState(
+    business?.invoice_due_days != null ? String(business.invoice_due_days) : '',
+  );
+  const [savingInvoice, setSavingInvoice] = useState(false);
+  const [invoiceMsg, setInvoiceMsg] = useState('');
+  const [invoiceMsgIsError, setInvoiceMsgIsError] = useState(false);
+
+  // ── Invoice required standard fields
+  const [invoiceFieldRequired, setInvoiceFieldRequired] = useState<Record<string, boolean>>(
+    business?.invoice_field_required ?? {},
+  );
+  const [savingInvoiceReq, setSavingInvoiceReq] = useState(false);
+  const [invoiceReqMsg, setInvoiceReqMsg] = useState('');
+  const [invoiceReqMsgIsError, setInvoiceReqMsgIsError] = useState(false);
+
+  // ── Custom field templates (invoices) — same shape as clients/jobs, but
+  // invoices have no standard fields, so it's a flat custom-only list.
+  const [invoiceTemplates, setInvoiceTemplates] = useState<FieldTemplate[]>([]);
+  const [addInvoiceFieldModal, setAddInvoiceFieldModal] = useState(false);
+  const [editInvoiceFieldModal, setEditInvoiceFieldModal] = useState(false);
+  const [editingInvoiceTpl, setEditingInvoiceTpl] = useState<FieldTemplate | null>(null);
+  const [invoiceTplForm, setInvoiceTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [savingInvoiceTpl, setSavingInvoiceTpl] = useState(false);
+  const [invoiceTplError, setInvoiceTplError] = useState('');
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(
     normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS,
   );
@@ -185,6 +220,8 @@ export default function AjustesPage() {
       setBizTaxId(business.tax_id ?? '');
       setBizLicense(business.license_number ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
+      setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
+      setInvoiceFieldRequired(business.invoice_field_required ?? {});
       setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
       setFieldRequired(business.client_field_required ?? {});
       setPipelineDisabled(business.job_pipeline_disabled ?? {});
@@ -227,13 +264,51 @@ export default function AjustesPage() {
       postal_code: bizZip.trim() || null,
       tax_id: bizTaxId.trim() || null,
       license_number: bizLicense.trim() || null,
-      invoice_notes_default: bizInvoiceNotes.trim() || null,
       operating_hours: operatingHours,
     }).eq('id', business.id);
     setBizMsgIsError(!!error);
     setBizMsg(error ? t.business.saveError : t.business.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingBiz(false);
+  };
+
+  // ── Invoices (default due window + terms). Notes moved here from Negocio.
+  const saveInvoiceSettings = async () => {
+    if (!business) return;
+    const trimmed = invoiceDueDays.trim();
+    const days = trimmed === '' ? null : Number(trimmed);
+    if (days != null && (!Number.isInteger(days) || days < 0)) {
+      setInvoiceMsgIsError(true);
+      setInvoiceMsg(t.invoices.saveError);
+      return;
+    }
+    setSavingInvoice(true); setInvoiceMsg('');
+    const { error } = await supabase.from('businesses').update({
+      invoice_due_days: days,
+      invoice_notes_default: bizInvoiceNotes.trim() || null,
+    }).eq('id', business.id);
+    setInvoiceMsgIsError(!!error);
+    setInvoiceMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
+    if (!error) await refetchBusiness();
+    setSavingInvoice(false);
+  };
+
+  // ── Invoice required standard fields
+  const toggleInvoiceFieldRequired = (key: string) => {
+    setInvoiceFieldRequired(prev => ({ ...prev, [key]: !prev[key] }));
+    setInvoiceReqMsg('');
+  };
+
+  const saveInvoiceRequired = async () => {
+    if (!business) return;
+    setSavingInvoiceReq(true); setInvoiceReqMsg('');
+    const { error } = await supabase.from('businesses')
+      .update({ invoice_field_required: invoiceFieldRequired })
+      .eq('id', business.id);
+    setInvoiceReqMsgIsError(!!error);
+    setInvoiceReqMsg(error ? t.requiredFields.saveError : t.requiredFields.saveSuccess);
+    if (!error) await refetchBusiness();
+    setSavingInvoiceReq(false);
   };
 
   // ── Password
@@ -794,6 +869,103 @@ export default function AjustesPage() {
     setSavingTpl(false); setEditFieldModal(false); setEditingTpl(null);
   };
 
+  // ── Invoice field template CRUD — same shape, separate table. No standard
+  // fields, so this list is custom-only.
+  const loadInvoiceTemplates = async () => {
+    if (!business) return;
+    const { data } = await supabase.from('invoice_field_templates').select('*')
+      .eq('business_id', business.id).order('sort_order');
+    setInvoiceTemplates(data ?? []);
+  };
+
+  const addInvoiceTemplate = async () => {
+    if (!invoiceTplForm.field_label.trim()) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
+    const key = toKey(invoiceTplForm.field_label);
+    if (invoiceTemplates.some(tpl => tpl.field_key === key)) { setInvoiceTplError(t.customFields.errorDuplicate); return; }
+    setSavingInvoiceTpl(true); setInvoiceTplError('');
+    const options = invoiceTplForm.field_type === 'select'
+      ? invoiceTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
+    const { error } = await supabase.from('invoice_field_templates').insert({
+      business_id: business!.id,
+      field_key: key, field_label: invoiceTplForm.field_label.trim(),
+      field_type: invoiceTplForm.field_type, field_options: options,
+      required: invoiceTplForm.required, sort_order: invoiceTemplates.length,
+    });
+    if (error) { setInvoiceTplError(t.customFields.errorSave); setSavingInvoiceTpl(false); return; }
+    await loadInvoiceTemplates();
+    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setSavingInvoiceTpl(false); setAddInvoiceFieldModal(false);
+  };
+
+  const removeInvoiceTemplate = async (id: string) => {
+    if (!confirm(t.invoices.confirmDeleteField)) return;
+    await supabase.from('invoice_field_templates').delete().eq('id', id);
+    setInvoiceTemplates(prev => prev.filter(tpl => tpl.id !== id));
+  };
+
+  const openEditInvoiceTemplate = (tpl: FieldTemplate) => {
+    setEditingInvoiceTpl(tpl);
+    setInvoiceTplForm({
+      field_label: tpl.field_label, field_type: tpl.field_type,
+      required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+    });
+    setInvoiceTplError('');
+    setEditInvoiceFieldModal(true);
+  };
+
+  const updateInvoiceTemplate = async () => {
+    if (!editingInvoiceTpl || !invoiceTplForm.field_label.trim()) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
+    setSavingInvoiceTpl(true); setInvoiceTplError('');
+    const options = invoiceTplForm.field_type === 'select'
+      ? invoiceTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
+    const { error } = await supabase.from('invoice_field_templates').update({
+      field_label: invoiceTplForm.field_label.trim(), field_type: invoiceTplForm.field_type,
+      field_options: options, required: invoiceTplForm.required,
+    }).eq('id', editingInvoiceTpl.id);
+    if (error) { setInvoiceTplError(t.customFields.errorSave); setSavingInvoiceTpl(false); return; }
+    await loadInvoiceTemplates();
+    setSavingInvoiceTpl(false); setEditInvoiceFieldModal(false); setEditingInvoiceTpl(null);
+  };
+
+  useEffect(() => { loadInvoiceTemplates(); }, [business]);
+
+  // ── Unified invoice-fields list (standard + custom interleaved) ───────
+  const invoiceItems: UnifiedItem[] = (() => {
+    const standardItems: UnifiedItem[] = DEFAULT_INVOICE_FIELDS.map(f => ({
+      kind: 'standard', key: f.key, label: f.label,
+    }));
+    const customItems: UnifiedItem[] = invoiceTemplates.map(tpl => ({
+      kind: 'custom', key: `custom:${tpl.id}`, label: tpl.field_label, tpl,
+    }));
+    const all = [...standardItems, ...customItems];
+    const byKey = new Map(all.map(it => [it.key, it]));
+
+    const saved = business?.invoice_field_order ?? null;
+    if (!Array.isArray(saved) || saved.length === 0) return all;
+
+    const ordered: UnifiedItem[] = [];
+    for (const k of saved) {
+      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+      if (item) ordered.push(item);
+    }
+    const used = new Set(ordered.map(i => i.key));
+    return [...ordered, ...all.filter(i => !used.has(i.key))];
+  })();
+
+  const moveInvoiceItem = async (key: string, direction: 'up' | 'down') => {
+    if (!business) return;
+    const idx = invoiceItems.findIndex(i => i.key === key);
+    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || otherIdx < 0 || otherIdx >= invoiceItems.length) return;
+    const next = [...invoiceItems];
+    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
+    await supabase
+      .from('businesses')
+      .update({ invoice_field_order: next.map(i => i.key) })
+      .eq('id', business.id);
+    await refetchBusiness();
+  };
+
   // ── Employee field template CRUD — same shape, separate table.
   const loadEmpTemplates = async () => {
     if (!business) return;
@@ -895,18 +1067,6 @@ export default function AjustesPage() {
                 <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.legalHeading}</p>
                 <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>
                 <Input label={t.business.licenseLabel} value={bizLicense} onChange={e => setBizLicense(e.target.value)}/>
-
-                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.invoiceHeading}</p>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.business.invoiceNotesLabel}</label>
-                  <textarea
-                    rows={3}
-                    placeholder={t.business.invoiceNotesPlaceholder}
-                    value={bizInvoiceNotes}
-                    onChange={e => setBizInvoiceNotes(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
-                  />
-                </div>
 
                 <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.operatingHoursHeading}</p>
                 <p className="text-xs text-gray-400 -mt-1">{t.business.operatingHoursSub}</p>
@@ -1434,6 +1594,127 @@ export default function AjustesPage() {
             </div>
           )}
 
+          {/* ══ FACTURAS ═════════════════════════════════════════════ */}
+          {tab === 'facturas' && (
+            <div className="flex flex-col gap-5">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
+                <div className="flex flex-col gap-4 max-w-md">
+                  <div>
+                    <Input
+                      label={t.invoices.dueDaysLabel}
+                      type="number"
+                      min="0"
+                      value={invoiceDueDays}
+                      onChange={e => setInvoiceDueDays(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.dueDaysHint}</p>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">{t.invoices.notesLabel}</label>
+                    <textarea
+                      rows={3}
+                      placeholder={t.invoices.notesPlaceholder}
+                      value={bizInvoiceNotes}
+                      onChange={e => setBizInvoiceNotes(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+                    />
+                  </div>
+                </div>
+                {invoiceMsg && <p className={`text-xs mt-3 ${invoiceMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{invoiceMsg}</p>}
+                <div className="mt-5">
+                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                    <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Unified invoice-fields list: standard (required toggle) +
+                 custom (edit/delete), reorderable. Same UX as Trabajos. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-base font-semibold text-gray-900">{t.invoicesSection.title}</h2>
+                  <Button size="sm" variant="secondary" onClick={() => {
+                    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setInvoiceTplError(''); setAddInvoiceFieldModal(true);
+                  }}>
+                    <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mb-5">{t.invoicesSection.subtitle}</p>
+
+                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
+                  {invoiceItems.map((item, i) => {
+                    const isLast = i === invoiceItems.length - 1;
+                    return (
+                      <div key={item.key} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {item.kind === 'custom' && (
+                              <Sparkles size={12} className="text-primary shrink-0"/>
+                            )}
+                            <span className="text-sm text-gray-900">{item.label}</span>
+                            {item.kind === 'custom' && item.tpl.required && (
+                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                            )}
+                          </div>
+                          {item.kind === 'custom' && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {FIELD_TYPES[item.tpl.field_type]}
+                              {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col shrink-0">
+                          <button
+                            onClick={() => moveInvoiceItem(item.key, 'up')}
+                            disabled={i === 0}
+                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Move up"
+                          >
+                            <ChevronUp size={14} className="text-gray-500"/>
+                          </button>
+                          <button
+                            onClick={() => moveInvoiceItem(item.key, 'down')}
+                            disabled={isLast}
+                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Move down"
+                          >
+                            <ChevronDown size={14} className="text-gray-500"/>
+                          </button>
+                        </div>
+
+                        {item.kind === 'standard' ? (
+                          <Toggle checked={!!invoiceFieldRequired[item.key]} onChange={() => toggleInvoiceFieldRequired(item.key)} />
+                        ) : (
+                          <>
+                            <button onClick={() => openEditInvoiceTemplate(item.tpl)}
+                              className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+                              aria-label={tc.buttons.edit}>
+                              <Pencil size={13} className="text-blue-400"/>
+                            </button>
+                            <button onClick={() => removeInvoiceTemplate(item.tpl.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                              aria-label={tc.buttons.delete}>
+                              <Trash2 size={13} className="text-red-400"/>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {invoiceReqMsg && <p className={`text-xs mb-3 ${invoiceReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{invoiceReqMsg}</p>}
+                <Button onClick={saveInvoiceRequired} loading={savingInvoiceReq}>
+                  <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ══ CONEXIONES ═══════════════════════════════════════════ */}
           {tab === 'conexiones' && (
             <div className="flex flex-col gap-5">
@@ -1754,6 +2035,85 @@ export default function AjustesPage() {
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setEditJobFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={updateJobTemplate} loading={savingJobTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Add INVOICE field modal ─────────────────────────────── */}
+      <Modal open={addInvoiceFieldModal} onClose={() => setAddInvoiceFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          {invoiceTplForm.field_label && (
+            <p className="text-xs text-gray-400 -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(invoiceTplForm.field_label)}</code>
+            </p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <select value={invoiceTplForm.field_type}
+              onChange={e => setInvoiceTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          {invoiceTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              </label>
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
+                value={invoiceTplForm.options_raw}
+                onChange={e => setInvoiceTplForm(f => ({ ...f, options_raw: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <Toggle checked={invoiceTplForm.required} onChange={(v) => setInvoiceTplForm(f => ({ ...f, required: v }))} />
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+          </div>
+          {invoiceTplError && <p className="text-xs text-red-500">{invoiceTplError}</p>}
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" onClick={() => setAddInvoiceFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={addInvoiceTemplate} loading={savingInvoiceTpl} fullWidth>{t.customFields.addFieldBtn}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Edit INVOICE field modal ────────────────────────────── */}
+      <Modal open={editInvoiceFieldModal} onClose={() => setEditInvoiceFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <select value={invoiceTplForm.field_type}
+              onChange={e => setInvoiceTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          {invoiceTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              </label>
+              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
+                value={invoiceTplForm.options_raw}
+                onChange={e => setInvoiceTplForm(f => ({ ...f, options_raw: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <Toggle checked={invoiceTplForm.required} onChange={(v) => setInvoiceTplForm(f => ({ ...f, required: v }))} />
+            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+          </div>
+          {invoiceTplError && <p className="text-xs text-red-500">{invoiceTplError}</p>}
+          <div className="flex gap-3 pt-1">
+            <Button variant="secondary" onClick={() => setEditInvoiceFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={updateInvoiceTemplate} loading={savingInvoiceTpl} fullWidth>{tc.buttons.saveChanges}</Button>
           </div>
         </div>
       </Modal>

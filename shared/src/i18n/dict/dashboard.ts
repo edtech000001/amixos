@@ -110,7 +110,9 @@ export type DashboardDict = {
       total: string;
       notesLabel: string;
       notesPlaceholder: string;
+      customFieldsHeading: string;
       errorAtLeastOne: string;
+      errorRequiredField: string;
       errorSave: string;
       saveDraft: string;
       sendInvoice: string;
@@ -433,6 +435,9 @@ export type DashboardDict = {
       addWorker: string;
       leadBadge: string;
       markAsLead: string;
+      leadLabel: string;
+      leadNone: string;
+      crewLabel: string;
       itemsHeadingProposal: string;
       itemsHeadingJob: string;
       colType: string;
@@ -571,6 +576,11 @@ export type DashboardDict = {
       basicInfoHeading: string;
       personalHeading: string;
       employmentHeading: string;
+      // App access (login + role) managed from the person record
+      appAccessHeading: string;
+      appAccessNoneHint: string;
+      appAccessEmailRequired: string;
+      appAccessNoManage: string;
     };
     timesheetModal: {
       title: string;
@@ -742,6 +752,10 @@ export type DashboardDict = {
       title: string;
       subtitle: string;
     };
+    invoicesSection: {
+      title: string;
+      subtitle: string;
+    };
     crewMode: {
       heading: string;
       subtitle: string;
@@ -838,6 +852,7 @@ export type DashboardDict = {
       notesPlaceholder: string;
       saveError: string;
       saveSuccess: string;
+      confirmDeleteField: string;
     };
     customFields: {
       heading: string;
@@ -1298,7 +1313,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       trabajos: 'Trabajos',
       clientes: 'Clientes',
       facturas: 'Facturas',
-      empleados: 'Empleados',
+      empleados: 'Equipo',
       equipo: 'Equipo',
       calendario: 'Calendario',
       inventario: 'Inventario',
@@ -1307,7 +1322,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'Más',
       logout: 'Cerrar sesión',
       descriptions: {
-        empleados: 'Gestiona tu equipo, horarios y pagos.',
+        empleados: 'Gestiona tu equipo, accesos, horarios y pagos.',
         equipo: 'Invita usuarios y gestiona roles de acceso.',
         calendario: 'Citas, trabajos programados y horarios.',
         inventario: 'Productos, partes y materiales.',
@@ -1400,7 +1415,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         total: 'Total',
         notesLabel: 'Notas (opcional)',
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
+        customFieldsHeading: 'Campos personalizados',
         errorAtLeastOne: 'Agrega al menos un concepto',
+        errorRequiredField: 'El campo "{{field}}" es requerido',
         errorSave: 'Error al guardar. Intenta de nuevo.',
         saveDraft: 'Guardar borrador',
         sendInvoice: 'Crear y enviar',
@@ -1714,6 +1731,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addWorker: '+ Agregar trabajador',
         leadBadge: 'Líder',
         markAsLead: 'Marcar como líder',
+        leadLabel: 'Líder del trabajo',
+        leadNone: 'Sin líder',
+        crewLabel: 'Cuadrilla',
         itemsHeadingProposal: 'Servicios',
         itemsHeadingJob: 'Materiales y mano de obra',
         colType: 'Tipo',
@@ -1765,7 +1785,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
     },
     employees: {
-      title: 'Empleados',
+      title: 'Equipo',
       summary: '{{active}} activos · {{hours}}h esta semana',
       logHours: 'Registrar horas',
       addBtn: 'Agregar',
@@ -1849,6 +1869,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         basicInfoHeading: 'Información básica',
         personalHeading: 'Información personal',
         employmentHeading: 'Empleo y pago',
+        appAccessHeading: 'Acceso a la app',
+        appAccessNoneHint: 'Invita a esta persona a iniciar sesión en la app con un rol.',
+        appAccessEmailRequired: 'Agrega un correo para poder invitar.',
+        appAccessNoManage: 'No tienes permiso para administrar el acceso.',
       },
       timesheetModal: {
         title: 'Registrar horas',
@@ -2002,7 +2026,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         negocio: 'Negocio',
         trabajos: 'Trabajos',
         clientes: 'Clientes',
-        empleados: 'Empleados',
+        empleados: 'Equipo',
         facturas: 'Facturas',
         cuenta: 'Cuenta',
         conexiones: 'Conexiones',
@@ -2017,6 +2041,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       jobsSection: {
         title: 'Campos del trabajo',
+        subtitle: 'Reordena los campos, marca cuáles son requeridos, y agrega campos personalizados.',
+      },
+      invoicesSection: {
+        title: 'Campos de la factura',
         subtitle: 'Reordena los campos, marca cuáles son requeridos, y agrega campos personalizados.',
       },
       crewMode: {
@@ -2115,6 +2143,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
+        confirmDeleteField: '¿Eliminar este campo? Los datos en facturas existentes se perderán.',
       },
       customFields: {
         heading: 'Campos personalizados',
@@ -2553,7 +2582,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       trabajos: 'Jobs',
       clientes: 'Clients',
       facturas: 'Invoices',
-      empleados: 'Employees',
+      empleados: 'Team',
       equipo: 'Team',
       calendario: 'Calendar',
       inventario: 'Inventory',
@@ -2562,7 +2591,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'More',
       logout: 'Sign out',
       descriptions: {
-        empleados: 'Manage your team, schedules, and pay.',
+        empleados: 'Manage your team, access, schedules, and pay.',
         equipo: 'Invite users and manage access roles.',
         calendario: 'Appointments, scheduled jobs, and hours.',
         inventario: 'Products, parts, and materials.',
@@ -2655,7 +2684,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         total: 'Total',
         notesLabel: 'Notes (optional)',
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
+        customFieldsHeading: 'Custom fields',
         errorAtLeastOne: 'Add at least one item',
+        errorRequiredField: 'The "{{field}}" field is required',
         errorSave: 'Save error. Try again.',
         saveDraft: 'Save draft',
         sendInvoice: 'Create and send',
@@ -2969,6 +3000,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addWorker: '+ Add worker',
         leadBadge: 'Lead',
         markAsLead: 'Mark as lead',
+        leadLabel: 'Job lead',
+        leadNone: 'No lead',
+        crewLabel: 'Crew',
         itemsHeadingProposal: 'Services',
         itemsHeadingJob: 'Materials and labor',
         colType: 'Type',
@@ -3020,7 +3054,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
     },
     employees: {
-      title: 'Employees',
+      title: 'Team',
       summary: '{{active}} active · {{hours}}h this week',
       logHours: 'Log hours',
       addBtn: 'Add',
@@ -3104,6 +3138,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         basicInfoHeading: 'Basic info',
         personalHeading: 'Personal info',
         employmentHeading: 'Employment & pay',
+        appAccessHeading: 'App access',
+        appAccessNoneHint: 'Invite this person to sign in to the app with a role.',
+        appAccessEmailRequired: 'Add an email to send an invite.',
+        appAccessNoManage: 'You do not have permission to manage access.',
       },
       timesheetModal: {
         title: 'Log hours',
@@ -3257,7 +3295,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         negocio: 'Business',
         trabajos: 'Jobs',
         clientes: 'Clients',
-        empleados: 'Employees',
+        empleados: 'Team',
         facturas: 'Invoices',
         cuenta: 'Account',
         conexiones: 'Connections',
@@ -3272,6 +3310,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       jobsSection: {
         title: 'Job fields',
+        subtitle: 'Reorder fields, mark which are required, and add custom ones.',
+      },
+      invoicesSection: {
+        title: 'Invoice fields',
         subtitle: 'Reorder fields, mark which are required, and add custom ones.',
       },
       crewMode: {
@@ -3370,6 +3412,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
+        confirmDeleteField: 'Delete this field? Data on existing invoices will be lost.',
       },
       customFields: {
         heading: 'Custom fields',

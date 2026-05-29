@@ -24,13 +24,23 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
+import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 
 interface Client {
   id: string;
   first_name: string;
   last_name: string;
+}
+
+interface FieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
 }
 
 interface LineItem {
@@ -81,6 +91,8 @@ export default function NuevaFacturaRoute() {
   const [taxRate, setTaxRate] = useState(0);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([newLine()]);
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
   const [clients, setClients] = useState<Client[]>([]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
@@ -108,13 +120,21 @@ export default function NuevaFacturaRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const { data: cl } = await supabase
-        .from('clients')
-        .select('id, first_name, last_name')
-        .eq('business_id', business.id)
-        .order('first_name');
+      const [{ data: cl }, { data: tpls }] = await Promise.all([
+        supabase
+          .from('clients')
+          .select('id, first_name, last_name')
+          .eq('business_id', business.id)
+          .order('first_name'),
+        supabase
+          .from('invoice_field_templates')
+          .select('*')
+          .eq('business_id', business.id)
+          .order('sort_order'),
+      ]);
       if (cancelled) return;
       setClients((cl ?? []) as Client[]);
+      setTemplates((tpls ?? []) as FieldTemplate[]);
 
       if (editId) {
         const [{ data: inv }, { data: links }] = await Promise.all([
@@ -129,6 +149,7 @@ export default function NuevaFacturaRoute() {
           setNotes(inv.notes ?? '');
           setTaxRate(inv.tax_rate ?? 0);
           setLanguage((inv.language as InvoiceLang) ?? 'es');
+          setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
           const items = (inv.line_items as { description: string; qty: number; rate: number }[] | null) ?? [];
           setLines(
             items.length > 0
@@ -184,6 +205,28 @@ export default function NuevaFacturaRoute() {
       setError(t.errorAtLeastOne);
       return;
     }
+    // Required standard fields (configured in Settings → Facturas).
+    const req = business.invoice_field_required ?? {};
+    const standardChecks: { key: string; label: string; filled: boolean }[] = [
+      { key: 'invoice_number', label: t.invoiceNumberLabel, filled: !!invoiceNumber.trim() },
+      { key: 'client', label: t.clientsLabel, filled: clientIds.length > 0 },
+      { key: 'issue_date', label: t.issueDateLabel, filled: !!issueDate },
+      { key: 'due_date', label: t.dueDateLabel, filled: !!dueDate },
+      { key: 'notes', label: t.notesLabel, filled: !!notes.trim() },
+    ];
+    for (const c of standardChecks) {
+      if (req[c.key] && !c.filled) {
+        setError(t.errorRequiredField.replace('{{field}}', c.label));
+        return;
+      }
+    }
+    // Required custom fields must be filled before saving.
+    for (const tpl of templates) {
+      if (tpl.required && !customFields[tpl.field_key]?.trim()) {
+        setError(t.errorRequiredField.replace('{{field}}', tpl.field_label));
+        return;
+      }
+    }
     setSaving(true);
     setError('');
 
@@ -199,6 +242,7 @@ export default function NuevaFacturaRoute() {
       total_amount: total,
       notes: notes.trim() || null,
       language,
+      custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
     let invoiceId: string;
@@ -437,6 +481,66 @@ export default function NuevaFacturaRoute() {
               </View>
             </View>
           </Section>
+
+          {/* Custom fields */}
+          {templates.length > 0 ? (
+            <Section title={t.customFieldsHeading}>
+              <View className="gap-3">
+                {templates.map(tpl => {
+                  const value = customFields[tpl.field_key] ?? '';
+                  const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+                  const setVal = (v: string) =>
+                    setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
+
+                  if (tpl.field_type === 'select' && tpl.field_options) {
+                    return (
+                      <Select
+                        key={tpl.field_key}
+                        label={labelText}
+                        value={value}
+                        onValueChange={setVal}
+                        options={[
+                          { value: '', label: '—' },
+                          ...tpl.field_options.map(o => ({ value: o, label: o })),
+                        ]}
+                      />
+                    );
+                  }
+                  if (tpl.field_type === 'boolean') {
+                    return (
+                      <View key={tpl.field_key}>
+                        <Text className="text-sm font-medium text-gray-700 mb-1.5">{labelText}</Text>
+                        <Toggle
+                          value={value === 'true'}
+                          onValueChange={v => setVal(v ? 'true' : 'false')}
+                          hint={value === 'true' ? tc.states.yes : tc.states.no}
+                        />
+                      </View>
+                    );
+                  }
+                  if (tpl.field_type === 'date') {
+                    return (
+                      <DatePicker
+                        key={tpl.field_key}
+                        label={labelText}
+                        value={value}
+                        onChange={setVal}
+                      />
+                    );
+                  }
+                  return (
+                    <Input
+                      key={tpl.field_key}
+                      label={labelText}
+                      value={value}
+                      onChangeText={setVal}
+                      keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+                    />
+                  );
+                })}
+              </View>
+            </Section>
+          ) : null}
 
           {/* Notes */}
           <Section title={t.notesLabel} icon={<FileText size={14} color="#4F46E5" />}>

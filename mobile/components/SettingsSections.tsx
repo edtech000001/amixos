@@ -12,6 +12,7 @@ import {
   Trash2,
   Sliders,
   Cloud,
+  FileText,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react-native';
@@ -150,7 +151,6 @@ export function BusinessSection() {
   const [zip, setZip] = useState(business?.postal_code ?? '');
   const [taxId, setTaxId] = useState(business?.tax_id ?? '');
   const [license, setLicense] = useState(business?.license_number ?? '');
-  const [invoiceNotes, setInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(
     normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS,
   );
@@ -169,7 +169,6 @@ export function BusinessSection() {
     setZip(business.postal_code ?? '');
     setTaxId(business.tax_id ?? '');
     setLicense(business.license_number ?? '');
-    setInvoiceNotes(business.invoice_notes_default ?? '');
     setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   }, [business]);
 
@@ -194,7 +193,6 @@ export function BusinessSection() {
         postal_code: zip.trim() || null,
         tax_id: taxId.trim() || null,
         license_number: license.trim() || null,
-        invoice_notes_default: invoiceNotes.trim() || null,
         operating_hours: operatingHours,
       })
       .eq('id', business.id);
@@ -225,7 +223,6 @@ export function BusinessSection() {
     zip !== (business?.postal_code ?? '') ||
     taxId !== (business?.tax_id ?? '') ||
     license !== (business?.license_number ?? '') ||
-    invoiceNotes !== (business?.invoice_notes_default ?? '') ||
     JSON.stringify(operatingHours) !==
       JSON.stringify(normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   useSettingsSaveAction({ dirty, saving, onSave });
@@ -271,22 +268,6 @@ export function BusinessSection() {
         <Input label={t.business.taxIdLabel} value={taxId} onChangeText={setTaxId} />
         <Input label={t.business.licenseLabel} value={license} onChangeText={setLicense} />
 
-        <GroupLabel>{t.business.invoiceHeading}</GroupLabel>
-        <View>
-          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.business.invoiceNotesLabel}</Text>
-          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
-            <TextInput
-              multiline
-              placeholder={t.business.invoiceNotesPlaceholder}
-              placeholderTextColor="#9CA3AF"
-              value={invoiceNotes}
-              onChangeText={setInvoiceNotes}
-              className="text-base text-gray-900 py-2"
-              style={{ textAlignVertical: 'top', minHeight: 70 }}
-            />
-          </View>
-        </View>
-
         <GroupLabel>{t.business.operatingHoursHeading}</GroupLabel>
         <Text className="text-xs text-gray-400 -mt-2">{t.business.operatingHoursSub}</Text>
         <View>
@@ -315,6 +296,322 @@ export function BusinessSection() {
       </View>
 
       <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
+// ─── Facturas section — default due window + terms (moved out of Negocio) ──
+export function FacturasSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+
+  const tNew = full.dashboard.invoices.new;
+
+  // Standard invoice fields the user can mark required. Order here is the
+  // display order; the new/edit invoice form enforces the flags on save.
+  const STANDARD_FIELDS: { key: string; label: string }[] = [
+    { key: 'invoice_number', label: tNew.invoiceNumberLabel },
+    { key: 'client', label: tNew.clientsLabel },
+    { key: 'issue_date', label: tNew.issueDateLabel },
+    { key: 'due_date', label: tNew.dueDateLabel },
+    { key: 'notes', label: tNew.notesLabel },
+  ];
+
+  const [dueDays, setDueDays] = useState(
+    business?.invoice_due_days != null ? String(business.invoice_due_days) : '',
+  );
+  const [notes, setNotes] = useState(business?.invoice_notes_default ?? '');
+  const [required, setRequired] = useState<Record<string, boolean>>(
+    business?.invoice_field_required ?? {},
+  );
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // Custom fields — per-business custom field definitions (add/edit/delete).
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<FieldTemplate | null>(null);
+
+  useEffect(() => {
+    if (!business) return;
+    setDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
+    setNotes(business.invoice_notes_default ?? '');
+    setRequired(business.invoice_field_required ?? {});
+  }, [business]);
+
+  useEffect(() => {
+    if (!business) return;
+    void loadTemplates();
+  }, [business?.id]);
+
+  const loadTemplates = async () => {
+    if (!business) return;
+    const { data } = await supabase
+      .from('invoice_field_templates')
+      .select('*')
+      .eq('business_id', business.id)
+      .order('sort_order');
+    setTemplates((data as FieldTemplate[] | null) ?? []);
+  };
+
+  const toggleRequired = (key: string) => {
+    setRequired((prev) => ({ ...prev, [key]: !prev[key] }));
+    setMsg(null);
+  };
+
+  const removeTemplate = (id: string) => {
+    Alert.alert('', t.invoices.confirmDeleteField, [
+      { text: full.common.buttons.cancel, style: 'cancel' },
+      {
+        text: full.common.buttons.delete,
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.from('invoice_field_templates').delete().eq('id', id);
+          setTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
+        },
+      },
+    ]);
+  };
+
+  // One save covers the whole settings page: due window, terms, and the
+  // standard-field required flags. Custom-field templates save themselves
+  // through the modal, so they're not part of this dirty check.
+  const onSave = async () => {
+    if (!business) return;
+    const trimmed = dueDays.trim();
+    const days = trimmed === '' ? null : Number(trimmed);
+    if (days != null && (!Number.isInteger(days) || days < 0)) {
+      setMsg({ text: t.invoices.saveError, isError: true });
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        invoice_due_days: days,
+        invoice_notes_default: notes.trim() || null,
+        invoice_field_required: required,
+      })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({ text: error ? t.invoices.saveError : t.invoices.saveSuccess, isError: !!error });
+    if (!error) await refetchBusiness();
+  };
+
+  const requiredDirty = (() => {
+    const saved = business?.invoice_field_required ?? {};
+    const keys = new Set([...Object.keys(required), ...Object.keys(saved)]);
+    for (const k of keys) {
+      if (!!required[k] !== !!saved[k]) return true;
+    }
+    return false;
+  })();
+
+  const dirty =
+    dueDays !== (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') ||
+    notes !== (business?.invoice_notes_default ?? '') ||
+    requiredDirty;
+  useSettingsSaveAction({ dirty, saving, onSave });
+
+  // ── Unified field list (standard + custom interleaved), same UX as
+  // Trabajos. Order lives in businesses.invoice_field_order; each entry is a
+  // standard key ("client") or a custom-template ref ("custom:<uuid>").
+  type UnifiedItem =
+    | { kind: 'standard'; key: string; label: string }
+    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
+
+  const buildItems = (): UnifiedItem[] => {
+    const standardItems: UnifiedItem[] = STANDARD_FIELDS.map((f) => ({
+      kind: 'standard' as const,
+      key: f.key,
+      label: f.label,
+    }));
+    const customItems: UnifiedItem[] = templates.map((tpl) => ({
+      kind: 'custom' as const,
+      key: `custom:${tpl.id}`,
+      label: tpl.field_label,
+      tpl,
+    }));
+    const all = [...standardItems, ...customItems];
+    const byKey = new Map(all.map((it) => [it.key, it]));
+
+    const saved = business?.invoice_field_order ?? null;
+    if (!Array.isArray(saved) || saved.length === 0) return all;
+
+    const ordered: UnifiedItem[] = [];
+    for (const k of saved) {
+      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+      if (item) ordered.push(item);
+    }
+    const used = new Set(ordered.map((i) => i.key));
+    const appended = all.filter((i) => !used.has(i.key));
+    return [...ordered, ...appended];
+  };
+  const items = buildItems();
+
+  const moveItem = async (key: string, direction: 'up' | 'down') => {
+    if (!business) return;
+    const idx = items.findIndex((it) => it.key === key);
+    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
+    const next = [...items];
+    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
+    await supabase
+      .from('businesses')
+      .update({ invoice_field_order: next.map((i) => i.key) })
+      .eq('id', business.id);
+    await refetchBusiness();
+  };
+
+  return (
+    <View className="gap-5">
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+        <SectionHeader
+          icon={<FileText size={18} color="#4F46E5" />}
+          title={t.invoices.heading}
+          subtitle={t.invoices.subtitle}
+        />
+        <Input
+          label={t.invoices.dueDaysLabel}
+          value={dueDays}
+          onChangeText={(v) => setDueDays(v.replace(/[^0-9]/g, ''))}
+          keyboardType="number-pad"
+        />
+        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.dueDaysHint}</Text>
+        <View>
+          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.invoices.notesLabel}</Text>
+          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
+            <TextInput
+              multiline
+              placeholder={t.invoices.notesPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              value={notes}
+              onChangeText={setNotes}
+              className="text-base text-gray-900 py-2"
+              style={{ textAlignVertical: 'top', minHeight: 70 }}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* Unified fields list: standard (required toggle) + custom
+         (edit/delete), reorderable. Same UX as Trabajos. */}
+      <View className="flex-row items-start justify-between">
+        <View className="flex-1 pr-3">
+          <SectionHeader
+            icon={<Sliders size={18} color="#4F46E5" />}
+            title={t.invoicesSection.title}
+            subtitle={t.invoicesSection.subtitle}
+          />
+        </View>
+        <Pressable
+          onPress={() => {
+            setEditing(null);
+            setModalOpen(true);
+          }}
+          className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl bg-primary active:opacity-80"
+        >
+          <Plus size={14} color="#FFFFFF" />
+          <Text className="text-white text-xs font-semibold">{t.customFields.addBtn}</Text>
+        </Pressable>
+      </View>
+
+      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        {items.map((item, i) => {
+          const isLast = i === items.length - 1;
+          return (
+            <View
+              key={item.key}
+              className={`flex-row items-center gap-2 px-4 py-3 ${
+                isLast ? '' : 'border-b border-gray-50'
+              }`}
+            >
+              <View className="flex-1">
+                <View className="flex-row items-center gap-1.5 flex-wrap">
+                  {item.kind === 'custom' ? <Sparkles size={12} color="#4F46E5" /> : null}
+                  <Text className="text-sm text-gray-900">{item.label}</Text>
+                  {item.kind === 'custom' && item.tpl.required ? (
+                    <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                      <Text className="text-[10px] text-orange-600 font-semibold">
+                        {t.customFields.requiredBadge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                {item.kind === 'custom' ? (
+                  <Text className="text-xs text-gray-400 mt-0.5">
+                    {t.fieldTypes[item.tpl.field_type]}
+                    {item.tpl.field_type === 'select' && item.tpl.field_options?.length
+                      ? ` · ${item.tpl.field_options.join(', ')}`
+                      : ''}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Reorder arrows — operate across the whole list. */}
+              <View className="flex-col">
+                <Pressable
+                  onPress={() => moveItem(item.key, 'up')}
+                  disabled={i === 0}
+                  className="px-1 active:opacity-60"
+                >
+                  <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
+                </Pressable>
+                <Pressable
+                  onPress={() => moveItem(item.key, 'down')}
+                  disabled={isLast}
+                  className="px-1 active:opacity-60"
+                >
+                  <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
+                </Pressable>
+              </View>
+
+              {item.kind === 'standard' ? (
+                <Toggle
+                  value={!!required[item.key]}
+                  onValueChange={() => toggleRequired(item.key)}
+                />
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      setEditing(item.tpl);
+                      setModalOpen(true);
+                    }}
+                    className="p-2 rounded-lg active:bg-blue-50"
+                  >
+                    <Pencil size={14} color="#3B82F6" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => removeTemplate(item.tpl.id)}
+                    className="p-2 rounded-lg active:bg-red-50"
+                  >
+                    <Trash2 size={14} color="#EF4444" />
+                  </Pressable>
+                </>
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      <StatusMsg msg={msg} />
+
+      <FieldTemplateModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        editing={editing}
+        templates={templates}
+        businessId={business?.id ?? null}
+        tableName="invoice_field_templates"
+        onSaved={() => {
+          setModalOpen(false);
+          void loadTemplates();
+        }}
+      />
     </View>
   );
 }
@@ -1699,7 +1996,8 @@ function FieldTemplateModal({
     | 'client_field_templates'
     | 'employee_field_templates'
     | 'job_field_templates'
-    | 'job_assignment_field_templates';
+    | 'job_assignment_field_templates'
+    | 'invoice_field_templates';
 }) {
   const supabase = createSupabaseClient();
   const { t: full } = useLang();

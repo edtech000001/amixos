@@ -45,6 +45,9 @@ export interface InvoiceDetail {
   notes: string | null;
   language: InvoiceLang;
   clients: InvoiceDetailClient[];
+  /** Resolved custom fields (label + display value), already ordered and
+   *  filtered to non-empty entries by the caller. */
+  customFields?: { label: string; value: string }[];
 }
 
 export interface InvoiceDetailScreenProps {
@@ -313,6 +316,21 @@ export function InvoiceDetailScreen({
           </View>
         </View>
       </View>
+
+      {/* Custom fields */}
+      {invoice.customFields && invoice.customFields.length > 0 ? (
+        <View className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
+          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.customFields}</Text>
+          <View className="gap-2.5">
+            {invoice.customFields.map((f, i) => (
+              <View key={i} className="flex-row justify-between gap-4">
+                <Text className="text-sm text-gray-500 flex-1">{f.label}</Text>
+                <Text className="text-sm font-medium text-gray-900 flex-1 text-right">{f.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {/* Notes */}
       {invoice.notes ? (

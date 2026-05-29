@@ -32,8 +32,15 @@ interface RawInvoice {
   total_amount: number;
   notes: string | null;
   language: InvoiceLang;
+  custom_fields: Record<string, string> | null;
   clients: RawClient | null;
   invoice_clients: { clients: RawClient }[];
+}
+
+interface InvoiceFieldTemplate {
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
 }
 
 export default function FacturaDetailRoute() {
@@ -49,12 +56,24 @@ export default function FacturaDetailRoute() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
-  const mapInvoice = (raw: RawInvoice): InvoiceDetail => {
+  const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
     const clientList: RawClient[] = raw.invoice_clients?.length
       ? raw.invoice_clients.map(ic => ic.clients)
       : raw.clients
         ? [raw.clients]
         : [];
+    // Resolve custom fields into ordered, label-mapped, non-empty entries.
+    const cf = raw.custom_fields ?? {};
+    const customFields = tpls
+      .map(tpl => {
+        const v = cf[tpl.field_key];
+        if (v == null || v === '') return null;
+        const value = tpl.field_type === 'boolean'
+          ? (v === 'true' ? tc.states.yes : tc.states.no)
+          : v;
+        return { label: tpl.field_label, value };
+      })
+      .filter((e): e is { label: string; value: string } => e !== null);
     return {
       id: raw.id,
       invoiceNumber: raw.invoice_number,
@@ -68,6 +87,7 @@ export default function FacturaDetailRoute() {
       totalAmount: raw.total_amount,
       notes: raw.notes,
       language: raw.language ?? 'es',
+      customFields,
       clients: clientList.map(c => ({
         firstName: c.first_name,
         lastName: c.last_name,
@@ -79,17 +99,25 @@ export default function FacturaDetailRoute() {
 
   useEffect(() => {
     if (!business) return;
-    supabase
-      .from('invoices')
-      .select(
-        '*, clients(first_name, last_name, email, phone_cell), invoice_clients(clients(first_name, last_name, email, phone_cell))',
-      )
-      .eq('id', id)
-      .single()
-      .then(({ data }) => {
-        if (data) setInvoice(mapInvoice(data as unknown as RawInvoice));
-        setLoading(false);
-      });
+    void (async () => {
+      const [{ data }, { data: tpls }] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select(
+            '*, clients(first_name, last_name, email, phone_cell), invoice_clients(clients(first_name, last_name, email, phone_cell))',
+          )
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('invoice_field_templates')
+          .select('field_key, field_label, field_type')
+          .eq('business_id', business.id)
+          .order('sort_order'),
+      ]);
+      const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
+      if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
+      setLoading(false);
+    })();
   }, [id, business]);
 
   const updateStatus = async (status: 'sent' | 'paid') => {

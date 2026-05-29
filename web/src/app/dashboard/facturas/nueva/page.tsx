@@ -15,6 +15,15 @@ import { useLang } from '@/i18n/LangProvider';
 
 interface LineItem { description: string; qty: number; rate: number; }
 interface Client { id: string; first_name: string; last_name: string; }
+interface FieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
+}
 
 const EMPTY_LINE: LineItem = { description: '', qty: 1, rate: 0 };
 
@@ -60,6 +69,8 @@ function NuevaFacturaContent() {
   const [taxRate, setTaxRate] = useState(0);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
+  const [customTemplates, setCustomTemplates] = useState<FieldTemplate[]>([]);
+  const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
@@ -82,6 +93,8 @@ function NuevaFacturaContent() {
     if (!business) return;
     supabase.from('clients').select('id, first_name, last_name').eq('business_id', business.id)
       .order('first_name').then(({ data }) => setClients(data ?? []));
+    supabase.from('invoice_field_templates').select('*').eq('business_id', business.id)
+      .order('sort_order').then(({ data }) => setCustomTemplates(data ?? []));
   }, [business]);
 
   // Edit mode: hydrate form from the existing invoice.
@@ -101,6 +114,7 @@ function NuevaFacturaContent() {
         setNotes(inv.notes ?? '');
         setTaxRate(inv.tax_rate ?? 0);
         setLanguage((inv.language as InvoiceLang) ?? 'es');
+        setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
         const lineItems = (inv.line_items as LineItem[] | null) ?? [];
         setLines(lineItems.length > 0 ? [...lineItems, { ...EMPTY_LINE }] : [{ ...EMPTY_LINE }]);
         const idsFromLinks = (links ?? []).map((r: { client_id: string }) => r.client_id);
@@ -131,6 +145,28 @@ function NuevaFacturaContent() {
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
     if (lines.every(l => !l.description.trim())) { setError(t.errorAtLeastOne); return; }
+    // Required standard fields (configured in Settings → Facturas).
+    const req = business.invoice_field_required ?? {};
+    const standardChecks: { key: string; label: string; filled: boolean }[] = [
+      { key: 'invoice_number', label: t.invoiceNumberLabel, filled: !!invoiceNumber.trim() },
+      { key: 'client', label: t.clientsLabel, filled: clientIds.length > 0 },
+      { key: 'issue_date', label: t.issueDateLabel, filled: !!issueDate },
+      { key: 'due_date', label: t.dueDateLabel, filled: !!dueDate },
+      { key: 'notes', label: t.notesLabel, filled: !!notes.trim() },
+    ];
+    for (const c of standardChecks) {
+      if (req[c.key] && !c.filled) {
+        setError(t.errorRequiredField.replace('{{field}}', c.label));
+        return;
+      }
+    }
+    // Required custom fields must be filled before saving.
+    for (const tpl of customTemplates) {
+      if (tpl.required && !customFields[tpl.field_key]?.trim()) {
+        setError(t.errorRequiredField.replace('{{field}}', tpl.field_label));
+        return;
+      }
+    }
     setSaving(true); setError('');
 
     const validLines = lines.filter(l => l.description.trim());
@@ -147,6 +183,7 @@ function NuevaFacturaContent() {
       total_amount: total,
       notes: notes || null,
       language,
+      custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
     let invoiceId: string;
@@ -319,6 +356,23 @@ function NuevaFacturaContent() {
           </div>
         </div>
 
+        {/* Custom fields */}
+        {customTemplates.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">{t.customFieldsHeading}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {customTemplates.map(tpl => (
+                <CustomFieldInput
+                  key={tpl.id}
+                  template={tpl}
+                  value={customFields[tpl.field_key] ?? ''}
+                  onChange={v => setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Notes */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <label className="text-sm font-semibold text-gray-700 block mb-2">{t.notesLabel}</label>
@@ -352,5 +406,55 @@ function NuevaFacturaContent() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomFieldInput({
+  template,
+  value,
+  onChange,
+}: {
+  template: FieldTemplate;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const label = template.required ? `${template.field_label} *` : template.field_label;
+
+  if (template.field_type === 'boolean') {
+    const on = value === 'true';
+    return (
+      <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
+        <span className="text-sm text-gray-900">{label}</span>
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={e => onChange(e.target.checked ? 'true' : 'false')}
+          className="w-5 h-5 accent-primary"
+        />
+      </label>
+    );
+  }
+  if (template.field_type === 'select' && template.field_options?.length) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+        >
+          <option value="">—</option>
+          {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  }
+  return (
+    <Input
+      label={label}
+      type={template.field_type === 'date' ? 'date' : template.field_type === 'number' ? 'number' : 'text'}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+    />
   );
 }
