@@ -28,6 +28,14 @@ export interface Business {
   service_type: string;
   city: string;
   state: string;
+  address: string | null;
+  postal_code: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  tax_id: string | null;
+  license_number: string | null;
+  invoice_notes_default: string | null;
   client_field_required: Record<string, boolean>;
   client_field_order: string[] | null;
   employee_field_required: Record<string, boolean>;
@@ -204,7 +212,7 @@ export const useAuthStore = create<AuthStore>()(
           const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config'),
+              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config'),
             supabase
               .from('business_members')
               .select('business_id, role')

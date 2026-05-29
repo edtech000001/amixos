@@ -116,6 +116,16 @@ function StatusMsg({ msg }: { msg: { text: string; isError: boolean } | null }) 
 }
 
 // ─── Business section ─────────────────────────────────────────────────────
+const BUSINESS_US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
+  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
+  'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
+
+function GroupLabel({ children }: { children: string }) {
+  return <Text className="text-xs font-semibold text-gray-400 uppercase mt-2">{children}</Text>;
+}
+
 export function BusinessSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
@@ -123,15 +133,32 @@ export function BusinessSection() {
   const t = full.dashboard.settings;
 
   const [name, setName] = useState(business?.name ?? '');
+  const [email, setEmail] = useState(business?.email ?? '');
+  const [phone, setPhone] = useState(business?.phone ?? '');
+  const [website, setWebsite] = useState(business?.website ?? '');
+  const [address, setAddress] = useState(business?.address ?? '');
   const [city, setCity] = useState(business?.city ?? '');
+  const [usState, setUsState] = useState(business?.state ?? '');
+  const [zip, setZip] = useState(business?.postal_code ?? '');
+  const [taxId, setTaxId] = useState(business?.tax_id ?? '');
+  const [license, setLicense] = useState(business?.license_number ?? '');
+  const [invoiceNotes, setInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
   useEffect(() => {
-    if (business) {
-      setName(business.name);
-      setCity(business.city);
-    }
+    if (!business) return;
+    setName(business.name ?? '');
+    setEmail(business.email ?? '');
+    setPhone(business.phone ?? '');
+    setWebsite(business.website ?? '');
+    setAddress(business.address ?? '');
+    setCity(business.city ?? '');
+    setUsState(business.state ?? '');
+    setZip(business.postal_code ?? '');
+    setTaxId(business.tax_id ?? '');
+    setLicense(business.license_number ?? '');
+    setInvoiceNotes(business.invoice_notes_default ?? '');
   }, [business]);
 
   const onSave = async () => {
@@ -140,7 +167,19 @@ export function BusinessSection() {
     setMsg(null);
     const { error } = await supabase
       .from('businesses')
-      .update({ name, city })
+      .update({
+        name,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        website: website.trim() || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: usState || null,
+        postal_code: zip.trim() || null,
+        tax_id: taxId.trim() || null,
+        license_number: license.trim() || null,
+        invoice_notes_default: invoiceNotes.trim() || null,
+      })
       .eq('id', business.id);
     setSaving(false);
     setMsg({
@@ -150,15 +189,69 @@ export function BusinessSection() {
     if (!error) await refetchBusiness();
   };
 
+  const stateOptions = [
+    { value: '', label: '—' },
+    ...BUSINESS_US_STATES.map((s) => ({ value: s, label: s })),
+  ];
+
   return (
     <View className="gap-5">
-      <SectionHeader
-        icon={<Building2 size={18} color="#4F46E5" />}
-        title={t.business.heading}
-        subtitle={t.business.subtitle}
-      />
-      <Input label={t.business.nameLabel} value={name} onChangeText={setName} autoCapitalize="words" />
-      <Input label={t.business.cityLabel} value={city} onChangeText={setCity} autoCapitalize="words" />
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+        <SectionHeader
+          icon={<Building2 size={18} color="#4F46E5" />}
+          title={t.business.heading}
+          subtitle={t.business.subtitle}
+        />
+        <Input label={t.business.nameLabel} value={name} onChangeText={setName} autoCapitalize="words" />
+
+        <GroupLabel>{t.business.contactHeading}</GroupLabel>
+        <Input
+          label={t.business.emailLabel}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Input
+          label={t.business.phoneLabel}
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+        />
+        <Input
+          label={t.business.websiteLabel}
+          value={website}
+          onChangeText={setWebsite}
+          autoCapitalize="none"
+        />
+
+        <GroupLabel>{t.business.addressHeading}</GroupLabel>
+        <Input label={t.business.addressLabel} value={address} onChangeText={setAddress} autoCapitalize="words" />
+        <Input label={t.business.cityLabel} value={city} onChangeText={setCity} autoCapitalize="words" />
+        <Select label={t.business.stateLabel} value={usState} onValueChange={setUsState} options={stateOptions} />
+        <Input label={t.business.zipLabel} value={zip} onChangeText={setZip} keyboardType="number-pad" />
+
+        <GroupLabel>{t.business.legalHeading}</GroupLabel>
+        <Input label={t.business.taxIdLabel} value={taxId} onChangeText={setTaxId} />
+        <Input label={t.business.licenseLabel} value={license} onChangeText={setLicense} />
+
+        <GroupLabel>{t.business.invoiceHeading}</GroupLabel>
+        <View>
+          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.business.invoiceNotesLabel}</Text>
+          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
+            <TextInput
+              multiline
+              placeholder={t.business.invoiceNotesPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              value={invoiceNotes}
+              onChangeText={setInvoiceNotes}
+              className="text-base text-gray-900 py-2"
+              style={{ textAlignVertical: 'top', minHeight: 70 }}
+            />
+          </View>
+        </View>
+      </View>
+
       <StatusMsg msg={msg} />
       <Button onPress={onSave} loading={saving} fullWidth>
         <Text className="text-white font-semibold">{full.common.buttons.saveChanges}</Text>
@@ -1720,20 +1813,22 @@ export function AccountSection() {
   };
 
   return (
-    <View className="gap-7">
-      <View className="gap-3">
+    <View className="gap-4">
+      {/* Account info card */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<UserIcon size={18} color="#4F46E5" />}
           title={t.account.heading}
           subtitle={t.account.subtitle}
         />
-        <View className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
-          <Text className="text-xs text-gray-500 mb-1">{t.account.emailLabel}</Text>
-          <Text className="text-sm text-gray-900">{user?.email ?? '—'}</Text>
+        <View className="gap-1">
+          <Text className="text-xs text-gray-500">{t.account.emailLabel}</Text>
+          <Text className="text-sm font-medium text-gray-900">{user?.email ?? '—'}</Text>
         </View>
       </View>
 
-      <View className="gap-3">
+      {/* Language card */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<Globe size={18} color="#4F46E5" />}
           title={t.language.heading}
@@ -1745,7 +1840,7 @@ export function AccountSection() {
               key={code}
               onPress={() => setLocale(code)}
               className={`flex-1 py-3 rounded-xl items-center ${
-                locale === code ? 'bg-primary' : 'bg-white border border-gray-200'
+                locale === code ? 'bg-primary' : 'bg-gray-50 border border-gray-200'
               }`}
             >
               <Text
@@ -1760,7 +1855,8 @@ export function AccountSection() {
         </View>
       </View>
 
-      <View className="gap-3">
+      {/* Password card */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<Lock size={18} color="#4F46E5" />}
           title={t.password.heading}

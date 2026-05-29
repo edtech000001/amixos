@@ -774,7 +774,21 @@ export type DashboardDict = {
       heading: string;
       subtitle: string;
       nameLabel: string;
+      contactHeading: string;
+      emailLabel: string;
+      phoneLabel: string;
+      websiteLabel: string;
+      addressHeading: string;
+      addressLabel: string;
       cityLabel: string;
+      stateLabel: string;
+      zipLabel: string;
+      legalHeading: string;
+      taxIdLabel: string;
+      licenseLabel: string;
+      invoiceHeading: string;
+      invoiceNotesLabel: string;
+      invoiceNotesPlaceholder: string;
       saveError: string;
       saveSuccess: string;
     };
@@ -1989,7 +2003,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Información del negocio',
         subtitle: 'Datos básicos de tu empresa.',
         nameLabel: 'Nombre del negocio',
+        contactHeading: 'Contacto',
+        emailLabel: 'Correo electrónico',
+        phoneLabel: 'Teléfono',
+        websiteLabel: 'Sitio web',
+        addressHeading: 'Dirección',
+        addressLabel: 'Dirección',
         cityLabel: 'Ciudad',
+        stateLabel: 'Estado',
+        zipLabel: 'Código postal',
+        legalHeading: 'Información fiscal y legal',
+        taxIdLabel: 'ID fiscal / EIN',
+        licenseLabel: 'Número de licencia',
+        invoiceHeading: 'Facturación',
+        invoiceNotesLabel: 'Notas predeterminadas de factura',
+        invoiceNotesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
       },
@@ -3182,7 +3210,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Business info',
         subtitle: 'Basic information about your company.',
         nameLabel: 'Business name',
+        contactHeading: 'Contact',
+        emailLabel: 'Email',
+        phoneLabel: 'Phone',
+        websiteLabel: 'Website',
+        addressHeading: 'Address',
+        addressLabel: 'Street address',
         cityLabel: 'City',
+        stateLabel: 'State',
+        zipLabel: 'ZIP code',
+        legalHeading: 'Tax & legal',
+        taxIdLabel: 'Tax ID / EIN',
+        licenseLabel: 'License number',
+        invoiceHeading: 'Invoicing',
+        invoiceNotesLabel: 'Default invoice notes',
+        invoiceNotesPlaceholder: 'Payment terms, transfer instructions, etc.',
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
       },

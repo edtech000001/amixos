@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState } from 'react';
 import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, ArrowLeft, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -51,6 +52,12 @@ const DEFAULT_CLIENT_FIELD_KEYS = [
   'first_name', 'last_name', 'company', 'phone_cell', 'phone_office',
   'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
 ] as const;
+
+const BIZ_US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
+  'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
+  'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
 
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
@@ -100,7 +107,16 @@ export default function AjustesPage() {
 
   // ── Business info
   const [bizName, setBizName] = useState(business?.name ?? '');
+  const [bizEmail, setBizEmail] = useState(business?.email ?? '');
+  const [bizPhone, setBizPhone] = useState(business?.phone ?? '');
+  const [bizWebsite, setBizWebsite] = useState(business?.website ?? '');
+  const [bizAddress, setBizAddress] = useState(business?.address ?? '');
   const [bizCity, setBizCity] = useState(business?.city ?? '');
+  const [bizState, setBizState] = useState(business?.state ?? '');
+  const [bizZip, setBizZip] = useState(business?.postal_code ?? '');
+  const [bizTaxId, setBizTaxId] = useState(business?.tax_id ?? '');
+  const [bizLicense, setBizLicense] = useState(business?.license_number ?? '');
+  const [bizInvoiceNotes, setBizInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
   const [savingBiz, setSavingBiz] = useState(false);
   const [bizMsg, setBizMsg] = useState('');
   const [bizMsgIsError, setBizMsgIsError] = useState(false);
@@ -153,7 +169,16 @@ export default function AjustesPage() {
   useEffect(() => {
     if (business) {
       setBizName(business.name);
-      setBizCity(business.city);
+      setBizEmail(business.email ?? '');
+      setBizPhone(business.phone ?? '');
+      setBizWebsite(business.website ?? '');
+      setBizAddress(business.address ?? '');
+      setBizCity(business.city ?? '');
+      setBizState(business.state ?? '');
+      setBizZip(business.postal_code ?? '');
+      setBizTaxId(business.tax_id ?? '');
+      setBizLicense(business.license_number ?? '');
+      setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setFieldRequired(business.client_field_required ?? {});
       setPipelineDisabled(business.job_pipeline_disabled ?? {});
     }
@@ -177,7 +202,19 @@ export default function AjustesPage() {
   const saveBusiness = async () => {
     if (!business) return;
     setSavingBiz(true); setBizMsg('');
-    const { error } = await supabase.from('businesses').update({ name: bizName, city: bizCity }).eq('id', business.id);
+    const { error } = await supabase.from('businesses').update({
+      name: bizName,
+      email: bizEmail.trim() || null,
+      phone: bizPhone.trim() || null,
+      website: bizWebsite.trim() || null,
+      address: bizAddress.trim() || null,
+      city: bizCity.trim() || null,
+      state: bizState || null,
+      postal_code: bizZip.trim() || null,
+      tax_id: bizTaxId.trim() || null,
+      license_number: bizLicense.trim() || null,
+      invoice_notes_default: bizInvoiceNotes.trim() || null,
+    }).eq('id', business.id);
     setBizMsgIsError(!!error);
     setBizMsg(error ? t.business.saveError : t.business.saveSuccess);
     if (!error) await refetchBusiness();
@@ -785,52 +822,54 @@ export default function AjustesPage() {
   useEffect(() => { loadEmpTemplates(); }, [business]);
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t.title}</h1>
-
-      <div className="flex gap-6">
-        {/* ── Sidebar nav ─────────────────────────────────────────── */}
-        <nav className="w-52 shrink-0">
-          <div className="flex flex-col gap-1 sticky top-6">
-            {/* Drill-in back link — the global rail is hidden on settings,
-               so this returns the user to the main dashboard. */}
-            <Link href="/dashboard"
-              className="flex items-center gap-2 px-3 py-2 mb-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
-              <ArrowLeft size={16} className="text-gray-400" />
-              {full.common.buttons.back}
+    <div className="md:flex md:min-h-screen">
+      {/* Settings rail — mirrors the main sidebar (white, border-r, business
+          header + divider). The global rail is hidden on settings routes
+          (drill-in), so this is the single rail. Full-width on mobile. */}
+      <aside className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-gray-100 bg-white md:h-screen md:sticky md:top-0 flex flex-col">
+        <div className="px-6 py-5 border-b border-gray-100">
+          <BusinessSwitcher />
+        </div>
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+          {/* Back to the main dashboard — the global rail lives there. */}
+          <Link href="/dashboard"
+            className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all">
+            <ArrowLeft size={18} className="text-gray-400" />
+            {full.common.buttons.back}
+          </Link>
+          {TABS.map(tabItem => {
+            const Icon = tabItem.icon;
+            const active = tab === tabItem.key;
+            return (
+              <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
+                  active
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}>
+                <Icon size={18} className={active ? 'text-white' : 'text-gray-400'}/>
+                {tabItem.label}
+              </button>
+            );
+          })}
+          <Link href="/dashboard/ajustes/equipo"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all w-full">
+            <UserPlus size={18} className="text-gray-400"/>
+            {t.tabs.equipo}
+          </Link>
+          {can.seeAuditLog(currentRole) && (
+            <Link href="/dashboard/ajustes/actividad"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all w-full">
+              <Activity size={18} className="text-gray-400"/>
+              {t.tabs.actividad}
             </Link>
-            {TABS.map(tabItem => {
-              const Icon = tabItem.icon;
-              const active = tab === tabItem.key;
-              return (
-                <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left w-full ${
-                    active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                  }`}>
-                  <Icon size={16} className={active ? 'text-primary' : 'text-gray-400'}/>
-                  {tabItem.label}
-                </button>
-              );
-            })}
-            <Link href="/dashboard/ajustes/equipo"
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
-              <UserPlus size={16} className="text-gray-400"/>
-              {t.tabs.equipo}
-            </Link>
-            {can.seeAuditLog(currentRole) && (
-              <Link href="/dashboard/ajustes/actividad"
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors w-full">
-                <Activity size={16} className="text-gray-400"/>
-                {t.tabs.actividad}
-              </Link>
-            )}
-          </div>
+          )}
         </nav>
+      </aside>
 
-        {/* ── Content ─────────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0">
+      {/* Content */}
+      <div className="flex-1 min-w-0 p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t.title}</h1>
 
           {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
           {tab === 'negocio' && (
@@ -839,7 +878,43 @@ export default function AjustesPage() {
               <p className="text-xs text-gray-400 mb-5">{t.business.subtitle}</p>
               <div className="flex flex-col gap-3 max-w-md">
                 <Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/>
+
+                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.contactHeading}</p>
+                <Input label={t.business.emailLabel} type="email" value={bizEmail} onChange={e => setBizEmail(e.target.value)}/>
+                <Input label={t.business.phoneLabel} value={bizPhone} onChange={e => setBizPhone(e.target.value)}/>
+                <Input label={t.business.websiteLabel} value={bizWebsite} onChange={e => setBizWebsite(e.target.value)}/>
+
+                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.addressHeading}</p>
+                <Input label={t.business.addressLabel} value={bizAddress} onChange={e => setBizAddress(e.target.value)}/>
                 <Input label={t.business.cityLabel} value={bizCity} onChange={e => setBizCity(e.target.value)}/>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700">{t.business.stateLabel}</label>
+                  <select
+                    value={bizState}
+                    onChange={e => setBizState(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+                  >
+                    <option value="">—</option>
+                    {BIZ_US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value)}/>
+
+                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.legalHeading}</p>
+                <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>
+                <Input label={t.business.licenseLabel} value={bizLicense} onChange={e => setBizLicense(e.target.value)}/>
+
+                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.invoiceHeading}</p>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700">{t.business.invoiceNotesLabel}</label>
+                  <textarea
+                    rows={3}
+                    placeholder={t.business.invoiceNotesPlaceholder}
+                    value={bizInvoiceNotes}
+                    onChange={e => setBizInvoiceNotes(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+                  />
+                </div>
               </div>
               {bizMsg && <p className={`text-xs mt-3 ${bizMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
               <div className="mt-5">
@@ -1381,7 +1456,6 @@ export default function AjustesPage() {
             </div>
           )}
         </div>
-      </div>
 
       {/* ── Add field modal ─────────────────────────────────────── */}
       <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
