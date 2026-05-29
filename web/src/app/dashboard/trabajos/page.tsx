@@ -36,7 +36,7 @@ interface RawJob {
   job_assignments: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }[];
 }
 
-const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
 export default function TrabajosPage() {

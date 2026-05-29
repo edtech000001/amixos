@@ -23,6 +23,14 @@ import {
   Sparkles,
   Hammer,
   MapPin,
+  Building2,
+  Award,
+  Dumbbell,
+  FolderOpen,
+  HandCoins,
+  Forklift,
+  PartyPopper,
+  Car,
 } from 'lucide-react-native';
 
 export type ModuleStatus = 'available' | 'coming_soon';
@@ -65,6 +73,14 @@ export const MODULE_REGISTRY: ModuleDef[] = [
   { id: 'restaurant',   icon: Utensils,  color: '#F59E0B', status: 'coming_soon', i18nKey: 'restaurant',   category: 'industry' },
   { id: 'cleaning',     icon: Sparkles,  color: '#8B5CF6', status: 'coming_soon', i18nKey: 'cleaning',     category: 'industry' },
   { id: 'construction', icon: Hammer,    color: '#F97316', status: 'coming_soon', i18nKey: 'construction', category: 'industry' },
+  { id: 'rentals',      icon: Building2,  color: '#14B8A6', status: 'coming_soon', i18nKey: 'rentals',      category: 'industry' },
+  { id: 'loyalty',      icon: Award,      color: '#EAB308', status: 'coming_soon', i18nKey: 'loyalty',      category: 'tools' },
+  { id: 'trainer',      icon: Dumbbell,   color: '#EF4444', status: 'coming_soon', i18nKey: 'trainer',      category: 'industry' },
+  { id: 'files',        icon: FolderOpen, color: '#64748B', status: 'coming_soon', i18nKey: 'files',        category: 'tools' },
+  { id: 'fundraising',  icon: HandCoins,  color: '#E11D48', status: 'coming_soon', i18nKey: 'fundraising',  category: 'industry' },
+  { id: 'equipment',    icon: Forklift,   color: '#78716C', status: 'coming_soon', i18nKey: 'equipment',    category: 'tools' },
+  { id: 'wedding',      icon: PartyPopper,color: '#A855F7', status: 'coming_soon', i18nKey: 'wedding',      category: 'industry' },
+  { id: 'dealership',   icon: Car,        color: '#0891B2', status: 'coming_soon', i18nKey: 'dealership',   category: 'industry' },
 ];
 
 export function getModuleById(id: string): ModuleDef | null {

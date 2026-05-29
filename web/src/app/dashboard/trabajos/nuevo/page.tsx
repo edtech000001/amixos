@@ -11,7 +11,11 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Toggle } from '@/components/ui/Toggle';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { formatProjectDuration } from '@amixos/shared/lib/duration';
+import { formatTime12h } from '@amixos/shared/lib/format';
+import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
@@ -84,12 +88,14 @@ function NuevoTrabajoContent() {
   // Form state
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
-  const [status, setStatus] = useState<'scheduled' | 'in_progress'>('scheduled');
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [allDay, setAllDay] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [description, setDescription] = useState('');
@@ -152,12 +158,16 @@ function NuevoTrabajoContent() {
         if (job) {
           setTitle(job.title || '');
           setClientId(job.client_id || '');
-          setStatus(job.status === 'in_progress' ? 'in_progress' : 'scheduled');
+          setStatus(
+            job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
+          );
           setPriority(job.priority || 'normal');
           setAddress(job.job_address || '');
           setCity(job.job_city || '');
           setState(job.job_state || '');
           setScheduledDate(job.scheduled_date || '');
+          setEndDate(job.end_date || '');
+          setAllDay(!!job.all_day);
           setTimeStart(job.time_start || '');
           setTimeEnd(job.time_end || '');
           setDescription(job.description || '');
@@ -262,6 +272,23 @@ function NuevoTrabajoContent() {
   const taxAmt = subtotal * (taxRate / 100);
   const total = isEditProposal ? subtotal + taxAmt - discount : subtotal;
 
+  // ── Total-time line + out-of-hours note ──
+  const totalTimeText = formatProjectDuration(
+    {
+      startDate: scheduledDate,
+      endDate,
+      timeStart: allDay ? null : timeStart,
+      timeEnd: allDay ? null : timeEnd,
+    },
+    full.common.duration,
+  );
+  const ohStatus = evaluateOperatingHours(
+    normalizeOperatingHours(business?.operating_hours),
+    scheduledDate,
+    allDay ? null : timeStart,
+    allDay ? null : timeEnd,
+  );
+
   const save = async () => {
     if (!title.trim()) { setError(isEditProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob); return; }
     const validItems = items.filter(i => i.description.trim());
@@ -284,6 +311,7 @@ function NuevoTrabajoContent() {
           discount: +discount.toFixed(2),
           total_amount: +total.toFixed(2),
           scheduled_date: scheduledDate || null,
+          end_date: endDate || null,
         };
 
         let finalJobId: string;
@@ -325,8 +353,10 @@ function NuevoTrabajoContent() {
           job_city: city.trim() || null,
           job_state: state || null,
           scheduled_date: scheduledDate || null,
-          time_start: timeStart || null,
-          time_end: timeEnd || null,
+          end_date: endDate || null,
+          all_day: allDay,
+          time_start: allDay ? null : (timeStart || null),
+          time_end: allDay ? null : (timeEnd || null),
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
         };
@@ -472,12 +502,22 @@ function NuevoTrabajoContent() {
             </div>
 
             {isEditProposal ? (
-              /* Proposal: issue + expiry + project start dates */
-              <div className="grid grid-cols-3 gap-3">
-                <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
-                <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
-                <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
-              </div>
+              /* Proposal: issue + expiry, then project start/finish + est. hours */
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
+                  <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
+                  <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
+                </div>
+                {totalTimeText && (
+                  <p className="text-xs text-gray-500 text-right">
+                    {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
+                  </p>
+                )}
+              </>
             ) : (
               /* Job: status + priority */
               <div className="grid grid-cols-2 gap-3">
@@ -485,6 +525,7 @@ function NuevoTrabajoContent() {
                   <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
                   <select value={status} onChange={e => setStatus(e.target.value as any)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    <option value="posible">{tStatuses.posible}</option>
                     <option value="scheduled">{tStatuses.scheduled}</option>
                     <option value="in_progress">{tStatuses.in_progress}</option>
                   </select>
@@ -557,14 +598,40 @@ function NuevoTrabajoContent() {
               <Calendar size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <Input label={t.dateLabel} type="date" value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}/>
-              <Input label={t.timeStartLabel} type="time" value={timeStart}
-                onChange={e => setTimeStart(e.target.value)}/>
-              <Input label={t.timeEndLabel} type="time" value={timeEnd}
-                onChange={e => setTimeEnd(e.target.value)}/>
+              <Input label={t.endDateLabel} type="date" value={endDate}
+                onChange={e => setEndDate(e.target.value)}/>
             </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <label className="text-sm font-medium text-gray-700">{t.allDayLabel}</label>
+              <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
+            </div>
+
+            {!allDay && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <Input label={t.timeStartLabel} type="time" value={timeStart}
+                  onChange={e => setTimeStart(e.target.value)}/>
+                <Input label={t.timeEndLabel} type="time" value={timeEnd}
+                  onChange={e => setTimeEnd(e.target.value)}/>
+              </div>
+            )}
+
+            {ohStatus && ohStatus.status !== 'ok' && (
+              <p className="text-xs text-amber-600 mt-3">
+                ⚠ {ohStatus.status === 'closed'
+                  ? t.outOfHoursClosedNote
+                  : `${t.outOfHoursNote} · ${formatTime12h(ohStatus.day.start)}–${formatTime12h(ohStatus.day.end)}`}
+              </p>
+            )}
+
+            {totalTimeText && (
+              <p className="text-xs text-gray-500 text-right mt-3">
+                {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
+              </p>
+            )}
           </div>
         )}
 

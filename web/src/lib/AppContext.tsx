@@ -19,6 +19,7 @@ export interface Business {
   tax_id: string | null;
   license_number: string | null;
   invoice_notes_default: string | null;
+  invoice_due_days: number | null;
   client_field_required: Record<string, boolean>;
   client_field_order: string[] | null;
   employee_field_required: Record<string, boolean>;
@@ -36,6 +37,10 @@ export interface Business {
   // Weather alert config (alpha — only the gated business id sees this UI).
   // Shape: see shared/src/lib/weather.ts (WeatherConfig).
   weather_config: Record<string, unknown> | null;
+  // Weekly operating hours (migration 041). Null = not configured yet — the
+  // app skips out-of-hours job warnings until set. Shape: see
+  // shared/src/lib/operatingHours.ts (OperatingHours).
+  operating_hours: Record<string, { enabled: boolean; start: string; end: string }> | null;
 }
 
 // Map view prefs — synced via businesses.map_view_settings (migration 039).
@@ -141,7 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config'),
+        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours'),
       supabase
         .from('business_members')
         .select('business_id, role')

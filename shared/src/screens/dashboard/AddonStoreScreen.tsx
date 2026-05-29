@@ -133,10 +133,9 @@ export function AddonStoreScreen({
             <Text className="text-sm text-gray-500">{t.noResults}</Text>
           </View>
         ) : (
-        // 2-column grid. Each card uses width 48% so they pack side-by-side
-        // with a tiny gutter; flex-wrap pushes the third card onto the next
-        // row. Mobile and web (via react-native-web) both honor this.
-        <View className="flex-row flex-wrap justify-between">
+        // Single column — one card per row (w-full) so each module's name +
+        // description has room to read instead of being cramped two-up.
+        <View>
           {filtered.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
@@ -171,8 +170,8 @@ export function AddonStoreScreen({
             return (
               <View
                 key={m.id}
-                className="w-[48%] bg-white rounded-2xl border border-gray-100 p-4 mb-3"
-                style={enabled ? { borderColor: `${m.color}40` } : undefined}
+                className={`w-full bg-white rounded-2xl ${enabled ? 'border-2' : 'border'} border-gray-100 p-4 mb-3`}
+                style={enabled ? { borderColor: '#4ADE80' } : undefined}
               >
                 <Pressable
                   onPress={canOpen ? () => onOpen?.(m.id) : undefined}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -52,11 +52,19 @@ const genInvoiceNumber = () => {
 };
 
 const todayISO = () => new Date().toISOString().split('T')[0];
+// Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
 
 export default function NuevaFacturaRoute() {
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
+  const insets = useSafeAreaInsets();
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.invoices.new;
@@ -80,6 +88,20 @@ export default function NuevaFacturaRoute() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Default due date — runs once on a NEW invoice: if the business set a
+  // default due window and the due date is still empty, set it to issue +
+  // N days. The ref guard means changing the issue date afterward never
+  // re-derives the due date (the user may have set it deliberately).
+  const dueDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || dueDefaultedRef.current || !business) return;
+    const days = business.invoice_due_days;
+    if (days != null && days >= 0 && issueDate && !dueDate) {
+      setDueDate(addDaysISO(issueDate, days));
+      dueDefaultedRef.current = true;
+    }
+  }, [editId, business, issueDate, dueDate]);
 
   // Load clients + optionally the invoice being edited.
   useEffect(() => {
@@ -470,14 +492,26 @@ export default function NuevaFacturaRoute() {
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >
-        <View className="flex-1 justify-end">
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Dark scrim — inline color so it renders without waiting on a
+              NativeWind regeneration. */}
           <Pressable
             onPress={() => setClientPickerOpen(false)}
-            className="absolute inset-0 bg-black/40"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
+          {/* Floating card: rounded on all corners, lifted off the screen
+              edges with side + bottom margins and a soft shadow. */}
           <View
-            className="bg-white rounded-t-3xl pt-3 pb-8"
-            style={{ height: '85%' }}
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
           >
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />

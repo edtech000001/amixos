@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil,
-  Share2, Download, RotateCcw, Building2,
+  Share2, Download, RotateCcw, Building2, Sparkles,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -20,13 +20,15 @@ import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
+import { formatProjectDuration } from '@amixos/shared/lib/duration';
 
 interface Job {
   id: string; business_id: string;
   client_id: string | null; invoice_id: string | null;
   title: string; description: string | null; status: string; priority: string;
   job_address: string | null; job_city: string | null; job_state: string | null;
-  scheduled_date: string | null; time_start: string | null; time_end: string | null;
+  scheduled_date: string | null; end_date: string | null; estimated_hours: number | null;
+  time_start: string | null; time_end: string | null;
   completed_date: string | null; total_amount: number; internal_notes: string | null;
   estimate_number: string | null; notes: string | null;
   issue_date: string | null; expiry_date: string | null;
@@ -283,7 +285,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const isProposal = !!job.estimate_number;
   const disabled = business?.job_pipeline_disabled ?? {};
-  const fullPipeline = isProposal ? PROPOSAL_PIPELINE : WORK_PIPELINE;
+  // 'posible' (lead) jobs get a posible→scheduled→… pipeline so the stepper
+  // highlights their stage; other work jobs keep the standard pipeline.
+  const POSIBLE_STEP = { key: 'posible', label: t.statuses.posible, icon: Sparkles, color: 'text-teal-600', bg: 'bg-teal-100' };
+  const fullPipeline = isProposal
+    ? PROPOSAL_PIPELINE
+    : job.status === 'posible'
+      ? [POSIBLE_STEP, ...WORK_PIPELINE]
+      : WORK_PIPELINE;
   const pipeline = fullPipeline.filter(s => !disabled[s.key]);
   const pipelineIdx = pipeline.findIndex(s => s.key === job.status);
   // Back one step in the visible pipeline. Hidden at index 0, once invoiced,
@@ -431,6 +440,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Next action buttons */}
           <div className="mt-4 pt-4 border-t border-gray-50 flex justify-center gap-3 flex-wrap">
+            {/* Lead → schedule */}
+            {job.status === 'posible' && (
+              <Button onClick={() => updateStatus('scheduled')} loading={updatingStatus} size="sm">
+                <Calendar size={14} className="mr-1.5"/> {td.scheduleWork}
+              </Button>
+            )}
             {/* Proposal phase actions */}
             {job.status === 'proposal' && (
               <Button onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
@@ -590,22 +605,38 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.detailsHeading}</h2>
             <div className="flex flex-col gap-3">
-              {job.scheduled_date && (
-                <div className="flex items-start gap-2.5">
-                  <Calendar size={15} className="text-gray-400 mt-0.5 shrink-0"/>
-                  <div>
-                    <p className="text-xs text-gray-400">{td.scheduledDate}</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatDateLong(job.scheduled_date, dateLoc)}
-                    </p>
-                    {(job.time_start || job.time_end) && (
-                      <p className="text-xs text-gray-400">
-                        {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
+              {job.scheduled_date && (() => {
+                const totalTimeText = formatProjectDuration(
+                  {
+                    startDate: job.scheduled_date,
+                    endDate: job.end_date,
+                    estimatedHours: job.estimated_hours,
+                    timeStart: job.time_start,
+                    timeEnd: job.time_end,
+                  },
+                  full.common.duration,
+                );
+                return (
+                  <div className="flex items-start gap-2.5">
+                    <Calendar size={15} className="text-gray-400 mt-0.5 shrink-0"/>
+                    <div>
+                      <p className="text-xs text-gray-400">{td.scheduledDate}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDateLong(job.scheduled_date, dateLoc)}
+                        {job.end_date ? ` — ${formatDateLong(job.end_date, dateLoc)}` : ''}
                       </p>
-                    )}
+                      {(job.time_start || job.time_end) && (
+                        <p className="text-xs text-gray-400">
+                          {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
+                        </p>
+                      )}
+                      {totalTimeText && (
+                        <p className="text-xs text-gray-400">{t.new.totalTimeLabel}: {totalTimeText}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               {(job.job_address || job.job_city) && (
                 <div className="flex items-start gap-2.5">
                   <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0"/>

@@ -49,7 +49,7 @@ export interface JobListItem {
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
-const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export interface JobsListScreenProps {
@@ -65,6 +65,7 @@ export interface JobsListScreenProps {
 }
 
 const STATUS_PILL: Record<string, string> = {
+  posible: 'bg-teal-100 text-teal-700',
   proposal: 'bg-gray-100 text-gray-600',
   sent: 'bg-blue-100 text-blue-600',
   accepted: 'bg-emerald-100 text-emerald-700',
@@ -76,6 +77,7 @@ const STATUS_PILL: Record<string, string> = {
   invoiced: 'bg-purple-100 text-purple-700',
 };
 const STATUS_DOT: Record<string, string> = {
+  posible: 'bg-teal-500',
   proposal: 'bg-gray-400',
   sent: 'bg-blue-500',
   accepted: 'bg-emerald-500',
@@ -123,6 +125,7 @@ export function JobsListScreen({
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
     propuestas: t.tabs.proposals,
+    posible: t.tabs.posible,
     scheduled: t.tabs.scheduled,
     in_progress: t.tabs.in_progress,
     completed: t.tabs.completed,
@@ -175,6 +178,19 @@ export function JobsListScreen({
 
   const renderActionBar = (job: JobListItem) => {
     const expired = isExpired(job);
+    if (job.status === 'posible') {
+      return (
+        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+          <button onClick={() => onUpdateStatus(job.id, 'scheduled')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
+            <Calendar size={11} /> {t.actions.schedule}
+          </button>
+          <div className="flex-1" />
+          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
+            {t.actions.cancel}
+          </button>
+        </div>
+      );
+    }
     if (job.status === 'proposal') {
       return (
         <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">

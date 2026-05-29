@@ -19,6 +19,8 @@ interface DatePickerProps {
   error?: string;
   mode?: Mode;
   containerClassName?: string;
+  /** 'ghost' = borderless inline input (matches the native ghost variant). */
+  variant?: 'default' | 'ghost';
 }
 
 export function DatePicker({
@@ -29,6 +31,7 @@ export function DatePicker({
   error,
   mode = 'date',
   containerClassName,
+  variant = 'default',
 }: DatePickerProps) {
   // Placeholder hint when value is empty — wrapped in a hidden span purely
   // so the API matches the native version (avoids "unused var" warnings).
@@ -42,8 +45,13 @@ export function DatePicker({
         onChange={(e) => onChange(e.target.value)}
         title={placeholderHint}
         className={clsx(
-          'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary',
-          error ? 'border-red-300' : 'border-gray-200',
+          'text-sm text-gray-900 focus:outline-none',
+          variant === 'ghost'
+            ? 'bg-transparent border-0 p-0 font-semibold focus:ring-0'
+            : clsx(
+                'w-full rounded-xl border bg-white px-4 py-2.5 focus:ring-2 focus:ring-primary',
+                error ? 'border-red-300' : 'border-gray-200',
+              ),
         )}
       />
       {error ? <span className="text-xs text-red-500">{error}</span> : null}

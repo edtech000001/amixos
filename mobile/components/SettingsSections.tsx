@@ -22,7 +22,13 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
-import { Input, Button, Modal, Toggle, Select } from '@amixos/shared/ui';
+import { Input, Button, Modal, Toggle, Select, DatePicker } from '@amixos/shared/ui';
+import {
+  DAY_KEYS,
+  DEFAULT_OPERATING_HOURS,
+  normalizeOperatingHours,
+  type OperatingHours,
+} from '@amixos/shared/lib/operatingHours';
 import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
@@ -145,6 +151,9 @@ export function BusinessSection() {
   const [taxId, setTaxId] = useState(business?.tax_id ?? '');
   const [license, setLicense] = useState(business?.license_number ?? '');
   const [invoiceNotes, setInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
+  const [operatingHours, setOperatingHours] = useState<OperatingHours>(
+    normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS,
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -161,6 +170,7 @@ export function BusinessSection() {
     setTaxId(business.tax_id ?? '');
     setLicense(business.license_number ?? '');
     setInvoiceNotes(business.invoice_notes_default ?? '');
+    setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   }, [business]);
 
   const onSave = async () => {
@@ -185,6 +195,7 @@ export function BusinessSection() {
         tax_id: taxId.trim() || null,
         license_number: license.trim() || null,
         invoice_notes_default: invoiceNotes.trim() || null,
+        operating_hours: operatingHours,
       })
       .eq('id', business.id);
     setSaving(false);
@@ -214,7 +225,9 @@ export function BusinessSection() {
     zip !== (business?.postal_code ?? '') ||
     taxId !== (business?.tax_id ?? '') ||
     license !== (business?.license_number ?? '') ||
-    invoiceNotes !== (business?.invoice_notes_default ?? '');
+    invoiceNotes !== (business?.invoice_notes_default ?? '') ||
+    JSON.stringify(operatingHours) !==
+      JSON.stringify(normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   useSettingsSaveAction({ dirty, saving, onSave });
 
   return (
@@ -272,6 +285,32 @@ export function BusinessSection() {
               style={{ textAlignVertical: 'top', minHeight: 70 }}
             />
           </View>
+        </View>
+
+        <GroupLabel>{t.business.operatingHoursHeading}</GroupLabel>
+        <Text className="text-xs text-gray-400 -mt-2">{t.business.operatingHoursSub}</Text>
+        <View>
+          {DAY_KEYS.map((dk) => {
+            const d = operatingHours[dk];
+            const setDay = (patch: Partial<typeof d>) =>
+              setOperatingHours((prev) => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
+            return (
+              <View key={dk} className="flex-row items-center py-2.5">
+                <Text className="w-24 text-sm text-gray-800">{t.business.days[dk]}</Text>
+                <Toggle value={d.enabled} onValueChange={(v) => setDay({ enabled: v })} />
+                <View className="flex-1" />
+                {d.enabled ? (
+                  <View className="flex-row items-center gap-1.5">
+                    <DatePicker variant="ghost" mode="time" value={d.start} onChange={(v) => setDay({ start: v })} />
+                    <Text className="text-gray-400 text-sm">–</Text>
+                    <DatePicker variant="ghost" mode="time" value={d.end} onChange={(v) => setDay({ end: v })} />
+                  </View>
+                ) : (
+                  <Text className="text-sm text-gray-400">{t.business.closedLabel}</Text>
+                )}
+              </View>
+            );
+          })}
         </View>
       </View>
 

@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -30,6 +30,12 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
+import { formatProjectDuration } from '@amixos/shared/lib/duration';
+import { formatTime12h } from '@amixos/shared/lib/format';
+import {
+  evaluateOperatingHours,
+  normalizeOperatingHours,
+} from '@amixos/shared/lib/operatingHours';
 
 interface Client {
   id: string;
@@ -75,6 +81,7 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
 
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { edit, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; modo?: string; client?: string }>();
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
@@ -99,12 +106,13 @@ export default function NuevoTrabajoRoute() {
   // Form — shared
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(clientParam ?? '');
-  const [status, setStatus] = useState<'scheduled' | 'in_progress'>('scheduled');
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [allDay, setAllDay] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
@@ -169,12 +177,15 @@ export default function NuevoTrabajoRoute() {
           setIsProposal(proposal);
           setTitle(job.title ?? '');
           setClientId(job.client_id ?? '');
-          setStatus(job.status === 'in_progress' ? 'in_progress' : 'scheduled');
+          setStatus(
+            job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
+          );
           setPriority(job.priority ?? 'normal');
           setAddress(job.job_address ?? '');
           setCity(job.job_city ?? '');
           setState(job.job_state ?? '');
           setScheduledDate(job.scheduled_date ?? '');
+          setEndDate(job.end_date ?? '');
           setAllDay(!!job.all_day);
           setTimeStart(job.time_start ?? '');
           setTimeEnd(job.time_end ?? '');
@@ -344,6 +355,7 @@ export default function NuevoTrabajoRoute() {
           issue_date: issueDate,
           expiry_date: expiryDate || null,
           scheduled_date: scheduledDate || null,
+          end_date: endDate || null,
         };
 
         if (editId) {
@@ -381,6 +393,7 @@ export default function NuevoTrabajoRoute() {
           description: description.trim() || null,
           priority,
           scheduled_date: scheduledDate || null,
+          end_date: endDate || null,
           all_day: allDay,
           time_start: allDay ? null : (timeStart || null),
           time_end: allDay ? null : (timeEnd || null),
@@ -469,6 +482,24 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
+  // ── Derived: total-time line + out-of-hours note (job mode schedule) ──
+  const durationLabels = full.common.duration;
+  const totalTimeText = formatProjectDuration(
+    {
+      startDate: scheduledDate,
+      endDate,
+      timeStart: allDay ? null : timeStart,
+      timeEnd: allDay ? null : timeEnd,
+    },
+    durationLabels,
+  );
+  const ohStatus = evaluateOperatingHours(
+    normalizeOperatingHours(business?.operating_hours),
+    scheduledDate,
+    allDay ? null : timeStart,
+    allDay ? null : timeEnd,
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
@@ -546,11 +577,24 @@ export default function NuevoTrabajoRoute() {
               <View className="mt-3 gap-3">
                 <DatePicker label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
                 <DatePicker label={t.expiryDateLabel} value={expiryDate} onChange={setExpiryDate} />
-                <DatePicker
-                  label={t.projectStartLabel}
-                  value={scheduledDate}
-                  onChange={setScheduledDate}
-                />
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <DatePicker
+                      label={t.projectStartLabel}
+                      value={scheduledDate}
+                      onChange={setScheduledDate}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+                  </View>
+                </View>
+                {totalTimeText ? (
+                  <View className="flex-row justify-end items-baseline gap-1.5">
+                    <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                    <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
+                  </View>
+                ) : null}
               </View>
             ) : (
               <View className="flex-row gap-3 mt-3">
@@ -558,8 +602,9 @@ export default function NuevoTrabajoRoute() {
                   <Select
                     label={t.statusLabel}
                     value={status}
-                    onValueChange={(v) => setStatus(v as 'scheduled' | 'in_progress')}
+                    onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress')}
                     options={[
+                      { value: 'posible', label: tStatuses.posible },
                       { value: 'scheduled', label: tStatuses.scheduled },
                       { value: 'in_progress', label: tStatuses.in_progress },
                     ]}
@@ -682,7 +727,14 @@ export default function NuevoTrabajoRoute() {
           {/* Schedule (job mode only) */}
           {!isProposal && (
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
-              <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
+                </View>
+                <View className="flex-1">
+                  <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+                </View>
+              </View>
 
               <View className="mt-4 flex-row items-center justify-between">
                 <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
@@ -690,27 +742,42 @@ export default function NuevoTrabajoRoute() {
               </View>
 
               {!allDay ? (
-                <>
-                  <View className="flex-row gap-3 mt-3">
-                    <View className="flex-1">
-                      <DatePicker
-                        label={t.timeStartLabel}
-                        mode="time"
-                        value={timeStart}
-                        onChange={setTimeStart}
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <DatePicker
-                        label={t.timeEndLabel}
-                        mode="time"
-                        value={timeEnd}
-                        onChange={setTimeEnd}
-                      />
-                    </View>
+                <View className="flex-row gap-3 mt-3">
+                  <View className="flex-1">
+                    <DatePicker
+                      label={t.timeStartLabel}
+                      mode="time"
+                      value={timeStart}
+                      onChange={setTimeStart}
+                    />
                   </View>
-                  <TotalTimeLine start={timeStart} end={timeEnd} label={t.totalTimeLabel} />
-                </>
+                  <View className="flex-1">
+                    <DatePicker
+                      label={t.timeEndLabel}
+                      mode="time"
+                      value={timeEnd}
+                      onChange={setTimeEnd}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {ohStatus && ohStatus.status !== 'ok' ? (
+                <View className="mt-3 flex-row items-start gap-1.5">
+                  <Text className="text-xs text-amber-600">⚠</Text>
+                  <Text className="text-xs text-amber-600 flex-1">
+                    {ohStatus.status === 'closed'
+                      ? t.outOfHoursClosedNote
+                      : `${t.outOfHoursNote} · ${formatTime12h(ohStatus.day.start)}–${formatTime12h(ohStatus.day.end)}`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {totalTimeText ? (
+                <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
+                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                  <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
+                </View>
               ) : null}
             </Section>
           )}
@@ -888,14 +955,32 @@ export default function NuevoTrabajoRoute() {
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >
-        <View className="flex-1 justify-end">
+        {/* Inline flex:1 (not the `flex-1` class) so this root reliably fills
+            the modal host — as the Modal's direct child the NativeWind class
+            wasn't expanding to full height, which left the scrim covering only
+            the card area instead of the whole screen. */}
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Heavier scrim so the form behind reads as a soft dark wash
+              instead of being clearly legible through the picker. Color is an
+              inline style (not a NativeWind opacity class) so it always
+              renders without waiting on a Metro/NativeWind regeneration. */}
           <Pressable
             onPress={() => setClientPickerOpen(false)}
-            className="absolute inset-0 bg-black/40"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
+          {/* Floating card: rounded on all corners, lifted off the screen
+              edges with side + bottom margins and a soft shadow. */}
           <View
-            className="bg-white rounded-t-3xl pt-3 pb-8"
-            style={{ height: '85%' }}
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
           >
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
@@ -965,26 +1050,6 @@ export default function NuevoTrabajoRoute() {
         </View>
       </RNModal>
     </SafeAreaView>
-  );
-}
-
-function TotalTimeLine({ start, end, label }: { start: string; end: string; label: string }) {
-  if (!start || !end) return null;
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return null;
-  const diffMin = eh * 60 + em - (sh * 60 + sm);
-  if (diffMin <= 0) return null;
-  const h = Math.floor(diffMin / 60);
-  const m = diffMin % 60;
-  const parts: string[] = [];
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}min`);
-  return (
-    <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
-      <Text className="text-xs text-gray-500">{label}:</Text>
-      <Text className="text-sm font-semibold text-primary">{parts.join(' ')}</Text>
-    </View>
   );
 }
 

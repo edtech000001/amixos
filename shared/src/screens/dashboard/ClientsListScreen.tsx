@@ -94,7 +94,9 @@ export function ClientsListScreen({
         <View>
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">
-            {t.countTotal.replace('{{count}}', String(clients.length))}
+            {search.trim()
+              ? t.countFound.replace('{{count}}', String(filtered.length))
+              : t.countTotal.replace('{{count}}', String(clients.length))}
           </Text>
         </View>
         <View className="flex-row gap-2">

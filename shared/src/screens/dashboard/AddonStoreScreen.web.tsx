@@ -111,7 +111,7 @@ export function AddonStoreScreen({
           <p className="text-sm text-gray-500">{t.noResults}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="flex flex-col gap-3">
           {filtered.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
@@ -131,8 +131,8 @@ export function AddonStoreScreen({
             return (
               <div
                 key={m.id}
-                className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col"
-                style={enabled ? { borderColor: `${m.color}40` } : undefined}
+                className={`bg-white rounded-2xl ${enabled ? 'border-2' : 'border'} border-gray-100 p-4 flex flex-col`}
+                style={enabled ? { borderColor: '#4ADE80' } : undefined}
               >
                 <div
                   onClick={canOpen ? () => onOpen?.(m.id) : undefined}

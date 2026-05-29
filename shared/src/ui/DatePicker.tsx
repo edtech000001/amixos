@@ -16,6 +16,11 @@ interface DatePickerProps {
   error?: string;
   mode?: Mode;
   containerClassName?: string;
+  /**
+   * 'ghost' renders the trigger as plain tappable text (no border/box), for
+   * inline use like the operating-hours rows. Default keeps the bordered input.
+   */
+  variant?: 'default' | 'ghost';
 }
 
 /**
@@ -34,6 +39,7 @@ export function DatePicker({
   error,
   mode = 'date',
   containerClassName,
+  variant = 'default',
 }: DatePickerProps) {
   return (
     <View className={clsx('flex flex-col gap-1.5', containerClassName)}>
@@ -52,7 +58,7 @@ export function DatePicker({
           )}
         />
       ) : (
-        <NativePicker value={value} onChange={onChange} mode={mode} label={label} placeholder={placeholder} error={error} />
+        <NativePicker value={value} onChange={onChange} mode={mode} label={label} placeholder={placeholder} error={error} variant={variant} />
       )}
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
@@ -67,6 +73,7 @@ function NativePicker({
   label,
   placeholder,
   error,
+  variant = 'default',
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -74,6 +81,7 @@ function NativePicker({
   label?: string;
   placeholder?: string;
   error?: string;
+  variant?: 'default' | 'ghost';
 }) {
   // Dynamic import keeps the native module out of the web bundle.
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
@@ -137,19 +145,22 @@ function NativePicker({
       <Pressable
         onPress={open}
         className={clsx(
-          'flex-row items-center rounded-xl border bg-white px-4 py-2.5',
-          error ? 'border-red-300' : 'border-gray-200',
+          'flex-row items-center',
+          variant === 'ghost'
+            ? 'active:opacity-60'
+            : clsx('rounded-xl border bg-white px-4 py-2.5', error ? 'border-red-300' : 'border-gray-200'),
         )}
       >
         <Text
           className={clsx(
-            'flex-1 text-sm',
+            'text-sm',
+            variant === 'ghost' ? 'font-semibold' : 'flex-1',
             displayText ? 'text-gray-900' : 'text-gray-400',
           )}
         >
           {displayText || placeholder || (mode === 'time' ? '--:--' : '--/--/----')}
         </Text>
-        <Icon size={16} color="#9CA3AF" />
+        {variant === 'ghost' ? null : <Icon size={16} color="#9CA3AF" />}
       </Pressable>
 
       {Platform.OS === 'ios' ? (

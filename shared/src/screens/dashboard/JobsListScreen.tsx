@@ -44,7 +44,7 @@ export interface JobListItem {
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
-const TAB_KEYS = ['all', 'propuestas', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 export interface JobsListScreenProps {
@@ -60,6 +60,7 @@ export interface JobsListScreenProps {
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
+  posible: 'bg-teal-100',
   proposal: 'bg-gray-100',
   sent: 'bg-blue-100',
   accepted: 'bg-emerald-100',
@@ -71,6 +72,7 @@ const STATUS_PILL_BG: Record<string, string> = {
   invoiced: 'bg-purple-100',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
+  posible: 'text-teal-700',
   proposal: 'text-gray-600',
   sent: 'text-blue-600',
   accepted: 'text-emerald-700',
@@ -82,6 +84,7 @@ const STATUS_PILL_TEXT: Record<string, string> = {
   invoiced: 'text-purple-700',
 };
 const STATUS_DOT: Record<string, string> = {
+  posible: 'bg-teal-500',
   proposal: 'bg-gray-400',
   sent: 'bg-blue-500',
   accepted: 'bg-emerald-500',
@@ -129,6 +132,7 @@ export function JobsListScreen({
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
     propuestas: t.tabs.proposals,
+    posible: t.tabs.posible,
     scheduled: t.tabs.scheduled,
     in_progress: t.tabs.in_progress,
     completed: t.tabs.completed,
@@ -175,6 +179,20 @@ export function JobsListScreen({
 
   const renderActionBar = (job: JobListItem) => {
     const expired = isExpired(job);
+    if (job.status === 'posible') {
+      return (
+        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'scheduled')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-50">
+            <Calendar size={11} color="#2563EB" />
+            <Text className="text-xs font-semibold text-blue-600">{t.actions.schedule}</Text>
+          </Pressable>
+          <View className="flex-1" />
+          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
+            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
+          </Pressable>
+        </View>
+      );
+    }
     if (job.status === 'proposal') {
       return (
         <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">

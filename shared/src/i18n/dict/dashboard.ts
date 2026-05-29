@@ -121,6 +121,7 @@ export type DashboardDict = {
   clients: {
     title: string;
     countTotal: string;
+    countFound: string;
     newClient: string;
     importBtn: string;
     importHint: string;
@@ -271,6 +272,7 @@ export type DashboardDict = {
     tabs: {
       all: string;
       proposals: string;
+      posible: string;
       scheduled: string;
       in_progress: string;
       completed: string;
@@ -282,6 +284,7 @@ export type DashboardDict = {
       sent: string;
       accepted: string;
       declined: string;
+      posible: string;
       scheduled: string;
       in_progress: string;
       completed: string;
@@ -416,9 +419,14 @@ export type DashboardDict = {
       scheduleHeading: string;
       allDayLabel: string;
       dateLabel: string;
+      endDateLabel: string;
+      estimatedHoursLabel: string;
+      estimatedHoursPlaceholder: string;
       timeStartLabel: string;
       timeEndLabel: string;
       totalTimeLabel: string;
+      outOfHoursNote: string;
+      outOfHoursClosedNote: string;
       workersHeading: string;
       additionalWorkersLabel: string;
       workerNumberPlaceholder: string;
@@ -718,6 +726,7 @@ export type DashboardDict = {
       trabajos: string;
       clientes: string;
       empleados: string;
+      facturas: string;
       cuenta: string;
       conexiones: string;
       equipo: string;
@@ -789,6 +798,20 @@ export type DashboardDict = {
       invoiceHeading: string;
       invoiceNotesLabel: string;
       invoiceNotesPlaceholder: string;
+      operatingHoursHeading: string;
+      operatingHoursSub: string;
+      closedLabel: string;
+      openTimeLabel: string;
+      closeTimeLabel: string;
+      days: {
+        mon: string;
+        tue: string;
+        wed: string;
+        thu: string;
+        fri: string;
+        sat: string;
+        sun: string;
+      };
       saveError: string;
       saveSuccess: string;
     };
@@ -803,6 +826,16 @@ export type DashboardDict = {
       heading: string;
       subtitle: string;
       saveBtn: string;
+      saveError: string;
+      saveSuccess: string;
+    };
+    invoices: {
+      heading: string;
+      subtitle: string;
+      dueDaysLabel: string;
+      dueDaysHint: string;
+      notesLabel: string;
+      notesPlaceholder: string;
       saveError: string;
       saveSuccess: string;
     };
@@ -977,6 +1010,14 @@ export type DashboardDict = {
       restaurant: { name: string; description: string };
       cleaning: { name: string; description: string };
       construction: { name: string; description: string };
+      rentals: { name: string; description: string };
+      loyalty: { name: string; description: string };
+      trainer: { name: string; description: string };
+      files: { name: string; description: string };
+      fundraising: { name: string; description: string };
+      equipment: { name: string; description: string };
+      wedding: { name: string; description: string };
+      dealership: { name: string; description: string };
     };
     // Map-specific UI strings — layer toggles, pin popups, geocoding
     // progress. Lives under `modules` because it's owned by the map
@@ -1369,6 +1410,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     clients: {
       title: 'Clientes',
       countTotal: '{{count}} en total',
+      countFound: '{{count}} encontrados',
       newClient: 'Nuevo cliente',
       importBtn: 'Importar clientes desde CSV',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
@@ -1518,6 +1560,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       tabs: {
         all: 'Todos',
         proposals: 'Cotizaciones',
+        posible: 'Posibles',
         scheduled: 'Programados',
         in_progress: 'En progreso',
         completed: 'Completados',
@@ -1529,6 +1572,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sent: 'Enviada',
         accepted: 'Aceptada',
         declined: 'Rechazada',
+        posible: 'Posible',
         scheduled: 'Programado',
         in_progress: 'En progreso',
         completed: 'Completado',
@@ -1655,10 +1699,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateNone: '—',
         scheduleHeading: 'Fecha y hora',
         allDayLabel: 'Todo el día',
-        dateLabel: 'Fecha',
+        dateLabel: 'Fecha de inicio',
+        endDateLabel: 'Fecha de fin',
+        estimatedHoursLabel: 'Horas estimadas',
+        estimatedHoursPlaceholder: 'ej. 52',
         timeStartLabel: 'Hora inicio',
         timeEndLabel: 'Hora fin',
         totalTimeLabel: 'Tiempo total',
+        outOfHoursNote: 'Fuera del horario de atención',
+        outOfHoursClosedNote: 'Este día está marcado como cerrado',
         workersHeading: 'Trabajadores asignados',
         additionalWorkersLabel: 'Trabajadores adicionales (manual)',
         workerNumberPlaceholder: 'Trabajador {{count}}',
@@ -1954,6 +2003,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Trabajos',
         clientes: 'Clientes',
         empleados: 'Empleados',
+        facturas: 'Facturas',
         cuenta: 'Cuenta',
         conexiones: 'Conexiones',
         equipo: 'Equipo',
@@ -2025,6 +2075,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoiceHeading: 'Facturación',
         invoiceNotesLabel: 'Notas predeterminadas de factura',
         invoiceNotesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
+        operatingHoursHeading: 'Horario de atención',
+        operatingHoursSub: 'Define tu horario para recibir un aviso cuando un trabajo se programe fuera de él.',
+        closedLabel: 'Cerrado',
+        openTimeLabel: 'Abre',
+        closeTimeLabel: 'Cierra',
+        days: {
+          mon: 'Lunes',
+          tue: 'Martes',
+          wed: 'Miércoles',
+          thu: 'Jueves',
+          fri: 'Viernes',
+          sat: 'Sábado',
+          sun: 'Domingo',
+        },
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
       },
@@ -2039,6 +2103,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Campos obligatorios',
         subtitle: 'Elige cuáles campos son obligatorios al crear o editar un cliente.',
         saveBtn: 'Guardar preferencias',
+        saveError: 'Error al guardar.',
+        saveSuccess: '¡Guardado!',
+      },
+      invoices: {
+        heading: 'Facturas',
+        subtitle: 'Términos por defecto y campos personalizados de tus facturas.',
+        dueDaysLabel: 'Días de vencimiento por defecto',
+        dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Déjalo vacío para no usar un valor por defecto.',
+        notesLabel: 'Notas / términos por defecto',
+        notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
       },
@@ -2211,6 +2285,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         restaurant:   { name: 'Restaurante',  description: 'Mesas, menú, pedidos, inventario de cocina' },
         cleaning:     { name: 'Limpieza',     description: 'Rutas, listas de tareas, productos' },
         construction: { name: 'Construcción', description: 'Permisos, planos, mediciones, subcontratistas' },
+        rentals:      { name: 'Propiedades en renta', description: 'Inquilinos, pagos, contratos, solicitudes de mantenimiento' },
+        loyalty:      { name: 'Programa de lealtad',   description: 'Recompensas y puntos de clientes frecuentes' },
+        trainer:      { name: 'Entrenador',            description: 'Planes de entrenamiento y alimentación para tus clientes' },
+        files:        { name: 'Archivos',              description: 'Guarda documentos y enlaza Google Drive, iCloud, OneDrive' },
+        fundraising:  { name: 'Recaudación',           description: 'Para organizaciones sin fines de lucro: metas y fondos recaudados' },
+        equipment:    { name: 'Equipo',                description: 'Ubicación, reparaciones y recargas de tu maquinaria' },
+        wedding:      { name: 'Bodas',                 description: 'Invitados, cronograma del evento y planeación' },
+        dealership:   { name: 'Concesionario',         description: 'Inventario de autos y ventas del lote' },
       },
       map: {
         layers: {
@@ -2583,6 +2665,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     clients: {
       title: 'Clients',
       countTotal: '{{count}} total',
+      countFound: '{{count}} found',
       newClient: 'New client',
       importBtn: 'Import clients from CSV',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
@@ -2732,6 +2815,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       tabs: {
         all: 'All',
         proposals: 'Estimates',
+        posible: 'Possible',
         scheduled: 'Scheduled',
         in_progress: 'In progress',
         completed: 'Completed',
@@ -2743,6 +2827,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sent: 'Sent',
         accepted: 'Accepted',
         declined: 'Declined',
+        posible: 'Possible',
         scheduled: 'Scheduled',
         in_progress: 'In progress',
         completed: 'Completed',
@@ -2869,10 +2954,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateNone: '—',
         scheduleHeading: 'Date and time',
         allDayLabel: 'All day',
-        dateLabel: 'Date',
+        dateLabel: 'Start date',
+        endDateLabel: 'Finish date',
+        estimatedHoursLabel: 'Estimated hours',
+        estimatedHoursPlaceholder: 'e.g. 52',
         timeStartLabel: 'Start time',
         timeEndLabel: 'End time',
         totalTimeLabel: 'Total time',
+        outOfHoursNote: 'Outside business hours',
+        outOfHoursClosedNote: 'This day is marked as closed',
         workersHeading: 'Assigned workers',
         additionalWorkersLabel: 'Additional workers (manual)',
         workerNumberPlaceholder: 'Worker {{count}}',
@@ -3168,6 +3258,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Jobs',
         clientes: 'Clients',
         empleados: 'Employees',
+        facturas: 'Invoices',
         cuenta: 'Account',
         conexiones: 'Connections',
         equipo: 'Team',
@@ -3239,6 +3330,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoiceHeading: 'Invoicing',
         invoiceNotesLabel: 'Default invoice notes',
         invoiceNotesPlaceholder: 'Payment terms, transfer instructions, etc.',
+        operatingHoursHeading: 'Operating hours',
+        operatingHoursSub: 'Set your hours to get a heads-up when a job is scheduled outside them.',
+        closedLabel: 'Closed',
+        openTimeLabel: 'Opens',
+        closeTimeLabel: 'Closes',
+        days: {
+          mon: 'Monday',
+          tue: 'Tuesday',
+          wed: 'Wednesday',
+          thu: 'Thursday',
+          fri: 'Friday',
+          sat: 'Saturday',
+          sun: 'Sunday',
+        },
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
       },
@@ -3253,6 +3358,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Required fields',
         subtitle: 'Choose which fields are required when creating or editing a client.',
         saveBtn: 'Save preferences',
+        saveError: 'Save error.',
+        saveSuccess: 'Saved!',
+      },
+      invoices: {
+        heading: 'Invoices',
+        subtitle: 'Default terms and custom fields for your invoices.',
+        dueDaysLabel: 'Default due window (days)',
+        dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty for no default.',
+        notesLabel: 'Default notes / terms',
+        notesPlaceholder: 'Payment terms, transfer instructions, etc.',
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
       },
@@ -3425,6 +3540,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         restaurant:   { name: 'Restaurant',   description: 'Tables, menu, orders, kitchen inventory' },
         cleaning:     { name: 'Cleaning',     description: 'Routes, task lists, supplies' },
         construction: { name: 'Construction', description: 'Permits, blueprints, measurements, subcontractors' },
+        rentals:      { name: 'Rental Properties', description: 'Tenants, payments, leases, work-order requests' },
+        loyalty:      { name: 'Loyalty Program',   description: 'Track customer loyalty points and rewards' },
+        trainer:      { name: 'Trainer',           description: 'Workout and meal plans for your clients' },
+        files:        { name: 'Files',             description: 'Store documents; link Google Drive, iCloud, OneDrive' },
+        fundraising:  { name: 'Fundraising',       description: 'For nonprofits: track goals and money raised' },
+        equipment:    { name: 'Equipment',         description: 'Track location, repairs, and refuels of your gear' },
+        wedding:      { name: 'Wedding Planner',   description: 'Guest counts, event schedule, and planning' },
+        dealership:   { name: 'Car Dealership',    description: 'Vehicle inventory and lot sales' },
       },
       map: {
         layers: {

@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Trash2, ArrowLeft, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -25,6 +25,14 @@ function fmt(n: number) {
 function genInvoiceNumber() {
   const now = new Date();
   return `FAC-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
+}
+
+// Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
 export default function NuevaFacturaPage() {
@@ -55,6 +63,20 @@ function NuevaFacturaContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
+
+  // Default due date — runs once on a NEW invoice: if the business set a
+  // default due window and the due date is still empty, set it to issue +
+  // N days. The ref guard means changing the issue date afterward never
+  // re-derives the due date (the user may have set it deliberately).
+  const dueDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || dueDefaultedRef.current || !business) return;
+    const days = business.invoice_due_days;
+    if (days != null && days >= 0 && issueDate && !dueDate) {
+      setDueDate(addDaysISO(issueDate, days));
+      dueDefaultedRef.current = true;
+    }
+  }, [editId, business, issueDate, dueDate]);
 
   useEffect(() => {
     if (!business) return;

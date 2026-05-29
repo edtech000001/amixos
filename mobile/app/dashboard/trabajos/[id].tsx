@@ -33,6 +33,7 @@ import {
   Mail,
   MessageSquare,
   X,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -44,6 +45,7 @@ import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatProjectDuration } from '@amixos/shared/lib/duration';
 
 interface Job {
   id: string;
@@ -60,6 +62,8 @@ interface Job {
   job_lat: number | null;
   job_lng: number | null;
   scheduled_date: string | null;
+  end_date: string | null;
+  estimated_hours: number | null;
   completed_date: string | null;
   all_day: boolean | null;
   total_amount: number;
@@ -400,7 +404,14 @@ export default function JobDetailRoute() {
 
   const isProposal = !!job.estimate_number;
   const disabled = business?.job_pipeline_disabled ?? {};
-  const fullPipeline = isProposal ? PROPOSAL_PIPELINE : WORK_PIPELINE;
+  // 'posible' (lead) jobs get a posible→scheduled→… pipeline so the stepper
+  // highlights their stage; other work jobs keep the standard pipeline.
+  const POSIBLE_STEP: PipelineStep = { key: 'posible', label: t.statuses.posible, icon: Sparkles, color: '#0D9488' };
+  const fullPipeline = isProposal
+    ? PROPOSAL_PIPELINE
+    : job.status === 'posible'
+      ? [POSIBLE_STEP, ...WORK_PIPELINE]
+      : WORK_PIPELINE;
   const pipeline = fullPipeline.filter((s) => !disabled[s.key]);
   const pipelineIdx = pipeline.findIndex((s) => s.key === job.status);
   const isCancelled = job.status === 'cancelled' || job.status === 'declined';
@@ -428,6 +439,7 @@ export default function JobDetailRoute() {
   // status nudge to the next step in the pipeline.
   const nextStatusAction = (() => {
     if (isCancelled) return null;
+    if (job.status === 'posible') return { label: t.statuses.scheduled, onPress: () => updateStatus('scheduled') };
     if (job.status === 'proposal') {
       return { label: td.sendAction, onPress: sendProposalAction };
     }
@@ -607,7 +619,19 @@ export default function JobDetailRoute() {
               <CalendarIcon size={16} color="#6B7280" />
               <View className="flex-1">
                 <Text className="text-xs text-gray-500">{td.scheduledDate}</Text>
-                <Text className="text-sm text-gray-900">{fmtDate(job.scheduled_date)}</Text>
+                <Text className="text-sm text-gray-900">
+                  {fmtDate(job.scheduled_date)}
+                  {job.end_date ? ` — ${fmtDate(job.end_date)}` : ''}
+                </Text>
+                {(() => {
+                  const totalTimeText = formatProjectDuration(
+                    { startDate: job.scheduled_date, endDate: job.end_date, estimatedHours: job.estimated_hours },
+                    tc.duration,
+                  );
+                  return totalTimeText ? (
+                    <Text className="text-xs text-gray-400 mt-0.5">{t.new.totalTimeLabel}: {totalTimeText}</Text>
+                  ) : null;
+                })()}
               </View>
             </View>
           ) : null}
