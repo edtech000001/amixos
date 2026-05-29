@@ -68,18 +68,18 @@ export default function AjustesIndex() {
       path: '/dashboard/mas/ajustes/actividad',
     }] : []),
     {
-      key: 'cuenta',
-      label: t.tabs.cuenta,
-      description: t.account.subtitle,
-      icon: UserIcon,
-      path: '/dashboard/mas/ajustes/cuenta',
-    },
-    {
       key: 'conexiones',
       label: t.tabs.conexiones,
       description: t.google.subtitle,
       icon: Cloud,
       path: '/dashboard/mas/ajustes/conexiones',
+    },
+    {
+      key: 'cuenta',
+      label: t.tabs.cuenta,
+      description: t.account.subtitle,
+      icon: UserIcon,
+      path: '/dashboard/mas/ajustes/cuenta',
     },
   ];
 

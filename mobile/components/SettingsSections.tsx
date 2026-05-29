@@ -20,6 +20,7 @@ import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Input, Button, Modal, Toggle, Select } from '@amixos/shared/ui';
 import { linkGoogleContacts } from '@/lib/oauth';
@@ -1806,9 +1807,9 @@ function FieldTemplateModal({
 // ─── Account section ──────────────────────────────────────────────────────
 export function AccountSection() {
   const supabase = createSupabaseClient();
-  const { user } = useApp();
+  const { user, currentRole } = useApp();
   const logout = useAuthStore((s) => s.logout);
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
   const [newPw, setNewPw] = useState('');
@@ -1851,6 +1852,12 @@ export function AccountSection() {
         <View className="gap-1">
           <Text className="text-xs text-gray-500">{t.account.emailLabel}</Text>
           <Text className="text-sm font-medium text-gray-900">{user?.email ?? '—'}</Text>
+        </View>
+        <View className="gap-1">
+          <Text className="text-xs text-gray-500">{t.account.roleLabel}</Text>
+          <Text className="text-sm font-medium text-gray-900">
+            {currentRole ? ROLE_LABELS[currentRole][locale] : '—'}
+          </Text>
         </View>
       </View>
 
