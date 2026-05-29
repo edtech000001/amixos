@@ -3,8 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -179,14 +178,12 @@ export default function EquipoPage() {
   ), [loading, members, invites, currentRole]);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Link href="/dashboard/ajustes" className="p-2 -ml-2 rounded-lg hover:bg-gray-100">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </Link>
-      </div>
-      <div className="bg-white rounded-2xl border border-gray-100">
-        {screen}
+    <div className="md:flex md:min-h-screen">
+      <SettingsNav />
+      <div className="flex-1 min-w-0 p-6">
+        <div className="bg-white rounded-2xl border border-gray-100">
+          {screen}
+        </div>
       </div>
     </div>
   );

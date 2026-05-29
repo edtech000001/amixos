@@ -1,0 +1,96 @@
+'use client';
+
+// Shared settings rail — the single left nav while inside Settings. The global
+// Sidebar hides on /dashboard/ajustes routes (drill-in), so this is the rail on
+// the Ajustes hub AND its standalone sub-pages (Equipo, Actividad).
+//
+// Hub mode: pass activeTab + onTabClick → tabs are buttons that switch the
+// in-page tab. Sub-page mode: omit them → tabs link back to the hub (?tab=) and
+// the active sub-page (Equipo/Actividad) is highlighted via the current path.
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Building2, ClipboardList, Users, Link2, User, UserPlus, Activity, ArrowLeft } from 'lucide-react';
+import { useLang } from '@/i18n/LangProvider';
+import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+
+export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'conexiones' | 'cuenta';
+
+interface Props {
+  activeTab?: SettingsTab;
+  onTabClick?: (tab: SettingsTab) => void;
+}
+
+export function SettingsNav({ activeTab, onTabClick }: Props) {
+  const pathname = usePathname();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+  const { currentRole } = useApp();
+
+  const TABS: { key: SettingsTab; label: string; icon: typeof Building2 }[] = [
+    { key: 'negocio', label: t.tabs.negocio, icon: Building2 },
+    { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
+    { key: 'clientes', label: t.tabs.clientes, icon: Users },
+    { key: 'empleados', label: t.tabs.empleados, icon: Users },
+    { key: 'conexiones', label: t.tabs.conexiones, icon: Link2 },
+    { key: 'cuenta', label: t.tabs.cuenta, icon: User },
+  ];
+
+  const onEquipo = pathname.startsWith('/dashboard/ajustes/equipo');
+  const onActividad = pathname.startsWith('/dashboard/ajustes/actividad');
+
+  const itemCls = (active: boolean) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
+      active ? 'bg-primary text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    }`;
+
+  return (
+    <aside className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-gray-100 bg-white md:h-screen md:sticky md:top-0 flex flex-col">
+      <div className="px-6 py-5 border-b border-gray-100">
+        <BusinessSwitcher />
+      </div>
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all"
+        >
+          <ArrowLeft size={18} className="text-gray-400" />
+          {full.common.buttons.back}
+        </Link>
+
+        {TABS.map(tabItem => {
+          const Icon = tabItem.icon;
+          // A tab is "active" only on the hub (no sub-page open) for the matching key.
+          const active = !onEquipo && !onActividad && activeTab === tabItem.key;
+          if (onTabClick) {
+            return (
+              <button key={tabItem.key} type="button" onClick={() => onTabClick(tabItem.key)} className={itemCls(active)}>
+                <Icon size={18} className={active ? 'text-white' : 'text-gray-400'} />
+                {tabItem.label}
+              </button>
+            );
+          }
+          return (
+            <Link key={tabItem.key} href={`/dashboard/ajustes?tab=${tabItem.key}`} className={itemCls(false)}>
+              <Icon size={18} className="text-gray-400" />
+              {tabItem.label}
+            </Link>
+          );
+        })}
+
+        <Link href="/dashboard/ajustes/equipo" className={itemCls(onEquipo)}>
+          <UserPlus size={18} className={onEquipo ? 'text-white' : 'text-gray-400'} />
+          {t.tabs.equipo}
+        </Link>
+        {can.seeAuditLog(currentRole) && (
+          <Link href="/dashboard/ajustes/actividad" className={itemCls(onActividad)}>
+            <Activity size={18} className={onActividad ? 'text-white' : 'text-gray-400'} />
+            {t.tabs.actividad}
+          </Link>
+        )}
+      </nav>
+    </aside>
+  );
+}

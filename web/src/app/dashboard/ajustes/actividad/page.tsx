@@ -3,8 +3,8 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Activity, Search } from 'lucide-react';
+import { Activity, Search } from 'lucide-react';
+import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -90,12 +90,9 @@ export default function ActividadPage() {
     : rows;
 
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Link href="/dashboard/ajustes" className="p-2 -ml-2 rounded-lg hover:bg-gray-100">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </Link>
-      </div>
+    <div className="md:flex md:min-h-screen">
+      <SettingsNav />
+      <div className="flex-1 min-w-0 p-6">
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <div className="flex items-start gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -158,6 +155,7 @@ export default function ActividadPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

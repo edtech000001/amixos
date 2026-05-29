@@ -3,9 +3,9 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, ArrowLeft, LogOut, Link2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -14,8 +14,15 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
-import { can } from '@amixos/shared/lib/permissions';
+import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
 import { formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
+import {
+  DAY_KEYS,
+  DEFAULT_OPERATING_HOURS,
+  normalizeOperatingHours,
+  type DayKey,
+  type OperatingHours,
+} from '@amixos/shared/lib/operatingHours';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 
@@ -68,7 +75,8 @@ export default function AjustesPage() {
   const t = full.dashboard.settings;
   const tc = full.common;
   const tFields = full.dashboard.clients.fields;
-  const [tab, setTab] = useState<Tab>('negocio');
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'negocio');
 
   // Map default client field keys to translated labels
   const DEFAULT_CLIENT_FIELDS: { key: string; label: string }[] = [
@@ -99,15 +107,6 @@ export default function AjustesPage() {
     description: t.pipelineSteps[key].description,
   }));
 
-  const TABS: { key: Tab; label: string; icon: any }[] = [
-    { key: 'negocio', label: t.tabs.negocio, icon: Building2 },
-    { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
-    { key: 'clientes', label: t.tabs.clientes, icon: Users },
-    { key: 'empleados', label: t.tabs.empleados, icon: Users },
-    { key: 'conexiones', label: t.tabs.conexiones, icon: Link2 },
-    { key: 'cuenta', label: t.tabs.cuenta, icon: User },
-  ];
-
   // ── Business info
   const [bizName, setBizName] = useState(business?.name ?? '');
   const [bizEmail, setBizEmail] = useState(business?.email ?? '');
@@ -120,6 +119,9 @@ export default function AjustesPage() {
   const [bizTaxId, setBizTaxId] = useState(business?.tax_id ?? '');
   const [bizLicense, setBizLicense] = useState(business?.license_number ?? '');
   const [bizInvoiceNotes, setBizInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
+  const [operatingHours, setOperatingHours] = useState<OperatingHours>(
+    normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS,
+  );
   const [savingBiz, setSavingBiz] = useState(false);
   const [bizMsg, setBizMsg] = useState('');
   const [bizMsgIsError, setBizMsgIsError] = useState(false);
@@ -183,6 +185,7 @@ export default function AjustesPage() {
       setBizTaxId(business.tax_id ?? '');
       setBizLicense(business.license_number ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
+      setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
       setFieldRequired(business.client_field_required ?? {});
       setPipelineDisabled(business.job_pipeline_disabled ?? {});
     }
@@ -225,6 +228,7 @@ export default function AjustesPage() {
       tax_id: bizTaxId.trim() || null,
       license_number: bizLicense.trim() || null,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
+      operating_hours: operatingHours,
     }).eq('id', business.id);
     setBizMsgIsError(!!error);
     setBizMsg(error ? t.business.saveError : t.business.saveSuccess);
@@ -851,49 +855,9 @@ export default function AjustesPage() {
 
   return (
     <div className="md:flex md:min-h-screen">
-      {/* Settings rail — mirrors the main sidebar (white, border-r, business
-          header + divider). The global rail is hidden on settings routes
-          (drill-in), so this is the single rail. Full-width on mobile. */}
-      <aside className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-gray-100 bg-white md:h-screen md:sticky md:top-0 flex flex-col">
-        <div className="px-6 py-5 border-b border-gray-100">
-          <BusinessSwitcher />
-        </div>
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-          {/* Back to the main dashboard — the global rail lives there. */}
-          <Link href="/dashboard"
-            className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all">
-            <ArrowLeft size={18} className="text-gray-400" />
-            {full.common.buttons.back}
-          </Link>
-          {TABS.map(tabItem => {
-            const Icon = tabItem.icon;
-            const active = tab === tabItem.key;
-            return (
-              <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
-                  active
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}>
-                <Icon size={18} className={active ? 'text-white' : 'text-gray-400'}/>
-                {tabItem.label}
-              </button>
-            );
-          })}
-          <Link href="/dashboard/ajustes/equipo"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all w-full">
-            <UserPlus size={18} className="text-gray-400"/>
-            {t.tabs.equipo}
-          </Link>
-          {can.seeAuditLog(currentRole) && (
-            <Link href="/dashboard/ajustes/actividad"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all w-full">
-              <Activity size={18} className="text-gray-400"/>
-              {t.tabs.actividad}
-            </Link>
-          )}
-        </nav>
-      </aside>
+      {/* Settings rail — shared with the Equipo/Actividad sub-pages so the nav
+          stays consistent across the whole Settings section. */}
+      <SettingsNav activeTab={tab as SettingsTab} onTabClick={(next) => setTab(next as Tab)} />
 
       {/* Content */}
       <div className="flex-1 min-w-0 p-6">
@@ -942,6 +906,42 @@ export default function AjustesPage() {
                     onChange={e => setBizInvoiceNotes(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
                   />
+                </div>
+
+                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.operatingHoursHeading}</p>
+                <p className="text-xs text-gray-400 -mt-1">{t.business.operatingHoursSub}</p>
+                <div className="flex flex-col divide-y divide-gray-50">
+                  {DAY_KEYS.map((dk: DayKey) => {
+                    const d = operatingHours[dk];
+                    const setDay = (patch: Partial<typeof d>) =>
+                      setOperatingHours(prev => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
+                    return (
+                      <div key={dk} className="flex items-center py-2.5">
+                        <span className="w-28 text-sm text-gray-800">{t.business.days[dk]}</span>
+                        <Toggle checked={d.enabled} onChange={(v) => setDay({ enabled: v })} />
+                        <div className="flex-1" />
+                        {d.enabled ? (
+                          <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                            <input
+                              type="time"
+                              value={d.start}
+                              onChange={e => setDay({ start: e.target.value })}
+                              className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                            />
+                            <span className="text-gray-400 font-normal">–</span>
+                            <input
+                              type="time"
+                              value={d.end}
+                              onChange={e => setDay({ end: e.target.value })}
+                              className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">{t.business.closedLabel}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               {bizMsg && <p className={`text-xs mt-3 ${bizMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
