@@ -131,6 +131,14 @@ export function Sidebar() {
           {t.ajustes}
         </Link>
       </div>
+
+      {/* Platform brand — the workspace shows the customer's name up top;
+          this keeps Amixos as the subtle platform mark at the foot. */}
+      <div className="px-6 py-3 border-t border-gray-100">
+        <p className="text-[10px] text-gray-400">
+          Powered by <span className="font-semibold text-gray-500">Amixos</span>
+        </p>
+      </div>
     </div>
   );
 

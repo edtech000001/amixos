@@ -108,6 +108,7 @@ export function LoginScreen({
           }}
         >
           <View className="w-full max-w-md mx-auto">
+            <Text className="text-sm font-bold text-primary mb-3">Amixos</Text>
             <Text className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">
               {t.login.heading}
             </Text>

@@ -77,6 +77,7 @@ export function LoginScreen({
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+        <p className="text-sm font-bold text-primary mb-4">Amixos</p>
         <h1 className="text-3xl font-bold text-gray-900">{t.login.heading}</h1>
         <p className="text-sm text-gray-500 mt-1 mb-8">{t.login.tagline}</p>
 

@@ -12,7 +12,7 @@ import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Link
 import MapView, { Marker, type Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft, Users, Briefcase, UserCircle2, X, Settings as SettingsIcon,
   Phone, MessageSquare, Mail, MapPin as MapPinIconLucide, Calendar,
@@ -253,6 +253,7 @@ const DEFAULT_REGION: Region = {
 export default function MapScreen() {
   const router = useRouter();
   const { business } = useApp();
+  const insets = useSafeAreaInsets();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
   // Module name comes from the same shared dict as everything else so
@@ -766,13 +767,16 @@ export default function MapScreen() {
           </ClusteredMapView>
         )}
 
-        {/* Reset-view button — re-frames all pins (the "default view"). */}
+        {/* Reset-view button — re-frames all pins (the "default view").
+            Bottom-right, lifted above the AnimatedDock (BAR 50 + raised
+            bubble ~22) plus the safe-area inset so it never hides behind it. */}
         {!loading ? (
           <Pressable
             onPress={resetView}
             accessibilityLabel={t.resetView}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white items-center justify-center border border-gray-200"
+            className="absolute right-4 w-10 h-10 rounded-full bg-white items-center justify-center border border-gray-200"
             style={{
+              bottom: insets.bottom + 84,
               shadowColor: '#000',
               shadowOpacity: 0.15,
               shadowRadius: 6,
@@ -797,7 +801,7 @@ export default function MapScreen() {
             // when it returned "0 located".
             onPress={() => setUnresolvedOpen(true)}
             disabled={geocoding}
-            className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
+            className="absolute top-4 left-4 right-4 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
             style={{
               shadowColor: '#000',
               shadowOpacity: 0.08,
