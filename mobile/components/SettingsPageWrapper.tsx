@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, Alert } from 'react-native';
+import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -112,13 +113,17 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
             </Pressable>
           ) : null}
         </View>
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="px-6 pt-6 pb-36"
+        {/* NestableScrollContainer (from react-native-draggable-flatlist) so
+           SortableList instances inside a section can drag without the
+           nested-FlatList warning. Acts as a plain ScrollView when no
+           NestableDraggableFlatList is present. */}
+        <NestableScrollContainer
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}
           keyboardShouldPersistTaps="handled"
         >
           {children}
-        </ScrollView>
+        </NestableScrollContainer>
       </SafeAreaView>
     </SettingsPageContext.Provider>
   );
