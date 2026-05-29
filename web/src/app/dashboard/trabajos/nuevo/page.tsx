@@ -261,6 +261,14 @@ function NuevoTrabajoContent() {
     });
   };
 
+  // The job lead lives in its own picker. Choosing a lead also assigns them to
+  // the job (the lead is always part of the crew). Clearing leaves nobody lead.
+  const setLead = (id: string) => {
+    if (!id) { setLeadEmployeeId(null); return; }
+    setLeadEmployeeId(id);
+    setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
   const updateItem = (id: string, field: keyof LineItem, value: any) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
 
@@ -643,50 +651,54 @@ function NuevoTrabajoContent() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
             </div>
             {employees.length > 0 && (
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {employees.map(emp => {
-                  const on = assignedEmployees.includes(emp.id);
-                  const isLead = leadEmployeeId === emp.id;
-                  return (
-                    <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium transition-all text-left ${
-                        on
-                          ? 'border-primary bg-primary/5 text-primary'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                        on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate">{emp.first_name} {emp.last_name}</p>
-                        <p className="text-xs text-gray-400 font-normal">{emp.role}</p>
-                      </div>
-                      {/* Lead radio — visible only for selected workers and only
-                         when crew mode is on. Click toggles lead independently
-                         of the outer chip's onClick (stopPropagation). */}
-                      {on && business?.job_crew_mode !== false && (
-                        <span
-                          role="checkbox"
-                          aria-checked={isLead}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLeadEmployeeId(isLead ? null : emp.id);
-                          }}
-                          className={`ml-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold cursor-pointer shrink-0 ${
-                            isLead
-                              ? 'bg-amber-100 border-amber-300 text-amber-700'
-                              : 'bg-white border-gray-300 text-gray-400 hover:border-amber-300'
-                          }`}
-                        >
-                          {isLead ? t.leadBadge : t.markAsLead}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                {/* Lead picker — one designated lead (crew mode only). Picking
+                   a lead also assigns them to the job. */}
+                {business?.job_crew_mode !== false && (
+                  <div className="flex flex-col gap-1.5 mb-4 max-w-xs">
+                    <label className="text-sm font-medium text-gray-700">{t.leadLabel}</label>
+                    <select
+                      value={leadEmployeeId ?? ''}
+                      onChange={e => setLead(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="">{t.leadNone}</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Crew — additional assigned workers. The lead is shown in its
+                   own picker above, so it's excluded from this grid. */}
+                {business?.job_crew_mode !== false && (
+                  <p className="text-xs text-gray-400 mb-2">{t.crewLabel}</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {employees.filter(emp => business?.job_crew_mode !== false ? emp.id !== leadEmployeeId : true).map(emp => {
+                    const on = assignedEmployees.includes(emp.id);
+                    return (
+                      <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium transition-all text-left ${
+                          on
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate">{emp.first_name} {emp.last_name}</p>
+                          <p className="text-xs text-gray-400 font-normal">{emp.role}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
             <div className="flex flex-col gap-2">
               <p className="text-xs text-gray-400">{t.additionalWorkersLabel}</p>

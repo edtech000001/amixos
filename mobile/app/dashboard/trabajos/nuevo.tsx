@@ -317,6 +317,17 @@ export default function NuevoTrabajoRoute() {
     });
   };
 
+  // The job lead lives in its own picker. Choosing a lead also assigns them to
+  // the job (the lead is always part of the crew). Clearing leaves nobody lead.
+  const setLead = (id: string) => {
+    if (!id) {
+      setLeadEmployeeId(null);
+      return;
+    }
+    setLeadEmployeeId(id);
+    setAssignedEmployees((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
   const save = async () => {
     if (!business) return;
     if (!title.trim()) {
@@ -786,68 +797,71 @@ export default function NuevoTrabajoRoute() {
           {!isProposal && (
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
               {employees.length > 0 ? (
-                <View className="flex-row flex-wrap gap-2">
-                  {employees.map((emp) => {
-                    const on = assignedEmployees.includes(emp.id);
-                    const isLead = leadEmployeeId === emp.id;
-                    return (
-                      <Pressable
-                        key={emp.id}
-                        onPress={() => toggleEmployee(emp.id)}
-                        className={`flex-row items-center gap-2 px-3 py-2 rounded-xl border-2 ${
-                          on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
-                        }`}
-                      >
-                        <View
-                          className={`w-7 h-7 rounded-full items-center justify-center ${
-                            on ? 'bg-primary' : 'bg-gray-100'
-                          }`}
-                        >
-                          <Text
-                            className={`text-xs font-bold ${
-                              on ? 'text-white' : 'text-gray-500'
-                            }`}
-                          >
-                            {emp.first_name.charAt(0)}
-                            {emp.last_name.charAt(0)}
-                          </Text>
-                        </View>
-                        <Text
-                          className={`text-sm font-medium ${
-                            on ? 'text-primary' : 'text-gray-700'
-                          }`}
-                        >
-                          {emp.first_name} {emp.last_name}
-                        </Text>
-                        {/* Lead radio appears only for selected employees and only
-                           when crew mode is on. Tapping toggles the lead role
-                           (single-select across all chips). */}
-                        {on && business?.job_crew_mode !== false ? (
+                <>
+                  {/* Lead picker — one designated lead (crew mode only). Picking
+                     a lead also assigns them to the job. */}
+                  {business?.job_crew_mode !== false ? (
+                    <View className="mb-4">
+                      <Select
+                        label={t.leadLabel}
+                        value={leadEmployeeId ?? ''}
+                        onValueChange={setLead}
+                        placeholder={t.leadNone}
+                        options={[
+                          { value: '', label: t.leadNone },
+                          ...employees.map((emp) => ({
+                            value: emp.id,
+                            label: `${emp.first_name} ${emp.last_name}`,
+                          })),
+                        ]}
+                      />
+                    </View>
+                  ) : null}
+
+                  {/* Crew — additional assigned workers. The lead is shown in its
+                     own picker above, so it's excluded from this list. */}
+                  {business?.job_crew_mode !== false ? (
+                    <Text className="text-xs text-gray-400 mb-2">{t.crewLabel}</Text>
+                  ) : null}
+                  <View className="flex-row flex-wrap gap-2">
+                    {employees
+                      .filter((emp) => (business?.job_crew_mode !== false ? emp.id !== leadEmployeeId : true))
+                      .map((emp) => {
+                        const on = assignedEmployees.includes(emp.id);
+                        return (
                           <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setLeadEmployeeId(isLead ? null : emp.id);
-                            }}
-                            hitSlop={4}
-                            className={`ml-1 px-2 py-0.5 rounded-full border ${
-                              isLead
-                                ? 'bg-amber-100 border-amber-300'
-                                : 'bg-white border-gray-300'
+                            key={emp.id}
+                            onPress={() => toggleEmployee(emp.id)}
+                            className={`flex-row items-center gap-2 px-3 py-2 rounded-xl border-2 ${
+                              on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
                             }`}
                           >
-                            <Text
-                              className={`text-[10px] font-semibold ${
-                                isLead ? 'text-amber-700' : 'text-gray-400'
+                            <View
+                              className={`w-7 h-7 rounded-full items-center justify-center ${
+                                on ? 'bg-primary' : 'bg-gray-100'
                               }`}
                             >
-                              {isLead ? t.leadBadge : t.markAsLead}
+                              <Text
+                                className={`text-xs font-bold ${
+                                  on ? 'text-white' : 'text-gray-500'
+                                }`}
+                              >
+                                {emp.first_name.charAt(0)}
+                                {emp.last_name.charAt(0)}
+                              </Text>
+                            </View>
+                            <Text
+                              className={`text-sm font-medium ${
+                                on ? 'text-primary' : 'text-gray-700'
+                              }`}
+                            >
+                              {emp.first_name} {emp.last_name}
                             </Text>
                           </Pressable>
-                        ) : null}
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                        );
+                      })}
+                  </View>
+                </>
               ) : null}
 
               <View className="mt-4">
