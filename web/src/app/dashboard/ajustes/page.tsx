@@ -3,17 +3,19 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, ArrowLeft, LogOut } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, ArrowLeft, LogOut, Link2 } from 'lucide-react';
 import Link from 'next/link';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { isValidEmail } from '@amixos/shared/lib/validation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Toggle } from '@/components/ui/Toggle';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 
@@ -27,7 +29,7 @@ interface FieldTemplate {
   sort_order: number;
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'cuenta';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'conexiones' | 'cuenta';
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -102,6 +104,7 @@ export default function AjustesPage() {
     { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
     { key: 'clientes', label: t.tabs.clientes, icon: Users },
     { key: 'empleados', label: t.tabs.empleados, icon: Users },
+    { key: 'conexiones', label: t.tabs.conexiones, icon: Link2 },
     { key: 'cuenta', label: t.tabs.cuenta, icon: User },
   ];
 
@@ -201,6 +204,13 @@ export default function AjustesPage() {
   // ── Business
   const saveBusiness = async () => {
     if (!business) return;
+    // Validate the (optional) email before saving — a typo here means the
+    // invoices/estimates we send from this address bounce.
+    if (bizEmail.trim() && !isValidEmail(bizEmail)) {
+      setBizMsgIsError(true);
+      setBizMsg(full.common.validation.invalidEmail);
+      return;
+    }
     setSavingBiz(true); setBizMsg('');
     const { error } = await supabase.from('businesses').update({
       name: bizName,
@@ -881,7 +891,7 @@ export default function AjustesPage() {
 
                 <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.contactHeading}</p>
                 <Input label={t.business.emailLabel} type="email" value={bizEmail} onChange={e => setBizEmail(e.target.value)}/>
-                <Input label={t.business.phoneLabel} value={bizPhone} onChange={e => setBizPhone(e.target.value)}/>
+                <Input label={t.business.phoneLabel} value={formatPhoneInput(bizPhone)} onChange={e => setBizPhone(formatPhoneInput(e.target.value))}/>
                 <Input label={t.business.websiteLabel} value={bizWebsite} onChange={e => setBizWebsite(e.target.value)}/>
 
                 <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.addressHeading}</p>
@@ -942,15 +952,7 @@ export default function AjustesPage() {
                           <span className={`text-sm font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-700'}`}>{step.label}</span>
                           <p className={`text-xs mt-0.5 ${isDisabled ? 'text-gray-300' : 'text-gray-400'}`}>{step.description}</p>
                         </div>
-                        <button
-                          type="button" role="switch" aria-checked={!isDisabled}
-                          onClick={() => togglePipelineStep(step.key)}
-                          style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                          className={`relative rounded-full transition-colors ${!isDisabled ? 'bg-primary' : 'bg-gray-200'}`}>
-                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            !isDisabled ? 'translate-x-6' : 'translate-x-1'
-                          }`}/>
-                        </button>
+                        <Toggle checked={!isDisabled} onChange={() => togglePipelineStep(step.key)} />
                       </div>
                     );
                   })}
@@ -1018,15 +1020,7 @@ export default function AjustesPage() {
                         </div>
 
                         {item.kind === 'standard' ? (
-                          <button
-                            type="button" role="switch" aria-checked={!!jobRequired[item.key]}
-                            onClick={() => toggleJobRequired(item.key)}
-                            style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                            className={`relative rounded-full transition-colors ${jobRequired[item.key] ? 'bg-primary' : 'bg-gray-200'}`}>
-                            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                              jobRequired[item.key] ? 'translate-x-6' : 'translate-x-1'
-                            }`}/>
-                          </button>
+                          <Toggle checked={!!jobRequired[item.key]} onChange={() => toggleJobRequired(item.key)} />
                         ) : (
                           <>
                             <button onClick={() => openEditJobTemplate(item.tpl)}
@@ -1060,15 +1054,7 @@ export default function AjustesPage() {
                     <h2 className="text-base font-semibold text-gray-900">{t.crewMode.heading}</h2>
                     <p className="text-xs text-gray-400 mt-0.5">{t.crewMode.subtitle}</p>
                   </div>
-                  <button
-                    type="button" role="switch" aria-checked={crewMode}
-                    onClick={() => { setCrewMode(v => !v); setCrewModeMsg(''); }}
-                    style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                    className={`relative rounded-full transition-colors ${crewMode ? 'bg-primary' : 'bg-gray-200'}`}>
-                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      crewMode ? 'translate-x-6' : 'translate-x-1'
-                    }`}/>
-                  </button>
+                  <Toggle checked={crewMode} onChange={() => { setCrewMode(v => !v); setCrewModeMsg(''); }} />
                 </div>
                 {crewModeMsg && <p className={`text-xs mt-3 ${crewModeMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{crewModeMsg}</p>}
                 {crewMode !== (business?.job_crew_mode ?? true) && (
@@ -1138,15 +1124,7 @@ export default function AjustesPage() {
                           </div>
 
                           {item.kind === 'standard' ? (
-                            <button
-                              type="button" role="switch" aria-checked={!!asgnRequired[item.key]}
-                              onClick={() => toggleAsgnRequired(item.key)}
-                              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                              className={`relative rounded-full transition-colors ${asgnRequired[item.key] ? 'bg-primary' : 'bg-gray-200'}`}>
-                              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                                asgnRequired[item.key] ? 'translate-x-6' : 'translate-x-1'
-                              }`}/>
-                            </button>
+                            <Toggle checked={!!asgnRequired[item.key]} onChange={() => toggleAsgnRequired(item.key)} />
                           ) : (
                             <>
                               <button onClick={() => openEditAsgnTemplate(item.tpl)}
@@ -1279,15 +1257,7 @@ export default function AjustesPage() {
 
                         {/* Right-side controls differ by kind. */}
                         {item.kind === 'standard' ? (
-                          <button
-                            type="button" role="switch" aria-checked={!!fieldRequired[item.key]}
-                            onClick={() => toggleFieldRequired(item.key)}
-                            style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                            className={`relative rounded-full transition-colors ${fieldRequired[item.key] ? 'bg-primary' : 'bg-gray-200'}`}>
-                            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                              fieldRequired[item.key] ? 'translate-x-6' : 'translate-x-1'
-                            }`}/>
-                          </button>
+                          <Toggle checked={!!fieldRequired[item.key]} onChange={() => toggleFieldRequired(item.key)} />
                         ) : (
                           <>
                             <button onClick={() => openEditTemplate(item.tpl)}
@@ -1374,15 +1344,7 @@ export default function AjustesPage() {
                         </div>
 
                         {item.kind === 'standard' ? (
-                          <button
-                            type="button" role="switch" aria-checked={!!empRequired[item.key]}
-                            onClick={() => toggleEmpRequired(item.key)}
-                            style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                            className={`relative rounded-full transition-colors ${empRequired[item.key] ? 'bg-primary' : 'bg-gray-200'}`}>
-                            <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                              empRequired[item.key] ? 'translate-x-6' : 'translate-x-1'
-                            }`}/>
-                          </button>
+                          <Toggle checked={!!empRequired[item.key]} onChange={() => toggleEmpRequired(item.key)} />
                         ) : (
                           <>
                             <button onClick={() => openEditEmpTemplate(item.tpl)}
@@ -1423,9 +1385,6 @@ export default function AjustesPage() {
               {/* Language */}
               <LanguageCard />
 
-              {/* Google Contacts sync */}
-              <GoogleSyncCard />
-
               {/* Password */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
@@ -1453,6 +1412,13 @@ export default function AjustesPage() {
               >
                 <LogOut size={16} /> {full.dashboard.sidebar.logout}
               </button>
+            </div>
+          )}
+
+          {/* ══ CONEXIONES ═══════════════════════════════════════════ */}
+          {tab === 'conexiones' && (
+            <div className="flex flex-col gap-5">
+              <GoogleSyncCard />
             </div>
           )}
         </div>
@@ -1488,14 +1454,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={tplForm.required}
-              onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${tplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                tplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={tplForm.required} onChange={(v) => setTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
@@ -1532,14 +1491,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={tplForm.required}
-              onClick={() => setTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${tplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                tplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={tplForm.required} onChange={(v) => setTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
@@ -1581,14 +1533,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={empTplForm.required}
-              onClick={() => setEmpTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${empTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                empTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={empTplForm.required} onChange={(v) => setEmpTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {empTplError && <p className="text-xs text-red-500">{empTplError}</p>}
@@ -1625,14 +1570,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={empTplForm.required}
-              onClick={() => setEmpTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${empTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                empTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={empTplForm.required} onChange={(v) => setEmpTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {empTplError && <p className="text-xs text-red-500">{empTplError}</p>}
@@ -1674,14 +1612,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={jobTplForm.required}
-              onClick={() => setJobTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${jobTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                jobTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={jobTplForm.required} onChange={(v) => setJobTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {jobTplError && <p className="text-xs text-red-500">{jobTplError}</p>}
@@ -1723,14 +1654,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={asgnTplForm.required}
-              onClick={() => setAsgnTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${asgnTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                asgnTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={asgnTplForm.required} onChange={(v) => setAsgnTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
@@ -1767,14 +1691,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={asgnTplForm.required}
-              onClick={() => setAsgnTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${asgnTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                asgnTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={asgnTplForm.required} onChange={(v) => setAsgnTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
@@ -1811,14 +1728,7 @@ export default function AjustesPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button type="button" role="switch" aria-checked={jobTplForm.required}
-              onClick={() => setJobTplForm(f => ({ ...f, required: !f.required }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${jobTplForm.required ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                jobTplForm.required ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
-            </button>
+            <Toggle checked={jobTplForm.required} onChange={(v) => setJobTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {jobTplError && <p className="text-xs text-red-500">{jobTplError}</p>}

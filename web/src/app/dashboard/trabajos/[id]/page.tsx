@@ -14,6 +14,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Toggle } from '@/components/ui/Toggle';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -1064,15 +1065,7 @@ function ActualsSection({
                   return (
                     <div key={tpl.id} className="mb-2 flex items-center justify-between">
                       <span className="text-xs text-gray-500">{tpl.field_label}</span>
-                      <button
-                        type="button" role="switch" aria-checked={value === true}
-                        onClick={() => setCustom(row.id, tpl.field_key, value !== true)}
-                        style={{ width: '44px', height: '24px' }}
-                        className={`relative rounded-full transition-colors ${value === true ? 'bg-primary' : 'bg-gray-200'}`}>
-                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          value === true ? 'translate-x-6' : 'translate-x-1'
-                        }`}/>
-                      </button>
+                      <Toggle checked={value === true} onChange={(v) => setCustom(row.id, tpl.field_key, v)} />
                     </div>
                   );
                 }

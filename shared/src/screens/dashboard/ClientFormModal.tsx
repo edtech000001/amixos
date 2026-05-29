@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput } from 'react-native';
 import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { isValidEmail } from '../../lib/validation';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -85,12 +86,23 @@ export function ClientFormModal({
   const tc = full.common;
 
   const [form, setForm] = useState<ClientFormValues>(EMPTY);
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
     if (open) {
       setForm({ ...EMPTY, ...initial, custom_fields: { ...(initial?.custom_fields ?? {}) } });
+      setEmailError('');
     }
   }, [open, initial]);
+
+  // Validate optional emails before handing off to the caller's onSubmit.
+  const submit = () => {
+    for (const em of [form.email_office, form.email_home]) {
+      if (em.trim() && !isValidEmail(em)) { setEmailError(tc.validation.invalidEmail); return; }
+    }
+    setEmailError('');
+    onSubmit(form);
+  };
 
   const isReq = (key: string) => !!requiredFlags[key];
   const rLabel = (key: string, base: string) => (isReq(key) ? `${base} *` : base);
@@ -313,7 +325,7 @@ export function ClientFormModal({
           </View>
         </View>
 
-        {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
+        {(emailError || error) ? <Text className="text-xs text-red-500">{emailError || error}</Text> : null}
 
         <View className="flex-row gap-3 pt-1">
           <View className="flex-1">
@@ -323,7 +335,7 @@ export function ClientFormModal({
           </View>
           <View className="flex-1">
             <Button
-              onPress={() => onSubmit(form)}
+              onPress={submit}
               loading={saving}
               fullWidth
             >

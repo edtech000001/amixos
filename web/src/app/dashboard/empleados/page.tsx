@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { isValidEmail } from '@amixos/shared/lib/validation';
 import { useLang } from '@/i18n/LangProvider';
 import {
   EmployeesScreen,
@@ -184,6 +185,7 @@ export default function EmpleadosPage() {
   };
   const saveEmp = async () => {
     if (!empForm.first_name.trim()) { setError(t.modal.errorFirstNameRequired); return; }
+    if (empForm.email.trim() && !isValidEmail(empForm.email)) { setError(tc.validation.invalidEmail); return; }
     setSaving(true); setError('');
     // Normalise empty-string dates / optional text → null so Postgres
     // accepts them.

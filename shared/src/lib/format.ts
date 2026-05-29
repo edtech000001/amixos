@@ -3,6 +3,18 @@
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/**
+ * Live-format a US phone number as the user types: "(402) 555-1234".
+ * Strips non-digits, caps at 10, and partially formats while typing so the
+ * field reads cleanly mid-entry. Shared by every phone input.
+ */
+export function formatPhoneInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 const MONTHS_EN = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',

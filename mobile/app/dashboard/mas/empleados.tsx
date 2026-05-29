@@ -14,6 +14,7 @@ import { ChevronDown, Check, DollarSign, X, Clock } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { isValidEmail } from '@amixos/shared/lib/validation';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import {
   EmployeesScreen,
@@ -276,6 +277,10 @@ export default function EmpleadosRoute() {
     if (!business) return;
     if (!empForm.first_name.trim()) {
       setError(t.modal.errorFirstNameRequired);
+      return;
+    }
+    if (empForm.email.trim() && !isValidEmail(empForm.email)) {
+      setError(tc.validation.invalidEmail);
       return;
     }
     setSaving(true);

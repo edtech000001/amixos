@@ -29,7 +29,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
+import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 
 interface Client {
   id: string;
@@ -457,9 +457,6 @@ export default function NuevoTrabajoRoute() {
   const subtitle = editId
     ? t.subtitleEdit
     : (isProposal ? t.subtitleNewProposal : t.subtitleNewJob);
-  const submitLabel = editId
-    ? tc.buttons.saveChanges
-    : (isProposal ? t.submitCreateProposal : t.submitCreateJob);
 
   // expo-router tabs don't push tab switches onto history, so router.back()
   // from a hidden tab screen often lands on the very first tab (home) rather
@@ -882,24 +879,6 @@ export default function NuevoTrabajoRoute() {
           ) : null}
         </ScrollView>
 
-        {/* Sticky footer actions */}
-        <View
-          className="border-t border-gray-100 bg-white px-5 pt-3"
-          style={{ paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
-        >
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Button variant="secondary" onPress={goBack} fullWidth>
-                {tc.buttons.cancel}
-              </Button>
-            </View>
-            <View className="flex-[2]">
-              <Button onPress={save} loading={saving} fullWidth>
-                {submitLabel}
-              </Button>
-            </View>
-          </View>
-        </View>
       </KeyboardAvoidingView>
 
       {/* Client picker modal */}

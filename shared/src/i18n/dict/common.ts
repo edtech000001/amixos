@@ -31,6 +31,9 @@ export type CommonDict = {
     no: string;
     optional: string;
   };
+  validation: {
+    invalidEmail: string;
+  };
   mobileAppBanner: {
     title: string;
     subtitle: string;
@@ -70,6 +73,9 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'opcional',
     },
+    validation: {
+      invalidEmail: 'Correo electrónico no válido.',
+    },
     mobileAppBanner: {
       title: 'Amixos para iPhone',
       subtitle: 'Mejor experiencia en la app.',
@@ -106,6 +112,9 @@ export const common: Record<Locale, CommonDict> = {
       yes: 'Yes',
       no: 'No',
       optional: 'optional',
+    },
+    validation: {
+      invalidEmail: 'Invalid email address.',
     },
     mobileAppBanner: {
       title: 'Amixos for iPhone',

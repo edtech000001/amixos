@@ -3,7 +3,6 @@ import { View, Text, Pressable, Alert, TextInput } from 'react-native';
 import {
   Building2,
   User as UserIcon,
-  Globe,
   Lock,
   LogOut,
   Briefcase,
@@ -19,6 +18,8 @@ import {
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
+import { isValidEmail } from '@amixos/shared/lib/validation';
+import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Input, Button, Modal, Toggle, Select } from '@amixos/shared/ui';
 import { linkGoogleContacts } from '@/lib/oauth';
@@ -163,6 +164,10 @@ export function BusinessSection() {
 
   const onSave = async () => {
     if (!business) return;
+    if (email.trim() && !isValidEmail(email)) {
+      setMsg({ text: full.common.validation.invalidEmail, isError: true });
+      return;
+    }
     setSaving(true);
     setMsg(null);
     const { error } = await supabase
@@ -194,6 +199,23 @@ export function BusinessSection() {
     ...BUSINESS_US_STATES.map((s) => ({ value: s, label: s })),
   ];
 
+  // Surface the save action to the page header (top-right pill) like the
+  // other settings sections, instead of a bottom button. Dirty = any field
+  // differs from what's currently persisted on the business.
+  const dirty =
+    name !== (business?.name ?? '') ||
+    email !== (business?.email ?? '') ||
+    phone !== (business?.phone ?? '') ||
+    website !== (business?.website ?? '') ||
+    address !== (business?.address ?? '') ||
+    city !== (business?.city ?? '') ||
+    usState !== (business?.state ?? '') ||
+    zip !== (business?.postal_code ?? '') ||
+    taxId !== (business?.tax_id ?? '') ||
+    license !== (business?.license_number ?? '') ||
+    invoiceNotes !== (business?.invoice_notes_default ?? '');
+  useSettingsSaveAction({ dirty, saving, onSave });
+
   return (
     <View className="gap-5">
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
@@ -214,8 +236,8 @@ export function BusinessSection() {
         />
         <Input
           label={t.business.phoneLabel}
-          value={phone}
-          onChangeText={setPhone}
+          value={formatPhoneInput(phone)}
+          onChangeText={v => setPhone(formatPhoneInput(v))}
           keyboardType="phone-pad"
         />
         <Input
@@ -253,9 +275,6 @@ export function BusinessSection() {
       </View>
 
       <StatusMsg msg={msg} />
-      <Button onPress={onSave} loading={saving} fullWidth>
-        <Text className="text-white font-semibold">{full.common.buttons.saveChanges}</Text>
-      </Button>
     </View>
   );
 }
@@ -297,6 +316,17 @@ export function TrabajosSection() {
     });
     if (!error) await refetchBusiness();
   };
+
+  // Surface save to the page header (top-right pill) like the sibling
+  // sections, instead of a bottom button. Dirty = any step toggle differs
+  // from what's persisted (missing key == not disabled).
+  const savedDisabled = business?.job_pipeline_disabled ?? {};
+  const dirty = (() => {
+    const keys = new Set([...Object.keys(disabled), ...Object.keys(savedDisabled)]);
+    for (const k of keys) if (!!disabled[k] !== !!savedDisabled[k]) return true;
+    return false;
+  })();
+  useSettingsSaveAction({ dirty, saving, onSave });
 
   return (
     <View className="gap-5">
@@ -340,9 +370,6 @@ export function TrabajosSection() {
       </View>
 
       <StatusMsg msg={msg} />
-      <Button onPress={onSave} loading={saving} fullWidth>
-        <Text className="text-white font-semibold">{t.pipeline.saveBtn}</Text>
-      </Button>
     </View>
   );
 }
@@ -1781,7 +1808,7 @@ export function AccountSection() {
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const logout = useAuthStore((s) => s.logout);
-  const { t: full, locale, setLocale, labels } = useLang();
+  const { t: full } = useLang();
   const t = full.dashboard.settings;
 
   const [newPw, setNewPw] = useState('');
@@ -1824,34 +1851,6 @@ export function AccountSection() {
         <View className="gap-1">
           <Text className="text-xs text-gray-500">{t.account.emailLabel}</Text>
           <Text className="text-sm font-medium text-gray-900">{user?.email ?? '—'}</Text>
-        </View>
-      </View>
-
-      {/* Language card */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
-        <SectionHeader
-          icon={<Globe size={18} color="#4F46E5" />}
-          title={t.language.heading}
-          subtitle={t.language.subtitle}
-        />
-        <View className="flex-row gap-2">
-          {(['es', 'en'] as const).map((code) => (
-            <Pressable
-              key={code}
-              onPress={() => setLocale(code)}
-              className={`flex-1 py-3 rounded-xl items-center ${
-                locale === code ? 'bg-primary' : 'bg-gray-50 border border-gray-200'
-              }`}
-            >
-              <Text
-                className={`text-sm font-semibold ${
-                  locale === code ? 'text-white' : 'text-gray-900'
-                }`}
-              >
-                {labels[code]}
-              </Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 

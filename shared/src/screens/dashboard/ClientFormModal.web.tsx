@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { Building2, Phone, Mail, MapPin, X } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { isValidEmail } from '../../lib/validation';
 
 export interface ClientFieldTemplate {
   field_key: string;
@@ -89,12 +90,23 @@ export function ClientFormModal({
   const tc = full.common;
 
   const [form, setForm] = useState<ClientFormValues>(EMPTY);
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
     if (open) {
       setForm({ ...EMPTY, ...initial, custom_fields: { ...(initial?.custom_fields ?? {}) } });
+      setEmailError('');
     }
   }, [open, initial]);
+
+  // Validate optional emails before handing off to the caller's onSubmit.
+  const submit = () => {
+    for (const em of [form.email_office, form.email_home]) {
+      if (em.trim() && !isValidEmail(em)) { setEmailError(tc.validation.invalidEmail); return; }
+    }
+    setEmailError('');
+    onSubmit(form);
+  };
 
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
@@ -352,7 +364,7 @@ export function ClientFormModal({
             />
           </section>
 
-          {error ? <p className="text-xs text-red-500">{error}</p> : null}
+          {(emailError || error) ? <p className="text-xs text-red-500">{emailError || error}</p> : null}
 
           <div className="flex gap-3 pt-1">
             <button
@@ -364,7 +376,7 @@ export function ClientFormModal({
             </button>
             <button
               type="button"
-              onClick={() => onSubmit(form)}
+              onClick={submit}
               disabled={saving}
               className="flex-1 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
             >

@@ -47,8 +47,8 @@ export function Select({
   const displayText = selected?.label ?? placeholder ?? '';
 
   return (
-    <View className={clsx('flex flex-col gap-1.5', containerClassName)}>
-      {label ? <Text className="text-sm font-medium text-gray-700">{label}</Text> : null}
+    <View className={clsx('flex flex-col gap-2', containerClassName)}>
+      {label ? <Text className="text-sm font-semibold text-gray-700">{label}</Text> : null}
 
       {Platform.OS === 'web' ? (
         // Native HTML select for web accessibility/keyboard support.
@@ -56,7 +56,7 @@ export function Select({
           value={value}
           onChange={(e: any) => onValueChange(e.target.value)}
           className={clsx(
-            'w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
+            'w-full rounded-2xl border px-4 py-3.5 text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
             borderClass,
             !highlight && !error && 'bg-white',
           )}
@@ -73,14 +73,21 @@ export function Select({
           <Pressable
             onPress={() => setOpen(true)}
             className={clsx(
-              'flex-row items-center justify-between rounded-xl border px-4 py-2.5',
+              'flex-row items-center justify-between rounded-2xl border px-4 py-3.5',
               borderClass,
               !highlight && !error && 'bg-white',
             )}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 8,
+              elevation: 1,
+            }}
           >
             <Text
               className={clsx(
-                'text-sm flex-1',
+                'text-base flex-1',
                 selected ? 'text-gray-900' : 'text-gray-400',
               )}
             >

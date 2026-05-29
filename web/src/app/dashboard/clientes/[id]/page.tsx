@@ -8,6 +8,8 @@ import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Tras
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
+import { Toggle } from '@/components/ui/Toggle';
+import { isValidEmail } from '@amixos/shared/lib/validation';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useLang } from '@/i18n/LangProvider';
@@ -124,11 +126,13 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   });
   const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const [contactModal, setContactModal] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [savingContact, setSavingContact] = useState(false);
+  const [contactError, setContactError] = useState('');
   // Distinct role values across this business — fed into the role
   // field's autocomplete so previously-typed titles can be reused.
   const [roleSuggestions, setRoleSuggestions] = useState<string[]>([]);
@@ -234,6 +238,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   useEffect(() => { load(); }, [id, business]);
 
   const saveEdit = async () => {
+    setEditError('');
+    for (const em of [form.email_office, form.email_home]) {
+      if (em.trim() && !isValidEmail(em)) { setEditError(tc.validation.invalidEmail); return; }
+    }
     setSaving(true);
     const payload = {
       first_name: form.first_name.trim(), last_name: form.last_name.trim(),
@@ -260,17 +268,24 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const openAddContact = () => {
     setEditingContact(null);
     setContactForm(EMPTY_CONTACT);
+    setContactError('');
     setContactModal(true);
   };
 
   const openEditContact = (ct: ClientContact) => {
     setEditingContact(ct);
     setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary });
+    setContactError('');
     setContactModal(true);
   };
 
   const saveContact = async () => {
     if (!contactForm.name.trim()) return;
+    if (contactForm.email.trim() && !isValidEmail(contactForm.email)) {
+      setContactError(tc.validation.invalidEmail);
+      return;
+    }
+    setContactError('');
     setSavingContact(true);
     const payload = {
       name: contactForm.name.trim(),
@@ -384,7 +399,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Button variant="secondary" size="sm" onClick={onShareCsv}>
             <Share2 size={14} className="mr-1.5"/> CSV
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => setEditModal(true)}>
+          <Button variant="secondary" size="sm" onClick={() => { setEditError(''); setEditModal(true); }}>
             <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
           </Button>
           <Link href={`/dashboard/trabajos/nuevo?client=${id}`}>
@@ -652,11 +667,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                       </select>
                     ) : tpl.field_type === 'boolean' ? (
                       <div className="flex items-center gap-3 h-[42px]">
-                        <button type="button" onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: v[tpl.field_key] === 'true' ? 'false' : 'true' }))}
-                          style={{ width: '44px', height: '24px', flexShrink: 0 }}
-                          className={`relative rounded-full transition-colors ${customVals[tpl.field_key] === 'true' ? 'bg-primary' : 'bg-gray-200'}`}>
-                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${customVals[tpl.field_key] === 'true' ? 'translate-x-6' : 'translate-x-1'}`}/>
-                        </button>
+                        <Toggle checked={customVals[tpl.field_key] === 'true'} onChange={(on) => setCustomVals(v => ({ ...v, [tpl.field_key]: on ? 'true' : 'false' }))} />
                         <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? tc.states.yes : tc.states.no}</span>
                       </div>
                     ) : (
@@ -677,6 +688,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
 
+          {editError && <p className="text-xs text-red-500">{editError}</p>}
           <div className="flex gap-3 pt-1 pb-2">
             <Button variant="secondary" onClick={() => setEditModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={saveEdit} loading={saving} fullWidth>{tc.buttons.saveChanges}</Button>
@@ -718,15 +730,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setContactForm(f => ({ ...f, is_primary: !f.is_primary }))}
-              style={{ width: '44px', height: '24px', flexShrink: 0 }}
-              className={`relative rounded-full transition-colors ${contactForm.is_primary ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${contactForm.is_primary ? 'translate-x-6' : 'translate-x-1'}`}/>
-            </button>
+            <Toggle checked={contactForm.is_primary} onChange={(v) => setContactForm(f => ({ ...f, is_primary: v }))} />
             <span className="text-sm text-gray-700 select-none">{td.contactModal.primaryLabel} <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
           </div>
+          {contactError && <p className="text-xs text-red-500">{contactError}</p>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setContactModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={saveContact} loading={savingContact} disabled={!contactForm.name.trim()} fullWidth>
