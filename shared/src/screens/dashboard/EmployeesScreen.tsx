@@ -10,6 +10,8 @@ import {
   DollarSign,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { ROLE_LABELS } from '../../lib/permissions';
+import type { AccessStatus } from '../../lib/teamPeople';
 
 export interface EmployeeListItem {
   id: string;
@@ -20,6 +22,8 @@ export interface EmployeeListItem {
   payType: string;
   payRate: number;
   active: boolean;
+  /** App-access status (Phase 1 merge of Empleados + Equipo). Undefined = unknown. */
+  access?: AccessStatus;
 }
 
 export interface TimesheetListItem {
@@ -53,8 +57,10 @@ export function EmployeesScreen({
   onLogHours,
   modalsSlot,
 }: EmployeesScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
+  const teamT = full.dashboard.settings.team;
+  const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const dateLocale = full.dashboard.dateLocale;
   const [tab, setTab] = useState<Tab>('empleados');
 
@@ -198,6 +204,15 @@ export function EmployeesScreen({
                       {!e.active ? (
                         <View className="px-2 py-0.5 rounded-full bg-gray-100">
                           <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
+                        </View>
+                      ) : null}
+                      {e.access?.kind === 'active' ? (
+                        <View className="px-2 py-0.5 rounded-full bg-primary/10">
+                          <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
+                        </View>
+                      ) : e.access?.kind === 'invited' ? (
+                        <View className="px-2 py-0.5 rounded-full bg-amber-100">
+                          <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
                         </View>
                       ) : null}
                     </View>

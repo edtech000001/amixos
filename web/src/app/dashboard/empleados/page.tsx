@@ -22,6 +22,9 @@ import {
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
+import type { Role } from '@amixos/shared/lib/permissions';
 
 interface RawEmployee {
   id: string;
@@ -32,6 +35,7 @@ interface RawEmployee {
   pay_type: string;
   pay_rate: number;
   active: boolean;
+  user_id: string | null;
   email: string | null;
   birthday: string | null;
   hire_date: string | null;
@@ -100,6 +104,8 @@ export default function EmpleadosPage() {
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [members, setMembers] = useState<AccessMember[]>([]);
+  const [invites, setInvites] = useState<AccessInvite[]>([]);
   const [empModal, setEmpModal] = useState<'add' | 'edit' | null>(null);
   const [tsModal, setTsModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -136,7 +142,51 @@ export default function EmpleadosPage() {
     setTemplates((data ?? []) as FieldTemplate[]);
   };
 
-  useEffect(() => { loadEmployees(); loadTimesheets(); loadTemplates(); }, [business]);
+  // Loads the unified people view: employees + app accounts (business_members)
+  // + pending invites. Part of the Empleados+Equipo merge (Phase 1).
+  //   - access badge per person  (Increment 1)
+  //   - auto-create an employee row for any app account that has none, so the
+  //     list is always complete — owner, legacy users, etc. (option B). The
+  //     insert is best-effort: RLS rejects it for non-admins, which we ignore.
+  const fetchEmployees = (bid: string) =>
+    fetchAll<RawEmployee>((from, to) =>
+      supabase.from('employees').select('*').eq('business_id', bid).order('first_name').range(from, to));
+
+  const loadPeople = async () => {
+    if (!business || !user) return;
+    const bid = business.id;
+    const [emps, { data: rawMembers }, invitesRes] = await Promise.all([
+      fetchEmployees(bid),
+      supabase.rpc('list_business_members', { b_id: bid }),
+      fetch(`${getApiBaseUrl()}/api/v1/invites?business_id=${bid}`, {
+        headers: { Authorization: `Bearer ${await getJwt()}` },
+      }).then(r => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+    ]);
+    const mappedMembers: AccessMember[] = ((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map(m => ({
+      id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
+    }));
+    const mappedInvites: AccessInvite[] = ((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string }>).map(i => ({
+      id: i.id, email: i.email, role: i.role as Role,
+    }));
+    setMembers(mappedMembers);
+    setInvites(mappedInvites);
+
+    const orphans = orphanMembers(mappedMembers, emps.map(e => ({ userId: e.user_id, email: e.email })));
+    if (orphans.length > 0) {
+      const { error } = await supabase.from('employees').insert(orphans.map(o => ({
+        business_id: bid,
+        user_id: o.userId,
+        first_name: displayNameFromAccount(o),
+        last_name: '',
+        role: o.role === 'owner' ? 'owner' : o.role === 'manager' ? 'manager' : 'worker',
+        active: true,
+      })));
+      if (!error) { setEmployees(await fetchEmployees(bid)); return; }
+    }
+    setEmployees(emps);
+  };
+
+  useEffect(() => { loadPeople(); loadTimesheets(); loadTemplates(); }, [business]);
 
   const empList: EmployeeListItem[] = useMemo(() => employees.map(e => ({
     id: e.id,
@@ -147,7 +197,8 @@ export default function EmpleadosPage() {
     payType: e.pay_type,
     payRate: e.pay_rate,
     active: e.active,
-  })), [employees]);
+    access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
+  })), [employees, members, invites]);
 
   const tsList: TimesheetListItem[] = useMemo(() => timesheets.map(ts => ({
     id: ts.id,
