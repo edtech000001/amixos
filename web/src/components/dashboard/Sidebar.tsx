@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, Clock, Calendar,
-  Package, Settings, LogOut, ChevronLeft, Menu, X, ClipboardList, BarChart3,
+  Package, Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
   Store as StoreIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -28,6 +28,13 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  // On settings pages the rail "drills in": hide the global desktop nav so
+  // the settings tabs (which carry their own ← Back link) act as the single
+  // left rail. Tienda (Module Store) lives under /ajustes but is a primary
+  // destination, so it keeps the global nav.
+  const isSettingsRoute =
+    pathname.startsWith('/dashboard/ajustes') &&
+    !pathname.startsWith('/dashboard/ajustes/tienda');
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
@@ -44,11 +51,6 @@ export function Sidebar() {
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/auth/login';
-  };
 
   const NavContent = () => (
     <div className="flex flex-col h-full">
@@ -128,23 +130,19 @@ export function Sidebar() {
           <Settings size={18} />
           {t.ajustes}
         </Link>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-50 hover:text-red-500 transition-all w-full"
-        >
-          <LogOut size={18} />
-          {t.logout}
-        </button>
       </div>
     </div>
   );
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 border-r border-gray-100 bg-white h-screen sticky top-0 flex-col">
-        <NavContent />
-      </aside>
+      {/* Desktop sidebar — hidden on settings pages (drill-in: the settings
+          tabs become the single left rail with their own Back link). */}
+      {!isSettingsRoute && (
+        <aside className="hidden md:flex w-60 shrink-0 border-r border-gray-100 bg-white h-screen sticky top-0 flex-col">
+          <NavContent />
+        </aside>
+      )}
 
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">

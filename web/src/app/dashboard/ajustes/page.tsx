@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
+import { Building2, User, Save, Users, Plus, Pencil, Trash2, GripVertical, Sliders, ClipboardList, Globe, UserPlus, Activity, ChevronUp, ChevronDown, Sparkles, ArrowLeft, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -792,6 +792,13 @@ export default function AjustesPage() {
         {/* ── Sidebar nav ─────────────────────────────────────────── */}
         <nav className="w-52 shrink-0">
           <div className="flex flex-col gap-1 sticky top-6">
+            {/* Drill-in back link — the global rail is hidden on settings,
+               so this returns the user to the main dashboard. */}
+            <Link href="/dashboard"
+              className="flex items-center gap-2 px-3 py-2 mb-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
+              <ArrowLeft size={16} className="text-gray-400" />
+              {full.common.buttons.back}
+            </Link>
             {TABS.map(tabItem => {
               const Icon = tabItem.icon;
               const active = tab === tabItem.key;
@@ -1358,6 +1365,19 @@ export default function AjustesPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Sign out — lives here so it's the single canonical logout
+                  (removed from the sidebar to avoid two competing entry points). */}
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = '/auth/login';
+                }}
+                className="flex items-center justify-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut size={16} /> {full.dashboard.sidebar.logout}
+              </button>
             </div>
           )}
         </div>

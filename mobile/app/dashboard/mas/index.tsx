@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -8,7 +8,6 @@ import {
   Settings,
   Store as StoreIcon,
   ChevronRight,
-  LogOut,
   HardHat,
   UserPlus,
   type LucideIcon,
@@ -30,7 +29,7 @@ interface MenuItem {
 export default function MasMenu() {
   const router = useRouter();
   const { t } = useLang();
-  const { signOut, business } = useApp();
+  const { business } = useApp();
   const sb = t.dashboard.sidebar;
   const store = t.dashboard.settings.store;
   const modulesDict = t.dashboard.modules.list;
@@ -54,7 +53,8 @@ export default function MasMenu() {
     };
   });
 
-  const items: MenuItem[] = [
+  // Core tools + any enabled modules — the "what you do" group.
+  const mainItems: MenuItem[] = [
     // "Mis Trabajos" — Project-Leader shortcut. Empty list for users who
     // aren't the lead on any job (RLS-friendly), so safe to always show.
     {
@@ -92,10 +92,13 @@ export default function MasMenu() {
       icon: Package,
       path: '/dashboard/mas/inventario',
     },
-    // Enabled modules slot in between core nav and Tienda/Ajustes so the
-    // "what's on" group is contiguous. Empty when no modules are active —
-    // the list reads identically to before in that case.
+    // Enabled modules slot in after core nav so the "what's on" group is
+    // contiguous. Empty when no modules are active.
     ...moduleItems,
+  ];
+
+  // Configuration surfaces — visually separated from the tools above.
+  const settingsItems: MenuItem[] = [
     {
       key: 'tienda',
       label: store.heading,
@@ -112,12 +115,38 @@ export default function MasMenu() {
     },
   ];
 
-  const confirmSignOut = () => {
-    Alert.alert(sb.logout, '', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: sb.logout, style: 'destructive', onPress: signOut },
-    ]);
-  };
+  // Card group — matches the Ajustes index layout: 10×10 icon tile in
+  // primary tint, bold name, small description, chevron on the right.
+  const renderGroup = (groupItems: MenuItem[]) => (
+    <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      {groupItems.map((item, i) => {
+        const Icon = item.icon;
+        return (
+          <Pressable
+            key={item.key}
+            onPress={() => {
+              if (item.path) router.push(item.path as any);
+              else item.onPress?.();
+            }}
+            className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
+              i < groupItems.length - 1 ? 'border-b border-gray-50' : ''
+            }`}
+          >
+            <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+              <Icon size={18} color="#4F46E5" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-900">{item.label}</Text>
+              <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
+                {item.description}
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#9CA3AF" />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -127,48 +156,8 @@ export default function MasMenu() {
           <Text className="text-sm text-gray-500 mb-6">{business.name}</Text>
         ) : null}
 
-        {/* Card group — matches the Ajustes index layout exactly: 10×10
-            icon tile in primary tint, bold name on top, small description
-            below, chevron on the right. Padding + dividers mirror that
-            page so the two feel like one surface. */}
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          {items.map((item, i) => {
-            const Icon = item.icon;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => {
-                  if (item.path) router.push(item.path as any);
-                  else item.onPress?.();
-                }}
-                className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
-                  i < items.length - 1 ? 'border-b border-gray-50' : ''
-                }`}
-              >
-                <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-                  <Icon size={18} color="#4F46E5" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-base font-semibold text-gray-900">{item.label}</Text>
-                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
-                    {item.description}
-                  </Text>
-                </View>
-                <ChevronRight size={18} color="#9CA3AF" />
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Pressable
-          onPress={confirmSignOut}
-          className="flex-row items-center gap-3 px-4 py-4 mt-4 bg-white rounded-2xl border border-gray-100 active:bg-red-50"
-        >
-          <View className="w-10 h-10 rounded-xl bg-red-50 items-center justify-center">
-            <LogOut size={18} color="#EF4444" />
-          </View>
-          <Text className="flex-1 text-base font-semibold text-red-600">{sb.logout}</Text>
-        </Pressable>
+        {renderGroup(mainItems)}
+        <View className="mt-4">{renderGroup(settingsItems)}</View>
       </ScrollView>
     </SafeAreaView>
   );
