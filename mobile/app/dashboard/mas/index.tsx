@@ -2,14 +2,13 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Briefcase,
+  UsersRound,
   Calendar,
   Package,
   Settings,
   Store as StoreIcon,
   ChevronRight,
   HardHat,
-  UserPlus,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -68,15 +67,8 @@ export default function MasMenu() {
       key: 'empleados',
       label: sb.empleados,
       description: sb.descriptions.empleados,
-      icon: Briefcase,
+      icon: UsersRound,
       path: '/dashboard/mas/empleados',
-    },
-    {
-      key: 'equipo',
-      label: sb.equipo,
-      description: sb.descriptions.equipo,
-      icon: UserPlus,
-      path: '/dashboard/mas/equipo',
     },
     {
       key: 'calendario',

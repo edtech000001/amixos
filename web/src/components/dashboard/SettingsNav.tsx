@@ -10,13 +10,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ClipboardList, Users, Link2, User, UserPlus, Activity, ArrowLeft } from 'lucide-react';
+import { Building2, ClipboardList, Users, Link2, User, Activity, ArrowLeft, FileText } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
-export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'conexiones' | 'cuenta';
+export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'conexiones' | 'cuenta';
 
 interface Props {
   activeTab?: SettingsTab;
@@ -34,11 +34,11 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
     { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
     { key: 'clientes', label: t.tabs.clientes, icon: Users },
     { key: 'empleados', label: t.tabs.empleados, icon: Users },
+    { key: 'facturas', label: t.tabs.facturas, icon: FileText },
     { key: 'conexiones', label: t.tabs.conexiones, icon: Link2 },
     { key: 'cuenta', label: t.tabs.cuenta, icon: User },
   ];
 
-  const onEquipo = pathname.startsWith('/dashboard/ajustes/equipo');
   const onActividad = pathname.startsWith('/dashboard/ajustes/actividad');
 
   const itemCls = (active: boolean) =>
@@ -63,7 +63,7 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
         {TABS.map(tabItem => {
           const Icon = tabItem.icon;
           // A tab is "active" only on the hub (no sub-page open) for the matching key.
-          const active = !onEquipo && !onActividad && activeTab === tabItem.key;
+          const active = !onActividad && activeTab === tabItem.key;
           if (onTabClick) {
             return (
               <button key={tabItem.key} type="button" onClick={() => onTabClick(tabItem.key)} className={itemCls(active)}>
@@ -80,10 +80,6 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           );
         })}
 
-        <Link href="/dashboard/ajustes/equipo" className={itemCls(onEquipo)}>
-          <UserPlus size={18} className={onEquipo ? 'text-white' : 'text-gray-400'} />
-          {t.tabs.equipo}
-        </Link>
         {can.seeAuditLog(currentRole) && (
           <Link href="/dashboard/ajustes/actividad" className={itemCls(onActividad)}>
             <Activity size={18} className={onActividad ? 'text-white' : 'text-gray-400'} />
@@ -91,6 +87,14 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           </Link>
         )}
       </nav>
+
+      {/* Platform brand — mirrors the global Sidebar footer so the Amixos
+          mark stays visible while drilled into Settings. */}
+      <div className="px-6 py-3 border-t border-gray-100">
+        <p className="text-[10px] text-gray-400">
+          Powered by <span className="font-semibold text-gray-500">Amixos</span>
+        </p>
+      </div>
     </aside>
   );
 }

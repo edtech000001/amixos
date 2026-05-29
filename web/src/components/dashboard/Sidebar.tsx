@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
-  LayoutDashboard, Users, FileText, Clock, Calendar,
+  LayoutDashboard, Users, FileText, UsersRound, Calendar,
   Package, Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
   Store as StoreIcon,
 } from 'lucide-react';
@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/trabajos', key: 'trabajos' as const, icon: ClipboardList },
   { href: '/dashboard/clientes', key: 'clientes' as const, icon: Users },
   { href: '/dashboard/facturas', key: 'facturas' as const, icon: FileText },
-  { href: '/dashboard/empleados', key: 'empleados' as const, icon: Clock },
+  { href: '/dashboard/empleados', key: 'empleados' as const, icon: UsersRound },
   { href: '/dashboard/calendario', key: 'calendario' as const, icon: Calendar },
   { href: '/dashboard/inventario', key: 'inventario' as const, icon: Package },
   { href: '/dashboard/reportes', key: 'reportes' as const, icon: BarChart3 },
@@ -28,10 +28,10 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  // Across the whole Settings section (/dashboard/ajustes — hub, Equipo,
-  // Actividad) the rail "drills in": hide the global desktop nav because those
-  // pages render the shared SettingsNav rail instead. Tienda (Module Store) is
-  // a primary destination with no settings rail, so it keeps the global nav.
+  // Across the whole Settings section (/dashboard/ajustes — hub + Actividad)
+  // the rail "drills in": hide the global desktop nav because those pages
+  // render the shared SettingsNav rail instead. Tienda (Module Store) is a
+  // primary destination with no settings rail, so it keeps the global nav.
   const isSettingsRoute =
     pathname.startsWith('/dashboard/ajustes') &&
     !pathname.startsWith('/dashboard/ajustes/tienda');

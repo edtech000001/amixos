@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { useLang } from '@/i18n/LangProvider';
 import {
   EmployeesScreen,
@@ -24,7 +25,7 @@ import {
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import type { Role } from '@amixos/shared/lib/permissions';
+import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
 
 interface RawEmployee {
   id: string;
@@ -96,11 +97,13 @@ const EMPTY_EMP = {
 const EMPTY_TS  = { employee_id: '', worker_name: '', work_date: new Date().toISOString().split('T')[0], hours_worked: 8, job_description: '' };
 
 export default function EmpleadosPage() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
+  const teamT = full.dashboard.settings.team;
+  const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, currentRole } = useApp();
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -114,6 +117,10 @@ export default function EmpleadosPage() {
   const [tsForm, setTsForm] = useState(EMPTY_TS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // App-access controls inside the person modal (invite/role/revoke).
+  const [accessRole, setAccessRole] = useState<Role>('office');
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState('');
 
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
@@ -232,7 +239,7 @@ export default function EmpleadosPage() {
       emergency_contact_phone: e.emergency_contact_phone ?? '',
       custom_fields: e.custom_fields ?? {},
     });
-    setError(''); setEmpModal('edit');
+    setError(''); setAccessError(''); setAccessRole('office'); setEmpModal('edit');
   };
   const saveEmp = async () => {
     if (!empForm.first_name.trim()) { setError(t.modal.errorFirstNameRequired); return; }
@@ -317,20 +324,116 @@ export default function EmpleadosPage() {
     await loadTimesheets(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS);
   };
 
+  // ─── App access (invite / change role / revoke / remove) ───────────────
+  // Managed straight from the person modal. RLS is the real lock; these
+  // controls only show for owner/admin. After each action we reload the
+  // unified people view so the badge reflects the new state.
+  const inviteToApp = async (email: string, role: Role) => {
+    if (!business || !email) return;
+    setAccessBusy(true); setAccessError('');
+    const res = await fetch(`${getApiBaseUrl()}/api/v1/invites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getJwt()}` },
+      body: JSON.stringify({ business_id: business.id, email, role }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const codeMap: Record<string, string> = {
+        invite_self: teamT.errorInviteSelf,
+        already_member: teamT.errorAlreadyMember,
+        already_invited: teamT.errorAlreadyInvited,
+      };
+      setAccessError(codeMap[body.code] ?? teamT.inviteFailedToast);
+      setAccessBusy(false);
+      return;
+    }
+    await loadPeople(); setAccessBusy(false);
+  };
+
+  const revokeInvite = async (inviteId: string) => {
+    if (!confirm(teamT.confirmRevoke.replace('{{email}}', selEmp?.email ?? ''))) return;
+    setAccessBusy(true); setAccessError('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${await getJwt()}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setAccessError(`${body.message ?? 'Error'} (${res.status})`);
+        setAccessBusy(false);
+        return;
+      }
+    } catch (e: any) {
+      setAccessError(e?.message ?? 'Network error');
+      setAccessBusy(false);
+      return;
+    }
+    await loadPeople(); setAccessBusy(false);
+  };
+
+  const changeAccessRole = async (memberId: string, role: Role) => {
+    const m = members.find(x => x.id === memberId);
+    if (!m || !business) return;
+    setAccessBusy(true); setAccessError('');
+    await supabase.from('business_members').update({ role }).eq('id', memberId);
+    await supabase.from('audit_log').insert({
+      business_id: business.id,
+      action: 'member.role_changed',
+      entity_type: 'member',
+      entity_id: m.userId,
+      details: { email: m.email, from: m.role, to: role },
+    });
+    await loadPeople(); setAccessBusy(false);
+  };
+
+  const removeAccess = async (memberId: string) => {
+    const m = members.find(x => x.id === memberId);
+    if (!m || !business) return;
+    if (!confirm(teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''))) return;
+    setAccessBusy(true); setAccessError('');
+    await supabase.from('business_members').delete().eq('id', memberId);
+    await supabase.from('audit_log').insert({
+      business_id: business.id,
+      action: 'member.removed',
+      entity_type: 'member',
+      entity_id: m.userId,
+      details: { email: m.email, role: m.role },
+    });
+    await loadPeople(); setAccessBusy(false);
+  };
+
+  const selAccess = selEmp
+    ? resolveAccess({ userId: selEmp.user_id ?? null, email: selEmp.email }, members, invites)
+    : null;
+  const canManageAccess = can.manageMembers(currentRole);
+
   const modals = (
     <>
       <Modal open={empModal !== null} onClose={() => setEmpModal(null)} title={empModal === 'add' ? t.modal.addTitle : t.modal.editTitle}>
         <div className="flex flex-col gap-4">
           {/* Basic info */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
+          <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder} value={empForm.first_name} onChange={e => setEmpForm(f => ({ ...f, first_name: e.target.value }))} />
+          <Input label={t.modal.lastNameLabel} placeholder={t.modal.lastNamePlaceholder} value={empForm.last_name} onChange={e => setEmpForm(f => ({ ...f, last_name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder} value={empForm.first_name} onChange={e => setEmpForm(f => ({ ...f, first_name: e.target.value }))} />
-            <Input label={t.modal.lastNameLabel} placeholder={t.modal.lastNamePlaceholder} value={empForm.last_name} onChange={e => setEmpForm(f => ({ ...f, last_name: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.phoneLabel} placeholder={t.modal.phonePlaceholder} value={empForm.phone} onChange={e => setEmpForm(f => ({ ...f, phone: e.target.value }))} />
+            <Input label={t.modal.phoneLabel} placeholder={t.modal.phonePlaceholder} value={formatPhoneInput(empForm.phone)} onChange={e => setEmpForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
             <Input label={t.modal.emailLabel} type="email" placeholder={t.modal.emailPlaceholder} value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} />
           </div>
+
+          {/* Personal — asked before employment so birthday comes first */}
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
+          <Input label={t.modal.birthdayLabel} type="date" value={empForm.birthday} onChange={e => setEmpForm(f => ({ ...f, birthday: e.target.value }))} />
+          <Input label={t.modal.addressLabel} placeholder={t.modal.addressPlaceholder} value={empForm.address} onChange={e => setEmpForm(f => ({ ...f, address: e.target.value }))} />
+          <Input label={t.modal.cityLabel} placeholder={t.modal.cityPlaceholder} value={empForm.city} onChange={e => setEmpForm(f => ({ ...f, city: e.target.value }))} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{t.modal.stateLabel}</label>
+            <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <option value="">{t.modal.stateNone}</option>
+              {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <Input label={t.modal.zipLabel} placeholder={t.modal.zipPlaceholder} value={empForm.zip_code} onChange={e => setEmpForm(f => ({ ...f, zip_code: e.target.value }))} />
 
           {/* Employment + pay */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</p>
@@ -345,27 +448,11 @@ export default function EmpleadosPage() {
           </div>
           <Input label={t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly)} type="number" min="0" step="0.01" value={empForm.pay_rate || ''} onChange={e => setEmpForm(f => ({ ...f, pay_rate: parseFloat(e.target.value) || 0 }))} leftIcon={<DollarSign size={15}/>} />
 
-          {/* Personal */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
-          <Input label={t.modal.birthdayLabel} type="date" value={empForm.birthday} onChange={e => setEmpForm(f => ({ ...f, birthday: e.target.value }))} />
-          <Input label={t.modal.addressLabel} placeholder={t.modal.addressPlaceholder} value={empForm.address} onChange={e => setEmpForm(f => ({ ...f, address: e.target.value }))} />
-          <div className="grid grid-cols-[1fr_100px_120px] gap-3">
-            <Input label={t.modal.cityLabel} placeholder={t.modal.cityPlaceholder} value={empForm.city} onChange={e => setEmpForm(f => ({ ...f, city: e.target.value }))} />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.modal.stateLabel}</label>
-              <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                <option value="">{t.modal.stateNone}</option>
-                {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <Input label={t.modal.zipLabel} placeholder={t.modal.zipPlaceholder} value={empForm.zip_code} onChange={e => setEmpForm(f => ({ ...f, zip_code: e.target.value }))} />
-          </div>
-
           {/* Emergency contact */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.modal.emergencyNameLabel} placeholder={t.modal.emergencyNamePlaceholder} value={empForm.emergency_contact_name} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_name: e.target.value }))} />
-            <Input label={t.modal.emergencyPhoneLabel} placeholder={t.modal.emergencyPhonePlaceholder} value={empForm.emergency_contact_phone} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_phone: e.target.value }))} />
+            <Input label={t.modal.emergencyPhoneLabel} placeholder={t.modal.emergencyPhonePlaceholder} value={formatPhoneInput(empForm.emergency_contact_phone)} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_phone: formatPhoneInput(e.target.value) }))} />
           </div>
 
           {/* Custom fields */}
@@ -389,6 +476,86 @@ export default function EmpleadosPage() {
           ) : null}
 
           {error && <p className="text-xs text-red-500">{error}</p>}
+
+          {/* App access — invite / change role / revoke, straight from the
+              person record. Edit mode only (needs a saved employee). */}
+          {empModal === 'edit' && selEmp ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</p>
+
+              {selAccess?.kind === 'active' ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</span>
+                    {selAccess.isYou ? <span className="text-xs text-gray-400">{teamT.youSuffix}</span> : null}
+                    {selAccess.role === 'owner' ? <span className="text-xs text-gray-400">{teamT.ownerSuffix}</span> : null}
+                  </div>
+                  {canManageAccess && !selAccess.isYou && selAccess.role !== 'owner' ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selAccess.role}
+                        disabled={accessBusy}
+                        onChange={e => changeAccessRole(selAccess.memberId, e.target.value as Role)}
+                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                      >
+                        {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={accessBusy}
+                        onClick={() => removeAccess(selAccess.memberId)}
+                        className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {teamT.removeBtn}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : selAccess?.kind === 'invited' ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
+                  <span className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</span>
+                  {canManageAccess ? (
+                    <button
+                      type="button"
+                      disabled={accessBusy}
+                      onClick={() => revokeInvite(selAccess.inviteId)}
+                      className="ml-auto px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      {teamT.revokeBtn}
+                    </button>
+                  ) : null}
+                </div>
+              ) : canManageAccess ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</p>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={accessRole}
+                      disabled={accessBusy}
+                      onChange={e => setAccessRole(e.target.value as Role)}
+                      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={accessBusy || !empForm.email.trim()}
+                      onClick={() => inviteToApp(empForm.email.trim(), accessRole)}
+                      className="px-3 py-2 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+                    >
+                      {teamT.inviteBtn}
+                    </button>
+                  </div>
+                  {!empForm.email.trim() ? <p className="text-xs text-amber-600">{t.modal.appAccessEmailRequired}</p> : null}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">{t.modal.appAccessNoManage}</p>
+              )}
+
+              {accessError ? <p className="text-xs text-red-500">{accessError}</p> : null}
+            </div>
+          ) : null}
 
           {/* Historial — only on edit (needs an existing employee id). */}
           {empModal === 'edit' && selEmp ? (
