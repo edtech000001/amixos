@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut } from 'lucide-react';
@@ -25,6 +25,8 @@ import {
 } from '@amixos/shared/lib/operatingHours';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
+import { SortableList } from '@/components/dashboard/SortableList';
 
 interface FieldTemplate {
   id: string;
@@ -168,9 +170,21 @@ export default function AjustesPage() {
   const [pwMsg, setPwMsg] = useState('');
   const [pwMsgIsError, setPwMsgIsError] = useState(false);
 
-  // ── Client field preferences
+  // ── Client field preferences (draft-until-save)
+  // `fieldRequired` / `templates` / `localClientOrder` are the working copy
+  // the form mutates. `db*` mirrors the last DB snapshot so we can diff on
+  // Save and tell whether the form is dirty.
   const [fieldRequired, setFieldRequired] = useState<Record<string, boolean>>(
     business?.client_field_required ?? {}
+  );
+  const [dbFieldRequired, setDbFieldRequired] = useState<Record<string, boolean>>(
+    business?.client_field_required ?? {}
+  );
+  const [localClientOrder, setLocalClientOrder] = useState<string[]>(
+    Array.isArray(business?.client_field_order) ? (business!.client_field_order as string[]) : []
+  );
+  const [dbClientOrder, setDbClientOrder] = useState<string[]>(
+    Array.isArray(business?.client_field_order) ? (business!.client_field_order as string[]) : []
   );
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsMsg, setFieldsMsg] = useState('');
@@ -181,8 +195,10 @@ export default function AjustesPage() {
   const [clientsCount, setClientsCount] = useState<number | null>(null);
   const [contactsCount, setContactsCount] = useState<number | null>(null);
 
-  // ── Custom field templates (clients)
+  // ── Custom field templates (clients) — `templates` is the working copy,
+  // `dbTemplates` is the last DB snapshot. Save() diffs the two via diffById.
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
   const [addFieldModal, setAddFieldModal] = useState(false);
   const [editFieldModal, setEditFieldModal] = useState(false);
   const [editingTpl, setEditingTpl] = useState<FieldTemplate | null>(null);
@@ -223,12 +239,18 @@ export default function AjustesPage() {
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
       setInvoiceFieldRequired(business.invoice_field_required ?? {});
       setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
-      setFieldRequired(business.client_field_required ?? {});
+      const cReq = business.client_field_required ?? {};
+      setFieldRequired(cReq);
+      setDbFieldRequired(cReq);
+      const cOrder = Array.isArray(business.client_field_order) ? (business.client_field_order as string[]) : [];
+      setLocalClientOrder(cOrder);
+      setDbClientOrder(cOrder);
       setPipelineDisabled(business.job_pipeline_disabled ?? {});
     }
   }, [business]);
 
-  useEffect(() => { loadTemplates(); }, [business]);
+  // (loadTemplates effect moved below loadTemplates' useCallback declaration
+  // to avoid the "used before declaration" error.)
 
   useEffect(() => {
     if (!business) return;
@@ -343,7 +365,9 @@ export default function AjustesPage() {
     setSavingPw(false);
   };
 
-  // ── Client field preferences
+  // ── Client field preferences (draft pattern)
+  // Mutations only touch local state; saveFieldPreferences diffs against the
+  // DB snapshots and persists everything in one batch.
   const toggleFieldRequired = (key: string) => {
     setFieldRequired(prev => ({ ...prev, [key]: !prev[key] }));
     setFieldsMsg('');
@@ -352,12 +376,79 @@ export default function AjustesPage() {
   const saveFieldPreferences = async () => {
     if (!business) return;
     setSavingFields(true); setFieldsMsg('');
-    const { error } = await supabase.from('businesses')
-      .update({ client_field_required: fieldRequired })
-      .eq('id', business.id);
-    setFieldsMsgIsError(!!error);
-    setFieldsMsg(error ? t.requiredFields.saveError : t.requiredFields.saveSuccess);
-    if (!error) await refetchBusiness();
+    try {
+      // ── 1. Template CRUD (insert / update / delete) ──
+      const ops = diffById(dbTemplates, templates);
+      const tempToReal: Record<string, string> = {};
+
+      if (ops.inserts.length > 0) {
+        const rows = ops.inserts.map((tpl, i) => {
+          // Strip the temp id; let Postgres assign one. sort_order is
+          // overwritten by client_field_order anyway, but we set it for
+          // legacy callers.
+          return {
+            business_id: business.id,
+            field_key: tpl.field_key,
+            field_label: tpl.field_label,
+            field_type: tpl.field_type,
+            field_options: tpl.field_options,
+            required: tpl.required,
+            sort_order: dbTemplates.length + i,
+          };
+        });
+        const { data: created, error } = await supabase
+          .from('client_field_templates').insert(rows).select();
+        if (error) throw error;
+        ops.inserts.forEach((tmp, i) => {
+          const realId = (created as { id: string }[] | null)?.[i]?.id;
+          if (realId) tempToReal[tmp.id] = realId;
+        });
+      }
+
+      for (const u of ops.updates) {
+        const { id, ...rest } = u;
+        const { error } = await supabase.from('client_field_templates')
+          .update(rest).eq('id', id);
+        if (error) throw error;
+      }
+
+      if (ops.deletes.length > 0) {
+        const { error } = await supabase.from('client_field_templates')
+          .delete().in('id', ops.deletes);
+        if (error) throw error;
+      }
+
+      // ── 2. Translate temp ids in the order array to their new real ids ──
+      const resolvedOrder = localClientOrder
+        .map(key => {
+          if (key.startsWith('custom:') && isTempId(key.slice('custom:'.length))) {
+            const tempId = key.slice('custom:'.length);
+            const realId = tempToReal[tempId];
+            return realId ? `custom:${realId}` : null;
+          }
+          return key;
+        })
+        .filter((k): k is string => k !== null);
+
+      // ── 3. Persist required-flags + order on the business row ──
+      const { error: bizErr } = await supabase.from('businesses').update({
+        client_field_required: fieldRequired,
+        client_field_order: resolvedOrder,
+      }).eq('id', business.id);
+      if (bizErr) throw bizErr;
+
+      await refetchBusiness();
+      await loadTemplates();
+      setLocalClientOrder(resolvedOrder);
+      setDbClientOrder(resolvedOrder);
+      setDbFieldRequired(fieldRequired);
+
+      setFieldsMsgIsError(false);
+      setFieldsMsg(t.requiredFields.saveSuccess);
+    } catch {
+      setFieldsMsgIsError(true);
+      setFieldsMsg(t.requiredFields.saveError);
+    }
     setSavingFields(false);
   };
 
@@ -369,7 +460,7 @@ export default function AjustesPage() {
     | { kind: 'standard'; key: string; label: string }
     | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
 
-  const clientItems: UnifiedItem[] = (() => {
+  const clientItems: UnifiedItem[] = useMemo(() => {
     const standardItems: UnifiedItem[] = DEFAULT_CLIENT_FIELDS.map(f => ({
       kind: 'standard', key: f.key, label: f.label,
     }));
@@ -379,17 +470,63 @@ export default function AjustesPage() {
     const all = [...standardItems, ...customItems];
     const byKey = new Map(all.map(it => [it.key, it]));
 
-    const saved = business?.client_field_order ?? null;
-    if (!Array.isArray(saved) || saved.length === 0) return all;
+    if (localClientOrder.length === 0) return all;
 
     const ordered: UnifiedItem[] = [];
-    for (const k of saved) {
-      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+    for (const k of localClientOrder) {
+      const item = byKey.get(k);
       if (item) ordered.push(item);
     }
     const used = new Set(ordered.map(i => i.key));
     return [...ordered, ...all.filter(i => !used.has(i.key))];
-  })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, localClientOrder, full]);
+
+  // ── Dirty tracking for the Clientes tab (templates + required + order) ──
+  const clientsDirty = useMemo(
+    () =>
+      isDirty(dbTemplates, templates) ||
+      JSON.stringify(dbFieldRequired) !== JSON.stringify(fieldRequired) ||
+      JSON.stringify(dbClientOrder) !== JSON.stringify(localClientOrder),
+    [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder],
+  );
+
+  // Reset every Clientes-tab working copy back to the last DB snapshot.
+  const discardClients = useCallback(() => {
+    setTemplates(dbTemplates);
+    setFieldRequired(dbFieldRequired);
+    setLocalClientOrder(dbClientOrder);
+    setFieldsMsg('');
+  }, [dbTemplates, dbFieldRequired, dbClientOrder]);
+
+  // True when ANY tab has unsaved edits. As more entities convert, OR their
+  // dirty flags in here so tab-switch confirm stays accurate.
+  const anyDirty = clientsDirty;
+
+  // Settings rail intercepts every tab click; if the current tab has unsaved
+  // edits, confirm with the user before discarding and switching.
+  const tryChangeTab = (next: Tab) => {
+    if (next === tab) return;
+    if (anyDirty) {
+      if (!confirm(t.unsavedChangesMessage)) return;
+      // Discard whatever the current tab is sitting on. Today only Clientes
+      // uses the draft pattern; expand as more tabs convert.
+      if (tab === 'clientes') discardClients();
+    }
+    setTab(next);
+  };
+
+  // Browser-level guard: warn before refresh / close when there are unsaved
+  // edits. (Internal tab switches go through tryChangeTab.)
+  useEffect(() => {
+    if (!anyDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [anyDirty]);
 
   // ── Employee field config (same shape as clients) ────────────────────
   const tEmpModal = full.dashboard.employees.modal;
@@ -777,18 +914,20 @@ export default function AjustesPage() {
     await refetchBusiness();
   };
 
-  const moveClientItem = async (key: string, direction: 'up' | 'down') => {
-    if (!business) return;
+  const moveClientItem = (key: string, direction: 'up' | 'down') => {
     const idx = clientItems.findIndex(i => i.key === key);
     const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (idx < 0 || otherIdx < 0 || otherIdx >= clientItems.length) return;
     const next = [...clientItems];
     [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    await supabase
-      .from('businesses')
-      .update({ client_field_order: next.map(i => i.key) })
-      .eq('id', business.id);
-    await refetchBusiness();
+    setLocalClientOrder(next.map(i => i.key));
+    setFieldsMsg('');
+  };
+
+  // DnD reorder: takes the new sorted list and updates the local order.
+  const onClientDragReorder = (next: { id: string }[]) => {
+    setLocalClientOrder(next.map(i => i.id));
+    setFieldsMsg('');
   };
 
   // ── Job pipeline config
@@ -809,40 +948,49 @@ export default function AjustesPage() {
     setSavingPipeline(false);
   };
 
-  // ── Custom field template CRUD
-  const loadTemplates = async () => {
+  // ── Custom field template CRUD (draft pattern)
+  // loadTemplates seeds both the working copy and the DB snapshot. CRUD
+  // handlers mutate only local state; saveFieldPreferences diffs and
+  // persists when the user clicks Save.
+  const loadTemplates = useCallback(async () => {
     if (!business) return;
     const { data } = await supabase.from('client_field_templates').select('*')
       .eq('business_id', business.id).order('sort_order');
-    setTemplates(data ?? []);
-  };
+    const fetched = (data ?? []) as FieldTemplate[];
+    setTemplates(fetched);
+    setDbTemplates(fetched);
+  }, [business, supabase]);
+
+  useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
   const toKey = (label: string) =>
     label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
-  const addTemplate = async () => {
+  const addTemplate = () => {
     if (!tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
     const key = toKey(tplForm.field_label);
     if (templates.some(tpl => tpl.field_key === key)) { setTplError(t.customFields.errorDuplicate); return; }
-    setSavingTpl(true); setTplError('');
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from('client_field_templates').insert({
-      business_id: business!.id,
-      field_key: key, field_label: tplForm.field_label.trim(),
-      field_type: tplForm.field_type, field_options: options,
-      required: tplForm.required, sort_order: templates.length,
-    });
-    if (error) { setTplError(t.customFields.errorSave); setSavingTpl(false); return; }
-    await loadTemplates();
+    const newTpl: FieldTemplate = {
+      id: newTempId(),
+      field_key: key,
+      field_label: tplForm.field_label.trim(),
+      field_type: tplForm.field_type,
+      field_options: options,
+      required: tplForm.required,
+      sort_order: templates.length,
+    };
+    setTemplates(prev => [...prev, newTpl]);
+    setLocalClientOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
     setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-    setSavingTpl(false); setAddFieldModal(false);
+    setTplError(''); setAddFieldModal(false);
   };
 
-  const removeTemplate = async (id: string) => {
+  const removeTemplate = (id: string) => {
     if (!confirm(t.customFields.confirmDelete)) return;
-    await supabase.from('client_field_templates').delete().eq('id', id);
     setTemplates(prev => prev.filter(tpl => tpl.id !== id));
+    setLocalClientOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
 
   const openEditTemplate = (tpl: FieldTemplate) => {
@@ -855,18 +1003,18 @@ export default function AjustesPage() {
     setEditFieldModal(true);
   };
 
-  const updateTemplate = async () => {
+  const updateTemplate = () => {
     if (!editingTpl || !tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
-    setSavingTpl(true); setTplError('');
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from('client_field_templates').update({
-      field_label: tplForm.field_label.trim(), field_type: tplForm.field_type,
-      field_options: options, required: tplForm.required,
-    }).eq('id', editingTpl.id);
-    if (error) { setTplError(t.customFields.errorSave); setSavingTpl(false); return; }
-    await loadTemplates();
-    setSavingTpl(false); setEditFieldModal(false); setEditingTpl(null);
+    setTemplates(prev => prev.map(tpl => tpl.id === editingTpl.id ? {
+      ...tpl,
+      field_label: tplForm.field_label.trim(),
+      field_type: tplForm.field_type,
+      field_options: options,
+      required: tplForm.required,
+    } : tpl));
+    setEditFieldModal(false); setEditingTpl(null);
   };
 
   // ── Invoice field template CRUD — same shape, separate table. No standard
@@ -1029,7 +1177,7 @@ export default function AjustesPage() {
     <div className="md:flex md:min-h-screen">
       {/* Settings rail — shared with the Equipo/Actividad sub-pages so the nav
           stays consistent across the whole Settings section. */}
-      <SettingsNav activeTab={tab as SettingsTab} onTabClick={(next) => setTab(next as Tab)} />
+      <SettingsNav activeTab={tab as SettingsTab} onTabClick={(next) => tryChangeTab(next as Tab)} />
 
       {/* Content */}
       <div className="flex-1 min-w-0 p-6">
@@ -1391,72 +1539,88 @@ export default function AjustesPage() {
                 <p className="text-xs text-gray-400 mb-5">{t.requiredFields.subtitle}</p>
 
                 <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  {clientItems.map((item, i) => {
-                    const isLast = i === clientItems.length - 1;
-                    return (
-                      <div key={item.key} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                  <SortableList<UnifiedItem & { id: string }>
+                    items={clientItems.map(it => ({ ...it, id: it.key }))}
+                    onReorder={onClientDragReorder}
+                    renderItem={(item, i, { attributes, listeners }) => {
+                      const isLast = i === clientItems.length - 1;
+                      return (
+                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                          {/* Drag handle — grip cursor, listeners attached here
+                             so action buttons stay clickable. */}
+                          <button
+                            type="button"
+                            {...attributes}
+                            {...listeners}
+                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                            aria-label="Drag to reorder"
+                          >
+                            <GripVertical size={14} />
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {item.kind === 'custom' && (
+                                <Sparkles size={12} className="text-primary shrink-0"/>
+                              )}
+                              <span className="text-sm text-gray-900">{item.label}</span>
+                              {item.kind === 'custom' && item.tpl.required && (
+                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                              )}
+                            </div>
                             {item.kind === 'custom' && (
-                              <Sparkles size={12} className="text-primary shrink-0"/>
-                            )}
-                            <span className="text-sm text-gray-900">{item.label}</span>
-                            {item.kind === 'custom' && item.tpl.required && (
-                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {FIELD_TYPES[item.tpl.field_type]}
+                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
+                              </p>
                             )}
                           </div>
-                          {item.kind === 'custom' && (
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {FIELD_TYPES[item.tpl.field_type]}
-                              {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                            </p>
+
+                          {/* Reorder arrows — kept for keyboard / accessibility
+                             fallback alongside DnD. */}
+                          <div className="flex flex-col shrink-0">
+                            <button
+                              onClick={() => moveClientItem(item.key, 'up')}
+                              disabled={i === 0}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move up"
+                            >
+                              <ChevronUp size={14} className="text-gray-500"/>
+                            </button>
+                            <button
+                              onClick={() => moveClientItem(item.key, 'down')}
+                              disabled={isLast}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move down"
+                            >
+                              <ChevronDown size={14} className="text-gray-500"/>
+                            </button>
+                          </div>
+
+                          {/* Right-side controls differ by kind. */}
+                          {item.kind === 'standard' ? (
+                            <Toggle checked={!!fieldRequired[item.key]} onChange={() => toggleFieldRequired(item.key)} />
+                          ) : (
+                            <>
+                              <button onClick={() => openEditTemplate(item.tpl)}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.edit}>
+                                <Pencil size={13} className="text-blue-400"/>
+                              </button>
+                              <button onClick={() => removeTemplate(item.tpl.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.delete}>
+                                <Trash2 size={13} className="text-red-400"/>
+                              </button>
+                            </>
                           )}
                         </div>
-
-                        {/* Reorder arrows — operate across the whole list. */}
-                        <div className="flex flex-col shrink-0">
-                          <button
-                            onClick={() => moveClientItem(item.key, 'up')}
-                            disabled={i === 0}
-                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Move up"
-                          >
-                            <ChevronUp size={14} className="text-gray-500"/>
-                          </button>
-                          <button
-                            onClick={() => moveClientItem(item.key, 'down')}
-                            disabled={isLast}
-                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Move down"
-                          >
-                            <ChevronDown size={14} className="text-gray-500"/>
-                          </button>
-                        </div>
-
-                        {/* Right-side controls differ by kind. */}
-                        {item.kind === 'standard' ? (
-                          <Toggle checked={!!fieldRequired[item.key]} onChange={() => toggleFieldRequired(item.key)} />
-                        ) : (
-                          <>
-                            <button onClick={() => openEditTemplate(item.tpl)}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                              aria-label={tc.buttons.edit}>
-                              <Pencil size={13} className="text-blue-400"/>
-                            </button>
-                            <button onClick={() => removeTemplate(item.tpl.id)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                              aria-label={tc.buttons.delete}>
-                              <Trash2 size={13} className="text-red-400"/>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    }}
+                  />
                 </div>
 
                 {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
-                <Button onClick={saveFieldPreferences} loading={savingFields}>
+                <Button onClick={saveFieldPreferences} loading={savingFields} disabled={!clientsDirty}>
                   <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
               </div>
