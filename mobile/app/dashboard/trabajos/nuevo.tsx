@@ -895,7 +895,7 @@ export default function NuevoTrabajoRoute() {
           />
           <View
             className="bg-white rounded-t-3xl pt-3 pb-8"
-            style={{ maxHeight: '85%' }}
+            style={{ height: '85%' }}
           >
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
@@ -916,7 +916,7 @@ export default function NuevoTrabajoRoute() {
                 />
               </View>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
               <Pressable
                 onPress={() => pickClient('')}
                 className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"

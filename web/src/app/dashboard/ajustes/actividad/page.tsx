@@ -128,7 +128,7 @@ export default function ActividadPage() {
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-400">{t.noResults}</p>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col max-h-[calc(100vh-280px)] overflow-y-auto -mr-3 pr-3">
             {filtered.map((row, i) => (
               <div key={row.id} className={`flex items-start gap-3 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">

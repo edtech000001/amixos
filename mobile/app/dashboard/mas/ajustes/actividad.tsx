@@ -90,8 +90,9 @@ export default function ActividadPage() {
         </Pressable>
         <Text className="ml-1 text-lg font-semibold text-gray-900">{t.heading}</Text>
       </View>
-      <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
-        <View className="flex-row items-start gap-3 mb-5">
+      {/* Pinned header + search — stay fixed while the list scrolls below. */}
+      <View className="px-5 pt-5">
+        <View className="flex-row items-start gap-3 mb-4">
           <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
             <Activity size={18} color="#4F46E5" />
           </View>
@@ -102,7 +103,7 @@ export default function ActividadPage() {
         </View>
 
         {rows.length > 0 ? (
-          <View className="flex-row items-center gap-2 mb-4 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+          <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
             <Search size={16} color="#9CA3AF" />
             <TextInput
               value={search}
@@ -115,7 +116,9 @@ export default function ActividadPage() {
             />
           </View>
         ) : null}
+      </View>
 
+      <ScrollView className="flex-1" contentContainerClassName="px-5 pt-4 pb-32" keyboardShouldPersistTaps="handled">
         {loading && rows.length === 0 ? (
           <View className="py-10 items-center">
             <View className="flex-row gap-1">{[0,1,2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}</View>

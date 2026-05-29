@@ -477,7 +477,7 @@ export default function NuevaFacturaRoute() {
           />
           <View
             className="bg-white rounded-t-3xl pt-3 pb-8"
-            style={{ maxHeight: '85%' }}
+            style={{ height: '85%' }}
           >
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
@@ -498,7 +498,7 @@ export default function NuevaFacturaRoute() {
                 />
               </View>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
               {filteredClients
                 .filter((c) => !clientIds.includes(c.id))
                 .map((c) => (
