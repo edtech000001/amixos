@@ -62,13 +62,11 @@ export function MapSettingsPanel({
   open,
   onClose,
   deviceSettings,
-  onDeviceSettingsChange,
   onPinConfigSaved,
 }: {
   open: boolean;
   onClose: () => void;
   deviceSettings: DeviceMapSettings;
-  onDeviceSettingsChange: (next: DeviceMapSettings) => void;
   onPinConfigSaved: () => void;
 }) {
   const { business, refetchBusiness } = useApp();
@@ -298,10 +296,12 @@ export function MapSettingsPanel({
     setSaving(true);
     setMsg(null);
 
-    // Pin config — direct Supabase write (RLS handles auth).
+    // Pin config + view settings — direct Supabase write (RLS handles auth).
+    // View settings (map type / clustering / pin size) live on the business
+    // row so they sync across the owner's devices.
     const { error: pinErr } = await supabase
       .from('businesses')
-      .update({ map_pin_config: config })
+      .update({ map_pin_config: config, map_view_settings: stagedDeviceSettings })
       .eq('id', business.id);
     if (pinErr) {
       setSaving(false);
@@ -334,9 +334,8 @@ export function MapSettingsPanel({
     }
 
     setSaving(false);
-    // Commit the staged device settings (map type / clustering / pin size)
-    // now — that's what makes them persist to localStorage in the parent.
-    onDeviceSettingsChange(stagedDeviceSettings);
+    // refetchBusiness re-reads map_view_settings → the map re-derives its
+    // view prefs and re-renders with the new map type / clustering / size.
     await refetchBusiness();
     onPinConfigSaved();
     // Auto-close so the user lands back on the map with the new pins.
@@ -366,7 +365,7 @@ export function MapSettingsPanel({
   return (
     <>
       <Modal open={open} onClose={onClose} title={t.settingsTitle} size="lg">
-        <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-5">
           {/* Map type */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.mapTypeLabel}</p>
@@ -397,11 +396,12 @@ export function MapSettingsPanel({
             <button
               type="button" role="switch" aria-checked={stagedDeviceSettings.clustering}
               onClick={() => setStagedDeviceSettings(prev => ({ ...prev, clustering: !prev.clustering }))}
-              style={{ width: 44, height: 24 }}
-              className={`relative rounded-full transition-colors shrink-0 ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-gray-200'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                stagedDeviceSettings.clustering ? 'translate-x-6' : 'translate-x-1'
-              }`}/>
+              className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-gray-200'}`}
+            >
+              <span
+                className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                style={{ transform: stagedDeviceSettings.clustering ? 'translateX(20px)' : 'translateX(0)' }}
+              />
             </button>
           </div>
 

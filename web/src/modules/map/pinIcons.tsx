@@ -189,7 +189,7 @@ export function pinBadgeToDataUrl(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="-1.5 -1.5 35 43">` +
       `<path d="M16 0 C7.16 0 0 7.16 0 16 C0 26 11 35 15.2 39.4 C15.65 39.85 16.35 39.85 16.8 39.4 C21 35 32 26 32 16 C32 7.16 24.84 0 16 0 Z" ` +
         `fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
-      `<g transform="translate(8 4) scale(0.66)">${iconInner}</g>` +
+      `<g transform="translate(5.8 1.7) scale(0.85)">${iconInner}</g>` +
       badge +
     `</svg>`;
   const url = `data:image/svg+xml;base64,${btoa(svg)}`;

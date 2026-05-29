@@ -11,13 +11,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft, Users, Briefcase, UserCircle2, X, Settings as SettingsIcon,
   Phone, MessageSquare, Mail, MapPin as MapPinIconLucide, Calendar,
   ArrowRight, Search as SearchIcon, CloudLightning, ExternalLink, Crosshair,
+  LocateFixed,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -38,7 +38,6 @@ import {
   type DeviceMapSettings,
 } from './MapSettingsSheet';
 
-const DEVICE_SETTINGS_KEY = 'map_device_settings_v1';
 const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'standard',
   clustering: true,
@@ -267,10 +266,29 @@ export default function MapScreen() {
   // captured at loop start so the denominator doesn't shift as rows get
   // marked unresolved.
   const [geocodeProgress, setGeocodeProgress] = useState<{ done: number; total: number } | null>(null);
-  // Per-device map prefs (map type, clustering, pin size) — persisted to
-  // AsyncStorage on every change. Pin styling rules live in the business
-  // DB instead and are read off `business.map_pin_config`.
-  const [deviceSettings, setDeviceSettings] = useState<DeviceMapSettings>(DEFAULT_DEVICE_SETTINGS);
+  // Map view prefs (map type, clustering, pin size) come from the business
+  // row (businesses.map_view_settings) so they sync across the owner's
+  // devices, like map_pin_config. mapType is normalized: web persists
+  // 'roadmap', react-native-maps wants 'standard'.
+  const deviceSettings = useMemo<DeviceMapSettings>(() => {
+    const s = business?.map_view_settings;
+    if (!s) return DEFAULT_DEVICE_SETTINGS;
+    const MOBILE_TYPES = ['standard', 'satellite', 'hybrid', 'terrain'] as const;
+    const mapType: DeviceMapSettings['mapType'] =
+      s.mapType === 'roadmap'
+        ? 'standard'
+        : (MOBILE_TYPES as readonly string[]).includes(s.mapType)
+          ? (s.mapType as DeviceMapSettings['mapType'])
+          : DEFAULT_DEVICE_SETTINGS.mapType;
+    const pinSize = (['small', 'medium', 'large'] as readonly string[]).includes(s.pinSize)
+      ? s.pinSize
+      : DEFAULT_DEVICE_SETTINGS.pinSize;
+    return {
+      mapType,
+      clustering: typeof s.clustering === 'boolean' ? s.clustering : DEFAULT_DEVICE_SETTINGS.clustering,
+      pinSize,
+    };
+  }, [business?.map_view_settings]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [layers, setLayers] = useState<Record<Layer, boolean>>({
     clients: true,
@@ -357,25 +375,6 @@ export default function MapScreen() {
   }, [business, apiBaseUrl, weatherEnabled]);
 
   useEffect(() => { void loadWeather(); }, [loadWeather]);
-
-  // Hydrate device settings on mount; persist on every change.
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(DEVICE_SETTINGS_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<DeviceMapSettings>;
-          setDeviceSettings({ ...DEFAULT_DEVICE_SETTINGS, ...parsed });
-        }
-      } catch {
-        // ignore — fall back to defaults
-      }
-    })();
-  }, []);
-  const updateDeviceSettings = (next: DeviceMapSettings) => {
-    setDeviceSettings(next);
-    void AsyncStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(next));
-  };
 
   // Derive an initial region that frames every visible pin. If there are
   // no pins yet, fall back to the continental US default so the map at
@@ -485,6 +484,30 @@ export default function MapScreen() {
       });
     }
   }, [search, visiblePins]);
+
+  // Reset to the default view — re-frame every visible pin (the corner
+  // button on the map). Falls back to the continental US default when
+  // there's nothing to frame.
+  const resetView = useCallback(() => {
+    if (visiblePins.length === 0) {
+      mapRef.current?.animateToRegion(DEFAULT_REGION, 400);
+      return;
+    }
+    const coords = visiblePins.map(p => ({ latitude: p.lat, longitude: p.lng }));
+    if (coords.length === 1) {
+      mapRef.current?.animateToRegion({
+        latitude: coords[0].latitude,
+        longitude: coords[0].longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 400);
+    } else {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 80, right: 60, bottom: 120, left: 60 },
+        animated: true,
+      });
+    }
+  }, [visiblePins]);
 
   const onGeocode = async () => {
     if (!business || !apiBaseUrl) return;
@@ -743,6 +766,24 @@ export default function MapScreen() {
           </ClusteredMapView>
         )}
 
+        {/* Reset-view button — re-frames all pins (the "default view"). */}
+        {!loading ? (
+          <Pressable
+            onPress={resetView}
+            accessibilityLabel={t.resetView}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white items-center justify-center border border-gray-200"
+            style={{
+              shadowColor: '#000',
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 4,
+            }}
+          >
+            <LocateFixed size={18} color="#374151" />
+          </Pressable>
+        ) : null}
+
         {/* Geocode banner — only when there are clients still missing
             coordinates. Tap-to-backfill saves a settings detour. Now
             auto-loops until count hits 0 or no progress is made, and
@@ -827,13 +868,12 @@ export default function MapScreen() {
         ) : null}
       </View>
 
-      {/* Settings sheet — gear icon in header triggers this. Pin rules
-         save to DB; map type/clustering/size persist to AsyncStorage. */}
+      {/* Settings sheet — gear icon in header triggers this. Pin rules +
+         view prefs (map type/clustering/size) both save to the business row. */}
       <MapSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         deviceSettings={deviceSettings}
-        onDeviceSettingsChange={updateDeviceSettings}
         onPinConfigSaved={() => void load()}
       />
 

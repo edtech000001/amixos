@@ -15,7 +15,7 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair } from 'lucide-react';
+import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair, Phone, Mail, ArrowRight, LocateFixed } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -205,7 +205,6 @@ function pinMatchesQuery(p: AnyPin, q: string): boolean {
   return false;
 }
 
-const DEVICE_SETTINGS_KEY = 'map_device_settings_v1';
 const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'roadmap',
   clustering: true,
@@ -256,13 +255,37 @@ export default function MapModule() {
   const [selected, setSelected] = useState<AnyPin | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [deviceSettings, setDeviceSettings] = useState<DeviceMapSettings>(DEFAULT_DEVICE_SETTINGS);
+  // Map view prefs come from the business row (synced across devices via
+  // businesses.map_view_settings). Defaults apply until the user saves.
+  // mapType is normalized: mobile persists 'standard', web wants 'roadmap'.
+  const deviceSettings = useMemo<DeviceMapSettings>(() => {
+    const s = business?.map_view_settings;
+    if (!s) return DEFAULT_DEVICE_SETTINGS;
+    const WEB_TYPES = ['roadmap', 'satellite', 'hybrid', 'terrain'] as const;
+    const mapType: DeviceMapSettings['mapType'] =
+      s.mapType === 'standard'
+        ? 'roadmap'
+        : (WEB_TYPES as readonly string[]).includes(s.mapType)
+          ? (s.mapType as DeviceMapSettings['mapType'])
+          : DEFAULT_DEVICE_SETTINGS.mapType;
+    const pinSize = (['small', 'medium', 'large'] as readonly string[]).includes(s.pinSize)
+      ? s.pinSize
+      : DEFAULT_DEVICE_SETTINGS.pinSize;
+    return {
+      mapType,
+      clustering: typeof s.clustering === 'boolean' ? s.clustering : DEFAULT_DEVICE_SETTINGS.clustering,
+      pinSize,
+    };
+  }, [business?.map_view_settings]);
   // Holds the live google.maps.Map instance so we can attach markers +
   // clusterer imperatively (the @react-google-maps/api <Marker> doesn't
   // play well with @googlemaps/markerclusterer in newer versions).
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  // First-load fit happens once; later layer toggles must not re-frame.
+  const didInitialFitRef = useRef(false);
 
   const apiBaseUrl = getApiBaseUrl();
 
@@ -319,26 +342,6 @@ export default function MapModule() {
   }, [business, apiBaseUrl, weatherEnabled]);
 
   useEffect(() => { void loadWeather(); }, [loadWeather]);
-
-  // Hydrate device settings on mount; persist on every change.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(DEVICE_SETTINGS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<DeviceMapSettings>;
-        setDeviceSettings({ ...DEFAULT_DEVICE_SETTINGS, ...parsed });
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-  const updateDeviceSettings = (next: DeviceMapSettings) => {
-    setDeviceSettings(next);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(next));
-    }
-  };
 
   // Compute initial center + zoom from visible pins, mirroring the
   // mobile region calculation. Only recomputed on first data load —
@@ -417,6 +420,44 @@ export default function MapModule() {
       return () => google.maps.event.removeListener(listener);
     }
   }, [search, visiblePins]);
+
+  // Initial fit — frame every pin on first load, mirroring mobile's
+  // initialRegion. Runs once (ref guard) so later layer toggles don't
+  // yank the view away from where the user panned.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !pins || didInitialFitRef.current) return;
+    if (search.trim()) return; // search-fit effect owns the view while searching
+    const all: AnyPin[] = [...pins.clients, ...pins.jobs, ...pins.employees];
+    if (all.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    all.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+    mapRef.current.fitBounds(bounds, 48);
+    didInitialFitRef.current = true;
+    // Clamp over-zoom when every pin sits at one spot.
+    const listener = google.maps.event.addListenerOnce(mapRef.current, 'idle', () => {
+      if (mapRef.current && (mapRef.current.getZoom() ?? 0) > 14) mapRef.current.setZoom(14);
+    });
+    return () => google.maps.event.removeListener(listener);
+  }, [mapReady, pins, search]);
+
+  // Reset to the default view — re-frame every currently visible pin
+  // (the corner button on the map). Falls back to the US overview when
+  // there are no pins to frame.
+  const resetView = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (visiblePins.length === 0) {
+      map.setCenter(DEFAULT_CENTER);
+      map.setZoom(4);
+      return;
+    }
+    const bounds = new google.maps.LatLngBounds();
+    visiblePins.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+    map.fitBounds(bounds, 48);
+    google.maps.event.addListenerOnce(map, 'idle', () => {
+      if (mapRef.current && (mapRef.current.getZoom() ?? 0) > 14) mapRef.current.setZoom(14);
+    });
+  }, [visiblePins]);
 
   // Imperative marker + clusterer wiring. Rebuilds when pins, clustering
   // toggle, or pin size changes. We intentionally rebuild rather than
@@ -543,7 +584,7 @@ export default function MapModule() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)]">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 3rem)' }}>
       {/* Layer pills + toggle hint + search. Pills scroll horizontally
          (4 pills can overflow narrow viewports); the gear stays pinned right. */}
       <div className="px-4 pt-4 pb-2">
@@ -659,11 +700,11 @@ export default function MapModule() {
           </div>
         ) : (
           <GoogleMap
-            mapContainerStyle={{ width: '100%', height: '100%' }}
+            mapContainerClassName="absolute inset-0"
             center={initialCenter}
-            zoom={pins && visiblePins.length > 0 ? 10 : 4}
+            zoom={4}
             mapTypeId={deviceSettings.mapType}
-            onLoad={(m) => { mapRef.current = m; }}
+            onLoad={(m) => { mapRef.current = m; setMapReady(true); }}
             onUnmount={() => {
               if (clustererRef.current) clustererRef.current.clearMarkers();
               markersRef.current.forEach(mk => mk.setMap(null));
@@ -679,6 +720,18 @@ export default function MapModule() {
             }}
           />
         )}
+
+        {/* Reset-view button — re-frames all pins (the "default view"). */}
+        {isLoaded && !loading ? (
+          <button
+            onClick={resetView}
+            className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50"
+            aria-label={t.resetView}
+            title={t.resetView}
+          >
+            <LocateFixed size={16} />
+          </button>
+        ) : null}
 
         {/* Geocode banner — tap opens the list of affected clients so the
            user can see which ones are missing coords + jump to fix. The X
@@ -734,68 +787,25 @@ export default function MapModule() {
           </button>
         ) : null}
 
-        {/* Selected pin sheet — mirrors the mobile bottom-sheet pattern. */}
-        {selected && selected.type === 'weather' ? (
-          <WeatherPinCard
-            selected={selected}
-            siblings={siblingsByWeatherId.get(selected.id) ?? []}
-            onClose={() => setSelected(null)}
-            labels={t.weather}
-          />
-        ) : selected ? (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl p-4">
-            <div className="flex items-start gap-3 mb-3">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                style={{
-                  backgroundColor: `${
-                    selected.type === 'client'
-                      ? LAYER_COLORS.clients
-                      : selected.type === 'job'
-                        ? LAYER_COLORS.jobs
-                        : LAYER_COLORS.employees
-                  }15`,
-                }}
-              >
-                {selected.type === 'client' ? (
-                  <Users size={20} color={LAYER_COLORS.clients} />
-                ) : selected.type === 'job' ? (
-                  <Briefcase size={20} color={LAYER_COLORS.jobs} />
-                ) : (
-                  <UserCircle2 size={20} color={LAYER_COLORS.employees} />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-gray-900 truncate">
-                  {selected.type === 'client'
-                    ? `${selected.first_name} ${selected.last_name}`
-                    : selected.type === 'job'
-                      ? selected.title
-                      : selected.type === 'employee'
-                        ? `${selected.first_name} ${selected.last_name}`
-                        : ''}
-                </p>
-                {selected.type === 'client' && selected.company ? (
-                  <p className="text-xs text-gray-500 truncate">{selected.company}</p>
-                ) : selected.type === 'job' && selected.client_name ? (
-                  <p className="text-xs text-gray-500 truncate">{selected.client_name}</p>
-                ) : selected.type === 'employee' && selected.job_title ? (
-                  <p className="text-xs text-gray-500 truncate">
-                    {t.assignedToJob}: {selected.job_title}
-                  </p>
-                ) : null}
-              </div>
-              <button onClick={() => setSelected(null)} className="p-1 -mr-1 text-gray-500 hover:text-gray-900">
-                <X size={18} />
-              </button>
-            </div>
-            <button
-              onClick={openSelected}
-              className="w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90"
-            >
-              {t.openRecord}
-            </button>
-          </div>
+        {/* Selected pin card — centered modal, mirrors the mobile pattern. */}
+        {selected ? (
+          selected.type === 'weather' ? (
+            <WeatherPinCard
+              selected={selected}
+              siblings={siblingsByWeatherId.get(selected.id) ?? []}
+              onClose={() => setSelected(null)}
+              labels={t.weather}
+            />
+          ) : (
+            <SelectedPinCard
+              selected={selected}
+              onClose={() => setSelected(null)}
+              onOpenRecord={openSelected}
+              openRecordLabel={t.openRecord}
+              assignedToLabel={t.assignedToJob}
+              emailActionLabel={full.dashboard.clients.detail.actionEmail}
+            />
+          )
         ) : null}
       </div>
 
@@ -805,7 +815,6 @@ export default function MapModule() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         deviceSettings={deviceSettings}
-        onDeviceSettingsChange={updateDeviceSettings}
         onPinConfigSaved={() => void load()}
       />
 
@@ -1169,5 +1178,139 @@ function LayerPill({ Icon, label, color, active, count, onClick }: LayerPillProp
         {count}
       </span>
     </button>
+  );
+}
+
+// US phone formatter — mirrors the clients pages.
+function fmtPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && digits[0] === '1') return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  return raw;
+}
+
+function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <span className="shrink-0 text-gray-500">{icon}</span>
+      <span className="text-sm text-gray-700 truncate">{text}</span>
+    </div>
+  );
+}
+
+// ─── Selected-pin card ──────────────────────────────────────────────────
+// Centered modal with backdrop — mirrors the mobile SelectedPinCard. Shows
+// identifying info + contact details + an "Open record" button. No call/text
+// quick actions on web (desktop); email opens the mail client via mailto.
+function SelectedPinCard({
+  selected,
+  onClose,
+  onOpenRecord,
+  openRecordLabel,
+  assignedToLabel,
+  emailActionLabel,
+}: {
+  selected: ClientPin | JobPin | EmployeePin;
+  onClose: () => void;
+  onOpenRecord: () => void;
+  openRecordLabel: string;
+  assignedToLabel: string;
+  emailActionLabel: string;
+}) {
+  const layerColor =
+    selected.type === 'client'
+      ? LAYER_COLORS.clients
+      : selected.type === 'job'
+        ? LAYER_COLORS.jobs
+        : LAYER_COLORS.employees;
+
+  const displayName =
+    selected.type === 'job'
+      ? selected.title
+      : `${selected.first_name} ${selected.last_name}`;
+
+  const subtitle =
+    selected.type === 'client'
+      ? selected.company
+      : selected.type === 'job'
+        ? selected.client_name
+        : selected.job_title
+          ? `${assignedToLabel}: ${selected.job_title}`
+          : null;
+
+  const phone = selected.type === 'client' ? selected.phone_cell ?? selected.phone_office ?? null : null;
+  const email = selected.type === 'client' ? selected.email_office ?? selected.email_home ?? null : null;
+  const addressLine =
+    selected.type === 'client'
+      ? [selected.address, selected.city, selected.state].filter(Boolean).join(', ')
+      : selected.type === 'job'
+        ? [selected.job_address, selected.job_city, selected.job_state].filter(Boolean).join(', ')
+        : '';
+  const scheduled = selected.type === 'job' ? selected.scheduled_date : null;
+  const hasInfo = !!(phone || email || addressLine || scheduled);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-4">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${layerColor}15` }}
+          >
+            {selected.type === 'client' ? (
+              <Users size={22} color={layerColor} />
+            ) : selected.type === 'job' ? (
+              <Briefcase size={22} color={layerColor} />
+            ) : (
+              <UserCircle2 size={22} color={layerColor} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0 pt-0.5">
+            <p className="text-base font-bold text-gray-900 truncate">{displayName}</p>
+            {subtitle ? <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{subtitle}</p> : null}
+          </div>
+          <button onClick={onClose} className="p-1 -mr-1 -mt-1 text-gray-400 hover:text-gray-700">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Info rows */}
+        {hasInfo ? (
+          <div className="flex flex-col gap-2 mb-4">
+            {phone ? <InfoRow icon={<Phone size={14} />} text={fmtPhone(phone)} /> : null}
+            {email ? <InfoRow icon={<Mail size={14} />} text={email} /> : null}
+            {addressLine ? <InfoRow icon={<MapPinIcon size={14} />} text={addressLine} /> : null}
+            {scheduled ? <InfoRow icon={<Calendar size={14} />} text={scheduled} /> : null}
+          </div>
+        ) : null}
+
+        {/* Email — the one quick action that makes sense on desktop. */}
+        {selected.type === 'client' && email ? (
+          <a
+            href={`mailto:${email}`}
+            className="flex items-center justify-center gap-2 w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-primary hover:bg-gray-50 mb-3"
+          >
+            <Mail size={16} />
+            {emailActionLabel}
+          </a>
+        ) : null}
+
+        {/* Open record */}
+        <button
+          onClick={onOpenRecord}
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white hover:opacity-90"
+        >
+          {openRecordLabel}
+          <ArrowRight size={14} />
+        </button>
+      </div>
+    </div>
   );
 }

@@ -25,7 +25,34 @@ const PORT = process.env.PORT || 3001;
 
 // Security & Middleware
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+
+// CORS allowlist. FRONTEND_URL stays the single canonical app URL (used to
+// build invite links elsewhere); browser origins allowed to call the API
+// come from FRONTEND_URL + CORS_ALLOWED_ORIGINS (comma-separated) + localhost
+// for dev. Vercel preview deploys (dynamic *.vercel.app URLs) are matched by
+// suffix so previews work without listing every URL.
+const corsAllowlist = [
+  process.env.FRONTEND_URL,
+  ...(process.env.CORS_ALLOWED_ORIGINS?.split(',') ?? []),
+  'http://localhost:3000',
+]
+  .map((o) => o?.trim())
+  .filter((o): o is string => Boolean(o));
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // No Origin header → non-browser client (mobile, curl, server-to-server).
+      // Not subject to browser CORS, so allow it through.
+      if (!origin) return callback(null, true);
+      if (corsAllowlist.includes(origin) || /^https?:\/\/[^/]+\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  }),
+);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

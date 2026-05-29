@@ -971,6 +971,7 @@ export type DashboardDict = {
       searchNoResults: string;
       searchResultsCount: string;
       layerToggleHint: string;
+      resetView: string;
       // Status footer / empty states
       noPinsYet: string;
       geocodeMissing: string;
@@ -2179,6 +2180,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchNoResults: 'Sin resultados.',
         searchResultsCount: '{{count}} resultados',
         layerToggleHint: 'Toca para mostrar / ocultar',
+        resetView: 'Ver todos los pines',
         noPinsYet: 'Aún no hay pines para mostrar.',
         geocodeMissing: '{{count}} clientes sin coordenadas. Toca para localizarlos.',
         geocodeRunning: 'Localizando clientes...',
@@ -3371,6 +3373,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchNoResults: 'No results.',
         searchResultsCount: '{{count}} results',
         layerToggleHint: 'Tap to show / hide',
+        resetView: 'View all pins',
         noPinsYet: 'No pins to show yet.',
         geocodeMissing: '{{count}} clients without coordinates. Tap to locate them.',
         geocodeRunning: 'Locating clients...',

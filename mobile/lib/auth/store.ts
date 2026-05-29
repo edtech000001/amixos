@@ -39,9 +39,21 @@ export interface Business {
   assignment_field_required: Record<string, boolean>;
   assignment_field_order: string[] | null;
   map_pin_config: MapPinConfig;
+  // Per-business map view prefs (map type / clustering / pin size). Synced
+  // across the owner's devices. Null = use client defaults. See migration 039.
+  map_view_settings: MapViewSettings | null;
   // Weather alert config (alpha — only the gated business id sees this UI).
   // Shape: see shared/src/lib/weather.ts (WeatherConfig).
   weather_config: Record<string, unknown> | null;
+}
+
+// Map view prefs — synced via businesses.map_view_settings (migration 039).
+// mapType is loosely typed: mobile uses 'standard', web uses 'roadmap', and
+// the same JSONB is shared, so each platform normalizes on read.
+export interface MapViewSettings {
+  mapType: string;
+  clustering: boolean;
+  pinSize: 'small' | 'medium' | 'large';
 }
 
 // ─── Map pin config (synced via businesses.map_pin_config) ─────────────
@@ -192,7 +204,7 @@ export const useAuthStore = create<AuthStore>()(
           const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, weather_config'),
+              .select('id, name, logo_url, service_type, city, state, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config'),
             supabase
               .from('business_members')
               .select('business_id, role')

@@ -85,13 +85,11 @@ export function MapSettingsSheet({
   open,
   onClose,
   deviceSettings,
-  onDeviceSettingsChange,
   onPinConfigSaved,
 }: {
   open: boolean;
   onClose: () => void;
   deviceSettings: DeviceMapSettings;
-  onDeviceSettingsChange: (next: DeviceMapSettings) => void;
   onPinConfigSaved: () => void;
 }) {
   const { business, refetchBusiness } = useApp();
@@ -352,10 +350,12 @@ export function MapSettingsSheet({
     setSaving(true);
     setMsg(null);
 
-    // Pin config save — direct Supabase write (RLS handles auth).
+    // Pin config + view settings save — direct Supabase write (RLS handles
+    // auth). View settings (map type / clustering / pin size) live on the
+    // business row so they sync across the owner's devices.
     const { error: pinErr } = await supabase
       .from('businesses')
-      .update({ map_pin_config: config })
+      .update({ map_pin_config: config, map_view_settings: stagedDeviceSettings })
       .eq('id', business.id);
     if (pinErr) {
       setSaving(false);
@@ -389,9 +389,8 @@ export function MapSettingsSheet({
     }
 
     setSaving(false);
-    // Commit the staged device settings (map type / clustering / pin size)
-    // now — that's what makes them "stick" to AsyncStorage in the parent.
-    onDeviceSettingsChange(stagedDeviceSettings);
+    // refetchBusiness re-reads map_view_settings → MapScreen re-derives its
+    // view prefs and re-renders with the new map type / clustering / size.
     await refetchBusiness();
     onPinConfigSaved();
     // Bounce back to the map so the user sees the result of their edits
