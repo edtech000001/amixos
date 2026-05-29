@@ -1812,23 +1812,41 @@ export function AccountSection() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
+  const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
   const onSavePassword = async () => {
+    if (!currentPw) {
+      setPwMsg({ text: t.password.errorCurrentRequired, isError: true });
+      return;
+    }
     if (newPw.length < 8) {
       setPwMsg({ text: t.password.errorMinLength, isError: true });
       return;
     }
     setSavingPw(true);
     setPwMsg(null);
+    // Re-authenticate with the current password first — updateUser() alone
+    // doesn't verify the old password, so without this anyone on an unlocked
+    // session could reset it.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user?.email ?? '',
+      password: currentPw,
+    });
+    if (verifyError) {
+      setSavingPw(false);
+      setPwMsg({ text: t.password.errorCurrentWrong, isError: true });
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setSavingPw(false);
     if (error) {
       setPwMsg({ text: `${t.password.errorPrefix}: ${error.message}`, isError: true });
     } else {
       setPwMsg({ text: t.password.successMsg, isError: false });
+      setCurrentPw('');
       setNewPw('');
     }
   };
@@ -1867,6 +1885,13 @@ export function AccountSection() {
           icon={<Lock size={18} color="#4F46E5" />}
           title={t.password.heading}
           subtitle={t.password.subtitle}
+        />
+        <Input
+          label={t.password.currentPasswordLabel}
+          placeholder={t.password.currentPasswordPlaceholder}
+          secureTextEntry
+          value={currentPw}
+          onChangeText={setCurrentPw}
         />
         <Input
           label={t.password.newPasswordLabel}

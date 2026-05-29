@@ -125,6 +125,7 @@ export default function AjustesPage() {
   const [bizMsgIsError, setBizMsgIsError] = useState(false);
 
   // ── Password
+  const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
@@ -233,16 +234,33 @@ export default function AjustesPage() {
 
   // ── Password
   const savePassword = async () => {
-    if (!newPw || newPw.length < 6) {
+    if (!currentPw) {
+      setPwMsgIsError(true);
+      setPwMsg(t.password.errorCurrentRequired);
+      return;
+    }
+    if (!newPw || newPw.length < 8) {
       setPwMsgIsError(true);
       setPwMsg(t.password.errorMinLength);
       return;
     }
     setSavingPw(true); setPwMsg('');
+    // Re-authenticate with the current password first — updateUser() alone
+    // doesn't verify the old password.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user?.email ?? '',
+      password: currentPw,
+    });
+    if (verifyError) {
+      setPwMsgIsError(true);
+      setPwMsg(t.password.errorCurrentWrong);
+      setSavingPw(false);
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setPwMsgIsError(!!error);
     setPwMsg(error ? t.password.errorPrefix.replace('{{message}}', error.message) : t.password.successMsg);
-    if (!error) setNewPw('');
+    if (!error) { setCurrentPw(''); setNewPw(''); }
     setSavingPw(false);
   };
 
@@ -1389,7 +1407,8 @@ export default function AjustesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.password.subtitle}</p>
-                <div className="max-w-md">
+                <div className="max-w-md flex flex-col gap-3">
+                  <Input label={t.password.currentPasswordLabel} type="password" placeholder={t.password.currentPasswordPlaceholder} value={currentPw} onChange={e => setCurrentPw(e.target.value)}/>
                   <Input label={t.password.newPasswordLabel} type="password" placeholder={t.password.newPasswordPlaceholder} value={newPw} onChange={e => setNewPw(e.target.value)}/>
                 </div>
                 {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
