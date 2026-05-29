@@ -28,13 +28,19 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  // On settings pages the rail "drills in": hide the global desktop nav so
-  // the settings tabs (which carry their own ← Back link) act as the single
-  // left rail. Tienda (Module Store) lives under /ajustes but is a primary
-  // destination, so it keeps the global nav.
+  // On the settings hub (/dashboard/ajustes) the rail "drills in": hide the
+  // global desktop nav so the settings tabs (which carry their own ← Back
+  // link) act as the single left rail. Standalone sub-pages — Tienda, Equipo,
+  // Actividad — are their own destinations rendered without that tab rail, so
+  // they keep the global nav (otherwise they'd have no nav bar at all).
+  const SETTINGS_NAV_EXCEPTIONS = [
+    '/dashboard/ajustes/tienda',
+    '/dashboard/ajustes/equipo',
+    '/dashboard/ajustes/actividad',
+  ];
   const isSettingsRoute =
     pathname.startsWith('/dashboard/ajustes') &&
-    !pathname.startsWith('/dashboard/ajustes/tienda');
+    !SETTINGS_NAV_EXCEPTIONS.some(p => pathname.startsWith(p));
   const { business } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
