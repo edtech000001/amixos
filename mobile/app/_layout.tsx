@@ -38,7 +38,7 @@ LogBox.ignoreLogs([
 
 const _orig = (SplashScreen as { _internal_preventAutoHideAsync?: () => Promise<unknown> })._internal_preventAutoHideAsync;
 if (_orig) {
-  (SplashScreen as { _internal_preventAutoHideAsync: () => Promise<unknown> })._internal_preventAutoHideAsync = async () => {
+  (SplashScreen as unknown as { _internal_preventAutoHideAsync: () => Promise<unknown> })._internal_preventAutoHideAsync = async () => {
     try {
       return await _orig();
     } catch (e: unknown) {

@@ -197,7 +197,14 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
               canPreventDefault: true,
             });
             if (!event.defaultPrevented) {
-              navigation.navigate(route.name as never, route.params as never);
+              // React Navigation's `navigate` is heavily overloaded on the route
+              // name; with mobile's `strict: false` the per-name typing falls
+              // through to a `never` parameter. Cast to a loose signature so
+              // the dynamic route.name + route.params flow compiles.
+              (navigation.navigate as (name: string, params?: object) => void)(
+                route.name,
+                route.params,
+              );
             }
           };
           const isActive = i === activeIndex;

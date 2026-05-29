@@ -2930,6 +2930,9 @@ function GoogleSyncSection() {
     console.log('[connect] linkGoogleContacts returned. ok:', result.ok, 'reason:', 'reason' in result ? result.reason : 'n/a');
     if (!result.ok) {
       setBusy(false);
+      // `in` narrows to the failure variant. `if (!result.ok)` alone doesn't
+      // narrow reliably with the project's `strict: false` tsconfig.
+      if (!('reason' in result)) return;
       if (result.reason === 'cancelled') {
         setMsg({ text: t.cancelled, isError: false });
       } else {

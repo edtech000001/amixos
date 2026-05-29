@@ -30,6 +30,9 @@ export function OAuthButtons({ onSuccess }: OAuthButtonsProps) {
 
   const handleResult = (result: OAuthResult, provider: Provider) => {
     if (result.ok) return onSuccess();
+    // `in` narrows to the failure variant. `if (!result.ok)` alone doesn't
+    // narrow reliably with mobile's `strict: false` tsconfig.
+    if (!('reason' in result)) return;
     if (result.reason === 'cancelled') return;
     if (result.reason === 'apple-not-available') {
       Alert.alert('Apple Sign In', 'Not available on this device.');
@@ -42,7 +45,8 @@ export function OAuthButtons({ onSuccess }: OAuthButtonsProps) {
       );
       return;
     }
-    Alert.alert('Sign-in failed', result.message ?? 'Please try again.');
+    const message = 'message' in result ? result.message : undefined;
+    Alert.alert('Sign-in failed', message ?? 'Please try again.');
   };
 
   const showApple = Platform.OS === 'ios';
