@@ -12,6 +12,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
@@ -92,6 +93,9 @@ export default function ClientesPage() {
   const { business } = useApp();
   const syncBanner = useGoogleSyncBanner();
   const [clients, setClients] = useState<Client[]>([]);
+  const [contactsByClient, setContactsByClient] = useState<
+    Map<string, { name: string; role: string | null }[]>
+  >(new Map());
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -105,15 +109,28 @@ export default function ClientesPage() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const [cl, { data: tpl }] = await Promise.all([
+    const [cl, contactRows, { data: tpl }] = await Promise.all([
       fetchAll<Client>((from, to) =>
         supabase.from('clients').select('*').eq('business_id', businessId)
           .order('created_at', { ascending: false }).range(from, to)),
+      // Contact people across the whole business — searched + shown under the
+      // matched client. Paginated: a busy business can have >1000 contacts.
+      fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+        supabase.from('client_contacts').select('client_id, name, role')
+          .eq('business_id', businessId)
+          .order('is_primary', { ascending: false }).range(from, to)),
       // Field templates are bounded config (one row per custom field); a
       // single page is always enough.
       supabase.from('client_field_templates').select('*').eq('business_id', businessId).order('sort_order'),
     ]);
+    const byClient = new Map<string, { name: string; role: string | null }[]>();
+    for (const ct of contactRows) {
+      const arr = byClient.get(ct.client_id);
+      if (arr) arr.push({ name: ct.name, role: ct.role });
+      else byClient.set(ct.client_id, [{ name: ct.name, role: ct.role }]);
+    }
     setClients(cl);
+    setContactsByClient(byClient);
     setTemplates(tpl ?? []);
     setLoading(false);
   };
@@ -237,17 +254,15 @@ export default function ClientesPage() {
     emailDisplay: c.email_office ?? c.email,
     city: c.city,
     state: c.state,
-  })), [clients]);
+    contacts: contactsByClient.get(c.id),
+  })), [clients, contactsByClient]);
 
-  const filteredIds = useMemo(() => {
-    const q = search.toLowerCase();
-    return new Set(
-      listItems
-        .filter(c => [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city]
-          .filter(Boolean).join(' ').toLowerCase().includes(q))
-        .map(c => c.id),
-    );
-  }, [listItems, search]);
+  // Keep this in lockstep with the list screen's own filter so select-all /
+  // bulk-delete operate on exactly the rows the user sees.
+  const filteredIds = useMemo(
+    () => new Set(listItems.filter(c => clientMatchesSearch(c, search)).map(c => c.id)),
+    [listItems, search],
+  );
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredIds.size) setSelectedIds(new Set());

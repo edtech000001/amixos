@@ -12,6 +12,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface Client {
@@ -47,6 +48,9 @@ export default function ClientesTab() {
   const t = full.dashboard.clients;
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [contactsByClient, setContactsByClient] = useState<
+    Map<string, { name: string; role: string | null }[]>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -55,14 +59,32 @@ export default function ClientesTab() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const cl = await fetchAll<Client>((from, to) =>
-      supabase
-        .from('clients')
-        .select('*')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .range(from, to));
+    const [cl, contactRows] = await Promise.all([
+      fetchAll<Client>((from, to) =>
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: false })
+          .range(from, to)),
+      // Contact people across the whole business — searched + shown under the
+      // matched client. Paginated: a busy business can have >1000 contacts.
+      fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+        supabase
+          .from('client_contacts')
+          .select('client_id, name, role')
+          .eq('business_id', businessId)
+          .order('is_primary', { ascending: false })
+          .range(from, to)),
+    ]);
+    const byClient = new Map<string, { name: string; role: string | null }[]>();
+    for (const ct of contactRows) {
+      const arr = byClient.get(ct.client_id);
+      if (arr) arr.push({ name: ct.name, role: ct.role });
+      else byClient.set(ct.client_id, [{ name: ct.name, role: ct.role }]);
+    }
     setClients(cl);
+    setContactsByClient(byClient);
     setLoading(false);
   };
 
@@ -86,24 +108,17 @@ export default function ClientesTab() {
         emailDisplay: c.email_office ?? c.email,
         city: c.city,
         state: c.state,
+        contacts: contactsByClient.get(c.id),
       })),
-    [clients],
+    [clients, contactsByClient],
   );
 
-  const filteredIds = useMemo(() => {
-    const q = search.toLowerCase();
-    return new Set(
-      items
-        .filter(c =>
-          [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(q),
-        )
-        .map(c => c.id),
-    );
-  }, [items, search]);
+  // Keep this in lockstep with the list screen's own filter so select-all /
+  // bulk-delete operate on exactly the rows the user sees.
+  const filteredIds = useMemo(
+    () => new Set(items.filter(c => clientMatchesSearch(c, search)).map(c => c.id)),
+    [items, search],
+  );
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {

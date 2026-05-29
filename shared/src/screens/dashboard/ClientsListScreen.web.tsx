@@ -6,9 +6,9 @@
 // bundler resolves this .web.tsx variant automatically.
 
 import { memo, useMemo, type ReactNode } from 'react';
-import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User } from 'lucide-react';
+import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users } from 'lucide-react';
 import { useLang } from '../../i18n';
-import { searchMatches } from '../../lib/usStates';
+import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 
 export interface ClientListItem {
   id: string;
@@ -19,6 +19,8 @@ export interface ClientListItem {
   emailDisplay: string | null;
   city: string | null;
   state: string | null;
+  /** Contact people for this client — surfaced in search + the matched row. */
+  contacts?: { name: string; role: string | null }[];
 }
 
 export interface ClientsListScreenProps {
@@ -62,15 +64,9 @@ export function ClientsListScreen({
   const t = full.dashboard.clients;
 
   const filtered = useMemo(
-    () =>
-      clients.filter((c) =>
-        searchMatches(
-          [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city, c.state]
-            .filter(Boolean)
-            .join(' '),
-          search,
-        ),
-      ),
+    // Matches own fields + contact people; state name ↔ abbr expansion is
+    // handled inside (see clientSearch / usStates).
+    () => clients.filter((c) => clientMatchesSearch(c, search)),
     [clients, search],
   );
 
@@ -157,6 +153,7 @@ export function ClientsListScreen({
             <ClientRow
               key={c.id}
               client={c}
+              search={search}
               isChecked={selectedIds.has(c.id)}
               onToggleSelect={onToggleSelect}
               onClientPress={onClientPress}
@@ -175,6 +172,7 @@ export function ClientsListScreen({
 
 const ClientRow = memo(function ClientRow({
   client: c,
+  search,
   isChecked,
   onToggleSelect,
   onClientPress,
@@ -182,12 +180,14 @@ const ClientRow = memo(function ClientRow({
   onDeletePress,
 }: {
   client: ClientListItem;
+  search: string;
   isChecked: boolean;
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
   onEditPress: (id: string) => void;
   onDeletePress: (id: string) => void;
 }) {
+  const matchedContacts = matchingContacts(c, search);
   return (
     <div className={`group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-gray-50'}`}>
       <button
@@ -213,6 +213,15 @@ const ClientRow = memo(function ClientRow({
             {c.emailDisplay ? <span className="flex items-center gap-1 text-xs text-gray-400"><Mail size={11} /> {c.emailDisplay}</span> : null}
             {c.city ? <span className="flex items-center gap-1 text-xs text-gray-400"><MapPin size={11} /> {c.city}{c.state ? `, ${c.state}` : ''}</span> : null}
           </span>
+          {matchedContacts.length > 0 ? (
+            <span className="flex flex-col gap-0.5 mt-1">
+              {matchedContacts.map((ct, i) => (
+                <span key={i} className="flex items-center gap-1 text-xs font-medium text-primary">
+                  <Users size={11} /> {ct.name}{ct.role ? `  ·  ${ct.role}` : ''}
+                </span>
+              ))}
+            </span>
+          ) : null}
         </span>
       </button>
       {/* Hover actions — web idiom */}

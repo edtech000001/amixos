@@ -8,12 +8,13 @@ import {
   MapPin,
   Trash2,
   User,
+  Users,
   Upload,
   X,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
-import { searchMatches } from '../../lib/usStates';
+import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 
 export interface ClientListItem {
   id: string;
@@ -24,6 +25,8 @@ export interface ClientListItem {
   emailDisplay: string | null;
   city: string | null;
   state: string | null;
+  /** Contact people for this client — surfaced in search + the matched row. */
+  contacts?: { name: string; role: string | null }[];
 }
 
 export interface ClientsListScreenProps {
@@ -67,19 +70,12 @@ export function ClientsListScreen({
   const { t: full } = useLang();
   const t = full.dashboard.clients;
 
-  const filtered = useMemo(() => {
-    return clients.filter(c =>
-      // searchMatches expands "Nebraska" → also match "NE" (and vice
-      // versa), so users can type either form. State is stored as the
-      // 2-letter abbr but the search input speaks both.
-      searchMatches(
-        [c.firstName, c.lastName, c.company, c.phoneDisplay, c.emailDisplay, c.city, c.state]
-          .filter(Boolean)
-          .join(' '),
-        search,
-      ),
-    );
-  }, [clients, search]);
+  const filtered = useMemo(
+    // Matches own fields + contact people; state name ↔ abbr expansion is
+    // handled inside (see clientSearch / usStates).
+    () => clients.filter(c => clientMatchesSearch(c, search)),
+    [clients, search],
+  );
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
   const selectedCountText = (
@@ -205,6 +201,7 @@ export function ClientsListScreen({
         renderItem={({ item }) => (
           <ClientRow
             client={item}
+            search={search}
             isChecked={selectedIds.has(item.id)}
             isLast={item.id === lastFilteredId}
             onToggleSelect={onToggleSelect}
@@ -237,6 +234,7 @@ export function ClientsListScreen({
 
 interface ClientRowProps {
   client: ClientListItem;
+  search: string;
   isChecked: boolean;
   isLast: boolean;
   onToggleSelect: (id: string) => void;
@@ -245,11 +243,13 @@ interface ClientRowProps {
 
 const ClientRow = memo(function ClientRow({
   client: c,
+  search,
   isChecked,
   isLast,
   onToggleSelect,
   onClientPress,
 }: ClientRowProps) {
+  const matchedContacts = matchingContacts(c, search);
   return (
     <View
       // Row sits inside the white card; border-x continues the card frame.
@@ -308,6 +308,19 @@ const ClientRow = memo(function ClientRow({
                 </View>
               ) : null}
             </View>
+            {matchedContacts.length > 0 ? (
+              <View className="mt-1 gap-0.5">
+                {matchedContacts.map((ct, i) => (
+                  <View key={i} className="flex-row items-center gap-1">
+                    <Users size={11} color="#4F46E5" />
+                    <Text className="text-xs font-medium text-primary" numberOfLines={1}>
+                      {ct.name}
+                      {ct.role ? `  ·  ${ct.role}` : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         </Pressable>
       </View>
