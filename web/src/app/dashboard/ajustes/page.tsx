@@ -206,8 +206,9 @@ export default function AjustesPage() {
   const [savingTpl, setSavingTpl] = useState(false);
   const [tplError, setTplError] = useState('');
 
-  // ── Custom field templates (employees) — same shape, separate table.
+  // ── Custom field templates (employees) — same draft pattern as clients.
   const [empTemplates, setEmpTemplates] = useState<FieldTemplate[]>([]);
+  const [dbEmpTemplates, setDbEmpTemplates] = useState<FieldTemplate[]>([]);
   const [addEmpFieldModal, setAddEmpFieldModal] = useState(false);
   const [editEmpFieldModal, setEditEmpFieldModal] = useState(false);
   const [editingEmpTpl, setEditingEmpTpl] = useState<FieldTemplate | null>(null);
@@ -499,34 +500,8 @@ export default function AjustesPage() {
     setFieldsMsg('');
   }, [dbTemplates, dbFieldRequired, dbClientOrder]);
 
-  // True when ANY tab has unsaved edits. As more entities convert, OR their
-  // dirty flags in here so tab-switch confirm stays accurate.
-  const anyDirty = clientsDirty;
-
-  // Settings rail intercepts every tab click; if the current tab has unsaved
-  // edits, confirm with the user before discarding and switching.
-  const tryChangeTab = (next: Tab) => {
-    if (next === tab) return;
-    if (anyDirty) {
-      if (!confirm(t.unsavedChangesMessage)) return;
-      // Discard whatever the current tab is sitting on. Today only Clientes
-      // uses the draft pattern; expand as more tabs convert.
-      if (tab === 'clientes') discardClients();
-    }
-    setTab(next);
-  };
-
-  // Browser-level guard: warn before refresh / close when there are unsaved
-  // edits. (Internal tab switches go through tryChangeTab.)
-  useEffect(() => {
-    if (!anyDirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [anyDirty]);
+  // tryChangeTab, anyDirty, and the beforeunload guard live near the bottom
+  // of the component so they can reference every tab's dirty flag.
 
   // ── Employee field config (same shape as clients) ────────────────────
   const tEmpModal = full.dashboard.employees.modal;
@@ -550,12 +525,28 @@ export default function AjustesPage() {
   const [empRequired, setEmpRequired] = useState<Record<string, boolean>>(
     business?.employee_field_required ?? {}
   );
+  const [dbEmpRequired, setDbEmpRequired] = useState<Record<string, boolean>>(
+    business?.employee_field_required ?? {}
+  );
+  const [localEmpOrder, setLocalEmpOrder] = useState<string[]>(
+    Array.isArray(business?.employee_field_order) ? (business!.employee_field_order as string[]) : []
+  );
+  const [dbEmpOrder, setDbEmpOrder] = useState<string[]>(
+    Array.isArray(business?.employee_field_order) ? (business!.employee_field_order as string[]) : []
+  );
   const [savingEmpRequired, setSavingEmpRequired] = useState(false);
   const [empReqMsg, setEmpReqMsg] = useState('');
   const [empReqMsgIsError, setEmpReqMsgIsError] = useState(false);
 
   useEffect(() => {
-    if (business) setEmpRequired(business.employee_field_required ?? {});
+    if (business) {
+      const r = business.employee_field_required ?? {};
+      setEmpRequired(r);
+      setDbEmpRequired(r);
+      const o = Array.isArray(business.employee_field_order) ? (business.employee_field_order as string[]) : [];
+      setLocalEmpOrder(o);
+      setDbEmpOrder(o);
+    }
   }, [business]);
 
   const toggleEmpRequired = (key: string) => {
@@ -563,19 +554,78 @@ export default function AjustesPage() {
     setEmpReqMsg('');
   };
 
+  // Save flow (draft): diff templates + persist required-flags + order on
+  // the business row. Mirrors saveFieldPreferences (clients).
   const saveEmpRequired = async () => {
     if (!business) return;
     setSavingEmpRequired(true); setEmpReqMsg('');
-    const { error } = await supabase.from('businesses')
-      .update({ employee_field_required: empRequired })
-      .eq('id', business.id);
-    setEmpReqMsgIsError(!!error);
-    setEmpReqMsg(error ? t.requiredFields.saveError : t.requiredFields.saveSuccess);
-    if (!error) await refetchBusiness();
+    try {
+      const ops = diffById(dbEmpTemplates, empTemplates);
+      const tempToReal: Record<string, string> = {};
+
+      if (ops.inserts.length > 0) {
+        const rows = ops.inserts.map((tpl, i) => ({
+          business_id: business.id,
+          field_key: tpl.field_key,
+          field_label: tpl.field_label,
+          field_type: tpl.field_type,
+          field_options: tpl.field_options,
+          required: tpl.required,
+          sort_order: dbEmpTemplates.length + i,
+        }));
+        const { data: created, error } = await supabase
+          .from('employee_field_templates').insert(rows).select();
+        if (error) throw error;
+        ops.inserts.forEach((tmp, i) => {
+          const realId = (created as { id: string }[] | null)?.[i]?.id;
+          if (realId) tempToReal[tmp.id] = realId;
+        });
+      }
+
+      for (const u of ops.updates) {
+        const { id, ...rest } = u;
+        const { error } = await supabase.from('employee_field_templates').update(rest).eq('id', id);
+        if (error) throw error;
+      }
+
+      if (ops.deletes.length > 0) {
+        const { error } = await supabase.from('employee_field_templates').delete().in('id', ops.deletes);
+        if (error) throw error;
+      }
+
+      const resolvedOrder = localEmpOrder
+        .map(key => {
+          if (key.startsWith('custom:') && isTempId(key.slice('custom:'.length))) {
+            const tempId = key.slice('custom:'.length);
+            const realId = tempToReal[tempId];
+            return realId ? `custom:${realId}` : null;
+          }
+          return key;
+        })
+        .filter((k): k is string => k !== null);
+
+      const { error: bizErr } = await supabase.from('businesses').update({
+        employee_field_required: empRequired,
+        employee_field_order: resolvedOrder,
+      }).eq('id', business.id);
+      if (bizErr) throw bizErr;
+
+      await refetchBusiness();
+      await loadEmpTemplates();
+      setLocalEmpOrder(resolvedOrder);
+      setDbEmpOrder(resolvedOrder);
+      setDbEmpRequired(empRequired);
+
+      setEmpReqMsgIsError(false);
+      setEmpReqMsg(t.requiredFields.saveSuccess);
+    } catch {
+      setEmpReqMsgIsError(true);
+      setEmpReqMsg(t.requiredFields.saveError);
+    }
     setSavingEmpRequired(false);
   };
 
-  const empItems: UnifiedItem[] = (() => {
+  const empItems: UnifiedItem[] = useMemo(() => {
     const standardItems: UnifiedItem[] = DEFAULT_EMPLOYEE_FIELD_KEYS.map((k) => ({
       kind: 'standard', key: k, label: EMP_FIELD_LABELS[k] ?? k,
     }));
@@ -585,31 +635,48 @@ export default function AjustesPage() {
     const all = [...standardItems, ...customItems];
     const byKey = new Map(all.map(it => [it.key, it]));
 
-    const saved = business?.employee_field_order ?? null;
-    if (!Array.isArray(saved) || saved.length === 0) return all;
+    if (localEmpOrder.length === 0) return all;
 
     const ordered: UnifiedItem[] = [];
-    for (const k of saved) {
-      const item = typeof k === 'string' ? byKey.get(k) : undefined;
+    for (const k of localEmpOrder) {
+      const item = byKey.get(k);
       if (item) ordered.push(item);
     }
     const used = new Set(ordered.map(i => i.key));
     return [...ordered, ...all.filter(i => !used.has(i.key))];
-  })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empTemplates, localEmpOrder, full]);
 
-  const moveEmpItem = async (key: string, direction: 'up' | 'down') => {
-    if (!business) return;
+  const moveEmpItem = (key: string, direction: 'up' | 'down') => {
     const idx = empItems.findIndex(i => i.key === key);
     const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (idx < 0 || otherIdx < 0 || otherIdx >= empItems.length) return;
     const next = [...empItems];
     [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    await supabase
-      .from('businesses')
-      .update({ employee_field_order: next.map(i => i.key) })
-      .eq('id', business.id);
-    await refetchBusiness();
+    setLocalEmpOrder(next.map(i => i.key));
+    setEmpReqMsg('');
   };
+
+  const onEmpDragReorder = (next: { id: string }[]) => {
+    setLocalEmpOrder(next.map(i => i.id));
+    setEmpReqMsg('');
+  };
+
+  // Dirty flag for the Empleados tab.
+  const employeesDirty = useMemo(
+    () =>
+      isDirty(dbEmpTemplates, empTemplates) ||
+      JSON.stringify(dbEmpRequired) !== JSON.stringify(empRequired) ||
+      JSON.stringify(dbEmpOrder) !== JSON.stringify(localEmpOrder),
+    [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder],
+  );
+
+  const discardEmployees = useCallback(() => {
+    setEmpTemplates(dbEmpTemplates);
+    setEmpRequired(dbEmpRequired);
+    setLocalEmpOrder(dbEmpOrder);
+    setEmpReqMsg('');
+  }, [dbEmpTemplates, dbEmpRequired, dbEmpOrder]);
 
   // ── Job field config (same shape as clients/employees) ────────────────
   const tJobNew = full.dashboard.jobs.new;
@@ -1114,37 +1181,43 @@ export default function AjustesPage() {
     await refetchBusiness();
   };
 
-  // ── Employee field template CRUD — same shape, separate table.
-  const loadEmpTemplates = async () => {
+  // ── Employee field template CRUD (draft pattern, mirrors clients) ────
+  const loadEmpTemplates = useCallback(async () => {
     if (!business) return;
     const { data } = await supabase.from('employee_field_templates').select('*')
       .eq('business_id', business.id).order('sort_order');
-    setEmpTemplates(data ?? []);
-  };
+    const fetched = (data ?? []) as FieldTemplate[];
+    setEmpTemplates(fetched);
+    setDbEmpTemplates(fetched);
+  }, [business, supabase]);
 
-  const addEmpTemplate = async () => {
+  useEffect(() => { loadEmpTemplates(); }, [loadEmpTemplates]);
+
+  const addEmpTemplate = () => {
     if (!empTplForm.field_label.trim()) { setEmpTplError(t.customFields.errorNameRequired); return; }
     const key = toKey(empTplForm.field_label);
     if (empTemplates.some(tpl => tpl.field_key === key)) { setEmpTplError(t.customFields.errorDuplicate); return; }
-    setSavingEmpTpl(true); setEmpTplError('');
     const options = empTplForm.field_type === 'select'
       ? empTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from('employee_field_templates').insert({
-      business_id: business!.id,
-      field_key: key, field_label: empTplForm.field_label.trim(),
-      field_type: empTplForm.field_type, field_options: options,
-      required: empTplForm.required, sort_order: empTemplates.length,
-    });
-    if (error) { setEmpTplError(t.customFields.errorSave); setSavingEmpTpl(false); return; }
-    await loadEmpTemplates();
+    const newTpl: FieldTemplate = {
+      id: newTempId(),
+      field_key: key,
+      field_label: empTplForm.field_label.trim(),
+      field_type: empTplForm.field_type,
+      field_options: options,
+      required: empTplForm.required,
+      sort_order: empTemplates.length,
+    };
+    setEmpTemplates(prev => [...prev, newTpl]);
+    setLocalEmpOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
     setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-    setSavingEmpTpl(false); setAddEmpFieldModal(false);
+    setEmpTplError(''); setAddEmpFieldModal(false);
   };
 
-  const removeEmpTemplate = async (id: string) => {
+  const removeEmpTemplate = (id: string) => {
     if (!confirm(t.customFields.confirmDelete)) return;
-    await supabase.from('employee_field_templates').delete().eq('id', id);
     setEmpTemplates(prev => prev.filter(tpl => tpl.id !== id));
+    setLocalEmpOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
 
   const openEditEmpTemplate = (tpl: FieldTemplate) => {
@@ -1157,21 +1230,50 @@ export default function AjustesPage() {
     setEditEmpFieldModal(true);
   };
 
-  const updateEmpTemplate = async () => {
+  const updateEmpTemplate = () => {
     if (!editingEmpTpl || !empTplForm.field_label.trim()) { setEmpTplError(t.customFields.errorNameRequired); return; }
-    setSavingEmpTpl(true); setEmpTplError('');
     const options = empTplForm.field_type === 'select'
       ? empTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from('employee_field_templates').update({
-      field_label: empTplForm.field_label.trim(), field_type: empTplForm.field_type,
-      field_options: options, required: empTplForm.required,
-    }).eq('id', editingEmpTpl.id);
-    if (error) { setEmpTplError(t.customFields.errorSave); setSavingEmpTpl(false); return; }
-    await loadEmpTemplates();
-    setSavingEmpTpl(false); setEditEmpFieldModal(false); setEditingEmpTpl(null);
+    setEmpTemplates(prev => prev.map(tpl => tpl.id === editingEmpTpl.id ? {
+      ...tpl,
+      field_label: empTplForm.field_label.trim(),
+      field_type: empTplForm.field_type,
+      field_options: options,
+      required: empTplForm.required,
+    } : tpl));
+    setEditEmpFieldModal(false); setEditingEmpTpl(null);
   };
 
-  useEffect(() => { loadEmpTemplates(); }, [business]);
+  // ── Cross-tab dirty + discard plumbing ───────────────────────────────
+  // Each entity's dirty flag is OR'd into `anyDirty` (used by the browser
+  // beforeunload guard). When the user clicks a different SettingsNav tab,
+  // tryChangeTab confirms with t.unsavedChangesMessage and runs the
+  // matching discard helper for the tab they're leaving.
+  const anyDirty = clientsDirty || employeesDirty;
+
+  const tryChangeTab = (next: Tab) => {
+    if (next === tab) return;
+    const dirtyByTab: Partial<Record<Tab, boolean>> = {
+      clientes: clientsDirty,
+      empleados: employeesDirty,
+    };
+    if (dirtyByTab[tab]) {
+      if (!confirm(t.unsavedChangesMessage)) return;
+      if (tab === 'clientes') discardClients();
+      else if (tab === 'empleados') discardEmployees();
+    }
+    setTab(next);
+  };
+
+  useEffect(() => {
+    if (!anyDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [anyDirty]);
 
   return (
     <div className="md:flex md:min-h-screen">
@@ -1644,70 +1746,83 @@ export default function AjustesPage() {
                 <p className="text-xs text-gray-400 mb-5">{t.employeesSection.subtitle}</p>
 
                 <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  {empItems.map((item, i) => {
-                    const isLast = i === empItems.length - 1;
-                    return (
-                      <div key={item.key} className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                  <SortableList<UnifiedItem & { id: string }>
+                    items={empItems.map(it => ({ ...it, id: it.key }))}
+                    onReorder={onEmpDragReorder}
+                    renderItem={(item, i, { attributes, listeners }) => {
+                      const isLast = i === empItems.length - 1;
+                      return (
+                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
+                          <button
+                            type="button"
+                            {...attributes}
+                            {...listeners}
+                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                            aria-label="Drag to reorder"
+                          >
+                            <GripVertical size={14} />
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {item.kind === 'custom' && (
+                                <Sparkles size={12} className="text-primary shrink-0"/>
+                              )}
+                              <span className="text-sm text-gray-900">{item.label}</span>
+                              {item.kind === 'custom' && item.tpl.required && (
+                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                              )}
+                            </div>
                             {item.kind === 'custom' && (
-                              <Sparkles size={12} className="text-primary shrink-0"/>
-                            )}
-                            <span className="text-sm text-gray-900">{item.label}</span>
-                            {item.kind === 'custom' && item.tpl.required && (
-                              <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {FIELD_TYPES[item.tpl.field_type]}
+                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
+                              </p>
                             )}
                           </div>
-                          {item.kind === 'custom' && (
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {FIELD_TYPES[item.tpl.field_type]}
-                              {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                            </p>
+
+                          <div className="flex flex-col shrink-0">
+                            <button
+                              onClick={() => moveEmpItem(item.key, 'up')}
+                              disabled={i === 0}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move up"
+                            >
+                              <ChevronUp size={14} className="text-gray-500"/>
+                            </button>
+                            <button
+                              onClick={() => moveEmpItem(item.key, 'down')}
+                              disabled={isLast}
+                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              aria-label="Move down"
+                            >
+                              <ChevronDown size={14} className="text-gray-500"/>
+                            </button>
+                          </div>
+
+                          {item.kind === 'standard' ? (
+                            <Toggle checked={!!empRequired[item.key]} onChange={() => toggleEmpRequired(item.key)} />
+                          ) : (
+                            <>
+                              <button onClick={() => openEditEmpTemplate(item.tpl)}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.edit}>
+                                <Pencil size={13} className="text-blue-400"/>
+                              </button>
+                              <button onClick={() => removeEmpTemplate(item.tpl.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                                aria-label={tc.buttons.delete}>
+                                <Trash2 size={13} className="text-red-400"/>
+                              </button>
+                            </>
                           )}
                         </div>
-
-                        <div className="flex flex-col shrink-0">
-                          <button
-                            onClick={() => moveEmpItem(item.key, 'up')}
-                            disabled={i === 0}
-                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Move up"
-                          >
-                            <ChevronUp size={14} className="text-gray-500"/>
-                          </button>
-                          <button
-                            onClick={() => moveEmpItem(item.key, 'down')}
-                            disabled={isLast}
-                            className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            aria-label="Move down"
-                          >
-                            <ChevronDown size={14} className="text-gray-500"/>
-                          </button>
-                        </div>
-
-                        {item.kind === 'standard' ? (
-                          <Toggle checked={!!empRequired[item.key]} onChange={() => toggleEmpRequired(item.key)} />
-                        ) : (
-                          <>
-                            <button onClick={() => openEditEmpTemplate(item.tpl)}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                              aria-label={tc.buttons.edit}>
-                              <Pencil size={13} className="text-blue-400"/>
-                            </button>
-                            <button onClick={() => removeEmpTemplate(item.tpl.id)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                              aria-label={tc.buttons.delete}>
-                              <Trash2 size={13} className="text-red-400"/>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    }}
+                  />
                 </div>
 
                 {empReqMsg && <p className={`text-xs mb-3 ${empReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{empReqMsg}</p>}
-                <Button onClick={saveEmpRequired} loading={savingEmpRequired}>
+                <Button onClick={saveEmpRequired} loading={savingEmpRequired} disabled={!employeesDirty}>
                   <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
               </div>
