@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Activity } from 'lucide-react';
+import { ArrowLeft, Activity, Search } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -22,7 +22,12 @@ interface AuditRow {
   created_at: string;
 }
 
-const PAGE_SIZE = 50;
+// Load a generous recent window up front (~a month+ for most businesses) so
+// the client-side search has a meaningful set to filter; "load more" pulls
+// older entries beyond it.
+const PAGE_SIZE = 200;
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 function relTime(
   iso: string,
@@ -57,6 +62,7 @@ export default function ActividadPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reachedEnd, setReachedEnd] = useState(false);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async (before?: string) => {
     if (!business) return;
@@ -73,6 +79,15 @@ export default function ActividadPage() {
   }, [business, supabase]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Client-side search over the loaded window — matches the rendered text
+  // (action label + who + details), so "maria" or "factura" find what you see.
+  const q = norm(search.trim());
+  const filtered = q
+    ? rows.filter(r =>
+        norm(`${describe(r, lang)} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
+      )
+    : rows;
 
   return (
     <div className="p-6">
@@ -92,16 +107,30 @@ export default function ActividadPage() {
           </div>
         </div>
 
+        {rows.length > 0 && (
+          <div className="relative mb-4">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t.searchPlaceholder}
+              className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        )}
+
         {loading && rows.length === 0 ? (
           <div className="py-10 flex justify-center">
             <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: `${i*0.15}s`}}/>)}</div>
           </div>
         ) : rows.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-400">{t.emptyState}</p>
+        ) : filtered.length === 0 ? (
+          <p className="py-10 text-center text-sm text-gray-400">{t.noResults}</p>
         ) : (
           <div className="flex flex-col">
-            {rows.map((row, i) => (
-              <div key={row.id} className={`flex items-start gap-3 py-3 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}>
+            {filtered.map((row, i) => (
+              <div key={row.id} className={`flex items-start gap-3 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                   <span className="text-xs font-bold text-gray-500">
                     {(row.user_email ?? '?').charAt(0).toUpperCase()}
@@ -115,7 +144,10 @@ export default function ActividadPage() {
                 </div>
               </div>
             ))}
-            {!reachedEnd && (
+            {/* Load more pulls older entries beyond the loaded window (and
+                widens what search can match). Hidden while actively searching
+                a narrowed set to keep the affordance unambiguous. */}
+            {!reachedEnd && !q && (
               <button
                 onClick={() => load(rows[rows.length - 1]?.created_at)}
                 disabled={loading}

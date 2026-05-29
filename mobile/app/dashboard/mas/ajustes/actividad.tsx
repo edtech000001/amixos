@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Activity, ChevronLeft } from 'lucide-react-native';
+import { Activity, ChevronLeft, Search } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -20,7 +20,11 @@ interface AuditRow {
   created_at: string;
 }
 
-const PAGE_SIZE = 50;
+// Load a generous recent window up front (~a month+ for most businesses) so
+// client-side search has a meaningful set to filter; "load more" pulls older.
+const PAGE_SIZE = 200;
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function ActividadPage() {
   const router = useRouter();
@@ -33,6 +37,7 @@ export default function ActividadPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reachedEnd, setReachedEnd] = useState(false);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async (before?: string) => {
     if (!business) return;
@@ -69,6 +74,14 @@ export default function ActividadPage() {
     return bits.length ? `${label} — ${bits.join(' · ')}` : label;
   };
 
+  // Client-side search over the loaded window — matches the rendered text.
+  const q = norm(search.trim());
+  const filtered = q
+    ? rows.filter(r =>
+        norm(`${describe(r)} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
+      )
+    : rows;
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
@@ -88,16 +101,33 @@ export default function ActividadPage() {
           </View>
         </View>
 
+        {rows.length > 0 ? (
+          <View className="flex-row items-center gap-2 mb-4 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <Search size={16} color="#9CA3AF" />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t.searchPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="flex-1 text-sm text-gray-900"
+            />
+          </View>
+        ) : null}
+
         {loading && rows.length === 0 ? (
           <View className="py-10 items-center">
             <View className="flex-row gap-1">{[0,1,2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}</View>
           </View>
         ) : rows.length === 0 ? (
           <Text className="py-10 text-center text-sm text-gray-400">{t.emptyState}</Text>
+        ) : filtered.length === 0 ? (
+          <Text className="py-10 text-center text-sm text-gray-400">{t.noResults}</Text>
         ) : (
           <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            {rows.map((row, i) => (
-              <View key={row.id} className={`flex-row items-start gap-3 px-4 py-3 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}>
+            {filtered.map((row, i) => (
+              <View key={row.id} className={`flex-row items-start gap-3 px-4 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <View className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center">
                   <Text className="text-xs font-bold text-gray-500">
                     {(row.user_email ?? '?').charAt(0).toUpperCase()}
@@ -113,7 +143,7 @@ export default function ActividadPage() {
             ))}
           </View>
         )}
-        {!reachedEnd && rows.length > 0 && (
+        {!reachedEnd && rows.length > 0 && !q && (
           <Pressable
             onPress={() => load(rows[rows.length - 1]?.created_at)}
             disabled={loading}

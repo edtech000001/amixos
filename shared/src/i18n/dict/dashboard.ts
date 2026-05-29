@@ -832,6 +832,7 @@ export type DashboardDict = {
       heading: string;
       subtitle: string;
       emailLabel: string;
+      roleLabel: string;
     };
     language: {
       heading: string;
@@ -842,10 +843,14 @@ export type DashboardDict = {
     password: {
       heading: string;
       subtitle: string;
+      currentPasswordLabel: string;
+      currentPasswordPlaceholder: string;
       newPasswordLabel: string;
       newPasswordPlaceholder: string;
       saveBtn: string;
       errorMinLength: string;
+      errorCurrentRequired: string;
+      errorCurrentWrong: string;
       errorPrefix: string;
       successMsg: string;
     };
@@ -931,6 +936,8 @@ export type DashboardDict = {
       emptyState: string;
       loadMore: string;
       unknownUser: string;
+      searchPlaceholder: string;
+      noResults: string;
       timeJustNow: string;
       timeMinutesAgo: string;
       timeHoursAgo: string;
@@ -2061,6 +2068,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Cuenta',
         subtitle: 'Tu información de acceso.',
         emailLabel: 'Correo',
+        roleLabel: 'Rol',
       },
       language: {
         heading: 'Idioma',
@@ -2160,6 +2168,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         emptyState: 'Aún no hay actividad registrada.',
         loadMore: 'Cargar más',
         unknownUser: 'Usuario desconocido',
+        searchPlaceholder: 'Buscar por persona, acción o detalle...',
+        noResults: 'Ningún cambio coincide con tu búsqueda.',
         timeJustNow: 'ahora mismo',
         timeMinutesAgo: 'hace {{n}} min',
         timeHoursAgo: 'hace {{n}} h',
@@ -3268,6 +3278,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Account',
         subtitle: 'Your sign-in information.',
         emailLabel: 'Email',
+        roleLabel: 'Role',
       },
       language: {
         heading: 'Language',
@@ -3367,6 +3378,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         emptyState: 'No activity recorded yet.',
         loadMore: 'Load more',
         unknownUser: 'Unknown user',
+        searchPlaceholder: 'Search by person, action, or detail...',
+        noResults: 'No changes match your search.',
         timeJustNow: 'just now',
         timeMinutesAgo: '{{n}} min ago',
         timeHoursAgo: '{{n}} h ago',
