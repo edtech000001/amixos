@@ -61,7 +61,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <LangProvider>
-          <StatusBar style="auto" />
+          {/* App UI is light-only, so force dark status-bar icons (clock,
+             wifi, battery). `auto` follows the device theme and turns them
+             white in dark mode, making them invisible on our light bg. */}
+          <StatusBar style="dark" />
           <AuthAwareApp />
         </LangProvider>
       </SafeAreaProvider>
