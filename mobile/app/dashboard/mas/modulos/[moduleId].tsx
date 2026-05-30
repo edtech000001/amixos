@@ -6,6 +6,8 @@ import { ChevronLeft, Construction } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import MapScreen from '@/modules/map/MapScreen';
+import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
+import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
 
 // Real module components register here. Unlike web, mobile can't lazy-
 // download chunks — Apple/Google forbid remote JS — so every module is
@@ -13,6 +15,8 @@ import MapScreen from '@/modules/map/MapScreen';
 // fall through to the placeholder.
 const MODULE_COMPONENTS: Record<string, ComponentType> = {
   map: MapScreen,
+  inventory: InventoryModuleScreen,
+  equipment: EquipmentScreen,
 };
 
 export default function ModuleRoute() {

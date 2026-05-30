@@ -1031,6 +1031,7 @@ export type DashboardDict = {
       files: { name: string; description: string };
       fundraising: { name: string; description: string };
       equipment: { name: string; description: string };
+      inventory: { name: string; description: string };
       wedding: { name: string; description: string };
       dealership: { name: string; description: string };
     };
@@ -2320,6 +2321,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         files:        { name: 'Archivos',              description: 'Guarda documentos y enlaza Google Drive, iCloud, OneDrive' },
         fundraising:  { name: 'Recaudación',           description: 'Para organizaciones sin fines de lucro: metas y fondos recaudados' },
         equipment:    { name: 'Equipo',                description: 'Ubicación, reparaciones y recargas de tu maquinaria' },
+        inventory:    { name: 'Inventario',            description: 'Productos, partes y materiales con conteo de existencias' },
         wedding:      { name: 'Bodas',                 description: 'Invitados, cronograma del evento y planeación' },
         dealership:   { name: 'Concesionario',         description: 'Inventario de autos y ventas del lote' },
       },
@@ -3589,6 +3591,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         files:        { name: 'Files',             description: 'Store documents; link Google Drive, iCloud, OneDrive' },
         fundraising:  { name: 'Fundraising',       description: 'For nonprofits: track goals and money raised' },
         equipment:    { name: 'Equipment',         description: 'Track location, repairs, and refuels of your gear' },
+        inventory:    { name: 'Inventory',         description: 'Products, parts, and materials with stock counts' },
         wedding:      { name: 'Wedding Planner',   description: 'Guest counts, event schedule, and planning' },
         dealership:   { name: 'Car Dealership',    description: 'Vehicle inventory and lot sales' },
       },

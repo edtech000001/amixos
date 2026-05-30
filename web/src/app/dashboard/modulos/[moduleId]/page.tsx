@@ -16,9 +16,13 @@ import { getModuleById } from '@amixos/shared/modules/registry';
 import { useLang } from '@/i18n/LangProvider';
 
 const MapModule = nextDynamic(() => import('@/modules/map'), { ssr: false });
+const EquipmentModule = nextDynamic(() => import('@/modules/equipment'), { ssr: false });
+const InventoryModule = nextDynamic(() => import('@/modules/inventory'), { ssr: false });
 
 const MODULE_COMPONENTS: Record<string, ComponentType> = {
   map: MapModule,
+  equipment: EquipmentModule,
+  inventory: InventoryModule,
 };
 
 export default function ModulePage({ params }: { params: { moduleId: string } }) {

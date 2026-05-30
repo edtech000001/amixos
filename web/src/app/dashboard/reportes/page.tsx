@@ -15,6 +15,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Invoice {
@@ -136,6 +137,12 @@ export default function ReportesPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Inventory KPIs only render — and only fetch — when the business has
+  // the Inventory module enabled. Disabled businesses don't need (or pay
+  // the query cost for) the inventory_items scan.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const inventoryEnabled = enabledModules.some(m => m.id === 'inventory');
+
   // Load all data once — filter client-side per range.
   // Each fetch paginates via fetchAll because reports must be accurate
   // even when a business is past PostgREST's 1000-row default cap.
@@ -163,10 +170,12 @@ export default function ReportesPage() {
         supabase.from('employees')
           .select('id, first_name, last_name, pay_rate, pay_type')
           .eq('business_id', businessId).range(from, to)),
-      fetchAll<InventoryItem>((from, to) =>
-        supabase.from('inventory_items')
-          .select('id, quantity, unit_cost')
-          .eq('business_id', businessId).range(from, to)),
+      inventoryEnabled
+        ? fetchAll<InventoryItem>((from, to) =>
+            supabase.from('inventory_items')
+              .select('id, quantity, unit_cost')
+              .eq('business_id', businessId).range(from, to))
+        : Promise.resolve([] as InventoryItem[]),
     ]).then(([inv, j, cl, ts, emp, inv_items]) => {
       setInvoices(inv);
       setJobs(j);
@@ -176,7 +185,7 @@ export default function ReportesPage() {
       setInventory(inv_items);
       setLoading(false);
     });
-  }, [business]);
+  }, [business, inventoryEnabled]);
 
   // Filter by date range
   const rangeStart = getRangeStart(range);
@@ -534,33 +543,35 @@ export default function ReportesPage() {
           </div>
         </Section>
 
-        {/* Inventory value */}
-        <Section title={t.sections.inventory}>
-          <div className="flex flex-col gap-4">
-            <div className="text-center py-2">
-              <p className="text-3xl font-black text-gray-900">{fmt(inventoryValue)}</p>
-              <p className="text-sm text-gray-500 mt-1">{t.inventoryBlock.totalValueLabel}</p>
+        {/* Inventory value — only shown when the Inventory module is on. */}
+        {inventoryEnabled && (
+          <Section title={t.sections.inventory}>
+            <div className="flex flex-col gap-4">
+              <div className="text-center py-2">
+                <p className="text-3xl font-black text-gray-900">{fmt(inventoryValue)}</p>
+                <p className="text-sm text-gray-500 mt-1">{t.inventoryBlock.totalValueLabel}</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">{t.inventoryBlock.totalItems}</span>
+                  <span className="font-bold">{inventory.length}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">{t.inventoryBlock.lowStock}</span>
+                  <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
+                    {inventory.filter(i => i.quantity <= 5).length}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">{t.inventoryBlock.outOfStock}</span>
+                  <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                    {inventory.filter(i => i.quantity === 0).length}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">{t.inventoryBlock.totalItems}</span>
-                <span className="font-bold">{inventory.length}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">{t.inventoryBlock.lowStock}</span>
-                <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
-                  {inventory.filter(i => i.quantity <= 5).length}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">{t.inventoryBlock.outOfStock}</span>
-                <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-gray-900'}`}>
-                  {inventory.filter(i => i.quantity === 0).length}
-                </span>
-              </div>
-            </div>
-          </div>
-        </Section>
+          </Section>
+        )}
       </div>
     </div>
   );

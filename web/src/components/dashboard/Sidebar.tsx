@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, UsersRound, Calendar,
-  Package, Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
+  Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
   Store as StoreIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -22,7 +22,6 @@ const NAV_ITEMS = [
   { href: '/dashboard/facturas', key: 'facturas' as const, icon: FileText },
   { href: '/dashboard/empleados', key: 'empleados' as const, icon: UsersRound },
   { href: '/dashboard/calendario', key: 'calendario' as const, icon: Calendar },
-  { href: '/dashboard/inventario', key: 'inventario' as const, icon: Package },
   { href: '/dashboard/reportes', key: 'reportes' as const, icon: BarChart3 },
 ];
 

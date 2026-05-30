@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   UsersRound,
   Calendar,
-  Package,
   Settings,
   Store as StoreIcon,
   ChevronRight,
@@ -76,13 +75,6 @@ export default function MasMenu() {
       description: sb.descriptions.calendario,
       icon: Calendar,
       path: '/dashboard/mas/calendario',
-    },
-    {
-      key: 'inventario',
-      label: sb.inventario,
-      description: sb.descriptions.inventario,
-      icon: Package,
-      path: '/dashboard/mas/inventario',
     },
     // Enabled modules slot in after core nav so the "what's on" group is
     // contiguous. Empty when no modules are active.
