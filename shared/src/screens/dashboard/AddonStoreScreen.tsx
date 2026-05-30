@@ -56,16 +56,26 @@ export function AddonStoreScreen({
 
   const filtered = useMemo(() => {
     const q = norm(search.trim());
-    return MODULE_REGISTRY.filter(m => {
+    // Group rank: 0 = enabled, 1 = available (not enabled), 2 = coming-soon.
+    // Within each group, preserve registry order (curated) so featured
+    // modules stay near the top.
+    const rank = (m: ModuleDef): number => {
+      if (m.status === 'coming_soon') return 2;
+      return enabledIds.has(m.id) ? 0 : 1;
+    };
+    const list = MODULE_REGISTRY.filter(m => {
       if (category !== 'all' && m.category !== category) return false;
       if (!q) return true;
       const { name, description } = labelFor(m);
       return norm(name).includes(q) || norm(description).includes(q);
     });
+    // Stable sort by rank — Array#sort is stable in ES2019+ (RN's Hermes
+    // and modern V8 both honor it), so equal ranks keep registry order.
+    return [...list].sort((a, b) => rank(a) - rank(b));
     // labelFor depends on the i18n dict — re-derive when the locale changes
     // by keying on `modulesDict`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, category, modulesDict]);
+  }, [search, category, enabledIds, modulesDict]);
 
   const CATEGORIES: Array<{ key: CategoryFilter; label: string }> = [
     { key: 'all',      label: t.categoryAll },
