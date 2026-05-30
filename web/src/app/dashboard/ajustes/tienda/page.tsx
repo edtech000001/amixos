@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { AddonStoreScreen } from '@amixos/shared/screens/dashboard/AddonStoreScreen';
 import { getModuleById } from '@amixos/shared/modules/registry';
+import { notifyModulesChanged } from '@amixos/shared/modules/useEnabledModules';
 import { logAudit } from '@amixos/shared/lib/audit';
 
 export default function TiendaPage() {
@@ -59,6 +60,9 @@ export default function TiendaPage() {
       { module_key: moduleId },
     );
     await load();
+    // Tell any mounted useEnabledModules() consumers (Sidebar, etc.) to
+    // refetch so the new icon appears without a full reload.
+    notifyModulesChanged();
   };
 
   // Wrap the toggle action with a confirmation dialog. Modules are optional

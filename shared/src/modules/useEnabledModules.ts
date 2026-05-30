@@ -26,6 +26,18 @@ export interface UseEnabledModulesResult {
   refetch: () => Promise<void>;
 }
 
+// Module-level pub/sub so any mounted useEnabledModules() instance refetches
+// when the Tienda enables/disables a module. Without this, the Sidebar (web)
+// and Más list (mobile) hold the snapshot they fetched at mount time and the
+// newly-toggled module doesn't appear until a full reload.
+// Cross-platform (no window/EventEmitter dependency) — just a module-level
+// Set of listeners.
+const moduleChangeListeners = new Set<() => void>();
+
+export function notifyModulesChanged(): void {
+  moduleChangeListeners.forEach(l => l());
+}
+
 export function useEnabledModules(
   supabase: AnySupabase | null,
   businessId: string | null,
@@ -58,6 +70,13 @@ export function useEnabledModules(
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    moduleChangeListeners.add(load);
+    return () => {
+      moduleChangeListeners.delete(load);
+    };
   }, [load]);
 
   return { modules, loading, refetch: load };
