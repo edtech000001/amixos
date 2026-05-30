@@ -122,7 +122,10 @@ export default function EquipmentScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const TYPE_OPTIONS = useMemo(() => [
-    { value: '', label: t.typePlaceholder },
+    // "—" is the canonical "no selection" label across the app (matches
+    // the state picker etc.). The descriptive `typePlaceholder` shows in
+    // the closed Select's placeholder slot, not as a confusing first row.
+    { value: '', label: '—' },
     { value: t.typeSuggestions.truck, label: t.typeSuggestions.truck },
     { value: t.typeSuggestions.car, label: t.typeSuggestions.car },
     { value: t.typeSuggestions.van, label: t.typeSuggestions.van },
@@ -478,7 +481,7 @@ export default function EquipmentScreen() {
             <Pressable onPress={() => { setModal(null); setSelected(null); }} style={sheetScrim} />
             <View
               className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
-              style={{ maxHeight: '92%', ...sheetShadow }}
+              style={{ maxHeight: '85%', ...sheetShadow }}
             >
               <View className="items-center mb-2">
                 <View className="w-10 h-1 bg-gray-200 rounded-full" />
@@ -507,26 +510,14 @@ export default function EquipmentScreen() {
                   placeholder={t.typePlaceholder}
                   options={TYPE_OPTIONS}
                 />
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
-                      onChangeText={(v) => setForm((f) => ({ ...f, make: v }))} />
-                  </View>
-                  <View className="flex-1">
-                    <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
-                      onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
-                  </View>
-                </View>
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
-                      value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v }))} />
-                  </View>
-                  <View className="flex-1">
-                    <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
-                      value={form.mileage} onChangeText={(v) => setForm((f) => ({ ...f, mileage: v }))} />
-                  </View>
-                </View>
+                <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
+                  onChangeText={(v) => setForm((f) => ({ ...f, make: v }))} />
+                <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
+                  onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
+                <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
+                  value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v }))} />
+                <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
+                  value={form.mileage} onChangeText={(v) => setForm((f) => ({ ...f, mileage: v }))} />
                 <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
                   onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters" />
 

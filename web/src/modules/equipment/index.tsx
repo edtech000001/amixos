@@ -81,7 +81,7 @@ export default function EquipmentModule() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const TYPE_SUGGESTIONS = useMemo(() => [
-    { value: '', label: t.typePlaceholder },
+    { value: '', label: '—' },
     { value: t.typeSuggestions.truck, label: t.typeSuggestions.truck },
     { value: t.typeSuggestions.car, label: t.typeSuggestions.car },
     { value: t.typeSuggestions.van, label: t.typeSuggestions.van },
@@ -405,18 +405,14 @@ export default function EquipmentModule() {
               {TYPE_SUGGESTIONS.map(o => <option key={o.value || '__none'} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
-              onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
-            <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
-              onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label={t.yearLabel} placeholder={t.yearPlaceholder} type="number" min="1900" max="2100"
-              value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))} />
-            <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} type="number" min="0"
-              value={form.mileage} onChange={e => setForm(f => ({ ...f, mileage: e.target.value }))} />
-          </div>
+          <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
+            onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
+          <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
+            onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+          <Input label={t.yearLabel} placeholder={t.yearPlaceholder} type="number" min="1900" max="2100"
+            value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))} />
+          <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} type="number" min="0"
+            value={form.mileage} onChange={e => setForm(f => ({ ...f, mileage: e.target.value }))} />
           <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
             onChange={e => setForm(f => ({ ...f, vin: e.target.value }))} />
 
