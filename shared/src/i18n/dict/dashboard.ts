@@ -304,6 +304,11 @@ export type DashboardDict = {
     emptyAll: string;
     createFirst: string;
     dueShort: string;
+    alertChip: {
+      today: string;
+      tomorrow: string;
+      inDays: string;
+    };
     actions: {
       markSent: string;
       markAccepted: string;
@@ -398,6 +403,13 @@ export type DashboardDict = {
       clientSearchPlaceholder: string;
       clientNoResults: string;
       clientNone: string;
+      // Crew visibility toggle (migration 044). When OFF the job stays
+      // private to office staff — used as the owner's scheduler so crew
+      // doesn't see the full plan when work is split across teams.
+      publishedToCrewLabel: string;
+      publishedToCrewHint: string;
+      privateBadge: string;
+      publicBadge: string;
       issueDateLabel: string;
       expiryDateLabel: string;
       projectStartLabel: string;
@@ -438,6 +450,11 @@ export type DashboardDict = {
       leadLabel: string;
       leadNone: string;
       crewLabel: string;
+      workerSearchPlaceholder: string;
+      workerNoResults: string;
+      crewPlaceholder: string;
+      crewSelectedCount: string;
+      crewDoneBtn: string;
       itemsHeadingProposal: string;
       itemsHeadingJob: string;
       colType: string;
@@ -551,6 +568,7 @@ export type DashboardDict = {
       payTypeLabel: string;
       payRateLabel: string;
       errorFirstNameRequired: string;
+      requiredError: string;
       // New standard fields
       emailLabel: string;
       emailPlaceholder: string;
@@ -759,6 +777,30 @@ export type DashboardDict = {
     crewMode: {
       heading: string;
       subtitle: string;
+      saveBtn: string;
+      saveSuccess: string;
+      saveError: string;
+    };
+    jobAlerts: {
+      heading: string;
+      subtitle: string;
+      enabledLabel: string;
+      enabledHint: string;
+      levelsHeading: string;
+      levelsEmpty: string;
+      daysLabel: string;
+      colorLabel: string;
+      daysSuffixOne: string;
+      daysSuffixMany: string;
+      addLevelBtn: string;
+      removeLevelLabel: string;
+      colors: {
+        red: string;
+        orange: string;
+        yellow: string;
+        blue: string;
+        purple: string;
+      };
       saveBtn: string;
       saveSuccess: string;
       saveError: string;
@@ -1222,6 +1264,77 @@ export type DashboardDict = {
         saveError: string;
       };
     };
+    // Equipment module — list, detail/edit form, photo gallery.
+    equipment: {
+      title: string;
+      subtitle: string;
+      addBtn: string;
+      searchPlaceholder: string;
+      emptyTitle: string;
+      emptyHint: string;
+      unassignedBadge: string;
+      paidOffBadge: string;
+      loanBadge: string;
+      plateExpiresSoon: string;
+      plateExpired: string;
+      mileageUnit: string;
+      addTitle: string;
+      editTitle: string;
+      basicInfoHeading: string;
+      registrationHeading: string;
+      ownershipHeading: string;
+      assignmentHeading: string;
+      photosHeading: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      typeLabel: string;
+      typePlaceholder: string;
+      typeSuggestions: {
+        truck: string;
+        car: string;
+        van: string;
+        semi: string;
+        trailer: string;
+        skidLoader: string;
+        tractor: string;
+        generator: string;
+        other: string;
+      };
+      makeLabel: string;
+      makePlaceholder: string;
+      modelLabel: string;
+      modelPlaceholder: string;
+      yearLabel: string;
+      yearPlaceholder: string;
+      vinLabel: string;
+      vinPlaceholder: string;
+      mileageLabel: string;
+      mileagePlaceholder: string;
+      plateNumberLabel: string;
+      plateNumberPlaceholder: string;
+      plateExpirationLabel: string;
+      paidOffLabel: string;
+      loanLenderLabel: string;
+      loanLenderPlaceholder: string;
+      assignedToLabel: string;
+      assignedToNone: string;
+      notesLabel: string;
+      notesPlaceholder: string;
+      photoEmpty: string;
+      photoAddBtn: string;
+      photoTakeBtn: string;
+      photoLibraryBtn: string;
+      photoUploading: string;
+      photoUploadError: string;
+      photoDeleteConfirm: string;
+      photoLimitHit: string;
+      saveSuccess: string;
+      saveError: string;
+      deleteBtn: string;
+      deleteConfirmTitle: string;
+      deleteConfirmMsg: string;
+      nameRequiredError: string;
+    };
   };
   reports: {
     title: string;
@@ -1608,6 +1721,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyAll: 'No tienes trabajos aún.',
       createFirst: 'Crear el primero →',
       dueShort: 'Vence {{date}}',
+      alertChip: {
+        today: 'Hoy',
+        tomorrow: 'Mañana',
+        inDays: 'En {{count}} días',
+      },
       actions: {
         markSent: 'Marcar enviada',
         markAccepted: 'Aceptada',
@@ -1695,6 +1813,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientSearchPlaceholder: 'Buscar cliente...',
         clientNoResults: 'Sin resultados',
         clientNone: '— Sin cliente —',
+        publishedToCrewLabel: 'Visible para la cuadrilla',
+        publishedToCrewHint: 'Cuando esté apagado, solo tú y la oficina pueden ver este trabajo. La cuadrilla asignada no lo verá.',
+        privateBadge: 'Privado',
+        publicBadge: 'Pública',
         issueDateLabel: 'Fecha de emisión',
         expiryDateLabel: 'Válida hasta',
         projectStartLabel: 'Inicio del proyecto',
@@ -1735,6 +1857,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadLabel: 'Líder del trabajo',
         leadNone: 'Sin líder',
         crewLabel: 'Cuadrilla',
+        workerSearchPlaceholder: 'Buscar trabajador...',
+        workerNoResults: 'Sin resultados',
+        crewPlaceholder: 'Selecciona la cuadrilla',
+        crewSelectedCount: '{{count}} seleccionados',
+        crewDoneBtn: 'Listo',
         itemsHeadingProposal: 'Servicios',
         itemsHeadingJob: 'Materiales y mano de obra',
         colType: 'Tipo',
@@ -1848,6 +1975,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payTypeLabel: 'Tipo de pago',
         payRateLabel: 'Tarifa ({{unit}})',
         errorFirstNameRequired: 'El nombre es requerido',
+        requiredError: 'Campos requeridos: {{fields}}',
         emailLabel: 'Correo personal',
         emailPlaceholder: 'juan@ejemplo.com',
         birthdayLabel: 'Fecha de nacimiento',
@@ -2054,6 +2182,30 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveBtn: 'Guardar modo cuadrilla',
         saveSuccess: 'Modo cuadrilla guardado.',
         saveError: 'No se pudo guardar.',
+      },
+      jobAlerts: {
+        heading: 'Alertas de trabajos próximos',
+        subtitle: 'Resalta los trabajos cuya fecha de inicio se acerca para que sepas cuáles necesitan ser programados.',
+        enabledLabel: 'Activar alertas',
+        enabledHint: 'Cuando esté activo, cada trabajo programado mostrará un borde de color en la lista según los niveles configurados.',
+        levelsHeading: 'Niveles de alerta',
+        levelsEmpty: 'Agrega al menos un nivel para mostrar alertas en las tarjetas.',
+        daysLabel: 'Días antes',
+        colorLabel: 'Color',
+        daysSuffixOne: 'día antes',
+        daysSuffixMany: 'días antes',
+        addLevelBtn: 'Agregar nivel',
+        removeLevelLabel: 'Eliminar nivel',
+        colors: {
+          red: 'Rojo',
+          orange: 'Naranja',
+          yellow: 'Amarillo',
+          blue: 'Azul',
+          purple: 'Morado',
+        },
+        saveBtn: 'Guardar alertas',
+        saveSuccess: '¡Guardado!',
+        saveError: 'Error al guardar.',
       },
       assignmentFieldsSection: {
         title: 'Campos por trabajador',
@@ -2320,7 +2472,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trainer:      { name: 'Entrenador',            description: 'Planes de entrenamiento y alimentación para tus clientes' },
         files:        { name: 'Archivos',              description: 'Guarda documentos y enlaza Google Drive, iCloud, OneDrive' },
         fundraising:  { name: 'Recaudación',           description: 'Para organizaciones sin fines de lucro: metas y fondos recaudados' },
-        equipment:    { name: 'Equipo',                description: 'Ubicación, reparaciones y recargas de tu maquinaria' },
+        equipment:    { name: 'Maquinaria',            description: 'Camiones, autos, equipo pesado y todo lo demás de tu negocio' },
         inventory:    { name: 'Inventario',            description: 'Productos, partes y materiales con conteo de existencias' },
         wedding:      { name: 'Bodas',                 description: 'Invitados, cronograma del evento y planeación' },
         dealership:   { name: 'Concesionario',         description: 'Inventario de autos y ventas del lote' },
@@ -2495,6 +2647,76 @@ export const dashboard: Record<Locale, DashboardDict> = {
           saveError: 'No se pudo guardar la configuración de clima.',
         },
       },
+      equipment: {
+        title: 'Maquinaria',
+          subtitle: 'Camiones, autos, equipos pesados y todo lo demás.',
+          addBtn: 'Agregar equipo',
+          searchPlaceholder: 'Buscar por nombre, marca o placa...',
+          emptyTitle: 'Sin equipos aún',
+          emptyHint: 'Agrega tu primer equipo para empezar a darle seguimiento.',
+          unassignedBadge: 'Sin asignar',
+          paidOffBadge: 'Pagado',
+          loanBadge: 'Préstamo',
+          plateExpiresSoon: 'Placa vence en {{days}} días',
+          plateExpired: 'Placa vencida',
+          mileageUnit: '{{n}} mi',
+          addTitle: 'Nuevo equipo',
+          editTitle: 'Editar equipo',
+          basicInfoHeading: 'Información básica',
+          registrationHeading: 'Registro y placa',
+          ownershipHeading: 'Propiedad',
+          assignmentHeading: 'Asignación',
+          photosHeading: 'Fotos',
+          nameLabel: 'Nombre',
+          namePlaceholder: 'Camión #1, Skid Loader, etc.',
+          typeLabel: 'Tipo',
+          typePlaceholder: 'Camión, auto, semi...',
+          typeSuggestions: {
+            truck: 'Camión',
+            car: 'Auto',
+            van: 'Camioneta',
+            semi: 'Semi',
+            trailer: 'Tráiler',
+            skidLoader: 'Skid loader',
+            tractor: 'Tractor',
+            generator: 'Generador',
+            other: 'Otro',
+          },
+          makeLabel: 'Marca',
+          makePlaceholder: 'Ford, Chevrolet, John Deere...',
+          modelLabel: 'Modelo',
+          modelPlaceholder: 'F-150, Silverado, S650...',
+          yearLabel: 'Año',
+          yearPlaceholder: '2024',
+          vinLabel: 'VIN',
+          vinPlaceholder: '17 caracteres',
+          mileageLabel: 'Millaje',
+          mileagePlaceholder: '0',
+          plateNumberLabel: 'Número de placa',
+          plateNumberPlaceholder: 'ABC-1234',
+          plateExpirationLabel: 'Vencimiento de placa',
+          paidOffLabel: 'Pagado por completo',
+          loanLenderLabel: 'Prestamista',
+          loanLenderPlaceholder: 'Banco, concesionario, persona...',
+          assignedToLabel: 'Asignado a',
+          assignedToNone: 'Sin asignar',
+          notesLabel: 'Notas',
+          notesPlaceholder: 'Detalles internos, recordatorios...',
+          photoEmpty: 'Sin fotos aún. Agrega una para identificar este equipo.',
+          photoAddBtn: 'Agregar foto',
+          photoTakeBtn: 'Tomar foto',
+          photoLibraryBtn: 'Elegir de la galería',
+          photoUploading: 'Subiendo...',
+          photoUploadError: 'No se pudo subir la foto.',
+          photoDeleteConfirm: '¿Eliminar esta foto?',
+          photoLimitHit: 'Máximo {{n}} fotos por equipo.',
+          saveSuccess: 'Equipo guardado.',
+          saveError: 'No se pudo guardar el equipo.',
+          deleteBtn: 'Eliminar equipo',
+          deleteConfirmTitle: 'Eliminar equipo',
+          deleteConfirmMsg: 'Esta acción no se puede deshacer. ¿Continuar?',
+          nameRequiredError: 'El nombre es requerido.',
+        },
     },
     reports: {
       title: 'Reportes',
@@ -2878,6 +3100,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyAll: 'No jobs yet.',
       createFirst: 'Create the first one →',
       dueShort: 'Due {{date}}',
+      alertChip: {
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        inDays: 'In {{count}} days',
+      },
       actions: {
         markSent: 'Mark sent',
         markAccepted: 'Accepted',
@@ -2965,6 +3192,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientSearchPlaceholder: 'Search client...',
         clientNoResults: 'No results',
         clientNone: '— No client —',
+        publishedToCrewLabel: 'Visible to crew',
+        publishedToCrewHint: "When off, only you and the office see this job. Assigned crew won't see it.",
+        privateBadge: 'Private',
+        publicBadge: 'Public',
         issueDateLabel: 'Issue date',
         expiryDateLabel: 'Valid until',
         projectStartLabel: 'Project start',
@@ -3005,6 +3236,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadLabel: 'Job lead',
         leadNone: 'No lead',
         crewLabel: 'Crew',
+        workerSearchPlaceholder: 'Search worker...',
+        workerNoResults: 'No results',
+        crewPlaceholder: 'Select crew',
+        crewSelectedCount: '{{count}} selected',
+        crewDoneBtn: 'Done',
         itemsHeadingProposal: 'Services',
         itemsHeadingJob: 'Materials and labor',
         colType: 'Type',
@@ -3118,6 +3354,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payTypeLabel: 'Pay type',
         payRateLabel: 'Rate ({{unit}})',
         errorFirstNameRequired: 'First name is required',
+        requiredError: 'Required fields: {{fields}}',
         emailLabel: 'Personal email',
         emailPlaceholder: 'john@example.com',
         birthdayLabel: 'Date of birth',
@@ -3324,6 +3561,30 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveBtn: 'Save crew mode',
         saveSuccess: 'Crew mode saved.',
         saveError: 'Could not save.',
+      },
+      jobAlerts: {
+        heading: 'Upcoming-job alerts',
+        subtitle: "Highlight jobs whose start date is approaching so you know which ones still need to be scheduled.",
+        enabledLabel: 'Enable alerts',
+        enabledHint: 'When on, each scheduled job shows a colored border on the list depending on the level it matches.',
+        levelsHeading: 'Alert levels',
+        levelsEmpty: 'Add at least one level to highlight job cards.',
+        daysLabel: 'Days before',
+        colorLabel: 'Color',
+        daysSuffixOne: 'day before',
+        daysSuffixMany: 'days before',
+        addLevelBtn: 'Add level',
+        removeLevelLabel: 'Remove level',
+        colors: {
+          red: 'Red',
+          orange: 'Orange',
+          yellow: 'Yellow',
+          blue: 'Blue',
+          purple: 'Purple',
+        },
+        saveBtn: 'Save alerts',
+        saveSuccess: 'Saved!',
+        saveError: 'Save error.',
       },
       assignmentFieldsSection: {
         title: 'Per-worker fields',
@@ -3590,7 +3851,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trainer:      { name: 'Trainer',           description: 'Workout and meal plans for your clients' },
         files:        { name: 'Files',             description: 'Store documents; link Google Drive, iCloud, OneDrive' },
         fundraising:  { name: 'Fundraising',       description: 'For nonprofits: track goals and money raised' },
-        equipment:    { name: 'Equipment',         description: 'Track location, repairs, and refuels of your gear' },
+        equipment:    { name: 'Equipment',         description: 'Trucks, cars, heavy equipment, and everything else your business owns' },
         inventory:    { name: 'Inventory',         description: 'Products, parts, and materials with stock counts' },
         wedding:      { name: 'Wedding Planner',   description: 'Guest counts, event schedule, and planning' },
         dealership:   { name: 'Car Dealership',    description: 'Vehicle inventory and lot sales' },
@@ -3765,6 +4026,76 @@ export const dashboard: Record<Locale, DashboardDict> = {
           saveError: 'Could not save weather settings.',
         },
       },
+      equipment: {
+        title: 'Equipment',
+          subtitle: 'Trucks, cars, heavy equipment, and everything else.',
+          addBtn: 'Add equipment',
+          searchPlaceholder: 'Search by name, make, or plate...',
+          emptyTitle: 'No equipment yet',
+          emptyHint: 'Add your first piece of equipment to start tracking it.',
+          unassignedBadge: 'Unassigned',
+          paidOffBadge: 'Paid off',
+          loanBadge: 'Loan',
+          plateExpiresSoon: 'Plate expires in {{days}} days',
+          plateExpired: 'Plate expired',
+          mileageUnit: '{{n}} mi',
+          addTitle: 'New equipment',
+          editTitle: 'Edit equipment',
+          basicInfoHeading: 'Basic info',
+          registrationHeading: 'Registration & plate',
+          ownershipHeading: 'Ownership',
+          assignmentHeading: 'Assignment',
+          photosHeading: 'Photos',
+          nameLabel: 'Name',
+          namePlaceholder: 'Truck #1, Skid Loader, etc.',
+          typeLabel: 'Type',
+          typePlaceholder: 'Truck, car, semi...',
+          typeSuggestions: {
+            truck: 'Truck',
+            car: 'Car',
+            van: 'Van',
+            semi: 'Semi',
+            trailer: 'Trailer',
+            skidLoader: 'Skid loader',
+            tractor: 'Tractor',
+            generator: 'Generator',
+            other: 'Other',
+          },
+          makeLabel: 'Make',
+          makePlaceholder: 'Ford, Chevrolet, John Deere...',
+          modelLabel: 'Model',
+          modelPlaceholder: 'F-150, Silverado, S650...',
+          yearLabel: 'Year',
+          yearPlaceholder: '2024',
+          vinLabel: 'VIN',
+          vinPlaceholder: '17 characters',
+          mileageLabel: 'Mileage',
+          mileagePlaceholder: '0',
+          plateNumberLabel: 'Plate number',
+          plateNumberPlaceholder: 'ABC-1234',
+          plateExpirationLabel: 'Plate expiration',
+          paidOffLabel: 'Paid off',
+          loanLenderLabel: 'Lender',
+          loanLenderPlaceholder: 'Bank, dealer, person...',
+          assignedToLabel: 'Assigned to',
+          assignedToNone: 'Unassigned',
+          notesLabel: 'Notes',
+          notesPlaceholder: 'Internal details, reminders...',
+          photoEmpty: 'No photos yet. Add one to identify this equipment.',
+          photoAddBtn: 'Add photo',
+          photoTakeBtn: 'Take photo',
+          photoLibraryBtn: 'Choose from library',
+          photoUploading: 'Uploading...',
+          photoUploadError: 'Could not upload photo.',
+          photoDeleteConfirm: 'Delete this photo?',
+          photoLimitHit: 'Maximum {{n}} photos per equipment.',
+          saveSuccess: 'Equipment saved.',
+          saveError: 'Could not save equipment.',
+          deleteBtn: 'Delete equipment',
+          deleteConfirmTitle: 'Delete equipment',
+          deleteConfirmMsg: 'This cannot be undone. Continue?',
+          nameRequiredError: 'Name is required.',
+        },
     },
     reports: {
       title: 'Reports',
