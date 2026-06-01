@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -136,6 +137,7 @@ const EMPTY_TS = (): TsForm => ({
 });
 
 export default function EmpleadosRoute() {
+  const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
   const { t: full, locale } = useLang();
@@ -339,7 +341,13 @@ export default function EmpleadosRoute() {
     setAccessRole('office');
     setEmpModal('add');
   };
-  const openEditEmpById = (id: string) => {
+  // Row taps now navigate to the dedicated detail screen — the in-list
+  // modal only owns the "Add" flow.
+  const openEditEmpById = (id: string) => router.push(`/dashboard/mas/empleados/${id}`);
+  // Legacy edit-modal seed kept inline as dead code (the RNModal's
+  // `visible` is gated on add mode below, so this isn't reached). Will
+  // be cleaned up in a follow-up pass.
+  const _legacyOpenEdit = (id: string) => {
     const e = employees.find((emp) => emp.id === id);
     if (!e) return;
     setSelEmpId(e.id);
@@ -615,7 +623,7 @@ export default function EmpleadosRoute() {
     <>
       {/* Add / edit employee */}
       <RNModal
-        visible={empModal !== null}
+        visible={empModal === 'add'}
         transparent
         animationType="slide"
         onRequestClose={() => setEmpModal(null)}
