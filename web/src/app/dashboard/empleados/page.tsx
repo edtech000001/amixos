@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, DollarSign } from 'lucide-react';
+import { Clock, DollarSign, UserX, UserCheck } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -469,7 +469,29 @@ export default function EmpleadosPage() {
 
   const modals = (
     <>
-      <Modal open={empModal !== null} onClose={() => setEmpModal(null)} title={empModal === 'add' ? t.modal.addTitle : t.modal.editTitle}>
+      <Modal
+        open={empModal !== null}
+        onClose={() => setEmpModal(null)}
+        title={empModal === 'add' ? t.modal.addTitle : t.modal.editTitle}
+        // Edit mode: surface the deactivate/activate toggle next to the
+        // close X. The list rows are now single-tap-to-open so this is
+        // the only place that action lives.
+        headerAction={
+          empModal === 'edit' && selEmp ? (
+            <button
+              type="button"
+              onClick={() => toggleActive(selEmp.id)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              {selEmp.active ? (
+                <UserX size={16} className="text-gray-500" />
+              ) : (
+                <UserCheck size={16} className="text-emerald-500" />
+              )}
+            </button>
+          ) : null
+        }
+      >
         <div className="flex flex-col gap-4">
           {/* Basic info */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>

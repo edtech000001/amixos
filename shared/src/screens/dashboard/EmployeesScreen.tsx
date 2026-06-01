@@ -4,9 +4,7 @@ import {
   Plus,
   Clock,
   ClipboardList,
-  Pencil,
   UserCheck,
-  UserX,
   DollarSign,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -176,73 +174,54 @@ export function EmployeesScreen({
         ) : (
           <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {employees.map((e, i) => (
-              <View
+              <Pressable
                 key={e.id}
-                className={`flex-row items-start justify-between px-5 py-4 gap-2 ${
+                onPress={() => onEditEmployee(e.id)}
+                className={`flex-row items-start gap-3 px-5 py-4 active:bg-gray-50 ${
                   i < employees.length - 1 ? 'border-b border-gray-50' : ''
                 }`}
               >
-                <View className="flex-row items-start gap-3 min-w-0 flex-1">
-                  <View
-                    className={`w-9 h-9 rounded-full items-center justify-center ${
-                      e.active ? 'bg-primary/10' : 'bg-gray-100'
+                <View
+                  className={`w-9 h-9 rounded-full items-center justify-center ${
+                    e.active ? 'bg-primary/10' : 'bg-gray-100'
+                  }`}
+                >
+                  <Text
+                    className={`text-sm font-semibold ${
+                      e.active ? 'text-primary' : 'text-gray-400'
                     }`}
                   >
-                    <Text
-                      className={`text-sm font-semibold ${
-                        e.active ? 'text-primary' : 'text-gray-400'
-                      }`}
-                    >
-                      {e.firstName.charAt(0)}{e.lastName.charAt(0)}
-                    </Text>
-                  </View>
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold text-gray-900" numberOfLines={2}>
-                      {e.firstName} {e.lastName}
-                    </Text>
-                    {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
-                      <View className="flex-row flex-wrap items-center gap-1.5 mt-1">
-                        {!e.active ? (
-                          <View className="px-2 py-0.5 rounded-full bg-gray-100">
-                            <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
-                          </View>
-                        ) : null}
-                        {e.access?.kind === 'active' ? (
-                          <View className="px-2 py-0.5 rounded-full bg-primary/10">
-                            <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
-                          </View>
-                        ) : e.access?.kind === 'invited' ? (
-                          <View className="px-2 py-0.5 rounded-full bg-amber-100">
-                            <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                    <Text className="text-xs text-gray-400 mt-1">
-                      {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
-                      {e.phone ? ` · ${e.phone}` : ''}
-                    </Text>
-                  </View>
+                    {e.firstName.charAt(0)}{e.lastName.charAt(0)}
+                  </Text>
                 </View>
-                <View className="flex-row items-center gap-1 shrink-0">
-                  <Pressable
-                    onPress={() => onEditEmployee(e.id)}
-                    className="p-2 rounded-lg active:bg-gray-100"
-                  >
-                    <Pencil size={14} color="#9CA3AF" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onToggleActive(e.id)}
-                    className="p-2 rounded-lg active:bg-gray-100"
-                  >
-                    {e.active ? (
-                      <UserX size={14} color="#9CA3AF" />
-                    ) : (
-                      <UserCheck size={14} color="#10B981" />
-                    )}
-                  </Pressable>
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={2}>
+                    {e.firstName} {e.lastName}
+                  </Text>
+                  {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
+                    <View className="flex-row flex-wrap items-center gap-1.5 mt-1">
+                      {!e.active ? (
+                        <View className="px-2 py-0.5 rounded-full bg-gray-100">
+                          <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
+                        </View>
+                      ) : null}
+                      {e.access?.kind === 'active' ? (
+                        <View className="px-2 py-0.5 rounded-full bg-primary/10">
+                          <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
+                        </View>
+                      ) : e.access?.kind === 'invited' ? (
+                        <View className="px-2 py-0.5 rounded-full bg-amber-100">
+                          <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  <Text className="text-xs text-gray-400 mt-1">
+                    {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+                    {e.phone ? ` · ${e.phone}` : ''}
+                  </Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         )

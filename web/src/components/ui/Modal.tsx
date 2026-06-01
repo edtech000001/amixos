@@ -9,9 +9,13 @@ interface Props {
   title: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  // Optional icon button(s) rendered to the left of the close X — used by
+  // the empleados modal for the deactivate/activate action that moved out
+  // of the list rows.
+  headerAction?: ReactNode;
 }
 
-export function Modal({ open, onClose, title, children, size = 'md' }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', headerAction }: Props) {
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
@@ -28,9 +32,12 @@ export function Modal({ open, onClose, title, children, size = 'md' }: Props) {
       <div className={`relative w-full ${widths[size]} bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X size={16} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1">
+            {headerAction}
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <X size={16} className="text-gray-500" />
+            </button>
+          </div>
         </div>
         <div className="overflow-y-auto overflow-x-hidden py-6 px-7">
           {children}

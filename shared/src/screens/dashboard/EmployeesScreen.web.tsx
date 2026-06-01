@@ -10,9 +10,7 @@ import {
   Plus,
   Clock,
   ClipboardList,
-  Pencil,
   UserCheck,
-  UserX,
   DollarSign,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
@@ -180,71 +178,51 @@ export function EmployeesScreen({
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             {employees.map((e, i) => (
-              <div
+              <button
+                type="button"
                 key={e.id}
-                className={`flex items-start justify-between gap-2 px-5 py-4 ${
+                onClick={() => onEditEmployee(e.id)}
+                className={`w-full text-left flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition-colors ${
                   i < employees.length - 1 ? 'border-b border-gray-50' : ''
                 }`}
               >
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                      e.active ? 'bg-primary/10' : 'bg-gray-100'
-                    }`}
-                  >
-                    <span className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-gray-400'}`}>
-                      {e.firstName.charAt(0)}{e.lastName.charAt(0)}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 break-words">
-                      {e.firstName} {e.lastName}
-                    </p>
-                    {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        {!e.active ? (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
-                            {t.inactiveBadge}
-                          </span>
-                        ) : null}
-                        {e.access?.kind === 'active' ? (
-                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                            {ROLE_LABELS[e.access.role][lang]}
-                          </span>
-                        ) : e.access?.kind === 'invited' ? (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
-                            {teamT.pendingBadge}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <p className="text-xs text-gray-400 mt-1 truncate">
-                      {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
-                      {e.phone ? ` · ${e.phone}` : ''}
-                    </p>
-                  </div>
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                    e.active ? 'bg-primary/10' : 'bg-gray-100'
+                  }`}
+                >
+                  <span className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-gray-400'}`}>
+                    {e.firstName.charAt(0)}{e.lastName.charAt(0)}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onEditEmployee(e.id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <Pencil size={14} className="text-gray-400" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleActive(e.id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    {e.active ? (
-                      <UserX size={14} className="text-gray-400" />
-                    ) : (
-                      <UserCheck size={14} className="text-emerald-500" />
-                    )}
-                  </button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-900 break-words">
+                    {e.firstName} {e.lastName}
+                  </p>
+                  {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {!e.active ? (
+                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
+                          {t.inactiveBadge}
+                        </span>
+                      ) : null}
+                      {e.access?.kind === 'active' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {ROLE_LABELS[e.access.role][lang]}
+                        </span>
+                      ) : e.access?.kind === 'invited' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
+                          {teamT.pendingBadge}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-gray-400 mt-1 truncate">
+                    {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+                    {e.phone ? ` · ${e.phone}` : ''}
+                  </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )

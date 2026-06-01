@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, Check, DollarSign, X, Clock } from 'lucide-react-native';
+import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -630,9 +630,26 @@ export default function EmpleadosRoute() {
               </View>
               <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
                 <Text className="text-lg font-bold text-gray-900">{empModalTitle}</Text>
-                <Pressable onPress={() => setEmpModal(null)} hitSlop={8}>
-                  <X size={20} color="#9CA3AF" />
-                </Pressable>
+                <View className="flex-row items-center gap-1">
+                  {/* Toggle active/inactive — moved here from the list rows so
+                     the row itself is a single tap to open the detail. */}
+                  {empModal === 'edit' && selEmp ? (
+                    <Pressable
+                      onPress={() => toggleActive(selEmp.id)}
+                      hitSlop={8}
+                      className="p-2 rounded-lg active:bg-gray-100"
+                    >
+                      {selEmp.active ? (
+                        <UserX size={18} color="#9CA3AF" />
+                      ) : (
+                        <UserCheck size={18} color="#10B981" />
+                      )}
+                    </Pressable>
+                  ) : null}
+                  <Pressable onPress={() => setEmpModal(null)} hitSlop={8} className="p-2">
+                    <X size={20} color="#9CA3AF" />
+                  </Pressable>
+                </View>
               </View>
               <ScrollView
                 contentContainerClassName="px-5 py-5 pb-10 gap-4"
