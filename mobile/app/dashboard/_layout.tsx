@@ -184,6 +184,11 @@ function DashboardTabs() {
             }}
           />
           <Tabs.Screen name="mas/empleados" options={{ href: null }} />
+          {/* After the empleados file → directory move, expo-router treats
+             these as distinct routes that need explicit href:null too,
+             otherwise they auto-appear as empty dock tabs. */}
+          <Tabs.Screen name="mas/empleados/index" options={{ href: null }} />
+          <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
           <Tabs.Screen name="mas/inventario" options={{ href: null }} />
           <Tabs.Screen name="mas/calendario" options={{ href: null }} />
