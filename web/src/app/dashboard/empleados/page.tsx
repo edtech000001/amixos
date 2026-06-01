@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Clock, DollarSign, UserX, UserCheck, Pencil } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -99,6 +100,7 @@ const EMPTY_EMP = {
 const EMPTY_TS  = { employee_id: '', worker_name: '', work_date: new Date().toISOString().split('T')[0], hours_worked: 8, job_description: '' };
 
 export default function EmpleadosPage() {
+  const router = useRouter();
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
@@ -243,7 +245,13 @@ export default function EmpleadosPage() {
   })), [timesheets]);
 
   const openAddEmp = () => { setEmpForm(EMPTY_EMP); setError(''); setEmpModal('add'); };
-  const openEditEmpById = (id: string) => {
+  // Row taps now navigate to the dedicated detail page; the list itself
+  // only owns the "Add" modal for the create flow.
+  const openEditEmpById = (id: string) => router.push(`/dashboard/empleados/${id}`);
+  // Legacy edit-modal seed (dead code — the modal `open` condition gates
+  // rendering to add-only now, so this is never reached. Kept inline for
+  // one follow-up cleanup pass).
+  const _legacyOpenEdit = (id: string) => {
     const e = employees.find(emp => emp.id === id);
     if (!e) return;
     setSelEmp(e);
@@ -476,7 +484,7 @@ export default function EmpleadosPage() {
   const modals = (
     <>
       <Modal
-        open={empModal !== null}
+        open={empModal === 'add'}
         onClose={() => setEmpModal(null)}
         title={
           empModal === 'add'
