@@ -666,10 +666,27 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                         {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
                     ) : tpl.field_type === 'boolean' ? (
-                      <div className="flex items-center gap-3 h-[42px]">
-                        <Toggle checked={customVals[tpl.field_key] === 'true'} onChange={(on) => setCustomVals(v => ({ ...v, [tpl.field_key]: on ? 'true' : 'false' }))} />
-                        <span className="text-sm text-gray-600">{customVals[tpl.field_key] === 'true' ? tc.states.yes : tc.states.no}</span>
-                      </div>
+                      (() => {
+                        // Three states — '', 'true', 'false'. Clicking the
+                        // active button clears so user can return to "unanswered".
+                        const cur = customVals[tpl.field_key] ?? '';
+                        const yesActive = cur === 'true';
+                        const noActive = cur === 'false';
+                        return (
+                          <div className="flex gap-2">
+                            <button type="button"
+                              onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: yesActive ? '' : 'true' }))}
+                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                              {tc.states.yes}
+                            </button>
+                            <button type="button"
+                              onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: noActive ? '' : 'false' }))}
+                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                              {tc.states.no}
+                            </button>
+                          </div>
+                        );
+                      })()
                     ) : (
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
                         value={customVals[tpl.field_key] ?? ''}

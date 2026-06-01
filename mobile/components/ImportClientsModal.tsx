@@ -8,8 +8,10 @@ import Papa from 'papaparse';
 import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users } from 'lucide-react-native';
 import { Modal, Button, Select } from '@amixos/shared/ui';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -63,6 +65,17 @@ export function ImportClientsModal({
   const { t: full } = useLang();
   const t = full.dashboard.clients;
   const syncBanner = useGoogleSyncBanner();
+
+  // Only queue the Google-Contacts mirror if sync is actually connected
+  // for this business — otherwise the user sees "Agregando a Google
+  // Contacts" for work that will silently no-op server-side.
+  const queueGoogleMirrorIfConnected = async (insertedIds: string[]) => {
+    if (insertedIds.length === 0) return;
+    const apiBaseUrl = getApiBaseUrl() || null;
+    const jwt = (await getJwt().catch(() => null)) || null;
+    const connected = await isGoogleSyncConnected(businessId, { apiBaseUrl, jwt });
+    if (connected) syncBanner.runCreateBatch(insertedIds);
+  };
 
   const [step, setStep] = useState<Step>('upload');
   const [parsing, setParsing] = useState(false);
@@ -249,9 +262,7 @@ export function ImportClientsModal({
 
     // Hand off to the banner provider — it owns throttling, persistence,
     // and auto-resume if the app is killed mid-batch.
-    if (batchInsertedIds.length > 0) {
-      syncBanner.runCreateBatch(batchInsertedIds);
-    }
+    await queueGoogleMirrorIfConnected(batchInsertedIds);
 
     setResult({ success, failedRows });
     setImporting(false);
@@ -446,9 +457,7 @@ export function ImportClientsModal({
 
     // Hand off to the banner provider — it owns throttling, persistence,
     // and auto-resume if the app is killed mid-batch.
-    if (insertedIds.length > 0) {
-      syncBanner.runCreateBatch(insertedIds);
-    }
+    await queueGoogleMirrorIfConnected(insertedIds);
 
     setResult({ success, failedRows });
     setImporting(false);

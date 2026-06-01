@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -88,6 +88,9 @@ function NuevoTrabajoContent() {
   // Form state
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
+  // Crew visibility (migration 044). New jobs default to "Privado" — the
+  // owner-side scheduler — and flip on when they're ready for the crew.
+  const [publishedToCrew, setPublishedToCrew] = useState(false);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
@@ -109,6 +112,12 @@ function NuevoTrabajoContent() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
+  const [leadSearch, setLeadSearch] = useState('');
+  const leadDropdownRef = useRef<HTMLDivElement>(null);
+  const [crewDropdownOpen, setCrewDropdownOpen] = useState(false);
+  const [crewSearch, setCrewSearch] = useState('');
+  const crewDropdownRef = useRef<HTMLDivElement>(null);
 
   // Map link
   const [mapLink, setMapLink] = useState('');
@@ -158,6 +167,7 @@ function NuevoTrabajoContent() {
         if (job) {
           setTitle(job.title || '');
           setClientId(job.client_id || '');
+          setPublishedToCrew(!!job.published_to_crew);
           setStatus(
             job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
           );
@@ -224,6 +234,22 @@ function NuevoTrabajoContent() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Close lead + crew dropdowns on outside click. Lead is single-select so we
+  // also clear its search input; crew stays so the user can keep multi-picking.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (leadDropdownRef.current && !leadDropdownRef.current.contains(e.target as Node)) {
+        setLeadDropdownOpen(false);
+        setLeadSearch('');
+      }
+      if (crewDropdownRef.current && !crewDropdownRef.current.contains(e.target as Node)) {
+        setCrewDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleClientChange = (id: string) => {
     setClientId(id);
     setClientDropdownOpen(false);
@@ -243,6 +269,20 @@ function NuevoTrabajoContent() {
     : clients;
 
   const selectedClient = clients.find(c => c.id === clientId);
+
+  const filterEmployeesByName = (list: typeof employees, query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(e => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+  };
+  const filteredLeadEmployees = filterEmployeesByName(employees, leadSearch);
+  // Crew picker excludes the current lead — the lead is always part of the
+  // crew at save time but is shown in its own picker, not here.
+  const crewEmployees = employees.filter(
+    e => business?.job_crew_mode !== false ? e.id !== leadEmployeeId : true,
+  );
+  const filteredCrewEmployees = filterEmployeesByName(crewEmployees, crewSearch);
+  const leadEmployee = employees.find(e => e.id === leadEmployeeId) ?? null;
 
   const parseMapLink = (link: string) => {
     setMapLink(link);
@@ -320,6 +360,7 @@ function NuevoTrabajoContent() {
           total_amount: +total.toFixed(2),
           scheduled_date: scheduledDate || null,
           end_date: endDate || null,
+          published_to_crew: publishedToCrew,
         };
 
         let finalJobId: string;
@@ -367,6 +408,7 @@ function NuevoTrabajoContent() {
           time_end: allDay ? null : (timeEnd || null),
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
+          published_to_crew: publishedToCrew,
         };
 
         let finalJobId: string;
@@ -557,6 +599,34 @@ function NuevoTrabajoContent() {
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
             </div>
+
+            {/* Crew visibility — when off, the job lives only on the
+               owner's scheduler. iOS-style segmented control: active choice
+               is the white pill that "floats" above the tinted track. */}
+            <div className="flex flex-col gap-1 mt-1">
+              <label className="text-sm font-medium text-gray-700">{t.publishedToCrewLabel}</label>
+              <p className="text-xs text-gray-500 mb-1.5">{t.publishedToCrewHint}</p>
+              <div className="flex p-1 rounded-2xl bg-gray-100">
+                <button type="button" onClick={() => setPublishedToCrew(false)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
+                    !publishedToCrew
+                      ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  <Lock size={13} />
+                  {t.privateBadge}
+                </button>
+                <button type="button" onClick={() => setPublishedToCrew(true)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
+                    publishedToCrew
+                      ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  <Eye size={13} />
+                  {t.publicBadge}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -652,51 +722,117 @@ function NuevoTrabajoContent() {
             </div>
             {employees.length > 0 && (
               <>
-                {/* Lead picker — one designated lead (crew mode only). Picking
-                   a lead also assigns them to the job. */}
+                {/* Lead picker — searchable single-select dropdown (mirrors
+                   the client picker). Picking a lead also assigns them. */}
                 {business?.job_crew_mode !== false && (
                   <div className="flex flex-col gap-1.5 mb-4 max-w-xs">
                     <label className="text-sm font-medium text-gray-700">{t.leadLabel}</label>
-                    <select
-                      value={leadEmployeeId ?? ''}
-                      onChange={e => setLead(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                    >
-                      <option value="">{t.leadNone}</option>
-                      {employees.map(emp => (
-                        <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
-                      ))}
-                    </select>
+                    <div className="relative" ref={leadDropdownRef}>
+                      <button type="button" onClick={() => setLeadDropdownOpen(o => !o)}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                        {leadEmployee ? (
+                          <span className="text-gray-900 truncate">{leadEmployee.first_name} {leadEmployee.last_name}</span>
+                        ) : (
+                          <span className="text-gray-400">{t.leadNone}</span>
+                        )}
+                        <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                      </button>
+                      {leadDropdownOpen && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                          <div className="p-2 border-b border-gray-100">
+                            <div className="relative">
+                              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                              <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
+                                value={leadSearch} onChange={e => setLeadSearch(e.target.value)}
+                                className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                            </div>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto">
+                            <button type="button"
+                              onClick={() => { setLead(''); setLeadDropdownOpen(false); setLeadSearch(''); }}
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${!leadEmployeeId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                              {t.leadNone}
+                            </button>
+                            {filteredLeadEmployees.map(emp => (
+                              <button type="button" key={emp.id}
+                                onClick={() => { setLead(emp.id); setLeadDropdownOpen(false); setLeadSearch(''); }}
+                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate ${leadEmployeeId === emp.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                                {emp.first_name} {emp.last_name}
+                              </button>
+                            ))}
+                            {filteredLeadEmployees.length === 0 && (
+                              <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Crew — additional assigned workers. The lead is shown in its
-                   own picker above, so it's excluded from this grid. */}
-                {business?.job_crew_mode !== false && (
-                  <p className="text-xs text-gray-400 mb-2">{t.crewLabel}</p>
-                )}
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {employees.filter(emp => business?.job_crew_mode !== false ? emp.id !== leadEmployeeId : true).map(emp => {
-                    const on = assignedEmployees.includes(emp.id);
-                    return (
-                      <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-medium transition-all text-left ${
-                          on
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}>
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                          on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
+                {/* Crew — searchable multi-select dropdown. Replaces the
+                   all-at-once grid so larger teams aren't overwhelming. */}
+                <div className="flex flex-col gap-1.5 mb-3 max-w-xs">
+                  {business?.job_crew_mode !== false && (
+                    <label className="text-sm font-medium text-gray-700">{t.crewLabel}</label>
+                  )}
+                  <div className="relative" ref={crewDropdownRef}>
+                    <button type="button" onClick={() => setCrewDropdownOpen(o => !o)}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                      {assignedEmployees.length > 0 ? (
+                        <span className="text-gray-900 truncate">
+                          {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">{t.crewPlaceholder}</span>
+                      )}
+                      <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                    </button>
+                    {crewDropdownOpen && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                        <div className="p-2 border-b border-gray-100">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                            <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
+                              value={crewSearch} onChange={e => setCrewSearch(e.target.value)}
+                              className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate">{emp.first_name} {emp.last_name}</p>
-                          <p className="text-xs text-gray-400 font-normal">{emp.role}</p>
+                        <div className="max-h-60 overflow-y-auto">
+                          {filteredCrewEmployees.map(emp => {
+                            const on = assignedEmployees.includes(emp.id);
+                            return (
+                              <button type="button" key={emp.id} onClick={() => toggleEmployee(emp.id)}
+                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                                <span className="truncate">{emp.first_name} {emp.last_name}</span>
+                                {on && <span className="text-xs text-primary ml-2">✓</span>}
+                              </button>
+                            );
+                          })}
+                          {filteredCrewEmployees.length === 0 && (
+                            <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                          )}
                         </div>
-                      </button>
-                    );
-                  })}
+                        <div className="p-2 border-t border-gray-100">
+                          <button type="button" onClick={() => { setCrewDropdownOpen(false); setCrewSearch(''); }}
+                            className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+                            {t.crewDoneBtn}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {assignedEmployees.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {employees.filter(emp => assignedEmployees.includes(emp.id)).map(emp => (
+                        <button key={emp.id} type="button" onClick={() => toggleEmployee(emp.id)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary hover:bg-primary/15 transition-colors">
+                          {emp.first_name} {emp.last_name}
+                          <X size={11}/>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}

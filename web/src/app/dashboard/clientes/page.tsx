@@ -11,6 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { Button } from '@/components/ui/Button';
@@ -476,9 +477,14 @@ export default function ClientesPage() {
       }
     }
     // Hand off to the banner provider — it owns throttling, persistence,
-    // and auto-resume if the browser is closed mid-batch.
-    if (insertedIds.length > 0) {
-      syncBanner.runCreateBatch(insertedIds);
+    // and auto-resume if the browser is closed mid-batch. Skip when Google
+    // sync isn't connected for this business — otherwise the user sees
+    // "Agregando a Google Contacts" for work that silently no-ops.
+    if (insertedIds.length > 0 && business?.id) {
+      const apiBaseUrl = getApiBaseUrl() || null;
+      const jwt = (await getJwt().catch(() => null)) || null;
+      const connected = await isGoogleSyncConnected(business.id, { apiBaseUrl, jwt });
+      if (connected) syncBanner.runCreateBatch(insertedIds);
     }
     setImportResult({ success, failedRows });
     await load();

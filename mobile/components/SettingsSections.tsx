@@ -15,6 +15,7 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  Bell,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
@@ -37,6 +38,13 @@ import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
+import {
+  JOB_ALERT_COLORS,
+  JOB_ALERT_STYLE,
+  normalizeJobAlertThresholds,
+  type JobAlertColor,
+  type JobAlertThresholds,
+} from '@amixos/shared/lib/jobAlerts';
 import { SortableList } from '@/components/SortableList';
 import { ChevronUp, ChevronDown, Sparkles, GripVertical } from 'lucide-react-native';
 
@@ -1219,6 +1227,168 @@ export function CrewModeSection() {
         <Text className="flex-1 text-sm text-gray-900">{t.crewMode.heading}</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
+// ─── Job alerts (upcoming-job tier highlight) ─────────────────────────────
+// Owner-configured tiers (e.g. "1 day before = red, 3 days before = orange")
+// that surface as a colored left border + chip on each job card. Schema:
+// businesses.job_alert_thresholds (migration 046). Matching logic +
+// rendering live in shared/lib/jobAlerts.ts.
+export function JobAlertsSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+
+  const initial = normalizeJobAlertThresholds(business?.job_alert_thresholds);
+  const [value, setValue] = useState<JobAlertThresholds>(initial);
+  const [saved, setSaved] = useState<JobAlertThresholds>(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = normalizeJobAlertThresholds(business.job_alert_thresholds);
+      setValue(fresh);
+      setSaved(fresh);
+    }
+  }, [business]);
+
+  const toggleEnabled = () => {
+    setValue(v => ({ ...v, enabled: !v.enabled }));
+    setMsg(null);
+  };
+  const addLevel = () => {
+    setValue(v => ({ ...v, levels: [...v.levels, { days: 1, color: 'red' as JobAlertColor }] }));
+    setMsg(null);
+  };
+  const updateLevel = (idx: number, patch: Partial<{ days: number; color: JobAlertColor }>) => {
+    setValue(v => ({
+      ...v,
+      levels: v.levels.map((lvl, i) => i === idx ? { ...lvl, ...patch } : lvl),
+    }));
+    setMsg(null);
+  };
+  const removeLevel = (idx: number) => {
+    setValue(v => ({ ...v, levels: v.levels.filter((_, i) => i !== idx) }));
+    setMsg(null);
+  };
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    // Persist with levels sorted ascending by days so matchJobAlert
+    // (which assumes that order) sees the same shape on every read.
+    const payload: JobAlertThresholds = {
+      enabled: value.enabled,
+      levels: [...value.levels].sort((a, b) => a.days - b.days),
+    };
+    const { error } = await supabase
+      .from('businesses')
+      .update({ job_alert_thresholds: payload })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({
+      text: error ? t.jobAlerts.saveError : t.jobAlerts.saveSuccess,
+      isError: !!error,
+    });
+    if (!error) {
+      setValue(payload);
+      setSaved(payload);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = JSON.stringify(saved) !== JSON.stringify(value);
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  const colorOptions = JOB_ALERT_COLORS.map(c => ({ value: c, label: t.jobAlerts.colors[c] }));
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Bell size={18} color="#4F46E5" />}
+        title={t.jobAlerts.heading}
+        subtitle={t.jobAlerts.subtitle}
+      />
+
+      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+        <View className="flex-1 mr-3">
+          <Text className="text-sm font-medium text-gray-900">{t.jobAlerts.enabledLabel}</Text>
+          <Text className="text-xs text-gray-500 mt-0.5">{t.jobAlerts.enabledHint}</Text>
+        </View>
+        <Toggle value={value.enabled} onValueChange={toggleEnabled} />
+      </View>
+
+      {value.enabled && (
+        <View className="gap-2">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs font-semibold text-gray-500 uppercase">
+              {t.jobAlerts.levelsHeading}
+            </Text>
+            <Pressable
+              onPress={addLevel}
+              className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 active:opacity-80"
+            >
+              <Plus size={14} color="#4F46E5" />
+              <Text className="text-xs font-semibold text-primary">{t.jobAlerts.addLevelBtn}</Text>
+            </Pressable>
+          </View>
+
+          {value.levels.length === 0 ? (
+            <Text className="text-xs text-gray-400 italic py-2">{t.jobAlerts.levelsEmpty}</Text>
+          ) : (
+            value.levels.map((level, idx) => {
+              const swatch = JOB_ALERT_STYLE[level.color as JobAlertColor];
+              return (
+                <View
+                  key={idx}
+                  className={`bg-white rounded-xl border border-gray-100 border-l-4 px-3 py-3 ${
+                    swatch?.borderClass ?? 'border-l-gray-300'
+                  }`}
+                >
+                  <View className="flex-row items-center gap-3">
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        keyboardType="number-pad"
+                        value={String(level.days)}
+                        onChangeText={txt => {
+                          const n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
+                          updateLevel(idx, { days: Number.isFinite(n) ? Math.max(0, n) : 0 });
+                        }}
+                        className="w-14 px-2 py-1.5 text-sm text-gray-900 rounded-lg border border-gray-200 bg-white text-center"
+                      />
+                      <Text className="text-xs text-gray-500">
+                        {level.days === 1 ? t.jobAlerts.daysSuffixOne : t.jobAlerts.daysSuffixMany}
+                      </Text>
+                    </View>
+                    <View className="flex-1" />
+                    <Pressable
+                      onPress={() => removeLevel(idx)}
+                      accessibilityLabel={t.jobAlerts.removeLevelLabel}
+                      className="p-2 rounded-lg active:bg-red-50"
+                    >
+                      <Trash2 size={14} color="#F87171" />
+                    </Pressable>
+                  </View>
+                  <View className="mt-2">
+                    <Select
+                      value={level.color}
+                      onValueChange={v => updateLevel(idx, { color: v as JobAlertColor })}
+                      options={colorOptions}
+                    />
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+
       <StatusMsg msg={msg} />
     </View>
   );

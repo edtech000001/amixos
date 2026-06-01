@@ -131,7 +131,12 @@ async function refreshBusinessAlerts(
     if (!eventNamesLc.has(event.toLowerCase())) continue;
     const maxWind = parseMaxWindMph(props.description ?? null);
     const minWind = minWindByEvent.get(event.toLowerCase()) ?? null;
-    if (minWind && (maxWind == null || maxWind < minWind)) continue;
+    // Only filter when the alert actually reports a parseable wind speed —
+    // setting a minimum on an event type whose description doesn't include
+    // an mph number (e.g. Tornado Warning) shouldn't silently drop every
+    // matching alert. Front-end hides the input on those events too, but
+    // this guard catches custom event names + any future NOAA shape change.
+    if (minWind && maxWind != null && maxWind < minWind) continue;
     const sames = props.geocode?.SAME ?? [];
     for (const sameCode of sames) {
       if (typeof sameCode !== 'string') continue;

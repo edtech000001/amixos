@@ -23,6 +23,13 @@ import {
   type DayKey,
   type OperatingHours,
 } from '@amixos/shared/lib/operatingHours';
+import {
+  JOB_ALERT_COLORS,
+  JOB_ALERT_STYLE,
+  normalizeJobAlertThresholds,
+  type JobAlertColor,
+  type JobAlertThresholds,
+} from '@amixos/shared/lib/jobAlerts';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
@@ -236,6 +243,19 @@ export default function AjustesPage() {
   const [pipelineMsg, setPipelineMsg] = useState('');
   const [pipelineMsgIsError, setPipelineMsgIsError] = useState(false);
 
+  // ── Upcoming-job alert thresholds (draft pattern)
+  // Tier list lives on businesses.job_alert_thresholds (migration 046);
+  // the matching logic + render lives in shared/lib/jobAlerts.ts.
+  const [jobAlerts, setJobAlerts] = useState<JobAlertThresholds>(
+    normalizeJobAlertThresholds(business?.job_alert_thresholds),
+  );
+  const [dbJobAlerts, setDbJobAlerts] = useState<JobAlertThresholds>(
+    normalizeJobAlertThresholds(business?.job_alert_thresholds),
+  );
+  const [savingJobAlerts, setSavingJobAlerts] = useState(false);
+  const [jobAlertsMsg, setJobAlertsMsg] = useState('');
+  const [jobAlertsMsgIsError, setJobAlertsMsgIsError] = useState(false);
+
   useEffect(() => {
     if (business) {
       setBizName(business.name);
@@ -266,6 +286,9 @@ export default function AjustesPage() {
       const pd = business.job_pipeline_disabled ?? {};
       setPipelineDisabled(pd);
       setDbPipelineDisabled(pd);
+      const ja = normalizeJobAlertThresholds(business.job_alert_thresholds);
+      setJobAlerts(ja);
+      setDbJobAlerts(ja);
     }
   }, [business]);
 
@@ -1274,6 +1297,56 @@ export default function AjustesPage() {
 
   const pipelineDirty = JSON.stringify(dbPipelineDisabled) !== JSON.stringify(pipelineDisabled);
 
+  // ── Job alert thresholds — local mutations + persist on save
+  const toggleJobAlertsEnabled = () => {
+    setJobAlerts(prev => ({ ...prev, enabled: !prev.enabled }));
+    setJobAlertsMsg('');
+  };
+  const addJobAlertLevel = () => {
+    // Default to "red, 1 day before" — most common first tier. Owner can
+    // edit before saving.
+    setJobAlerts(prev => ({
+      ...prev,
+      levels: [...prev.levels, { days: 1, color: 'red' as JobAlertColor }],
+    }));
+    setJobAlertsMsg('');
+  };
+  const updateJobAlertLevel = (idx: number, patch: Partial<{ days: number; color: JobAlertColor }>) => {
+    setJobAlerts(prev => ({
+      ...prev,
+      levels: prev.levels.map((lvl, i) => i === idx ? { ...lvl, ...patch } : lvl),
+    }));
+    setJobAlertsMsg('');
+  };
+  const removeJobAlertLevel = (idx: number) => {
+    setJobAlerts(prev => ({ ...prev, levels: prev.levels.filter((_, i) => i !== idx) }));
+    setJobAlertsMsg('');
+  };
+
+  const saveJobAlerts = async () => {
+    if (!business) return;
+    setSavingJobAlerts(true); setJobAlertsMsg('');
+    // Sort levels ascending by days so the persisted shape matches what
+    // matchJobAlert expects (smallest tier wins for any given job).
+    const payload: JobAlertThresholds = {
+      enabled: jobAlerts.enabled,
+      levels: [...jobAlerts.levels].sort((a, b) => a.days - b.days),
+    };
+    const { error } = await supabase.from('businesses')
+      .update({ job_alert_thresholds: payload })
+      .eq('id', business.id);
+    setJobAlertsMsgIsError(!!error);
+    setJobAlertsMsg(error ? t.jobAlerts.saveError : t.jobAlerts.saveSuccess);
+    if (!error) {
+      await refetchBusiness();
+      setJobAlerts(payload);
+      setDbJobAlerts(payload);
+    }
+    setSavingJobAlerts(false);
+  };
+
+  const jobAlertsDirty = JSON.stringify(dbJobAlerts) !== JSON.stringify(jobAlerts);
+
   // ── Custom field template CRUD (draft pattern)
   // loadTemplates seeds both the working copy and the DB snapshot. CRUD
   // handlers mutate only local state; saveFieldPreferences diffs and
@@ -1535,22 +1608,24 @@ export default function AjustesPage() {
   // beforeunload guard). When the user clicks a different SettingsNav tab,
   // tryChangeTab confirms with t.unsavedChangesMessage and runs the
   // matching discard helper for the tab they're leaving.
-  // Trabajos tab has FOUR sub-cards (pipeline / job fields / crew mode /
-  // assignment fields); each saves on its own button but a switch away from
-  // the tab with any pending edits triggers the unified discard.
-  const trabajosDirty = pipelineDirty || jobFieldsDirty || crewModeDirty || asgnFieldsDirty;
+  // Trabajos tab has FIVE sub-cards (pipeline / job fields / alerts /
+  // crew mode / assignment fields); each saves on its own button but a
+  // switch away from the tab with any pending edits triggers the unified
+  // discard.
+  const trabajosDirty = pipelineDirty || jobFieldsDirty || jobAlertsDirty || crewModeDirty || asgnFieldsDirty;
 
   const discardTrabajos = useCallback(() => {
     setPipelineDisabled(dbPipelineDisabled);
     setJobTemplates(dbJobTemplates);
     setJobRequired(dbJobRequired);
     setLocalJobOrder(dbJobOrder);
+    setJobAlerts(dbJobAlerts);
     setCrewMode(dbCrewMode);
     setAsgnTemplates(dbAsgnTemplates);
     setAsgnRequired(dbAsgnRequired);
     setLocalAsgnOrder(dbAsgnOrder);
-    setPipelineMsg(''); setJobReqMsg(''); setCrewModeMsg(''); setAsgnReqMsg('');
-  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbCrewMode, dbAsgnTemplates, dbAsgnRequired, dbAsgnOrder]);
+    setPipelineMsg(''); setJobReqMsg(''); setJobAlertsMsg(''); setCrewModeMsg(''); setAsgnReqMsg('');
+  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobAlerts, dbCrewMode, dbAsgnTemplates, dbAsgnRequired, dbAsgnOrder]);
 
   const anyDirty = clientsDirty || employeesDirty || invoicesDirty || trabajosDirty;
 
@@ -1792,6 +1867,85 @@ export default function AjustesPage() {
                 <Button onClick={saveJobRequired} loading={savingJobRequired} disabled={!jobFieldsDirty}>
                   <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
+              </div>
+
+              {/* Upcoming-job alert tiers. When enabled, jobs whose
+                 scheduled_date falls inside a tier get a colored left
+                 border + chip on the job list card. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4 mb-1">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-gray-900">{t.jobAlerts.heading}</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.jobAlerts.subtitle}</p>
+                  </div>
+                  <Toggle checked={jobAlerts.enabled} onChange={toggleJobAlertsEnabled} />
+                </div>
+
+                {jobAlerts.enabled && (
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{t.jobAlerts.levelsHeading}</p>
+                      <Button size="sm" variant="secondary" onClick={addJobAlertLevel}>
+                        <Plus size={14} className="mr-1"/> {t.jobAlerts.addLevelBtn}
+                      </Button>
+                    </div>
+
+                    {jobAlerts.levels.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-3">{t.jobAlerts.levelsEmpty}</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {jobAlerts.levels.map((level, idx) => {
+                          const style = JOB_ALERT_STYLE[level.color as JobAlertColor];
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-100 bg-white border-l-4 ${style?.borderClass ?? 'border-l-gray-300'}`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={level.days}
+                                  onChange={e => updateJobAlertLevel(idx, { days: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                                  className="w-16 px-2 py-1 text-sm rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                />
+                                <span className="text-xs text-gray-500">
+                                  {level.days === 1 ? t.jobAlerts.daysSuffixOne : t.jobAlerts.daysSuffixMany}
+                                </span>
+                              </div>
+                              <select
+                                value={level.color}
+                                onChange={e => updateJobAlertLevel(idx, { color: e.target.value as JobAlertColor })}
+                                className="text-sm rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:border-primary"
+                              >
+                                {JOB_ALERT_COLORS.map(c => (
+                                  <option key={c} value={c}>{t.jobAlerts.colors[c]}</option>
+                                ))}
+                              </select>
+                              <div className="flex-1" />
+                              <button
+                                onClick={() => removeJobAlertLevel(idx)}
+                                aria-label={t.jobAlerts.removeLevelLabel}
+                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 size={14} className="text-red-400" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {jobAlertsMsg && <p className={`text-xs mt-4 ${jobAlertsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{jobAlertsMsg}</p>}
+                {jobAlertsDirty && (
+                  <div className="mt-4">
+                    <Button onClick={saveJobAlerts} loading={savingJobAlerts}>
+                      <Save size={14} className="mr-1.5"/> {t.jobAlerts.saveBtn}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Crew mode toggle — hides the per-worker fields card + the

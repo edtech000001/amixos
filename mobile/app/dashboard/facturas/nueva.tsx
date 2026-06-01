@@ -24,7 +24,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
+import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 
 interface Client {
@@ -507,14 +507,30 @@ export default function NuevaFacturaRoute() {
                     );
                   }
                   if (tpl.field_type === 'boolean') {
+                    // Three states — '', 'true', 'false'. Tapping active clears.
+                    const yesActive = value === 'true';
+                    const noActive = value === 'false';
                     return (
                       <View key={tpl.field_key}>
-                        <Text className="text-sm font-medium text-gray-700 mb-1.5">{labelText}</Text>
-                        <Toggle
-                          value={value === 'true'}
-                          onValueChange={v => setVal(v ? 'true' : 'false')}
-                          hint={value === 'true' ? tc.states.yes : tc.states.no}
-                        />
+                        <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+                        <View className="flex-row gap-2">
+                          <Pressable
+                            onPress={() => setVal(yesActive ? '' : 'true')}
+                            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                          >
+                            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                              {tc.states.yes}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setVal(noActive ? '' : 'false')}
+                            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                          >
+                            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                              {tc.states.no}
+                            </Text>
+                          </Pressable>
+                        </View>
                       </View>
                     );
                   }

@@ -25,6 +25,8 @@ import {
   Users as UsersIcon,
   FileText,
   Check,
+  Lock,
+  Eye,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -106,6 +108,10 @@ export default function NuevoTrabajoRoute() {
   // Form — shared
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(clientParam ?? '');
+  // Crew visibility (migration 044). Defaults to false so new jobs start as
+  // "Privado" (owner's scheduler view); the owner explicitly flips it on
+  // when the job is ready for the assigned crew to see.
+  const [publishedToCrew, setPublishedToCrew] = useState(false);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
@@ -140,6 +146,10 @@ export default function NuevoTrabajoRoute() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  const [leadPickerOpen, setLeadPickerOpen] = useState(false);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [crewPickerOpen, setCrewPickerOpen] = useState(false);
+  const [crewSearch, setCrewSearch] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -177,6 +187,7 @@ export default function NuevoTrabajoRoute() {
           setIsProposal(proposal);
           setTitle(job.title ?? '');
           setClientId(job.client_id ?? '');
+          setPublishedToCrew(!!job.published_to_crew);
           setStatus(
             job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
           );
@@ -300,6 +311,27 @@ export default function NuevoTrabajoRoute() {
     );
   }, [clients, clientSearch]);
 
+  const filterEmployees = (list: Employee[], query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((e) => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+  };
+  const filteredLeadEmployees = useMemo(
+    () => filterEmployees(employees, leadSearch),
+    [employees, leadSearch],
+  );
+  // Crew picker excludes the current lead — the lead is always part of the
+  // crew at save time but is shown in its own picker, not here.
+  const crewEmployees = useMemo(
+    () => employees.filter((e) => business?.job_crew_mode !== false ? e.id !== leadEmployeeId : true),
+    [employees, leadEmployeeId, business?.job_crew_mode],
+  );
+  const filteredCrewEmployees = useMemo(
+    () => filterEmployees(crewEmployees, crewSearch),
+    [crewEmployees, crewSearch],
+  );
+  const leadEmployee = employees.find((e) => e.id === leadEmployeeId) ?? null;
+
   const pickClient = (id: string) => {
     setClientId(id);
     setClientPickerOpen(false);
@@ -354,6 +386,7 @@ export default function NuevoTrabajoRoute() {
         job_lng: jobLng,
         internal_notes: internalNotes.trim() || null,
         worker_notes: workerNotes.trim() || null,
+        published_to_crew: publishedToCrew,
       };
 
       if (isProposal) {
@@ -652,6 +685,44 @@ export default function NuevoTrabajoRoute() {
                 style={{ textAlignVertical: 'top' }}
               />
             </View>
+
+            {/* Crew visibility — when off, the job lives only on the
+               owner's scheduler. iOS-style segmented control: the active
+               choice is the white pill that "floats" above the tinted track. */}
+            <View className="mt-2">
+              <Text className="text-sm font-semibold text-gray-700 mb-1">{t.publishedToCrewLabel}</Text>
+              <Text className="text-xs text-gray-500 mb-2.5">{t.publishedToCrewHint}</Text>
+              <View className="flex-row p-1 rounded-2xl bg-gray-100">
+                <Pressable
+                  onPress={() => setPublishedToCrew(false)}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${!publishedToCrew ? 'bg-white' : ''}`}
+                  style={!publishedToCrew ? {
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 3,
+                    elevation: 2,
+                  } : undefined}
+                >
+                  <Lock size={13} color={!publishedToCrew ? '#4F46E5' : '#9CA3AF'} />
+                  <Text className={`text-sm font-semibold ${!publishedToCrew ? 'text-primary' : 'text-gray-500'}`}>{t.privateBadge}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setPublishedToCrew(true)}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${publishedToCrew ? 'bg-white' : ''}`}
+                  style={publishedToCrew ? {
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 3,
+                    elevation: 2,
+                  } : undefined}
+                >
+                  <Eye size={13} color={publishedToCrew ? '#4F46E5' : '#9CA3AF'} />
+                  <Text className={`text-sm font-semibold ${publishedToCrew ? 'text-primary' : 'text-gray-500'}`}>{t.publicBadge}</Text>
+                </Pressable>
+              </View>
+            </View>
           </Section>
 
           {/* Location (job mode only) */}
@@ -798,68 +869,61 @@ export default function NuevoTrabajoRoute() {
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
               {employees.length > 0 ? (
                 <>
-                  {/* Lead picker — one designated lead (crew mode only). Picking
-                     a lead also assigns them to the job. */}
+                  {/* Lead picker — one designated lead (crew mode only).
+                     Tapping opens a searchable bottom sheet so picking from
+                     larger teams isn't a wall of names. Picking a lead also
+                     assigns them to the job. */}
                   {business?.job_crew_mode !== false ? (
                     <View className="mb-4">
-                      <Select
-                        label={t.leadLabel}
-                        value={leadEmployeeId ?? ''}
-                        onValueChange={setLead}
-                        placeholder={t.leadNone}
-                        options={[
-                          { value: '', label: t.leadNone },
-                          ...employees.map((emp) => ({
-                            value: emp.id,
-                            label: `${emp.first_name} ${emp.last_name}`,
-                          })),
-                        ]}
-                      />
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.leadLabel}</Text>
+                      <Pressable
+                        onPress={() => { setLeadSearch(''); setLeadPickerOpen(true); }}
+                        className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                      >
+                        <Text className={`text-base flex-1 ${leadEmployee ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                          {leadEmployee ? `${leadEmployee.first_name} ${leadEmployee.last_name}` : t.leadNone}
+                        </Text>
+                        <ChevronDown size={16} color="#9CA3AF" />
+                      </Pressable>
                     </View>
                   ) : null}
 
-                  {/* Crew — additional assigned workers. The lead is shown in its
-                     own picker above, so it's excluded from this list. */}
-                  {business?.job_crew_mode !== false ? (
-                    <Text className="text-xs text-gray-400 mb-2">{t.crewLabel}</Text>
-                  ) : null}
-                  <View className="flex-row flex-wrap gap-2">
-                    {employees
-                      .filter((emp) => (business?.job_crew_mode !== false ? emp.id !== leadEmployeeId : true))
-                      .map((emp) => {
-                        const on = assignedEmployees.includes(emp.id);
-                        return (
-                          <Pressable
-                            key={emp.id}
-                            onPress={() => toggleEmployee(emp.id)}
-                            className={`flex-row items-center gap-2 px-3 py-2 rounded-xl border-2 ${
-                              on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
-                            }`}
-                          >
-                            <View
-                              className={`w-7 h-7 rounded-full items-center justify-center ${
-                                on ? 'bg-primary' : 'bg-gray-100'
-                              }`}
+                  {/* Crew — searchable multi-select. Replaces the all-at-once
+                     grid so larger teams aren't overwhelming. The lead is
+                     shown in its own picker above and excluded here. */}
+                  <View className="mb-3">
+                    {business?.job_crew_mode !== false ? (
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.crewLabel}</Text>
+                    ) : null}
+                    <Pressable
+                      onPress={() => { setCrewSearch(''); setCrewPickerOpen(true); }}
+                      className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                    >
+                      <Text className={`text-base flex-1 ${assignedEmployees.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                        {assignedEmployees.length > 0
+                          ? t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))
+                          : t.crewPlaceholder}
+                      </Text>
+                      <ChevronDown size={16} color="#9CA3AF" />
+                    </Pressable>
+                    {assignedEmployees.length > 0 ? (
+                      <View className="flex-row flex-wrap gap-2 mt-2">
+                        {employees
+                          .filter((emp) => assignedEmployees.includes(emp.id))
+                          .map((emp) => (
+                            <Pressable
+                              key={emp.id}
+                              onPress={() => toggleEmployee(emp.id)}
+                              className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
                             >
-                              <Text
-                                className={`text-xs font-bold ${
-                                  on ? 'text-white' : 'text-gray-500'
-                                }`}
-                              >
-                                {emp.first_name.charAt(0)}
-                                {emp.last_name.charAt(0)}
+                              <Text className="text-xs font-medium text-primary">
+                                {emp.first_name} {emp.last_name}
                               </Text>
-                            </View>
-                            <Text
-                              className={`text-sm font-medium ${
-                                on ? 'text-primary' : 'text-gray-700'
-                              }`}
-                            >
-                              {emp.first_name} {emp.last_name}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
+                              <X size={12} color="#4F46E5" />
+                            </Pressable>
+                          ))}
+                      </View>
+                    ) : null}
                   </View>
                 </>
               ) : null}
@@ -1060,6 +1124,175 @@ export default function NuevoTrabajoRoute() {
                 </View>
               ) : null}
             </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Lead picker modal — single-select, mirrors the client picker. */}
+      <RNModal
+        visible={leadPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setLeadPickerOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => setLeadPickerOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="px-5 mb-3">
+              <Text className="text-base font-semibold text-gray-900">{t.leadLabel}</Text>
+            </View>
+            <View className="px-5 mb-3">
+              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
+                <Search size={16} color="#9CA3AF" />
+                <TextInput
+                  value={leadSearch}
+                  onChangeText={setLeadSearch}
+                  placeholder={t.workerSearchPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  autoFocus
+                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              <Pressable
+                onPress={() => { setLead(''); setLeadPickerOpen(false); }}
+                className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
+              >
+                <Text className={`text-sm ${!leadEmployeeId ? 'text-primary font-semibold' : 'text-gray-500'}`}>
+                  {t.leadNone}
+                </Text>
+                {!leadEmployeeId ? <Check size={16} color="#4F46E5" /> : null}
+              </Pressable>
+              {filteredLeadEmployees.map((emp) => {
+                const isSel = emp.id === leadEmployeeId;
+                return (
+                  <Pressable
+                    key={emp.id}
+                    onPress={() => { setLead(emp.id); setLeadPickerOpen(false); }}
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                      isSel ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      numberOfLines={1}
+                    >
+                      {emp.first_name} {emp.last_name}
+                    </Text>
+                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                  </Pressable>
+                );
+              })}
+              {filteredLeadEmployees.length === 0 ? (
+                <View className="px-5 py-8 items-center">
+                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Crew picker modal — multi-select. Tap toggles each row; the sheet
+         only closes when the user taps Listo or the scrim. */}
+      <RNModal
+        visible={crewPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCrewPickerOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => setCrewPickerOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="px-5 mb-3 flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-gray-900">{t.crewLabel}</Text>
+              <Text className="text-xs text-gray-400">
+                {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
+              </Text>
+            </View>
+            <View className="px-5 mb-3">
+              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
+                <Search size={16} color="#9CA3AF" />
+                <TextInput
+                  value={crewSearch}
+                  onChangeText={setCrewSearch}
+                  placeholder={t.workerSearchPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  autoFocus
+                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              {filteredCrewEmployees.map((emp) => {
+                const isSel = assignedEmployees.includes(emp.id);
+                return (
+                  <Pressable
+                    key={emp.id}
+                    onPress={() => toggleEmployee(emp.id)}
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                      isSel ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      numberOfLines={1}
+                    >
+                      {emp.first_name} {emp.last_name}
+                    </Text>
+                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                  </Pressable>
+                );
+              })}
+              {filteredCrewEmployees.length === 0 ? (
+                <View className="px-5 py-8 items-center">
+                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+            <View className="px-5 pt-3 border-t border-gray-100">
+              <Pressable
+                onPress={() => setCrewPickerOpen(false)}
+                className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
+              >
+                <Text className="text-sm font-semibold text-white">{t.crewDoneBtn}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </RNModal>

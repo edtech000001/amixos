@@ -13,6 +13,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import {
   isWeatherFeatureEnabled,
   NOAA_EVENT_CATEGORIES,
+  eventCarriesWind,
   type WeatherConfig,
 } from '@amixos/shared/lib/weather';
 
@@ -220,20 +221,22 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                         <Trash2 size={16} color="#EF4444" />
                       </Pressable>
                     </View>
-                    <View style={dimStyle}>
-                      <Text className="text-[10px] text-gray-500 mb-1">{t.minWindLabel}</Text>
-                      <TextInput
-                        value={ev.min_wind_speed != null ? String(ev.min_wind_speed) : ''}
-                        onChangeText={(v) => {
-                          const n = parseInt(v.replace(/\D/g, ''), 10);
-                          updateEvent(idx, { min_wind_speed: isNaN(n) || n <= 0 ? null : n });
-                        }}
-                        keyboardType="number-pad"
-                        placeholder="—"
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-                      />
-                    </View>
+                    {eventCarriesWind(ev.event) ? (
+                      <View style={dimStyle}>
+                        <Text className="text-[10px] text-gray-500 mb-1">{t.minWindLabel}</Text>
+                        <TextInput
+                          value={ev.min_wind_speed != null ? String(ev.min_wind_speed) : ''}
+                          onChangeText={(v) => {
+                            const n = parseInt(v.replace(/\D/g, ''), 10);
+                            updateEvent(idx, { min_wind_speed: isNaN(n) || n <= 0 ? null : n });
+                          }}
+                          keyboardType="number-pad"
+                          placeholder="—"
+                          placeholderTextColor="#9CA3AF"
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        />
+                      </View>
+                    ) : null}
                   </View>
                 );
               })

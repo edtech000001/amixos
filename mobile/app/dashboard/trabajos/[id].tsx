@@ -40,7 +40,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
-import { Button, Toggle } from '@amixos/shared/ui';
+import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
@@ -1328,13 +1328,32 @@ function ActualsSection({
             {orderedTemplates.map((tpl) => {
               const value = d.custom[tpl.field_key];
               if (tpl.field_type === 'boolean') {
+                // Three states — null/undefined, true, false. Tapping the
+                // active button clears to null so workers can return to
+                // "unanswered" if they tapped by mistake.
+                const yesActive = value === true;
+                const noActive = value === false;
                 return (
-                  <View key={tpl.id} className="mb-2 flex-row items-center justify-between">
-                    <Text className="text-xs text-gray-500 flex-1">{tpl.field_label}</Text>
-                    <Toggle
-                      value={value === true}
-                      onValueChange={(v) => setCustom(row.id, tpl.field_key, v)}
-                    />
+                  <View key={tpl.id} className="mb-2">
+                    <Text className="text-xs text-gray-500 mb-1.5">{tpl.field_label}</Text>
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        onPress={() => setCustom(row.id, tpl.field_key, yesActive ? null : true)}
+                        className={`flex-1 rounded-xl border px-3 py-2 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                      >
+                        <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                          {tc.states.yes}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setCustom(row.id, tpl.field_key, noActive ? null : false)}
+                        className={`flex-1 rounded-xl border px-3 py-2 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                      >
+                        <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                          {tc.states.no}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 );
               }

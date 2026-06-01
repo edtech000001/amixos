@@ -144,6 +144,43 @@ export const NOAA_EVENT_CATEGORIES: WeatherEventCategory[] = [
   },
 ];
 
+// NOAA event types whose alert description reliably includes an mph value
+// the API's parseMaxWindMph can extract. Min-wind filter only makes sense
+// on these — used by the settings UI to hide the "Viento mínimo" input on
+// events like Tornado Warning, where the threat isn't wind speed and the
+// description has no mph, so a non-empty value would silently drop every
+// matching alert. Server still ignores impossible min-wind values
+// defensively (see api/src/routes/weather.ts).
+const WIND_BEARING_EVENT_NAMES: ReadonlyArray<string> = [
+  'Severe Thunderstorm Warning',
+  'Severe Thunderstorm Watch',
+  'Extreme Wind Warning',
+  'High Wind Warning',
+  'High Wind Watch',
+  'Wind Advisory',
+  'Dust Storm Warning',
+  'Hurricane Warning',
+  'Hurricane Watch',
+  'Tropical Storm Warning',
+  'Tropical Storm Watch',
+  'Storm Surge Warning',
+  'Storm Surge Watch',
+];
+
+const WIND_BEARING_EVENT_SET = new Set(
+  WIND_BEARING_EVENT_NAMES.map((n) => n.toLowerCase()),
+);
+
+// Whether the min-wind filter is meaningful for this event. Returns
+// false for unknown / blank names so the UI hides the input by default;
+// users only see the knob on events whose NOAA descriptions are known
+// to carry an mph number. The server's null-safe guard
+// (api/src/routes/weather.ts) catches any bad value that slips through.
+export function eventCarriesWind(eventName: string | null | undefined): boolean {
+  if (!eventName) return false;
+  return WIND_BEARING_EVENT_SET.has(eventName.toLowerCase());
+}
+
 export const ALL_NOAA_EVENTS: ReadonlyArray<string> = NOAA_EVENT_CATEGORIES.flatMap(
   (c) => c.events,
 );

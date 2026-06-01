@@ -82,7 +82,9 @@ const EMPTY_EMP = {
   // Default stays 'worker' so existing DB checks/queries still pass.
   role: 'worker',
   pay_type: 'hourly',
-  pay_rate: 0,
+  // Kept as a string so the user can type "18." mid-entry without losing
+  // the decimal point. Parsed to a number on save.
+  pay_rate: '',
   email: '',
   birthday: '',
   hire_date: '',
@@ -124,6 +126,26 @@ export default function EmpleadosPage() {
 
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
+
+  // Labels used both for the `*` indicator on form fields and the "missing
+  // required" error. first_name is omitted — it has its own dedicated error.
+  const REQUIRED_FIELD_LABELS: Record<string, string> = {
+    last_name: t.modal.lastNameLabel,
+    phone: t.modal.phoneLabel,
+    email: t.modal.emailLabel,
+    birthday: t.modal.birthdayLabel,
+    hire_date: t.modal.hireDateLabel,
+    pay_type: t.modal.payTypeLabel,
+    pay_rate: t.modal.payRateLabel.replace(' ({{unit}})', ''),
+    address: t.modal.addressLabel,
+    city: t.modal.cityLabel,
+    state: t.modal.stateLabel,
+    zip_code: t.modal.zipLabel,
+    emergency_contact_name: `${t.modal.emergencyContactHeading} — ${t.modal.emergencyNameLabel}`,
+    emergency_contact_phone: `${t.modal.emergencyContactHeading} — ${t.modal.emergencyPhoneLabel}`,
+  };
+  const reqFlags: Record<string, boolean> = business?.employee_field_required ?? {};
+  const rLabel = (key: string, base: string) => (reqFlags[key] ? `${base} *` : base);
 
   const loadEmployees = async () => {
     if (!business) return;
@@ -227,7 +249,7 @@ export default function EmpleadosPage() {
       phone: e.phone ?? '',
       role: e.role,
       pay_type: e.pay_type,
-      pay_rate: e.pay_rate,
+      pay_rate: e.pay_rate ? String(e.pay_rate) : '',
       email: e.email ?? '',
       birthday: e.birthday ?? '',
       hire_date: e.hire_date ?? '',
@@ -244,11 +266,48 @@ export default function EmpleadosPage() {
   const saveEmp = async () => {
     if (!empForm.first_name.trim()) { setError(t.modal.errorFirstNameRequired); return; }
     if (empForm.email.trim() && !isValidEmail(empForm.email)) { setError(tc.validation.invalidEmail); return; }
+    // Honour the per-business required-field toggles from Ajustes → Equipo
+    // (employee_field_required). first_name is enforced above to mirror the
+    // DB NOT NULL constraint; everything else is opt-in.
+    const fieldValues: Record<string, string> = {
+      last_name: empForm.last_name,
+      phone: empForm.phone,
+      email: empForm.email,
+      birthday: empForm.birthday,
+      hire_date: empForm.hire_date,
+      pay_type: empForm.pay_type,
+      pay_rate: empForm.pay_rate,
+      address: empForm.address,
+      city: empForm.city,
+      state: empForm.state,
+      zip_code: empForm.zip_code,
+      emergency_contact_name: empForm.emergency_contact_name,
+      emergency_contact_phone: empForm.emergency_contact_phone,
+    };
+    const missing: string[] = [];
+    for (const [key, label] of Object.entries(REQUIRED_FIELD_LABELS)) {
+      if (!reqFlags[key]) continue;
+      const v = fieldValues[key];
+      if (!v || !v.trim()) missing.push(label);
+    }
+    for (const tpl of templates) {
+      if (tpl.required && !empForm.custom_fields[tpl.field_key]?.trim()) {
+        missing.push(tpl.field_label);
+      }
+    }
+    if (missing.length > 0) {
+      setError(t.modal.requiredError.replace('{{fields}}', missing.join(', ')));
+      return;
+    }
     setSaving(true); setError('');
+    // pay_rate is a string in the form so the user can type "18." mid-entry
+    // without losing the decimal — parse it back to a number for the DB.
+    const payRateNum = parseFloat(empForm.pay_rate) || 0;
     // Normalise empty-string dates / optional text → null so Postgres
     // accepts them.
     const payload = {
       ...empForm,
+      pay_rate: payRateNum,
       birthday: empForm.birthday || null,
       hire_date: empForm.hire_date || null,
       email: empForm.email.trim() || null,
@@ -267,7 +326,7 @@ export default function EmpleadosPage() {
           businessId: business!.id,
           employeeId: created.id,
           eventType: 'hired',
-          details: { role: empForm.role, pay_type: empForm.pay_type, rate: empForm.pay_rate },
+          details: { role: empForm.role, pay_type: empForm.pay_type, rate: payRateNum },
           createdBy: user?.id ?? null,
         });
       }
@@ -278,7 +337,7 @@ export default function EmpleadosPage() {
       // entries). Phone/name edits don't log.
       const milestones = diffEmployeeChanges(
         { pay_rate: prev.pay_rate, pay_type: prev.pay_type, role: prev.role },
-        { pay_rate: empForm.pay_rate, pay_type: empForm.pay_type, role: empForm.role },
+        { pay_rate: payRateNum, pay_type: empForm.pay_type, role: empForm.role },
       );
       for (const m of milestones) {
         void logEmployeeMilestone(supabase, {
@@ -415,44 +474,59 @@ export default function EmpleadosPage() {
           {/* Basic info */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
           <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder} value={empForm.first_name} onChange={e => setEmpForm(f => ({ ...f, first_name: e.target.value }))} />
-          <Input label={t.modal.lastNameLabel} placeholder={t.modal.lastNamePlaceholder} value={empForm.last_name} onChange={e => setEmpForm(f => ({ ...f, last_name: e.target.value }))} />
+          <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder} value={empForm.last_name} onChange={e => setEmpForm(f => ({ ...f, last_name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.phoneLabel} placeholder={t.modal.phonePlaceholder} value={formatPhoneInput(empForm.phone)} onChange={e => setEmpForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
-            <Input label={t.modal.emailLabel} type="email" placeholder={t.modal.emailPlaceholder} value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} />
+            <Input label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder} value={formatPhoneInput(empForm.phone)} onChange={e => setEmpForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
+            <Input label={rLabel('email', t.modal.emailLabel)} type="email" placeholder={t.modal.emailPlaceholder} value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} />
           </div>
 
           {/* Personal — asked before employment so birthday comes first */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
-          <Input label={t.modal.birthdayLabel} type="date" value={empForm.birthday} onChange={e => setEmpForm(f => ({ ...f, birthday: e.target.value }))} />
-          <Input label={t.modal.addressLabel} placeholder={t.modal.addressPlaceholder} value={empForm.address} onChange={e => setEmpForm(f => ({ ...f, address: e.target.value }))} />
-          <Input label={t.modal.cityLabel} placeholder={t.modal.cityPlaceholder} value={empForm.city} onChange={e => setEmpForm(f => ({ ...f, city: e.target.value }))} />
+          <Input label={rLabel('birthday', t.modal.birthdayLabel)} type="date" value={empForm.birthday} onChange={e => setEmpForm(f => ({ ...f, birthday: e.target.value }))} />
+          <Input label={rLabel('address', t.modal.addressLabel)} placeholder={t.modal.addressPlaceholder} value={empForm.address} onChange={e => setEmpForm(f => ({ ...f, address: e.target.value }))} />
+          <Input label={rLabel('city', t.modal.cityLabel)} placeholder={t.modal.cityPlaceholder} value={empForm.city} onChange={e => setEmpForm(f => ({ ...f, city: e.target.value }))} />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.modal.stateLabel}</label>
+            <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
             <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
               <option value="">{t.modal.stateNone}</option>
               {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <Input label={t.modal.zipLabel} placeholder={t.modal.zipPlaceholder} value={empForm.zip_code} onChange={e => setEmpForm(f => ({ ...f, zip_code: e.target.value }))} />
+          <Input label={rLabel('zip_code', t.modal.zipLabel)} placeholder={t.modal.zipPlaceholder} value={empForm.zip_code} onChange={e => setEmpForm(f => ({ ...f, zip_code: e.target.value }))} />
 
           {/* Employment + pay */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</p>
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.hireDateLabel} type="date" value={empForm.hire_date} onChange={e => setEmpForm(f => ({ ...f, hire_date: e.target.value }))} />
+            <Input label={rLabel('hire_date', t.modal.hireDateLabel)} type="date" value={empForm.hire_date} onChange={e => setEmpForm(f => ({ ...f, hire_date: e.target.value }))} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.modal.payTypeLabel}</label>
+              <label className="text-sm font-medium text-gray-700">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
               <select value={empForm.pay_type} onChange={e => setEmpForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                 {Object.entries(PAY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
           </div>
-          <Input label={t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly)} type="number" min="0" step="0.01" value={empForm.pay_rate || ''} onChange={e => setEmpForm(f => ({ ...f, pay_rate: parseFloat(e.target.value) || 0 }))} leftIcon={<DollarSign size={15}/>} />
+          <Input
+            label={rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly))}
+            type="text"
+            inputMode="decimal"
+            value={empForm.pay_rate}
+            onChange={e => {
+              // Allow only digits + a single decimal point so the user can
+              // type "18." → "18.5" without it being parsed back to "18".
+              const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+              const parts = cleaned.split('.');
+              const next = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+              setEmpForm(f => ({ ...f, pay_rate: next }));
+            }}
+            placeholder="0.00"
+            leftIcon={<DollarSign size={15}/>}
+          />
 
           {/* Emergency contact */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.emergencyNameLabel} placeholder={t.modal.emergencyNamePlaceholder} value={empForm.emergency_contact_name} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_name: e.target.value }))} />
-            <Input label={t.modal.emergencyPhoneLabel} placeholder={t.modal.emergencyPhonePlaceholder} value={formatPhoneInput(empForm.emergency_contact_phone)} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_phone: formatPhoneInput(e.target.value) }))} />
+            <Input label={rLabel('emergency_contact_name', t.modal.emergencyNameLabel)} placeholder={t.modal.emergencyNamePlaceholder} value={empForm.emergency_contact_name} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_name: e.target.value }))} />
+            <Input label={rLabel('emergency_contact_phone', t.modal.emergencyPhoneLabel)} placeholder={t.modal.emergencyPhonePlaceholder} value={formatPhoneInput(empForm.emergency_contact_phone)} onChange={e => setEmpForm(f => ({ ...f, emergency_contact_phone: formatPhoneInput(e.target.value) }))} />
           </div>
 
           {/* Custom fields */}
@@ -636,20 +710,30 @@ function CustomFieldInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t: full } = useLang();
+  const tc = full.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
 
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Three states — '', 'true', 'false'. Clicking the active button clears
+    // it so the user can return to "unanswered". Required-field validation
+    // now distinguishes "No" from "didn't touch".
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-        <span className="text-sm text-gray-900">{label}</span>
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={e => onChange(e.target.checked ? 'true' : 'false')}
-          className="w-5 h-5 accent-primary"
-        />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.yes}
+          </button>
+          <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.no}
+          </button>
+        </div>
+      </div>
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {

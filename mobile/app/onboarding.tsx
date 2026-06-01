@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/auth/store';
 import { useLang } from '@/lib/i18n/LangProvider';
 import {
   OnboardingScreen,
@@ -103,6 +104,11 @@ export default function OnboardingRoute() {
         modules.map((key) => ({ business_id: business.id, module_key: key })),
       );
       if (modulesError) console.warn('Modules insert warning:', modulesError.message);
+
+      // Pull the new business into the auth store before navigating —
+      // otherwise the route gate still sees business: null from the
+      // SIGNED_IN-time fetch and bounces us back to /onboarding.
+      await useAuthStore.getState().refetchBusiness();
 
       router.replace('/(tabs)');
       return { ok: true as const };

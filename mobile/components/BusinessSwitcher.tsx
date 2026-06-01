@@ -28,11 +28,11 @@ export function BusinessSwitcher() {
   // Single-business users don't need a switcher — just show the name.
   if (businesses.length <= 1) {
     return (
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-start gap-2">
         <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
           <Building2 size={16} color="#4F46E5" />
         </View>
-        <Text className="text-base font-semibold text-gray-900" numberOfLines={1}>
+        <Text className="flex-1 text-base font-semibold text-gray-900 pt-1" numberOfLines={3}>
           {active.name}
         </Text>
       </View>
@@ -43,16 +43,16 @@ export function BusinessSwitcher() {
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        className="flex-row items-center gap-2 active:opacity-70"
+        className="flex-row items-start gap-2 active:opacity-70"
         accessibilityLabel={tw.switcherLabel}
       >
         <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
           <Building2 size={16} color="#4F46E5" />
         </View>
-        <Text className="text-base font-semibold text-gray-900 max-w-[180px]" numberOfLines={1}>
+        <Text className="flex-1 text-base font-semibold text-gray-900 pt-1" numberOfLines={3}>
           {active.name}
         </Text>
-        <ChevronDown size={16} color="#6B7280" />
+        <ChevronDown size={16} color="#6B7280" className="mt-1.5" />
       </Pressable>
 
       <RNModal

@@ -182,11 +182,11 @@ export function EmployeesScreen({
             {employees.map((e, i) => (
               <div
                 key={e.id}
-                className={`flex items-center justify-between px-5 py-4 ${
+                className={`flex items-start justify-between gap-2 px-5 py-4 ${
                   i < employees.length - 1 ? 'border-b border-gray-50' : ''
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                       e.active ? 'bg-primary/10' : 'bg-gray-100'
@@ -197,26 +197,28 @@ export function EmployeesScreen({
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900 truncate">
-                        {e.firstName} {e.lastName}
-                      </span>
-                      {!e.active ? (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
-                          {t.inactiveBadge}
-                        </span>
-                      ) : null}
-                      {e.access?.kind === 'active' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                          {ROLE_LABELS[e.access.role][lang]}
-                        </span>
-                      ) : e.access?.kind === 'invited' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
-                          {teamT.pendingBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    <p className="text-sm font-semibold text-gray-900 break-words">
+                      {e.firstName} {e.lastName}
+                    </p>
+                    {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        {!e.active ? (
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
+                            {t.inactiveBadge}
+                          </span>
+                        ) : null}
+                        {e.access?.kind === 'active' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                            {ROLE_LABELS[e.access.role][lang]}
+                          </span>
+                        ) : e.access?.kind === 'invited' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
+                            {teamT.pendingBadge}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-gray-400 mt-1 truncate">
                       {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
                       {e.phone ? ` · ${e.phone}` : ''}
                     </p>

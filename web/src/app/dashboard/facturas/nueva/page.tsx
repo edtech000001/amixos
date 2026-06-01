@@ -418,20 +418,29 @@ function CustomFieldInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t: full } = useLang();
+  const tc = full.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
 
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Three states — '', 'true', 'false'. Clicking the active button clears
+    // so the user can return to "unanswered".
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-        <span className="text-sm text-gray-900">{label}</span>
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={e => onChange(e.target.checked ? 'true' : 'false')}
-          className="w-5 h-5 accent-primary"
-        />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.yes}
+          </button>
+          <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.no}
+          </button>
+        </div>
+      </div>
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {

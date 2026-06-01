@@ -79,7 +79,9 @@ interface EmpForm {
   phone: string;
   role: string;
   pay_type: string;
-  pay_rate: number;
+  // Stored as a string so the user can type intermediate values like "18."
+  // without losing the decimal point. Parsed to a number on save.
+  pay_rate: string;
   email: string;
   birthday: string;
   hire_date: string;
@@ -113,7 +115,7 @@ const EMPTY_EMP: EmpForm = {
   // stays 'worker' so existing DB checks/queries still pass.
   role: 'worker',
   pay_type: 'hourly',
-  pay_rate: 0,
+  pay_rate: '',
   email: '',
   birthday: '',
   hire_date: '',
@@ -181,6 +183,26 @@ export default function EmpleadosRoute() {
     { value: 'salary', label: t.payTypes.salary },
     { value: 'daily', label: t.payTypes.daily },
   ];
+
+  // Labels used both for the `*` indicator on form fields and the "missing
+  // required" error. first_name is omitted — it has its own dedicated error.
+  const REQUIRED_FIELD_LABELS: Record<string, string> = {
+    last_name: t.modal.lastNameLabel,
+    phone: t.modal.phoneLabel,
+    email: t.modal.emailLabel,
+    birthday: t.modal.birthdayLabel,
+    hire_date: t.modal.hireDateLabel,
+    pay_type: t.modal.payTypeLabel,
+    pay_rate: t.modal.payRateLabel.replace(' ({{unit}})', ''),
+    address: t.modal.addressLabel,
+    city: t.modal.cityLabel,
+    state: t.modal.stateLabel,
+    zip_code: t.modal.zipLabel,
+    emergency_contact_name: `${t.modal.emergencyContactHeading} — ${t.modal.emergencyNameLabel}`,
+    emergency_contact_phone: `${t.modal.emergencyContactHeading} — ${t.modal.emergencyPhoneLabel}`,
+  };
+  const reqFlags: Record<string, boolean> = business?.employee_field_required ?? {};
+  const rLabel = (key: string, base: string) => (reqFlags[key] ? `${base} *` : base);
   const PAY_UNIT: Record<string, string> = {
     hourly: t.payRateUnit.hourly,
     salary: t.payRateUnit.salary,
@@ -323,7 +345,7 @@ export default function EmpleadosRoute() {
       phone: e.phone ?? '',
       role: e.role,
       pay_type: e.pay_type,
-      pay_rate: e.pay_rate,
+      pay_rate: e.pay_rate ? String(e.pay_rate) : '',
       email: e.email ?? '',
       birthday: e.birthday ?? '',
       hire_date: e.hire_date ?? '',
@@ -350,11 +372,48 @@ export default function EmpleadosRoute() {
       setError(tc.validation.invalidEmail);
       return;
     }
+    // Honour the per-business required-field toggles from Ajustes → Equipo
+    // (employee_field_required). first_name is enforced above to mirror the
+    // DB NOT NULL constraint; everything else is opt-in.
+    const fieldValues: Record<string, string> = {
+      last_name: empForm.last_name,
+      phone: empForm.phone,
+      email: empForm.email,
+      birthday: empForm.birthday,
+      hire_date: empForm.hire_date,
+      pay_type: empForm.pay_type,
+      pay_rate: empForm.pay_rate,
+      address: empForm.address,
+      city: empForm.city,
+      state: empForm.state,
+      zip_code: empForm.zip_code,
+      emergency_contact_name: empForm.emergency_contact_name,
+      emergency_contact_phone: empForm.emergency_contact_phone,
+    };
+    const missing: string[] = [];
+    for (const [key, label] of Object.entries(REQUIRED_FIELD_LABELS)) {
+      if (!reqFlags[key]) continue;
+      const v = fieldValues[key];
+      if (!v || !v.trim()) missing.push(label);
+    }
+    for (const tpl of templates) {
+      if (tpl.required && !empForm.custom_fields[tpl.field_key]?.trim()) {
+        missing.push(tpl.field_label);
+      }
+    }
+    if (missing.length > 0) {
+      setError(t.modal.requiredError.replace('{{fields}}', missing.join(', ')));
+      return;
+    }
     setSaving(true);
     setError('');
+    // pay_rate is a string in the form so the user can type "18." while still
+    // mid-typing — parse it back to a number for the DB.
+    const payRateNum = parseFloat(empForm.pay_rate) || 0;
     // Normalise empty-string dates → null so Postgres doesn't reject them.
     const payload = {
       ...empForm,
+      pay_rate: payRateNum,
       birthday: empForm.birthday || null,
       hire_date: empForm.hire_date || null,
       email: empForm.email.trim() || null,
@@ -380,7 +439,7 @@ export default function EmpleadosRoute() {
           details: {
             role: empForm.role,
             pay_type: empForm.pay_type,
-            rate: empForm.pay_rate,
+            rate: payRateNum,
           },
           createdBy: user?.id ?? null,
         });
@@ -393,7 +452,7 @@ export default function EmpleadosRoute() {
         // change in one save → two entries). Phone/name edits don't log.
         const milestones = diffEmployeeChanges(
           { pay_rate: prev.pay_rate, pay_type: prev.pay_type, role: prev.role },
-          { pay_rate: empForm.pay_rate, pay_type: empForm.pay_type, role: empForm.role },
+          { pay_rate: payRateNum, pay_type: empForm.pay_type, role: empForm.role },
         );
         for (const m of milestones) {
           void logEmployeeMilestone(supabase, {
@@ -590,20 +649,20 @@ export default function EmpleadosRoute() {
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, first_name: v }))}
                 />
                 <Input
-                  label={t.modal.lastNameLabel}
+                  label={rLabel('last_name', t.modal.lastNameLabel)}
                   placeholder={t.modal.lastNamePlaceholder}
                   value={empForm.last_name}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, last_name: v }))}
                 />
                 <Input
-                  label={t.modal.phoneLabel}
+                  label={rLabel('phone', t.modal.phoneLabel)}
                   placeholder={t.modal.phonePlaceholder}
                   value={formatPhoneInput(empForm.phone)}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
                   keyboardType="phone-pad"
                 />
                 <Input
-                  label={t.modal.emailLabel}
+                  label={rLabel('email', t.modal.emailLabel)}
                   placeholder={t.modal.emailPlaceholder}
                   value={empForm.email}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, email: v }))}
@@ -616,24 +675,24 @@ export default function EmpleadosRoute() {
                   {t.modal.personalHeading}
                 </Text>
                 <DatePicker
-                  label={t.modal.birthdayLabel}
+                  label={rLabel('birthday', t.modal.birthdayLabel)}
                   value={empForm.birthday}
                   onChange={(v) => setEmpForm((f) => ({ ...f, birthday: v }))}
                 />
                 <Input
-                  label={t.modal.addressLabel}
+                  label={rLabel('address', t.modal.addressLabel)}
                   placeholder={t.modal.addressPlaceholder}
                   value={empForm.address}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, address: v }))}
                 />
                 <Input
-                  label={t.modal.cityLabel}
+                  label={rLabel('city', t.modal.cityLabel)}
                   placeholder={t.modal.cityPlaceholder}
                   value={empForm.city}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, city: v }))}
                 />
                 <Select
-                  label={t.modal.stateLabel}
+                  label={rLabel('state', t.modal.stateLabel)}
                   value={empForm.state}
                   onValueChange={(v) => setEmpForm((f) => ({ ...f, state: v }))}
                   placeholder={t.modal.stateNone}
@@ -643,7 +702,7 @@ export default function EmpleadosRoute() {
                   ]}
                 />
                 <Input
-                  label={t.modal.zipLabel}
+                  label={rLabel('zip_code', t.modal.zipLabel)}
                   placeholder={t.modal.zipPlaceholder}
                   value={empForm.zip_code}
                   onChangeText={(v) => setEmpForm((f) => ({ ...f, zip_code: v }))}
@@ -655,13 +714,13 @@ export default function EmpleadosRoute() {
                   {t.modal.employmentHeading}
                 </Text>
                 <DatePicker
-                  label={t.modal.hireDateLabel}
+                  label={rLabel('hire_date', t.modal.hireDateLabel)}
                   value={empForm.hire_date}
                   onChange={(v) => setEmpForm((f) => ({ ...f, hire_date: v }))}
                 />
                 <View>
                   <Select
-                    label={t.modal.payTypeLabel}
+                    label={rLabel('pay_type', t.modal.payTypeLabel)}
                     value={empForm.pay_type}
                     onValueChange={(v) => setEmpForm((f) => ({ ...f, pay_type: v }))}
                     options={PAY_TYPE_OPTIONS}
@@ -669,18 +728,29 @@ export default function EmpleadosRoute() {
                 </View>
                 <View>
                   <Text className="text-sm font-semibold text-gray-700 mb-2">
-                    {t.modal.payRateLabel.replace(
-                      '{{unit}}',
-                      PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly,
+                    {rLabel(
+                      'pay_rate',
+                      t.modal.payRateLabel.replace(
+                        '{{unit}}',
+                        PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly,
+                      ),
                     )}
                   </Text>
                   <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
                     <DollarSign size={16} color="#9CA3AF" />
                     <TextInput
-                      value={empForm.pay_rate ? String(empForm.pay_rate) : ''}
-                      onChangeText={(v) =>
-                        setEmpForm((f) => ({ ...f, pay_rate: parseFloat(v) || 0 }))
-                      }
+                      value={empForm.pay_rate}
+                      onChangeText={(v) => {
+                        // Allow only digits and a single decimal point so the
+                        // user can type "18." → "18.5" without the value being
+                        // stripped back to "18". Drop everything else.
+                        const cleaned = v.replace(/[^0-9.]/g, '');
+                        const parts = cleaned.split('.');
+                        const next = parts.length > 1
+                          ? `${parts[0]}.${parts.slice(1).join('')}`
+                          : cleaned;
+                        setEmpForm((f) => ({ ...f, pay_rate: next }));
+                      }}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
                       placeholderTextColor="#9CA3AF"
@@ -694,7 +764,7 @@ export default function EmpleadosRoute() {
                   {t.modal.emergencyContactHeading}
                 </Text>
                 <Input
-                  label={t.modal.emergencyNameLabel}
+                  label={rLabel('emergency_contact_name', t.modal.emergencyNameLabel)}
                   placeholder={t.modal.emergencyNamePlaceholder}
                   value={empForm.emergency_contact_name}
                   onChangeText={(v) =>
@@ -702,7 +772,7 @@ export default function EmpleadosRoute() {
                   }
                 />
                 <Input
-                  label={t.modal.emergencyPhoneLabel}
+                  label={rLabel('emergency_contact_phone', t.modal.emergencyPhoneLabel)}
                   placeholder={t.modal.emergencyPhonePlaceholder}
                   value={formatPhoneInput(empForm.emergency_contact_phone)}
                   onChangeText={(v) =>
@@ -1097,24 +1167,41 @@ function CustomFieldInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t: full } = useLang();
+  const tc = full.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
 
   if (template.field_type === 'date') {
     return <DatePicker label={label} value={value} onChange={onChange} />;
   }
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Three states — '', 'true', 'false'. Tapping the active button clears
+    // it so the user can return to "unanswered" if they tapped by mistake.
+    // This makes required-field validation meaningful (was: a toggle with no
+    // distinct "No" answer).
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-        <Text className="text-base text-gray-900 flex-1">{label}</Text>
-        <Pressable
-          onPress={() => onChange(on ? 'false' : 'true')}
-          className={`w-12 h-7 rounded-full ${on ? 'bg-primary' : 'bg-gray-200'} justify-center px-1`}
-        >
-          <View
-            className={`w-5 h-5 rounded-full bg-white ${on ? 'self-end' : 'self-start'}`}
-          />
-        </Pressable>
+      <View>
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+          >
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+              {tc.states.yes}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+          >
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+              {tc.states.no}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

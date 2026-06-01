@@ -138,3 +138,34 @@ export async function triggerGoogleSyncDeleteOrphan(
 // throttling + persistence + auto-resume. Callers should use
 // `syncBanner.runCreateBatch(ids)` (or `runDeleteBatch` for orphan
 // cleanup) instead — the provider owns throttling + persistence.
+
+/**
+ * Check whether the active business has Google Contacts sync connected AND
+ * enabled. Used to gate the banner / batch runner — without this, importing
+ * a CSV on a fresh account triggers a "Agregando a Google Contacts" banner
+ * even though no connection was ever established. The API silently no-ops
+ * disconnected requests, so the call would "succeed" while doing nothing.
+ *
+ * Returns false on any error (missing creds, network, auth) — sync is
+ * best-effort and false is always the safe default.
+ */
+export async function isGoogleSyncConnected(
+  businessId: string,
+  opts: { apiBaseUrl: string | null; jwt: string | null },
+): Promise<boolean> {
+  if (!opts.apiBaseUrl || !opts.jwt || !businessId) return false;
+  try {
+    const res = await fetch(
+      `${opts.apiBaseUrl}/api/v1/google-sync/status?business_id=${businessId}`,
+      { headers: { Authorization: `Bearer ${opts.jwt}` } },
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    const data = json?.data;
+    // Mirror the server-side gate at /google-sync/contact: a row must
+    // exist (connected) AND not be paused (enabled !== false).
+    return Boolean(data?.connected) && data?.enabled !== false;
+  } catch {
+    return false;
+  }
+}

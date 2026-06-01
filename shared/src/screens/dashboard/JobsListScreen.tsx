@@ -20,6 +20,12 @@ import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { searchMatches } from '../../lib/usStates';
+import {
+  matchJobAlert,
+  JOB_ALERT_STYLE,
+  DEFAULT_JOB_ALERT_THRESHOLDS,
+  type JobAlertThresholds,
+} from '../../lib/jobAlerts';
 
 export interface JobListItem {
   id: string;
@@ -41,6 +47,9 @@ export interface JobListItem {
   workerNames: string[];
   delegatedToBusinessName?: string | null;
   delegatedFromBusinessName?: string | null;
+  // Crew visibility (migration 044). false = scheduler-only; shown as a
+  // "Privado" badge so the owner can tell published vs draft at a glance.
+  publishedToCrew?: boolean;
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
@@ -57,6 +66,9 @@ export interface JobsListScreenProps {
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
+  // Upcoming-job alert tiers from businesses.job_alert_thresholds. When
+  // omitted or disabled, cards render without the indicator.
+  alertThresholds?: JobAlertThresholds;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -120,6 +132,7 @@ export function JobsListScreen({
   onViewInvoice,
   onNewJob,
   onNewProposal,
+  alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
 }: JobsListScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
@@ -415,11 +428,28 @@ export function JobsListScreen({
             const priorityColor = PRIORITY_COLORS[job.priority] ?? 'text-blue-500';
             const expired = isExpired(job);
             const isProposal = PROPOSAL_STATUSES.includes(job.status);
+            // Upcoming-job alert tier. Skipped for proposal-stage cards
+            // (they don't have a real scheduled date yet) so the indicator
+            // only fires on jobs the owner actually needs to prep for.
+            const alertMatch = !isProposal
+              ? matchJobAlert(alertThresholds, job.scheduledDate)
+              : null;
+            const alertStyle = alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null;
+            // chip copy: "Hoy" / "Mañana" / "En N días".
+            const alertChipLabel = alertMatch
+              ? alertMatch.daysUntil === 0
+                ? t.alertChip.today
+                : alertMatch.daysUntil === 1
+                  ? t.alertChip.tomorrow
+                  : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
+              : null;
 
             return (
               <View
                 key={job.id}
-                className="bg-white rounded-2xl border border-gray-100 overflow-hidden"
+                className={`bg-white rounded-2xl border border-gray-100 overflow-hidden ${
+                  alertStyle ? `border-l-4 ${alertStyle.borderClass}` : ''
+                }`}
               >
                 <Pressable
                   onPress={() => onJobPress(job.id)}
@@ -458,6 +488,14 @@ export function JobsListScreen({
                             {statusLabel}
                           </Text>
                         </View>
+                        {/* Crew-visibility marker. Default migration value
+                           is true, so this badge only fires when the owner
+                           explicitly kept the job in their private scheduler. */}
+                        {job.publishedToCrew === false ? (
+                          <View className="px-2 py-0.5 rounded-full bg-gray-200">
+                            <Text className="text-[10px] font-semibold text-gray-600">{t.new.privateBadge}</Text>
+                          </View>
+                        ) : null}
                         {expired ? (
                           <Text className="text-xs text-orange-500 font-medium">{t.expired}</Text>
                         ) : null}
@@ -483,6 +521,13 @@ export function JobsListScreen({
                           <Text className="text-xs text-gray-400">
                             {formatDateLong(job.scheduledDate, dateLoc)}
                             {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {alertStyle && alertChipLabel ? (
+                        <View className={`flex-row items-center px-2 py-0.5 rounded-full ${alertStyle.bgClass}`}>
+                          <Text className={`text-[10px] font-semibold ${alertStyle.textClass}`}>
+                            {alertChipLabel}
                           </Text>
                         </View>
                       ) : null}

@@ -12,6 +12,7 @@ import { useLang } from '@/i18n/LangProvider';
 import {
   isWeatherFeatureEnabled,
   NOAA_EVENT_CATEGORIES,
+  eventCarriesWind,
   type WeatherConfig,
 } from '@amixos/shared/lib/weather';
 
@@ -205,20 +206,22 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                         <Trash2 size={16} color="#EF4444" />
                       </button>
                     </div>
-                    <div className={dimClass}>
-                      <label className="block text-[10px] text-gray-500 mb-1">{t.minWindLabel}</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={ev.min_wind_speed ?? ''}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value, 10);
-                          updateEvent(idx, { min_wind_speed: isNaN(n) || n <= 0 ? null : n });
-                        }}
-                        placeholder="—"
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-                      />
-                    </div>
+                    {eventCarriesWind(ev.event) ? (
+                      <div className={dimClass}>
+                        <label className="block text-[10px] text-gray-500 mb-1">{t.minWindLabel}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={ev.min_wind_speed ?? ''}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10);
+                            updateEvent(idx, { min_wind_speed: isNaN(n) || n <= 0 ? null : n });
+                          }}
+                          placeholder="—"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 );
               })

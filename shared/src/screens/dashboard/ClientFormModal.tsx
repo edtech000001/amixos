@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput } from 'react-native';
+import { View, Text, TextInput, Pressable } from 'react-native';
 import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
@@ -7,7 +7,6 @@ import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 import { Select, type SelectOption } from '../../ui/Select';
-import { Toggle } from '../../ui/Toggle';
 import { DatePicker } from '../../ui/DatePicker';
 
 export interface ClientFieldTemplate {
@@ -271,14 +270,30 @@ export function ClientFormModal({
                   );
                 }
                 if (tpl.field_type === 'boolean') {
+                  // Three states — '', 'true', 'false'. Tapping active clears.
+                  const yesActive = value === 'true';
+                  const noActive = value === 'false';
                   return (
                     <View key={tpl.field_key}>
-                      <Text className="text-sm font-medium text-gray-700 mb-1.5">{labelText}</Text>
-                      <Toggle
-                        value={value === 'true'}
-                        onValueChange={v => setCustom(tpl.field_key, v ? 'true' : 'false')}
-                        hint={value === 'true' ? tc.states.yes : tc.states.no}
-                      />
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+                      <View className="flex-row gap-2">
+                        <Pressable
+                          onPress={() => setCustom(tpl.field_key, yesActive ? '' : 'true')}
+                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                        >
+                          <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                            {tc.states.yes}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setCustom(tpl.field_key, noActive ? '' : 'false')}
+                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                        >
+                          <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                            {tc.states.no}
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
                   );
                 }

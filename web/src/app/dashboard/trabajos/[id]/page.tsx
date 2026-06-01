@@ -14,7 +14,6 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Toggle } from '@/components/ui/Toggle';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -972,6 +971,7 @@ function ActualsSection({
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
   const tA = full.dashboard.jobs.actuals;
+  const tc = full.common;
 
   const [templates, setTemplates] = useState<AssignmentFieldTemplate[]>([]);
   const [draft, setDraft] = useState<Record<string, { hours: string; custom: Record<string, unknown> }>>({});
@@ -1093,10 +1093,26 @@ function ActualsSection({
               {orderedTemplates.map(tpl => {
                 const value = d.custom[tpl.field_key];
                 if (tpl.field_type === 'boolean') {
+                  // Three states — null/undefined, true, false. Clicking the
+                  // active button clears to null so the user can return to
+                  // "unanswered" if they clicked by mistake.
+                  const yesActive = value === true;
+                  const noActive = value === false;
                   return (
-                    <div key={tpl.id} className="mb-2 flex items-center justify-between">
-                      <span className="text-xs text-gray-500">{tpl.field_label}</span>
-                      <Toggle checked={value === true} onChange={(v) => setCustom(row.id, tpl.field_key, v)} />
+                    <div key={tpl.id} className="mb-2">
+                      <span className="text-xs text-gray-500 block mb-1.5">{tpl.field_label}</span>
+                      <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => setCustom(row.id, tpl.field_key, yesActive ? null : true)}
+                          className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                          {tc.states.yes}
+                        </button>
+                        <button type="button"
+                          onClick={() => setCustom(row.id, tpl.field_key, noActive ? null : false)}
+                          className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                          {tc.states.no}
+                        </button>
+                      </div>
                     </div>
                   );
                 }

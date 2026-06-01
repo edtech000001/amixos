@@ -9,6 +9,7 @@ import {
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 
 interface RawJob {
   id: string;
@@ -29,6 +30,7 @@ interface RawJob {
   expiry_date: string | null;
   delegated_to_business_id: string | null;
   delegated_from_business_id: string | null;
+  published_to_crew: boolean;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   job_assignments: {
@@ -104,7 +106,13 @@ export default function TrabajosTab() {
     delegatedFromBusinessName: j.delegated_from_business_id
       ? businesses.find(b => b.id === j.delegated_from_business_id)?.name ?? null
       : null,
+    publishedToCrew: j.published_to_crew,
   })), [rawJobs, businesses]);
+
+  const alertThresholds = useMemo(
+    () => normalizeJobAlertThresholds(business?.job_alert_thresholds),
+    [business?.job_alert_thresholds],
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
@@ -117,6 +125,7 @@ export default function TrabajosTab() {
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
+        alertThresholds={alertThresholds}
       />
     </View>
   );

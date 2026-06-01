@@ -5,6 +5,7 @@ import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
 import {
   TrabajosSection,
   TrabajosFieldsSection,
+  JobAlertsSection,
   CrewModeSection,
   TrabajadorFieldsSection,
 } from '@/components/SettingsSections';
@@ -13,8 +14,9 @@ import {
  * Ajustes → Trabajos. Stacked sections:
  *  1. Pipeline step config (which statuses are enabled)
  *  2. Field config — required toggles + unified standard/custom list
- *  3. Crew mode toggle (hides everything below when off)
- *  4. Per-worker fields — what the Project Leader fills out for each worker
+ *  3. Upcoming-job alert tiers (highlight cards as start date approaches)
+ *  4. Crew mode toggle (hides everything below when off)
+ *  5. Per-worker fields — what the Project Leader fills out for each worker
  */
 export default function TrabajosPage() {
   const { t } = useLang();
@@ -27,6 +29,8 @@ export default function TrabajosPage() {
         <TrabajosSection />
         <View className="h-px bg-gray-100 -mx-6" />
         <TrabajosFieldsSection />
+        <View className="h-px bg-gray-100 -mx-6" />
+        <JobAlertsSection />
         <View className="h-px bg-gray-100 -mx-6" />
         <CrewModeSection />
         {crewOn ? (
