@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck } from 'lucide-react-native';
+import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -164,7 +164,11 @@ export default function EmpleadosRoute() {
   const [members, setMembers] = useState<AccessMember[]>([]);
   const [invites, setInvites] = useState<AccessInvite[]>([]);
 
-  const [empModal, setEmpModal] = useState<'add' | 'edit' | null>(null);
+  // Modal modes:
+  //   'view' — tap a row → read-only detail with pencil + deactivate in header
+  //   'edit' — pencil in 'view' mode flips here (full form)
+  //   'add'  — Agregar button (full form, no pre-existing row)
+  const [empModal, setEmpModal] = useState<'add' | 'edit' | 'view' | null>(null);
   const [selEmpId, setSelEmpId] = useState<string | null>(null);
   const [empForm, setEmpForm] = useState<EmpForm>(EMPTY_EMP);
   const [tsModalOpen, setTsModalOpen] = useState(false);
@@ -360,7 +364,9 @@ export default function EmpleadosRoute() {
     setError('');
     setAccessError('');
     setAccessRole('office');
-    setEmpModal('edit');
+    // Row taps open the read-only detail view first; the user clicks the
+    // pencil in the header to switch to the editable form.
+    setEmpModal('view');
   };
   const saveEmp = async () => {
     if (!business) return;
@@ -594,7 +600,12 @@ export default function EmpleadosRoute() {
     : null;
   const canManageAccess = can.manageMembers(currentRole);
 
-  const empModalTitle = empModal === 'add' ? t.modal.addTitle : t.modal.editTitle;
+  const empModalTitle =
+    empModal === 'add'
+      ? t.modal.addTitle
+      : empModal === 'view' && selEmp
+      ? `${selEmp.first_name} ${selEmp.last_name}`.trim()
+      : t.modal.editTitle;
   const selectedTsEmp = tsForm.employee_id
     ? employees.find((e) => e.id === tsForm.employee_id) ?? null
     : null;
@@ -631,20 +642,31 @@ export default function EmpleadosRoute() {
               <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
                 <Text className="text-lg font-bold text-gray-900">{empModalTitle}</Text>
                 <View className="flex-row items-center gap-1">
-                  {/* Toggle active/inactive — moved here from the list rows so
-                     the row itself is a single tap to open the detail. */}
-                  {empModal === 'edit' && selEmp ? (
-                    <Pressable
-                      onPress={() => toggleActive(selEmp.id)}
-                      hitSlop={8}
-                      className="p-2 rounded-lg active:bg-gray-100"
-                    >
-                      {selEmp.active ? (
-                        <UserX size={18} color="#9CA3AF" />
-                      ) : (
-                        <UserCheck size={18} color="#10B981" />
-                      )}
-                    </Pressable>
+                  {/* View-mode header actions: pencil → edit, then toggle
+                     active. Both hidden in 'add' (no selected employee) and
+                     in 'edit' (the form below has Save / Cancel + the user
+                     is already editing, so the icons would be redundant). */}
+                  {empModal === 'view' && selEmp ? (
+                    <>
+                      <Pressable
+                        onPress={() => setEmpModal('edit')}
+                        hitSlop={8}
+                        className="p-2 rounded-lg active:bg-gray-100"
+                      >
+                        <Pencil size={18} color="#9CA3AF" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => toggleActive(selEmp.id)}
+                        hitSlop={8}
+                        className="p-2 rounded-lg active:bg-gray-100"
+                      >
+                        {selEmp.active ? (
+                          <UserX size={18} color="#9CA3AF" />
+                        ) : (
+                          <UserCheck size={18} color="#10B981" />
+                        )}
+                      </Pressable>
+                    </>
                   ) : null}
                   <Pressable onPress={() => setEmpModal(null)} hitSlop={8} className="p-2">
                     <X size={20} color="#9CA3AF" />
@@ -655,6 +677,97 @@ export default function EmpleadosRoute() {
                 contentContainerClassName="px-5 py-5 pb-10 gap-4"
                 keyboardShouldPersistTaps="handled"
               >
+                {/* Read-only detail view (row tap lands here; pencil in the
+                    header flips to 'edit' to make the form editable). */}
+                {empModal === 'view' && selEmp ? (
+                  <View className="gap-4">
+                    {/* Avatar + name */}
+                    <View className="items-center gap-2 py-2">
+                      <View
+                        className={`w-16 h-16 rounded-full items-center justify-center ${
+                          selEmp.active ? 'bg-primary/10' : 'bg-gray-100'
+                        }`}
+                      >
+                        <Text
+                          className={`text-2xl font-bold ${
+                            selEmp.active ? 'text-primary' : 'text-gray-400'
+                          }`}
+                        >
+                          {selEmp.first_name.charAt(0)}{selEmp.last_name.charAt(0)}
+                        </Text>
+                      </View>
+                      {!selEmp.active ? (
+                        <View className="bg-gray-100 px-2 py-0.5 rounded-full">
+                          <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Basic info */}
+                    {(selEmp.phone || selEmp.email) ? (
+                      <>
+                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</Text>
+                        <ViewRow label={t.modal.phoneLabel} value={selEmp.phone} />
+                        <ViewRow label={t.modal.emailLabel} value={selEmp.email} />
+                      </>
+                    ) : null}
+
+                    {/* Empleo y pago */}
+                    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</Text>
+                    <ViewRow label={t.modal.hireDateLabel} value={selEmp.hire_date} />
+                    <ViewRow
+                      label={t.modal.payTypeLabel}
+                      value={PAY_TYPE_OPTIONS.find((o) => o.value === selEmp.pay_type)?.label ?? selEmp.pay_type}
+                    />
+                    {selEmp.pay_rate ? (
+                      <ViewRow
+                        label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
+                        value={`$${selEmp.pay_rate.toFixed(2)} / ${PAY_UNIT[selEmp.pay_type] ?? PAY_UNIT.hourly}`}
+                      />
+                    ) : null}
+
+                    {/* Personal */}
+                    {(selEmp.birthday || selEmp.address || selEmp.city || selEmp.state || selEmp.zip_code) ? (
+                      <>
+                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</Text>
+                        <ViewRow label={t.modal.birthdayLabel} value={selEmp.birthday} />
+                        <ViewRow label={t.modal.addressLabel} value={selEmp.address} />
+                        {(selEmp.city || selEmp.state || selEmp.zip_code) ? (
+                          <ViewRow
+                            label={`${t.modal.cityLabel} / ${t.modal.stateLabel} / ${t.modal.zipLabel}`}
+                            value={[selEmp.city, selEmp.state, selEmp.zip_code].filter(Boolean).join(' · ')}
+                          />
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {/* Emergency contact */}
+                    {(selEmp.emergency_contact_name || selEmp.emergency_contact_phone) ? (
+                      <>
+                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</Text>
+                        <ViewRow label={t.modal.emergencyNameLabel} value={selEmp.emergency_contact_name} />
+                        <ViewRow label={t.modal.emergencyPhoneLabel} value={selEmp.emergency_contact_phone} />
+                      </>
+                    ) : null}
+
+                    {/* Custom fields */}
+                    {templates.length > 0 && selEmp.custom_fields && Object.keys(selEmp.custom_fields).length > 0 ? (
+                      <>
+                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</Text>
+                        {templates.map((tpl) => (
+                          <ViewRow
+                            key={tpl.id}
+                            label={tpl.field_label}
+                            value={selEmp.custom_fields?.[tpl.field_key]}
+                          />
+                        ))}
+                      </>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {empModal !== 'view' ? (
+                  <>
                 {/* Basic info */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                   {t.modal.basicInfoHeading}
@@ -823,10 +936,12 @@ export default function EmpleadosRoute() {
                 {error ? (
                   <Text className="text-xs text-red-500 mt-1">{error}</Text>
                 ) : null}
+                  </>
+                ) : null}
 
                 {/* App access — invite / change role / revoke, from the
-                    person record. Edit mode only (needs a saved employee). */}
-                {empModal === 'edit' && selEmp ? (
+                    person record. Visible in view AND edit modes. */}
+                {(empModal === 'edit' || empModal === 'view') && selEmp ? (
                   <View className="gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 mt-1">
                     <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                       {t.modal.appAccessHeading}
@@ -899,9 +1014,8 @@ export default function EmpleadosRoute() {
                   </View>
                 ) : null}
 
-                {/* Historial — only available on edit (need an existing
-                    employee id to query against). */}
-                {empModal === 'edit' && selEmpId ? (
+                {/* Historial — available in view AND edit modes. */}
+                {(empModal === 'edit' || empModal === 'view') && selEmpId ? (
                   <Pressable
                     onPress={() => setHistoryOpen(true)}
                     className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-50 active:bg-gray-100 mt-1"
@@ -913,18 +1027,22 @@ export default function EmpleadosRoute() {
                   </Pressable>
                 ) : null}
 
-                <View className="flex-row gap-3 pt-3">
-                  <View className="flex-1">
-                    <Button variant="secondary" onPress={() => setEmpModal(null)} fullWidth>
-                      {tc.buttons.cancel}
-                    </Button>
+                {/* Save / cancel — only when the form is open ('view' is
+                    read-only; pencil flips to 'edit' to expose these). */}
+                {empModal !== 'view' ? (
+                  <View className="flex-row gap-3 pt-3">
+                    <View className="flex-1">
+                      <Button variant="secondary" onPress={() => setEmpModal(null)} fullWidth>
+                        {tc.buttons.cancel}
+                      </Button>
+                    </View>
+                    <View className="flex-1">
+                      <Button onPress={saveEmp} loading={saving} fullWidth>
+                        {tc.buttons.save}
+                      </Button>
+                    </View>
                   </View>
-                  <View className="flex-1">
-                    <Button onPress={saveEmp} loading={saving} fullWidth>
-                      {tc.buttons.save}
-                    </Button>
-                  </View>
-                </View>
+                ) : null}
               </ScrollView>
             </View>
           </View>
@@ -1243,5 +1361,20 @@ function CustomFieldInput({
       onChangeText={onChange}
       keyboardType={template.field_type === 'number' ? 'decimal-pad' : 'default'}
     />
+  );
+}
+
+/**
+ * Read-only label/value row used by the view-detail mode of the person
+ * modal. Returns null when the value is empty so missing optional fields
+ * just disappear from the detail.
+ */
+function ViewRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <View className="gap-0.5">
+      <Text className="text-xs text-gray-400">{label}</Text>
+      <Text className="text-sm text-gray-900">{value}</Text>
+    </View>
   );
 }
