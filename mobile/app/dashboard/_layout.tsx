@@ -183,10 +183,10 @@ function DashboardTabs() {
               unmountOnBlur: true,
             }}
           />
-          <Tabs.Screen name="mas/empleados" options={{ href: null }} />
-          {/* After the empleados file → directory move, expo-router treats
-             these as distinct routes that need explicit href:null too,
-             otherwise they auto-appear as empty dock tabs. */}
+          {/* The empleados file → directory move means the route is no
+             longer a leaf at `mas/empleados`; it's `mas/empleados/index`
+             + `mas/empleados/[id]`. Both need explicit href:null,
+             otherwise expo-router auto-surfaces them as empty dock tabs. */}
           <Tabs.Screen name="mas/empleados/index" options={{ href: null }} />
           <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
