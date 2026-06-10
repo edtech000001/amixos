@@ -80,6 +80,56 @@ export function formatDateLong(
 }
 
 /**
+ * Long-form, locale-aware relative-time label: "hace 5 minutos" / "hace
+ * 3 horas" / "hace 2 días" / "ahora mismo". Singular vs plural is picked
+ * from the labels object based on the count; each label embeds {{n}}.
+ *
+ * Labels are passed in (rather than imported) so this stays in the shared
+ * formatter layer with no i18n dependency — callers feed it the strings
+ * from `dashboard.clients.detail.commLog.rel`.
+ */
+export interface RelativeTimeLabels {
+  now: string;
+  minute: string;
+  minutes: string;
+  hour: string;
+  hours: string;
+  day: string;
+  days: string;
+  week: string;
+  weeks: string;
+  month: string;
+  months: string;
+  year: string;
+  years: string;
+}
+
+export function formatRelativeLong(
+  input: string | Date | null | undefined,
+  labels: RelativeTimeLabels,
+): string {
+  const d = toDate(input);
+  if (!d) return '';
+  const diffMs = Date.now() - d.getTime();
+  const pick = (one: string, many: string, n: number) =>
+    (n === 1 ? one : many).replace('{{n}}', String(n));
+
+  if (diffMs < 60_000) return labels.now;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return pick(labels.minute, labels.minutes, mins);
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return pick(labels.hour, labels.hours, hrs);
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return pick(labels.day, labels.days, days);
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return pick(labels.week, labels.weeks, weeks);
+  const months = Math.floor(days / 30);
+  if (months < 12) return pick(labels.month, labels.months, months);
+  const years = Math.floor(days / 365);
+  return pick(labels.year, labels.years, years);
+}
+
+/**
  * Format a date + time as "Mayo 24, 2026, 9:30 PM". Used for created /
  * updated_at metadata where the time matters.
  */

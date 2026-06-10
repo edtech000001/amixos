@@ -17,7 +17,7 @@ import {
   ChevronLeft, Users, Briefcase, UserCircle2, X, Settings as SettingsIcon,
   Phone, MessageSquare, Mail, MapPin as MapPinIconLucide, Calendar,
   ArrowRight, Search as SearchIcon, CloudLightning, ExternalLink, Crosshair,
-  LocateFixed,
+  LocateFixed, EyeOff, CircleCheckBig, History,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -33,6 +33,8 @@ import {
 import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/usStates';
 import { PinBadge } from '@/lib/mapPinIcons';
 import { createSupabaseClient } from '@/lib/supabase';
+import { formatRelativeLong, type RelativeTimeLabels } from '@amixos/shared/lib/format';
+import { useContactOutcomePrompt, type FireContactArgs } from '@/lib/useContactOutcomePrompt';
 import {
   MapSettingsSheet,
   type DeviceMapSettings,
@@ -42,6 +44,7 @@ const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'standard',
   clustering: true,
   pinSize: 'medium',
+  outreachDays: 1,
 };
 
 const PIN_SIZE_PX: Record<DeviceMapSettings['pinSize'], number> = {
@@ -138,6 +141,8 @@ interface ClientPin {
   state?: string | null;
   zip_code?: string | null;
   custom_fields?: Record<string, unknown> | null;
+  // Most recent communication with this client (from v_client_last_contact).
+  last_contacted_at?: string | null;
   // Legacy fields from the pre-refactor API — ignored when present, the
   // client always resolves locally now.
   color?: string;
@@ -252,7 +257,7 @@ const DEFAULT_REGION: Region = {
 
 export default function MapScreen() {
   const router = useRouter();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const insets = useSafeAreaInsets();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
@@ -284,10 +289,15 @@ export default function MapScreen() {
     const pinSize = (['small', 'medium', 'large'] as readonly string[]).includes(s.pinSize)
       ? s.pinSize
       : DEFAULT_DEVICE_SETTINGS.pinSize;
+    const rawDays = Number(s.outreachDays);
+    const outreachDays = Number.isFinite(rawDays) && rawDays >= 1
+      ? Math.min(365, Math.floor(rawDays))
+      : DEFAULT_DEVICE_SETTINGS.outreachDays;
     return {
       mapType,
       clustering: typeof s.clustering === 'boolean' ? s.clustering : DEFAULT_DEVICE_SETTINGS.clustering,
       pinSize,
+      outreachDays,
     };
   }, [business?.map_view_settings]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -302,6 +312,12 @@ export default function MapScreen() {
   // "Storm focus" mode — when on, hide every pin EXCEPT weather alerts
   // and non-weather pins within `proximity_radius_miles` of any alert.
   const [stormFocus, setStormFocus] = useState(false);
+  // Outreach mode — when on, client pins contacted within
+  // deviceSettings.outreachDays are dimmed + flagged with a green ✓ so the
+  // user can see who's still left to call. The last-contact timestamp rides
+  // along on each pin (pin.last_contacted_at, from v_client_last_contact via
+  // the /pins endpoint).
+  const [outreach, setOutreach] = useState(false);
   // Modal listing every client with missing lat/lng — opened from the
   // geocode banner so the user can see WHICH clients failed and jump
   // straight to their detail page to fix the address.
@@ -343,6 +359,22 @@ export default function MapScreen() {
   }, [business, apiBaseUrl]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Direct Supabase client for the last-contact view read (RLS scopes it
+  // to the business — no API round-trip needed).
+  const supabase = useMemo(() => createSupabaseClient(), []);
+
+  // "Confirm outcome after" contact logging for the pin card's quick
+  // actions. Logs a client_communications row when the user returns from
+  // the dialer / SMS / mail app and confirms the outcome; refetches pins
+  // so "Último contacto" updates.
+  const { fireContact } = useContactOutcomePrompt({
+    supabase,
+    businessId: business?.id,
+    createdBy: user?.id ?? null,
+    labels: full.dashboard.clients.detail.commLog.prompt,
+    onLogged: () => { void load(); },
+  });
 
   // Weather alerts — only fetched when the alpha business gate is on.
   // Posts to /weather/refresh first (server skips the NWS call if cache
@@ -591,6 +623,15 @@ export default function MapScreen() {
             <Crosshair size={20} color={stormFocus ? '#DC2626' : '#374151'} />
           </Pressable>
         ) : null}
+        {/* Outreach mode toggle — dims + ✓ clients contacted within the
+           configured window. Available to every business (not weather-gated). */}
+        <Pressable
+          onPress={() => setOutreach(v => !v)}
+          hitSlop={12}
+          className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${outreach ? 'bg-emerald-50' : ''}`}
+        >
+          <CircleCheckBig size={20} color={outreach ? '#16A34A' : '#374151'} />
+        </Pressable>
         <Pressable
           onPress={() => setSettingsOpen(true)}
           hitSlop={12}
@@ -690,6 +731,76 @@ export default function MapScreen() {
             </Pressable>
           </View>
         ) : null}
+        {/* Outreach-mode active banner — contacted clients are dimmed + ✓. */}
+        {outreach ? (
+          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+            <CircleCheckBig size={12} color="#16A34A" />
+            <Text className="text-[11px] font-semibold text-emerald-700 flex-1">
+              {t.outreachModeBadge.replace('{{days}}', String(deviceSettings.outreachDays))}
+            </Text>
+            <Pressable onPress={() => setOutreach(false)} hitSlop={6}>
+              <X size={12} color="#16A34A" />
+            </Pressable>
+          </View>
+        ) : null}
+        {/* Geocode banner — only when there are clients still missing
+           coordinates. Tap-to-backfill saves a settings detour. Lives
+           inline inside the same px-4 container as the search bar so
+           horizontal alignment matches exactly; pushes the map down a
+           bit when shown, which is fine since it's an action prompt. */}
+        {!loading && pins && pins.needsGeocoding > 0 && !bannerDismissed ? (
+          <Pressable
+            // Tap opens the unresolved-clients list so the user can SEE
+            // which clients are affected. The list has its own "Reintentar"
+            // button for batch geocoding. Tapping the banner used to fire
+            // geocoding blindly which gave the user no actionable info
+            // when it returned "0 located".
+            onPress={() => setUnresolvedOpen(true)}
+            disabled={geocoding}
+            className="mt-2 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
+            style={{
+              shadowColor: '#000',
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 3,
+            }}
+          >
+            <View className="w-8 h-8 rounded-full bg-sky-100 items-center justify-center">
+              <Users size={16} color="#0EA5E9" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm text-gray-900">
+                {geocoding && geocodeProgress
+                  ? t.geocodeProgress
+                      .replace('{{done}}', String(geocodeProgress.done))
+                      .replace('{{total}}', String(geocodeProgress.total))
+                  : geocoding
+                    ? t.geocodeRunning
+                    : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
+              </Text>
+              {!geocoding && pins.geocodeBreakdown ? (
+                <Text className="text-xs text-gray-500 mt-0.5">
+                  {t.geocodeBreakdown
+                    .replace('{{noAddr}}', String(pins.geocodeBreakdown.noAddress))
+                    .replace('{{unresolved}}', String(pins.geocodeBreakdown.unresolved))
+                    .replace('{{pending}}', String(pins.geocodeBreakdown.pending))}
+                </Text>
+              ) : null}
+            </View>
+            {geocoding ? <ActivityIndicator size="small" color="#4F46E5" /> : null}
+            {/* Dismiss for this session — banner re-shows when the user
+               returns to the map. stopPropagation so the surrounding
+               Pressable's onPress (open list) doesn't also fire. */}
+            <Pressable
+              onPress={(e) => { e.stopPropagation(); setBannerDismissed(true); }}
+              hitSlop={10}
+              className="p-1.5 rounded-lg active:bg-gray-100"
+            >
+              <X size={16} color="#9CA3AF" />
+            </Pressable>
+          </Pressable>
+        ) : null}
       </View>
 
       <View className="flex-1">
@@ -740,11 +851,22 @@ export default function MapScreen() {
               // this location so the badge shows "+N".
               const siblingCount =
                 p.type === 'weather' ? (siblingsByWeatherId.get(p.id)?.length ?? 0) : 0;
+              // Outreach mode: dim + ✓ a client contacted within the window.
+              // last_contacted_at rides along on the pin from the /pins endpoint.
+              const contacted =
+                outreach && p.type === 'client' &&
+                !!p.last_contacted_at &&
+                Date.now() - Date.parse(p.last_contacted_at) <= deviceSettings.outreachDays * 86_400_000;
               return (
                 <Marker
-                  key={`${p.type}-${p.id}`}
+                  // Outreach state is folded into the key so flipping the
+                  // toggle remounts client markers — required because
+                  // tracksViewChanges={false} otherwise won't repaint the
+                  // ✓ badge / opacity on an existing marker snapshot.
+                  key={`${p.type}-${p.id}${p.type === 'client' && outreach ? (contacted ? '-c' : '-n') : ''}`}
                   coordinate={{ latitude: p.lat, longitude: p.lng }}
                   onPress={() => setSelected(p)}
+                  opacity={contacted ? 0.45 : 1}
                   // Anchor the pin tip (bottom-center of the PinBadge view)
                   // at the lat/lng. Without this the badge centers on the
                   // location and looks like it's floating above it.
@@ -760,6 +882,7 @@ export default function MapScreen() {
                     iconColor={style.iconColor}
                     size={PIN_SIZE_PX[deviceSettings.pinSize]}
                     countBadge={siblingCount > 0 ? siblingCount : undefined}
+                    checkBadge={contacted}
                   />
                 </Marker>
               );
@@ -788,63 +911,6 @@ export default function MapScreen() {
           </Pressable>
         ) : null}
 
-        {/* Geocode banner — only when there are clients still missing
-            coordinates. Tap-to-backfill saves a settings detour. Now
-            auto-loops until count hits 0 or no progress is made, and
-            shows a breakdown so the user knows why some won't resolve. */}
-        {!loading && pins && pins.needsGeocoding > 0 && !bannerDismissed ? (
-          <Pressable
-            // Tap opens the unresolved-clients list so the user can SEE
-            // which clients are affected. The list has its own "Reintentar"
-            // button for batch geocoding. Tapping the banner used to fire
-            // geocoding blindly which gave the user no actionable info
-            // when it returned "0 located".
-            onPress={() => setUnresolvedOpen(true)}
-            disabled={geocoding}
-            className="absolute top-4 left-4 right-4 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
-            style={{
-              shadowColor: '#000',
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 3,
-            }}
-          >
-            <View className="w-8 h-8 rounded-full bg-sky-100 items-center justify-center">
-              <Users size={16} color="#0EA5E9" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-sm text-gray-900">
-                {geocoding && geocodeProgress
-                  ? t.geocodeProgress
-                      .replace('{{done}}', String(geocodeProgress.done))
-                      .replace('{{total}}', String(geocodeProgress.total))
-                  : geocoding
-                    ? t.geocodeRunning
-                    : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
-              </Text>
-              {!geocoding && pins.geocodeBreakdown ? (
-                <Text className="text-xs text-gray-500 mt-0.5">
-                  {t.geocodeBreakdown
-                    .replace('{{noAddr}}', String(pins.geocodeBreakdown.noAddress))
-                    .replace('{{unresolved}}', String(pins.geocodeBreakdown.unresolved))
-                    .replace('{{pending}}', String(pins.geocodeBreakdown.pending))}
-                </Text>
-              ) : null}
-            </View>
-            {geocoding ? <ActivityIndicator size="small" color="#4F46E5" /> : null}
-            {/* Dismiss for this session — banner re-shows when the user
-               returns to the map. stopPropagation so the surrounding
-               Pressable's onPress (open list) doesn't also fire. */}
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); setBannerDismissed(true); }}
-              hitSlop={10}
-              className="p-1.5 -mr-1 rounded-lg active:bg-gray-100"
-            >
-              <X size={16} color="#9CA3AF" />
-            </Pressable>
-          </Pressable>
-        ) : null}
 
         {/* Selected pin sheet — centered modal with a backdrop. Shows
            identifying info + quick-action buttons (call/text/email for
@@ -867,6 +933,8 @@ export default function MapScreen() {
               openRecordLabel={t.openRecord}
               assignedToLabel={t.assignedToJob}
               callsClient={full.dashboard.clients.detail}
+              commLog={full.dashboard.clients.detail.commLog}
+              fireContact={fireContact}
             />
           )
         ) : null}
@@ -879,6 +947,13 @@ export default function MapScreen() {
         onClose={() => setSettingsOpen(false)}
         deviceSettings={deviceSettings}
         onPinConfigSaved={() => void load()}
+        // Ignored-clients list inside the sheet pipes name-taps through
+        // to the client detail page. Close the sheet first so the
+        // navigation lands cleanly with no modal in the back-stack.
+        onOpenClient={(id) => {
+          setSettingsOpen(false);
+          router.push(`/dashboard/clientes/${id}?from=map` as never);
+        }}
       />
 
       {/* Unresolved-clients list — opened by tapping the geocode banner.
@@ -896,6 +971,9 @@ export default function MapScreen() {
             await onGeocode();
           }}
           retrying={geocoding}
+          // Re-fetch pins so the banner count drops as soon as the user
+          // ignores a row, even without closing the modal.
+          onChanged={() => void load()}
         />
       ) : null}
     </SafeAreaView>
@@ -950,6 +1028,8 @@ function SelectedPinCard({
   openRecordLabel,
   assignedToLabel,
   callsClient,
+  commLog,
+  fireContact,
 }: {
   selected: ClientPin | JobPin | EmployeePin;
   onClose: () => void;
@@ -957,6 +1037,12 @@ function SelectedPinCard({
   openRecordLabel: string;
   assignedToLabel: string;
   callsClient: { actionCall: string; actionText: string; actionEmail: string };
+  commLog: {
+    lastContacted: string;
+    neverContacted: string;
+    rel: RelativeTimeLabels;
+  };
+  fireContact: (args: FireContactArgs) => void;
 }) {
   const layerColor =
     selected.type === 'client'
@@ -1058,6 +1144,19 @@ function SelectedPinCard({
             {selected.type === 'job' && selected.scheduled_date ? (
               <InfoRow icon={<Calendar size={14} color="#6B7280" />} text={selected.scheduled_date} />
             ) : null}
+            {selected.type === 'client' ? (
+              <InfoRow
+                icon={<History size={14} color="#6B7280" />}
+                text={
+                  selected.last_contacted_at
+                    ? commLog.lastContacted.replace(
+                        '{{rel}}',
+                        formatRelativeLong(selected.last_contacted_at, commLog.rel),
+                      )
+                    : commLog.neverContacted
+                }
+              />
+            ) : null}
           </View>
 
           {/* Quick contact actions — clients only, only if we have data */}
@@ -1067,21 +1166,36 @@ function SelectedPinCard({
                 <ActionButton
                   icon={<Phone size={16} color="#4F46E5" />}
                   label={callsClient.actionCall}
-                  onPress={() => Linking.openURL(`tel:${phone.replace(/\D/g, '')}`).catch(() => {})}
+                  onPress={() => fireContact({
+                    type: 'call',
+                    target: `tel:${phone.replace(/\D/g, '')}`,
+                    contactMethod: phone,
+                    clientId: selected.id,
+                  })}
                 />
               ) : null}
               {phone ? (
                 <ActionButton
                   icon={<MessageSquare size={16} color="#4F46E5" />}
                   label={callsClient.actionText}
-                  onPress={() => Linking.openURL(`sms:${phone.replace(/\D/g, '')}`).catch(() => {})}
+                  onPress={() => fireContact({
+                    type: 'sms',
+                    target: `sms:${phone.replace(/\D/g, '')}`,
+                    contactMethod: phone,
+                    clientId: selected.id,
+                  })}
                 />
               ) : null}
               {email ? (
                 <ActionButton
                   icon={<Mail size={16} color="#4F46E5" />}
                   label={callsClient.actionEmail}
-                  onPress={() => Linking.openURL(`mailto:${email}`).catch(() => {})}
+                  onPress={() => fireContact({
+                    type: 'email',
+                    target: `mailto:${email}`,
+                    contactMethod: email,
+                    clientId: selected.id,
+                  })}
                 />
               ) : null}
             </View>
@@ -1353,11 +1467,15 @@ function UnresolvedClientsModal({
   onOpenClient,
   onRetry,
   retrying,
+  onChanged,
 }: {
   onClose: () => void;
   onOpenClient: (id: string) => void;
   onRetry: () => void;
   retrying: boolean;
+  // Fires after an ignore (or any future side-effect) so the parent can
+  // re-fetch pins and the banner count drops without closing the modal.
+  onChanged?: () => void;
 }) {
   const { business } = useApp();
   const { t: full } = useLang();
@@ -1387,6 +1505,8 @@ function UnresolvedClientsModal({
         .from('clients')
         .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
         .eq('business_id', business.id)
+        // Hide rows the user has already silenced from the list (migration 047).
+        .eq('geocoding_ignored', false)
         .is('lat', null)
         .order('first_name', { ascending: true });
       if (!cancelled) {
@@ -1414,26 +1534,61 @@ function UnresolvedClientsModal({
     return { noAddress, notFound, pending };
   }, [rows]);
 
+  // Mark a client as permanently ignored. Drops it from the local list
+  // immediately (optimistic), persists via UPDATE, then signals the
+  // parent so the banner count + map data refresh.
+  const ignoreRow = async (id: string) => {
+    setRows(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase
+      .from('clients')
+      .update({ geocoding_ignored: true })
+      .eq('id', id);
+    if (error) {
+      // Revert the optimistic removal so the user can retry.
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
+        .eq('id', id)
+        .maybeSingle();
+      if (data) setRows(prev => [...prev, data as Row].sort((a, b) =>
+        (a.first_name ?? '').localeCompare(b.first_name ?? '')));
+      return;
+    }
+    onChanged?.();
+  };
+
   const renderRow = (r: Row, hint?: string) => {
     const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
     const addr = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
     return (
-      <Pressable
-        key={r.id}
-        onPress={() => onOpenClient(r.id)}
-        className="px-4 py-3 border-b border-gray-100 active:bg-gray-50"
-      >
-        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
-        {r.company ? (
-          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
-        ) : null}
-        <Text className="text-xs text-gray-400 mt-1" numberOfLines={2}>
-          {addr || '—'}
-        </Text>
-        {hint ? (
-          <Text className="text-[10px] text-gray-400 italic mt-1" numberOfLines={2}>{hint}</Text>
-        ) : null}
-      </Pressable>
+      <View key={r.id} className="flex-row items-start border-b border-gray-100">
+        <Pressable
+          onPress={() => onOpenClient(r.id)}
+          className="flex-1 px-4 py-3 active:bg-gray-50"
+        >
+          <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
+          {r.company ? (
+            <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
+          ) : null}
+          <Text className="text-xs text-gray-400 mt-1" numberOfLines={2}>
+            {addr || '—'}
+          </Text>
+          {hint ? (
+            <Text className="text-[10px] text-gray-400 italic mt-1" numberOfLines={2}>{hint}</Text>
+          ) : null}
+        </Pressable>
+        {/* Per-row "permanently ignore" — sets clients.geocoding_ignored=true
+           so this client stops counting against the banner. Hits stay
+           reversible via SQL or future settings UI. */}
+        <Pressable
+          onPress={() => void ignoreRow(r.id)}
+          accessibilityLabel={t.geocodeIgnoreBtn}
+          hitSlop={6}
+          className="py-3 pr-4 pl-2 active:opacity-60"
+        >
+          <EyeOff size={16} color="#9CA3AF" />
+        </Pressable>
+      </View>
     );
   };
 

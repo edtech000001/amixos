@@ -30,6 +30,7 @@ import {
   User, Users, UserCheck, UserCog, UserPlus, UserMinus, UserX, Crown, Briefcase,
   Baby, GraduationCap, Glasses, Smile, Contact,
   // Status & Symbols (24)
+  Check,
   CircleCheckBig, TriangleAlert, OctagonAlert, CircleAlert, CircleX, Info,
   Heart, HeartHandshake, Star, Sparkles, Tag, Tags, Bookmark, ThumbsUp,
   ThumbsDown, MessageCircle, Bell, BellRing, Eye, EyeOff, Ban, Shield, ShieldCheck,
@@ -144,6 +145,7 @@ export function PinBadge({
   iconColor = '#FFFFFF',
   size,
   countBadge,
+  checkBadge,
 }: {
   iconKey: string | null | undefined;
   color: string;
@@ -152,6 +154,9 @@ export function PinBadge({
   // Optional "+N" badge in the top-right corner (used by grouped weather
   // pins to show how many other alerts share the same location).
   countBadge?: number;
+  // Optional green ✓ badge in the same corner — used by outreach mode to
+  // flag clients contacted within the window. Count badge wins if both set.
+  checkBadge?: boolean;
 }) {
   const Icon = getPinIconComponent(iconKey);
   const w = size;
@@ -216,6 +221,25 @@ export function PinBadge({
           <Text style={{ color: '#FFFFFF', fontSize: badgeFont, fontWeight: '800', lineHeight: badgeFont + 1 }}>
             +{countBadge}
           </Text>
+        </View>
+      ) : checkBadge ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -badgeSize * 0.15,
+            right: -badgeSize * 0.25,
+            width: badgeSize,
+            height: badgeSize,
+            borderRadius: badgeSize / 2,
+            backgroundColor: '#16A34A',
+            borderWidth: 1.5,
+            borderColor: '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Check color="#FFFFFF" strokeWidth={3} size={Math.round(badgeSize * 0.62)} />
         </View>
       ) : null}
     </View>

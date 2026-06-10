@@ -58,6 +58,10 @@ export interface DeviceMapSettings {
   mapType: MapType;
   clustering: boolean;
   pinSize: PinSize;
+  // Outreach mode: a client pin is flagged "contacted" (green ✓ + dimmed)
+  // when its last communication is within this many days. Persisted so the
+  // window syncs across the owner's devices. Always >= 1.
+  outreachDays: number;
 }
 
 interface FieldOption { key: string; label: string; }
@@ -86,11 +90,16 @@ export function MapSettingsSheet({
   onClose,
   deviceSettings,
   onPinConfigSaved,
+  onOpenClient,
 }: {
   open: boolean;
   onClose: () => void;
   deviceSettings: DeviceMapSettings;
   onPinConfigSaved: () => void;
+  // Fired from the Ignored Clients section when the user taps a row.
+  // Parent decides what to do (typically close this sheet + navigate to
+  // the client detail page).
+  onOpenClient: (id: string) => void;
 }) {
   const { business, refetchBusiness } = useApp();
   const supabase = createSupabaseClient();
@@ -494,6 +503,38 @@ export function MapSettingsSheet({
               </View>
             </View>
 
+            {/* Outreach window — how recent a contact must be to flag a pin
+               with the green ✓ when outreach mode is on. */}
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-sm font-semibold text-gray-900">{t.outreachDaysLabel}</Text>
+                <Text className="text-xs text-gray-500 mt-0.5">{t.outreachDaysSubtitle}</Text>
+              </View>
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  onPress={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.max(1, prev.outreachDays - 1) }))}
+                  disabled={stagedDeviceSettings.outreachDays <= 1}
+                  hitSlop={6}
+                  style={{ width: 32, height: 32 }}
+                  className={`rounded-lg border border-gray-200 bg-white items-center justify-center ${stagedDeviceSettings.outreachDays <= 1 ? 'opacity-40' : 'active:bg-gray-50'}`}
+                >
+                  <Text className="text-lg font-semibold text-gray-700">−</Text>
+                </Pressable>
+                <Text className="text-sm font-semibold text-gray-900 text-center" style={{ minWidth: 56 }}>
+                  {t.outreachDaysValue.replace('{{days}}', String(stagedDeviceSettings.outreachDays))}
+                </Text>
+                <Pressable
+                  onPress={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.min(365, prev.outreachDays + 1) }))}
+                  disabled={stagedDeviceSettings.outreachDays >= 365}
+                  hitSlop={6}
+                  style={{ width: 32, height: 32 }}
+                  className={`rounded-lg border border-gray-200 bg-white items-center justify-center ${stagedDeviceSettings.outreachDays >= 365 ? 'opacity-40' : 'active:bg-gray-50'}`}
+                >
+                  <Text className="text-lg font-semibold text-gray-700">+</Text>
+                </Pressable>
+              </View>
+            </View>
+
             {/* Layer style cards */}
             <View>
               <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.pinRulesHeading}</Text>
@@ -731,6 +772,13 @@ export function MapSettingsSheet({
                parent so the single Guardar below saves both pin + weather. */}
             <WeatherSettingsSection config={weatherConfig} onChange={setWeatherConfig} />
 
+            {/* Ignored clients — restore-from-trash section. Renders nothing
+               when no rows have geocoding_ignored=true. Reuses the existing
+               pin-config-saved callback to trigger a parent re-fetch on
+               restore (same effect: pin counts change). Collapsible since
+               a long-running business can accumulate hundreds of rows. */}
+            <IgnoredClientsSection onChanged={onPinConfigSaved} onOpenClient={onOpenClient} />
+
             {msg ? (
               <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
             ) : null}
@@ -768,6 +816,131 @@ export function MapSettingsSheet({
         />
       ) : null}
     </RNModal>
+  );
+}
+
+// ─── Ignored clients section ────────────────────────────────────────────
+// Lists every client the user has tagged with geocoding_ignored=true so
+// they can un-ignore (restore) from one place, or tap through to the
+// client detail page. Collapsible — a long-running business can
+// accumulate hundreds, so the section opens closed by default and shows
+// the count in its header.
+function IgnoredClientsSection({
+  onChanged,
+  onOpenClient,
+}: {
+  onChanged: () => void;
+  onOpenClient: (id: string) => void;
+}) {
+  const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.modules.map;
+  const supabase = createSupabaseClient();
+  type Row = { id: string; first_name: string | null; last_name: string | null; company: string | null };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('business_id', business.id)
+        .eq('geocoding_ignored', true)
+        .order('first_name', { ascending: true });
+      if (!cancelled) {
+        setRows((data ?? []) as Row[]);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [business?.id]);
+
+  // Flip geocoding_ignored back to false. Optimistic removal; revert on
+  // error so the user can retry.
+  const restore = async (id: string) => {
+    setRows(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase
+      .from('clients')
+      .update({ geocoding_ignored: false })
+      .eq('id', id);
+    if (error) {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('id', id)
+        .maybeSingle();
+      if (data) setRows(prev => [...prev, data as Row]
+        .sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')));
+      return;
+    }
+    onChanged();
+  };
+
+  // Don't render anything when there's nothing to manage — a permanent
+  // empty card adds noise. The user only sees this section when there's
+  // actually something to restore.
+  if (loading || rows.length === 0) return null;
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setExpanded(v => !v)}
+        className="flex-row items-center justify-between py-1 active:opacity-70"
+      >
+        <View className="flex-1 pr-3">
+          <View className="flex-row items-center gap-2">
+            <Text className="text-xs font-semibold text-gray-400 uppercase">{t.ignoredSectionTitle}</Text>
+            <View className="px-1.5 py-0.5 rounded-full bg-gray-100">
+              <Text className="text-[10px] font-bold text-gray-600">{rows.length}</Text>
+            </View>
+          </View>
+          <Text className="text-xs text-gray-500 mt-1">{t.ignoredSectionSubtitle}</Text>
+        </View>
+        <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
+          <ChevronDown size={16} color="#9CA3AF" />
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View className="mt-3 rounded-2xl border border-gray-100 bg-white overflow-hidden">
+          {rows.map((r, i) => {
+            const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
+            return (
+              <View
+                key={r.id}
+                className={`flex-row items-center ${i < rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+              >
+                {/* Whole name area is a Pressable that navigates to the
+                   client detail — handy when the user wants to inspect /
+                   fix the address before restoring. */}
+                <Pressable
+                  onPress={() => onOpenClient(r.id)}
+                  className="flex-1 min-w-0 px-4 py-3 active:bg-gray-50"
+                >
+                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
+                  {r.company ? (
+                    <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => void restore(r.id)}
+                  accessibilityLabel={t.geocodeRestoreBtn}
+                  hitSlop={6}
+                  className="mr-3 flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 active:opacity-70"
+                >
+                  <Eye size={14} color="#4F46E5" />
+                  <Text className="text-xs font-semibold text-primary">{t.geocodeRestoreBtn}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
   );
 }
 

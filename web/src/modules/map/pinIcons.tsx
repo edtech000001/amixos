@@ -159,9 +159,13 @@ export function pinBadgeToDataUrl(
   // Optional "+N" badge in the top-right corner (used by grouped weather
   // pins to show how many other alerts share the same location).
   countBadge?: number,
+  // Optional green ✓ badge in the same top-right corner — used by outreach
+  // mode to flag clients contacted within the configured window. The count
+  // badge wins if both are set (it never is in practice).
+  checkBadge?: boolean,
 ): string {
   const heightPx = Math.round(widthPx * 1.25);
-  const cacheKey = `${normalizeIconKey(rawKey)}|${color}|${iconColor}|${widthPx}|${countBadge ?? 0}`;
+  const cacheKey = `${normalizeIconKey(rawKey)}|${color}|${iconColor}|${widthPx}|${countBadge ?? 0}|${checkBadge ? 1 : 0}`;
   const cached = pinBadgeUrlCache.get(cacheKey);
   if (cached) return cached;
   const iconInner = getIconInner(rawKey, iconColor);
@@ -180,6 +184,15 @@ export function pinBadgeToDataUrl(
         );
       })()
     : '';
+  // Green check badge — only when there's no count badge competing for the
+  // same corner. Same circle geometry as the count badge for visual parity.
+  const check = !badge && checkBadge
+    ? `<g>` +
+        `<circle cx="27.5" cy="4.5" r="6" fill="#16A34A" stroke="#ffffff" stroke-width="1.5"/>` +
+        `<path d="M24.7 4.6 l1.9 1.9 l3.3 -3.6" fill="none" stroke="#ffffff" ` +
+          `stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `</g>`
+    : '';
   // viewBox padded 1.5 units on every side so the white stroke
   // (width 2 = 1px each side of the path) has room to render without
   // being clipped at the edges. Without padding the stroke is cropped
@@ -191,6 +204,7 @@ export function pinBadgeToDataUrl(
         `fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
       `<g transform="translate(5.8 1.7) scale(0.85)">${iconInner}</g>` +
       badge +
+      check +
     `</svg>`;
   const url = `data:image/svg+xml;base64,${btoa(svg)}`;
   pinBadgeUrlCache.set(cacheKey, url);

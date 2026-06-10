@@ -73,6 +73,9 @@ export interface MapViewSettings {
   mapType: string;
   clustering: boolean;
   pinSize: 'small' | 'medium' | 'large';
+  // Outreach-mode window (days) — optional for back-compat with rows saved
+  // before the feature shipped; readers default to 1.
+  outreachDays?: number;
 }
 
 // ─── Map pin config (synced via businesses.map_pin_config) ─────────────

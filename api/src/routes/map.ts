@@ -28,6 +28,10 @@ interface ClientPin {
   state: string | null;
   zip_code: string | null;
   custom_fields: Record<string, unknown> | null;
+  // Most recent communication (call/text/email/manual) with this client,
+  // sourced from v_client_last_contact. null = never contacted. Drives the
+  // "Último contacto: hace X" line on the pin card.
+  last_contacted_at: string | null;
 }
 
 interface JobPin {
@@ -128,6 +132,27 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
       .eq('jobs.scheduled_date', today),
   ]);
 
+  // Most-recent contact per client. Read from the v_client_last_contact
+  // view (one row per client). Paginated with .range() — communication
+  // volume grows faster than any other client-scoped table.
+  const lastContactByClient = new Map<string, string>();
+  {
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('v_client_last_contact')
+        .select('client_id, last_contacted_at')
+        .eq('business_id', businessId)
+        .range(from, from + pageSize - 1);
+      if (error) break; // view may not exist yet (pre-migration) — degrade gracefully
+      const rows = (data ?? []) as Array<{ client_id: string; last_contacted_at: string | null }>;
+      for (const r of rows) {
+        if (r.last_contacted_at) lastContactByClient.set(r.client_id, r.last_contacted_at);
+      }
+      if (rows.length < pageSize) break;
+    }
+  }
+
   const clients: ClientPin[] = ((clientsRes.data ?? []) as Array<{
     id: string;
     first_name: string;
@@ -161,6 +186,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     state: c.state,
     zip_code: c.zip_code,
     custom_fields: c.custom_fields,
+    last_contacted_at: lastContactByClient.get(c.id) ?? null,
   }));
 
   const jobs: JobPin[] = ((jobsRes.data ?? []) as unknown as Array<{
@@ -229,16 +255,20 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   //   - pending:      address exists, never attempted yet (will geocode on next tap)
   // Total `needsGeocoding` = noAddress + unresolved + pending; it's the
   // count of all rows with NULL lat regardless of attempt history.
+  // All three counts exclude `geocoding_ignored = true` clients (migration
+  // 047) so the user can permanently silence rows they don't want pinned.
   const [{ count: needsGeocoding }, { count: noAddress }, { count: unresolved }] = await Promise.all([
     supabase
       .from('clients')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
       .is('lat', null),
     supabase
       .from('clients')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
       .is('lat', null)
       .is('address', null)
       .is('city', null)
@@ -248,6 +278,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
       .from('clients')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
       .is('lat', null)
       .not('lat_lookup_attempted_at', 'is', null),
   ]);

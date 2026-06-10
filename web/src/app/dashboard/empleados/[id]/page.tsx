@@ -403,15 +403,17 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           />
         ) : null}
 
-        {/* Historial */}
-        <button
-          type="button"
-          onClick={() => setHistoryOpen(true)}
-          className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <Clock size={15} className="text-primary" />
-          <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
-        </button>
+        {/* Historial — view mode only (edit mode skips it; user re-enters view to access). */}
+        {isView ? (
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            <Clock size={15} className="text-primary" />
+            <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
+          </button>
+        ) : null}
 
         {/* Save row — edit mode only */}
         {!isView ? (

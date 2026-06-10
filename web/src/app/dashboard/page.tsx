@@ -80,7 +80,7 @@ export default function DashboardPage() {
         supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'sent'),
         supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'overdue'),
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
-        supabase.from('timesheets').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'active'),
+        supabase.from('timesheets').select('id', { count: 'exact', head: true }).eq('business_id', business.id).is('clock_out', null),
         supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business.id).order('created_at', { ascending: false }).limit(5),
       ]);
 

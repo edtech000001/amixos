@@ -224,6 +224,72 @@ export type DashboardDict = {
         addBtn: string;
         confirmDelete: string;
       };
+      commLog: {
+        heading: string;
+        lastContacted: string;
+        neverContacted: string;
+        add: string;
+        empty: string;
+        withContact: string;
+        types: {
+          call: string;
+          sms: string;
+          email: string;
+          in_person: string;
+          whatsapp: string;
+          note: string;
+        };
+        outcomes: {
+          connected: string;
+          no_answer: string;
+          sent: string;
+          left_voicemail: string;
+        };
+        prompt: {
+          callTitle: string;
+          smsTitle: string;
+          emailTitle: string;
+          connected: string;
+          noAnswer: string;
+          sent: string;
+          dontLog: string;
+        };
+        form: {
+          addTitle: string;
+          editTitle: string;
+          typeLabel: string;
+          outcomeLabel: string;
+          outcomeNone: string;
+          directionLabel: string;
+          directionOutbound: string;
+          directionInbound: string;
+          dateLabel: string;
+          noteLabel: string;
+          notePlaceholder: string;
+          contactLabel: string;
+          contactNone: string;
+          save: string;
+          cancel: string;
+          confirmDelete: string;
+          delete: string;
+          edit: string;
+        };
+        rel: {
+          now: string;
+          minute: string;
+          minutes: string;
+          hour: string;
+          hours: string;
+          day: string;
+          days: string;
+          week: string;
+          weeks: string;
+          month: string;
+          months: string;
+          year: string;
+          years: string;
+        };
+      };
     };
     importModal: {
       title: string;
@@ -923,6 +989,9 @@ export type DashboardDict = {
       subtitle: string;
       emailLabel: string;
       roleLabel: string;
+      businessesHeading: string;
+      businessesSubtitle: string;
+      businessesEmpty: string;
     };
     language: {
       heading: string;
@@ -1114,6 +1183,17 @@ export type DashboardDict = {
       geocodeListRetryBtn: string;
       geocodeListOpenClient: string;
       geocodeListUnnamed: string;
+      geocodeIgnoreBtn: string;
+      geocodeRestoreBtn: string;
+      ignoredSectionTitle: string;
+      ignoredSectionSubtitle: string;
+      // Outreach mode — dims + ✓ clients contacted within outreachDays.
+      outreachModeOn: string;       // toggle label when off (tap to enable)
+      outreachModeOff: string;      // toggle label when on (tap to disable)
+      outreachModeBadge: string;    // banner shown on the map when on ({{days}})
+      outreachDaysLabel: string;    // settings row title
+      outreachDaysSubtitle: string; // settings row subtitle
+      outreachDaysValue: string;    // stepper value label ({{days}})
       // Settings sheet
       settingsTitle: string;
       mapTypeLabel: string;
@@ -1641,6 +1721,72 @@ export const dashboard: Record<Locale, DashboardDict> = {
           primaryLabel: 'Contacto principal',
           addBtn: 'Agregar contacto',
           confirmDelete: '¿Eliminar este contacto?',
+        },
+        commLog: {
+          heading: 'Comunicaciones',
+          lastContacted: 'Último contacto: {{rel}}',
+          neverContacted: 'Sin contacto',
+          add: 'Registrar contacto',
+          empty: 'Aún no has contactado a este cliente.',
+          withContact: 'con {{name}}',
+          types: {
+            call: 'Llamada',
+            sms: 'Mensaje',
+            email: 'Correo',
+            in_person: 'En persona',
+            whatsapp: 'WhatsApp',
+            note: 'Nota',
+          },
+          outcomes: {
+            connected: 'Contestó',
+            no_answer: 'No contestó',
+            sent: 'Enviado',
+            left_voicemail: 'Buzón de voz',
+          },
+          prompt: {
+            callTitle: '¿Lograste contactar?',
+            smsTitle: '¿Enviaste el mensaje?',
+            emailTitle: '¿Enviaste el correo?',
+            connected: 'Contestó',
+            noAnswer: 'No contestó',
+            sent: 'Enviado',
+            dontLog: 'No registrar',
+          },
+          form: {
+            addTitle: 'Registrar contacto',
+            editTitle: 'Editar registro',
+            typeLabel: 'Tipo',
+            outcomeLabel: 'Resultado',
+            outcomeNone: 'Sin resultado',
+            directionLabel: 'Dirección',
+            directionOutbound: 'Saliente',
+            directionInbound: 'Entrante',
+            dateLabel: 'Fecha',
+            noteLabel: 'Nota',
+            notePlaceholder: 'Detalles de la comunicación…',
+            contactLabel: 'Persona de contacto',
+            contactNone: 'Cliente (general)',
+            save: 'Guardar',
+            cancel: 'Cancelar',
+            confirmDelete: '¿Eliminar este registro?',
+            delete: 'Eliminar',
+            edit: 'Editar',
+          },
+          rel: {
+            now: 'ahora mismo',
+            minute: 'hace {{n}} minuto',
+            minutes: 'hace {{n}} minutos',
+            hour: 'hace {{n}} hora',
+            hours: 'hace {{n}} horas',
+            day: 'hace {{n}} día',
+            days: 'hace {{n}} días',
+            week: 'hace {{n}} semana',
+            weeks: 'hace {{n}} semanas',
+            month: 'hace {{n}} mes',
+            months: 'hace {{n}} meses',
+            year: 'hace {{n}} año',
+            years: 'hace {{n}} años',
+          },
         },
       },
       importModal: {
@@ -2325,6 +2471,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Tu información de acceso.',
         emailLabel: 'Correo',
         roleLabel: 'Rol',
+        businessesHeading: 'Tus negocios',
+        businessesSubtitle: 'Negocios donde eres miembro y tu rol en cada uno.',
+        businessesEmpty: 'Aún no eres miembro de ningún negocio.',
       },
       language: {
         heading: 'Idioma',
@@ -2508,6 +2657,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         geocodeListRetryBtn: 'Reintentar pendientes',
         geocodeListOpenClient: 'Abrir cliente',
         geocodeListUnnamed: 'Sin nombre',
+        geocodeIgnoreBtn: 'Ignorar permanentemente',
+        geocodeRestoreBtn: 'Restaurar',
+        ignoredSectionTitle: 'Clientes ignorados',
+        ignoredSectionSubtitle: 'Restaura un cliente para que vuelva a contar en el mapa.',
+        outreachModeOn: 'Modo seguimiento',
+        outreachModeOff: 'Quitar seguimiento',
+        outreachModeBadge: 'Contactados en los últimos {{days}} días: marcados con ✓',
+        outreachDaysLabel: 'Seguimiento de contacto',
+        outreachDaysSubtitle: 'Días para marcar un cliente como contactado en el modo seguimiento.',
+        outreachDaysValue: '{{days}} días',
         settingsTitle: 'Ajustes del mapa',
         mapTypeLabel: 'Tipo de mapa',
         mapTypeStandard: 'Estándar',
@@ -3020,6 +3179,72 @@ export const dashboard: Record<Locale, DashboardDict> = {
           primaryLabel: 'Primary contact',
           addBtn: 'Add contact',
           confirmDelete: 'Delete this contact?',
+        },
+        commLog: {
+          heading: 'Communications',
+          lastContacted: 'Last contact: {{rel}}',
+          neverContacted: 'No contact yet',
+          add: 'Log contact',
+          empty: "You haven't contacted this client yet.",
+          withContact: 'with {{name}}',
+          types: {
+            call: 'Call',
+            sms: 'Text',
+            email: 'Email',
+            in_person: 'In person',
+            whatsapp: 'WhatsApp',
+            note: 'Note',
+          },
+          outcomes: {
+            connected: 'Answered',
+            no_answer: 'No answer',
+            sent: 'Sent',
+            left_voicemail: 'Voicemail',
+          },
+          prompt: {
+            callTitle: 'Did you reach them?',
+            smsTitle: 'Did you send the message?',
+            emailTitle: 'Did you send the email?',
+            connected: 'Answered',
+            noAnswer: 'No answer',
+            sent: 'Sent',
+            dontLog: "Don't log",
+          },
+          form: {
+            addTitle: 'Log contact',
+            editTitle: 'Edit entry',
+            typeLabel: 'Type',
+            outcomeLabel: 'Outcome',
+            outcomeNone: 'No outcome',
+            directionLabel: 'Direction',
+            directionOutbound: 'Outbound',
+            directionInbound: 'Inbound',
+            dateLabel: 'Date',
+            noteLabel: 'Note',
+            notePlaceholder: 'Communication details…',
+            contactLabel: 'Contact person',
+            contactNone: 'Client (general)',
+            save: 'Save',
+            cancel: 'Cancel',
+            confirmDelete: 'Delete this entry?',
+            delete: 'Delete',
+            edit: 'Edit',
+          },
+          rel: {
+            now: 'just now',
+            minute: '{{n}} minute ago',
+            minutes: '{{n}} minutes ago',
+            hour: '{{n}} hour ago',
+            hours: '{{n}} hours ago',
+            day: '{{n}} day ago',
+            days: '{{n}} days ago',
+            week: '{{n}} week ago',
+            weeks: '{{n}} weeks ago',
+            month: '{{n}} month ago',
+            months: '{{n}} months ago',
+            year: '{{n}} year ago',
+            years: '{{n}} years ago',
+          },
         },
       },
       importModal: {
@@ -3704,6 +3929,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Your sign-in information.',
         emailLabel: 'Email',
         roleLabel: 'Role',
+        businessesHeading: 'Your businesses',
+        businessesSubtitle: 'Businesses you belong to and your role in each one.',
+        businessesEmpty: 'You are not a member of any business yet.',
       },
       language: {
         heading: 'Language',
@@ -3887,6 +4115,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         geocodeListRetryBtn: 'Retry pending',
         geocodeListOpenClient: 'Open client',
         geocodeListUnnamed: 'Unnamed',
+        geocodeIgnoreBtn: 'Permanently ignore',
+        geocodeRestoreBtn: 'Restore',
+        ignoredSectionTitle: 'Ignored clients',
+        ignoredSectionSubtitle: 'Restore a client so it counts toward the map again.',
+        outreachModeOn: 'Outreach mode',
+        outreachModeOff: 'Clear outreach',
+        outreachModeBadge: 'Contacted within {{days}} days are marked with ✓',
+        outreachDaysLabel: 'Contact follow-up',
+        outreachDaysSubtitle: 'Days a client counts as contacted in outreach mode.',
+        outreachDaysValue: '{{days}} days',
         settingsTitle: 'Map settings',
         mapTypeLabel: 'Map type',
         mapTypeStandard: 'Standard',

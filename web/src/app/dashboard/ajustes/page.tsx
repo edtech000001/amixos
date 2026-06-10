@@ -5,8 +5,9 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut, Building2 } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -79,8 +80,8 @@ const BIZ_US_STATES = [
 
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
-  const { business, user, refetchBusiness, currentRole } = useApp();
-  const { t: full } = useLang();
+  const { business, user, refetchBusiness, currentRole, businesses, roles, activeBusinessId } = useApp();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const tc = full.common;
   const tFields = full.dashboard.clients.fields;
@@ -2323,7 +2324,48 @@ export default function AjustesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.account.subtitle}</p>
-                <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
+                  <p className="text-sm text-gray-500">{t.account.roleLabel}: <span className="font-medium text-gray-900">{currentRole ? ROLE_LABELS[currentRole][locale] : '—'}</span></p>
+                </div>
+              </div>
+
+              {/* Businesses you belong to — read-only list; switching active
+                  business still happens via the header BusinessSwitcher. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.businessesHeading}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.account.businessesSubtitle}</p>
+                {businesses.length === 0 ? (
+                  <p className="text-sm text-gray-500">{t.account.businessesEmpty}</p>
+                ) : (
+                  <div className="bg-gray-50 rounded-xl overflow-hidden">
+                    {businesses.map((b, i) => {
+                      const role = roles[b.id];
+                      const isActive = b.id === activeBusinessId;
+                      return (
+                        <div
+                          key={b.id}
+                          className={`flex items-center gap-3 px-4 py-3 ${
+                            i < businesses.length - 1 ? 'border-b border-gray-100' : ''
+                          }`}
+                        >
+                          <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Building2 size={14} className="text-primary" />
+                          </span>
+                          <span className="flex-1 text-sm font-semibold text-gray-900 break-words">
+                            {b.name}
+                            {isActive ? ' •' : ''}
+                          </span>
+                          {role ? (
+                            <span className="bg-primary/10 rounded-full px-2.5 py-1 text-xs font-semibold text-primary shrink-0">
+                              {ROLE_LABELS[role][locale]}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Language */}

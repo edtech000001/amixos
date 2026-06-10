@@ -296,11 +296,18 @@ export default function EmpleadoDetailRoute() {
   );
   const canManageAccess = can.manageMembers(currentRole);
 
+  // Back always returns to the empleados list. router.back() inside the
+  // Tabs navigator pops past the list into the home tab when [id] is
+  // pushed directly, so replace explicitly to the list route.
+  const goBack = useCallback(() => {
+    router.replace('/dashboard/mas/empleados');
+  }, [router]);
+
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={goBack} />
         <View className="flex-1 items-center justify-center">
           <Text className="text-sm text-gray-400">{tc.states.loading}...</Text>
         </View>
@@ -310,7 +317,7 @@ export default function EmpleadoDetailRoute() {
   if (notFound || !employee) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={goBack} />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-sm text-gray-400">—</Text>
         </View>
@@ -324,7 +331,7 @@ export default function EmpleadoDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
+        <Pressable onPress={goBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <Text className="ml-1 flex-1 text-base font-semibold text-gray-900" numberOfLines={1}>
@@ -570,14 +577,16 @@ export default function EmpleadoDetailRoute() {
           </View>
         ) : null}
 
-        {/* Historial */}
-        <Pressable
-          onPress={() => setHistoryOpen(true)}
-          className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-50 active:bg-gray-100"
-        >
-          <Clock size={16} color="#4F46E5" />
-          <Text className="text-sm font-semibold text-primary">{t.history.openBtn}</Text>
-        </Pressable>
+        {/* Historial — view mode only (edit mode skips it; user re-enters view to access). */}
+        {isView ? (
+          <Pressable
+            onPress={() => setHistoryOpen(true)}
+            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-50 active:bg-gray-100"
+          >
+            <Clock size={16} color="#4F46E5" />
+            <Text className="text-sm font-semibold text-primary">{t.history.openBtn}</Text>
+          </Pressable>
+        ) : null}
 
         {/* Save row — edit mode only */}
         {!isView ? (

@@ -15,10 +15,12 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair, Phone, Mail, ArrowRight, LocateFixed } from 'lucide-react';
+import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair, Phone, Mail, ArrowRight, LocateFixed, EyeOff, CircleCheckBig, History } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { formatRelativeLong, type RelativeTimeLabels } from '@amixos/shared/lib/format';
+import { useContactOutcomePrompt, type FireContactArgs } from '@/modules/communications/useContactOutcomePrompt';
 import type { MapPinIcon as MapPinIconKey } from '@amixos/shared/lib/mapPinPresets';
 import { resolvePinStyle } from '@amixos/shared/lib/mapPinResolve';
 import {
@@ -55,6 +57,8 @@ interface ClientPin {
   state?: string | null;
   zip_code?: string | null;
   custom_fields?: Record<string, unknown> | null;
+  // Most recent communication with this client (from v_client_last_contact).
+  last_contacted_at?: string | null;
   color?: string;
   icon?: MapPinIconKey;
 }
@@ -209,6 +213,7 @@ const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'roadmap',
   clustering: true,
   pinSize: 'medium',
+  outreachDays: 1,
 };
 
 // Pixel size for the marker icon at each pin-size preset. Larger sizes
@@ -221,7 +226,7 @@ const PIN_PX_BY_SIZE: Record<DeviceMapSettings['pinSize'], number> = {
 
 export default function MapModule() {
   const router = useRouter();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
 
@@ -244,6 +249,12 @@ export default function MapModule() {
   // "Storm focus" mode — when on, hide every pin EXCEPT weather alerts
   // and non-weather pins within `proximity_radius_miles` of any alert.
   const [stormFocus, setStormFocus] = useState(false);
+  // Outreach mode — when on, client pins contacted within
+  // deviceSettings.outreachDays are dimmed + flagged with a green ✓ so the
+  // user can see who's still left to call during storm triage. The
+  // last-contact timestamp rides along on each pin (pin.last_contacted_at,
+  // sourced from v_client_last_contact by the /pins endpoint).
+  const [outreach, setOutreach] = useState(false);
   // Modal listing every client with missing lat/lng — opened from the
   // geocode banner so the user can see WHICH clients failed.
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
@@ -271,10 +282,15 @@ export default function MapModule() {
     const pinSize = (['small', 'medium', 'large'] as readonly string[]).includes(s.pinSize)
       ? s.pinSize
       : DEFAULT_DEVICE_SETTINGS.pinSize;
+    const rawDays = Number(s.outreachDays);
+    const outreachDays = Number.isFinite(rawDays) && rawDays >= 1
+      ? Math.min(365, Math.floor(rawDays))
+      : DEFAULT_DEVICE_SETTINGS.outreachDays;
     return {
       mapType,
       clustering: typeof s.clustering === 'boolean' ? s.clustering : DEFAULT_DEVICE_SETTINGS.clustering,
       pinSize,
+      outreachDays,
     };
   }, [business?.map_view_settings]);
   // Holds the live google.maps.Map instance so we can attach markers +
@@ -313,6 +329,21 @@ export default function MapModule() {
   }, [business, apiBaseUrl]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Direct Supabase client for the last-contact view read (RLS scopes it
+  // to the business — no API round-trip needed).
+  const supabase = useMemo(() => createSupabaseClient(), []);
+
+  // "Confirm outcome after" contact logging for the pin card's email
+  // action. Writes a client_communications row when the user returns from
+  // their mail client and confirms; refetches pins so "Último contacto"
+  // updates. `contactPrompt` is the modal element, rendered below.
+  const { fireContact, prompt: contactPrompt } = useContactOutcomePrompt({
+    supabase,
+    businessId: business?.id,
+    createdBy: user?.id ?? null,
+    onLogged: () => { void load(); },
+  });
 
   // Weather alerts — only fetched when the alpha business gate is on.
   // POST /weather/refresh (server skips NWS call if cache is fresh) then
@@ -491,15 +522,23 @@ export default function MapModule() {
       if (style === null) continue;
       const siblingCount =
         p.type === 'weather' ? (siblingsByWeatherId.get(p.id)?.length ?? 0) : 0;
+      // Outreach mode: dim + ✓ a client contacted within the window.
+      // last_contacted_at rides along on the pin from the /pins endpoint.
+      const contacted =
+        outreach && p.type === 'client' &&
+        !!p.last_contacted_at &&
+        Date.now() - Date.parse(p.last_contacted_at) <= deviceSettings.outreachDays * 86_400_000;
       const iconUrl = pinBadgeToDataUrl(
         style.icon,
         style.color,
         px,
         style.iconColor,
         siblingCount > 0 ? siblingCount : undefined,
+        contacted,
       );
       const marker = new google.maps.Marker({
         position: { lat: p.lat, lng: p.lng },
+        opacity: contacted ? 0.45 : 1,
         icon: {
           url: iconUrl,
           scaledSize: new google.maps.Size(px, hpx),
@@ -520,7 +559,7 @@ export default function MapModule() {
     // Include map_pin_config so saving new rules in the settings panel
     // triggers a marker rebuild with the new colors/icons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, visiblePins, deviceSettings.clustering, deviceSettings.pinSize, JSON.stringify(business?.map_pin_config), siblingsByWeatherId]);
+  }, [isLoaded, visiblePins, deviceSettings.clustering, deviceSettings.pinSize, deviceSettings.outreachDays, JSON.stringify(business?.map_pin_config), siblingsByWeatherId, outreach]);
 
   const onGeocode = async () => {
     if (!business || !apiBaseUrl) return;
@@ -636,6 +675,14 @@ export default function MapModule() {
             </button>
           ) : null}
           <button
+            onClick={() => setOutreach(v => !v)}
+            className={`p-2 rounded-lg border ${outreach ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+            aria-label={outreach ? t.outreachModeOff : t.outreachModeOn}
+            title={outreach ? t.outreachModeOff : t.outreachModeOn}
+          >
+            <CircleCheckBig size={18} className={outreach ? 'text-emerald-600' : 'text-gray-700'} />
+          </button>
+          <button
             onClick={() => setSettingsOpen(true)}
             className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
             aria-label={t.settingsTitle}
@@ -679,6 +726,18 @@ export default function MapModule() {
             </span>
             <button onClick={() => setStormFocus(false)} aria-label="Clear">
               <X size={12} className="text-red-600" />
+            </button>
+          </div>
+        ) : null}
+        {/* Outreach-mode active banner — contacted clients are dimmed + ✓. */}
+        {outreach ? (
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+            <CircleCheckBig size={12} className="text-emerald-600 shrink-0" />
+            <span className="text-[11px] font-semibold text-emerald-700 flex-1">
+              {t.outreachModeBadge.replace('{{days}}', String(deviceSettings.outreachDays))}
+            </span>
+            <button onClick={() => setOutreach(false)} aria-label="Clear">
+              <X size={12} className="text-emerald-600" />
             </button>
           </div>
         ) : null}
@@ -804,9 +863,12 @@ export default function MapModule() {
               openRecordLabel={t.openRecord}
               assignedToLabel={t.assignedToJob}
               emailActionLabel={full.dashboard.clients.detail.actionEmail}
+              commLog={full.dashboard.clients.detail.commLog}
+              fireContact={fireContact}
             />
           )
         ) : null}
+        {contactPrompt}
       </div>
 
       {/* Settings panel — gear icon in the layer-pill row triggers this.
@@ -816,6 +878,10 @@ export default function MapModule() {
         onClose={() => setSettingsOpen(false)}
         deviceSettings={deviceSettings}
         onPinConfigSaved={() => void load()}
+        onOpenClient={(id) => {
+          setSettingsOpen(false);
+          router.push(`/dashboard/clientes/${id}`);
+        }}
       />
 
       {/* Unresolved-clients list — opened by tapping the geocode banner. */}
@@ -831,6 +897,9 @@ export default function MapModule() {
             await onGeocode();
           }}
           retrying={geocoding}
+          // Re-fetch pins so the banner count drops as soon as the user
+          // ignores a row, even without closing the modal.
+          onChanged={() => void load()}
         />
       ) : null}
     </div>
@@ -1014,11 +1083,15 @@ function UnresolvedClientsModal({
   onOpenClient,
   onRetry,
   retrying,
+  onChanged,
 }: {
   onClose: () => void;
   onOpenClient: (id: string) => void;
   onRetry: () => void;
   retrying: boolean;
+  // Fires after an ignore (or any future side-effect) so the parent can
+  // re-fetch pins and the banner count drops without closing the modal.
+  onChanged?: () => void;
 }) {
   const { business } = useApp();
   const { t: full } = useLang();
@@ -1049,6 +1122,8 @@ function UnresolvedClientsModal({
         .from('clients')
         .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
         .eq('business_id', business.id)
+        // Hide rows the user has already silenced from the list (migration 047).
+        .eq('geocoding_ignored', false)
         .is('lat', null)
         .order('first_name', { ascending: true });
       if (!cancelled) {
@@ -1076,21 +1151,56 @@ function UnresolvedClientsModal({
     return { noAddress, notFound, pending };
   }, [rows]);
 
+  // Mark a client as permanently ignored. Drops it locally first
+  // (optimistic), then persists. Parent re-fetches pins via onChanged so
+  // the banner count drops without closing the modal.
+  const ignoreRow = async (id: string) => {
+    setRows(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase
+      .from('clients')
+      .update({ geocoding_ignored: true })
+      .eq('id', id);
+    if (error) {
+      // Revert optimistic removal so the user can retry.
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
+        .eq('id', id)
+        .maybeSingle();
+      if (data) setRows(prev => [...prev, data as Row].sort((a, b) =>
+        (a.first_name ?? '').localeCompare(b.first_name ?? '')));
+      return;
+    }
+    onChanged?.();
+  };
+
   const renderRow = (r: Row, hint?: string) => {
     const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
     const addr = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
     return (
-      <button
-        key={r.id}
-        type="button"
-        onClick={() => onOpenClient(r.id)}
-        className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50"
-      >
-        <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
-        {r.company ? <p className="text-xs text-gray-500 mt-0.5 truncate">{r.company}</p> : null}
-        <p className="text-xs text-gray-400 mt-1 truncate">{addr || '—'}</p>
-        {hint ? <p className="text-[10px] text-gray-400 italic mt-1">{hint}</p> : null}
-      </button>
+      <div key={r.id} className="flex items-start border-b border-gray-100">
+        <button
+          type="button"
+          onClick={() => onOpenClient(r.id)}
+          className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-gray-50"
+        >
+          <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+          {r.company ? <p className="text-xs text-gray-500 mt-0.5 truncate">{r.company}</p> : null}
+          <p className="text-xs text-gray-400 mt-1 truncate">{addr || '—'}</p>
+          {hint ? <p className="text-[10px] text-gray-400 italic mt-1">{hint}</p> : null}
+        </button>
+        {/* Per-row "permanently ignore" — sets clients.geocoding_ignored=true
+           so this client stops counting against the banner. Reversible
+           via SQL or future settings UI. */}
+        <button
+          type="button"
+          onClick={() => void ignoreRow(r.id)}
+          aria-label={t.geocodeIgnoreBtn}
+          className="py-3 pr-4 pl-2 hover:opacity-60"
+        >
+          <EyeOff size={16} className="text-gray-400" />
+        </button>
+      </div>
     );
   };
 
@@ -1209,6 +1319,8 @@ function SelectedPinCard({
   openRecordLabel,
   assignedToLabel,
   emailActionLabel,
+  commLog,
+  fireContact,
 }: {
   selected: ClientPin | JobPin | EmployeePin;
   onClose: () => void;
@@ -1216,6 +1328,12 @@ function SelectedPinCard({
   openRecordLabel: string;
   assignedToLabel: string;
   emailActionLabel: string;
+  commLog: {
+    lastContacted: string;
+    neverContacted: string;
+    rel: RelativeTimeLabels;
+  };
+  fireContact: (args: FireContactArgs) => void;
 }) {
   const layerColor =
     selected.type === 'client'
@@ -1282,24 +1400,43 @@ function SelectedPinCard({
         </div>
 
         {/* Info rows */}
-        {hasInfo ? (
+        {hasInfo || selected.type === 'client' ? (
           <div className="flex flex-col gap-2 mb-4">
             {phone ? <InfoRow icon={<Phone size={14} />} text={fmtPhone(phone)} /> : null}
             {email ? <InfoRow icon={<Mail size={14} />} text={email} /> : null}
             {addressLine ? <InfoRow icon={<MapPinIcon size={14} />} text={addressLine} /> : null}
             {scheduled ? <InfoRow icon={<Calendar size={14} />} text={scheduled} /> : null}
+            {selected.type === 'client' ? (
+              <InfoRow
+                icon={<History size={14} />}
+                text={
+                  selected.last_contacted_at
+                    ? commLog.lastContacted.replace(
+                        '{{rel}}',
+                        formatRelativeLong(selected.last_contacted_at, commLog.rel),
+                      )
+                    : commLog.neverContacted
+                }
+              />
+            ) : null}
           </div>
         ) : null}
 
-        {/* Email — the one quick action that makes sense on desktop. */}
+        {/* Email — the one quick action that makes sense on desktop. Routed
+           through the confirm-outcome prompt so it's logged on return. */}
         {selected.type === 'client' && email ? (
-          <a
-            href={`mailto:${email}`}
+          <button
+            onClick={() => fireContact({
+              type: 'email',
+              target: `mailto:${email}`,
+              contactMethod: email,
+              clientId: selected.id,
+            })}
             className="flex items-center justify-center gap-2 w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-primary hover:bg-gray-50 mb-3"
           >
             <Mail size={16} />
             {emailActionLabel}
-          </a>
+          </button>
         ) : null}
 
         {/* Open record */}

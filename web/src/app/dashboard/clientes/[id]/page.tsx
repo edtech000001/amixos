@@ -17,6 +17,8 @@ import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { buildClientCsv } from '@amixos/shared/lib/clientShare';
+import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
+import { useContactOutcomePrompt } from '@/modules/communications/useContactOutcomePrompt';
 
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -87,7 +89,7 @@ function fmtPhoneInput(raw: string): string {
   return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
 }
 
-function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: string; href?: string }) {
+function ContactRow({ icon, label, value, href, onActivate }: { icon: React.ReactNode; label: string; value: string; href?: string; onActivate?: () => void }) {
   const content = (
     <div className="flex items-start gap-2.5">
       <span className="text-gray-400 mt-0.5 shrink-0">{icon}</span>
@@ -97,6 +99,9 @@ function ContactRow({ icon, label, value, href }: { icon: React.ReactNode; label
       </div>
     </div>
   );
+  // onActivate wins over href: routes the contact through the confirm-
+  // outcome prompt so it gets logged, instead of a bare tel:/mailto: link.
+  if (onActivate) return <button type="button" onClick={onActivate} className="text-left hover:text-primary transition-colors">{content}</button>;
   if (href) return <a href={href} className="hover:text-primary transition-colors">{content}</a>;
   return <div>{content}</div>;
 }
@@ -109,12 +114,22 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const tc = full.common;
   const tStatus = full.dashboard.invoiceStatus;
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const [client, setClient] = useState<Client | null>(null);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Communication log: bump to refetch the timeline after a contact is
+  // logged via the confirm-outcome prompt.
+  const [commReload, setCommReload] = useState(0);
+  const { fireContact, prompt: contactPrompt } = useContactOutcomePrompt({
+    supabase,
+    businessId: business?.id,
+    createdBy: user?.id ?? null,
+    onLogged: () => setCommReload(n => n + 1),
+  });
 
   const [editModal, setEditModal] = useState(false);
   const [form, setForm] = useState({
@@ -419,10 +434,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.contact}</h2>
             <div className="flex flex-col gap-3">
-              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneCell} value={fmtPhone(primaryPhone)} href={`tel:${primaryPhone}`}/>}
-              {officePhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneOffice} value={fmtPhone(officePhone)} href={`tel:${officePhone}`}/>}
-              {primaryEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailOffice} value={primaryEmail} href={`mailto:${primaryEmail}`}/>}
-              {homeEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailHome} value={homeEmail} href={`mailto:${homeEmail}`}/>}
+              {primaryPhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneCell} value={fmtPhone(primaryPhone)} onActivate={() => fireContact({ type: 'call', target: `tel:${primaryPhone}`, contactMethod: primaryPhone, clientId: client.id })}/>}
+              {officePhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneOffice} value={fmtPhone(officePhone)} onActivate={() => fireContact({ type: 'call', target: `tel:${officePhone}`, contactMethod: officePhone, clientId: client.id })}/>}
+              {primaryEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailOffice} value={primaryEmail} onActivate={() => fireContact({ type: 'email', target: `mailto:${primaryEmail}`, contactMethod: primaryEmail, clientId: client.id })}/>}
+              {homeEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailHome} value={homeEmail} onActivate={() => fireContact({ type: 'email', target: `mailto:${homeEmail}`, contactMethod: homeEmail, clientId: client.id })}/>}
               {fullAddress && (
                 <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress}/>
               )}
@@ -459,14 +474,14 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                         </div>
                         {ct.role && <p className="text-xs text-gray-400">{ct.role}</p>}
                         {ct.phone && (
-                          <a href={`tel:${ct.phone}`} className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
+                          <button type="button" onClick={() => fireContact({ type: 'call', target: `tel:${ct.phone}`, contactMethod: ct.phone ?? undefined, clientId: client.id, clientContactId: ct.id })} className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
                             <Phone size={11}/> {fmtPhone(ct.phone)}
-                          </a>
+                          </button>
                         )}
                         {ct.email && (
-                          <a href={`mailto:${ct.email}`} className="text-xs text-primary hover:underline flex items-center gap-1">
+                          <button type="button" onClick={() => fireContact({ type: 'email', target: `mailto:${ct.email}`, contactMethod: ct.email ?? undefined, clientId: client.id, clientContactId: ct.id })} className="text-xs text-primary hover:underline flex items-center gap-1">
                             <Mail size={11}/> {ct.email}
-                          </a>
+                          </button>
                         )}
                         {ct.notes && <p className="text-xs text-gray-400 mt-1 italic">{ct.notes}</p>}
                       </div>
@@ -484,6 +499,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               </div>
             )}
           </div>
+
+          {/* Communication log */}
+          <CommunicationLog
+            supabase={supabase}
+            businessId={business?.id ?? ''}
+            clientId={client.id}
+            createdBy={user?.id ?? null}
+            contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
+            reloadToken={commReload}
+          />
 
           {/* Custom fields */}
           {templates.length > 0 && (
@@ -759,6 +784,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </Modal>
+
+      {/* Confirm-outcome prompt for the contact-card / contact-people actions. */}
+      {contactPrompt}
     </div>
   );
 }

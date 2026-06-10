@@ -43,23 +43,23 @@ export function BusinessSwitcher() {
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative z-[1000]" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+        className="max-w-full flex items-center gap-2 border border-gray-200 bg-white rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-gray-50 transition-colors"
         aria-label={tw.switcherLabel}
       >
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Building2 size={16} className="text-primary" />
-        </div>
-        <span className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
+        <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+          <Building2 size={12} className="text-primary" />
+        </span>
+        <span className="text-sm font-semibold text-gray-900 truncate min-w-0">
           {business.name}
         </span>
-        <ChevronDown size={14} className="text-gray-500" />
+        <ChevronDown size={14} className="text-primary shrink-0" />
       </button>
 
       {open ? (
-        <div className="absolute z-50 left-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden">
+        <div className="absolute z-[1001] left-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden">
           <div className="px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
             {tw.switcherLabel}
           </div>
@@ -80,9 +80,9 @@ export function BusinessSwitcher() {
                   <Building2 size={16} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
+                  <p className="text-sm font-semibold text-gray-900 break-words">{b.name}</p>
                   {b.city ? (
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-gray-500 break-words">
                       {b.city}
                       {b.state ? `, ${b.state}` : ''}
                     </p>

@@ -36,6 +36,10 @@ export interface DeviceMapSettings {
   mapType: MapType;
   clustering: boolean;
   pinSize: PinSize;
+  // Outreach mode: a client pin is flagged "contacted" (green ✓ + dimmed)
+  // when its last communication is within this many days. Persisted so the
+  // window syncs across the owner's devices. Always >= 1.
+  outreachDays: number;
 }
 
 type Layer = 'clients' | 'jobs' | 'employees' | 'weather';
@@ -63,11 +67,15 @@ export function MapSettingsPanel({
   onClose,
   deviceSettings,
   onPinConfigSaved,
+  onOpenClient,
 }: {
   open: boolean;
   onClose: () => void;
   deviceSettings: DeviceMapSettings;
   onPinConfigSaved: () => void;
+  // Fired from the Ignored Clients section when the user taps a row.
+  // Parent typically closes this panel + navigates to the client detail.
+  onOpenClient: (id: string) => void;
 }) {
   const { business, refetchBusiness } = useApp();
   const supabase = createSupabaseClient();
@@ -426,6 +434,38 @@ export function MapSettingsPanel({
             </div>
           </div>
 
+          {/* Outreach window — how recent a contact must be to flag a pin
+             with the green ✓ when outreach mode is on. */}
+          <div className="flex items-center justify-between">
+            <div className="flex-1 pr-3">
+              <p className="text-sm font-semibold text-gray-900">{t.outreachDaysLabel}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t.outreachDaysSubtitle}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.max(1, prev.outreachDays - 1) }))}
+                disabled={stagedDeviceSettings.outreachDays <= 1}
+                className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center justify-center"
+                aria-label="-1"
+              >
+                −
+              </button>
+              <span className="min-w-[3.5rem] text-center text-sm font-semibold text-gray-900">
+                {t.outreachDaysValue.replace('{{days}}', String(stagedDeviceSettings.outreachDays))}
+              </span>
+              <button
+                type="button"
+                onClick={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.min(365, prev.outreachDays + 1) }))}
+                disabled={stagedDeviceSettings.outreachDays >= 365}
+                className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center justify-center"
+                aria-label="+1"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
           {/* Layer style cards */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase">{t.pinRulesHeading}</p>
@@ -632,6 +672,12 @@ export function MapSettingsPanel({
              parent so the single Guardar below saves both pin + weather. */}
           <WeatherSettingsSection config={weatherConfig} onChange={setWeatherConfig} />
 
+          {/* Ignored clients — restore-from-trash section. Renders nothing
+             when no rows have geocoding_ignored=true. Reuses the pin-config
+             saved callback to trigger the parent map re-fetch. Collapsible
+             since the list can grow large over time. */}
+          <IgnoredClientsSection onChanged={onPinConfigSaved} onOpenClient={onOpenClient} />
+
           {msg && (
             <p className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</p>
           )}
@@ -659,6 +705,123 @@ export function MapSettingsPanel({
         />
       )}
     </>
+  );
+}
+
+// ─── Ignored clients section (web) ──────────────────────────────────────
+// Mirrors the mobile counterpart in MapSettingsSheet.tsx. Lists clients
+// the user has tagged geocoding_ignored=true and offers a one-tap restore
+// or a click-through to the client detail. Hidden entirely when there's
+// nothing to restore so it doesn't clutter the settings dialog.
+// Collapsible — a long-running business can accumulate hundreds.
+function IgnoredClientsSection({
+  onChanged,
+  onOpenClient,
+}: {
+  onChanged: () => void;
+  onOpenClient: (id: string) => void;
+}) {
+  const { business } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.modules.map;
+  const supabase = createSupabaseClient();
+  type Row = { id: string; first_name: string | null; last_name: string | null; company: string | null };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('business_id', business.id)
+        .eq('geocoding_ignored', true)
+        .order('first_name', { ascending: true });
+      if (!cancelled) {
+        setRows((data ?? []) as Row[]);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [business?.id]);
+
+  const restore = async (id: string) => {
+    setRows(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase
+      .from('clients')
+      .update({ geocoding_ignored: false })
+      .eq('id', id);
+    if (error) {
+      const { data } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('id', id)
+        .maybeSingle();
+      if (data) setRows(prev => [...prev, data as Row]
+        .sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')));
+      return;
+    }
+    onChanged();
+  };
+
+  if (loading || rows.length === 0) return null;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between py-1 hover:opacity-70 text-left"
+      >
+        <div className="flex-1 pr-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase">{t.ignoredSectionTitle}</p>
+            <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-[10px] font-bold text-gray-600">
+              {rows.length}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">{t.ignoredSectionSubtitle}</p>
+        </div>
+        <ChevronDown size={16} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded ? (
+        <div className="mt-3 rounded-2xl border border-gray-100 bg-white overflow-hidden">
+          {rows.map((r, i) => {
+            const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
+            return (
+              <div
+                key={r.id}
+                className={`flex items-center ${i < rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+              >
+                {/* Whole name area routes to the client detail page so
+                   the user can inspect / fix the address before restoring. */}
+                <button
+                  type="button"
+                  onClick={() => onOpenClient(r.id)}
+                  className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-gray-50"
+                >
+                  <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+                  {r.company ? <p className="text-xs text-gray-500 mt-0.5 truncate">{r.company}</p> : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void restore(r.id)}
+                  aria-label={t.geocodeRestoreBtn}
+                  className="mr-3 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 hover:opacity-70"
+                >
+                  <Eye size={14} className="text-primary" />
+                  <span className="text-xs font-semibold text-primary">{t.geocodeRestoreBtn}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

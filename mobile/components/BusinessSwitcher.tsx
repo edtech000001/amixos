@@ -43,16 +43,27 @@ export function BusinessSwitcher() {
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        className="flex-row items-start gap-2 active:opacity-70"
+        className="self-start flex-row items-center gap-2 border border-gray-200 bg-white rounded-2xl active:bg-gray-50"
         accessibilityLabel={tw.switcherLabel}
+        style={{
+          paddingLeft: 20,
+          paddingRight: 12,
+          paddingTop: 8,
+          paddingBottom: 8,
+          shadowColor: '#000',
+          shadowOpacity: 0.04,
+          shadowRadius: 2,
+          shadowOffset: { width: 0, height: 1 },
+          elevation: 1,
+        }}
       >
-        <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
-          <Building2 size={16} color="#4F46E5" />
+        <View className="w-5 h-5 rounded-md bg-primary/10 items-center justify-center">
+          <Building2 size={12} color="#4F46E5" />
         </View>
-        <Text className="flex-1 text-base font-semibold text-gray-900 pt-1" numberOfLines={3}>
+        <Text className="flex-1 text-sm font-semibold text-gray-900">
           {active.name}
         </Text>
-        <ChevronDown size={16} color="#6B7280" className="mt-1.5" />
+        <ChevronDown size={14} color="#4F46E5" />
       </Pressable>
 
       <RNModal
@@ -93,11 +104,11 @@ export function BusinessSwitcher() {
                       <Building2 size={16} color="#4F46E5" />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+                      <Text className="text-sm font-semibold text-gray-900">
                         {b.name}
                       </Text>
                       {b.city ? (
-                        <Text className="text-xs text-gray-500" numberOfLines={1}>
+                        <Text className="text-xs text-gray-500">
                           {b.city}
                           {b.state ? `, ${b.state}` : ''}
                         </Text>

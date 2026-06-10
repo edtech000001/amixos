@@ -110,6 +110,9 @@ export async function geocodeMissingClients(
     .from('clients')
     .select('id, address, address_line2, city, state, zip_code')
     .eq('business_id', businessId)
+    // Skip rows the user explicitly told us to ignore (migration 047) —
+    // otherwise every Reintentar would re-burn quota on them.
+    .eq('geocoding_ignored', false)
     .is('lat', null)
     .or(`lat_lookup_attempted_at.is.null,lat_lookup_attempted_at.lt.${cutoff}`)
     .limit(maxRows);

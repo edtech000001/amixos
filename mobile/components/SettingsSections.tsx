@@ -2732,6 +2732,9 @@ export function AccountSection() {
   const supabase = createSupabaseClient();
   const { user, currentRole } = useApp();
   const logout = useAuthStore((s) => s.logout);
+  const businesses = useAuthStore((s) => s.businesses);
+  const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
+  const roles = useAuthStore((s) => s.roles);
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
@@ -2800,6 +2803,50 @@ export function AccountSection() {
             {currentRole ? ROLE_LABELS[currentRole][locale] : '—'}
           </Text>
         </View>
+      </View>
+
+      {/* Businesses you belong to — shows every workspace the user is a member
+          of, with their role per business. Read-only list; switching active
+          business still happens via the header BusinessSwitcher. */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-3">
+        <SectionHeader
+          icon={<Building2 size={18} color="#4F46E5" />}
+          title={t.account.businessesHeading}
+          subtitle={t.account.businessesSubtitle}
+        />
+        {businesses.length === 0 ? (
+          <Text className="text-sm text-gray-500">{t.account.businessesEmpty}</Text>
+        ) : (
+          <View className="bg-gray-50 rounded-xl overflow-hidden">
+            {businesses.map((b, i) => {
+              const role = roles[b.id];
+              const isActive = b.id === activeBusinessId;
+              return (
+                <View
+                  key={b.id}
+                  className={`flex-row items-center gap-3 px-4 py-3 ${
+                    i < businesses.length - 1 ? 'border-b border-gray-100' : ''
+                  }`}
+                >
+                  <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+                    <Building2 size={14} color="#4F46E5" />
+                  </View>
+                  <Text className="flex-1 text-sm font-semibold text-gray-900">
+                    {b.name}
+                    {isActive ? ' •' : ''}
+                  </Text>
+                  {role ? (
+                    <View className="bg-primary/10 rounded-full px-2.5 py-1 shrink-0">
+                      <Text className="text-xs font-semibold text-primary">
+                        {ROLE_LABELS[role][locale]}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Password card */}

@@ -38,6 +38,8 @@ import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
+import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate {
@@ -150,7 +152,7 @@ export default function ClienteDetailRoute() {
     }
   };
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, user } = useApp();
   const syncBanner = useGoogleSyncBanner();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
@@ -172,6 +174,17 @@ export default function ClienteDetailRoute() {
   // Cache of distinct role values across this business — feeds the
   // role-field autocomplete so previously-typed titles are one tap away.
   const [roleSuggestions, setRoleSuggestions] = useState<string[]>([]);
+
+  // Communication log: bump to refetch the timeline after a contact is
+  // logged via the confirm-outcome prompt.
+  const [commReload, setCommReload] = useState(0);
+  const { fireContact } = useContactOutcomePrompt({
+    supabase,
+    businessId: business?.id,
+    createdBy: user?.id ?? null,
+    labels: full.dashboard.clients.detail.commLog.prompt,
+    onLogged: () => setCommReload(n => n + 1),
+  });
 
   const load = async () => {
     if (!business || !id) return;
@@ -557,7 +570,12 @@ export default function ClienteDetailRoute() {
         <View className="flex-row gap-2 mb-3">
           <Pressable
             disabled={!primaryPhone}
-            onPress={() => primaryPhone && openLink(`tel:${primaryPhone}`)}
+            onPress={() => primaryPhone && fireContact({
+              type: 'call',
+              target: `tel:${primaryPhone}`,
+              contactMethod: primaryPhone,
+              clientId: client.id,
+            })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -575,7 +593,12 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!primaryPhone}
-            onPress={() => primaryPhone && openLink(`sms:${primaryPhone}`)}
+            onPress={() => primaryPhone && fireContact({
+              type: 'sms',
+              target: `sms:${primaryPhone}`,
+              contactMethod: primaryPhone,
+              clientId: client.id,
+            })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -593,7 +616,12 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!primaryEmail}
-            onPress={() => primaryEmail && openLink(`mailto:${primaryEmail}`)}
+            onPress={() => primaryEmail && fireContact({
+              type: 'email',
+              target: `mailto:${primaryEmail}`,
+              contactMethod: primaryEmail,
+              clientId: client.id,
+            })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
               primaryEmail
                 ? 'bg-white border-gray-100 active:bg-gray-50'
@@ -775,7 +803,13 @@ export default function ClienteDetailRoute() {
                     <View className="flex-row gap-2 mt-2.5">
                       {ct.phone ? (
                         <Pressable
-                          onPress={() => openLink(`tel:${ct.phone}`)}
+                          onPress={() => fireContact({
+                            type: 'call',
+                            target: `tel:${ct.phone}`,
+                            contactMethod: ct.phone,
+                            clientId: client.id,
+                            clientContactId: ct.id,
+                          })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <Phone size={12} color="#4F46E5" />
@@ -784,7 +818,13 @@ export default function ClienteDetailRoute() {
                       ) : null}
                       {ct.phone ? (
                         <Pressable
-                          onPress={() => openLink(`sms:${ct.phone}`)}
+                          onPress={() => fireContact({
+                            type: 'sms',
+                            target: `sms:${ct.phone}`,
+                            contactMethod: ct.phone,
+                            clientId: client.id,
+                            clientContactId: ct.id,
+                          })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <MessageSquare size={12} color="#4F46E5" />
@@ -793,7 +833,13 @@ export default function ClienteDetailRoute() {
                       ) : null}
                       {ct.email ? (
                         <Pressable
-                          onPress={() => openLink(`mailto:${ct.email}`)}
+                          onPress={() => fireContact({
+                            type: 'email',
+                            target: `mailto:${ct.email}`,
+                            contactMethod: ct.email,
+                            clientId: client.id,
+                            clientContactId: ct.id,
+                          })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
                           <Mail size={12} color="#4F46E5" />
@@ -806,6 +852,18 @@ export default function ClienteDetailRoute() {
               ))}
             </View>
           )}
+        </View>
+
+        {/* Communication log */}
+        <View className="mb-4">
+          <CommunicationLog
+            supabase={supabase}
+            businessId={business?.id ?? ''}
+            clientId={client.id}
+            createdBy={user?.id ?? null}
+            contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
+            reloadToken={commReload}
+          />
         </View>
 
         {/* Custom fields card */}
