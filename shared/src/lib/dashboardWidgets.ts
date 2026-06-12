@@ -7,6 +7,13 @@
 // longer exist are silently dropped, and registry widgets missing from a
 // saved layout are appended at the end — so adding/removing widgets never
 // requires a data migration.
+//
+// Every widget supports three sizes. Size changes both the footprint AND
+// the content density (each renderer decides what to show per size):
+//   sm — compact tile  (web: 1/3 row · mobile: half width)
+//   md — wide tile     (web: 1/2 row · mobile: full width)
+//   lg — full row, expanded content
+// Layouts saved before sizes existed simply omit `sizes` — defaults apply.
 
 export type DashboardWidgetId =
   | 'quickActions'
@@ -21,44 +28,60 @@ export type DashboardWidgetId =
   | 'upcomingJobs'
   | 'recentInvoices';
 
-export type DashboardWidgetSize = 'stat' | 'full';
+export type DashboardWidgetSize = 'sm' | 'md' | 'lg';
+
+export const DASHBOARD_WIDGET_SIZES: DashboardWidgetSize[] = ['sm', 'md', 'lg'];
 
 export interface DashboardWidgetDef {
   id: DashboardWidgetId;
-  /** 'stat' = small card in the grid, 'full' = spans the whole row. */
-  size: DashboardWidgetSize;
+  defaultSize: DashboardWidgetSize;
   /** Hidden unless the user adds it from the customize panel. */
   defaultHidden?: boolean;
 }
 
 // Registry order doubles as the default layout order.
 export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
-  { id: 'quickActions', size: 'full' },
-  { id: 'earningsMonth', size: 'stat' },
-  { id: 'invoicesPending', size: 'stat' },
-  { id: 'clientsTotal', size: 'stat' },
-  { id: 'invoicesOverdue', size: 'stat' },
-  { id: 'clockedIn', size: 'stat' },
-  { id: 'earningsYear', size: 'stat' },
-  { id: 'jobsActive', size: 'stat', defaultHidden: true },
-  { id: 'monthlyChart', size: 'full' },
-  { id: 'upcomingJobs', size: 'full' },
-  { id: 'recentInvoices', size: 'full' },
+  { id: 'quickActions', defaultSize: 'lg' },
+  { id: 'earningsMonth', defaultSize: 'sm' },
+  { id: 'invoicesPending', defaultSize: 'sm' },
+  { id: 'clientsTotal', defaultSize: 'sm' },
+  { id: 'invoicesOverdue', defaultSize: 'sm' },
+  { id: 'clockedIn', defaultSize: 'sm' },
+  { id: 'earningsYear', defaultSize: 'sm' },
+  { id: 'jobsActive', defaultSize: 'sm', defaultHidden: true },
+  { id: 'monthlyChart', defaultSize: 'lg' },
+  { id: 'upcomingJobs', defaultSize: 'lg' },
+  { id: 'recentInvoices', defaultSize: 'lg' },
 ];
 
 export interface DashboardLayout {
   order: string[];
   hidden: string[];
+  /** Per-widget size override; missing entries fall back to defaultSize. */
+  sizes?: Record<string, DashboardWidgetSize>;
+}
+
+export interface ResolvedDashboardWidget {
+  id: DashboardWidgetId;
+  size: DashboardWidgetSize;
 }
 
 export interface ResolvedDashboardLayout {
-  /** Widgets to render, in display order. */
-  visible: DashboardWidgetDef[];
+  /** Widgets to render, in display order, with their effective size. */
+  visible: ResolvedDashboardWidget[];
   /** Widgets available in the "add widget" panel. */
-  hidden: DashboardWidgetDef[];
+  hidden: DashboardWidgetId[];
 }
 
 const byId = new Map(DASHBOARD_WIDGETS.map((w) => [w.id as string, w]));
+
+function effectiveSize(
+  def: DashboardWidgetDef,
+  sizes: Record<string, DashboardWidgetSize> | undefined,
+): DashboardWidgetSize {
+  const saved = sizes?.[def.id];
+  return saved && DASHBOARD_WIDGET_SIZES.includes(saved) ? saved : def.defaultSize;
+}
 
 export function resolveDashboardLayout(
   layout: DashboardLayout | null | undefined,
@@ -77,15 +100,22 @@ export function resolveDashboardLayout(
   ].map((id) => byId.get(id)!);
 
   return {
-    visible: ordered.filter((w) => !hiddenIds.has(w.id)),
-    hidden: ordered.filter((w) => hiddenIds.has(w.id)),
+    visible: ordered
+      .filter((w) => !hiddenIds.has(w.id))
+      .map((w) => ({ id: w.id, size: effectiveSize(w, layout?.sizes) })),
+    hidden: ordered.filter((w) => hiddenIds.has(w.id)).map((w) => w.id),
   };
 }
 
-/** Serialize the current visible order + hidden set back into the JSONB shape. */
+/** Serialize the current visible order + hidden set + sizes back into JSONB. */
 export function buildDashboardLayout(
   visibleIds: string[],
   hiddenIds: string[],
+  sizes: Record<string, DashboardWidgetSize>,
 ): DashboardLayout {
-  return { order: [...visibleIds, ...hiddenIds], hidden: hiddenIds };
+  return { order: [...visibleIds, ...hiddenIds], hidden: hiddenIds, sizes };
+}
+
+export function defaultWidgetSize(id: DashboardWidgetId): DashboardWidgetSize {
+  return byId.get(id)?.defaultSize ?? 'sm';
 }

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DraggableFlatList from 'react-native-draggable-flatlist';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -84,18 +83,19 @@ export default function DashboardHome() {
             .eq('business_id', business.id).is('clock_out', null),
           supabase.from('jobs').select('id', { count: 'exact', head: true })
             .eq('business_id', business.id).in('status', ['scheduled', 'in_progress']),
+          // Fetch enough rows for the largest widget size (lg shows 8).
           supabase.from('invoices')
             .select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)')
             .eq('business_id', business.id)
             .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(8),
           supabase.from('jobs')
             .select('id, title, status, scheduled_date, clients(first_name, last_name)')
             .eq('business_id', business.id)
             .in('status', ['scheduled', 'in_progress'])
             .gte('scheduled_date', today)
             .order('scheduled_date', { ascending: true })
-            .limit(5),
+            .limit(8),
         ]);
 
       const sum = (rows: { total_amount?: number | null }[]) =>
@@ -178,19 +178,6 @@ export default function DashboardHome() {
         onNewClientPress={() => router.push('/dashboard/clientes')}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
         onCalendarPress={() => router.push('/dashboard/mas/calendario')}
-        renderEditList={({ items, onReorder, renderRow, header, footer }) => (
-          <DraggableFlatList
-            data={items}
-            keyExtractor={(it) => it.id}
-            onDragEnd={({ data }) => onReorder(data)}
-            renderItem={({ item, drag, isActive }) => renderRow(item, { drag, isActive }) as JSX.Element}
-            ListHeaderComponent={<>{header}</>}
-            ListFooterComponent={<>{footer}</>}
-            containerStyle={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}
-            activationDistance={8}
-          />
-        )}
       />
     </View>
   );

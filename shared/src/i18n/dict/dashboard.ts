@@ -41,6 +41,13 @@ export type DashboardDict = {
       addTitle: string;
       addEmpty: string;
       saveError: string;
+      // Widget size options (segmented control in edit mode). The single
+      // letter shown in the control is derived from the first character.
+      sizes: {
+        sm: string;
+        md: string;
+        lg: string;
+      };
     };
     widgetNames: {
       quickActions: string;
@@ -70,6 +77,9 @@ export type DashboardDict = {
       earningsYearSub: string;
       jobsActiveLabel: string;
       jobsActiveSub: string;
+      // Extra context lines shown on md/lg sized earnings widgets.
+      vsLastMonth: string;
+      avgPerMonth: string;
     };
     quickActions: {
       newInvoice: string;
@@ -80,6 +90,8 @@ export type DashboardDict = {
     monthlyChart: {
       title: string;
       empty: string;
+      totalLabel: string;
+      avgLabel: string;
     };
     upcomingJobs: {
       title: string;
@@ -1582,6 +1594,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addTitle: 'Agregar widgets',
         addEmpty: 'Ya estás mostrando todos los widgets.',
         saveError: 'No se pudo guardar tu diseño. Intenta de nuevo.',
+        sizes: {
+          sm: 'Pequeño',
+          md: 'Mediano',
+          lg: 'Grande',
+        },
       },
       widgetNames: {
         quickActions: 'Acciones rápidas',
@@ -1611,6 +1628,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         earningsYearSub: 'desde ene {{year}}',
         jobsActiveLabel: 'Trabajos activos',
         jobsActiveSub: 'programados o en progreso',
+        vsLastMonth: '{{pct}} vs mes anterior',
+        avgPerMonth: 'Promedio {{amount}}/mes',
       },
       quickActions: {
         newInvoice: 'Nueva factura',
@@ -1621,6 +1640,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       monthlyChart: {
         title: 'Ingresos por mes',
         empty: 'Aún no hay pagos este año.',
+        totalLabel: 'Total {{year}}',
+        avgLabel: 'Promedio mensual',
       },
       upcomingJobs: {
         title: 'Próximos trabajos',
@@ -3082,6 +3103,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addTitle: 'Add widgets',
         addEmpty: "You're already showing every widget.",
         saveError: "Couldn't save your layout. Try again.",
+        sizes: {
+          sm: 'Small',
+          md: 'Medium',
+          lg: 'Large',
+        },
       },
       widgetNames: {
         quickActions: 'Quick actions',
@@ -3111,6 +3137,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         earningsYearSub: 'since Jan {{year}}',
         jobsActiveLabel: 'Active jobs',
         jobsActiveSub: 'scheduled or in progress',
+        vsLastMonth: '{{pct}} vs last month',
+        avgPerMonth: 'Avg {{amount}}/mo',
       },
       quickActions: {
         newInvoice: 'New invoice',
@@ -3121,6 +3149,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       monthlyChart: {
         title: 'Revenue by month',
         empty: 'No payments yet this year.',
+        totalLabel: 'Total {{year}}',
+        avgLabel: 'Monthly average',
       },
       upcomingJobs: {
         title: 'Upcoming jobs',

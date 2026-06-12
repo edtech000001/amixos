@@ -49,7 +49,7 @@ export interface Business {
   operating_hours: Record<string, { enabled: boolean; start: string; end: string }> | null;
   // Home dashboard widget layout (migration 049). Null = default layout.
   // Shape: see shared/src/lib/dashboardWidgets.ts (DashboardLayout).
-  dashboard_layout: { order: string[]; hidden: string[] } | null;
+  dashboard_layout: { order: string[]; hidden: string[]; sizes?: Record<string, 'sm' | 'md' | 'lg'> } | null;
 }
 
 // Map view prefs — synced via businesses.map_view_settings (migration 039).

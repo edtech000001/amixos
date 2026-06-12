@@ -6,7 +6,12 @@ export const dynamic = 'force-dynamic';
 // (shared/src/lib/dashboardWidgets.ts) and the per-business layout is synced
 // via businesses.dashboard_layout (migration 049) — same layout drives the
 // mobile home screen. "Personalizar" toggles an edit mode with drag-and-drop
-// reordering (@dnd-kit) + show/hide; every change auto-saves.
+// reordering (@dnd-kit), show/hide, and a per-widget size control; every
+// change auto-saves.
+//
+// Sizes change footprint AND content: sm = compact tile (1/3 row), md = wide
+// tile with extra context (1/2 row), lg = full row with expanded content
+// (more list rows, inline mini charts, chart totals).
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -34,15 +39,26 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
-  DASHBOARD_WIDGETS,
+  DASHBOARD_WIDGET_SIZES,
   buildDashboardLayout,
   resolveDashboardLayout,
   type DashboardWidgetId,
+  type DashboardWidgetSize,
 } from '@amixos/shared/lib/dashboardWidgets';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+
+// How many list rows each size shows (recent invoices / upcoming jobs).
+const LIST_ROWS: Record<DashboardWidgetSize, number> = { sm: 3, md: 5, lg: 8 };
+
+// Grid spans per size: 6-col grid on lg screens, 2-col on sm, stacked below.
+const SIZE_SPAN: Record<DashboardWidgetSize, string> = {
+  sm: 'sm:col-span-1 lg:col-span-2',
+  md: 'sm:col-span-1 lg:col-span-3',
+  lg: 'sm:col-span-2 lg:col-span-6',
+};
 
 interface DashboardStats {
   earningsMonth: number;
@@ -112,33 +128,61 @@ const WIDGET_ICONS: Record<DashboardWidgetId, LucideIcon> = {
   recentInvoices: FileText,
 };
 
-const WIDGET_SIZE = new Map(DASHBOARD_WIDGETS.map(w => [w.id, w.size]));
+// 12 thin bars used inside lg-sized earnings widgets. `light` renders white
+// bars for the gradient hero card.
+function MiniBars({ monthly, light }: { monthly: number[]; light?: boolean }) {
+  const max = Math.max(...monthly);
+  if (max === 0) return null;
+  const currentMonth = new Date().getMonth();
+  return (
+    <div className="flex items-end gap-1 h-12 w-40 shrink-0">
+      {monthly.map((amount, i) => (
+        <div
+          key={i}
+          className={`flex-1 rounded-sm ${
+            i === currentMonth
+              ? light ? 'bg-white' : 'bg-primary'
+              : amount > 0
+                ? light ? 'bg-white/40' : 'bg-primary/30'
+                : light ? 'bg-white/15' : 'bg-gray-100'
+          }`}
+          style={{ height: `${Math.max(amount > 0 ? 12 : 6, Math.round((amount / max) * 100))}%` }}
+        />
+      ))}
+    </div>
+  );
+}
 
 // Sortable wrapper — in edit mode the whole card drags and gets a dashed
-// outline + a hide button; outside edit mode it renders children untouched.
+// outline, a hide button, and an S/M/L size control; outside edit mode it
+// renders children untouched.
 function SortableWidget({
   id,
+  size,
   editing,
   hideLabel,
+  sizeLabels,
   onHide,
+  onSizeChange,
   children,
 }: {
   id: DashboardWidgetId;
+  size: DashboardWidgetSize;
   editing: boolean;
   hideLabel: string;
+  sizeLabels: Record<DashboardWidgetSize, string>;
   onHide: (id: DashboardWidgetId) => void;
+  onSizeChange: (id: DashboardWidgetId, size: DashboardWidgetSize) => void;
   children: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, disabled: !editing });
 
-  const span = WIDGET_SIZE.get(id) === 'full' ? 'sm:col-span-2 lg:col-span-3' : '';
-
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 10 : undefined }}
-      className={`relative ${span}`}
+      className={`relative ${SIZE_SPAN[size]}`}
       {...(editing ? { ...attributes, ...listeners } : {})}
     >
       {editing && (
@@ -154,6 +198,23 @@ function SortableWidget({
           </button>
           <div className="absolute top-3 right-3 z-10 text-gray-300">
             <GripVertical size={16} />
+          </div>
+          <div
+            className="absolute bottom-2 right-2 z-20 flex rounded-lg bg-gray-900/90 p-0.5 shadow-md"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {DASHBOARD_WIDGET_SIZES.map((s) => (
+              <button
+                key={s}
+                onClick={(e) => { e.stopPropagation(); onSizeChange(id, s); }}
+                title={sizeLabels[s]}
+                className={`w-6 h-6 rounded-md text-[11px] font-bold transition-colors ${
+                  size === s ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white'
+                }`}
+              >
+                {sizeLabels[s].charAt(0)}
+              </button>
+            ))}
           </div>
         </>
       )}
@@ -177,6 +238,7 @@ export default function DashboardPage() {
   const [editing, setEditing] = useState(false);
   const [visibleIds, setVisibleIds] = useState<DashboardWidgetId[]>([]);
   const [hiddenIds, setHiddenIds] = useState<DashboardWidgetId[]>([]);
+  const [sizes, setSizes] = useState<Record<string, DashboardWidgetSize>>({});
   const [saveError, setSaveError] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -196,7 +258,8 @@ export default function DashboardPage() {
     if (!business) return;
     const resolved = resolveDashboardLayout(business.dashboard_layout);
     setVisibleIds(resolved.visible.map(w => w.id));
-    setHiddenIds(resolved.hidden.map(w => w.id));
+    setHiddenIds(resolved.hidden);
+    setSizes(Object.fromEntries(resolved.visible.map(w => [w.id, w.size])));
   }, [business?.id]);
 
   useEffect(() => {
@@ -204,62 +267,63 @@ export default function DashboardPage() {
     const load = async () => {
       const now = new Date();
       try {
-      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
-      const today = now.toISOString().split('T')[0];
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
+        const today = now.toISOString().split('T')[0];
 
-      const [paidMonth, paidYearRows, pending, overdue, clients, clocked, jobsActive, recentInv, upcomingJobs] = await Promise.all([
-        supabase.from('invoices').select('total_amount').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
-        // All paid invoices this year (also feeds the monthly chart) — can
-        // exceed 1000 rows for a busy business, so paginate.
-        fetchAll<{ total_amount: number | null; paid_at: string | null }>((from, to) =>
-          supabase.from('invoices').select('total_amount, paid_at').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startYear).range(from, to),
-        ),
-        supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'sent'),
-        supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'overdue'),
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
-        supabase.from('timesheets').select('id', { count: 'exact', head: true }).eq('business_id', business.id).is('clock_out', null),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('business_id', business.id).in('status', ['scheduled', 'in_progress']),
-        supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(5),
-      ]);
+        const [paidMonth, paidYearRows, pending, overdue, clients, clocked, jobsActive, recentInv, upcomingJobs] = await Promise.all([
+          supabase.from('invoices').select('total_amount').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
+          // All paid invoices this year (also feeds the monthly chart) — can
+          // exceed 1000 rows for a busy business, so paginate.
+          fetchAll<{ total_amount: number | null; paid_at: string | null }>((from, to) =>
+            supabase.from('invoices').select('total_amount, paid_at').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startYear).range(from, to),
+          ),
+          supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'sent'),
+          supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'overdue'),
+          supabase.from('clients').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
+          supabase.from('timesheets').select('id', { count: 'exact', head: true }).eq('business_id', business.id).is('clock_out', null),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('business_id', business.id).in('status', ['scheduled', 'in_progress']),
+          // Fetch enough rows for the largest widget size (lg shows 8).
+          supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
+          supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
+        ]);
 
-      const sum = (rows: { total_amount?: number | null }[] | null) => rows?.reduce((acc, r) => acc + (r.total_amount ?? 0), 0) ?? 0;
+        const sum = (rows: { total_amount?: number | null }[] | null) => rows?.reduce((acc, r) => acc + (r.total_amount ?? 0), 0) ?? 0;
 
-      const monthly = Array(12).fill(0) as number[];
-      for (const row of paidYearRows) {
-        if (!row.paid_at) continue;
-        monthly[new Date(row.paid_at).getMonth()] += row.total_amount ?? 0;
-      }
+        const monthly = Array(12).fill(0) as number[];
+        for (const row of paidYearRows) {
+          if (!row.paid_at) continue;
+          monthly[new Date(row.paid_at).getMonth()] += row.total_amount ?? 0;
+        }
 
-      setStats({
-        earningsMonth: sum(paidMonth.data),
-        earningsYear: sum(paidYearRows),
-        invoicesPending: pending.count ?? 0,
-        invoicesOverdue: overdue.count ?? 0,
-        clientsTotal: clients.count ?? 0,
-        clockedInNow: clocked.count ?? 0,
-        jobsActive: jobsActive.count ?? 0,
-        monthly,
-      });
+        setStats({
+          earningsMonth: sum(paidMonth.data),
+          earningsYear: sum(paidYearRows),
+          invoicesPending: pending.count ?? 0,
+          invoicesOverdue: overdue.count ?? 0,
+          clientsTotal: clients.count ?? 0,
+          clockedInNow: clocked.count ?? 0,
+          jobsActive: jobsActive.count ?? 0,
+          monthly,
+        });
 
-      const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
-      setRecent(rawInv.map(inv => ({
-        id: inv.id,
-        invoiceNumber: inv.invoice_number,
-        totalAmount: inv.total_amount,
-        status: inv.status,
-        clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
-      })));
+        const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
+        setRecent(rawInv.map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          totalAmount: inv.total_amount,
+          status: inv.status,
+          clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
+        })));
 
-      const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
-      setUpcoming(rawJobs.map(job => ({
-        id: job.id,
-        title: job.title,
-        status: job.status,
-        scheduledDate: job.scheduled_date,
-        clientName: job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null,
-      })));
+        const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
+        setUpcoming(rawJobs.map(job => ({
+          id: job.id,
+          title: job.title,
+          status: job.status,
+          scheduledDate: job.scheduled_date,
+          clientName: job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null,
+        })));
       } catch (err) {
         console.error('dashboard load failed', err);
       } finally {
@@ -269,12 +333,16 @@ export default function DashboardPage() {
     void load();
   }, [business?.id]);
 
-  const persistLayout = async (visible: DashboardWidgetId[], hidden: DashboardWidgetId[]) => {
+  const persistLayout = async (
+    visible: DashboardWidgetId[],
+    hidden: DashboardWidgetId[],
+    nextSizes: Record<string, DashboardWidgetSize>,
+  ) => {
     if (!business) return;
     setSaveError(false);
     const { error } = await supabase
       .from('businesses')
-      .update({ dashboard_layout: buildDashboardLayout(visible, hidden) })
+      .update({ dashboard_layout: buildDashboardLayout(visible, hidden, nextSizes) })
       .eq('id', business.id);
     if (error) setSaveError(true);
   };
@@ -287,7 +355,7 @@ export default function DashboardPage() {
     if (oldIndex < 0 || newIndex < 0) return;
     const next = arrayMove(visibleIds, oldIndex, newIndex);
     setVisibleIds(next);
-    void persistLayout(next, hiddenIds);
+    void persistLayout(next, hiddenIds, sizes);
   };
 
   const hideWidget = (id: DashboardWidgetId) => {
@@ -295,7 +363,7 @@ export default function DashboardPage() {
     const nextHidden = [...hiddenIds, id];
     setVisibleIds(nextVisible);
     setHiddenIds(nextHidden);
-    void persistLayout(nextVisible, nextHidden);
+    void persistLayout(nextVisible, nextHidden, sizes);
   };
 
   const addWidget = (id: DashboardWidgetId) => {
@@ -303,7 +371,13 @@ export default function DashboardPage() {
     const nextHidden = hiddenIds.filter(w => w !== id);
     setVisibleIds(nextVisible);
     setHiddenIds(nextHidden);
-    void persistLayout(nextVisible, nextHidden);
+    void persistLayout(nextVisible, nextHidden, sizes);
+  };
+
+  const setWidgetSize = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
+    const nextSizes = { ...sizes, [id]: size };
+    setSizes(nextSizes);
+    void persistLayout(visibleIds, hiddenIds, nextSizes);
   };
 
   const finishEditing = () => {
@@ -311,17 +385,35 @@ export default function DashboardPage() {
     void refetchBusiness();
   };
 
-  const yearStr = String(new Date().getFullYear());
+  const now = new Date();
+  const yearStr = String(now.getFullYear());
+  const currentMonth = now.getMonth();
   const yearAmount = formatCurrency(stats?.earningsYear ?? 0);
+  const monthly = stats?.monthly ?? (Array(12).fill(0) as number[]);
 
-  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string }>>>(() => ({
+  // Extra context line for md/lg earnings widgets — derived from data we
+  // already have, no extra queries.
+  const vsLastMonthLine = useMemo(() => {
+    const prev = monthly[currentMonth - 1];
+    if (currentMonth === 0 || !prev) return null;
+    const pctNum = ((monthly[currentMonth] - prev) / prev) * 100;
+    const pct = `${pctNum >= 0 ? '+' : ''}${Math.round(pctNum)}%`;
+    return t.home.widgets.vsLastMonth.replace('{{pct}}', pct);
+  }, [monthly, currentMonth, t]);
+
+  const avgPerMonthLine = t.home.widgets.avgPerMonth.replace(
+    '{{amount}}',
+    formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1)),
+  );
+
+  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string; extra?: string | null; bars?: boolean }>>>(() => ({
     invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub },
     clientsTotal: { label: t.home.widgets.clientsLabel, value: stats?.clientsTotal ?? 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', sub: t.home.widgets.clientsSub },
     invoicesOverdue: { label: t.home.widgets.invoicesOverdueLabel, value: stats?.invoicesOverdue ?? 0, icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50', sub: t.home.widgets.invoicesOverdueSub },
     clockedIn: { label: t.home.widgets.clockedInLabel, value: stats?.clockedInNow ?? 0, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', sub: t.home.widgets.clockedInSub },
-    earningsYear: { label: t.home.widgets.earningsYearLabel, value: yearAmount, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr) },
+    earningsYear: { label: t.home.widgets.earningsYearLabel, value: yearAmount, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr), extra: avgPerMonthLine, bars: true },
     jobsActive: { label: t.home.widgets.jobsActiveLabel, value: stats?.jobsActive ?? 0, icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50', sub: t.home.widgets.jobsActiveSub },
-  }), [stats, t, yearAmount, yearStr]);
+  }), [stats, t, yearAmount, yearStr, avgPerMonthLine]);
 
   const formatJobDate = (dateStr: string) => {
     const date = new Date(`${dateStr}T00:00:00`);
@@ -339,49 +431,72 @@ export default function DashboardPage() {
     { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-50 text-orange-600 hover:bg-orange-100' },
   ];
 
-  const renderWidget = (id: DashboardWidgetId) => {
+  const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
+    if (id === 'earningsMonth') {
+      // Hero card — gradient brand background so the headline number pops.
+      return (
+        <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-sm p-5 h-full text-white relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+          <div className="absolute -right-12 top-10 w-28 h-28 rounded-full bg-white/5" />
+          <div className="flex items-center justify-between gap-4 relative">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+                  <DollarSign size={18} className="text-white" />
+                </div>
+                <span className="text-sm text-white/80">{t.home.widgets.earningsMonthLabel}</span>
+              </div>
+              <p className={`font-bold mt-3 ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>{formatCurrency(stats?.earningsMonth ?? 0)}</p>
+              <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
+              {size !== 'sm' && vsLastMonthLine ? (
+                <p className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</p>
+              ) : null}
+            </div>
+            {size === 'lg' ? <MiniBars monthly={monthly} light /> : null}
+          </div>
+        </div>
+      );
+    }
+
     const stat = statWidgets[id];
     if (stat) {
-      const { label, value, icon: Icon, color, bg, sub } = stat;
+      const { label, value, icon: Icon, color, bg, sub, extra, bars } = stat;
       return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full transition-shadow hover:shadow-md">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
-              <Icon size={18} className={color} />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
+                  <Icon size={18} className={color} />
+                </div>
+                <span className="text-sm text-gray-500">{label}</span>
+              </div>
+              <p className={`font-bold text-gray-900 mt-3 ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>{value}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+              {size !== 'sm' && extra ? (
+                <p className="text-xs font-semibold text-gray-600 mt-1">{extra}</p>
+              ) : null}
             </div>
-            <span className="text-sm text-gray-500">{label}</span>
+            {size === 'lg' && bars ? <MiniBars monthly={monthly} /> : null}
           </div>
-          <p className="text-2xl font-bold text-gray-900 mt-3">{value}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
         </div>
       );
     }
 
     switch (id) {
-      case 'earningsMonth':
-        // Hero card — gradient brand background so the headline number pops.
-        return (
-          <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-sm p-5 h-full text-white relative overflow-hidden transition-shadow hover:shadow-md">
-            <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
-            <div className="absolute -right-12 top-10 w-28 h-28 rounded-full bg-white/5" />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-                <DollarSign size={18} className="text-white" />
-              </div>
-              <span className="text-sm text-white/80">{t.home.widgets.earningsMonthLabel}</span>
-            </div>
-            <p className="text-2xl font-bold mt-3">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
-            <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
-          </div>
-        );
-
       case 'quickActions':
         return (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 h-full">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className={`grid gap-3 ${size === 'lg' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
               {quickActions.map(({ label, icon: Icon, onClick, classes }) => (
-                <button key={label} onClick={onClick} className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-semibold transition-colors ${classes}`}>
-                  <Icon size={16} /> {label}
+                <button
+                  key={label}
+                  onClick={onClick}
+                  title={label}
+                  className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-semibold transition-colors ${classes}`}
+                >
+                  <Icon size={16} />
+                  {size !== 'sm' ? label : null}
                 </button>
               ))}
             </div>
@@ -389,39 +504,52 @@ export default function DashboardPage() {
         );
 
       case 'monthlyChart': {
-        const monthly = stats?.monthly ?? Array(12).fill(0);
         const max = Math.max(...monthly);
-        const currentMonth = new Date().getMonth();
+        // sm shows the most recent 6 months; md/lg show the full year.
+        const startIdx = size === 'sm' ? Math.max(0, currentMonth - 5) : 0;
+        const shown = size === 'sm' ? monthly.slice(startIdx, startIdx + 6) : monthly;
         const monthLabel = (i: number) =>
           new Intl.DateTimeFormat(t.dateLocale, { month: 'short' }).format(new Date(2026, i, 1)).replace('.', '');
         return (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">{t.home.monthlyChart.title}</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-900">{t.home.monthlyChart.title}</h2>
+              {size === 'lg' && max > 0 ? (
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span><span className="font-semibold text-gray-900">{yearAmount}</span> · {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}</span>
+                  <span><span className="font-semibold text-gray-900">{formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}</span> · {t.home.monthlyChart.avgLabel}</span>
+                </div>
+              ) : null}
+            </div>
             {max === 0 ? (
               <p className="text-sm text-gray-400 py-8 text-center">{t.home.monthlyChart.empty}</p>
             ) : (
-              <div className="flex items-end gap-2 h-32">
-                {monthly.map((amount, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                    <span className="absolute -top-6 text-[10px] font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {formatCurrency(amount)}
-                    </span>
-                    <div className="w-full flex items-end h-24">
-                      <div
-                        className={`w-full rounded-t-md transition-colors ${i === currentMonth ? 'bg-primary' : amount > 0 ? 'bg-primary/30 group-hover:bg-primary/50' : 'bg-gray-100'}`}
-                        style={{ height: `${Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * 100))}%` }}
-                      />
+              <div className={`flex items-end gap-2 ${size === 'sm' ? 'h-24' : 'h-32'}`}>
+                {shown.map((amount, idx) => {
+                  const i = startIdx + idx;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                      <span className="absolute -top-6 text-[10px] font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        {formatCurrency(amount)}
+                      </span>
+                      <div className={`w-full flex items-end ${size === 'sm' ? 'h-16' : 'h-24'}`}>
+                        <div
+                          className={`w-full rounded-t-md transition-colors ${i === currentMonth ? 'bg-primary' : amount > 0 ? 'bg-primary/30 group-hover:bg-primary/50' : 'bg-gray-100'}`}
+                          style={{ height: `${Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * 100))}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-gray-400'}`}>{monthLabel(i)}</span>
                     </div>
-                    <span className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-gray-400'}`}>{monthLabel(i)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         );
       }
 
-      case 'upcomingJobs':
+      case 'upcomingJobs': {
+        const rows = upcoming.slice(0, LIST_ROWS[size]);
         return (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -430,20 +558,20 @@ export default function DashboardPage() {
                 {t.home.upcomingJobs.viewAll}
               </button>
             </div>
-            {upcoming.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="flex flex-col items-center py-10">
                 <CalendarDays size={36} className="text-gray-300" />
                 <p className="text-gray-400 text-sm mt-3">{t.home.upcomingJobs.empty}</p>
               </div>
             ) : (
               <div>
-                {upcoming.map((job) => {
+                {rows.map((job) => {
                   const statusKey = job.status as keyof typeof t.jobs.statuses;
                   return (
                     <button
                       key={job.id}
                       onClick={() => router.push(`/dashboard/trabajos/${job.id}`)}
-                      className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 text-left"
+                      className={`w-full flex items-center justify-between px-5 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 text-left ${size === 'sm' ? 'py-2.5' : 'py-4'}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg shrink-0">
@@ -451,12 +579,16 @@ export default function DashboardPage() {
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-900 truncate">{job.title}</p>
-                          <p className="text-xs text-gray-500 truncate">{job.clientName ?? t.home.upcomingJobs.noClient}</p>
+                          {size !== 'sm' ? (
+                            <p className="text-xs text-gray-500 truncate">{job.clientName ?? t.home.upcomingJobs.noClient}</p>
+                          ) : null}
                         </div>
                       </div>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_PILL[job.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {t.jobs.statuses[statusKey] ?? job.status}
-                      </span>
+                      {size !== 'sm' ? (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_PILL[job.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {t.jobs.statuses[statusKey] ?? job.status}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -464,8 +596,10 @@ export default function DashboardPage() {
             )}
           </div>
         );
+      }
 
-      case 'recentInvoices':
+      case 'recentInvoices': {
+        const rows = recent.slice(0, LIST_ROWS[size]);
         return (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -474,7 +608,7 @@ export default function DashboardPage() {
                 {t.home.recent.viewAll}
               </button>
             </div>
-            {recent.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="flex flex-col items-center py-12">
                 <FileText size={40} className="text-gray-300" />
                 <p className="text-gray-400 text-sm mt-3">{t.home.recent.empty}</p>
@@ -484,7 +618,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div>
-                {recent.map((inv) => {
+                {rows.map((inv) => {
                   const statusKey = inv.status as keyof typeof t.invoiceStatus;
                   const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
                   const pill = STATUS_PILL[inv.status] ?? STATUS_PILL.draft;
@@ -492,15 +626,19 @@ export default function DashboardPage() {
                     <button
                       key={inv.id}
                       onClick={() => router.push(`/dashboard/facturas/${inv.id}`)}
-                      className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 text-left"
+                      className={`w-full flex items-center justify-between px-5 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 text-left ${size === 'sm' ? 'py-2.5' : 'py-4'}`}
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{inv.invoiceNumber}</p>
-                        <p className="text-xs text-gray-500 truncate">{inv.clientName ?? t.home.recent.noClient}</p>
+                        {size !== 'sm' ? (
+                          <p className="text-xs text-gray-500 truncate">{inv.clientName ?? t.home.recent.noClient}</p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <span className="text-sm font-semibold text-gray-900">{formatCurrency(inv.totalAmount)}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${pill}`}>{statusLabel}</span>
+                        {size !== 'sm' ? (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${pill}`}>{statusLabel}</span>
+                        ) : null}
                       </div>
                     </button>
                   );
@@ -509,6 +647,7 @@ export default function DashboardPage() {
             )}
           </div>
         );
+      }
 
       default:
         return null;
@@ -565,12 +704,24 @@ export default function DashboardPage() {
       {/* Widget grid */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {visibleIds.map((id) => (
-              <SortableWidget key={id} id={id} editing={editing} hideLabel={t.home.customize.hideLabel} onHide={hideWidget}>
-                {renderWidget(id)}
-              </SortableWidget>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            {visibleIds.map((id) => {
+              const size = sizes[id] ?? 'sm';
+              return (
+                <SortableWidget
+                  key={id}
+                  id={id}
+                  size={size}
+                  editing={editing}
+                  hideLabel={t.home.customize.hideLabel}
+                  sizeLabels={t.home.customize.sizes}
+                  onHide={hideWidget}
+                  onSizeChange={setWidgetSize}
+                >
+                  {renderWidget(id, size)}
+                </SortableWidget>
+              );
+            })}
           </div>
         </SortableContext>
       </DndContext>
