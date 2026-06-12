@@ -2995,6 +2995,10 @@ function GoogleSyncCard() {
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // True when the status CHECK failed (missing API config, network, non-2xx)
+  // — rendered differently from a real "disconnected" answer so a broken
+  // env var doesn't masquerade as a disconnected account.
+  const [statusError, setStatusError] = useState(false);
 
   // Disconnect dialog state. Two options for the user: keep contacts or also
   // remove them from Google. Count is fetched before showing the dialog so
@@ -3020,7 +3024,14 @@ function GoogleSyncCard() {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
 
   const fetchStatus = async () => {
-    if (!apiBaseUrl || !businessId) { setLoading(false); return; }
+    if (!businessId) { setLoading(false); return; }
+    if (!apiBaseUrl) {
+      // NEXT_PUBLIC_API_URL not configured for this deployment — that's a
+      // config problem, not a disconnected account.
+      setStatusError(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -3031,9 +3042,13 @@ function GoogleSyncCard() {
       if (res.ok) {
         const json = await res.json();
         setStatus(json.data ?? { connected: false });
+        setStatusError(false);
+      } else {
+        setStatusError(true);
       }
     } catch {
       setStatus({ connected: false });
+      setStatusError(true);
     }
     setLoading(false);
   };
@@ -3319,7 +3334,18 @@ function GoogleSyncCard() {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
       <h2 className="text-base font-semibold text-gray-900 mb-1">{t.heading}</h2>
-      <p className="text-xs text-gray-400 mb-4">{t.subtitle}</p>
+      <p className="text-xs text-gray-400 mb-1">{t.subtitle}</p>
+      {business?.name ? (
+        <p className="text-xs text-gray-500 font-medium mb-4">
+          {t.scopeNote.replace('{{name}}', business.name)}
+        </p>
+      ) : null}
+
+      {statusError ? (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-700">
+          {t.statusCheckError}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between mb-4">
         <div>

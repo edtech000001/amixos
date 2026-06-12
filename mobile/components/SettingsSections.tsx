@@ -2919,6 +2919,10 @@ function GoogleSyncSection() {
   const [status, setStatus] = useState<GoogleStatus>({ connected: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // True when the status CHECK failed (missing API config, network, non-2xx)
+  // — rendered differently from a real "disconnected" answer so a transport
+  // problem doesn't masquerade as a disconnected account.
+  const [statusError, setStatusError] = useState(false);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -2935,7 +2939,12 @@ function GoogleSyncSection() {
   const businessId = business?.id ?? null;
 
   const fetchStatus = async () => {
-    if (!apiBaseUrl || !businessId) return;
+    if (!businessId) return;
+    if (!apiBaseUrl) {
+      setStatusError(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const jwt = await getJwt();
@@ -2945,9 +2954,13 @@ function GoogleSyncSection() {
       if (res.ok) {
         const json = await res.json();
         setStatus(json.data ?? { connected: false });
+        setStatusError(false);
+      } else {
+        setStatusError(true);
       }
     } catch {
       setStatus({ connected: false });
+      setStatusError(true);
     }
     setLoading(false);
   };
@@ -3282,6 +3295,18 @@ function GoogleSyncSection() {
         title={t.heading}
         subtitle={t.subtitle}
       />
+
+      {business?.name ? (
+        <Text className="text-xs font-medium text-gray-500">
+          {t.scopeNote.replace('{{name}}', business.name)}
+        </Text>
+      ) : null}
+
+      {statusError ? (
+        <View className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-100">
+          <Text className="text-sm text-amber-700">{t.statusCheckError}</Text>
+        </View>
+      ) : null}
 
       <View className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
         <View className="flex-row items-center gap-2 mb-1">

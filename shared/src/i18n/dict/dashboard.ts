@@ -1073,6 +1073,13 @@ export type DashboardDict = {
     google: {
       heading: string;
       subtitle: string;
+      // The connection is PER BUSINESS (migration 031) — this line shows
+      // which business the card is checking so "disconnected" on one device
+      // vs "connected" on another is explainable (different active business).
+      scopeNote: string;
+      // Shown when the status check itself failed (missing API config or
+      // network error) — distinct from a real "disconnected" answer.
+      statusCheckError: string;
       connectBtn: string;
       reconnectBtn: string;
       disconnectBtn: string;
@@ -2606,6 +2613,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       google: {
         heading: 'Sincronizar con Google Contactos',
         subtitle: 'Cuando agregas un cliente, también se guarda en tus contactos de Google para que aparezca su nombre cuando te llamen.',
+        scopeNote: 'Esta conexión es por negocio. Negocio activo: {{name}}',
+        statusCheckError: 'No se pudo verificar la conexión. Revisa tu internet o la configuración del API.',
         connectBtn: 'Conectar con Google',
         reconnectBtn: 'Reconectar con Google',
         disconnectBtn: 'Desconectar',
@@ -4115,6 +4124,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       google: {
         heading: 'Sync with Google Contacts',
         subtitle: 'When you add a client, they\'re also saved to your Google Contacts so their name shows up when they call you.',
+        scopeNote: 'This connection is per business. Active business: {{name}}',
+        statusCheckError: "Couldn't check the connection. Check your internet or the API configuration.",
         connectBtn: 'Connect Google',
         reconnectBtn: 'Reconnect Google',
         disconnectBtn: 'Disconnect',
