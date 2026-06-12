@@ -30,6 +30,31 @@ export type DashboardDict = {
   home: {
     welcome: string;
     newInvoice: string;
+    // Customizable widget dashboard (migration 049). `customize` is the
+    // edit mode UI; `widgetNames` are the display names used both on the
+    // cards and in the add-widget panel — keys match DashboardWidgetId.
+    customize: {
+      editBtn: string;
+      doneBtn: string;
+      dragHint: string;
+      hideLabel: string;
+      addTitle: string;
+      addEmpty: string;
+      saveError: string;
+    };
+    widgetNames: {
+      quickActions: string;
+      earningsMonth: string;
+      invoicesPending: string;
+      clientsTotal: string;
+      invoicesOverdue: string;
+      clockedIn: string;
+      earningsYear: string;
+      jobsActive: string;
+      monthlyChart: string;
+      upcomingJobs: string;
+      recentInvoices: string;
+    };
     widgets: {
       earningsMonthLabel: string;
       earningsMonthSub: string;
@@ -43,6 +68,26 @@ export type DashboardDict = {
       clockedInSub: string;
       earningsYearLabel: string;
       earningsYearSub: string;
+      jobsActiveLabel: string;
+      jobsActiveSub: string;
+    };
+    quickActions: {
+      newInvoice: string;
+      newClient: string;
+      newJob: string;
+      calendar: string;
+    };
+    monthlyChart: {
+      title: string;
+      empty: string;
+    };
+    upcomingJobs: {
+      title: string;
+      viewAll: string;
+      empty: string;
+      noClient: string;
+      today: string;
+      tomorrow: string;
     };
     recent: {
       title: string;
@@ -1529,6 +1574,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
     home: {
       welcome: 'Bienvenido 👋',
       newInvoice: 'Nueva factura',
+      customize: {
+        editBtn: 'Personalizar',
+        doneBtn: 'Listo',
+        dragHint: 'Arrastra para reordenar tus widgets',
+        hideLabel: 'Ocultar widget',
+        addTitle: 'Agregar widgets',
+        addEmpty: 'Ya estás mostrando todos los widgets.',
+        saveError: 'No se pudo guardar tu diseño. Intenta de nuevo.',
+      },
+      widgetNames: {
+        quickActions: 'Acciones rápidas',
+        earningsMonth: 'Ganancias del mes',
+        invoicesPending: 'Facturas pendientes',
+        clientsTotal: 'Clientes',
+        invoicesOverdue: 'Facturas vencidas',
+        clockedIn: 'Activos ahora',
+        earningsYear: 'Ganancias del año',
+        jobsActive: 'Trabajos activos',
+        monthlyChart: 'Ingresos por mes',
+        upcomingJobs: 'Próximos trabajos',
+        recentInvoices: 'Facturas recientes',
+      },
       widgets: {
         earningsMonthLabel: 'Ganancias del mes',
         earningsMonthSub: '{{amount}} este año',
@@ -1542,6 +1609,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clockedInSub: 'empleados trabajando',
         earningsYearLabel: 'Ganancias del año',
         earningsYearSub: 'desde ene {{year}}',
+        jobsActiveLabel: 'Trabajos activos',
+        jobsActiveSub: 'programados o en progreso',
+      },
+      quickActions: {
+        newInvoice: 'Nueva factura',
+        newClient: 'Nuevo cliente',
+        newJob: 'Nuevo trabajo',
+        calendar: 'Calendario',
+      },
+      monthlyChart: {
+        title: 'Ingresos por mes',
+        empty: 'Aún no hay pagos este año.',
+      },
+      upcomingJobs: {
+        title: 'Próximos trabajos',
+        viewAll: 'Ver todos',
+        empty: 'No tienes trabajos programados.',
+        noClient: 'Sin cliente',
+        today: 'Hoy',
+        tomorrow: 'Mañana',
       },
       recent: {
         title: 'Facturas recientes',
@@ -2987,6 +3074,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
     home: {
       welcome: 'Welcome 👋',
       newInvoice: 'New invoice',
+      customize: {
+        editBtn: 'Customize',
+        doneBtn: 'Done',
+        dragHint: 'Drag to reorder your widgets',
+        hideLabel: 'Hide widget',
+        addTitle: 'Add widgets',
+        addEmpty: "You're already showing every widget.",
+        saveError: "Couldn't save your layout. Try again.",
+      },
+      widgetNames: {
+        quickActions: 'Quick actions',
+        earningsMonth: 'Earnings this month',
+        invoicesPending: 'Pending invoices',
+        clientsTotal: 'Clients',
+        invoicesOverdue: 'Overdue invoices',
+        clockedIn: 'Active now',
+        earningsYear: 'Earnings this year',
+        jobsActive: 'Active jobs',
+        monthlyChart: 'Revenue by month',
+        upcomingJobs: 'Upcoming jobs',
+        recentInvoices: 'Recent invoices',
+      },
       widgets: {
         earningsMonthLabel: 'Earnings this month',
         earningsMonthSub: '{{amount}} this year',
@@ -3000,6 +3109,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clockedInSub: 'employees working',
         earningsYearLabel: 'Earnings this year',
         earningsYearSub: 'since Jan {{year}}',
+        jobsActiveLabel: 'Active jobs',
+        jobsActiveSub: 'scheduled or in progress',
+      },
+      quickActions: {
+        newInvoice: 'New invoice',
+        newClient: 'New client',
+        newJob: 'New job',
+        calendar: 'Calendar',
+      },
+      monthlyChart: {
+        title: 'Revenue by month',
+        empty: 'No payments yet this year.',
+      },
+      upcomingJobs: {
+        title: 'Upcoming jobs',
+        viewAll: 'View all',
+        empty: 'No scheduled jobs.',
+        noClient: 'No client',
+        today: 'Today',
+        tomorrow: 'Tomorrow',
       },
       recent: {
         title: 'Recent invoices',

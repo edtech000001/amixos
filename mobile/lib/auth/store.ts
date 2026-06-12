@@ -64,6 +64,9 @@ export interface Business {
   // app skips out-of-hours job warnings until set. Shape: see
   // shared/src/lib/operatingHours.ts (OperatingHours).
   operating_hours: Record<string, { enabled: boolean; start: string; end: string }> | null;
+  // Home dashboard widget layout (migration 049). Null = default layout.
+  // Shape: see shared/src/lib/dashboardWidgets.ts (DashboardLayout).
+  dashboard_layout: { order: string[]; hidden: string[] } | null;
 }
 
 // Map view prefs — synced via businesses.map_view_settings (migration 039).
@@ -226,7 +229,7 @@ export const useAuthStore = create<AuthStore>()(
           const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_field_required, invoice_field_order, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours'),
+              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_field_required, invoice_field_order, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout'),
             supabase
               .from('business_members')
               .select('business_id, role')
