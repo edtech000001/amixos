@@ -73,6 +73,7 @@ async function doGoogleSyncRequest(
   action: GoogleSyncAction,
   clientId: string,
   { apiBaseUrl, jwt }: TriggerGoogleSyncOptions,
+  skipContactCascade = false,
 ): Promise<void> {
   const res = await fetch(`${apiBaseUrl}/api/v1/google-sync/contact`, {
     method: 'POST',
@@ -80,7 +81,7 @@ async function doGoogleSyncRequest(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${jwt}`,
     },
-    body: JSON.stringify({ action, clientId }),
+    body: JSON.stringify({ action, clientId, skipContactCascade }),
   });
   if (!res.ok) {
     throw new Error(`Google sync failed (${res.status})`);
@@ -102,13 +103,19 @@ export function triggerGoogleSync(
  * report the error (e.g. via the GoogleSyncBanner). Use for single-op
  * mutations (add/edit/delete one client) where the user should know if
  * the Google mirror didn't go through.
+ *
+ * skipContactCascade: on 'update' the API re-pushes the client's synced
+ * contact people too (they inherit address/company/template from the
+ * parent). Batch runners that already enqueue contacts separately pass
+ * true to avoid pushing each contact twice.
  */
 export function triggerGoogleSyncOrThrow(
   action: GoogleSyncAction,
   clientId: string,
   opts: TriggerGoogleSyncOptions,
+  skipContactCascade = false,
 ): Promise<void> {
-  return doGoogleSyncRequest(action, clientId, opts);
+  return doGoogleSyncRequest(action, clientId, opts, skipContactCascade);
 }
 
 /**

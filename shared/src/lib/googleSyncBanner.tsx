@@ -157,7 +157,10 @@ export function GoogleSyncBannerProvider({
       if (item.kind === 'create') {
         await triggerGoogleSyncOrThrow('create', item.clientId, { apiBaseUrl, jwt });
       } else if (item.kind === 'update') {
-        await triggerGoogleSyncOrThrow('update', item.clientId, { apiBaseUrl, jwt });
+        // Batch updates (template reapply) enqueue client_contacts as their
+        // own items — skip the server-side contact cascade so each contact
+        // is pushed once, at this queue's throttled rate.
+        await triggerGoogleSyncOrThrow('update', item.clientId, { apiBaseUrl, jwt }, true);
       } else if (item.kind === 'create-contact') {
         await triggerClientContactGoogleSyncOrThrow('create', item.contactId, { apiBaseUrl, jwt });
       } else if (item.kind === 'update-contact') {

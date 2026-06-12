@@ -513,6 +513,14 @@ function buildClientContactPayload(
   if (contact.phone) {
     payload.phoneNumbers = [{ type: 'mobile', value: contact.phone }];
   }
+  // Contact people don't have their own address — carry the parent client's
+  // (business) address so they're reachable from Google/iPhone Maps too.
+  const parentAddress = [parent.address, parent.address_line2, parent.city, parent.state, parent.zip_code]
+    .filter(Boolean)
+    .join(', ');
+  if (parentAddress) {
+    payload.addresses = [{ type: 'work', formattedValue: parentAddress }];
+  }
   // Same myContacts-membership rule as buildContactPayload — without it
   // these people-of-clients don't appear in the main Google Contacts view.
   const memberships: Array<{ contactGroupMembership: { contactGroupResourceName: string } }> = [

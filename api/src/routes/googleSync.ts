@@ -719,12 +719,17 @@ googleSyncRouter.patch('/contact-group', async (req: AuthRequest, res) => {
  * triggerGoogleSync helper on every client write. Sync is opportunistic —
  * if the user isn't connected, we return success-with-skipped so the
  * caller doesn't have to know about Google state.
+ *
+ * On update, the client's synced contact people are re-pushed too — their
+ * Google contacts inherit the parent's address, company and notes template,
+ * so a parent edit must cascade. Batch callers (template reapply) enqueue
+ * contacts separately and pass skipContactCascade to avoid double pushes.
  */
 googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
-  const { action, clientId } = req.body ?? {};
+  const { action, clientId, skipContactCascade } = req.body ?? {};
   if (!clientId || typeof clientId !== 'string') {
     return res.status(400).json({ success: false, message: 'clientId required' });
   }
@@ -759,7 +764,24 @@ googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
   }
   if (action === 'update') {
     const result = await updateGoogleContact(clientRow, creds);
-    return res.json({ success: true, data: result });
+    let cascadedContacts = 0;
+    if (skipContactCascade !== true) {
+      const contacts = await fetchAll<ClientContactRow>((from, to) =>
+        supabase
+          .from('client_contacts')
+          .select('id, business_id, client_id, name, role, phone, email, notes, google_resource_name')
+          .eq('client_id', clientRow.id)
+          .not('google_resource_name', 'is', null)
+          .range(from, to),
+      ).catch(() => [] as ClientContactRow[]);
+      // Sequential on purpose — keeps the People API write rate gentle.
+      // Best-effort: a failed contact push never fails the client update.
+      for (const contact of contacts) {
+        const r = await updateClientContactGoogleContact(contact, clientRow, creds);
+        if (!('error' in r)) cascadedContacts++;
+      }
+    }
+    return res.json({ success: true, data: { ...result, cascadedContacts } });
   }
   // action === 'delete'
   const result = await deleteGoogleContact(clientRow, creds);
