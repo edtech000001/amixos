@@ -371,30 +371,53 @@ export function DashboardHomeScreen({
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
       // Hero card — solid brand background so the headline number pops.
+      // lg switches to a horizontal banner layout (big icon left) so the
+      // size jump is obvious even before there's any data.
+      if (size === 'lg') {
+        return (
+          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative">
+            <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
+            <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
+            <View className="flex-row items-center gap-4">
+              <View className="w-14 h-14 rounded-2xl bg-white/15 items-center justify-center">
+                <DollarSign size={26} color="#FFFFFF" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-medium text-white/80">
+                  {t.home.widgets.earningsMonthLabel}
+                </Text>
+                <Text className="text-3xl font-bold text-white mt-0.5">
+                  {formatCurrency(stats?.earningsMonth ?? 0)}
+                </Text>
+                <Text className="text-xs text-white/70 mt-0.5">
+                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
+                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
+                </Text>
+              </View>
+              <MiniBars monthly={monthly} light />
+            </View>
+          </View>
+        );
+      }
       return (
         <View className="bg-primary rounded-2xl p-5 overflow-hidden relative">
           <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
           <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 mr-2">
-              <View className="w-9 h-9 rounded-xl bg-white/15 items-center justify-center mb-3">
-                <DollarSign size={18} color="#FFFFFF" />
-              </View>
-              <Text className={`font-bold text-white ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>
-                {formatCurrency(stats?.earningsMonth ?? 0)}
-              </Text>
-              <Text className="text-xs font-medium text-white/90 mt-0.5">
-                {t.home.widgets.earningsMonthLabel}
-              </Text>
-              <Text className="text-xs text-white/70 mt-0.5">
-                {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
-              </Text>
-              {size !== 'sm' && vsLastMonthLine ? (
-                <Text className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</Text>
-              ) : null}
-            </View>
-            {size === 'lg' ? <MiniBars monthly={monthly} light /> : null}
+          <View className="w-9 h-9 rounded-xl bg-white/15 items-center justify-center mb-3">
+            <DollarSign size={18} color="#FFFFFF" />
           </View>
+          <Text className="text-2xl font-bold text-white">
+            {formatCurrency(stats?.earningsMonth ?? 0)}
+          </Text>
+          <Text className="text-xs font-medium text-white/90 mt-0.5">
+            {t.home.widgets.earningsMonthLabel}
+          </Text>
+          <Text className="text-xs text-white/70 mt-0.5">
+            {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
+          </Text>
+          {size === 'md' && vsLastMonthLine ? (
+            <Text className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</Text>
+          ) : null}
         </View>
       );
     }
@@ -402,24 +425,39 @@ export function DashboardHomeScreen({
     const stat = statWidgets[id];
     if (stat) {
       const { label, value, icon: Icon, color, bg, sub, extra, bars } = stat;
+      // lg = horizontal banner (big icon left, value right) — clearly
+      // different from the vertical sm/md tiles even with zero data.
+      if (size === 'lg') {
+        return (
+          <View className="bg-white rounded-2xl border border-gray-100 p-5">
+            <View className="flex-row items-center gap-4">
+              <View className={`w-14 h-14 rounded-2xl ${bg} items-center justify-center`}>
+                <Icon size={26} className={color} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-medium text-gray-500">{label}</Text>
+                <Text className="text-3xl font-bold text-gray-900 mt-0.5">{String(value)}</Text>
+                <Text className="text-xs text-gray-400 mt-0.5">
+                  {sub}
+                  {extra ? ` · ${extra}` : ''}
+                </Text>
+              </View>
+              {bars ? <MiniBars monthly={monthly} /> : null}
+            </View>
+          </View>
+        );
+      }
       return (
         <View className="bg-white rounded-2xl border border-gray-100 p-5">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 mr-2">
-              <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
-                <Icon size={18} className={color} />
-              </View>
-              <Text className={`font-bold text-gray-900 ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>
-                {String(value)}
-              </Text>
-              <Text className="text-xs font-medium text-gray-700 mt-0.5">{label}</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">{sub}</Text>
-              {size !== 'sm' && extra ? (
-                <Text className="text-xs font-semibold text-gray-600 mt-1">{extra}</Text>
-              ) : null}
-            </View>
-            {size === 'lg' && bars ? <MiniBars monthly={monthly} /> : null}
+          <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
+            <Icon size={18} className={color} />
           </View>
+          <Text className="text-2xl font-bold text-gray-900">{String(value)}</Text>
+          <Text className="text-xs font-medium text-gray-700 mt-0.5">{label}</Text>
+          <Text className="text-xs text-gray-400 mt-0.5">{sub}</Text>
+          {size === 'md' && extra ? (
+            <Text className="text-xs font-semibold text-gray-600 mt-1">{extra}</Text>
+          ) : null}
         </View>
       );
     }

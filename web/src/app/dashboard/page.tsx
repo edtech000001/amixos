@@ -434,25 +434,46 @@ export default function DashboardPage() {
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
       // Hero card — gradient brand background so the headline number pops.
+      // lg switches to a horizontal banner layout (big icon left) so the
+      // size jump is obvious even before there's any data.
+      if (size === 'lg') {
+        return (
+          <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-sm p-5 h-full text-white relative overflow-hidden transition-shadow hover:shadow-md">
+            <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+            <div className="absolute -right-12 top-10 w-28 h-28 rounded-full bg-white/5" />
+            <div className="flex items-center gap-4 relative">
+              <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                <DollarSign size={26} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white/80">{t.home.widgets.earningsMonthLabel}</p>
+                <p className="text-3xl font-bold mt-0.5">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
+                <p className="text-xs text-white/70 mt-0.5">
+                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
+                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
+                </p>
+              </div>
+              <MiniBars monthly={monthly} light />
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-sm p-5 h-full text-white relative overflow-hidden transition-shadow hover:shadow-md">
           <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
           <div className="absolute -right-12 top-10 w-28 h-28 rounded-full bg-white/5" />
-          <div className="flex items-center justify-between gap-4 relative">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-                  <DollarSign size={18} className="text-white" />
-                </div>
-                <span className="text-sm text-white/80">{t.home.widgets.earningsMonthLabel}</span>
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+                <DollarSign size={18} className="text-white" />
               </div>
-              <p className={`font-bold mt-3 ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>{formatCurrency(stats?.earningsMonth ?? 0)}</p>
-              <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
-              {size !== 'sm' && vsLastMonthLine ? (
-                <p className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</p>
-              ) : null}
+              <span className="text-sm text-white/80">{t.home.widgets.earningsMonthLabel}</span>
             </div>
-            {size === 'lg' ? <MiniBars monthly={monthly} light /> : null}
+            <p className="text-2xl font-bold mt-3">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
+            <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
+            {size === 'md' && vsLastMonthLine ? (
+              <p className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</p>
+            ) : null}
           </div>
         </div>
       );
@@ -461,24 +482,41 @@ export default function DashboardPage() {
     const stat = statWidgets[id];
     if (stat) {
       const { label, value, icon: Icon, color, bg, sub, extra, bars } = stat;
+      // lg = horizontal banner (big icon left, value right) — clearly
+      // different from the vertical sm/md tiles even with zero data.
+      if (size === 'lg') {
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full transition-shadow hover:shadow-md">
+            <div className="flex items-center gap-4">
+              <div className={`w-14 h-14 rounded-2xl ${bg} flex items-center justify-center shrink-0`}>
+                <Icon size={26} className={color} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-500">{label}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-0.5">{value}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {sub}
+                  {extra ? ` · ${extra}` : ''}
+                </p>
+              </div>
+              {bars ? <MiniBars monthly={monthly} /> : null}
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 h-full transition-shadow hover:shadow-md">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
-                  <Icon size={18} className={color} />
-                </div>
-                <span className="text-sm text-gray-500">{label}</span>
-              </div>
-              <p className={`font-bold text-gray-900 mt-3 ${size === 'lg' ? 'text-3xl' : 'text-2xl'}`}>{value}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-              {size !== 'sm' && extra ? (
-                <p className="text-xs font-semibold text-gray-600 mt-1">{extra}</p>
-              ) : null}
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
+              <Icon size={18} className={color} />
             </div>
-            {size === 'lg' && bars ? <MiniBars monthly={monthly} /> : null}
+            <span className="text-sm text-gray-500">{label}</span>
           </div>
+          <p className="text-2xl font-bold text-gray-900 mt-3">{value}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+          {size === 'md' && extra ? (
+            <p className="text-xs font-semibold text-gray-600 mt-1">{extra}</p>
+          ) : null}
         </div>
       );
     }
