@@ -5,7 +5,7 @@
 // API as JobsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   Plus,
   Search,
@@ -21,10 +21,26 @@ import {
   Send,
   ChevronDown,
   Building2,
+  ArrowUpDown,
+  Check,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
-import { searchMatches } from '../../lib/usStates';
+import { searchMatches, usStateName } from '../../lib/usStates';
+import {
+  matchJobAlert,
+  JOB_ALERT_STYLE,
+  DEFAULT_JOB_ALERT_THRESHOLDS,
+  type JobAlertThresholds,
+} from '../../lib/jobAlerts';
+import {
+  sortJobs,
+  groupJobs,
+  JOB_SORT_KEYS,
+  JOB_GROUP_KEYS,
+  type JobSortKey,
+  type JobGroupKey,
+} from '../../lib/jobSort';
 
 export interface JobListItem {
   id: string;
@@ -44,6 +60,8 @@ export interface JobListItem {
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
+  /** Assignment marked is_lead (migration 033) — drives sort/group by lead. */
+  leadName?: string | null;
   delegatedToBusinessName?: string | null;
   delegatedFromBusinessName?: string | null;
 }
@@ -62,6 +80,9 @@ export interface JobsListScreenProps {
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
+  // Upcoming-job alert tiers (Ajustes → Trabajos, migration 046). Keep in
+  // sync with JobsListScreen.tsx — the native variant declares the same prop.
+  alertThresholds?: JobAlertThresholds;
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -113,14 +134,18 @@ export function JobsListScreen({
   onViewInvoice,
   onNewJob,
   onNewProposal,
+  alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
 }: JobsListScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
   const tw = full.dashboard.workspaces;
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<JobSortKey>('recent');
+  const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -153,6 +178,16 @@ export function JobsListScreen({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, search, tab]);
+
+  const sections = useMemo(
+    () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+      lead: t.sort.noLead,
+      company: t.sort.noCompany,
+      state: t.sort.noState,
+    }, (v) => usStateName(v, locale)),
+    [filtered, sortBy, groupBy, t, locale],
+  );
+  const sortActive = sortBy !== 'recent' || groupBy !== 'none';
 
   const counts = useMemo(
     () =>
@@ -348,17 +383,78 @@ export function JobsListScreen({
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-3">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t.searchPlaceholder}
-          autoCapitalize="none"
-          autoCorrect="off"
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+      {/* Search + sort */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setSortMenuOpen(o => !o)}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              sortActive
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <ArrowUpDown size={15} /> {t.sort.button}
+          </button>
+          {sortMenuOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setSortMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  {t.sort.sortByTitle}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {JOB_SORT_KEYS.map(k => {
+                    const selected = sortBy === k;
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => setSortBy(k)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                          selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {selected ? <Check size={12} /> : null}
+                        {t.sort.by[k]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  {t.sort.groupByTitle}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {JOB_GROUP_KEYS.map(k => {
+                    const selected = groupBy === k;
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => setGroupBy(k)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                          selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {selected ? <Check size={12} /> : null}
+                        {t.sort.group[k]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -399,7 +495,17 @@ export function JobsListScreen({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {filtered.map((job) => {
+          {sections.map(section => (
+          <Fragment key={section.title ?? '__all__'}>
+          {section.title ? (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{section.title}</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-gray-200 text-[10px] font-bold text-gray-600">
+                {section.jobs.length}
+              </span>
+            </div>
+          ) : null}
+          {section.jobs.map((job) => {
             const statusKey = job.status as keyof typeof t.statuses;
             const statusLabel = t.statuses[statusKey] ?? job.status;
             const pill = STATUS_PILL[job.status] ?? 'bg-blue-100 text-blue-700';
@@ -409,9 +515,29 @@ export function JobsListScreen({
             const priorityColor = PRIORITY_COLORS[job.priority] ?? 'text-blue-500';
             const expired = isExpired(job);
             const isProposal = PROPOSAL_STATUSES.includes(job.status);
+            // Upcoming-job alert tier. Skipped for proposal-stage cards
+            // (they don't have a real scheduled date yet) so the indicator
+            // only fires on jobs the owner actually needs to prep for.
+            const alertMatch = !isProposal
+              ? matchJobAlert(alertThresholds, job.scheduledDate)
+              : null;
+            const alertStyle = alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null;
+            // chip copy: "Hoy" / "Mañana" / "En N días".
+            const alertChipLabel = alertMatch
+              ? alertMatch.daysUntil === 0
+                ? t.alertChip.today
+                : alertMatch.daysUntil === 1
+                  ? t.alertChip.tomorrow
+                  : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
+              : null;
 
             return (
-              <div key={job.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div
+                key={job.id}
+                className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${
+                  alertStyle ? `border-l-4 ${alertStyle.borderClass}` : ''
+                }`}
+              >
                 <button onClick={() => onJobPress(job.id)} className="w-full flex items-start gap-4 p-5 hover:bg-gray-50 text-left">
                   <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
                   <div className="flex-1 min-w-0">
@@ -438,7 +564,12 @@ export function JobsListScreen({
                     </div>
 
                     {/* Meta row */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                      {alertStyle && alertChipLabel ? (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${alertStyle.bgClass} ${alertStyle.textClass}`}>
+                          {alertChipLabel}
+                        </span>
+                      ) : null}
                       {isProposal && job.issueDate ? (
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Calendar size={12} />
@@ -482,6 +613,8 @@ export function JobsListScreen({
               </div>
             );
           })}
+          </Fragment>
+          ))}
         </div>
       )}
     </div>

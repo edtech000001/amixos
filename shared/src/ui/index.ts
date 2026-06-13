@@ -9,3 +9,4 @@ export { Select } from './Select';
 export type { SelectOption } from './Select';
 export { Toggle } from './Toggle';
 export { DatePicker } from './DatePicker';
+export { Fab } from './Fab';

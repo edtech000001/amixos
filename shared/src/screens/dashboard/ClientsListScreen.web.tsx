@@ -5,10 +5,11 @@
 // API as ClientsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { memo, useMemo, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, type ReactNode } from 'react';
 import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
+import { groupClientsByLetter } from '../../lib/clientSections';
 
 export interface ClientListItem {
   id: string;
@@ -68,6 +69,13 @@ export function ClientsListScreen({
     // handled inside (see clientSearch / usStates).
     () => clients.filter((c) => clientMatchesSearch(c, search)),
     [clients, search],
+  );
+
+  const searching = search.trim().length > 0;
+  // Alphabetical sections (A–Z + trailing '#'); flat while searching.
+  const sections = useMemo(
+    () => groupClientsByLetter(filtered, searching),
+    [filtered, searching],
   );
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
@@ -153,17 +161,27 @@ export function ClientsListScreen({
             </span>
             <span className="text-xs text-gray-500">{t.selectAll}</span>
           </button>
-          {filtered.map((c) => (
-            <ClientRow
-              key={c.id}
-              client={c}
-              search={search}
-              isChecked={selectedIds.has(c.id)}
-              onToggleSelect={onToggleSelect}
-              onClientPress={onClientPress}
-              onEditPress={onEditPress}
-              onDeletePress={onDeletePress}
-            />
+          {sections.map((s) => (
+            <Fragment key={s.title || 'results'}>
+              {s.title ? (
+                // top-14 clears the fixed mobile top bar; desktop sticks at 0.
+                <div className="sticky top-14 md:top-0 z-10 bg-gray-50 px-5 py-1 border-b border-gray-200 text-xs font-bold text-gray-500">
+                  {s.title}
+                </div>
+              ) : null}
+              {s.data.map((c) => (
+                <ClientRow
+                  key={c.id}
+                  client={c}
+                  search={search}
+                  isChecked={selectedIds.has(c.id)}
+                  onToggleSelect={onToggleSelect}
+                  onClientPress={onClientPress}
+                  onEditPress={onEditPress}
+                  onDeletePress={onDeletePress}
+                />
+              ))}
+            </Fragment>
           ))}
         </div>
       )}
@@ -214,7 +232,13 @@ const ClientRow = memo(function ClientRow({
           </span>
           <span className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
             {c.phoneDisplay ? <span className="flex items-center gap-1 text-xs text-gray-400"><Phone size={11} /> {c.phoneDisplay}</span> : null}
-            {c.emailDisplay ? <span className="flex items-center gap-1 text-xs text-gray-400"><Mail size={11} /> {c.emailDisplay}</span> : null}
+            {c.emailDisplay ? (
+              // min-w-0 + truncate: a long email truncates in place instead of
+              // wrapping the meta line and making rows uneven.
+              <span className="flex items-center gap-1 text-xs text-gray-400 min-w-0">
+                <Mail size={11} className="shrink-0" /> <span className="truncate">{c.emailDisplay}</span>
+              </span>
+            ) : null}
             {c.city ? <span className="flex items-center gap-1 text-xs text-gray-400"><MapPin size={11} /> {c.city}{c.state ? `, ${c.state}` : ''}</span> : null}
           </span>
           {matchedContacts.length > 0 ? (

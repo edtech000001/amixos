@@ -35,7 +35,11 @@ interface RawJob {
   published_to_crew: boolean;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
-  job_assignments: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }[];
+  job_assignments: { worker_name: string | null; is_lead: boolean | null; employees: { first_name: string; last_name: string } | null }[];
+}
+
+function assignmentName(a: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }): string | null {
+  return a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name;
 }
 
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
@@ -65,7 +69,7 @@ export default function TrabajosPage() {
         .select(`
           *,
           clients(first_name, last_name, company),
-          job_assignments(worker_name, employees(first_name, last_name))
+          job_assignments(worker_name, is_lead, employees(first_name, last_name))
         `)
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
@@ -104,8 +108,11 @@ export default function TrabajosPage() {
     clientName: j.clients ? `${j.clients.first_name} ${j.clients.last_name}` : null,
     clientCompany: j.clients?.company ?? null,
     workerNames: j.job_assignments
-      .map(a => a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name)
+      .map(assignmentName)
       .filter((s): s is string => !!s),
+    leadName: assignmentName(
+      j.job_assignments.find(a => a.is_lead) ?? { worker_name: null, employees: null },
+    ),
     delegatedToBusinessName: j.delegated_to_business_id
       ? businesses.find(b => b.id === j.delegated_to_business_id)?.name ?? null
       : null,

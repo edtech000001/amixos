@@ -8,6 +8,8 @@
 // codes table (PR, VI, AS, GU, MP, FM, MH, PW, UM). Anything missing here
 // just falls through to the regular substring search — no errors.
 
+import type { Locale } from '../i18n/locales';
+
 export const US_STATE_NAME_TO_ABBR: Record<string, string> = {
   'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
   'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
@@ -37,10 +39,56 @@ export const US_STATE_ABBR_TO_NAME: Record<string, string> = (() => {
   const out: Record<string, string> = {};
   for (const [name, abbr] of Object.entries(US_STATE_NAME_TO_ABBR)) {
     // Skip the alias entries — keep only the canonical (first) name per abbr.
-    if (!out[abbr]) out[abbr] = name.replace(/\b\w/g, (c) => c.toUpperCase());
+    // Title-case, but keep connector words lowercase ("District of Columbia").
+    if (!out[abbr]) {
+      out[abbr] = name
+        .split(' ')
+        .map((w) => (w === 'of' ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' ');
+    }
   }
   return out;
 })();
+
+// Spanish state names that differ from the English form. Everything not
+// listed here (California, Texas, Florida, …) is spelled the same in both.
+const US_STATE_NAME_ES_OVERRIDES: Record<string, string> = {
+  HI: 'Hawái',
+  LA: 'Luisiana',
+  MS: 'Misisipi',
+  MO: 'Misuri',
+  NH: 'Nuevo Hampshire',
+  NJ: 'Nueva Jersey',
+  NM: 'Nuevo México',
+  NY: 'Nueva York',
+  NC: 'Carolina del Norte',
+  ND: 'Dakota del Norte',
+  OR: 'Oregón',
+  PA: 'Pensilvania',
+  SC: 'Carolina del Sur',
+  SD: 'Dakota del Sur',
+  WV: 'Virginia Occidental',
+  DC: 'Distrito de Columbia',
+  VI: 'Islas Vírgenes',
+  MP: 'Islas Marianas del Norte',
+  MH: 'Islas Marshall',
+};
+
+/**
+ * Full display name for a state value as stored on a row ("CO" → "Colorado",
+ * or "Nueva York" when locale is 'es'). Values that aren't a known 2-letter
+ * abbreviation (already-spelled-out names, foreign states) pass through
+ * unchanged, so this is safe to call on free-text fields.
+ */
+export function usStateName(value: string, locale: Locale): string {
+  const trimmed = value.trim();
+  if (trimmed.length !== 2) return trimmed;
+  const abbr = trimmed.toUpperCase();
+  if (locale === 'es' && US_STATE_NAME_ES_OVERRIDES[abbr]) {
+    return US_STATE_NAME_ES_OVERRIDES[abbr];
+  }
+  return US_STATE_ABBR_TO_NAME[abbr] ?? trimmed;
+}
 
 /**
  * Build the list of extra search terms implied by a query. If the query

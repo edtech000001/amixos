@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
 import {
-  Plus,
   Search,
   ClipboardList,
   Calendar,
@@ -13,19 +12,29 @@ import {
   Users,
   ArrowRight,
   Send,
-  ChevronDown,
   Building2,
+  ArrowUpDown,
+  Check,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
-import { searchMatches } from '../../lib/usStates';
+import { searchMatches, usStateName } from '../../lib/usStates';
 import {
   matchJobAlert,
   JOB_ALERT_STYLE,
   DEFAULT_JOB_ALERT_THRESHOLDS,
   type JobAlertThresholds,
 } from '../../lib/jobAlerts';
+import {
+  sortJobs,
+  groupJobs,
+  JOB_SORT_KEYS,
+  JOB_GROUP_KEYS,
+  type JobSortKey,
+  type JobGroupKey,
+} from '../../lib/jobSort';
 
 export interface JobListItem {
   id: string;
@@ -45,6 +54,8 @@ export interface JobListItem {
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
+  /** Assignment marked is_lead (migration 033) — drives sort/group by lead. */
+  leadName?: string | null;
   delegatedToBusinessName?: string | null;
   delegatedFromBusinessName?: string | null;
   // Crew visibility (migration 044). false = scheduler-only; shown as a
@@ -134,12 +145,15 @@ export function JobsListScreen({
   onNewProposal,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
 }: JobsListScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<JobSortKey>('recent');
+  const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -172,6 +186,16 @@ export function JobsListScreen({
       return matchSearch && matchesTab(j);
     });
   }, [jobs, search, tab]);
+
+  const sections = useMemo(
+    () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+      lead: t.sort.noLead,
+      company: t.sort.noCompany,
+      state: t.sort.noState,
+    }, (v) => usStateName(v, locale)),
+    [filtered, sortBy, groupBy, t, locale],
+  );
+  const sortActive = sortBy !== 'recent' || groupBy !== 'none';
 
   const counts = useMemo(() =>
     TAB_KEYS.reduce((acc, k) => {
@@ -307,7 +331,8 @@ export function JobsListScreen({
   };
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
+    <View className="flex-1 bg-surface">
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-5">
         <View className="flex-1">
@@ -331,26 +356,31 @@ export function JobsListScreen({
             ) : null}
           </Text>
         </View>
-        <Pressable
-          onPress={() => setNewMenuOpen(true)}
-          className="flex-row items-center gap-1 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-        >
-          <Plus size={15} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">{t.newDropdown.trigger}</Text>
-          <ChevronDown size={14} color="#FFFFFF" />
-        </Pressable>
       </View>
 
       {/* Search + Tabs */}
       <View className="flex-col gap-3 mb-5">
-        <Input
-          placeholder={t.searchPlaceholder}
-          value={search}
-          onChangeText={setSearch}
-          leftIcon={<Search size={16} color="#9CA3AF" />}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View className="flex-row items-center gap-2">
+          <View className="flex-1">
+            <Input
+              placeholder={t.searchPlaceholder}
+              value={search}
+              onChangeText={setSearch}
+              leftIcon={<Search size={16} color="#9CA3AF" />}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <Pressable
+            onPress={() => setSortMenuOpen(true)}
+            accessibilityLabel={t.sort.button}
+            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+              sortActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+            }`}
+          >
+            <ArrowUpDown size={16} color={sortActive ? '#4F46E5' : '#6B7280'} />
+          </Pressable>
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -417,7 +447,19 @@ export function JobsListScreen({
         </View>
       ) : (
         <View className="flex-col gap-3">
-          {filtered.map(job => {
+          {sections.map(section => (
+          <Fragment key={section.title ?? '__all__'}>
+          {section.title ? (
+            <View className="flex-row items-center gap-2 mt-2">
+              <Text className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                {section.title}
+              </Text>
+              <View className="px-1.5 py-0.5 rounded-full bg-gray-200">
+                <Text className="text-[10px] font-bold text-gray-600">{section.jobs.length}</Text>
+              </View>
+            </View>
+          ) : null}
+          {section.jobs.map(job => {
             const statusKey = job.status as keyof typeof t.statuses;
             const statusLabel = t.statuses[statusKey] ?? job.status;
             const pillBg = STATUS_PILL_BG[job.status] ?? 'bg-blue-100';
@@ -572,10 +614,87 @@ export function JobsListScreen({
               </View>
             );
           })}
+          </Fragment>
+          ))}
         </View>
       )}
 
-      {/* New job/proposal action sheet */}
+      {/* Sort & group bottom sheet — selectable chips instead of long
+          radio rows. animationType="fade" (not "slide") on purpose: slide
+          animates the whole overlay INCLUDING the dim backdrop up from the
+          bottom, which reads as a gray bar rising. Fade matches the
+          delegate target picker. */}
+      <RNModal
+        visible={sortMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortMenuOpen(false)}
+      >
+        <Pressable
+          onPress={() => setSortMenuOpen(false)}
+          className="flex-1 bg-black/40 justify-end"
+        >
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-6 pt-3 pb-10">
+            <View className="self-center w-10 h-1 rounded-full bg-gray-200 mb-4" />
+            <View className="flex-row items-center justify-between mb-5">
+              <Text className="text-base font-bold text-gray-900">{t.sort.title}</Text>
+              <Pressable onPress={() => setSortMenuOpen(false)} hitSlop={8}>
+                <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
+              </Pressable>
+            </View>
+
+            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+              {t.sort.sortByTitle}
+            </Text>
+            <View className="flex-row flex-wrap gap-2 mb-6">
+              {JOB_SORT_KEYS.map(k => {
+                const selected = sortBy === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => setSortBy(k)}
+                    className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
+                      selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    {selected ? <Check size={13} color="#FFFFFF" /> : null}
+                    <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                      {t.sort.by[k]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+              {t.sort.groupByTitle}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {JOB_GROUP_KEYS.map(k => {
+                const selected = groupBy === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => setGroupBy(k)}
+                    className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
+                      selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    {selected ? <Check size={13} color="#FFFFFF" /> : null}
+                    <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                      {t.sort.group[k]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </RNModal>
+
+      {/* New job/proposal action sheet — bottom sheet, one-handed reach.
+          animationType="fade" (not "slide") — slide animates the dim
+          backdrop up with the sheet, which reads as a gray bar rising. */}
       <RNModal
         visible={newMenuOpen}
         transparent
@@ -584,34 +703,52 @@ export function JobsListScreen({
       >
         <Pressable
           onPress={() => setNewMenuOpen(false)}
-          className="flex-1 bg-black/40 items-center justify-center px-6"
+          className="flex-1 justify-end bg-black/40"
         >
-          <View className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+          {/* No-op press swallows taps on the sheet so they don't close it. */}
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
+            <View className="items-center mb-3">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="bg-gray-50 rounded-2xl overflow-hidden">
+              <Pressable
+                onPress={() => { setNewMenuOpen(false); onNewJob(); }}
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100 border-b border-gray-100"
+              >
+                <ClipboardList size={18} color="#6B7280" />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-900">{t.newDropdown.jobOption}</Text>
+                  <Text className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</Text>
+                </View>
+              </Pressable>
+              <Pressable
+                onPress={() => { setNewMenuOpen(false); onNewProposal(); }}
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100"
+              >
+                <FileText size={18} color="#6B7280" />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-900">
+                    {t.newDropdown.proposalOption}
+                  </Text>
+                  <Text className="text-xs text-gray-400">{t.newDropdown.proposalOptionSub}</Text>
+                </View>
+              </Pressable>
+            </View>
             <Pressable
-              onPress={() => { setNewMenuOpen(false); onNewJob(); }}
-              className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-50 border-b border-gray-50"
+              onPress={() => setNewMenuOpen(false)}
+              className="mt-3 items-center py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
             >
-              <ClipboardList size={18} color="#6B7280" />
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-gray-900">{t.newDropdown.jobOption}</Text>
-                <Text className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</Text>
-              </View>
+              <Text className="text-sm font-semibold text-gray-700">
+                {full.common.buttons.cancel}
+              </Text>
             </Pressable>
-            <Pressable
-              onPress={() => { setNewMenuOpen(false); onNewProposal(); }}
-              className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-50"
-            >
-              <FileText size={18} color="#6B7280" />
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-gray-900">
-                  {t.newDropdown.proposalOption}
-                </Text>
-                <Text className="text-xs text-gray-400">{t.newDropdown.proposalOptionSub}</Text>
-              </View>
-            </Pressable>
-          </View>
+          </Pressable>
         </Pressable>
       </RNModal>
     </ScrollView>
+
+    {/* New job/proposal — floating action, bottom-right thumb reach */}
+    <Fab onPress={() => setNewMenuOpen(true)} />
+    </View>
   );
 }

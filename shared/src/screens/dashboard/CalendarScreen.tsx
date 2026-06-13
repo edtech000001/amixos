@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { Fab } from '../../ui/Fab';
 
 export interface CalendarEvent {
   id: string;
@@ -94,17 +95,11 @@ export function CalendarScreen({
     events.filter(e => sameDay(new Date(e.startTime), d));
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
+    <View className="flex-1 bg-surface">
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-6">
         <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-        <Pressable
-          onPress={onNewEvent}
-          className="flex-row items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-        >
-          <Plus size={15} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">{t.newEvent}</Text>
-        </Pressable>
       </View>
 
       {/* Month nav */}
@@ -203,5 +198,9 @@ export function CalendarScreen({
 
       {modalsSlot}
     </ScrollView>
+
+    {/* New event — floating action, bottom-right thumb reach */}
+    <Fab onPress={onNewEvent} />
+    </View>
   );
 }

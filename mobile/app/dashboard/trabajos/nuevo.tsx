@@ -33,6 +33,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import {
   evaluateOperatingHours,
@@ -84,7 +85,7 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { edit, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; modo?: string; client?: string }>();
+  const { edit, duplicate, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string }>();
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const { t: full } = useLang();
@@ -94,16 +95,20 @@ export default function NuevoTrabajoRoute() {
   const tPriorities = full.dashboard.jobs.priorities;
 
   const editId = edit ?? null;
-  const [loadingEdit, setLoadingEdit] = useState(!!editId);
-  // For new mode the URL drives this; for edit mode we overwrite once the
-  // job loads (estimate_number === proposal).
+  // Duplicate mode: prefill the whole form from an existing job but save as
+  // a brand-new record (editId stays null so the insert path runs).
+  const duplicateId = duplicate ?? null;
+  const sourceId = editId ?? duplicateId;
+  const [loadingEdit, setLoadingEdit] = useState(!!sourceId);
+  // For new mode the URL drives this; for edit/duplicate mode we overwrite
+  // once the job loads (estimate_number === proposal).
   const [isProposal, setIsProposal] = useState(modo === 'propuesta');
 
   // expo-router params can hydrate after first render — keep isProposal in
   // sync with ?modo= so the heading + form layout reflect the URL.
   useEffect(() => {
-    if (!editId) setIsProposal(modo === 'propuesta');
-  }, [editId, modo]);
+    if (!sourceId) setIsProposal(modo === 'propuesta');
+  }, [sourceId, modo]);
 
   // Form — shared
   const [title, setTitle] = useState('');
@@ -159,27 +164,31 @@ export default function NuevoTrabajoRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const [{ data: cl }, { data: emp }] = await Promise.all([
-        supabase
-          .from('clients')
-          .select('id, first_name, last_name, company, city, state')
-          .eq('business_id', business.id)
-          .order('first_name'),
-        supabase
-          .from('employees')
-          .select('id, first_name, last_name, role')
-          .eq('business_id', business.id)
-          .eq('active', true)
-          .order('first_name'),
+      const [cl, emp] = await Promise.all([
+        fetchAll<Client>((from, to) =>
+          supabase
+            .from('clients')
+            .select('id, first_name, last_name, company, city, state')
+            .eq('business_id', business.id)
+            .order('first_name')
+            .range(from, to)),
+        fetchAll<Employee>((from, to) =>
+          supabase
+            .from('employees')
+            .select('id, first_name, last_name, role')
+            .eq('business_id', business.id)
+            .eq('active', true)
+            .order('first_name')
+            .range(from, to)),
       ]);
       if (cancelled) return;
-      setClients((cl ?? []) as Client[]);
-      setEmployees((emp ?? []) as Employee[]);
+      setClients(cl);
+      setEmployees(emp);
 
-      if (editId) {
+      if (sourceId) {
         const [{ data: job }, { data: assigns }] = await Promise.all([
-          supabase.from('jobs').select('*').eq('id', editId).single(),
-          supabase.from('job_assignments').select('*').eq('job_id', editId),
+          supabase.from('jobs').select('*').eq('id', sourceId).single(),
+          supabase.from('job_assignments').select('*').eq('job_id', sourceId),
         ]);
         if (cancelled) return;
         if (job) {
@@ -210,8 +219,12 @@ export default function NuevoTrabajoRoute() {
           }
           if (proposal) {
             setClientNotes(job.notes ?? '');
-            setIssueDate(job.issue_date ?? todayISO());
-            setExpiryDate(job.expiry_date ?? '');
+            // A duplicated proposal is a new proposal: keep today's issue
+            // date + default expiry instead of copying the source's.
+            if (editId) {
+              setIssueDate(job.issue_date ?? todayISO());
+              setExpiryDate(job.expiry_date ?? '');
+            }
           }
         }
         if (assigns) {
@@ -231,7 +244,7 @@ export default function NuevoTrabajoRoute() {
     return () => {
       cancelled = true;
     };
-  }, [business?.id, editId]);
+  }, [business?.id, sourceId]);
 
   // Parse pasted coordinates ("lat, lng") and store as numeric lat/lng.
   const onCoordsChange = (text: string) => {
@@ -519,8 +532,8 @@ export default function NuevoTrabajoRoute() {
   // from a hidden tab screen often lands on the very first tab (home) rather
   // than the trabajos list. Navigate explicitly to the right destination.
   const goBack = () => {
-    if (editId) {
-      router.replace(`/dashboard/trabajos/${editId}` as never);
+    if (sourceId) {
+      router.replace(`/dashboard/trabajos/${sourceId}` as never);
     } else {
       router.replace('/dashboard/trabajos' as never);
     }
@@ -559,16 +572,6 @@ export default function NuevoTrabajoRoute() {
           <Text className="text-lg font-bold text-gray-900">{heading}</Text>
           <Text className="text-xs text-gray-400">{subtitle}</Text>
         </View>
-        <Pressable
-          onPress={save}
-          disabled={saving}
-          hitSlop={8}
-          className={`px-3.5 py-1.5 rounded-full ${saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'}`}
-        >
-          <Text className="text-sm font-semibold text-white">
-            {saving ? '…' : tc.buttons.save}
-          </Text>
-        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -1022,14 +1025,27 @@ export default function NuevoTrabajoRoute() {
               <Text className="text-sm text-red-600">{error}</Text>
             </View>
           ) : null}
-        </ScrollView>
 
+          {/* Save — last element of the form so it's where the thumb lands
+             after filling the final field. */}
+          <Pressable
+            onPress={save}
+            disabled={saving}
+            className={`mt-4 items-center py-3.5 rounded-2xl ${
+              saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'
+            }`}
+          >
+            <Text className="text-base font-semibold text-white">
+              {saving ? '…' : tc.buttons.save}
+            </Text>
+          </Pressable>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Client picker modal */}
       <RNModal
         visible={clientPickerOpen}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >
@@ -1131,7 +1147,7 @@ export default function NuevoTrabajoRoute() {
       {/* Lead picker modal — single-select, mirrors the client picker. */}
       <RNModal
         visible={leadPickerOpen}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setLeadPickerOpen(false)}
       >
@@ -1215,7 +1231,7 @@ export default function NuevoTrabajoRoute() {
          only closes when the user taps Listo or the scrim. */}
       <RNModal
         visible={crewPickerOpen}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setCrewPickerOpen(false)}
       >

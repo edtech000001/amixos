@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Plus, FileText, Search } from 'lucide-react-native';
+import { FileText, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { Fab } from '../../ui/Fab';
 import { formatDateLong } from '../../lib/format';
 
 export interface InvoiceListItem {
@@ -82,7 +83,8 @@ export function InvoicesListScreen({
   );
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
+    <View className="flex-1 bg-surface">
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-6">
         <View>
@@ -91,13 +93,6 @@ export function InvoicesListScreen({
             {t.countTotal.replace('{{count}}', String(invoices.length))}
           </Text>
         </View>
-        <Pressable
-          onPress={onNewInvoicePress}
-          className="flex-row items-center gap-2 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-        >
-          <Plus size={16} color="#FFFFFF" />
-          <Text className="text-white text-sm font-semibold">{t.newInvoice}</Text>
-        </Pressable>
       </View>
 
       {/* Filter tabs */}
@@ -217,5 +212,9 @@ export function InvoicesListScreen({
         </View>
       )}
     </ScrollView>
+
+    {/* New invoice — floating action, bottom-right thumb reach */}
+    <Fab onPress={onNewInvoicePress} />
+    </View>
   );
 }

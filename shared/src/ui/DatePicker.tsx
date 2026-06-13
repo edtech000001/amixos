@@ -167,7 +167,7 @@ function NativePicker({
         <RNModal
           visible={iosOpen}
           transparent
-          animationType="slide"
+          animationType="fade"
           onRequestClose={() => setIosOpen(false)}
         >
           <View className="flex-1 justify-end">

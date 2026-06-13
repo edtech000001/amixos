@@ -305,16 +305,6 @@ export default function NuevaFacturaRoute() {
           <Text className="text-lg font-bold text-gray-900">{heading}</Text>
           <Text className="text-xs text-gray-400">{subtitle}</Text>
         </View>
-        <Pressable
-          onPress={() => save(editId ? 'draft' : 'sent')}
-          disabled={saving}
-          hitSlop={8}
-          className={`px-3.5 py-1.5 rounded-full ${saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'}`}
-        >
-          <Text className="text-sm font-semibold text-white">
-            {saving ? '…' : tc.buttons.save}
-          </Text>
-        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -577,38 +567,36 @@ export default function NuevaFacturaRoute() {
               <Text className="text-sm text-red-600">{error}</Text>
             </View>
           ) : null}
-        </ScrollView>
 
-        {/* Sticky footer */}
-        <View
-          className="border-t border-gray-100 bg-white px-5 pt-3"
-          style={{ paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
-        >
-          {editId ? (
-            <Button onPress={() => save('draft')} loading={saving} fullWidth>
-              {tc.buttons.saveChanges}
-            </Button>
-          ) : (
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Button variant="secondary" onPress={() => save('draft')} loading={saving} fullWidth>
-                  {t.saveDraft}
-                </Button>
+          {/* Save — last element of the form so it's where the thumb lands
+             after filling the final field. */}
+          <View className="mt-4">
+            {editId ? (
+              <Button onPress={() => save('draft')} loading={saving} fullWidth>
+                {tc.buttons.saveChanges}
+              </Button>
+            ) : (
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Button variant="secondary" onPress={() => save('draft')} loading={saving} fullWidth>
+                    {t.saveDraft}
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button onPress={() => save('sent')} loading={saving} fullWidth>
+                    {t.sendInvoice}
+                  </Button>
+                </View>
               </View>
-              <View className="flex-1">
-                <Button onPress={() => save('sent')} loading={saving} fullWidth>
-                  {t.sendInvoice}
-                </Button>
-              </View>
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Client picker modal */}
       <RNModal
         visible={clientPickerOpen}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >

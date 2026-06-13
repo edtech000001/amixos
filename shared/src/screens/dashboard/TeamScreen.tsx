@@ -10,7 +10,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
-import { Input, Button } from '../../ui';
+import { Input, Button, Fab } from '../../ui';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, INVITABLE_ROLES, type Role } from '../../lib/permissions';
 
 export interface TeamMember {
@@ -105,6 +105,7 @@ export function TeamScreen({
   };
 
   return (
+    <View className="flex-1">
     <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
       {/* Heading */}
       <View className="flex-row items-start justify-between mb-5">
@@ -112,15 +113,6 @@ export function TeamScreen({
           <Text className="text-2xl font-bold text-gray-900">{t.heading}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">{t.subtitle}</Text>
         </View>
-        {canManage ? (
-          <Pressable
-            onPress={() => setInviteOpen(true)}
-            className="flex-row items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-          >
-            <UserPlus size={14} color="#FFFFFF" />
-            <Text className="text-sm font-semibold text-white">{t.inviteBtn}</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       {/* Members */}
@@ -374,5 +366,14 @@ export function TeamScreen({
         </Pressable>
       </RNModal>
     </ScrollView>
+
+    {/* Invite member — floating action, bottom-right thumb reach */}
+    {canManage ? (
+      <Fab
+        onPress={() => setInviteOpen(true)}
+        icon={<UserPlus size={22} color="#FFFFFF" />}
+      />
+    ) : null}
+    </View>
   );
 }

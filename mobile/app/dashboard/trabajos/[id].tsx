@@ -24,9 +24,9 @@ import {
   Send,
   Trash2,
   Pencil,
+  Copy,
   Phone,
   RotateCcw,
-  Share2,
   Building2,
   Navigation,
   User,
@@ -340,7 +340,12 @@ export default function JobDetailRoute() {
   const runDelegate = async (targetBusinessId: string) => {
     if (!job) return;
     setDelegating(true);
-    const result = await delegateJob(supabase, job.id, targetBusinessId);
+    // delegateJob reports known failures as { ok: false }, but the network
+    // call itself can reject — catch so `delegating` never wedges the sheet
+    // with every row disabled.
+    const result = await delegateJob(supabase, job.id, targetBusinessId).catch(
+      () => ({ ok: false as const, error: 'network' }),
+    );
     setDelegating(false);
     setDelegateOpen(false);
     if (!result.ok) {
@@ -488,7 +493,16 @@ export default function JobDetailRoute() {
               hitSlop={8}
               className="p-2 rounded-lg active:bg-primary/10"
             >
-              <Share2 size={18} color="#4F46E5" />
+              <Building2 size={18} color="#4F46E5" />
+            </Pressable>
+          ) : null}
+          {can.createJob(currentRole) ? (
+            <Pressable
+              onPress={() => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}` as never)}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-gray-100"
+            >
+              <Copy size={18} color="#6B7280" />
             </Pressable>
           ) : null}
           {can.editJobMetadata(currentRole) ? (
@@ -782,12 +796,12 @@ export default function JobDetailRoute() {
         animationType="fade"
         onRequestClose={() => setDelegateOpen(false)}
       >
-        <View className="flex-1 justify-end">
-          <Pressable
-            onPress={() => setDelegateOpen(false)}
-            className="absolute inset-0 bg-black/40"
-          />
-          <View className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
+        <Pressable
+          onPress={() => setDelegateOpen(false)}
+          className="flex-1 justify-end bg-black/40"
+        >
+          {/* No-op press swallows taps on the sheet so they don't close it. */}
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -810,7 +824,11 @@ export default function JobDetailRoute() {
                     } active:bg-gray-100`}
                   >
                     <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                      <Building2 size={16} color="#4F46E5" />
+                      {delegating ? (
+                        <ActivityIndicator size="small" color="#4F46E5" />
+                      ) : (
+                        <Building2 size={16} color="#4F46E5" />
+                      )}
                     </View>
                     <View className="flex-1">
                       <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
@@ -826,23 +844,32 @@ export default function JobDetailRoute() {
                   </Pressable>
                 ))}
             </View>
-          </View>
-        </View>
+            <Pressable
+              onPress={() => setDelegateOpen(false)}
+              disabled={delegating}
+              className="mt-3 items-center py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+            >
+              <Text className="text-sm font-semibold text-gray-700">
+                {full.common.buttons.cancel}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </RNModal>
 
       {/* Client details modal */}
       <RNModal
         visible={clientModalOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setClientModalOpen(false)}
       >
-        <View className="flex-1 justify-end">
+        <Pressable
+          onPress={() => setClientModalOpen(false)}
+          className="flex-1 justify-end bg-black/40"
+        >
           <Pressable
-            onPress={() => setClientModalOpen(false)}
-            className="absolute inset-0 bg-black/40"
-          />
-          <View
+            onPress={() => {}}
             className="bg-white rounded-t-3xl pt-3"
             style={{ maxHeight: '85%' }}
           >
@@ -870,23 +897,23 @@ export default function JobDetailRoute() {
                 />
               ) : null}
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </RNModal>
 
       {/* Location details modal */}
       <RNModal
         visible={locationModalOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setLocationModalOpen(false)}
       >
-        <View className="flex-1 justify-end">
+        <Pressable
+          onPress={() => setLocationModalOpen(false)}
+          className="flex-1 justify-end bg-black/40"
+        >
           <Pressable
-            onPress={() => setLocationModalOpen(false)}
-            className="absolute inset-0 bg-black/40"
-          />
-          <View
+            onPress={() => {}}
             className="bg-white rounded-t-3xl pt-3"
             style={{ maxHeight: '85%' }}
           >
@@ -938,8 +965,8 @@ export default function JobDetailRoute() {
                 <Text className="text-white font-semibold text-sm">{td.openInMaps}</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </RNModal>
     </SafeAreaView>
   );

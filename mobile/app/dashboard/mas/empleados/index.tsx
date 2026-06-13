@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -282,11 +282,15 @@ export default function EmpleadosRoute() {
     setEmployees(emps);
   };
 
-  useEffect(() => {
-    void loadPeople();
-    void loadTimesheets();
-    void loadTemplates();
-  }, [business?.id]);
+  // Reload on focus (not just mount) so employees added/edited on the
+  // dedicated /nuevo and /[id] screens appear when the user navigates back.
+  useFocusEffect(
+    useCallback(() => {
+      void loadPeople();
+      void loadTimesheets();
+      void loadTemplates();
+    }, [business?.id]),
+  );
 
   const empList: EmployeeListItem[] = useMemo(
     () =>
@@ -333,16 +337,10 @@ export default function EmpleadosRoute() {
     );
   };
 
-  const openAddEmp = () => {
-    setSelEmpId(null);
-    setEmpForm(EMPTY_EMP);
-    setError('');
-    setAccessError('');
-    setAccessRole('office');
-    setEmpModal('add');
-  };
-  // Row taps now navigate to the dedicated detail screen — the in-list
-  // modal only owns the "Add" flow.
+  // Add + row taps both navigate to dedicated screens now (no in-list modal):
+  // FAB → /nuevo (create form), row → /[id] (detail). The list reloads on
+  // focus so changes made on those screens show up on return.
+  const openAddEmp = () => router.push('/dashboard/mas/empleados/nuevo' as never);
   const openEditEmpById = (id: string) => router.push(`/dashboard/mas/empleados/${id}`);
   // Legacy edit-modal seed kept inline as dead code (the RNModal's
   // `visible` is gated on add mode below, so this isn't reached). Will
@@ -621,447 +619,11 @@ export default function EmpleadosRoute() {
 
   const modalsSlot = (
     <>
-      {/* Add / edit employee */}
-      <RNModal
-        visible={empModal === 'add'}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEmpModal(null)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
-        >
-          {/* Backdrop sits BEHIND the sheet so its Pressable doesn't eat the
-             ScrollView's pan gestures. The previous nested-Pressable layout
-             only let you scroll after focusing an input. */}
-          <View className="flex-1 justify-end">
-            <Pressable
-              onPress={() => setEmpModal(null)}
-              style={sheetScrim}
-            />
-            <View
-              className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
-              style={{ maxHeight: '90%', ...sheetShadow }}
-            >
-              <View className="items-center mb-2">
-                <View className="w-10 h-1 bg-gray-200 rounded-full" />
-              </View>
-              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-                <Text className="text-lg font-bold text-gray-900">{empModalTitle}</Text>
-                <View className="flex-row items-center gap-1">
-                  {/* View-mode header actions: pencil → edit, then toggle
-                     active. Both hidden in 'add' (no selected employee) and
-                     in 'edit' (the form below has Save / Cancel + the user
-                     is already editing, so the icons would be redundant). */}
-                  {empModal === 'view' && selEmp ? (
-                    <>
-                      <Pressable
-                        onPress={() => setEmpModal('edit')}
-                        hitSlop={8}
-                        className="p-2 rounded-lg active:bg-gray-100"
-                      >
-                        <Pencil size={18} color="#9CA3AF" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => toggleActive(selEmp.id)}
-                        hitSlop={8}
-                        className="p-2 rounded-lg active:bg-gray-100"
-                      >
-                        {selEmp.active ? (
-                          <UserX size={18} color="#9CA3AF" />
-                        ) : (
-                          <UserCheck size={18} color="#10B981" />
-                        )}
-                      </Pressable>
-                    </>
-                  ) : null}
-                  <Pressable onPress={() => setEmpModal(null)} hitSlop={8} className="p-2">
-                    <X size={20} color="#9CA3AF" />
-                  </Pressable>
-                </View>
-              </View>
-              <ScrollView
-                contentContainerClassName="px-5 py-5 pb-10 gap-4"
-                keyboardShouldPersistTaps="handled"
-              >
-                {/* Read-only detail view (row tap lands here; pencil in the
-                    header flips to 'edit' to make the form editable). */}
-                {empModal === 'view' && selEmp ? (
-                  <View className="gap-4">
-                    {/* Avatar + name */}
-                    <View className="items-center gap-2 py-2">
-                      <View
-                        className={`w-16 h-16 rounded-full items-center justify-center ${
-                          selEmp.active ? 'bg-primary/10' : 'bg-gray-100'
-                        }`}
-                      >
-                        <Text
-                          className={`text-2xl font-bold ${
-                            selEmp.active ? 'text-primary' : 'text-gray-400'
-                          }`}
-                        >
-                          {selEmp.first_name.charAt(0)}{selEmp.last_name.charAt(0)}
-                        </Text>
-                      </View>
-                      {!selEmp.active ? (
-                        <View className="bg-gray-100 px-2 py-0.5 rounded-full">
-                          <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {/* Basic info */}
-                    {(selEmp.phone || selEmp.email) ? (
-                      <>
-                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</Text>
-                        <ViewRow label={t.modal.phoneLabel} value={selEmp.phone} />
-                        <ViewRow label={t.modal.emailLabel} value={selEmp.email} />
-                      </>
-                    ) : null}
-
-                    {/* Empleo y pago */}
-                    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</Text>
-                    <ViewRow label={t.modal.hireDateLabel} value={selEmp.hire_date} />
-                    <ViewRow
-                      label={t.modal.payTypeLabel}
-                      value={PAY_TYPE_OPTIONS.find((o) => o.value === selEmp.pay_type)?.label ?? selEmp.pay_type}
-                    />
-                    {selEmp.pay_rate ? (
-                      <ViewRow
-                        label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
-                        value={`$${selEmp.pay_rate.toFixed(2)} / ${PAY_UNIT[selEmp.pay_type] ?? PAY_UNIT.hourly}`}
-                      />
-                    ) : null}
-
-                    {/* Personal */}
-                    {(selEmp.birthday || selEmp.address || selEmp.city || selEmp.state || selEmp.zip_code) ? (
-                      <>
-                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</Text>
-                        <ViewRow label={t.modal.birthdayLabel} value={selEmp.birthday} />
-                        <ViewRow label={t.modal.addressLabel} value={selEmp.address} />
-                        {(selEmp.city || selEmp.state || selEmp.zip_code) ? (
-                          <ViewRow
-                            label={`${t.modal.cityLabel} / ${t.modal.stateLabel} / ${t.modal.zipLabel}`}
-                            value={[selEmp.city, selEmp.state, selEmp.zip_code].filter(Boolean).join(' · ')}
-                          />
-                        ) : null}
-                      </>
-                    ) : null}
-
-                    {/* Emergency contact */}
-                    {(selEmp.emergency_contact_name || selEmp.emergency_contact_phone) ? (
-                      <>
-                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</Text>
-                        <ViewRow label={t.modal.emergencyNameLabel} value={selEmp.emergency_contact_name} />
-                        <ViewRow label={t.modal.emergencyPhoneLabel} value={selEmp.emergency_contact_phone} />
-                      </>
-                    ) : null}
-
-                    {/* Custom fields */}
-                    {templates.length > 0 && selEmp.custom_fields && Object.keys(selEmp.custom_fields).length > 0 ? (
-                      <>
-                        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</Text>
-                        {templates.map((tpl) => (
-                          <ViewRow
-                            key={tpl.id}
-                            label={tpl.field_label}
-                            value={selEmp.custom_fields?.[tpl.field_key]}
-                          />
-                        ))}
-                      </>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                {empModal !== 'view' ? (
-                  <>
-                {/* Basic info */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  {t.modal.basicInfoHeading}
-                </Text>
-                <Input
-                  label={t.modal.firstNameLabel}
-                  placeholder={t.modal.firstNamePlaceholder}
-                  value={empForm.first_name}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, first_name: v }))}
-                />
-                <Input
-                  label={rLabel('last_name', t.modal.lastNameLabel)}
-                  placeholder={t.modal.lastNamePlaceholder}
-                  value={empForm.last_name}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, last_name: v }))}
-                />
-                <Input
-                  label={rLabel('phone', t.modal.phoneLabel)}
-                  placeholder={t.modal.phonePlaceholder}
-                  value={formatPhoneInput(empForm.phone)}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
-                  keyboardType="phone-pad"
-                />
-                <Input
-                  label={rLabel('email', t.modal.emailLabel)}
-                  placeholder={t.modal.emailPlaceholder}
-                  value={empForm.email}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, email: v }))}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-
-                {/* Personal — asked before employment so birthday comes first */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">
-                  {t.modal.personalHeading}
-                </Text>
-                <DatePicker
-                  label={rLabel('birthday', t.modal.birthdayLabel)}
-                  value={empForm.birthday}
-                  onChange={(v) => setEmpForm((f) => ({ ...f, birthday: v }))}
-                />
-                <Input
-                  label={rLabel('address', t.modal.addressLabel)}
-                  placeholder={t.modal.addressPlaceholder}
-                  value={empForm.address}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, address: v }))}
-                />
-                <Input
-                  label={rLabel('city', t.modal.cityLabel)}
-                  placeholder={t.modal.cityPlaceholder}
-                  value={empForm.city}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, city: v }))}
-                />
-                <Select
-                  label={rLabel('state', t.modal.stateLabel)}
-                  value={empForm.state}
-                  onValueChange={(v) => setEmpForm((f) => ({ ...f, state: v }))}
-                  placeholder={t.modal.stateNone}
-                  options={[
-                    { value: '', label: t.modal.stateNone },
-                    ...US_STATES.map((s) => ({ value: s, label: s })),
-                  ]}
-                />
-                <Input
-                  label={rLabel('zip_code', t.modal.zipLabel)}
-                  placeholder={t.modal.zipPlaceholder}
-                  value={empForm.zip_code}
-                  onChangeText={(v) => setEmpForm((f) => ({ ...f, zip_code: v }))}
-                  keyboardType="number-pad"
-                />
-
-                {/* Employment + pay */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">
-                  {t.modal.employmentHeading}
-                </Text>
-                <DatePicker
-                  label={rLabel('hire_date', t.modal.hireDateLabel)}
-                  value={empForm.hire_date}
-                  onChange={(v) => setEmpForm((f) => ({ ...f, hire_date: v }))}
-                />
-                <View>
-                  <Select
-                    label={rLabel('pay_type', t.modal.payTypeLabel)}
-                    value={empForm.pay_type}
-                    onValueChange={(v) => setEmpForm((f) => ({ ...f, pay_type: v }))}
-                    options={PAY_TYPE_OPTIONS}
-                  />
-                </View>
-                <View>
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">
-                    {rLabel(
-                      'pay_rate',
-                      t.modal.payRateLabel.replace(
-                        '{{unit}}',
-                        PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly,
-                      ),
-                    )}
-                  </Text>
-                  <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
-                    <DollarSign size={16} color="#9CA3AF" />
-                    <TextInput
-                      value={empForm.pay_rate}
-                      onChangeText={(v) => {
-                        // Allow only digits and a single decimal point so the
-                        // user can type "18." → "18.5" without the value being
-                        // stripped back to "18". Drop everything else.
-                        const cleaned = v.replace(/[^0-9.]/g, '');
-                        const parts = cleaned.split('.');
-                        const next = parts.length > 1
-                          ? `${parts[0]}.${parts.slice(1).join('')}`
-                          : cleaned;
-                        setEmpForm((f) => ({ ...f, pay_rate: next }));
-                      }}
-                      keyboardType="decimal-pad"
-                      placeholder="0.00"
-                      placeholderTextColor="#9CA3AF"
-                      className="flex-1 py-3.5 pl-2 text-base text-gray-900"
-                    />
-                  </View>
-                </View>
-
-                {/* Emergency contact */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">
-                  {t.modal.emergencyContactHeading}
-                </Text>
-                <Input
-                  label={rLabel('emergency_contact_name', t.modal.emergencyNameLabel)}
-                  placeholder={t.modal.emergencyNamePlaceholder}
-                  value={empForm.emergency_contact_name}
-                  onChangeText={(v) =>
-                    setEmpForm((f) => ({ ...f, emergency_contact_name: v }))
-                  }
-                />
-                <Input
-                  label={rLabel('emergency_contact_phone', t.modal.emergencyPhoneLabel)}
-                  placeholder={t.modal.emergencyPhonePlaceholder}
-                  value={formatPhoneInput(empForm.emergency_contact_phone)}
-                  onChangeText={(v) =>
-                    setEmpForm((f) => ({ ...f, emergency_contact_phone: formatPhoneInput(v) }))
-                  }
-                  keyboardType="phone-pad"
-                />
-
-                {/* Custom fields (rendered from templates table) */}
-                {templates.length > 0 ? (
-                  <>
-                    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">
-                      {t.modal.customFieldsHeading}
-                    </Text>
-                    {templates.map((tpl) => (
-                      <CustomFieldInput
-                        key={tpl.id}
-                        template={tpl}
-                        value={empForm.custom_fields[tpl.field_key] ?? ''}
-                        onChange={(v) =>
-                          setEmpForm((f) => ({
-                            ...f,
-                            custom_fields: { ...f.custom_fields, [tpl.field_key]: v },
-                          }))
-                        }
-                      />
-                    ))}
-                  </>
-                ) : null}
-
-                {error ? (
-                  <Text className="text-xs text-red-500 mt-1">{error}</Text>
-                ) : null}
-                  </>
-                ) : null}
-
-                {/* App access — invite / change role / revoke, from the
-                    person record. Visible in view AND edit modes. */}
-                {(empModal === 'edit' || empModal === 'view') && selEmp ? (
-                  <View className="gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 mt-1">
-                    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {t.modal.appAccessHeading}
-                    </Text>
-
-                    {selAccess?.kind === 'active' ? (
-                      <View className="gap-2">
-                        <View className="flex-row items-center gap-2">
-                          <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
-                            <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</Text>
-                          </View>
-                          {selAccess.isYou ? <Text className="text-xs text-gray-400">{teamT.youSuffix}</Text> : null}
-                          {selAccess.role === 'owner' ? <Text className="text-xs text-gray-400">{teamT.ownerSuffix}</Text> : null}
-                        </View>
-                        {canManageAccess && !selAccess.isYou && selAccess.role !== 'owner' ? (
-                          <>
-                            <Select
-                              value={selAccess.role}
-                              onValueChange={(v) => changeAccessRole(selAccess.memberId, v as Role)}
-                              options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r][lang] }))}
-                            />
-                            <Pressable
-                              onPress={() => removeAccess(selAccess.memberId)}
-                              disabled={accessBusy}
-                              className="py-2.5 rounded-2xl bg-red-50 active:bg-red-100 items-center"
-                            >
-                              <Text className="text-sm font-semibold text-red-600">{teamT.removeBtn}</Text>
-                            </Pressable>
-                          </>
-                        ) : null}
-                      </View>
-                    ) : selAccess?.kind === 'invited' ? (
-                      <View className="flex-row items-center gap-2">
-                        <View className="rounded-full bg-amber-100 px-2.5 py-0.5">
-                          <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
-                        </View>
-                        <Text className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</Text>
-                        {canManageAccess ? (
-                          <Pressable
-                            onPress={() => revokeInvite(selAccess.inviteId, selEmp.email ?? '')}
-                            disabled={accessBusy}
-                            className="ml-auto px-3 py-1.5 rounded-2xl bg-red-50 active:bg-red-100"
-                          >
-                            <Text className="text-sm font-semibold text-red-600">{teamT.revokeBtn}</Text>
-                          </Pressable>
-                        ) : null}
-                      </View>
-                    ) : canManageAccess ? (
-                      <View className="gap-2">
-                        <Text className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</Text>
-                        <Select
-                          value={accessRole}
-                          onValueChange={(v) => setAccessRole(v as Role)}
-                          options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r][lang] }))}
-                        />
-                        <Pressable
-                          onPress={() => inviteToApp(empForm.email.trim(), accessRole)}
-                          disabled={accessBusy || !empForm.email.trim()}
-                          className={`py-2.5 rounded-2xl items-center ${empForm.email.trim() ? 'bg-primary/10 active:bg-primary/20' : 'bg-gray-100'}`}
-                        >
-                          <Text className={`text-sm font-semibold ${empForm.email.trim() ? 'text-primary' : 'text-gray-400'}`}>{teamT.inviteBtn}</Text>
-                        </Pressable>
-                        {!empForm.email.trim() ? <Text className="text-xs text-amber-600">{t.modal.appAccessEmailRequired}</Text> : null}
-                      </View>
-                    ) : (
-                      <Text className="text-xs text-gray-400">{t.modal.appAccessNoManage}</Text>
-                    )}
-
-                    {accessError ? <Text className="text-xs text-red-500">{accessError}</Text> : null}
-                  </View>
-                ) : null}
-
-                {/* Historial — available in view AND edit modes. */}
-                {(empModal === 'edit' || empModal === 'view') && selEmpId ? (
-                  <Pressable
-                    onPress={() => setHistoryOpen(true)}
-                    className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-50 active:bg-gray-100 mt-1"
-                  >
-                    <Clock size={16} color="#4F46E5" />
-                    <Text className="text-sm font-semibold text-primary">
-                      {t.history.openBtn}
-                    </Text>
-                  </Pressable>
-                ) : null}
-
-                {/* Save / cancel — only when the form is open ('view' is
-                    read-only; pencil flips to 'edit' to expose these). */}
-                {empModal !== 'view' ? (
-                  <View className="flex-row gap-3 pt-3">
-                    <View className="flex-1">
-                      <Button variant="secondary" onPress={() => setEmpModal(null)} fullWidth>
-                        {tc.buttons.cancel}
-                      </Button>
-                    </View>
-                    <View className="flex-1">
-                      <Button onPress={saveEmp} loading={saving} fullWidth>
-                        {tc.buttons.save}
-                      </Button>
-                    </View>
-                  </View>
-                ) : null}
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </RNModal>
-
       {/* Employee history (read-only timeline) */}
       <RNModal
         visible={historyOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setHistoryOpen(false)}
       >
         <View className="flex-1 justify-end">
@@ -1095,7 +657,7 @@ export default function EmpleadosRoute() {
       <RNModal
         visible={tsModalOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setTsModalOpen(false)}
       >
         <KeyboardAvoidingView
@@ -1214,7 +776,7 @@ export default function EmpleadosRoute() {
       <RNModal
         visible={empPickerOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setEmpPickerOpen(false)}
       >
         <View className="flex-1 justify-end">

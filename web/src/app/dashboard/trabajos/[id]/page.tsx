@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
-  XCircle, Send, ArrowRight, Trash2, Pencil,
+  XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -343,62 +343,75 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          {canInvoice && (
-            <Button onClick={() => setInvoiceModal(true)} size="sm">
-              <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
-            </Button>
-          )}
-          {job.invoice_id && (
-            <Link href={`/dashboard/facturas/${job.invoice_id}`}>
-              <Button variant="secondary" size="sm">
-                <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn} <ArrowRight size={13} className="ml-1"/>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <div className="flex gap-2">
+            {canInvoice && (
+              <Button onClick={() => setInvoiceModal(true)} size="sm">
+                <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
               </Button>
-            </Link>
-          )}
-          {isProposal && (
-            <>
-              <button onClick={shareProposal}
-                className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors relative"
-                title={td.shareTooltip}>
-                <Share2 size={16}/>
-                {sharecopied && (
-                  <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded whitespace-nowrap">
-                    {td.shareCopied}
-                  </span>
-                )}
+            )}
+            {job.invoice_id && (
+              <Link href={`/dashboard/facturas/${job.invoice_id}`}>
+                <Button variant="secondary" size="sm">
+                  <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn} <ArrowRight size={13} className="ml-1"/>
+                </Button>
+              </Link>
+            )}
+            {isProposal && (
+              <>
+                <button onClick={shareProposal}
+                  className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors relative"
+                  title={td.shareTooltip}>
+                  <Share2 size={16}/>
+                  {sharecopied && (
+                    <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded whitespace-nowrap">
+                      {td.shareCopied}
+                    </span>
+                  )}
+                </button>
+                <button onClick={openPrintView}
+                  className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+                  title={td.printTooltip}>
+                  <Download size={16}/>
+                </button>
+              </>
+            )}
+            {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) && (
+              <button
+                onClick={() => setDelegateModal(true)}
+                className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors"
+                title={tw.delegateBtn}>
+                <Building2 size={16}/>
               </button>
-              <button onClick={openPrintView}
-                className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-                title={td.printTooltip}>
-                <Download size={16}/>
+            )}
+            {can.createJob(currentRole) && (
+              <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}`}
+                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                title={td.duplicateTooltip}>
+                <Copy size={16}/>
+              </Link>
+            )}
+            {can.editJobMetadata(currentRole) && (
+              <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
+                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                title={td.editTooltip}>
+                <Pencil size={16}/>
+              </Link>
+            )}
+            {can.deleteJob(currentRole) && (
+              <button
+                onClick={() => setDeleteModal(true)}
+                className="p-2 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title={td.deleteTooltip}
+              >
+                <Trash2 size={16}/>
               </button>
-            </>
-          )}
-          {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) && (
-            <button
-              onClick={() => setDelegateModal(true)}
-              className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-              title={tw.delegateBtn}>
-              <Building2 size={16}/>
-            </button>
-          )}
-          {can.editJobMetadata(currentRole) && (
-            <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
-              className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
-              title={td.editTooltip}>
-              <Pencil size={16}/>
-            </Link>
-          )}
-          {can.deleteJob(currentRole) && (
-            <button
-              onClick={() => setDeleteModal(true)}
-              className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              title={td.deleteTooltip}
-            >
-              <Trash2 size={16}/>
-            </button>
-          )}
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <Clock size={11}/>
+            <span>{td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}</span>
+          </div>
         </div>
       </div>
 
@@ -656,7 +669,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               {job.description && (
                 <div>
                   <p className="text-xs text-gray-400 mb-1">{td.description}</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{job.description}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{job.description}</p>
                 </div>
               )}
             </div>
@@ -666,7 +679,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {job.notes && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{td.clientNote}</h2>
-              <p className="text-sm text-gray-600 leading-relaxed">{job.notes}</p>
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{job.notes}</p>
             </div>
           )}
 
@@ -674,25 +687,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {job.internal_notes && (
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
-              <p className="text-xs text-amber-800">{job.internal_notes}</p>
+              <p className="text-xs text-amber-800 whitespace-pre-wrap">{job.internal_notes}</p>
             </div>
           )}
-
-          {/* Created + last edited */}
-          <div className="px-1 flex flex-col gap-0.5 text-xs text-gray-400">
-            <div className="flex items-center gap-1.5">
-              <Clock size={11}/>
-              <span>
-                {td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}
-                {job.created_by && user && job.created_by === user.id && ` ${td.createdBy.replace('{{name}}', user.email ?? '')}`}
-              </span>
-            </div>
-            {job.updated_at && job.updated_at !== job.created_at ? (
-              <div className="flex items-center gap-1.5 pl-[18px]">
-                <span>{td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}</span>
-              </div>
-            ) : null}
-          </div>
 
           {/* Workers card */}
           {assignments.length > 0 && (
@@ -811,6 +808,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </div>
+
+      {/* Last edited — bottom of the page, mirrors the mobile layout */}
+      {job.updated_at && job.updated_at !== job.created_at ? (
+        <p className="mt-5 px-1 text-xs text-gray-400">
+          {td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}
+        </p>
+      ) : null}
 
       {/* Generate Invoice Modal */}
       <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size="sm">

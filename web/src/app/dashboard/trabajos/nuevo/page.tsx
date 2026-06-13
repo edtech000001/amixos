@@ -76,13 +76,17 @@ function NuevoTrabajoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
+  // Duplicate mode: prefill the whole form from an existing job but save as
+  // a brand-new record (editId stays null so the insert path runs).
+  const duplicateId = searchParams.get('duplicate');
+  const sourceId = editId ?? duplicateId;
   const isProposal = searchParams.get('modo') === 'propuesta';
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [loadingEdit, setLoadingEdit] = useState(!!sourceId);
   const [editIsProposal, setEditIsProposal] = useState(false);
 
   // Form state
@@ -131,11 +135,11 @@ function NuevoTrabajoContent() {
   const [taxRate, setTaxRate] = useState(0);
   const [discount, setDiscount] = useState(0);
 
-  const isEditProposal = editId ? editIsProposal : isProposal;
+  const isEditProposal = sourceId ? editIsProposal : isProposal;
 
-  // Initialize default item for new jobs (not edit mode)
+  // Initialize default item for new jobs (not edit/duplicate mode)
   useEffect(() => {
-    if (!editId && items.length === 0) {
+    if (!sourceId && items.length === 0) {
       setItems([isEditProposal ? newItem() : newLaborItem()]);
     }
   }, []);
@@ -158,11 +162,11 @@ function NuevoTrabajoContent() {
       setClients(cl);
       setEmployees(emp);
 
-      if (editId) {
+      if (sourceId) {
         const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
-          supabase.from('jobs').select('*').eq('id', editId).single(),
-          supabase.from('job_items').select('*').eq('job_id', editId).order('created_at'),
-          supabase.from('job_assignments').select('*').eq('job_id', editId),
+          supabase.from('jobs').select('*').eq('id', sourceId).single(),
+          supabase.from('job_items').select('*').eq('job_id', sourceId).order('created_at'),
+          supabase.from('job_assignments').select('*').eq('job_id', sourceId),
         ]);
         if (job) {
           setTitle(job.title || '');
@@ -186,8 +190,12 @@ function NuevoTrabajoContent() {
           setEditIsProposal(isEst);
           if (isEst) {
             setClientNotes(job.notes || '');
-            setIssueDate(job.issue_date || new Date().toISOString().split('T')[0]);
-            setExpiryDate(job.expiry_date || '');
+            // A duplicated proposal is a new proposal: keep today's issue
+            // date + default expiry instead of copying the source's.
+            if (editId) {
+              setIssueDate(job.issue_date || new Date().toISOString().split('T')[0]);
+              setExpiryDate(job.expiry_date || '');
+            }
             setTaxRate(job.tax_rate || 0);
             setDiscount(job.discount || 0);
           }
@@ -481,7 +489,7 @@ function NuevoTrabajoContent() {
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+        <Link href={sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos'} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <ArrowLeft size={18} className="text-gray-500"/>
         </Link>
         <div>
@@ -595,9 +603,9 @@ function NuevoTrabajoContent() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">{t.descriptionLabel}</label>
-              <textarea rows={2} placeholder={t.descriptionPlaceholder}
+              <textarea rows={5} placeholder={t.descriptionPlaceholder}
                 value={description} onChange={e => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
             </div>
 
             {/* Crew visibility — when off, the job lives only on the
@@ -976,18 +984,18 @@ function NuevoTrabajoContent() {
             {isEditProposal && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">{t.clientNoteLabel}</label>
-                <textarea rows={2} placeholder={t.clientNotePlaceholder}
+                <textarea rows={4} placeholder={t.clientNotePlaceholder}
                   value={clientNotes} onChange={e => setClientNotes(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
               </div>
             )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
                 {isEditProposal ? t.internalNoteLabelProposal : t.internalNoteLabelJob}
               </label>
-              <textarea rows={3} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
+              <textarea rows={4} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
                 value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
             </div>
           </div>
         </div>

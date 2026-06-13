@@ -186,6 +186,7 @@ export type DashboardDict = {
     importHint: string;
     searchPlaceholder: string;
     selectAll: string;
+    selectAllShort: string;
     selectedCountSingle: string;
     selectedCountPlural: string;
     bulkDelete: string;
@@ -394,6 +395,29 @@ export type DashboardDict = {
       proposalOptionSub: string;
     };
     searchPlaceholder: string;
+    // Sort + group control on the jobs list. `group.state` means the US
+    // state (location), not job status — keep the labels disambiguated.
+    sort: {
+      button: string;
+      title: string;
+      sortByTitle: string;
+      groupByTitle: string;
+      by: {
+        recent: string;
+        status: string;
+        startDate: string;
+        lead: string;
+      };
+      group: {
+        none: string;
+        lead: string;
+        company: string;
+        state: string;
+      };
+      noLead: string;
+      noCompany: string;
+      noState: string;
+    };
     tabs: {
       all: string;
       proposals: string;
@@ -450,6 +474,7 @@ export type DashboardDict = {
       shareCopied: string;
       printTooltip: string;
       editTooltip: string;
+      duplicateTooltip: string;
       deleteTooltip: string;
       sendAction: string;
       sendActionMessage: string;
@@ -478,7 +503,6 @@ export type DashboardDict = {
       clientNote: string;
       internalNote: string;
       createdOn: string;
-      createdBy: string;
       lastEditedOn: string;
       clientModalTitle: string;
       locationModalTitle: string;
@@ -1740,8 +1764,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       newClient: 'Nuevo cliente',
       importBtn: 'Importar clientes desde CSV',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
-      searchPlaceholder: 'Buscar por nombre, empresa, contacto, teléfono...',
+      searchPlaceholder: 'Buscar clientes...',
       selectAll: 'Seleccionar todos',
+      selectAllShort: 'Todos',
       selectedCountSingle: '{{count}} seleccionado',
       selectedCountPlural: '{{count}} seleccionados',
       bulkDelete: 'Eliminar',
@@ -1949,6 +1974,27 @@ export const dashboard: Record<Locale, DashboardDict> = {
         proposalOptionSub: 'Cotizar antes de trabajar',
       },
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
+      sort: {
+        button: 'Ordenar',
+        title: 'Ordenar y agrupar',
+        sortByTitle: 'Ordenar por',
+        groupByTitle: 'Agrupar por',
+        by: {
+          recent: 'Más recientes',
+          status: 'Estado del trabajo',
+          startDate: 'Fecha de inicio',
+          lead: 'Líder de equipo',
+        },
+        group: {
+          none: 'Sin agrupar',
+          lead: 'Líder de equipo',
+          company: 'Empresa',
+          state: 'Estado (ubicación)',
+        },
+        noLead: 'Sin líder',
+        noCompany: 'Sin empresa',
+        noState: 'Sin estado',
+      },
       tabs: {
         all: 'Todos',
         proposals: 'Cotizaciones',
@@ -2009,6 +2055,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareError: 'No se pudo compartir',
         printTooltip: 'Descargar PDF',
         editTooltip: 'Editar trabajo',
+        duplicateTooltip: 'Duplicar trabajo',
         deleteTooltip: 'Eliminar trabajo',
         generateInvoiceBtn: 'Generar factura',
         viewInvoiceBtn: 'Ver factura',
@@ -2029,7 +2076,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientNote: 'Nota para cliente',
         internalNote: '📝 Nota interna',
         createdOn: 'Creado el {{date}}',
-        createdBy: 'por {{name}}',
         lastEditedOn: 'Última edición {{date}}',
         clientModalTitle: 'Cliente',
         locationModalTitle: 'Ubicación',
@@ -3251,8 +3297,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       newClient: 'New client',
       importBtn: 'Import clients from CSV',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
-      searchPlaceholder: 'Search by name, company, contact, phone...',
+      searchPlaceholder: 'Search clients...',
       selectAll: 'Select all',
+      selectAllShort: 'All',
       selectedCountSingle: '{{count}} selected',
       selectedCountPlural: '{{count}} selected',
       bulkDelete: 'Delete',
@@ -3460,6 +3507,27 @@ export const dashboard: Record<Locale, DashboardDict> = {
         proposalOptionSub: 'Estimate before working',
       },
       searchPlaceholder: 'Search by name, client, number, city...',
+      sort: {
+        button: 'Sort',
+        title: 'Sort & group',
+        sortByTitle: 'Sort by',
+        groupByTitle: 'Group by',
+        by: {
+          recent: 'Newest',
+          status: 'Job status',
+          startDate: 'Start date',
+          lead: 'Crew lead',
+        },
+        group: {
+          none: 'No grouping',
+          lead: 'Crew lead',
+          company: 'Company',
+          state: 'State (location)',
+        },
+        noLead: 'No lead',
+        noCompany: 'No company',
+        noState: 'No state',
+      },
       tabs: {
         all: 'All',
         proposals: 'Estimates',
@@ -3520,6 +3588,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareError: 'Could not share',
         printTooltip: 'Download PDF',
         editTooltip: 'Edit job',
+        duplicateTooltip: 'Duplicate job',
         deleteTooltip: 'Delete job',
         generateInvoiceBtn: 'Generate invoice',
         viewInvoiceBtn: 'View invoice',
@@ -3540,7 +3609,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientNote: 'Note for client',
         internalNote: '📝 Internal note',
         createdOn: 'Created on {{date}}',
-        createdBy: 'by {{name}}',
         lastEditedOn: 'Last edited {{date}}',
         clientModalTitle: 'Client',
         locationModalTitle: 'Location',

@@ -267,18 +267,6 @@ export default function NuevoClienteRoute() {
         <View className="ml-2 flex-1">
           <Text className="text-lg font-bold text-gray-900">{heading}</Text>
         </View>
-        <Pressable
-          onPress={save}
-          disabled={saving}
-          hitSlop={8}
-          className={`px-3.5 py-1.5 rounded-full ${
-            saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'
-          }`}
-        >
-          <Text className="text-sm font-semibold text-white">
-            {saving ? '…' : tc.buttons.save}
-          </Text>
-        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -476,6 +464,20 @@ export default function NuevoClienteRoute() {
           </Section>
 
           {error ? <Text className="text-xs text-red-500 mb-2">{error}</Text> : null}
+
+          {/* Save — last element of the form so it's where the thumb lands
+             after filling the final field. */}
+          <Pressable
+            onPress={save}
+            disabled={saving}
+            className={`mt-2 items-center py-3.5 rounded-2xl ${
+              saving ? 'bg-primary/50' : 'bg-primary active:opacity-80'
+            }`}
+          >
+            <Text className="text-base font-semibold text-white">
+              {saving ? '…' : tc.buttons.save}
+            </Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

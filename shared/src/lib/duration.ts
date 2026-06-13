@@ -4,7 +4,7 @@
 //   1. Manual estimate in hours (jobs.estimated_hours) → days / hours / minutes
 //      using a 24-hour day. 52h → "2 días 4 h 0 min".
 //   2. A start→finish date range (scheduled_date → end_date) → the span in
-//      days measured as (end − start). Jun 4 → Jun 8 = "4 días".
+//      days, inclusive of both endpoints. Jun 4 → Jun 8 = "5 días".
 //   3. Single-day time window (time_start → time_end) → "2h 30min".
 //
 // Day/hour/minute words come from the caller (i18n) so this stays locale-free.
@@ -22,7 +22,11 @@ function parseYMD(s: string | null | undefined): Date | null {
   return new Date(y, m - 1, d);
 }
 
-/** Whole-day difference end − start (local). Non-positive / invalid → 0. */
+/**
+ * Whole-day span counting BOTH endpoints (local): Jun 15 → Jun 26 = 12.
+ * Same-day / reversed / invalid → 0, so a single-day job still falls
+ * through to the time-window display in formatProjectDuration.
+ */
 export function daySpan(
   start: string | null | undefined,
   end: string | null | undefined,
@@ -32,7 +36,7 @@ export function daySpan(
   if (!a || !b) return 0;
   const ms = b.getTime() - a.getTime();
   if (ms <= 0) return 0;
-  return Math.round(ms / 86400000);
+  return Math.round(ms / 86400000) + 1;
 }
 
 function dayWord(n: number, labels: DurationLabels): string {
