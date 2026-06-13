@@ -30,7 +30,7 @@ import {
   normalizeWeatherConfig,
 } from '@amixos/shared/lib/weather';
 import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/usStates';
-import { pinBadgeToDataUrl } from './pinIcons';
+import { buildPinMarkerIcon } from './pinIcons';
 import { MapSettingsPanel, type DeviceMapSettings } from './MapSettingsPanel';
 import { Modal } from '@/components/ui/Modal';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -218,10 +218,12 @@ const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
 
 // Pixel size for the marker icon at each pin-size preset. Larger sizes
 // produce sharper icons since the SVG is re-rasterized by the browser.
+// Same pin sizes as mobile (mobile/modules/map/MapScreen.tsx) so the two
+// platforms render identical-looking maps.
 const PIN_PX_BY_SIZE: Record<DeviceMapSettings['pinSize'], number> = {
-  small: 22,
-  medium: 32,
-  large: 44,
+  small: 18,
+  medium: 26,
+  large: 34,
 };
 
 export default function MapModule() {
@@ -506,7 +508,6 @@ export default function MapModule() {
     markersRef.current = [];
 
     const px = PIN_PX_BY_SIZE[deviceSettings.pinSize];
-    const hpx = Math.round(px * 1.25);
     // Resolve styles per pin; null means a hide rule matched → skip it.
     const newMarkers: google.maps.Marker[] = [];
     for (const p of visiblePins) {
@@ -528,7 +529,7 @@ export default function MapModule() {
         outreach && p.type === 'client' &&
         !!p.last_contacted_at &&
         Date.now() - Date.parse(p.last_contacted_at) <= deviceSettings.outreachDays * 86_400_000;
-      const iconUrl = pinBadgeToDataUrl(
+      const pinIcon = buildPinMarkerIcon(
         style.icon,
         style.color,
         px,
@@ -540,9 +541,9 @@ export default function MapModule() {
         position: { lat: p.lat, lng: p.lng },
         opacity: contacted ? 0.45 : 1,
         icon: {
-          url: iconUrl,
-          scaledSize: new google.maps.Size(px, hpx),
-          anchor: new google.maps.Point(px / 2, hpx),
+          url: pinIcon.url,
+          scaledSize: new google.maps.Size(pinIcon.width, pinIcon.height),
+          anchor: new google.maps.Point(pinIcon.anchorX, pinIcon.anchorY),
         },
       });
       marker.addListener('click', () => setSelected(p));
@@ -551,7 +552,31 @@ export default function MapModule() {
     markersRef.current = newMarkers;
 
     if (deviceSettings.clustering) {
-      clustererRef.current = new MarkerClusterer({ map, markers: newMarkers });
+      clustererRef.current = new MarkerClusterer({
+        map,
+        markers: newMarkers,
+        // Brand-colored cluster bubble — matches mobile's clusterColor
+        // (#4F46E5 circle, white count) instead of the library default.
+        renderer: {
+          render: ({ count, position }) => {
+            const svg =
+              `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">` +
+                `<circle cx="22" cy="22" r="19" fill="#4F46E5" stroke="#ffffff" stroke-width="2.5"/>` +
+                `<text x="22" y="22.5" text-anchor="middle" dominant-baseline="central" font-family="Arial, sans-serif" ` +
+                  `font-size="${String(count).length > 2 ? 12 : 14}" font-weight="700" fill="#ffffff">${count}</text>` +
+              `</svg>`;
+            return new google.maps.Marker({
+              position,
+              icon: {
+                url: `data:image/svg+xml;base64,${btoa(svg)}`,
+                scaledSize: new google.maps.Size(44, 44),
+                anchor: new google.maps.Point(22, 22),
+              },
+              zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
+            });
+          },
+        },
+      });
     } else {
       newMarkers.forEach(m => m.setMap(map));
     }

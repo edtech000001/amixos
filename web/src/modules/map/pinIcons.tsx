@@ -128,7 +128,6 @@ export function PinIcon({
 // Key now includes iconColor so the cache stays correct when foreground
 // color is customized per rule.
 const iconInnerCache = new Map<string, string>();
-const pinBadgeUrlCache = new Map<string, string>();
 
 function getIconInner(rawKey: string | null | undefined, iconColor: string): string {
   const key = normalizeIconKey(rawKey);
@@ -147,11 +146,24 @@ function getIconInner(rawKey: string | null | undefined, iconColor: string): str
   return inner;
 }
 
-// Build a colored teardrop pin SVG with the lucide icon embedded in the
-// round top, return as base64 data URL for Google Maps marker.icon.url.
-//
-// Anchor (for caller): bottom-center, i.e. new google.maps.Point(width/2, height).
-export function pinBadgeToDataUrl(
+// Geometry + data URL for a Google Maps marker icon. Mirrors mobile's
+// PinBadge (mobile/lib/mapPinIcons.tsx) so pins look identical on both
+// platforms: icon at 50% of pin width sitting 18% from the top, and
+// count/check badges that scale with the pin (with a 14px readability
+// floor) and overflow the pin's top-right corner like a notification dot.
+export interface PinMarkerIcon {
+  url: string;
+  /** Rendered size for google.maps.Size — includes badge overflow. */
+  width: number;
+  height: number;
+  /** Teardrop tip position for google.maps.Point. */
+  anchorX: number;
+  anchorY: number;
+}
+
+const pinMarkerIconCache = new Map<string, PinMarkerIcon>();
+
+export function buildPinMarkerIcon(
   rawKey: string | null | undefined,
   color: string,
   widthPx: number,
@@ -163,52 +175,92 @@ export function pinBadgeToDataUrl(
   // mode to flag clients contacted within the configured window. The count
   // badge wins if both are set (it never is in practice).
   checkBadge?: boolean,
-): string {
-  const heightPx = Math.round(widthPx * 1.25);
+): PinMarkerIcon {
   const cacheKey = `${normalizeIconKey(rawKey)}|${color}|${iconColor}|${widthPx}|${countBadge ?? 0}|${checkBadge ? 1 : 0}`;
-  const cached = pinBadgeUrlCache.get(cacheKey);
+  const cached = pinMarkerIconCache.get(cacheKey);
   if (cached) return cached;
   const iconInner = getIconInner(rawKey, iconColor);
-  // Badge text — show "+N" up to 9, else "9+".
-  const badge = countBadge && countBadge > 0
-    ? (() => {
-        const label = countBadge > 9 ? '9+' : `+${countBadge}`;
-        // Position relative to the padded viewBox — top-right corner of
-        // the pin head. Circle ~6 radius reads well at typical sizes.
-        return (
-          `<g>` +
-            `<circle cx="27.5" cy="4.5" r="6" fill="#DC2626" stroke="#ffffff" stroke-width="1.5"/>` +
-            `<text x="27.5" y="6.5" text-anchor="middle" font-family="Arial, sans-serif" ` +
-              `font-size="${label.length > 2 ? 5 : 6}" font-weight="800" fill="#ffffff">${label}</text>` +
-          `</g>`
-        );
-      })()
-    : '';
-  // Green check badge — only when there's no count badge competing for the
-  // same corner. Same circle geometry as the count badge for visual parity.
-  const check = !badge && checkBadge
-    ? `<g>` +
-        `<circle cx="27.5" cy="4.5" r="6" fill="#16A34A" stroke="#ffffff" stroke-width="1.5"/>` +
-        `<path d="M24.7 4.6 l1.9 1.9 l3.3 -3.6" fill="none" stroke="#ffffff" ` +
-          `stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` +
-      `</g>`
-    : '';
-  // viewBox padded 1.5 units on every side so the white stroke
-  // (width 2 = 1px each side of the path) has room to render without
-  // being clipped at the edges. Without padding the stroke is cropped
-  // at top/sides/tip and the border looks jagged. Round joins + caps
-  // smooth out the transitions on the bezier curves.
+
+  // The teardrop body spans viewBox x 0..32, y 0..40 (tip at y≈39.4); the
+  // base viewBox is padded 1.5 units so the white stroke isn't clipped.
+  // `f` converts viewBox units → pixels (pin body box = widthPx wide).
+  const f = widthPx / 35;
+
+  // Icon: 50% of pin width, top edge 18% down — same as mobile.
+  // Lucide inner content is a 24-unit viewBox; 50% of the 35-unit box
+  // is 17.5 units.
+  const iconScale = 17.5 / 24;
+  const iconX = 16 - 17.5 / 2;
+  const iconY = 6.24;
+
+  const hasBadge = (countBadge != null && countBadge > 0) || !!checkBadge;
+  // Mobile: badge = max(14px, 55% of pin size), overhanging top-right.
+  const badgePx = Math.max(14, Math.round(widthPx * 0.55));
+  const bUnits = (badgePx / widthPx) * 35;
+  const r = bUnits / 2;
+  const badgeCx = 33.5 + 0.25 * bUnits - r;
+  const badgeCy = -1.5 - 0.15 * bUnits + r;
+
+  // Expand the canvas so the overflowing badge isn't clipped.
+  const xMin = -1.5;
+  const yMin = hasBadge ? Math.min(-1.5, badgeCy - r - 1) : -1.5;
+  const xMax = hasBadge ? Math.max(33.5, badgeCx + r + 1) : 33.5;
+  const vbW = xMax - xMin;
+  const vbH = 41.5 - yMin;
+
+  let badge = '';
+  if (countBadge != null && countBadge > 0) {
+    const label = countBadge > 9 ? '9+' : `+${countBadge}`;
+    const fontUnits = (Math.max(8, Math.round(widthPx * 0.34)) / widthPx) * 35 * (label.length > 2 ? 0.85 : 1);
+    badge =
+      `<g>` +
+        `<circle cx="${badgeCx}" cy="${badgeCy}" r="${r}" fill="#DC2626" stroke="#ffffff" stroke-width="1.5"/>` +
+        `<text x="${badgeCx}" y="${badgeCy + fontUnits * 0.36}" text-anchor="middle" font-family="Arial, sans-serif" ` +
+          `font-size="${fontUnits}" font-weight="800" fill="#ffffff">${label}</text>` +
+      `</g>`;
+  } else if (checkBadge) {
+    const sw = 0.3 * r;
+    badge =
+      `<g>` +
+        `<circle cx="${badgeCx}" cy="${badgeCy}" r="${r}" fill="#16A34A" stroke="#ffffff" stroke-width="1.5"/>` +
+        `<path d="M ${badgeCx - 0.45 * r} ${badgeCy + 0.05 * r} l ${0.32 * r} ${0.32 * r} l ${0.55 * r} ${-0.62 * r}" fill="none" stroke="#ffffff" ` +
+          `stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `</g>`;
+  }
+
+  const width = Math.round(vbW * f);
+  const height = Math.round(vbH * f);
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="-1.5 -1.5 35 43">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${xMin} ${yMin} ${vbW} ${vbH}">` +
       `<path d="M16 0 C7.16 0 0 7.16 0 16 C0 26 11 35 15.2 39.4 C15.65 39.85 16.35 39.85 16.8 39.4 C21 35 32 26 32 16 C32 7.16 24.84 0 16 0 Z" ` +
         `fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
-      `<g transform="translate(5.8 1.7) scale(0.85)">${iconInner}</g>` +
+      `<g transform="translate(${iconX} ${iconY}) scale(${iconScale})">${iconInner}</g>` +
       badge +
-      check +
     `</svg>`;
-  const url = `data:image/svg+xml;base64,${btoa(svg)}`;
-  pinBadgeUrlCache.set(cacheKey, url);
-  return url;
+  const icon: PinMarkerIcon = {
+    url: `data:image/svg+xml;base64,${btoa(svg)}`,
+    width,
+    height,
+    anchorX: (16 - xMin) * f,
+    anchorY: (41.5 - yMin) * f,
+  };
+  pinMarkerIconCache.set(cacheKey, icon);
+  return icon;
+}
+
+// Build a colored teardrop pin SVG with the lucide icon embedded in the
+// round top, return as base64 data URL. Kept for the settings previews
+// (PinBadge below) — markers should use buildPinMarkerIcon for correct
+// badge overflow geometry.
+export function pinBadgeToDataUrl(
+  rawKey: string | null | undefined,
+  color: string,
+  widthPx: number,
+  iconColor: string = '#ffffff',
+  countBadge?: number,
+  checkBadge?: boolean,
+): string {
+  return buildPinMarkerIcon(rawKey, color, widthPx, iconColor, countBadge, checkBadge).url;
 }
 
 export function PinBadge({
