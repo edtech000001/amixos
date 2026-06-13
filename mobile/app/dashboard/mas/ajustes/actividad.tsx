@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface AuditRow {
@@ -77,6 +78,14 @@ export default function ActividadPage() {
     const label = AUDIT_ACTION_LABEL[row.action as AuditAction]?.[lang] ?? row.action;
     const d = row.details ?? {};
     const bits: string[] = [];
+    // module.enabled/disabled stores module_key — show the human module name.
+    if (d.module_key) {
+      const def = getModuleById(String(d.module_key));
+      const entry = def
+        ? (full.dashboard.modules.list as unknown as Record<string, { name: string } | undefined>)[def.i18nKey]
+        : undefined;
+      bits.push(entry?.name ?? String(d.module_key));
+    }
     if (d.from && d.to) bits.push(`${d.from} → ${d.to}`);
     if (d.title) bits.push(String(d.title));
     if (d.job_title) bits.push(String(d.job_title));

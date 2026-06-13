@@ -32,6 +32,7 @@ import {
   PartyPopper,
   Car,
   Package,
+  MessageSquare,
 } from 'lucide-react-native';
 
 export type ModuleStatus = 'available' | 'coming_soon';
@@ -81,6 +82,7 @@ export const MODULE_REGISTRY: ModuleDef[] = [
   { id: 'fundraising',  icon: HandCoins,  color: '#E11D48', status: 'coming_soon', i18nKey: 'fundraising',  category: 'industry' },
   { id: 'equipment',    icon: Forklift,   color: '#78716C', status: 'available',   i18nKey: 'equipment',    category: 'tools' },
   { id: 'inventory',    icon: Package,    color: '#16A34A', status: 'available',   i18nKey: 'inventory',    category: 'tools' },
+  { id: 'messaging',    icon: MessageSquare, color: '#06B6D4', status: 'available', i18nKey: 'messaging',    category: 'tools' },
   { id: 'wedding',      icon: PartyPopper,color: '#A855F7', status: 'coming_soon', i18nKey: 'wedding',      category: 'industry' },
   { id: 'dealership',   icon: Car,        color: '#0891B2', status: 'coming_soon', i18nKey: 'dealership',   category: 'industry' },
 ];

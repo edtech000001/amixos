@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -10,25 +10,41 @@ import {
   FileText,
   Cloud,
   Activity,
+  LifeBuoy,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
+import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 
 interface SettingsItem {
   key: string;
   label: string;
   description: string;
   icon: LucideIcon;
-  path: string;
+  // Either navigates to a screen (path) or runs an action (e.g. open mail).
+  path?: string;
+  action?: () => void;
 }
 
 export default function AjustesIndex() {
   const router = useRouter();
   const { t: full } = useLang();
-  const { currentRole } = useApp();
+  const { currentRole, user, business } = useApp();
   const t = full.dashboard.settings;
+
+  const contactSupport = async () => {
+    const url = buildSupportMailto({
+      subject: t.support.emailSubject,
+      userEmail: user?.email,
+      businessName: business?.name ?? null,
+      platform: Platform.OS === 'ios' ? 'iOS' : 'Android',
+    });
+    const ok = await Linking.canOpenURL(url).catch(() => false);
+    if (ok) Linking.openURL(url).catch(() => {});
+    else Alert.alert('', t.support.noMailApp.replace('{{email}}', SUPPORT_EMAIL));
+  };
 
   const items: SettingsItem[] = [
     {
@@ -89,6 +105,13 @@ export default function AjustesIndex() {
       icon: UserIcon,
       path: '/dashboard/mas/ajustes/cuenta',
     },
+    {
+      key: 'soporte',
+      label: t.support.heading,
+      description: t.support.subtitle,
+      icon: LifeBuoy,
+      action: contactSupport,
+    },
   ];
 
   return (
@@ -104,7 +127,7 @@ export default function AjustesIndex() {
             return (
               <Pressable
                 key={item.key}
-                onPress={() => router.push(item.path as never)}
+                onPress={() => (item.action ? item.action() : router.push(item.path as never))}
                 className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
                   i < items.length - 1 ? 'border-b border-gray-50' : ''
                 }`}

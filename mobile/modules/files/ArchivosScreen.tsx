@@ -4,7 +4,7 @@
 // Navigate one level at a time; files can override their own visibility.
 // One-hand conventions: FAB + bottom-sheet forms (fade), save at the bottom.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
   Modal as RNModal,
@@ -51,8 +51,16 @@ export default function ArchivosScreen() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [stack, setStack] = useState<Crumb[]>([{ categoryId: null, folderId: null, label: '' }]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Selection spans BOTH files and folders so a single Move button relocates
+  // everything chosen at once.
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState<Sheet>(null);
+  const clearSelection = () => { setSelectedEntries(new Set()); setSelectedFolders(new Set()); };
+  const selectionCount = selectedEntries.size + selectedFolders.size;
+  // Selection UI (checkboxes) only appears once something is selected — entered
+  // by long-pressing a row. Until then rows behave normally (tap = open/enter).
+  const selectionMode = selectionCount > 0;
 
   const load = useCallback(async () => {
     if (!business) return;
@@ -71,17 +79,23 @@ export default function ArchivosScreen() {
   const childFolders = atHome ? [] : folders.filter(f => f.category_id === here.categoryId && f.parent_folder_id === here.folderId);
   const childEntries = atHome ? [] : entries.filter(e => e.category_id === here.categoryId && e.folder_id === here.folderId);
   const isEmpty = atHome ? categories.length === 0 : (childFolders.length === 0 && childEntries.length === 0);
+  // Direct items in a folder = its subfolders + its files (one level, like
+  // Drive/Finder). Computed from the already-loaded full tree.
+  const folderItemCount = (categoryId: string, folderId: string | null) =>
+    folders.filter(f => f.category_id === categoryId && f.parent_folder_id === folderId).length +
+    entries.filter(e => e.category_id === categoryId && e.folder_id === folderId).length;
 
   const goBack = () => {
-    if (stack.length > 1) { setStack(s => s.slice(0, -1)); setSelectedIds(new Set()); }
+    if (stack.length > 1) { setStack(s => s.slice(0, -1)); clearSelection(); }
     else router.back();
   };
   const enterCategory = (c: FileCategory) => setStack(s => [...s, { categoryId: c.id, folderId: null, label: c.name }]);
   const enterFolder = (f: FileFolder) => setStack(s => [...s, { categoryId: f.category_id, folderId: f.id, label: f.name }]);
 
-  const toggleSelect = (id: string) =>
-    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const clearSelection = () => setSelectedIds(new Set());
+  const toggleEntry = (id: string) =>
+    setSelectedEntries(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleFolder = (id: string) =>
+    setSelectedFolders(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openEntry = (e: FileEntry) => {
     const href = e.kind === 'link' ? e.url : (e.storage_path ? fileUrl(supabase, e.storage_path) : null);
@@ -92,10 +106,51 @@ export default function ArchivosScreen() {
       { text: tc.buttons.cancel, style: 'cancel' },
       { text: tc.buttons.delete, style: 'destructive', onPress: () => { void run().then(load); } },
     ]);
-  const moveSelected = async (target: { categoryId: string; folderId: string | null }) => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    await supabase.from('file_entries').update({ category_id: target.categoryId, folder_id: target.folderId }).in('id', ids);
+  // All folder ids in a subtree (the folder + everything nested below it).
+  const folderSubtreeIds = (folderId: string): string[] => {
+    const out = new Set<string>([folderId]);
+    let frontier = [folderId];
+    while (frontier.length) {
+      const next = folders.filter(f => f.parent_folder_id && frontier.includes(f.parent_folder_id) && !out.has(f.id));
+      next.forEach(f => out.add(f.id));
+      frontier = next.map(f => f.id);
+    }
+    return Array.from(out);
+  };
+
+  // Move the whole selection (files + folders) into one destination.
+  const moveSelection = async (target: { categoryId: string; folderId: string | null }) => {
+    if (selectionCount === 0) return;
+    // Files: straight repoint.
+    if (selectedEntries.size) {
+      await supabase.from('file_entries')
+        .update({ category_id: target.categoryId, folder_id: target.folderId })
+        .in('id', Array.from(selectedEntries));
+    }
+    // Folders: move only the top-level selected ones. A selected folder nested
+    // under another selected folder rides along with its ancestor — moving it
+    // separately would yank it out of place. Cross-category moves cascade the
+    // denormalized category_id over each moved subtree (RLS resolves visibility
+    // via a single category join, so it must stay accurate).
+    const ancestorSelected = (f: FileFolder) => {
+      let pid = f.parent_folder_id;
+      while (pid) {
+        if (selectedFolders.has(pid)) return true;
+        pid = folders.find(x => x.id === pid)?.parent_folder_id ?? null;
+      }
+      return false;
+    };
+    const topLevel = folders.filter(f => selectedFolders.has(f.id) && !ancestorSelected(f));
+    for (const folder of topLevel) {
+      await supabase.from('file_folders')
+        .update({ category_id: target.categoryId, parent_folder_id: target.folderId })
+        .eq('id', folder.id);
+      if (target.categoryId !== folder.category_id) {
+        const ids = folderSubtreeIds(folder.id);
+        await supabase.from('file_folders').update({ category_id: target.categoryId }).in('id', ids);
+        await supabase.from('file_entries').update({ category_id: target.categoryId }).in('folder_id', ids);
+      }
+    }
     setSheet(null);
     clearSelection();
     void load();
@@ -113,9 +168,11 @@ export default function ArchivosScreen() {
         </Text>
       </View>
 
-      {/* Breadcrumb (depth > 1) */}
+      {/* Breadcrumb (depth > 1). A plain flex-row View — NOT a horizontal
+         ScrollView, which stretches vertically in a flex column and left a
+         huge gap under the header. flex-wrap handles deep paths. */}
       {stack.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b border-gray-100" contentContainerClassName="px-4 py-2 gap-1 items-center">
+        <View className="flex-row flex-wrap items-center gap-1 px-4 py-2.5 border-b border-gray-100">
           {stack.map((c, i) => (
             <Pressable key={i} onPress={() => { setStack(s => s.slice(0, i + 1)); clearSelection(); }} className="flex-row items-center gap-1">
               {i > 0 ? <ChevronRight size={12} color="#D1D5DB" /> : null}
@@ -124,21 +181,21 @@ export default function ArchivosScreen() {
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
       ) : null}
 
-      {/* Selection bar */}
-      {canManage && selectedIds.size > 0 ? (
+      {/* Selection bar (files + folders) */}
+      {canManage && selectionCount > 0 ? (
         <View className="flex-row items-center gap-3 px-4 py-2.5 bg-primary/5 border-b border-primary/20">
           <Pressable onPress={clearSelection} hitSlop={8}><X size={16} color="#4F46E5" /></Pressable>
-          <Text className="text-sm font-medium text-primary flex-1">{t.selectedCount.replace('{{count}}', String(selectedIds.size))}</Text>
+          <Text className="text-sm font-medium text-primary flex-1">{t.selectedCount.replace('{{count}}', String(selectionCount))}</Text>
           <Pressable onPress={() => setSheet({ type: 'move' })} className="flex-row items-center gap-1.5 bg-primary px-3.5 py-1.5 rounded-full active:opacity-80">
             <FolderInput size={14} color="#FFFFFF" /><Text className="text-xs font-semibold text-white">{t.moveBtn}</Text>
           </Pressable>
         </View>
       ) : null}
 
-      <ScrollView contentContainerClassName="px-6 pt-5 pb-32">
+      <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-32">
         {atHome ? <Text className="text-sm text-gray-500 mb-5">{t.subtitle}</Text> : null}
 
         {loading ? (
@@ -153,7 +210,7 @@ export default function ArchivosScreen() {
           <View className="gap-2">
             {/* Top-level folders (home) */}
             {atHome ? categories.map(c => (
-              <FolderRow key={c.id} name={c.name}
+              <FolderRow key={c.id} name={c.name} count={folderItemCount(c.id, null)}
                 badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
                 onOpen={() => enterCategory(c)} canManage={canManage}
                 onEdit={() => setSheet({ type: 'folder', editing: c })}
@@ -161,10 +218,12 @@ export default function ArchivosScreen() {
               />
             )) : null}
 
-            {/* Subfolders */}
+            {/* Subfolders — selectable, so they can be moved with files in bulk */}
             {childFolders.map(f => (
-              <FolderRow key={f.id} name={f.name}
+              <FolderRow key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                 onOpen={() => enterFolder(f)} canManage={canManage}
+                selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
+                onToggleSelect={() => toggleFolder(f.id)}
                 onEdit={() => setSheet({ type: 'folder', editing: f })}
                 onDelete={() => confirmDelete(t.deleteFolderConfirm, async () => { await supabase.from('file_folders').delete().eq('id', f.id); })}
               />
@@ -174,28 +233,37 @@ export default function ArchivosScreen() {
             {childEntries.map(e => {
               const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
               return (
-                <View key={e.id} className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl border ${selectedIds.has(e.id) ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
-                  {canManage ? (
-                    <Pressable onPress={() => toggleSelect(e.id)} hitSlop={6}
-                      className={`w-5 h-5 rounded border items-center justify-center ${selectedIds.has(e.id) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
-                      {selectedIds.has(e.id) ? <Check size={12} color="#FFFFFF" /> : null}
+                <View key={e.id} className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl border ${selectedEntries.has(e.id) ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
+                  {canManage && selectionMode ? (
+                    <Pressable onPress={() => toggleEntry(e.id)} hitSlop={8}
+                      className={`w-5 h-5 rounded border items-center justify-center ${selectedEntries.has(e.id) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                      {selectedEntries.has(e.id) ? <Check size={12} color="#FFFFFF" /> : null}
                     </Pressable>
                   ) : null}
                   <View className="w-8 h-8 rounded-lg bg-gray-50 items-center justify-center">
                     {e.kind === 'link' ? <Link2 size={15} color="#6B7280" /> : <FileText size={15} color="#6B7280" />}
                   </View>
-                  <Pressable onPress={() => openEntry(e)} className="flex-1">
+                  <Pressable
+                    onPress={() => (canManage && selectionMode ? toggleEntry(e.id) : openEntry(e))}
+                    onLongPress={canManage ? () => toggleEntry(e.id) : undefined}
+                    delayLongPress={250}
+                    className="flex-1"
+                  >
                     <View className="flex-row items-center gap-1.5">
                       <Text className="text-sm font-medium text-gray-900 flex-shrink" numberOfLines={1}>{e.title}</Text>
                       {officeOnly ? <Lock size={11} color="#F59E0B" /> : null}
                     </View>
                     <Text className="text-xs text-gray-400">{fileMeta(e, t.linkBadge)}</Text>
                   </Pressable>
-                  <Pressable onPress={() => openEntry(e)} hitSlop={6} className="p-1.5"><ExternalLink size={15} color="#9CA3AF" /></Pressable>
-                  {canManage ? (
+                  {!selectionMode ? (
                     <>
-                      <Pressable onPress={() => setSheet({ type: 'file', editing: e })} hitSlop={6} className="p-1.5"><Pencil size={14} color="#6B7280" /></Pressable>
-                      <Pressable onPress={() => confirmDelete(t.deleteEntryConfirm, async () => { await supabase.from('file_entries').delete().eq('id', e.id); })} hitSlop={6} className="p-1.5"><Trash2 size={14} color="#EF4444" /></Pressable>
+                      <Pressable onPress={() => openEntry(e)} hitSlop={6} className="p-1.5"><ExternalLink size={15} color="#9CA3AF" /></Pressable>
+                      {canManage ? (
+                        <>
+                          <Pressable onPress={() => setSheet({ type: 'file', editing: e })} hitSlop={6} className="p-1.5"><Pencil size={14} color="#6B7280" /></Pressable>
+                          <Pressable onPress={() => confirmDelete(t.deleteEntryConfirm, async () => { await supabase.from('file_entries').delete().eq('id', e.id); })} hitSlop={6} className="p-1.5"><Trash2 size={14} color="#EF4444" /></Pressable>
+                        </>
+                      ) : null}
                     </>
                   ) : null}
                 </View>
@@ -217,12 +285,13 @@ export default function ArchivosScreen() {
           folderId={here.folderId}
           categories={categories}
           folders={folders}
-          selectedCount={selectedIds.size}
+          selectedCount={selectionCount}
+          selectedFolderIds={selectedFolders}
           businessId={business!.id}
           userId={user?.id ?? null}
           onClose={() => setSheet(null)}
           onPick={(next) => setSheet(next)}
-          onMove={moveSelected}
+          onMove={moveSelection}
           onSaved={() => { setSheet(null); void load(); }}
         />
       ) : null}
@@ -230,31 +299,57 @@ export default function ArchivosScreen() {
   );
 }
 
-function FolderRow({ name, badge, onOpen, canManage, onEdit, onDelete }: {
-  name: string; badge?: { label: string; team: boolean }; onOpen: () => void;
+function FolderRow({ name, count, badge, onOpen, canManage, onEdit, onDelete, selected, selectionMode, onToggleSelect }: {
+  name: string; count?: number; badge?: { label: string; team: boolean }; onOpen: () => void;
   canManage: boolean; onEdit: () => void; onDelete: () => void;
+  // Subfolders are selectable (long-press → checkbox) so they can be
+  // bulk-moved with files. Top-level categories omit these.
+  selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
 }) {
+  const { t: full } = useLang();
+  const t = full.dashboard.files;
+  const countLabel = count == null
+    ? null
+    : count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
+  const selectable = canManage && !!onToggleSelect;
+  const inSelect = selectable && !!selectionMode;
   return (
-    <View className="flex-row items-center gap-3 px-3 py-3 rounded-xl border border-gray-100">
-      <Pressable onPress={onOpen} className="flex-row items-center gap-3 flex-1">
+    <View className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border ${selected ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
+      {inSelect ? (
+        <Pressable onPress={onToggleSelect} hitSlop={8}
+          className={`w-5 h-5 rounded border items-center justify-center ${selected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+          {selected ? <Check size={12} color="#FFFFFF" /> : null}
+        </Pressable>
+      ) : null}
+      <Pressable
+        onPress={() => (inSelect ? onToggleSelect!() : onOpen())}
+        onLongPress={selectable ? onToggleSelect : undefined}
+        delayLongPress={250}
+        className="flex-row items-center gap-3 flex-1"
+      >
         <View className="w-9 h-9 rounded-lg bg-primary/10 items-center justify-center">
           <Folder size={17} color="#4F46E5" />
         </View>
-        <Text className="font-medium text-gray-900 flex-shrink" numberOfLines={1}>{name}</Text>
-        {badge ? (
-          <View className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${badge.team ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-            {badge.team ? <UsersIcon size={9} color="#047857" /> : <Lock size={9} color="#B45309" />}
-            <Text className={`text-[10px] font-semibold ${badge.team ? 'text-emerald-700' : 'text-amber-700'}`}>{badge.label}</Text>
+        <View className="flex-1">
+          <View className="flex-row items-center gap-2">
+            <Text className="font-medium text-gray-900 flex-shrink" numberOfLines={1}>{name}</Text>
+            {badge ? (
+              <View className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${badge.team ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                {badge.team ? <UsersIcon size={9} color="#047857" /> : <Lock size={9} color="#B45309" />}
+                <Text className={`text-[10px] font-semibold ${badge.team ? 'text-emerald-700' : 'text-amber-700'}`}>{badge.label}</Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+          {countLabel ? <Text className="text-xs text-gray-400 mt-0.5">{countLabel}</Text> : null}
+        </View>
       </Pressable>
-      {canManage ? (
+      {!inSelect && canManage ? (
         <View className="flex-row items-center">
           <Pressable onPress={onEdit} hitSlop={6} className="p-1.5"><Pencil size={14} color="#6B7280" /></Pressable>
           <Pressable onPress={onDelete} hitSlop={6} className="p-1.5"><Trash2 size={14} color="#EF4444" /></Pressable>
         </View>
       ) : null}
-      <ChevronRight size={16} color="#D1D5DB" />
+      {!inSelect ? <ChevronRight size={16} color="#D1D5DB" /> : null}
     </View>
   );
 }
@@ -262,12 +357,15 @@ function FolderRow({ name, badge, onOpen, canManage, onEdit, onDelete }: {
 // All bottom sheets for the screen (actions chooser, folder form, file form,
 // move picker). animationType="fade" keeps the backdrop steady.
 function FileSheets({
-  sheet, atHome, categoryId, folderId, categories, folders, selectedCount,
+  sheet, atHome, categoryId, folderId, categories, folders, selectedCount, selectedFolderIds,
   businessId, userId, onClose, onPick, onMove, onSaved,
 }: {
   sheet: NonNullable<Sheet>;
   atHome: boolean; categoryId: string | null; folderId: string | null;
   categories: FileCategory[]; folders: FileFolder[]; selectedCount: number;
+  // Selected folders (+ their subtrees) are excluded from the destination
+  // picker so you can't move a folder into itself or one of its children.
+  selectedFolderIds: Set<string>;
   businessId: string; userId: string | null;
   onClose: () => void; onPick: (s: Sheet) => void;
   onMove: (target: { categoryId: string; folderId: string | null }) => void;
@@ -296,7 +394,32 @@ function FileSheets({
   const [picked, setPicked] = useState<{ uri: string; name: string; size: number; mimeType: string | null } | null>(null);
 
   // Move picker state
-  const [crumb, setCrumb] = useState<{ categoryId: string | null; folderId: string | null; label: string }>({ categoryId: null, folderId: null, label: '' });
+  // Open the move picker AT the current location (so the sibling folders —
+  // e.g. Valley — show first), not at the root. The "up" control climbs out
+  // toward Archivos if the user wants to move the item elsewhere.
+  const [crumb, setCrumb] = useState<{ categoryId: string | null; folderId: string | null; label: string }>(() => {
+    if (folderId) {
+      return { categoryId, folderId, label: folders.find(f => f.id === folderId)?.name ?? '' };
+    }
+    if (categoryId) {
+      return { categoryId, folderId: null, label: categories.find(c => c.id === categoryId)?.name ?? '' };
+    }
+    return { categoryId: null, folderId: null, label: '' };
+  });
+  const goUpInMove = () => {
+    if (crumb.folderId) {
+      const f = folders.find(x => x.id === crumb.folderId);
+      if (f?.parent_folder_id) {
+        const p = folders.find(x => x.id === f.parent_folder_id);
+        setCrumb({ categoryId: crumb.categoryId, folderId: f.parent_folder_id, label: p?.name ?? '' });
+      } else {
+        const c = categories.find(x => x.id === crumb.categoryId);
+        setCrumb({ categoryId: crumb.categoryId, folderId: null, label: c?.name ?? '' });
+      }
+    } else {
+      setCrumb({ categoryId: null, folderId: null, label: '' });
+    }
+  };
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -372,7 +495,29 @@ function FileSheets({
   ];
 
   const moveAtHome = crumb.categoryId === null;
-  const moveSubFolders = moveAtHome ? [] : folders.filter(f => f.category_id === crumb.categoryId && f.parent_folder_id === crumb.folderId);
+  // Exclude every selected folder + its whole subtree from the destination
+  // picker so you can't drop a folder into itself or one of its children.
+  const excludedFolderIds = useMemo(() => {
+    const out = new Set<string>();
+    const seeds = Array.from(selectedFolderIds);
+    let frontier = seeds;
+    seeds.forEach(id => out.add(id));
+    while (frontier.length) {
+      const next = folders.filter(f => f.parent_folder_id && frontier.includes(f.parent_folder_id) && !out.has(f.id));
+      next.forEach(f => out.add(f.id));
+      frontier = next.map(f => f.id);
+    }
+    return out;
+  }, [selectedFolderIds, folders]);
+  const moveSubFolders = moveAtHome
+    ? []
+    : folders.filter(f =>
+        f.category_id === crumb.categoryId &&
+        f.parent_folder_id === crumb.folderId &&
+        !excludedFolderIds.has(f.id),
+      );
+  // Move the whole selection (files + folders) to the chosen destination.
+  const onDoMove = (target: { categoryId: string; folderId: string | null }) => onMove(target);
 
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -455,31 +600,56 @@ function FileSheets({
             </View>
           ) : null}
 
-          {/* Move picker */}
+          {/* Move picker — tap a folder to drop the item straight into it;
+             use the › chevron to open a folder and pick a nested destination.
+             The bottom button moves into the current breadcrumb level. */}
           {sheet.type === 'move' ? (
-            <View className="gap-4">
-              <Text className="text-lg font-bold text-gray-900 px-1">{t.moveTitle}</Text>
-              <View className="flex-row items-center gap-1">
-                <Pressable onPress={() => setCrumb({ categoryId: null, folderId: null, label: '' })}>
-                  <Text className={`text-xs ${moveAtHome ? 'text-gray-900 font-semibold' : 'text-primary'}`}>{t.title}</Text>
-                </Pressable>
-                {!moveAtHome ? <><ChevronRight size={12} color="#D1D5DB" /><Text className="text-xs font-semibold text-gray-900">{crumb.label}</Text></> : null}
+            <View className="gap-3">
+              <Text className="text-lg font-bold text-gray-900 px-1">
+                {t.moveTitle}
+              </Text>
+              <Text className="text-xs text-gray-400 px-1 -mt-1">{t.moveHint}</Text>
+              {/* Current location + an up control to climb out of the folder. */}
+              <View className="flex-row items-center gap-2">
+                {!moveAtHome ? (
+                  <Pressable onPress={goUpInMove} hitSlop={6} className="w-8 h-8 rounded-lg bg-gray-100 items-center justify-center active:bg-gray-200">
+                    <ChevronLeft size={16} color="#374151" />
+                  </Pressable>
+                ) : null}
+                <Folder size={15} color="#4F46E5" />
+                <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
+                  {moveAtHome ? t.title : crumb.label}
+                </Text>
               </View>
               <ScrollView className="max-h-72" contentContainerClassName="gap-1.5">
                 {moveAtHome
                   ? categories.map(c => (
-                      <Pressable key={c.id} onPress={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} className="flex-row items-center gap-2 px-3 py-3 rounded-xl border border-gray-100">
-                        <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1">{c.name}</Text><ChevronRight size={15} color="#D1D5DB" />
-                      </Pressable>
+                      <View key={c.id} className="flex-row items-center rounded-xl border border-gray-100">
+                        <Pressable onPress={() => onDoMove({ categoryId: c.id, folderId: null })} className="flex-row items-center gap-2 px-3 py-3 flex-1">
+                          <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>{c.name}</Text>
+                        </Pressable>
+                        <Pressable onPress={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} hitSlop={6} className="px-3 py-3 border-l border-gray-100">
+                          <ChevronRight size={16} color="#9CA3AF" />
+                        </Pressable>
+                      </View>
                     ))
                   : moveSubFolders.map(f => (
-                      <Pressable key={f.id} onPress={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} className="flex-row items-center gap-2 px-3 py-3 rounded-xl border border-gray-100">
-                        <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1">{f.name}</Text><ChevronRight size={15} color="#D1D5DB" />
-                      </Pressable>
+                      <View key={f.id} className="flex-row items-center rounded-xl border border-gray-100">
+                        <Pressable onPress={() => onDoMove({ categoryId: f.category_id, folderId: f.id })} className="flex-row items-center gap-2 px-3 py-3 flex-1">
+                          <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>{f.name}</Text>
+                        </Pressable>
+                        <Pressable onPress={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} hitSlop={6} className="px-3 py-3 border-l border-gray-100">
+                          <ChevronRight size={16} color="#9CA3AF" />
+                        </Pressable>
+                      </View>
                     ))}
                 {!moveAtHome && moveSubFolders.length === 0 ? <Text className="text-xs text-gray-400 px-1 py-2">{t.emptyFolder}</Text> : null}
               </ScrollView>
-              <Button onPress={() => crumb.categoryId && onMove({ categoryId: crumb.categoryId, folderId: crumb.folderId })} disabled={moveAtHome} fullWidth>
+              <Button
+                onPress={() => crumb.categoryId && onDoMove({ categoryId: crumb.categoryId, folderId: crumb.folderId })}
+                disabled={moveAtHome}
+                fullWidth
+              >
                 {`${t.moveHere} (${selectedCount})`}
               </Button>
             </View>

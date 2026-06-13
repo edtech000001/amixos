@@ -16,3 +16,6 @@ build/
 coverage/
 prisma/migrations/*.sql
 *.tsbuildinfo
+
+# Claude Code session/plan files
+.claude/

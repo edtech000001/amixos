@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface AuditRow {
@@ -51,10 +52,12 @@ function relTime(
   return formatDateTimeLong(iso, locale);
 }
 
-function describe(row: AuditRow, lang: 'es' | 'en'): string {
+function describe(row: AuditRow, lang: 'es' | 'en', moduleName?: (key: string) => string): string {
   const label = AUDIT_ACTION_LABEL[row.action as AuditAction]?.[lang] ?? row.action;
   const d = row.details ?? {};
   const bits: string[] = [];
+  // module.enabled/disabled stores module_key — show the human module name.
+  if (d.module_key && moduleName) bits.push(moduleName(String(d.module_key)));
   if (d.from && d.to) bits.push(`${d.from} → ${d.to}`);
   if (d.title) bits.push(String(d.title));
   if (d.job_title) bits.push(String(d.job_title));
@@ -73,6 +76,15 @@ export default function ActividadPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.activity;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+
+  // Resolve a module_key (e.g. "files") to its localized display name.
+  const moduleName = useCallback((key: string) => {
+    const def = getModuleById(key);
+    const entry = def
+      ? (full.dashboard.modules.list as unknown as Record<string, { name: string } | undefined>)[def.i18nKey]
+      : undefined;
+    return entry?.name ?? key;
+  }, [full]);
 
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +112,7 @@ export default function ActividadPage() {
   const q = norm(search.trim());
   const filtered = q
     ? rows.filter(r =>
-        norm(`${describe(r, lang)} ${r.user_name ?? ''} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
+        norm(`${describe(r, lang, moduleName)} ${r.user_name ?? ''} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
       )
     : rows;
 
@@ -149,7 +161,7 @@ export default function ActividadPage() {
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">{describe(row, lang)}</p>
+                  <p className="text-sm text-gray-900">{describe(row, lang, moduleName)}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {actorLine(row, t.unknownUser)} · {relTime(row.created_at, t, locale)}
                   </p>

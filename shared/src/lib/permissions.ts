@@ -98,6 +98,10 @@ export const can = {
   // a field crew actually sees); writers manage categories/sections/uploads.
   manageFiles: (role: Role | null) => isAny(role, WRITERS),
 
+  // Third-party integrations (SMS provider creds, etc.). Writers configure;
+  // mirrors the WRITER_ROLES gate the API enforces server-side.
+  manageIntegrations: (role: Role | null) => isAny(role, WRITERS),
+
   // Reports
   seeReports: (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),
 

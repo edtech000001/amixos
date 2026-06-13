@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, FileText, Link2,
+  FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -42,7 +42,10 @@ export default function FilesModule() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [stack, setStack] = useState<Crumb[]>([{ categoryId: null, folderId: null, label: '' }]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Selection spans files AND folders so one Move button relocates everything.
+  // Checkboxes only appear once something is selected (entered via long-press).
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
 
   const [folderModal, setFolderModal] = useState<{ editing: FileCategory | FileFolder | null } | null>(null);
   const [fileModal, setFileModal] = useState<{ editing: FileEntry | null } | null>(null);
@@ -74,13 +77,27 @@ export default function FilesModule() {
     return entries.filter(e => e.category_id === here.categoryId && e.folder_id === here.folderId);
   }, [entries, atHome, here.categoryId, here.folderId]);
 
+  // Web enters selection mode explicitly via the "Mover" button (long-press
+  // isn't discoverable with a mouse). It also turns on if something is selected
+  // by other means.
+  const [selectMode, setSelectMode] = useState(false);
+  const clearSelection = () => { setSelectedEntries(new Set()); setSelectedFolders(new Set()); setSelectMode(false); };
+  const selectionCount = selectedEntries.size + selectedFolders.size;
+  const selectionMode = selectMode || selectionCount > 0;
+
   const enterCategory = (c: FileCategory) => setStack(s => [...s, { categoryId: c.id, folderId: null, label: c.name }]);
   const enterFolder = (f: FileFolder) => setStack(s => [...s, { categoryId: f.category_id, folderId: f.id, label: f.name }]);
-  const goToCrumb = (i: number) => { setStack(s => s.slice(0, i + 1)); setSelectedIds(new Set()); };
+  const goToCrumb = (i: number) => { setStack(s => s.slice(0, i + 1)); clearSelection(); };
 
-  const toggleSelect = (id: string) =>
-    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const clearSelection = () => setSelectedIds(new Set());
+  const toggleEntry = (id: string) =>
+    setSelectedEntries(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleFolder = (id: string) =>
+    setSelectedFolders(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  // Direct items in a folder = its subfolders + its files (one level).
+  const folderItemCount = (cid: string, fid: string | null) =>
+    folders.filter(f => f.category_id === cid && f.parent_folder_id === fid).length +
+    entries.filter(e => e.category_id === cid && e.folder_id === fid).length;
 
   const openFile = (e: FileEntry) => {
     const href = e.kind === 'link' ? e.url : (e.storage_path ? fileUrl(supabase, e.storage_path) : null);
@@ -101,10 +118,43 @@ export default function FilesModule() {
     await supabase.from('file_entries').delete().eq('id', e.id);
     void load();
   };
-  const moveSelected = async (target: { categoryId: string; folderId: string | null }) => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    await supabase.from('file_entries').update({ category_id: target.categoryId, folder_id: target.folderId }).in('id', ids);
+  const folderSubtreeIds = (folderId: string): string[] => {
+    const out = new Set<string>([folderId]);
+    let frontier = [folderId];
+    while (frontier.length) {
+      const next = folders.filter(f => f.parent_folder_id && frontier.includes(f.parent_folder_id) && !out.has(f.id));
+      next.forEach(f => out.add(f.id));
+      frontier = next.map(f => f.id);
+    }
+    return Array.from(out);
+  };
+  // Move the whole selection (files + folders) into one destination. Only the
+  // top-level selected folders move; a selected folder nested under another
+  // selected one rides along with its ancestor. Cross-category moves cascade
+  // the denormalized category_id over each moved subtree (RLS uses it).
+  const moveSelection = async (target: { categoryId: string; folderId: string | null }) => {
+    if (selectionCount === 0) return;
+    if (selectedEntries.size) {
+      await supabase.from('file_entries')
+        .update({ category_id: target.categoryId, folder_id: target.folderId })
+        .in('id', Array.from(selectedEntries));
+    }
+    const ancestorSelected = (f: FileFolder) => {
+      let pid = f.parent_folder_id;
+      while (pid) { if (selectedFolders.has(pid)) return true; pid = folders.find(x => x.id === pid)?.parent_folder_id ?? null; }
+      return false;
+    };
+    const topLevel = folders.filter(f => selectedFolders.has(f.id) && !ancestorSelected(f));
+    for (const folder of topLevel) {
+      await supabase.from('file_folders')
+        .update({ category_id: target.categoryId, parent_folder_id: target.folderId })
+        .eq('id', folder.id);
+      if (target.categoryId !== folder.category_id) {
+        const ids = folderSubtreeIds(folder.id);
+        await supabase.from('file_folders').update({ category_id: target.categoryId }).in('id', ids);
+        await supabase.from('file_entries').update({ category_id: target.categoryId }).in('folder_id', ids);
+      }
+    }
     setMoveOpen(false);
     clearSelection();
     void load();
@@ -127,6 +177,13 @@ export default function FilesModule() {
         </div>
         {canManage && (
           <div className="flex items-center gap-2 shrink-0">
+            {/* Enter selection mode (checkboxes appear). Shown only where
+                there are selectable items and we're not already selecting. */}
+            {!atHome && !selectionMode && (childFolders.length > 0 || childEntries.length > 0) && (
+              <Button variant="secondary" onClick={() => setSelectMode(true)}>
+                <FolderInput size={16} className="mr-1.5" /> {t.moveBtn}
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setFolderModal({ editing: null })}>
               <FolderPlus size={16} className="mr-1.5" /> {t.newFolder}
             </Button>
@@ -158,13 +215,17 @@ export default function FilesModule() {
         })}
       </div>
 
-      {/* Selection bar */}
-      {canManage && selectedIds.size > 0 && (
+      {/* Selection bar (files + folders) — visible whenever selection mode is on */}
+      {canManage && selectionMode && (
         <div className="flex items-center gap-3 mb-4 rounded-xl bg-primary/5 border border-primary/20 px-4 py-2.5">
           <button onClick={clearSelection} className="p-1 rounded-lg hover:bg-primary/10"><X size={15} className="text-primary" /></button>
-          <span className="text-sm font-medium text-primary">{t.selectedCount.replace('{{count}}', String(selectedIds.size))}</span>
+          <span className="text-sm font-medium text-primary">
+            {selectionCount > 0 ? t.selectedCount.replace('{{count}}', String(selectionCount)) : t.selectPrompt}
+          </span>
           <div className="flex-1" />
-          <Button size="sm" onClick={() => setMoveOpen(true)}><FolderInput size={15} className="mr-1.5" /> {t.moveBtn}</Button>
+          <Button size="sm" disabled={selectionCount === 0} onClick={() => setMoveOpen(true)}>
+            <FolderInput size={15} className="mr-1.5" /> {t.moveBtn}
+          </Button>
         </div>
       )}
 
@@ -180,11 +241,12 @@ export default function FilesModule() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Top-level folders (home) */}
+          {/* Top-level folders (home) — not selectable/movable */}
           {atHome && categories.map(c => (
             <FolderCard
               key={c.id}
               name={c.name}
+              count={folderItemCount(c.id, null)}
               badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
               onOpen={() => enterCategory(c)}
               canManage={canManage}
@@ -193,48 +255,38 @@ export default function FilesModule() {
             />
           ))}
 
-          {/* Subfolders */}
+          {/* Subfolders — selectable (long-press) so they can be bulk-moved */}
           {childFolders.map(f => (
             <FolderCard
               key={f.id}
               name={f.name}
+              count={folderItemCount(f.category_id, f.id)}
               onOpen={() => enterFolder(f)}
               canManage={canManage}
+              selected={selectedFolders.has(f.id)}
+              selectionMode={selectionMode}
+              onToggleSelect={() => toggleFolder(f.id)}
               onEdit={() => setFolderModal({ editing: f })}
               onDelete={() => deleteFolderRow(f)}
             />
           ))}
 
           {/* Files at this level */}
-          {childEntries.map(e => {
-            const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
-            return (
-              <div key={e.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-white ${selectedIds.has(e.id) ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}>
-                {canManage && (
-                  <button onClick={() => toggleSelect(e.id)} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selectedIds.has(e.id) ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}`}>
-                    {selectedIds.has(e.id) && <Check size={12} className="text-white" />}
-                  </button>
-                )}
-                <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
-                  {e.kind === 'link' ? <Link2 size={15} className="text-gray-500" /> : <FileText size={15} className="text-gray-500" />}
-                </div>
-                <button onClick={() => openFile(e)} className="flex-1 min-w-0 text-left">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-gray-900 truncate">{e.title}</p>
-                    {officeOnly && <Lock size={11} className="text-amber-500 shrink-0" />}
-                  </div>
-                  <p className="text-xs text-gray-400">{fileMeta(e, t.linkBadge)}</p>
-                </button>
-                <button onClick={() => openFile(e)} className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
-                {canManage && (
-                  <>
-                    <button onClick={() => setFileModal({ editing: e })} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
-                    <button onClick={() => deleteEntry(e)} className="p-2 rounded-lg text-red-500 hover:bg-red-50 shrink-0"><Trash2 size={14} /></button>
-                  </>
-                )}
-              </div>
-            );
-          })}
+          {childEntries.map(e => (
+            <FileRow
+              key={e.id}
+              entry={e}
+              officeOnly={!!category && !fileIsCrewVisible(e, category.crew_visible)}
+              metaLabel={fileMeta(e, t.linkBadge)}
+              canManage={canManage}
+              selected={selectedEntries.has(e.id)}
+              selectionMode={selectionMode}
+              onToggleSelect={() => toggleEntry(e.id)}
+              onOpen={() => openFile(e)}
+              onEdit={() => setFileModal({ editing: e })}
+              onDelete={() => deleteEntry(e)}
+            />
+          ))}
         </div>
       )}
 
@@ -265,39 +317,104 @@ export default function FilesModule() {
         <MoveModal
           categories={categories}
           folders={folders}
-          count={selectedIds.size}
+          count={selectionCount}
+          selectedFolderIds={selectedFolders}
+          startCategoryId={here.categoryId}
+          startFolderId={here.folderId}
           onClose={() => setMoveOpen(false)}
-          onMove={moveSelected}
+          onMove={moveSelection}
         />
       )}
     </div>
   );
 }
 
-function FolderCard({ name, badge, onOpen, canManage, onEdit, onDelete }: {
-  name: string; badge?: { label: string; team: boolean }; onOpen: () => void;
+function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, selected, selectionMode, onToggleSelect }: {
+  name: string; count?: number; badge?: { label: string; team: boolean }; onOpen: () => void;
   canManage: boolean; onEdit: () => void; onDelete: () => void;
+  // Subfolders pass these (selectable); top-level categories omit them.
+  selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
 }) {
+  const { t: full } = useLang();
+  const t = full.dashboard.files;
+  const countLabel = count == null ? null
+    : count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
+  const selectable = canManage && !!onToggleSelect;
+  const inSelect = selectable && !!selectionMode;
   return (
-    <div className="flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 hover:border-gray-200 bg-white">
-      <button onClick={onOpen} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+    <div className={`flex items-center gap-3 px-3 py-3 rounded-xl border bg-white ${selected ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}>
+      {inSelect && (
+        <button onClick={() => onToggleSelect?.()} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}`}>
+          {selected && <Check size={12} className="text-white" />}
+        </button>
+      )}
+      <button
+        onClick={() => (inSelect ? onToggleSelect?.() : onOpen())}
+        className="flex items-center gap-3 flex-1 min-w-0 text-left select-none"
+      >
         <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <Folder size={17} className="text-primary" />
         </div>
-        <span className="font-medium text-gray-900 truncate">{name}</span>
-        {badge && (
-          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge.team ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-            {badge.team ? <Users size={10} /> : <Lock size={10} />}{badge.label}
-          </span>
-        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900 truncate">{name}</span>
+            {badge && (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${badge.team ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {badge.team ? <Users size={10} /> : <Lock size={10} />}{badge.label}
+              </span>
+            )}
+          </div>
+          {countLabel && <p className="text-xs text-gray-400 mt-0.5">{countLabel}</p>}
+        </div>
       </button>
-      {canManage && (
+      {!inSelect && canManage && (
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={onEdit} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
           <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
         </div>
       )}
-      <ChevronRight size={16} className="text-gray-300 shrink-0" />
+      {!inSelect && <ChevronRight size={16} className="text-gray-300 shrink-0" />}
+    </div>
+  );
+}
+
+function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionMode, onToggleSelect, onOpen, onEdit, onDelete }: {
+  entry: FileEntry; officeOnly: boolean; metaLabel: string;
+  canManage: boolean; selected: boolean; selectionMode: boolean;
+  onToggleSelect: () => void; onOpen: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const inSelect = canManage && selectionMode;
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-white ${selected ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}>
+      {inSelect && (
+        <button onClick={onToggleSelect} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}`}>
+          {selected && <Check size={12} className="text-white" />}
+        </button>
+      )}
+      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
+        {entry.kind === 'link' ? <Link2 size={15} className="text-gray-500" /> : <FileText size={15} className="text-gray-500" />}
+      </div>
+      <button
+        onClick={() => (inSelect ? onToggleSelect() : onOpen())}
+        className="flex-1 min-w-0 text-left select-none"
+      >
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium text-gray-900 truncate">{entry.title}</p>
+          {officeOnly && <Lock size={11} className="text-amber-500 shrink-0" />}
+        </div>
+        <p className="text-xs text-gray-400">{metaLabel}</p>
+      </button>
+      {!inSelect && (
+        <>
+          <button onClick={onOpen} className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
+          {canManage && (
+            <>
+              <button onClick={onEdit} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
+              <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-50 shrink-0"><Trash2 size={14} /></button>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -473,37 +590,77 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, onClose,
   );
 }
 
-// Move picker: navigate the folder tree, pick a destination folder.
-function MoveModal({ categories, folders, count, onClose, onMove }: {
+// Move picker: opens at the current location (so sibling folders show first),
+// click a folder to drop the selection into it, the › chevron to open it, and
+// the ‹ up button to climb out. Selected folders + their subtrees are excluded
+// so you can't move a folder into itself.
+function MoveModal({ categories, folders, count, selectedFolderIds, startCategoryId, startFolderId, onClose, onMove }: {
   categories: FileCategory[]; folders: FileFolder[]; count: number;
+  selectedFolderIds: Set<string>; startCategoryId: string | null; startFolderId: string | null;
   onClose: () => void; onMove: (target: { categoryId: string; folderId: string | null }) => void;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
   const tc = full.common;
-  const [crumb, setCrumb] = useState<{ categoryId: string | null; folderId: string | null; label: string }>({ categoryId: null, folderId: null, label: '' });
+  const [crumb, setCrumb] = useState<{ categoryId: string | null; folderId: string | null; label: string }>(() => {
+    if (startFolderId) return { categoryId: startCategoryId, folderId: startFolderId, label: folders.find(f => f.id === startFolderId)?.name ?? '' };
+    if (startCategoryId) return { categoryId: startCategoryId, folderId: null, label: categories.find(c => c.id === startCategoryId)?.name ?? '' };
+    return { categoryId: null, folderId: null, label: '' };
+  });
 
   const atHome = crumb.categoryId === null;
-  const subFolders = atHome ? [] : folders.filter(f => f.category_id === crumb.categoryId && f.parent_folder_id === crumb.folderId);
+  const excluded = useMemo(() => {
+    const out = new Set<string>();
+    let frontier = Array.from(selectedFolderIds);
+    frontier.forEach(id => out.add(id));
+    while (frontier.length) {
+      const next = folders.filter(f => f.parent_folder_id && frontier.includes(f.parent_folder_id) && !out.has(f.id));
+      next.forEach(f => out.add(f.id));
+      frontier = next.map(f => f.id);
+    }
+    return out;
+  }, [selectedFolderIds, folders]);
+  const subFolders = atHome ? [] : folders.filter(f => f.category_id === crumb.categoryId && f.parent_folder_id === crumb.folderId && !excluded.has(f.id));
+
+  const goUp = () => {
+    if (crumb.folderId) {
+      const f = folders.find(x => x.id === crumb.folderId);
+      if (f?.parent_folder_id) setCrumb({ categoryId: crumb.categoryId, folderId: f.parent_folder_id, label: folders.find(x => x.id === f.parent_folder_id)?.name ?? '' });
+      else setCrumb({ categoryId: crumb.categoryId, folderId: null, label: categories.find(c => c.id === crumb.categoryId)?.name ?? '' });
+    } else {
+      setCrumb({ categoryId: null, folderId: null, label: '' });
+    }
+  };
 
   return (
     <Modal open onClose={onClose} title={t.moveTitle}>
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-1 text-sm">
-          <button onClick={() => setCrumb({ categoryId: null, folderId: null, label: '' })} className={atHome ? 'font-semibold text-gray-900' : 'text-primary hover:underline'}>{t.title}</button>
-          {!atHome && <><ChevronRight size={14} className="text-gray-300" /><span className="font-semibold text-gray-900">{crumb.label}</span></>}
+        <p className="text-xs text-gray-400 -mt-1">{t.moveHint}</p>
+        {/* Current location + up control */}
+        <div className="flex items-center gap-2">
+          {!atHome && (
+            <button onClick={goUp} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-gray-700" /></button>
+          )}
+          <Folder size={15} className="text-primary shrink-0" />
+          <span className="text-sm font-semibold text-gray-900 truncate">{atHome ? t.title : crumb.label}</span>
         </div>
         <div className="flex flex-col gap-1.5 max-h-[45vh] overflow-y-auto">
           {atHome
             ? categories.map(c => (
-                <button key={c.id} onClick={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 text-left">
-                  <Folder size={15} className="text-primary" /><span className="text-sm text-gray-900 flex-1">{c.name}</span><ChevronRight size={15} className="text-gray-300" />
-                </button>
+                <div key={c.id} className="flex items-center rounded-xl border border-gray-100 hover:border-gray-200">
+                  <button onClick={() => onMove({ categoryId: c.id, folderId: null })} className="flex items-center gap-2 px-3 py-2.5 flex-1 min-w-0 text-left">
+                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-gray-900 truncate">{c.name}</span>
+                  </button>
+                  <button onClick={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} className="px-3 py-2.5 border-l border-gray-100 text-gray-400 hover:text-primary"><ChevronRight size={16} /></button>
+                </div>
               ))
             : subFolders.map(f => (
-                <button key={f.id} onClick={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 text-left">
-                  <Folder size={15} className="text-primary" /><span className="text-sm text-gray-900 flex-1">{f.name}</span><ChevronRight size={15} className="text-gray-300" />
-                </button>
+                <div key={f.id} className="flex items-center rounded-xl border border-gray-100 hover:border-gray-200">
+                  <button onClick={() => onMove({ categoryId: f.category_id, folderId: f.id })} className="flex items-center gap-2 px-3 py-2.5 flex-1 min-w-0 text-left">
+                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-gray-900 truncate">{f.name}</span>
+                  </button>
+                  <button onClick={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} className="px-3 py-2.5 border-l border-gray-100 text-gray-400 hover:text-primary"><ChevronRight size={16} /></button>
+                </div>
               ))}
           {!atHome && subFolders.length === 0 && <p className="text-xs text-gray-400 px-1 py-2">{t.emptyFolder}</p>}
         </div>

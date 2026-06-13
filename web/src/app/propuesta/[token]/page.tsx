@@ -52,27 +52,20 @@ export default function PublicProposalPage({ params }: { params: { token: string
   useEffect(() => {
     const load = async () => {
       const supabase = createSupabaseClient();
-      const { data: job } = await supabase
-        .from('jobs')
-        .select('id, title, description, estimate_number, status, issue_date, expiry_date, scheduled_date, subtotal_amount, tax_rate, tax_amount, discount, total_amount, notes, clients(first_name, last_name, company), businesses(name, logo_url, city, state)')
-        .eq('share_token', token)
-        .single();
+      // Token-gated RPC (061): anon has no direct read on jobs/job_items —
+      // the function returns only the proposal matching this token, as
+      // { job: {…, clients, businesses}, items: [...] }.
+      const { data } = await supabase.rpc('get_shared_proposal', { p_token: token });
 
-      if (!job) {
+      if (!data) {
         setNotFound(true);
         setLoading(false);
         return;
       }
 
-      setProposal(job as ProposalData);
-
-      const { data: jobItems } = await supabase
-        .from('job_items')
-        .select('id, description, quantity, unit_price, total')
-        .eq('job_id', job.id)
-        .order('created_at');
-
-      setItems(jobItems ?? []);
+      const payload = data as { job: ProposalData; items: JobItem[] };
+      setProposal(payload.job);
+      setItems(payload.items ?? []);
       setLoading(false);
     };
     load();
