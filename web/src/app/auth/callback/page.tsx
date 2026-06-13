@@ -20,11 +20,26 @@ export default function AuthCallbackPage() {
       }
 
       if (code) {
-        // Exchange code for session — stores in localStorage via our createClient
+        // Exchange code for session (PKCE) — needs the code_verifier cookie
+        // written when signInWithOAuth started. If the user lands on a
+        // DIFFERENT domain than the one they started on (www vs apex,
+        // vercel.app preview vs prod), that cookie is missing and the
+        // exchange fails.
         const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
         if (exchangeError || !data.session) {
-          window.location.href = '/auth/login?error=verification_failed';
+          // The code may already have been exchanged (double navigation /
+          // remount) — if a session exists anyway, just continue.
+          const { data: { session: existing } } = await supabase.auth.getSession();
+          if (existing) {
+            const needsOnboarding = await userNeedsOnboarding(supabase, existing.user.id);
+            window.location.href = needsOnboarding ? '/onboarding' : '/dashboard';
+            return;
+          }
+          console.error('OAuth code exchange failed', exchangeError);
+          // Carry the real reason so the failure is diagnosable from the URL.
+          const detail = encodeURIComponent(exchangeError?.message ?? 'no_session');
+          window.location.href = `/auth/login?error=verification_failed&detail=${detail}`;
           return;
         }
 
