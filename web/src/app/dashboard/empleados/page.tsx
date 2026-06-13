@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui/Modal';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { useLang } from '@/i18n/LangProvider';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import {
   EmployeesScreen,
   type EmployeeListItem,
@@ -243,6 +244,12 @@ export default function EmpleadosPage() {
     jobDescription: ts.job_description,
     employeeId: ts.employee_id,
   })), [timesheets]);
+
+  // Unsaved-changes guard for the Add modal: dirty once the form diverges
+  // from EMPTY_EMP. Confirms before closing via backdrop / X; a successful
+  // save closes through setEmpModal(null) directly (no prompt).
+  const empDirty = empModal === 'add' && JSON.stringify(empForm) !== JSON.stringify(EMPTY_EMP);
+  const confirmEmpClose = useUnsavedChanges(empDirty);
 
   const openAddEmp = () => { setEmpForm(EMPTY_EMP); setError(''); setEmpModal('add'); };
   // Row taps now navigate to the dedicated detail page; the list itself
@@ -485,7 +492,7 @@ export default function EmpleadosPage() {
     <>
       <Modal
         open={empModal === 'add'}
-        onClose={() => setEmpModal(null)}
+        onClose={() => confirmEmpClose(() => setEmpModal(null))}
         title={
           empModal === 'add'
             ? t.modal.addTitle
@@ -769,7 +776,7 @@ export default function EmpleadosPage() {
               read-only; pencil flips to 'edit' to expose these). */}
           {empModal !== 'view' ? (
             <div className="flex gap-3 pt-2">
-              <Button variant="secondary" onClick={() => setEmpModal(null)} fullWidth>{tc.buttons.cancel}</Button>
+              <Button variant="secondary" onClick={() => confirmEmpClose(() => setEmpModal(null))} fullWidth>{tc.buttons.cancel}</Button>
               <Button onClick={saveEmp} loading={saving} fullWidth>{tc.buttons.save}</Button>
             </div>
           ) : null}

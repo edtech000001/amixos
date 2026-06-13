@@ -27,6 +27,7 @@ import {
   Check,
   Lock,
   Eye,
+  ImagePlus,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -34,11 +35,14 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import {
   evaluateOperatingHours,
   normalizeOperatingHours,
 } from '@amixos/shared/lib/operatingHours';
+import { JobPhotosSection } from '@/components/JobPhotosSection';
+import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 
 interface Client {
   id: string;
@@ -471,6 +475,10 @@ export default function NuevoTrabajoRoute() {
         }
       }
 
+      void logAudit(supabase, business.id, editId ? 'job.updated' : 'job.created', 'job', jobId, {
+        title: title.trim(),
+      });
+
       // Replace assignments (jobs only — proposals don't carry crew yet).
       // Existing job_items are intentionally preserved; we no longer manage
       // line items from this form (moved to detail page).
@@ -513,6 +521,34 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
+  // expo-router tabs don't push tab switches onto history, so router.back()
+  // from a hidden tab screen often lands on the very first tab (home) rather
+  // than the trabajos list. Navigate explicitly to the right destination.
+  const goBack = () => {
+    if (sourceId) {
+      router.replace(`/dashboard/trabajos/${sourceId}` as never);
+    } else {
+      router.replace('/dashboard/trabajos' as never);
+    }
+  };
+
+  // Unsaved-changes guard on the back arrow + hardware back. `values` covers
+  // every editable field (manual workers filtered so the trailing empty row
+  // isn't counted); the snapshot is taken once data loads (edit/duplicate) or
+  // at mount (new), so untouched forms never prompt. Defined before the
+  // loading early-return to keep hook order stable.
+  const dirty = useDirty(
+    {
+      title, clientId, publishedToCrew, status, priority, address, city, state,
+      scheduledDate, endDate, allDay, timeStart, timeEnd, description,
+      internalNotes, workerNotes, assignedEmployees,
+      manualWorkers: manualWorkers.filter((w) => w.trim()),
+      leadEmployeeId, clientNotes, issueDate, expiryDate, jobLat, jobLng,
+    },
+    !loadingEdit,
+  );
+  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+
   if (loadingEdit) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
@@ -527,17 +563,6 @@ export default function NuevoTrabajoRoute() {
   const subtitle = editId
     ? t.subtitleEdit
     : (isProposal ? t.subtitleNewProposal : t.subtitleNewJob);
-
-  // expo-router tabs don't push tab switches onto history, so router.back()
-  // from a hidden tab screen often lands on the very first tab (home) rather
-  // than the trabajos list. Navigate explicitly to the right destination.
-  const goBack = () => {
-    if (sourceId) {
-      router.replace(`/dashboard/trabajos/${sourceId}` as never);
-    } else {
-      router.replace('/dashboard/trabajos' as never);
-    }
-  };
 
   // ── Derived: total-time line + out-of-hours note (job mode schedule) ──
   const durationLabels = full.common.duration;
@@ -562,7 +587,7 @@ export default function NuevoTrabajoRoute() {
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={goBack}
+          onPress={confirmBack}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >
@@ -1018,6 +1043,19 @@ export default function NuevoTrabajoRoute() {
                 style={{ textAlignVertical: 'top' }}
               />
             </View>
+          </Section>
+
+          {/* Photos — uploads need a saved job_id, so the gallery only
+             appears when editing an existing job. New jobs get a hint and
+             land on the detail screen (which has the gallery) after save. */}
+          <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color="#4F46E5" />}>
+            {editId && business ? (
+              <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
+            ) : (
+              <Text className="text-sm text-gray-400">
+                {full.dashboard.jobs.detail.photos.addAfterSave}
+              </Text>
+            )}
           </Section>
 
           {error ? (

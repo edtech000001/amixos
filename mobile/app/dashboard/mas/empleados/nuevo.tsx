@@ -20,6 +20,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
 
@@ -136,6 +137,10 @@ export default function NuevoEmpleadoRoute() {
 
   const goBack = () => router.replace('/dashboard/mas/empleados' as never);
 
+  // Guard the back arrow + hardware back when the form has been touched.
+  const dirty = useDirty(form, true);
+  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+
   const save = async () => {
     if (!business) return;
     if (!form.first_name.trim()) {
@@ -223,7 +228,7 @@ export default function NuevoEmpleadoRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <View className="ml-2 flex-1">

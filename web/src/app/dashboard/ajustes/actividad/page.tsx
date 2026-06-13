@@ -15,11 +15,20 @@ interface AuditRow {
   id: string;
   user_id: string | null;
   user_email: string | null;
+  user_name: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;
   details: Record<string, unknown>;
   created_at: string;
+}
+
+// Who performed the action: "Full Name · email" when a display name is set,
+// otherwise just the email (and the unknown-user fallback for old rows).
+function actorLine(row: AuditRow, unknownUser: string): string {
+  const name = row.user_name?.trim();
+  if (name && row.user_email) return `${name} · ${row.user_email}`;
+  return name || row.user_email || unknownUser;
 }
 
 // Load a generous recent window up front (~a month+ for most businesses) so
@@ -47,6 +56,12 @@ function describe(row: AuditRow, lang: 'es' | 'en'): string {
   const d = row.details ?? {};
   const bits: string[] = [];
   if (d.from && d.to) bits.push(`${d.from} → ${d.to}`);
+  if (d.title) bits.push(String(d.title));
+  if (d.job_title) bits.push(String(d.job_title));
+  if (d.estimate_number) bits.push(String(d.estimate_number));
+  if (d.name) bits.push(String(d.name));
+  if (d.invoice_number) bits.push(String(d.invoice_number));
+  if (typeof d.count === 'number') bits.push(`${d.count}`);
   if (d.email) bits.push(String(d.email));
   if (d.target_business_name) bits.push(String(d.target_business_name));
   return bits.length ? `${label} — ${bits.join(' · ')}` : label;
@@ -85,7 +100,7 @@ export default function ActividadPage() {
   const q = norm(search.trim());
   const filtered = q
     ? rows.filter(r =>
-        norm(`${describe(r, lang)} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
+        norm(`${describe(r, lang)} ${r.user_name ?? ''} ${r.user_email ?? ''} ${r.action} ${JSON.stringify(r.details ?? {})}`).includes(q),
       )
     : rows;
 
@@ -130,13 +145,13 @@ export default function ActividadPage() {
               <div key={row.id} className={`flex items-start gap-3 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                   <span className="text-xs font-bold text-gray-500">
-                    {(row.user_email ?? '?').charAt(0).toUpperCase()}
+                    {(row.user_name || row.user_email || '?').charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-900">{describe(row, lang)}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {row.user_email ?? t.unknownUser} · {relTime(row.created_at, t, locale)}
+                    {actorLine(row, t.unknownUser)} · {relTime(row.created_at, t, locale)}
                   </p>
                 </div>
               </div>

@@ -375,7 +375,7 @@ export function DashboardHomeScreen({
       // size jump is obvious even before there's any data.
       if (size === 'lg') {
         return (
-          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative">
+          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 justify-center">
             <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
             <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
             <View className="flex-row items-center gap-4">
@@ -400,7 +400,7 @@ export function DashboardHomeScreen({
         );
       }
       return (
-        <View className="bg-primary rounded-2xl p-5 overflow-hidden relative">
+        <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1">
           <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
           <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
           <View className="w-9 h-9 rounded-xl bg-white/15 items-center justify-center mb-3">
@@ -429,7 +429,7 @@ export function DashboardHomeScreen({
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-5">
+          <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
             <View className="flex-row items-center gap-4">
               <View className={`w-14 h-14 rounded-2xl ${bg} items-center justify-center`}>
                 <Icon size={26} className={color} />
@@ -448,7 +448,7 @@ export function DashboardHomeScreen({
         );
       }
       return (
-        <View className="bg-white rounded-2xl border border-gray-100 p-5">
+        <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
           <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
             <Icon size={18} className={color} />
           </View>
@@ -471,19 +471,29 @@ export function DashboardHomeScreen({
           { label: t.home.quickActions.calendar, icon: CalendarDays, onPress: onCalendarPress, bg: 'bg-orange-50', color: '#EA580C' },
         ];
         if (size === 'sm') {
-          // Compact half-width tile: 2x2 icon-only buttons.
+          // Compact half-width tile: 2x2 icon-only buttons. Each button gets
+          // its height from padding (not a vertical flex, which collapses in
+          // this non-stretched card) and flexes to fill its half-width, so
+          // the grid is well-proportioned and never overflows. justify-center
+          // keeps the rows centered if the card ends up taller than its content.
+          const rows = [actions.slice(0, 2), actions.slice(2, 4)];
           return (
-            <View className="bg-white rounded-2xl border border-gray-100 p-4">
-              <View className="flex-row flex-wrap gap-2">
-                {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
-                  <Pressable
-                    key={label}
-                    onPress={onPress}
-                    accessibilityLabel={label}
-                    className={`items-center justify-center py-3 rounded-xl flex-1 min-w-[45%] active:opacity-80 ${bg}`}
-                  >
-                    <Icon size={18} color={color} />
-                  </Pressable>
+            <View className="bg-white rounded-2xl border border-gray-100 p-3 flex-1">
+              <View style={{ flex: 1, rowGap: 10, justifyContent: 'center' }}>
+                {rows.map((row, ri) => (
+                  <View key={ri} style={{ flexDirection: 'row', columnGap: 10 }}>
+                    {row.map(({ label, icon: Icon, onPress, bg, color }) => (
+                      <Pressable
+                        key={label}
+                        onPress={onPress}
+                        accessibilityLabel={label}
+                        style={{ flex: 1 }}
+                        className={`items-center justify-center py-5 rounded-xl active:opacity-80 ${bg}`}
+                      >
+                        <Icon size={22} color={color} />
+                      </Pressable>
+                    ))}
+                  </View>
                 ))}
               </View>
             </View>
@@ -492,7 +502,7 @@ export function DashboardHomeScreen({
         if (size === 'md') {
           // Full-width strip: 4 across, icon over a small label.
           return (
-            <View className="bg-white rounded-2xl border border-gray-100 p-4">
+            <View className="bg-white rounded-2xl border border-gray-100 p-4 flex-1 justify-center">
               <View className="flex-row gap-2">
                 {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
                   <Pressable
@@ -512,7 +522,7 @@ export function DashboardHomeScreen({
         }
         // lg — 2x2 big buttons with labels.
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-4">
+          <View className="bg-white rounded-2xl border border-gray-100 p-4 flex-1 justify-center">
             <View className="flex-row flex-wrap gap-3">
               {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
                 <Pressable
@@ -538,7 +548,7 @@ export function DashboardHomeScreen({
         const monthLabel = (i: number) =>
           new Intl.DateTimeFormat(t.dateLocale, { month: 'narrow' }).format(new Date(2026, i, 1));
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-5">
+          <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
             <Text className="text-sm font-semibold text-gray-900 mb-1">
               {t.home.monthlyChart.title}
             </Text>
@@ -588,7 +598,7 @@ export function DashboardHomeScreen({
       case 'upcomingJobs': {
         const rows = upcomingJobs.slice(0, LIST_ROWS[size]);
         return (
-          <View className="bg-white rounded-2xl border border-gray-100">
+          <View className="bg-white rounded-2xl border border-gray-100 flex-1">
             <View className="px-6 py-4 border-b border-gray-50 flex-row items-center justify-between">
               <Text className="text-sm font-semibold text-gray-900">
                 {t.home.upcomingJobs.title}
@@ -652,7 +662,7 @@ export function DashboardHomeScreen({
       case 'recentInvoices': {
         const rows = recent.slice(0, LIST_ROWS[size]);
         return (
-          <View className="bg-white rounded-2xl border border-gray-100">
+          <View className="bg-white rounded-2xl border border-gray-100 flex-1">
             <View className="px-6 py-4 border-b border-gray-50 flex-row items-center justify-between">
               <Text className="text-sm font-semibold text-gray-900">{t.home.recent.title}</Text>
               <Pressable onPress={onViewAllInvoicesPress}>
@@ -781,7 +791,11 @@ export function DashboardHomeScreen({
           const size = sizes[id] ?? defaultWidgetSize(id);
           return (
             <View key={id} style={{ width: widthFor(size) }}>
-              <View pointerEvents={editing ? 'none' : 'auto'}>{renderWidget(id, size)}</View>
+              {/* flex:1 so the card fills the row height (Sortable.Flex
+                  stretches items in a wrap line to the tallest), letting
+                  half-width widgets like quick-actions fill their cube
+                  instead of leaving empty space under the content. */}
+              <View pointerEvents={editing ? 'none' : 'auto'} style={{ flex: 1 }}>{renderWidget(id, size)}</View>
               {editing ? (
                 <>
                   <View

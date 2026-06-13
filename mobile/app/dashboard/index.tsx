@@ -175,7 +175,7 @@ export default function DashboardHome() {
         onCreateFirstInvoicePress={() => router.push('/dashboard/facturas/nueva')}
         onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
         onViewAllJobsPress={() => router.push('/dashboard/trabajos')}
-        onNewClientPress={() => router.push('/dashboard/clientes')}
+        onNewClientPress={() => router.push('/dashboard/clientes/nuevo')}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
         onCalendarPress={() => router.push('/dashboard/mas/calendario')}
       />

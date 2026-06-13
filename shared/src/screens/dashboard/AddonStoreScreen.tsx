@@ -83,6 +83,17 @@ export function AddonStoreScreen({
     { key: 'industry', label: t.categoryIndustry },
   ];
 
+  // In the "All" view, split into labeled sections so add-on tools read
+  // distinctly from full industry verticals. A specific filter renders one
+  // unlabeled group (the active chip already names it).
+  const groups: Array<{ key: string; label: string | null; items: ModuleDef[] }> =
+    category === 'all'
+      ? [
+          { key: 'tools', label: t.categoryTools, items: filtered.filter(m => m.category === 'tools') },
+          { key: 'industry', label: t.categoryIndustry, items: filtered.filter(m => m.category === 'industry') },
+        ].filter(g => g.items.length > 0)
+      : [{ key: category, label: null, items: filtered }];
+
   return (
     <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
       {/* Heading */}
@@ -145,8 +156,13 @@ export function AddonStoreScreen({
         ) : (
         // Single column — one card per row (w-full) so each module's name +
         // description has room to read instead of being cramped two-up.
-        <View>
-          {filtered.map(m => {
+        <View className="gap-5">
+          {groups.map(g => (
+            <View key={g.key}>
+              {g.label ? (
+                <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">{g.label}</Text>
+              ) : null}
+              {g.items.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
             const isComingSoon = m.status === 'coming_soon';
@@ -234,7 +250,9 @@ export function AddonStoreScreen({
                 </Pressable>
               </View>
             );
-          })}
+              })}
+            </View>
+          ))}
         </View>
         )
       )}

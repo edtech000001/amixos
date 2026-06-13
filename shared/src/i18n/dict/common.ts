@@ -31,8 +31,23 @@ export type CommonDict = {
     no: string;
     optional: string;
   };
+  // Shown when the app can't load the user's account/business (e.g. a
+  // not-yet-run DB migration). Deliberately reassures the user nothing was
+  // lost and offers a retry.
+  loadError: {
+    title: string;
+    body: string;
+    retry: string;
+    signOut: string;
+  };
   validation: {
     invalidEmail: string;
+  };
+  unsavedChanges: {
+    title: string;
+    body: string;
+    stay: string;
+    discard: string;
   };
   duration: {
     day: string;
@@ -79,8 +94,20 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'opcional',
     },
+    loadError: {
+      title: 'No pudimos cargar tu cuenta',
+      body: 'Tu información sigue guardada. Esto suele pasar justo después de una actualización. Intenta de nuevo en un momento.',
+      retry: 'Intentar de nuevo',
+      signOut: 'Cerrar sesión',
+    },
     validation: {
       invalidEmail: 'Correo electrónico no válido.',
+    },
+    unsavedChanges: {
+      title: 'Cambios sin guardar',
+      body: 'Si sales ahora, perderás lo que escribiste. ¿Quieres salir?',
+      stay: 'Seguir editando',
+      discard: 'Salir sin guardar',
     },
     duration: {
       day: 'día',
@@ -125,8 +152,20 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'optional',
     },
+    loadError: {
+      title: "We couldn't load your account",
+      body: 'Your data is still safe. This usually happens right after an update — try again in a moment.',
+      retry: 'Try again',
+      signOut: 'Sign out',
+    },
     validation: {
       invalidEmail: 'Invalid email address.',
+    },
+    unsavedChanges: {
+      title: 'Unsaved changes',
+      body: 'If you leave now, you\'ll lose what you typed. Leave anyway?',
+      stay: 'Keep editing',
+      discard: 'Leave without saving',
     },
     duration: {
       day: 'day',

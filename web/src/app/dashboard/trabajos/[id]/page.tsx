@@ -20,6 +20,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
+import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 
 interface Job {
   id: string; business_id: string;
@@ -193,6 +194,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
     if (!error && invoice) {
       await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', id);
+      void logAudit(supabase, business.id, 'invoice.created', 'invoice', invoice.id, {
+        invoice_number: invNum,
+        total_amount: invoiceTotal,
+        from_job_id: id,
+      });
       setInvoicing(false);
       window.location.href = `/dashboard/facturas/${invoice.id}`;
     } else {
@@ -807,6 +813,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
           </div>
         </div>
+      </div>
+
+      {/* Photos */}
+      <div className="mt-5">
+        <JobPhotosSection
+          jobId={job.id}
+          businessId={job.business_id}
+          canWrite={can.editJobMetadata(currentRole)}
+        />
       </div>
 
       {/* Last edited — bottom of the page, mirrors the mobile layout */}

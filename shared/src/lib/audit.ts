@@ -10,6 +10,7 @@
 export type AuditAction =
   // Jobs
   | 'job.created'
+  | 'job.updated'
   | 'job.deleted'
   | 'job.status_changed'
   | 'job.delegated'
@@ -82,6 +83,7 @@ export async function logAudit(
 // Human-readable labels for audit actions. Used by the activity viewer.
 export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }> = {
   'job.created':         { es: 'Trabajo creado',           en: 'Job created' },
+  'job.updated':         { es: 'Trabajo actualizado',      en: 'Job updated' },
   'job.deleted':         { es: 'Trabajo eliminado',        en: 'Job deleted' },
   'job.status_changed':  { es: 'Estado de trabajo cambiado', en: 'Job status changed' },
   'job.delegated':       { es: 'Trabajo delegado',         en: 'Job delegated' },

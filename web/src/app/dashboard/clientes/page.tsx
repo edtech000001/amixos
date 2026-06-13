@@ -13,6 +13,7 @@ import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -233,7 +234,13 @@ export default function ClientesPage() {
         syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
       }
     }
+    const deleted = clients.find(c => c.id === id);
     await supabase.from('clients').delete().eq('id', id);
+    if (business) {
+      void logAudit(supabase, business.id, 'client.deleted', 'client', id, {
+        name: deleted ? `${deleted.first_name} ${deleted.last_name}`.trim() : undefined,
+      });
+    }
     setClients(prev => prev.filter(c => c.id !== id));
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
@@ -297,6 +304,10 @@ export default function ClientesPage() {
       if (e) hasError = true;
     }
     if (!hasError) {
+      // One summary entry for the batch rather than N rows flooding the log.
+      if (business) {
+        void logAudit(supabase, business.id, 'client.deleted', 'client', null, { count: ids.length });
+      }
       setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
@@ -335,6 +346,19 @@ export default function ClientesPage() {
       const qs = params.toString();
       router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
     }
+  }, [searchParams, router]);
+
+  // Dashboard "Nuevo cliente" quick action navigates here with ?new=1 to
+  // auto-open the add-client form (the add flow lives in this modal).
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      openAdd();
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('new');
+      const qs = params.toString();
+      router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, router]);
 
   const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [

@@ -1,10 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   View,
   Text,
   Pressable,
-  SectionList,
+  FlatList,
   type ViewToken,
 } from 'react-native';
 import {
@@ -59,6 +59,16 @@ export interface ClientsListScreenProps {
 
 type Section = ClientSection<ClientListItem>;
 
+// Flattened FlatList rows: a single leading list-header (title/search/bulk
+// bar), then a sticky letter header + client rows per section, then a footer.
+// Every row carries its `letter` so the active-letter indicator can read it
+// straight off the topmost visible item.
+type Row =
+  | { type: 'listheader'; key: string; letter: '' }
+  | { type: 'header'; key: string; letter: string }
+  | { type: 'client'; key: string; letter: string; client: ClientListItem; isLast: boolean }
+  | { type: 'footer'; key: string; letter: '' };
+
 export function ClientsListScreen({
   loading,
   clients,
@@ -111,54 +121,110 @@ export function ClientsListScreen({
   const lastSection = sections.length > 0 ? sections[sections.length - 1] : null;
   const lastClientId = lastSection ? lastSection.data[lastSection.data.length - 1].id : null;
 
+  // Flatten the sections into a single row list so we can drive a plain
+  // FlatList. SectionList's scrollToLocation can't reach unrendered sections
+  // and its imperative scroll node is unreliable; a flat list with fixed-height
+  // rows lets us supply getItemLayout, so scrollToIndex jumps land exactly.
+  // Sticky letter headers come from stickyHeaderIndices.
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [{ type: 'listheader', key: '__listheader', letter: '' }];
+    if (showList) {
+      for (const s of sections) {
+        if (s.title) out.push({ type: 'header', key: `__h_${s.title}`, letter: s.title });
+        for (const client of s.data) {
+          out.push({
+            type: 'client',
+            key: client.id,
+            letter: s.title,
+            client,
+            isLast: client.id === lastClientId,
+          });
+        }
+      }
+    }
+    out.push({ type: 'footer', key: '__footer', letter: '' });
+    return out;
+  }, [sections, showList, lastClientId]);
+
+  const stickyHeaderIndices = useMemo(
+    () => rows.reduce<number[]>((acc, r, i) => (r.type === 'header' ? (acc.push(i), acc) : acc), []),
+    [rows],
+  );
+  const headerIndexByLetter = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.forEach((r, i) => {
+      if (r.type === 'header') m.set(r.letter, i);
+    });
+    return m;
+  }, [rows]);
+
   // Letter the list is currently scrolled to — highlighted in the scrubber.
   // Functional set bails out when unchanged so scrolling within a section
   // doesn't re-render anything.
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
+
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      // Headers and rows both appear as tokens; take the first one that
-      // belongs to a titled section.
-      const first = viewableItems.find(v => (v.section as Section | undefined)?.title);
-      const title = (first?.section as Section | undefined)?.title;
-      if (title) setActiveLetter(prev => (prev === title ? prev : title));
+      const first = viewableItems.find(v => (v.item as Row | undefined)?.letter);
+      const letter = (first?.item as Row | undefined)?.letter;
+      if (letter) setActiveLetter(prev => (prev === letter ? prev : letter));
     },
   ).current;
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 1 }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 10 }).current;
 
-  const listRef = useRef<SectionList<ClientListItem, Section>>(null);
-  // Without getItemLayout, scrollToLocation can't reach unrendered sections in
-  // one go — onScrollToIndexFailed jumps near the target by estimate, then the
-  // stored section index is retried once the rows there have rendered.
-  const pendingJump = useRef<{ section: number; retried: boolean } | null>(null);
+  const listRef = useRef<FlatList<Row>>(null);
 
-  const jumpToSection = (sectionIndex: number) => {
-    pendingJump.current = { section: sectionIndex, retried: false };
-    listRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: false });
-  };
+  // Exact, failure-proof jumps need deterministic offsets. In alphabetical mode
+  // every row is a fixed height (CLIENT_ROW_H / LETTER_HEADER_H / CARD_EDGE_H);
+  // only the leading list-header varies, so we measure it. With a real
+  // getItemLayout, scrollToIndex always lands on the precise section — no
+  // estimate drift (which undershot big sections) and no scrollToIndex bailing
+  // to the top (which is what made taps jump back to A).
+  const [listHeaderH, setListHeaderH] = useState(LIST_HEADER_H);
 
-  const onScrollToIndexFailed = (info: { index: number; averageItemLength: number }) => {
-    listRef.current
-      ?.getScrollResponder()
-      ?.scrollTo({ y: info.averageItemLength * info.index, animated: false });
-    const pending = pendingJump.current;
-    if (pending && !pending.retried) {
-      pending.retried = true;
-      setTimeout(() => {
-        listRef.current?.scrollToLocation({
-          sectionIndex: pending.section,
-          itemIndex: 0,
-          animated: false,
-        });
-      }, 120);
+  const rowHeight = (r: Row) =>
+    r.type === 'listheader'
+      ? listHeaderH
+      : r.type === 'header'
+        ? LETTER_HEADER_H
+        : r.type === 'footer'
+          ? CARD_EDGE_H
+          : CLIENT_ROW_H;
+
+  const offsets = useMemo(() => {
+    const arr = new Array<number>(rows.length + 1);
+    let y = 0;
+    for (let i = 0; i < rows.length; i++) {
+      arr[i] = y;
+      y += rowHeight(rows[i]);
     }
+    arr[rows.length] = y;
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, listHeaderH]);
+
+  const getItemLayout = useCallback(
+    (_data: ArrayLike<Row> | null | undefined, index: number) => ({
+      length: rowHeight(rows[index]),
+      offset: offsets[index],
+      index,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, offsets, listHeaderH],
+  );
+
+  const jumpToLetterIndex = (letterIdx: number) => {
+    const target = headerIndexByLetter.get(letters[letterIdx]);
+    if (target == null) return;
+    listRef.current?.scrollToIndex({ index: target, viewPosition: 0, animated: false });
   };
 
-  // Header content scrolls with the list (title, search, bulk-bar).
-  // SectionList carries a small paddingHorizontal — children render at that
-  // inset; no per-child px is needed.
+  // Leading list row — title, search, bulk bar, and the loading / empty
+  // states. The top inset lives here (pt-6) rather than on the list's
+  // contentContainer, so getItemLayout offsets can start cleanly at 0. The
+  // FlatList's paddingHorizontal handles the side inset.
   const header = (
-    <View>
+    <View className="pt-6">
       <View className="flex-row items-center justify-between mb-6">
         <View>
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
@@ -255,50 +321,73 @@ export function ClientsListScreen({
     </View>
   );
 
+  const renderRow = ({ item }: { item: Row; index: number }) => {
+    if (item.type === 'listheader') {
+      // The only variable-height row — measure it so getItemLayout stays exact.
+      return (
+        <View onLayout={e => setListHeaderH(Math.max(1, e.nativeEvent.layout.height))}>
+          {header}
+        </View>
+      );
+    }
+    if (item.type === 'header') {
+      return (
+        <View
+          className="bg-gray-50 px-5 justify-center border-x border-b border-x-gray-100 border-b-gray-200"
+          style={{ height: LETTER_HEADER_H }}
+        >
+          <Text className="text-xs font-bold text-gray-500">{item.letter}</Text>
+        </View>
+      );
+    }
+    if (item.type === 'client') {
+      return (
+        <ClientRow
+          client={item.client}
+          search={search}
+          selectionMode={selectionMode}
+          isChecked={selectedIds.has(item.client.id)}
+          isLast={item.isLast}
+          // Fixed height in alphabetical mode keeps getItemLayout exact; while
+          // searching, rows size to content (matched contacts expand them).
+          fixedHeight={searching ? undefined : CLIENT_ROW_H}
+          onToggleSelect={onToggleSelect}
+          onClientPress={onClientPress}
+        />
+      );
+    }
+    return (
+      <>
+        {showList ? (
+          <View className="bg-white rounded-b-2xl border border-t-0 border-gray-100 h-2" />
+        ) : null}
+        {bottomSlot}
+      </>
+    );
+  };
+
   return (
     <View className="flex-1 bg-surface">
-      <SectionList
+      <FlatList
         ref={listRef}
-        sections={showList ? sections : []}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <ClientRow
-            client={item}
-            search={search}
-            selectionMode={selectionMode}
-            isChecked={selectedIds.has(item.id)}
-            isLast={item.id === lastClientId}
-            onToggleSelect={onToggleSelect}
-            onClientPress={onClientPress}
-          />
-        )}
-        renderSectionHeader={({ section }) =>
-          section.title ? (
-            <View className="bg-gray-50 px-5 py-1 border-x border-b border-x-gray-100 border-b-gray-200">
-              <Text className="text-xs font-bold text-gray-500">{section.title}</Text>
-            </View>
-          ) : null
-        }
-        stickySectionHeadersEnabled
-        onScrollToIndexFailed={onScrollToIndexFailed}
+        data={rows}
+        keyExtractor={item => item.key}
+        renderItem={renderRow}
+        // Letter headers pin to the top as you scroll past them.
+        stickyHeaderIndices={stickyHeaderIndices}
+        // Exact section offsets — only in alphabetical mode, where rows are a
+        // fixed height. While searching, rows size to content, so we let the
+        // list measure them normally (no scrubber/jumps then anyway).
+        getItemLayout={showList && !searching ? getItemLayout : undefined}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        ListHeaderComponent={header}
-        ListFooterComponent={
-          <>
-            {showList ? (
-              <View className="bg-white rounded-b-2xl border border-t-0 border-gray-100 h-2" />
-            ) : null}
-            {bottomSlot}
-          </>
-        }
-        // 12px inset (down from 24px) so rows are visibly wider than before
-        // but the card still has a small breathing margin from the screen
-        // edges.
-        contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 24, paddingBottom: 144 }}
+        // 12px side inset so rows are visibly wider but the card still has a
+        // small breathing margin from the screen edges. Top inset is on the
+        // header row (pt-6) so getItemLayout offsets start at 0.
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 144 }}
         // Tuning for long lists — keep the visible window small, recycle
-        // aggressively. (No removeClippedSubviews: it glitches sticky section
-        // headers on Android.)
+        // aggressively. (No removeClippedSubviews: it glitches sticky headers
+        // on Android.)
         initialNumToRender={15}
         windowSize={7}
         maxToRenderPerBatch={10}
@@ -310,7 +399,7 @@ export function ClientsListScreen({
         <AlphabetScrubber
           letters={letters}
           activeLetter={activeLetter}
-          onJump={jumpToSection}
+          onJump={jumpToLetterIndex}
         />
       ) : null}
 
@@ -320,8 +409,19 @@ export function ClientsListScreen({
   );
 }
 
-// Fixed slot height per letter — drag math and the sliding dot both rely on it.
+// Nominal slot height per letter; the real value is derived from the measured
+// strip height at runtime (the rendered glyph slot isn't exactly this), so the
+// dot and drag math stay aligned regardless of font metrics / density.
 const LETTER_H = 16;
+const DOT_SIZE = 16;
+
+// Fixed row heights for alphabetical mode — make section offsets deterministic
+// so scrubber jumps land exactly (see getItemLayout). Client rows clip to this
+// height; it fits the common avatar + name + two meta lines.
+const CLIENT_ROW_H = 88;
+const LETTER_HEADER_H = 28;
+const CARD_EDGE_H = 8; // the rounded-bottom card strip (footer row)
+const LIST_HEADER_H = 200; // initial estimate for the leading row until measured
 
 /**
  * Vertical letter strip for jumping between sections — drag or tap a letter.
@@ -340,6 +440,14 @@ function AlphabetScrubber({
 }) {
   const lastIndex = useRef(-1);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Finger Y within the strip — drives the bubble position so it sits exactly
+  // at the touch (no index→pixel mismatch).
+  const [dragY, setDragY] = useState(0);
+  const stripH = useRef(1);
+  // Real per-letter height = measured strip height / letter count. Using this
+  // instead of a hardcoded LETTER_H keeps the dot centered on its letter all
+  // the way down the alphabet (a fixed guess drifts as the index grows).
+  const [letterH, setLetterH] = useState(LETTER_H);
   const bubbleAnim = useRef(new Animated.Value(0)).current;
   const dotY = useRef(new Animated.Value(0)).current;
   const dotOpacity = useRef(new Animated.Value(0)).current;
@@ -355,17 +463,20 @@ function AlphabetScrubber({
     }
     Animated.parallel([
       Animated.spring(dotY, {
-        toValue: activeIdx * LETTER_H,
+        // Center the dot on the letter: slot top + half a slot − half the dot.
+        toValue: activeIdx * letterH + letterH / 2 - DOT_SIZE / 2,
         speed: 24,
         bounciness: 6,
         useNativeDriver: true,
       }),
       Animated.timing(dotOpacity, { toValue: 1, duration: 120, useNativeDriver: true }),
     ]).start();
-  }, [activeIdx, dotY, dotOpacity]);
+  }, [activeIdx, letterH, dotY, dotOpacity]);
 
   const handle = (y: number) => {
-    const idx = Math.min(letters.length - 1, Math.max(0, Math.floor(y / LETTER_H)));
+    const clamped = Math.min(stripH.current, Math.max(0, y));
+    setDragY(clamped);
+    const idx = Math.min(letters.length - 1, Math.max(0, Math.floor(clamped / letterH)));
     setDragIndex(prev => (prev === idx ? prev : idx));
     if (idx !== lastIndex.current) {
       lastIndex.current = idx;
@@ -393,13 +504,13 @@ function AlphabetScrubber({
   return (
     <View className="absolute right-0 top-0 bottom-32 justify-center" pointerEvents="box-none">
       <View pointerEvents="box-none">
-        {/* Drag bubble — floats left of the strip at the finger's letter */}
+        {/* Drag bubble — floats left of the strip, centered on the finger */}
         {dragIndex != null ? (
           <Animated.View
             pointerEvents="none"
             className="absolute right-9 w-12 h-12 rounded-full bg-primary items-center justify-center"
             style={{
-              top: dragIndex * LETTER_H + LETTER_H / 2 - 24,
+              top: dragY - 24,
               opacity: bubbleAnim,
               transform: [
                 { scale: bubbleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
@@ -418,6 +529,11 @@ function AlphabetScrubber({
         <View
           className="px-1"
           hitSlop={{ left: 8, right: 4 }}
+          onLayout={e => {
+            const h = Math.max(1, e.nativeEvent.layout.height);
+            stripH.current = h;
+            setLetterH(h / letters.length);
+          }}
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
           onResponderGrant={e => startDrag(e.nativeEvent.locationY)}
@@ -454,6 +570,8 @@ interface ClientRowProps {
   selectionMode: boolean;
   isChecked: boolean;
   isLast: boolean;
+  /** Fixed row height for alphabetical mode (keeps getItemLayout exact). */
+  fixedHeight?: number;
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
 }
@@ -464,6 +582,7 @@ const ClientRow = memo(function ClientRow({
   selectionMode,
   isChecked,
   isLast,
+  fixedHeight,
   onToggleSelect,
   onClientPress,
 }: ClientRowProps) {
@@ -478,8 +597,11 @@ const ClientRow = memo(function ClientRow({
       delayLongPress={300}
       // Row sits inside the white card; border-x continues the card frame.
       // border-b-gray-200 keeps the divider readable (the original gray-50
-      // was nearly invisible against the white card).
-      className={`flex-row items-center px-5 py-4 bg-white border-x ${
+      // was nearly invisible against the white card). With a fixedHeight the
+      // content is vertically centered and clipped to keep rows uniform;
+      // otherwise py-4 sizes the row to its content (search mode).
+      style={fixedHeight ? { height: fixedHeight, overflow: 'hidden' } : undefined}
+      className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-white border-x ${
         isLast ? '' : 'border-b border-b-gray-200'
       } border-x-gray-100 ${isChecked ? 'bg-primary/5' : 'active:bg-gray-50'}`}
     >

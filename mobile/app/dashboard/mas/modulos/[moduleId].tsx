@@ -8,6 +8,7 @@ import { getModuleById } from '@amixos/shared/modules/registry';
 import MapScreen from '@/modules/map/MapScreen';
 import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
 import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
+import ArchivosScreen from '@/modules/files/ArchivosScreen';
 
 // Real module components register here. Unlike web, mobile can't lazy-
 // download chunks — Apple/Google forbid remote JS — so every module is
@@ -17,6 +18,7 @@ const MODULE_COMPONENTS: Record<string, ComponentType> = {
   map: MapScreen,
   inventory: InventoryModuleScreen,
   equipment: EquipmentScreen,
+  files: ArchivosScreen,
 };
 
 export default function ModuleRoute() {

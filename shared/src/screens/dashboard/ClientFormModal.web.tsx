@@ -4,7 +4,7 @@
 // ClientFormModal.tsx so the web clients page resolves this variant
 // automatically instead of rendering the RN modal through react-native-web.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Building2, Phone, Mail, MapPin, X } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
@@ -114,6 +114,25 @@ export function ClientFormModal({
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Unsaved-changes guard: dirty once the form diverges from the values it
+  // opened with. Closing via backdrop / X / Cancel confirms first; a
+  // successful submit closes through the parent's onClose (no prompt).
+  const baseline = useMemo(
+    () => JSON.stringify({ ...EMPTY, ...initial, custom_fields: { ...(initial?.custom_fields ?? {}) } }),
+    [initial],
+  );
+  const dirty = open && JSON.stringify(form) !== baseline;
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [dirty]);
+  const guardedClose = () => {
+    const s = full.common.unsavedChanges;
+    if (!dirty || window.confirm(`${s.title}\n\n${s.body}`)) onClose();
+  };
+
   if (!open) return null;
 
   const isReq = (key: string) => !!requiredFlags[key];
@@ -125,7 +144,7 @@ export function ClientFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={guardedClose} />
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
@@ -134,7 +153,7 @@ export function ClientFormModal({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardedClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <X size={16} className="text-gray-500" />
@@ -371,7 +390,7 @@ export function ClientFormModal({
           <div className="flex gap-3 pt-1">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardedClose}
               className="flex-1 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >
               {tc.buttons.cancel}

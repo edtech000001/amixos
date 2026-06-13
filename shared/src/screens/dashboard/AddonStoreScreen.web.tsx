@@ -68,6 +68,17 @@ export function AddonStoreScreen({
     { key: 'industry', label: t.categoryIndustry },
   ];
 
+  // In the "All" view, split into labeled sections so add-on tools read
+  // distinctly from full industry verticals. A specific filter renders one
+  // unlabeled group (the active chip already names it).
+  const groups: Array<{ key: string; label: string | null; items: ModuleDef[] }> =
+    category === 'all'
+      ? [
+          { key: 'tools', label: t.categoryTools, items: filtered.filter(m => m.category === 'tools') },
+          { key: 'industry', label: t.categoryIndustry, items: filtered.filter(m => m.category === 'industry') },
+        ].filter(g => g.items.length > 0)
+      : [{ key: category, label: null, items: filtered }];
+
   return (
     <div className="px-5 lg:px-6 pt-5 pb-10">
       {/* Heading */}
@@ -119,8 +130,14 @@ export function AddonStoreScreen({
           <p className="text-sm text-gray-500">{t.noResults}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map(m => {
+        <div className="flex flex-col gap-6">
+          {groups.map(g => (
+            <div key={g.key}>
+              {g.label ? (
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">{g.label}</p>
+              ) : null}
+              <div className="flex flex-col gap-3">
+              {g.items.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
             const isComingSoon = m.status === 'coming_soon';
@@ -181,7 +198,10 @@ export function AddonStoreScreen({
                 </button>
               </div>
             );
-          })}
+              })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

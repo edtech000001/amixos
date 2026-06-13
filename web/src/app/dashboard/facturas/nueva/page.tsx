@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
 import { useLang } from '@/i18n/LangProvider';
+import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
 interface LineItem { description: string; qty: number; rate: number; }
 interface Client { id: string; first_name: string; last_name: string; }
@@ -213,6 +214,19 @@ function NuevaFacturaContent() {
     window.location.href = `/dashboard/facturas/${invoiceId}`;
   };
 
+  // Unsaved-changes guard: the back link calls confirmDiscard; beforeunload
+  // covers refresh / tab-close. dueDate is excluded — it auto-fills from
+  // business.invoice_due_days via an effect after mount. Declared before the
+  // loading early-return to keep hook order stable.
+  const dirty = useDirty(
+    {
+      invoiceNumber, clientIds, issueDate, notes, taxRate, language, customFields,
+      lines: lines.filter(l => l.description.trim()),
+    },
+    !loadingEdit,
+  );
+  const confirmDiscard = useUnsavedChanges(dirty);
+
   if (loadingEdit) {
     return (
       <div className="p-6 max-w-4xl">
@@ -227,6 +241,7 @@ function NuevaFacturaContent() {
       <div className="flex items-center gap-3 mb-6">
         <Link
           href={editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'}
+          onClick={e => { e.preventDefault(); confirmDiscard(() => { window.location.href = editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'; }); }}
           className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
         >
           <ArrowLeft size={18} className="text-gray-500" />

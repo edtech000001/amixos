@@ -39,6 +39,8 @@ export interface Business {
   invoice_due_days: number | null;
   invoice_field_required: Record<string, boolean>;
   invoice_field_order: string[] | null;
+  // Default invoice template config (JSONB). See shared/src/lib/invoiceTemplate.
+  invoice_template: Record<string, unknown> | null;
   client_field_required: Record<string, boolean>;
   client_field_order: string[] | null;
   employee_field_required: Record<string, boolean>;
@@ -155,6 +157,11 @@ interface AuthStore {
   // Convenience: caller's role in the active business.
   currentRole: Role | null;
   businessLoaded: boolean;
+  // True when the business fetch FAILED (e.g. a not-yet-run migration left a
+  // column the query references missing). Distinct from "loaded 0 businesses"
+  // so the route gate can show a retry screen instead of dumping an existing
+  // user into onboarding (which looks like their account was wiped).
+  businessLoadError: boolean;
   status: AuthStatus;
   error: string | null;
 
@@ -181,6 +188,7 @@ export const useAuthStore = create<AuthStore>()(
       roles: {},
       currentRole: null,
       businessLoaded: false,
+      businessLoadError: false,
       status: 'unknown',
       error: null,
 
@@ -226,10 +234,10 @@ export const useAuthStore = create<AuthStore>()(
           // Fetch all businesses the user is a member of (RLS lets the join
           // through because the user is in business_members for each). The
           // member row also gives us this user's role per business.
-          const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
+          const [bizRes, memberRes] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_field_required, invoice_field_order, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
+              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_field_required, invoice_field_order, invoice_template, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
               // Deterministic order: the fallback "first business" must be
               // the same on web and mobile, or per-business state (e.g. the
               // Google connection) looks inconsistent across devices.
@@ -239,6 +247,16 @@ export const useAuthStore = create<AuthStore>()(
               .select('business_id, role')
               .eq('user_id', u.id),
           ]);
+          // A failed query (e.g. a column from a not-yet-run migration) is NOT
+          // the same as "this user has no businesses". Flag the error and keep
+          // the previous businesses; the gate shows a retry screen instead of
+          // routing an existing user into onboarding.
+          if (bizRes.error || memberRes.error) {
+            set({ businessLoaded: true, businessLoadError: true });
+            return;
+          }
+          const { data: bizRows } = bizRes;
+          const { data: memberRows } = memberRes;
           const list = ((bizRows as Business[] | null) ?? []);
           const roleMap: Record<string, Role> = {};
           for (const m of (memberRows ?? []) as Array<{ business_id: string; role: string }>) {
@@ -257,9 +275,12 @@ export const useAuthStore = create<AuthStore>()(
             roles: roleMap,
             currentRole: activeId ? roleMap[activeId] ?? null : null,
             businessLoaded: true,
+            businessLoadError: false,
           });
         } catch {
-          set({ businesses: [], business: null, businessLoaded: true });
+          // Network/transport failure — same fail-safe: don't masquerade as
+          // "no businesses". Show the retry screen, don't wipe state.
+          set({ businessLoaded: true, businessLoadError: true });
         }
       },
 
@@ -283,6 +304,7 @@ export const useAuthStore = create<AuthStore>()(
                 user: { id: session.user.id, email: session.user.email ?? '' },
                 status: 'authenticated',
                 businessLoaded: false,
+                businessLoadError: false,
               });
               void get().refetchBusiness();
             } else {
@@ -296,6 +318,7 @@ export const useAuthStore = create<AuthStore>()(
                 status: 'authenticated',
                 error: null,
                 businessLoaded: false,
+                businessLoadError: false,
               });
               void get().refetchBusiness();
             }

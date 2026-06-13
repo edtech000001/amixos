@@ -94,6 +94,10 @@ export const can = {
   editInventory: (role: Role | null) => isAny(role, WRITERS),
   editCalendar:  (role: Role | null) => isAny(role, WRITERS),
 
+  // Files / document library — everyone reads (RLS + crew_visible decide what
+  // a field crew actually sees); writers manage categories/sections/uploads.
+  manageFiles: (role: Role | null) => isAny(role, WRITERS),
+
   // Reports
   seeReports: (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),
 

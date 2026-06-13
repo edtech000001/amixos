@@ -18,6 +18,7 @@ export function useProtectedRoute() {
   const status = useAuthStore((s) => s.status);
   const business = useAuthStore((s) => s.business);
   const businessLoaded = useAuthStore((s) => s.businessLoaded);
+  const businessLoadError = useAuthStore((s) => s.businessLoadError);
   const segments = useSegments();
   const router = useRouter();
 
@@ -28,9 +29,10 @@ export function useProtectedRoute() {
     const inAuthGroup = seg === 'auth';
     const inOnboarding = seg === 'onboarding';
     const inDashboard = seg === 'dashboard';
+    const inLoadError = seg === 'load-error';
     const onSplash = seg === '(tabs)' || !seg;
 
-    if (status === 'logged_out' && (inDashboard || inOnboarding)) {
+    if (status === 'logged_out' && (inDashboard || inOnboarding || inLoadError)) {
       router.replace('/auth/login');
       return;
     }
@@ -40,14 +42,22 @@ export function useProtectedRoute() {
       // otherwise we'd flash to /onboarding while business is still loading.
       if (!businessLoaded) return;
 
+      // The fetch FAILED (vs returned zero businesses). Send the user to a
+      // retry screen — never to onboarding, which would look like their
+      // account/business vanished. Most common cause: a not-yet-run migration.
+      if (businessLoadError) {
+        if (!inLoadError && !inAuthGroup) router.replace('/load-error');
+        return;
+      }
+
       if (!business && !inOnboarding && !inAuthGroup) {
         router.replace('/onboarding');
         return;
       }
-      if (business && (inAuthGroup || onSplash)) {
+      if (business && (inAuthGroup || onSplash || inLoadError)) {
         router.replace('/dashboard');
         return;
       }
     }
-  }, [status, business, businessLoaded, segments, router]);
+  }, [status, business, businessLoaded, businessLoadError, segments, router]);
 }

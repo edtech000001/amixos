@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -157,6 +158,18 @@ export default function NuevoClienteRoute() {
     else router.replace('/dashboard/clientes' as never);
   };
 
+  // Unsaved-changes guard on the back arrow + hardware back. `values` holds
+  // every editable field; the snapshot is taken once data has loaded (edit)
+  // or at mount (new), so untouched forms never prompt.
+  const dirty = useDirty(
+    {
+      firstName, lastName, company, phoneCell, phoneOffice, emailOffice,
+      emailHome, address, addressLine2, city, state, zipCode, notes, customFields,
+    },
+    !loadingEdit,
+  );
+  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+
   const save = async () => {
     if (!business) return;
     setSaving(true);
@@ -261,7 +274,7 @@ export default function NuevoClienteRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <View className="ml-2 flex-1">

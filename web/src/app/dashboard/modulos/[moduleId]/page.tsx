@@ -18,11 +18,13 @@ import { useLang } from '@/i18n/LangProvider';
 const MapModule = nextDynamic(() => import('@/modules/map'), { ssr: false });
 const EquipmentModule = nextDynamic(() => import('@/modules/equipment'), { ssr: false });
 const InventoryModule = nextDynamic(() => import('@/modules/inventory'), { ssr: false });
+const FilesModule = nextDynamic(() => import('@/modules/files'), { ssr: false });
 
 const MODULE_COMPONENTS: Record<string, ComponentType> = {
   map: MapModule,
   equipment: EquipmentModule,
   inventory: InventoryModule,
+  files: FilesModule,
 };
 
 export default function ModulePage({ params }: { params: { moduleId: string } }) {

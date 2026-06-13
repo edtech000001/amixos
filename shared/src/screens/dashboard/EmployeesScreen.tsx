@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
-  Plus,
   Clock,
   ClipboardList,
   UserCheck,
   DollarSign,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { Fab } from '../../ui/Fab';
 import { ROLE_LABELS } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 
@@ -114,8 +114,10 @@ export function EmployeesScreen({
   }, 0);
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
-      {/* Header */}
+    <View className="flex-1 bg-surface">
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
+      {/* Header — "add" is the bottom-right Fab; log-hours stays here as a
+         secondary action. */}
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
         <View>
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
@@ -125,22 +127,13 @@ export function EmployeesScreen({
               .replace('{{hours}}', String(totalHoursThisWeek))}
           </Text>
         </View>
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={onLogHours}
-            className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl active:bg-gray-50"
-          >
-            <Clock size={15} color="#374151" />
-            <Text className="text-sm font-semibold text-gray-700">{t.logHours}</Text>
-          </Pressable>
-          <Pressable
-            onPress={onAddEmployee}
-            className="flex-row items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-          >
-            <Plus size={15} color="#FFFFFF" />
-            <Text className="text-sm font-semibold text-white">{t.addBtn}</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={onLogHours}
+          className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl active:bg-gray-50"
+        >
+          <Clock size={15} color="#374151" />
+          <Text className="text-sm font-semibold text-gray-700">{t.logHours}</Text>
+        </Pressable>
       </View>
 
       {/* Tabs */}
@@ -335,5 +328,9 @@ export function EmployeesScreen({
 
       {modalsSlot}
     </ScrollView>
+
+    {/* New employee — floating action, bottom-right thumb reach */}
+    <Fab onPress={onAddEmployee} />
+    </View>
   );
 }

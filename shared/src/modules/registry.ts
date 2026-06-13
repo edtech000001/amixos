@@ -77,7 +77,7 @@ export const MODULE_REGISTRY: ModuleDef[] = [
   { id: 'rentals',      icon: Building2,  color: '#14B8A6', status: 'coming_soon', i18nKey: 'rentals',      category: 'industry' },
   { id: 'loyalty',      icon: Award,      color: '#EAB308', status: 'coming_soon', i18nKey: 'loyalty',      category: 'tools' },
   { id: 'trainer',      icon: Dumbbell,   color: '#EF4444', status: 'coming_soon', i18nKey: 'trainer',      category: 'industry' },
-  { id: 'files',        icon: FolderOpen, color: '#64748B', status: 'coming_soon', i18nKey: 'files',        category: 'tools' },
+  { id: 'files',        icon: FolderOpen, color: '#64748B', status: 'available',   i18nKey: 'files',        category: 'tools' },
   { id: 'fundraising',  icon: HandCoins,  color: '#E11D48', status: 'coming_soon', i18nKey: 'fundraising',  category: 'industry' },
   { id: 'equipment',    icon: Forklift,   color: '#78716C', status: 'available',   i18nKey: 'equipment',    category: 'tools' },
   { id: 'inventory',    icon: Package,    color: '#16A34A', status: 'available',   i18nKey: 'inventory',    category: 'tools' },

@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { fetchAll } from '../lib/supabaseFetch';
 import { geocodeAddress } from '../lib/geocoding';
 import {
   isWeatherFeatureEnabled,
@@ -158,15 +159,20 @@ async function refreshBusinessAlerts(
     return { status: 'skipped', reason: 'no_matches' };
   }
 
-  // Look up same_codes for every candidate SAME at once.
+  // Look up same_codes for every candidate SAME. Chunked: a nationwide
+  // outbreak can produce >1000 unique county codes, and a single .in()
+  // both bloats the query string and silently caps the response at
+  // PostgREST's 1000-row default, dropping alerts with no error.
   const uniqueSames = Array.from(new Set(candidatePairs.map((p) => p.sameCode)));
-  const { data: sameRows } = await supabase
-    .from('same_codes')
-    .select('code, county, state, lat, lng')
-    .in('code', uniqueSames);
   const sameMap = new Map<string, { county: string; state: string; lat: number | null; lng: number | null }>();
-  for (const r of sameRows ?? []) {
-    sameMap.set(r.code, { county: r.county, state: r.state, lat: r.lat, lng: r.lng });
+  for (let i = 0; i < uniqueSames.length; i += 500) {
+    const { data: sameRows } = await supabase
+      .from('same_codes')
+      .select('code, county, state, lat, lng')
+      .in('code', uniqueSames.slice(i, i + 500));
+    for (const r of sameRows ?? []) {
+      sameMap.set(r.code, { county: r.county, state: r.state, lat: r.lat, lng: r.lng });
+    }
   }
 
   // Lazy-geocode any SAME row missing lat/lng (county + state level).
@@ -300,23 +306,28 @@ weatherRouter.get('/alerts', async (req: AuthRequest, res) => {
     return res.status(403).json({ success: false, message: 'forbidden' });
   }
 
-  const { data, error } = await supabase
-    .from('weather_alerts')
-    .select('id, alert_id, event, severity, headline, description, area_desc, same_code, county, state, lat, lng, effective_at, expires_at, ends_at, sent_at, fetched_at')
-    .eq('business_id', businessId)
-    .not('lat', 'is', null)
-    .not('lng', 'is', null)
-    .order('fetched_at', { ascending: false });
-  if (error) return res.status(500).json({ success: false, message: error.message });
-
   // Return ALL cached alerts within the retention window — expired ones
-  // included. The map paints them at reduced opacity + flags them as
-  // expired in the popup so a user who skips a day still sees what hit
-  // their area. The retention-prune in /refresh handles the time bound;
-  // here we only filter out rows whose expires_at is so far in the past
-  // they're below the configured retention (defensive — prune should
-  // already have dropped them, but the cache may be stale between runs).
-  const rows = data ?? [];
+  // included, so a user who skips a day still sees what hit their area.
+  // The retention-prune in /refresh handles the time bound. Paginated via
+  // fetchAll: during an active outbreak the (alert × county) rows easily
+  // exceed PostgREST's silent 1000-row cap, which used to drop the oldest
+  // alerts from the map well before retention_days elapsed.
+  let rows: Array<Record<string, any>>;
+  try {
+    rows = await fetchAll((from, to) =>
+      supabase
+        .from('weather_alerts')
+        .select('id, alert_id, event, severity, headline, description, area_desc, same_code, county, state, lat, lng, effective_at, expires_at, ends_at, sent_at, fetched_at')
+        .eq('business_id', businessId)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+        .order('fetched_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e instanceof Error ? e.message : String(e) });
+  }
 
   // Most recent fetched_at across remaining rows (or null if none).
   const lastFetched = rows.length > 0 ? rows[0].fetched_at : null;

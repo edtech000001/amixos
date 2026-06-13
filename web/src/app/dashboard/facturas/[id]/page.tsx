@@ -16,6 +16,10 @@ import {
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
+import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+
+const genToken = () =>
+  Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
 interface RawClient {
   first_name: string;
@@ -56,6 +60,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [invoiceConfigRaw, setInvoiceConfigRaw] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -117,7 +123,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           .order('sort_order'),
       ]);
       const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
-      if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
+      if (data) {
+        setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
+        const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null };
+        setShareToken(raw.share_token ?? null);
+        setInvoiceConfigRaw(raw.template_config ?? null);
+      }
       setLoading(false);
     })();
   }, [id, business]);
@@ -128,6 +139,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
     await supabase.from('invoices').update(update).eq('id', id);
+    if (business) {
+      void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : 'invoice.sent', 'invoice', id, {
+        invoice_number: invoice?.invoiceNumber,
+      });
+    }
     setInvoice(prev => prev ? { ...prev, status } : prev);
     setUpdating(false);
   };
@@ -154,9 +170,49 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     router.push('/dashboard/facturas');
   };
 
-  const businessLocation = business
-    ? `${business.city ?? ''}${business.state ? `, ${business.state}` : ''}`
-    : '';
+  const branding: InvoiceBranding = {
+    name: business?.name ?? '',
+    logoUrl: business?.logo_url ?? null,
+    city: business?.city ?? null,
+    state: business?.state ?? null,
+    address: business?.address ?? null,
+    postalCode: business?.postal_code ?? null,
+    taxId: business?.tax_id ?? null,
+    licenseNumber: business?.license_number ?? null,
+    email: business?.email ?? null,
+    phone: business?.phone ?? null,
+    website: business?.website ?? null,
+  };
+  const templateConfig = resolveConfig(invoiceConfigRaw, business?.invoice_template ?? null);
+
+  // Generate (once) + persist the public share token, freezing the resolved
+  // template config onto the invoice so restyling the default later never
+  // changes an already-shared invoice. Returns the token.
+  const ensureShareToken = async (): Promise<string> => {
+    if (shareToken) return shareToken;
+    const token = genToken();
+    await supabase
+      .from('invoices')
+      .update({ share_token: token, template_config: invoiceConfigRaw ?? templateConfig })
+      .eq('id', id);
+    setShareToken(token);
+    return token;
+  };
+
+  const onPrint = async () => {
+    const token = await ensureShareToken();
+    window.open(`/factura/${token}?print=1`, '_blank');
+  };
+  const onShareLink = async () => {
+    const token = await ensureShareToken();
+    const url = `${window.location.origin}/factura/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert(tInv.linkCopied);
+    } catch {
+      window.prompt(tInv.linkCopied, url);
+    }
+  };
 
   const canDelete = can.deleteInvoice(currentRole);
 
@@ -165,12 +221,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       <InvoiceDetailScreen
         loading={loading}
         invoice={invoice}
-        businessName={business?.name ?? ''}
-        businessLocation={businessLocation}
+        branding={branding}
+        templateConfig={templateConfig}
         updating={updating}
         onBack={() => router.push('/dashboard/facturas')}
         onUpdateStatus={updateStatus}
-        onPrint={() => window.print()}
+        onPrint={onPrint}
+        onShareLink={onShareLink}
         onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
       />

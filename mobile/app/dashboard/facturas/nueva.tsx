@@ -24,6 +24,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 
@@ -198,6 +199,22 @@ export default function NuevaFacturaRoute() {
     else router.replace('/dashboard/facturas' as never);
   };
 
+  // Unsaved-changes guard on the back arrow + hardware back. `values` covers
+  // the editable fields (lines filtered to those with a description so the
+  // trailing empty row isn't counted); the snapshot is taken once data loads
+  // (edit) or at mount (new), so untouched forms never prompt. dueDate is
+  // intentionally excluded — it auto-fills from business.invoice_due_days via
+  // an effect after mount, which would otherwise read as an instant edit.
+  const dirty = useDirty(
+    {
+      invoiceNumber, clientIds, issueDate, notes, taxRate, language,
+      customFields,
+      lines: lines.filter((l) => l.description.trim()),
+    },
+    !loadingEdit,
+  );
+  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
     const validLines = lines.filter((l) => l.description.trim());
@@ -295,7 +312,7 @@ export default function NuevaFacturaRoute() {
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
         <Pressable
-          onPress={goBack}
+          onPress={confirmBack}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-gray-100"
         >

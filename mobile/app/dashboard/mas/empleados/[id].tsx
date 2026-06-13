@@ -3,7 +3,7 @@
 // links work). Mirrors the data + UX the previous in-list modal exposed:
 // view ↔ edit, access section, history timeline.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,7 @@ import {
   type AccessInvite,
 } from '@amixos/shared/lib/teamPeople';
 import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import { useUnsavedGuard } from '@/lib/useUnsavedGuard';
 
 interface RawEmployee {
   id: string;
@@ -303,6 +304,17 @@ export default function EmpleadoDetailRoute() {
     router.replace('/dashboard/mas/empleados');
   }, [router]);
 
+  // Snapshot the form when entering edit mode so the back guard only fires
+  // when something actually changed this session (re-baselined each entry,
+  // so it stays clean after a save → view → edit round-trip).
+  const editBaselineRef = useRef('');
+  const enterEdit = () => {
+    editBaselineRef.current = JSON.stringify(form);
+    setMode('edit');
+  };
+  const dirty = mode === 'edit' && JSON.stringify(form) !== editBaselineRef.current;
+  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -331,7 +343,7 @@ export default function EmpleadoDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
         <Text className="ml-1 flex-1 text-base font-semibold text-gray-900" numberOfLines={1}>
@@ -340,7 +352,7 @@ export default function EmpleadoDetailRoute() {
         <View className="flex-row items-center gap-1">
           {isView ? (
             <>
-              <Pressable onPress={() => setMode('edit')} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
+              <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
                 <Pencil size={18} color="#9CA3AF" />
               </Pressable>
               <Pressable onPress={toggleActive} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">

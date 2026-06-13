@@ -12,6 +12,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
@@ -157,7 +158,13 @@ export default function ClientesTab() {
               syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
             }
           }
+          const deleted = clients.find(c => c.id === id);
           await supabase.from('clients').delete().eq('id', id);
+          if (business) {
+            void logAudit(supabase, business.id, 'client.deleted', 'client', id, {
+              name: deleted ? `${deleted.first_name} ${deleted.last_name}`.trim() : undefined,
+            });
+          }
           setClients(prev => prev.filter(c => c.id !== id));
           setSelectedIds(prev => {
             const n = new Set(prev);
@@ -200,6 +207,10 @@ export default function ClientesTab() {
             }
             for (let i = 0; i < ids.length; i += 50) {
               await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));
+            }
+            // One summary entry for the batch rather than N rows in the log.
+            if (business) {
+              void logAudit(supabase, business.id, 'client.deleted', 'client', null, { count: ids.length });
             }
             setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
             setSelectedIds(new Set());

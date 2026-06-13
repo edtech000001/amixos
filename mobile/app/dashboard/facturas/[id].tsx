@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Share } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -12,6 +14,15 @@ import {
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
+import {
+  resolveConfig,
+  buildInvoiceViewModel,
+  buildInvoiceHtml,
+  type InvoiceBranding,
+} from '@amixos/shared/lib/invoiceTemplate';
+
+const genToken = () =>
+  Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
 interface RawClient {
   first_name: string;
@@ -53,6 +64,8 @@ export default function FacturaDetailRoute() {
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [invoiceConfigRaw, setInvoiceConfigRaw] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -115,7 +128,12 @@ export default function FacturaDetailRoute() {
           .order('sort_order'),
       ]);
       const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
-      if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
+      if (data) {
+        setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
+        const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null };
+        setShareToken(raw.share_token ?? null);
+        setInvoiceConfigRaw(raw.template_config ?? null);
+      }
       setLoading(false);
     })();
   }, [id, business]);
@@ -126,6 +144,11 @@ export default function FacturaDetailRoute() {
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
     await supabase.from('invoices').update(update).eq('id', id);
+    if (business) {
+      void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : 'invoice.sent', 'invoice', id, {
+        invoice_number: invoice?.invoiceNumber,
+      });
+    }
     setInvoice(prev => (prev ? { ...prev, status } : prev));
     setUpdating(false);
   };
@@ -163,9 +186,49 @@ export default function FacturaDetailRoute() {
     );
   };
 
-  const businessLocation = business
-    ? `${business.city ?? ''}${business.state ? `, ${business.state}` : ''}`
-    : '';
+  const branding: InvoiceBranding = {
+    name: business?.name ?? '',
+    logoUrl: business?.logo_url ?? null,
+    city: business?.city ?? null,
+    state: business?.state ?? null,
+    address: business?.address ?? null,
+    postalCode: business?.postal_code ?? null,
+    taxId: business?.tax_id ?? null,
+    licenseNumber: business?.license_number ?? null,
+    email: business?.email ?? null,
+    phone: business?.phone ?? null,
+    website: business?.website ?? null,
+  };
+  const templateConfig = resolveConfig(invoiceConfigRaw, business?.invoice_template ?? null);
+
+  // Generate (once) + persist the public share token, freezing the resolved
+  // config onto the invoice so restyling the default never changes a shared one.
+  const ensureShareToken = async (): Promise<string> => {
+    if (shareToken) return shareToken;
+    const token = genToken();
+    await supabase
+      .from('invoices')
+      .update({ share_token: token, template_config: invoiceConfigRaw ?? templateConfig })
+      .eq('id', id);
+    setShareToken(token);
+    return token;
+  };
+
+  const exportPdf = async () => {
+    if (!invoice) return;
+    const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
+    const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+    }
+  };
+
+  const shareLink = async () => {
+    const token = await ensureShareToken();
+    const base = process.env.EXPO_PUBLIC_WEB_URL ?? '';
+    const url = `${base}/factura/${token}`;
+    await Share.share({ message: url, url });
+  };
 
   const canDelete = can.deleteInvoice(currentRole);
 
@@ -174,14 +237,15 @@ export default function FacturaDetailRoute() {
       <InvoiceDetailScreen
         loading={loading}
         invoice={invoice}
-        businessName={business?.name ?? ''}
-        businessLocation={businessLocation}
+        branding={branding}
+        templateConfig={templateConfig}
         updating={updating}
         onBack={() => router.replace('/dashboard/facturas' as never)}
         onUpdateStatus={updateStatus}
+        onPrint={invoice ? exportPdf : undefined}
+        onShareLink={invoice ? shareLink : undefined}
         onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
-        // No print button on mobile.
       />
     </SafeAreaView>
   );

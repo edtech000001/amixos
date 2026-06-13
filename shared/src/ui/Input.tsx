@@ -6,11 +6,13 @@ interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   leftIcon?: ReactNode;
+  // Interactive slot on the right (e.g. a password-reveal eye toggle).
+  rightIcon?: ReactNode;
   containerClassName?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, leftIcon, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
+  { label, error, leftIcon, rightIcon, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
@@ -60,6 +62,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           )}
           {...rest}
         />
+        {rightIcon && <View className="ml-2">{rightIcon}</View>}
       </View>
       {error && <Text className="text-xs font-medium text-red-500">{error}</Text>}
     </View>

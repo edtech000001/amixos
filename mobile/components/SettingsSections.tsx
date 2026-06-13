@@ -16,11 +16,16 @@ import {
   CheckCircle2,
   AlertCircle,
   Bell,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { logAudit } from '@amixos/shared/lib/audit';
+import { InvoiceDesigner } from './InvoiceDesigner';
+import { normalizeConfig, type InvoiceTemplateConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -211,7 +216,10 @@ export function BusinessSection() {
       text: error ? t.business.saveError : t.business.saveSuccess,
       isError: !!error,
     });
-    if (!error) await refetchBusiness();
+    if (!error) {
+      void logAudit(supabase, business.id, 'business.updated', 'business', business.id, { name });
+      await refetchBusiness();
+    }
   };
 
   const stateOptions = [
@@ -353,6 +361,10 @@ export function FacturasSection() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
+  // Invoice template design (businesses.invoice_template).
+  const [design, setDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
+  const [dbDesign, setDbDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
+
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -368,6 +380,8 @@ export function FacturasSection() {
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
     setLocalOrder(o); setDbOrder(o);
+    const dz = normalizeConfig(business.invoice_template);
+    setDesign(dz); setDbDesign(dz);
   }, [business]);
 
   const loadTemplates = useCallback(async () => {
@@ -499,6 +513,7 @@ export function FacturasSection() {
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
+        invoice_template: design,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -509,6 +524,7 @@ export function FacturasSection() {
       setDbRequired(required);
       setDbDueDays(dueDays);
       setDbNotes(notes);
+      setDbDesign(design);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } catch {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -522,8 +538,9 @@ export function FacturasSection() {
       notes !== dbNotes ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
+      JSON.stringify(dbDesign) !== JSON.stringify(design) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, dbRequired, required, dbOrder, localOrder, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, dbRequired, required, dbOrder, localOrder, dbTemplates, templates, dbDesign, design],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -573,8 +590,32 @@ export function FacturasSection() {
     setMsg(null);
   };
 
+  const designBranding: InvoiceBranding = {
+    name: business?.name ?? '',
+    logoUrl: business?.logo_url ?? null,
+    city: business?.city ?? null,
+    state: business?.state ?? null,
+    address: business?.address ?? null,
+    postalCode: business?.postal_code ?? null,
+    taxId: business?.tax_id ?? null,
+    licenseNumber: business?.license_number ?? null,
+    email: business?.email ?? null,
+    phone: business?.phone ?? null,
+    website: business?.website ?? null,
+  };
+
   return (
     <View className="gap-5">
+      {/* Invoice design — template picker + structured customizer */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+        <SectionHeader
+          icon={<FileText size={18} color="#4F46E5" />}
+          title={t.invoices.design.title}
+          subtitle={t.invoices.design.subtitle}
+        />
+        <InvoiceDesigner value={design} onChange={(c) => { setDesign(c); setMsg(null); }} branding={designBranding} />
+      </View>
+
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<FileText size={18} color="#4F46E5" />}
@@ -2740,8 +2781,48 @@ export function AccountSection() {
 
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // ── Profile name (first/last) — lives in public.profiles, editable here.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setFirstName(data.first_name ?? '');
+      setLastName(data.last_name ?? '');
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const onSaveName = async () => {
+    if (!user) return;
+    setSavingName(true);
+    setNameMsg(null);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ first_name: firstName.trim(), last_name: lastName.trim() })
+      .eq('id', user.id);
+    setSavingName(false);
+    setNameMsg(
+      error
+        ? { text: t.account.nameSaveError, isError: true }
+        : { text: t.account.nameSaveSuccess, isError: false },
+    );
+  };
 
   const onSavePassword = async () => {
     if (!currentPw) {
@@ -2793,7 +2874,23 @@ export function AccountSection() {
           title={t.account.heading}
           subtitle={t.account.subtitle}
         />
-        <View className="gap-1">
+        <Input
+          label={t.account.firstNameLabel}
+          value={firstName}
+          onChangeText={setFirstName}
+          autoCapitalize="words"
+        />
+        <Input
+          label={t.account.lastNameLabel}
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+        />
+        <StatusMsg msg={nameMsg} />
+        <Button onPress={onSaveName} loading={savingName} fullWidth>
+          <Text className="text-white font-semibold">{t.account.saveNameBtn}</Text>
+        </Button>
+        <View className="gap-1 pt-2 border-t border-gray-100">
           <Text className="text-xs text-gray-500">{t.account.emailLabel}</Text>
           <Text className="text-sm font-medium text-gray-900">{user?.email ?? '—'}</Text>
         </View>
@@ -2859,16 +2956,34 @@ export function AccountSection() {
         <Input
           label={t.password.currentPasswordLabel}
           placeholder={t.password.currentPasswordPlaceholder}
-          secureTextEntry
+          secureTextEntry={!showCurrentPw}
           value={currentPw}
           onChangeText={setCurrentPw}
+          rightIcon={
+            <Pressable
+              onPress={() => setShowCurrentPw(v => !v)}
+              hitSlop={8}
+              accessibilityLabel={showCurrentPw ? t.password.hidePassword : t.password.showPassword}
+            >
+              {showCurrentPw ? <EyeOff size={18} color="#9CA3AF" /> : <Eye size={18} color="#9CA3AF" />}
+            </Pressable>
+          }
         />
         <Input
           label={t.password.newPasswordLabel}
           placeholder={t.password.newPasswordPlaceholder}
-          secureTextEntry
+          secureTextEntry={!showNewPw}
           value={newPw}
           onChangeText={setNewPw}
+          rightIcon={
+            <Pressable
+              onPress={() => setShowNewPw(v => !v)}
+              hitSlop={8}
+              accessibilityLabel={showNewPw ? t.password.hidePassword : t.password.showPassword}
+            >
+              {showNewPw ? <EyeOff size={18} color="#9CA3AF" /> : <Eye size={18} color="#9CA3AF" />}
+            </Pressable>
+          }
         />
         <StatusMsg msg={pwMsg} />
         <Button onPress={onSavePassword} loading={savingPw} fullWidth>

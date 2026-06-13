@@ -10,6 +10,7 @@ export type DashboardDict = {
     equipo: string;
     calendario: string;
     inventario: string;
+    archivos: string;
     reportes: string;
     ajustes: string;
     mas: string;
@@ -21,6 +22,7 @@ export type DashboardDict = {
       equipo: string;
       calendario: string;
       inventario: string;
+      archivos: string;
       tienda: string;
       ajustes: string;
       misTrabajos: string;
@@ -137,6 +139,8 @@ export type DashboardDict = {
     dueShort: string;
     markSent: string;
     markPaid: string;
+    print: string;
+    linkCopied: string;
     notFound: string;
     editTitle: string;
     deleteTitle: string;
@@ -532,6 +536,22 @@ export type DashboardDict = {
       deleteJobConfirm: string;
       deleting: string;
       deleteBtn: string;
+      // Job photos (migration 051)
+      photos: {
+        heading: string;
+        countLabel: string;
+        addBtn: string;
+        takePhoto: string;
+        chooseFromLibrary: string;
+        empty: string;
+        uploading: string;
+        uploadError: string;
+        limitHit: string;
+        deleteConfirm: string;
+        viewerClose: string;
+        // Shown in the create form before the job is saved (no id to attach to yet).
+        addAfterSave: string;
+      };
     };
     new: {
       headingNewJob: string;
@@ -855,19 +875,43 @@ export type DashboardDict = {
     newEvent: string;
     moreCount: string;
     noClient: string;
+    today: string;
+    views: {
+      month: string;
+      week: string;
+      day: string;
+    };
+    agenda: {
+      empty: string;
+      emptyAdd: string;
+      allDay: string;
+      count: string;
+    };
+    availability: {
+      button: string;
+      title: string;
+      hint: string;
+      available: string;
+      busy: string;
+      noTeam: string;
+    };
     eventTypes: {
       job: string;
       meeting: string;
       delivery: string;
+      reminder: string;
       follow_up: string;
       other: string;
     };
     modal: {
       newEventTitle: string;
+      editTitle: string;
       titleLabel: string;
       titlePlaceholder: string;
       typeLabel: string;
+      allDayLabel: string;
       dateLabel: string;
+      endDateLabel: string;
       timeStartLabel: string;
       timeEndLabel: string;
       locationLabel: string;
@@ -1042,6 +1086,32 @@ export type DashboardDict = {
       saveError: string;
       saveSuccess: string;
       confirmDeleteField: string;
+      design: {
+        title: string;
+        subtitle: string;
+        preset: string;
+        presets: { clasica: string; moderna: string; minimalista: string; compacta: string };
+        accent: string;
+        font: string;
+        fonts: { sans: string; serif: string; mono: string };
+        density: string;
+        densities: { comfortable: string; compact: string };
+        showLogo: string;
+        logoSize: string;
+        logoSizes: { sm: string; md: string; lg: string };
+        sections: string;
+        sectionNames: {
+          header: string; billTo: string; lineItems: string; totals: string;
+          customFields: string; notes: string; paymentInstructions: string; footer: string;
+        };
+        columns: string;
+        columnNames: { qty: string; rate: string; total: string };
+        textBlocks: string;
+        headerNote: string;
+        paymentInstructionsField: string;
+        footerField: string;
+        preview: string;
+      };
     };
     customFields: {
       heading: string;
@@ -1070,6 +1140,11 @@ export type DashboardDict = {
       subtitle: string;
       emailLabel: string;
       roleLabel: string;
+      firstNameLabel: string;
+      lastNameLabel: string;
+      saveNameBtn: string;
+      nameSaveSuccess: string;
+      nameSaveError: string;
       businessesHeading: string;
       businessesSubtitle: string;
       businessesEmpty: string;
@@ -1087,6 +1162,8 @@ export type DashboardDict = {
       currentPasswordPlaceholder: string;
       newPasswordLabel: string;
       newPasswordPlaceholder: string;
+      showPassword: string;
+      hidePassword: string;
       saveBtn: string;
       errorMinLength: string;
       errorCurrentRequired: string;
@@ -1584,6 +1661,28 @@ export type DashboardDict = {
       outOfStock: string;
     };
   };
+  files: {
+    title: string; subtitle: string;
+    empty: string; emptyHint: string;
+    newCategory: string; newSection: string; addEntry: string;
+    categoryNameLabel: string; categoryNamePlaceholder: string;
+    sectionNameLabel: string; sectionNamePlaceholder: string;
+    entryTitleLabel: string; entryTitlePlaceholder: string;
+    crewVisibleLabel: string; crewVisibleHint: string;
+    officeOnlyBadge: string; crewBadge: string;
+    kindFile: string; kindLink: string;
+    uploadBtn: string; uploading: string; chooseFile: string;
+    linkUrlLabel: string; linkUrlPlaceholder: string; linkBadge: string;
+    openBtn: string;
+    noSections: string; noEntries: string;
+    deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
+    tooBig: string;
+    sectionsCount: string; filesCount: string;
+    selectedCount: string; moveBtn: string; moveTitle: string; moveHere: string;
+    newFolder: string; folderNameLabel: string; folderNamePlaceholder: string;
+    deleteFolderConfirm: string; emptyFolder: string;
+    visibilityLabel: string; visInherit: string;
+  };
   // Date locale for short month formatting in lists
   dateLocale: string;
 };
@@ -1599,6 +1698,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       equipo: 'Equipo',
       calendario: 'Calendario',
       inventario: 'Inventario',
+      archivos: 'Archivos',
       reportes: 'Reportes',
       ajustes: 'Ajustes',
       mas: 'Más',
@@ -1608,6 +1708,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         equipo: 'Invita usuarios y gestiona roles de acceso.',
         calendario: 'Citas, trabajos programados y horarios.',
         inventario: 'Productos, partes y materiales.',
+        archivos: 'Manuales y documentos para tu equipo.',
         tienda: 'Activa o desactiva módulos para tu negocio.',
         ajustes: 'Configura tu negocio, equipo y conexiones.',
         misTrabajos: 'Trabajos donde eres líder.',
@@ -1718,6 +1819,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dueShort: 'Vence {{date}}',
       markSent: 'Marcar enviada',
       markPaid: 'Marcar pagada',
+      print: 'Imprimir / PDF',
+      linkCopied: 'Enlace de la factura copiado',
       notFound: 'Factura no encontrada.',
       editTitle: 'Editar factura',
       deleteTitle: 'Eliminar factura',
@@ -2102,6 +2205,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
         deleting: 'Eliminando...',
         deleteBtn: 'Eliminar',
+        photos: {
+          heading: 'Fotos',
+          countLabel: '{{count}} de {{max}}',
+          addBtn: 'Agregar foto',
+          takePhoto: 'Tomar foto',
+          chooseFromLibrary: 'Elegir de la galería',
+          empty: 'Aún no hay fotos de este trabajo.',
+          uploading: 'Subiendo...',
+          uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
+          limitHit: 'Máximo {{max}} fotos por trabajo.',
+          deleteConfirm: '¿Eliminar esta foto?',
+          viewerClose: 'Cerrar',
+          addAfterSave: 'Guarda el trabajo primero para agregar fotos.',
+        },
       },
       new: {
         headingNewJob: 'Nuevo trabajo',
@@ -2163,10 +2280,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         markAsLead: 'Marcar como líder',
         leadLabel: 'Líder del trabajo',
         leadNone: 'Sin líder',
-        crewLabel: 'Cuadrilla',
+        crewLabel: 'Trabajadores',
         workerSearchPlaceholder: 'Buscar trabajador...',
         workerNoResults: 'Sin resultados',
-        crewPlaceholder: 'Selecciona la cuadrilla',
+        crewPlaceholder: 'Selecciona los trabajadores',
         crewSelectedCount: '{{count}} seleccionados',
         crewDoneBtn: 'Listo',
         itemsHeadingProposal: 'Servicios',
@@ -2417,19 +2534,43 @@ export const dashboard: Record<Locale, DashboardDict> = {
       newEvent: 'Nuevo evento',
       moreCount: '+{{count}} más',
       noClient: 'Sin cliente',
+      today: 'Hoy',
+      views: {
+        month: 'Mes',
+        week: 'Semana',
+        day: 'Día',
+      },
+      agenda: {
+        empty: 'No hay nada este día',
+        emptyAdd: '+ Agregar evento',
+        allDay: 'Todo el día',
+        count: '{{count}} en total',
+      },
+      availability: {
+        button: 'Disponibilidad',
+        title: 'Disponibilidad del equipo',
+        hint: 'El número es cuántos trabajos asignados tiene cada persona ese día',
+        available: 'Disponible',
+        busy: 'Ocupado',
+        noTeam: 'No hay empleados activos',
+      },
       eventTypes: {
         job: 'Trabajo',
         meeting: 'Reunión',
         delivery: 'Entrega',
+        reminder: 'Recordatorio',
         follow_up: 'Seguimiento',
         other: 'Otro',
       },
       modal: {
         newEventTitle: 'Nuevo evento — {{date}}',
+        editTitle: 'Editar evento',
         titleLabel: 'Título *',
-        titlePlaceholder: 'Instalación de pivote, reunión con cliente...',
+        titlePlaceholder: 'Reunión con cliente, entrega de material...',
         typeLabel: 'Tipo',
+        allDayLabel: 'Todo el día',
         dateLabel: 'Fecha',
+        endDateLabel: 'Fecha fin',
         timeStartLabel: 'Inicio',
         timeEndLabel: 'Fin',
         locationLabel: 'Ubicación',
@@ -2604,6 +2745,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
         confirmDeleteField: '¿Eliminar este campo? Los datos en facturas existentes se perderán.',
+        design: {
+          title: 'Diseño de factura',
+          subtitle: 'Elige una plantilla y personalízala. Se aplica a la vista, al PDF y al enlace público.',
+          preset: 'Plantilla',
+          presets: { clasica: 'Clásica', moderna: 'Moderna', minimalista: 'Minimalista', compacta: 'Compacta' },
+          accent: 'Color de acento',
+          font: 'Tipografía',
+          fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
+          density: 'Densidad',
+          densities: { comfortable: 'Cómoda', compact: 'Compacta' },
+          showLogo: 'Mostrar logo',
+          logoSize: 'Tamaño del logo',
+          logoSizes: { sm: 'Pequeño', md: 'Mediano', lg: 'Grande' },
+          sections: 'Secciones',
+          sectionNames: {
+            header: 'Encabezado', billTo: 'Facturar a', lineItems: 'Conceptos', totals: 'Totales',
+            customFields: 'Detalles adicionales', notes: 'Notas', paymentInstructions: 'Instrucciones de pago', footer: 'Pie de página',
+          },
+          columns: 'Columnas',
+          columnNames: { qty: 'Cant.', rate: 'Precio', total: 'Total' },
+          textBlocks: 'Bloques de texto',
+          headerNote: 'Nota del encabezado',
+          paymentInstructionsField: 'Instrucciones de pago',
+          footerField: 'Pie de página',
+          preview: 'Vista previa',
+        },
       },
       customFields: {
         heading: 'Campos personalizados',
@@ -2632,6 +2799,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Tu información de acceso.',
         emailLabel: 'Correo',
         roleLabel: 'Rol',
+        firstNameLabel: 'Nombre',
+        lastNameLabel: 'Apellido',
+        saveNameBtn: 'Guardar nombre',
+        nameSaveSuccess: 'Nombre actualizado.',
+        nameSaveError: 'No se pudo guardar el nombre.',
         businessesHeading: 'Tus negocios',
         businessesSubtitle: 'Negocios donde eres miembro y tu rol en cada uno.',
         businessesEmpty: 'Aún no eres miembro de ningún negocio.',
@@ -2649,6 +2821,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         currentPasswordPlaceholder: 'Tu contraseña actual',
         newPasswordLabel: 'Nueva contraseña',
         newPasswordPlaceholder: 'Mínimo 8 caracteres',
+        showPassword: 'Mostrar contraseña',
+        hidePassword: 'Ocultar contraseña',
         saveBtn: 'Actualizar contraseña',
         errorMinLength: 'Mínimo 8 caracteres',
         errorCurrentRequired: 'Ingresa tu contraseña actual.',
@@ -2782,7 +2956,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         rentals:      { name: 'Propiedades en renta', description: 'Inquilinos, pagos, contratos, solicitudes de mantenimiento' },
         loyalty:      { name: 'Programa de lealtad',   description: 'Recompensas y puntos de clientes frecuentes' },
         trainer:      { name: 'Entrenador',            description: 'Planes de entrenamiento y alimentación para tus clientes' },
-        files:        { name: 'Archivos',              description: 'Guarda documentos y enlaza Google Drive, iCloud, OneDrive' },
+        files:        { name: 'Archivos',              description: 'Manuales y documentos que tu equipo puede abrir (sube archivos o pega enlaces)' },
         fundraising:  { name: 'Recaudación',           description: 'Para organizaciones sin fines de lucro: metas y fondos recaudados' },
         equipment:    { name: 'Maquinaria',            description: 'Camiones, autos, equipo pesado y todo lo demás de tu negocio' },
         inventory:    { name: 'Inventario',            description: 'Productos, partes y materiales con conteo de existencias' },
@@ -3120,6 +3294,53 @@ export const dashboard: Record<Locale, DashboardDict> = {
         outOfStock: 'Sin stock',
       },
     },
+    files: {
+      title: 'Archivos',
+      subtitle: 'Manuales y documentos para tu equipo',
+      empty: 'Aún no hay archivos',
+      emptyHint: 'Pídele a tu oficina que suba manuales y documentos.',
+      newCategory: 'Nueva categoría',
+      newSection: 'Nueva sección',
+      addEntry: 'Agregar archivo',
+      categoryNameLabel: 'Nombre de la categoría',
+      categoryNamePlaceholder: 'Ej. Manuales, Seguridad, Contratos',
+      sectionNameLabel: 'Nombre de la sección',
+      sectionNamePlaceholder: 'Ej. Tractores, Bombas',
+      entryTitleLabel: 'Título',
+      entryTitlePlaceholder: 'Ej. Manual del operador',
+      crewVisibleLabel: 'Visible para el equipo',
+      crewVisibleHint: 'Si está apagado, solo la oficina ve esta categoría.',
+      officeOnlyBadge: 'Solo oficina',
+      crewBadge: 'Equipo',
+      kindFile: 'Subir archivo',
+      kindLink: 'Pegar enlace',
+      uploadBtn: 'Subir',
+      uploading: 'Subiendo…',
+      chooseFile: 'Elegir archivo',
+      linkUrlLabel: 'Enlace',
+      linkUrlPlaceholder: 'https://… (Drive, Dropbox, YouTube)',
+      linkBadge: 'Enlace',
+      openBtn: 'Abrir',
+      noSections: 'Sin secciones todavía',
+      noEntries: 'Sin archivos todavía',
+      deleteCategoryConfirm: '¿Eliminar esta categoría y todo su contenido?',
+      deleteSectionConfirm: '¿Eliminar esta sección y sus archivos?',
+      deleteEntryConfirm: '¿Eliminar este archivo?',
+      tooBig: 'El archivo supera el límite de 50 MB. Usa un enlace.',
+      sectionsCount: '{{count}} secciones',
+      filesCount: '{{count}} archivos',
+      selectedCount: '{{count}} seleccionados',
+      moveBtn: 'Mover',
+      moveTitle: 'Mover a…',
+      moveHere: 'Mover aquí',
+      newFolder: 'Nueva carpeta',
+      folderNameLabel: 'Nombre de la carpeta',
+      folderNamePlaceholder: 'Ej. Tractores, Corner, Manuales',
+      deleteFolderConfirm: '¿Eliminar esta carpeta y todo su contenido?',
+      emptyFolder: 'Esta carpeta está vacía',
+      visibilityLabel: 'Visibilidad',
+      visInherit: 'Heredar',
+    },
     dateLocale: 'es-MX',
   },
   en: {
@@ -3132,6 +3353,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       equipo: 'Team',
       calendario: 'Calendar',
       inventario: 'Inventory',
+      archivos: 'Files',
       reportes: 'Reports',
       ajustes: 'Settings',
       mas: 'More',
@@ -3141,6 +3363,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         equipo: 'Invite users and manage access roles.',
         calendario: 'Appointments, scheduled jobs, and hours.',
         inventario: 'Products, parts, and materials.',
+        archivos: 'Manuals and documents for your team.',
         tienda: 'Enable or disable modules for your business.',
         ajustes: 'Configure your business, team, and connections.',
         misTrabajos: "Jobs where you're the lead.",
@@ -3251,6 +3474,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dueShort: 'Due {{date}}',
       markSent: 'Mark sent',
       markPaid: 'Mark paid',
+      print: 'Print / PDF',
+      linkCopied: 'Invoice link copied',
       notFound: 'Invoice not found.',
       editTitle: 'Edit invoice',
       deleteTitle: 'Delete invoice',
@@ -3635,6 +3860,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
         deleting: 'Deleting...',
         deleteBtn: 'Delete',
+        photos: {
+          heading: 'Photos',
+          countLabel: '{{count}} of {{max}}',
+          addBtn: 'Add photo',
+          takePhoto: 'Take photo',
+          chooseFromLibrary: 'Choose from library',
+          empty: 'No photos for this job yet.',
+          uploading: 'Uploading...',
+          uploadError: "Couldn't upload the photo. Try again.",
+          limitHit: 'Maximum {{max}} photos per job.',
+          deleteConfirm: 'Delete this photo?',
+          viewerClose: 'Close',
+          addAfterSave: 'Save the job first to add photos.',
+        },
       },
       new: {
         headingNewJob: 'New job',
@@ -3950,19 +4189,43 @@ export const dashboard: Record<Locale, DashboardDict> = {
       newEvent: 'New event',
       moreCount: '+{{count}} more',
       noClient: 'No client',
+      today: 'Today',
+      views: {
+        month: 'Month',
+        week: 'Week',
+        day: 'Day',
+      },
+      agenda: {
+        empty: 'Nothing on this day',
+        emptyAdd: '+ Add event',
+        allDay: 'All day',
+        count: '{{count}} total',
+      },
+      availability: {
+        button: 'Availability',
+        title: 'Team availability',
+        hint: 'The number is how many jobs each person has that day',
+        available: 'Available',
+        busy: 'Busy',
+        noTeam: 'No active employees',
+      },
       eventTypes: {
         job: 'Job',
         meeting: 'Meeting',
         delivery: 'Delivery',
+        reminder: 'Reminder',
         follow_up: 'Follow-up',
         other: 'Other',
       },
       modal: {
         newEventTitle: 'New event — {{date}}',
+        editTitle: 'Edit event',
         titleLabel: 'Title *',
-        titlePlaceholder: 'Pivot installation, client meeting...',
+        titlePlaceholder: 'Client meeting, material delivery...',
         typeLabel: 'Type',
+        allDayLabel: 'All day',
         dateLabel: 'Date',
+        endDateLabel: 'End date',
         timeStartLabel: 'Start',
         timeEndLabel: 'End',
         locationLabel: 'Location',
@@ -4137,6 +4400,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
         confirmDeleteField: 'Delete this field? Data on existing invoices will be lost.',
+        design: {
+          title: 'Invoice design',
+          subtitle: 'Pick a template and customize it. Applies to the view, the PDF, and the public link.',
+          preset: 'Template',
+          presets: { clasica: 'Classic', moderna: 'Modern', minimalista: 'Minimal', compacta: 'Compact' },
+          accent: 'Accent color',
+          font: 'Font',
+          fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
+          density: 'Density',
+          densities: { comfortable: 'Comfortable', compact: 'Compact' },
+          showLogo: 'Show logo',
+          logoSize: 'Logo size',
+          logoSizes: { sm: 'Small', md: 'Medium', lg: 'Large' },
+          sections: 'Sections',
+          sectionNames: {
+            header: 'Header', billTo: 'Bill to', lineItems: 'Line items', totals: 'Totals',
+            customFields: 'Additional details', notes: 'Notes', paymentInstructions: 'Payment instructions', footer: 'Footer',
+          },
+          columns: 'Columns',
+          columnNames: { qty: 'Qty', rate: 'Rate', total: 'Total' },
+          textBlocks: 'Text blocks',
+          headerNote: 'Header note',
+          paymentInstructionsField: 'Payment instructions',
+          footerField: 'Footer',
+          preview: 'Preview',
+        },
       },
       customFields: {
         heading: 'Custom fields',
@@ -4165,6 +4454,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Your sign-in information.',
         emailLabel: 'Email',
         roleLabel: 'Role',
+        firstNameLabel: 'First name',
+        lastNameLabel: 'Last name',
+        saveNameBtn: 'Save name',
+        nameSaveSuccess: 'Name updated.',
+        nameSaveError: "Couldn't save your name.",
         businessesHeading: 'Your businesses',
         businessesSubtitle: 'Businesses you belong to and your role in each one.',
         businessesEmpty: 'You are not a member of any business yet.',
@@ -4182,6 +4476,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         currentPasswordPlaceholder: 'Your current password',
         newPasswordLabel: 'New password',
         newPasswordPlaceholder: 'At least 8 characters',
+        showPassword: 'Show password',
+        hidePassword: 'Hide password',
         saveBtn: 'Update password',
         errorMinLength: 'At least 8 characters',
         errorCurrentRequired: 'Enter your current password.',
@@ -4315,7 +4611,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         rentals:      { name: 'Rental Properties', description: 'Tenants, payments, leases, work-order requests' },
         loyalty:      { name: 'Loyalty Program',   description: 'Track customer loyalty points and rewards' },
         trainer:      { name: 'Trainer',           description: 'Workout and meal plans for your clients' },
-        files:        { name: 'Files',             description: 'Store documents; link Google Drive, iCloud, OneDrive' },
+        files:        { name: 'Files',             description: 'Manuals and documents your team can open (upload files or paste links)' },
         fundraising:  { name: 'Fundraising',       description: 'For nonprofits: track goals and money raised' },
         equipment:    { name: 'Equipment',         description: 'Trucks, cars, heavy equipment, and everything else your business owns' },
         inventory:    { name: 'Inventory',         description: 'Products, parts, and materials with stock counts' },
@@ -4652,6 +4948,53 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lowStock: 'Low stock',
         outOfStock: 'Out of stock',
       },
+    },
+    files: {
+      title: 'Files',
+      subtitle: 'Manuals and documents for your team',
+      empty: 'No files yet',
+      emptyHint: 'Ask your office to upload manuals and documents.',
+      newCategory: 'New category',
+      newSection: 'New section',
+      addEntry: 'Add file',
+      categoryNameLabel: 'Category name',
+      categoryNamePlaceholder: 'e.g. Manuals, Safety, Contracts',
+      sectionNameLabel: 'Section name',
+      sectionNamePlaceholder: 'e.g. Tractors, Pumps',
+      entryTitleLabel: 'Title',
+      entryTitlePlaceholder: 'e.g. Operator manual',
+      crewVisibleLabel: 'Visible to the team',
+      crewVisibleHint: 'When off, only the office sees this category.',
+      officeOnlyBadge: 'Office only',
+      crewBadge: 'Team',
+      kindFile: 'Upload file',
+      kindLink: 'Paste link',
+      uploadBtn: 'Upload',
+      uploading: 'Uploading…',
+      chooseFile: 'Choose file',
+      linkUrlLabel: 'Link',
+      linkUrlPlaceholder: 'https://… (Drive, Dropbox, YouTube)',
+      linkBadge: 'Link',
+      openBtn: 'Open',
+      noSections: 'No sections yet',
+      noEntries: 'No files yet',
+      deleteCategoryConfirm: 'Delete this category and everything in it?',
+      deleteSectionConfirm: 'Delete this section and its files?',
+      deleteEntryConfirm: 'Delete this file?',
+      tooBig: 'File exceeds the 50 MB limit. Use a link instead.',
+      sectionsCount: '{{count}} sections',
+      filesCount: '{{count}} files',
+      selectedCount: '{{count}} selected',
+      moveBtn: 'Move',
+      moveTitle: 'Move to…',
+      moveHere: 'Move here',
+      newFolder: 'New folder',
+      folderNameLabel: 'Folder name',
+      folderNamePlaceholder: 'e.g. Tractors, Corner, Manuals',
+      deleteFolderConfirm: 'Delete this folder and everything in it?',
+      emptyFolder: 'This folder is empty',
+      visibilityLabel: 'Visibility',
+      visInherit: 'Inherit',
     },
     dateLocale: 'en-US',
   },

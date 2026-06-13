@@ -426,7 +426,7 @@ export default function DashboardPage() {
 
   const quickActions = [
     { label: t.home.quickActions.newInvoice, icon: FileText, onClick: () => router.push('/dashboard/facturas/nueva'), classes: 'bg-primary/10 text-primary hover:bg-primary/15' },
-    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes'), classes: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
+    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes?new=1'), classes: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
     { label: t.home.quickActions.newJob, icon: Briefcase, onClick: () => router.push('/dashboard/trabajos/nuevo'), classes: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' },
     { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-50 text-orange-600 hover:bg-orange-100' },
   ];

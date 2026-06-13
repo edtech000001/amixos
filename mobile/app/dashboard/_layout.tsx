@@ -189,6 +189,7 @@ function DashboardTabs() {
              otherwise expo-router auto-surfaces them as empty dock tabs. */}
           <Tabs.Screen name="mas/empleados/index" options={{ href: null }} />
           <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
+          <Tabs.Screen name="mas/empleados/nuevo" options={{ href: null }} />
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
           <Tabs.Screen name="mas/inventario" options={{ href: null }} />
           <Tabs.Screen name="mas/calendario" options={{ href: null }} />

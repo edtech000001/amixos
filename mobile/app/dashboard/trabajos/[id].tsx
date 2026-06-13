@@ -46,6 +46,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
+import { JobPhotosSection } from '@/components/JobPhotosSection';
 
 interface Job {
   id: string;
@@ -332,6 +333,11 @@ export default function JobDetailRoute() {
 
     if (!error && invoice) {
       await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', job.id);
+      void logAudit(supabase, business.id, 'invoice.created', 'invoice', invoice.id, {
+        invoice_number: invNum,
+        total_amount: total,
+        from_job_id: job.id,
+      });
       router.replace(`/dashboard/facturas/${invoice.id}`);
     }
     setUpdatingStatus(false);
@@ -771,6 +777,15 @@ export default function JobDetailRoute() {
               </View>
             </View>
           )}
+        </View>
+
+        {/* Photos */}
+        <View className="bg-white rounded-2xl border border-gray-100 p-5">
+          <JobPhotosSection
+            jobId={job.id}
+            businessId={job.business_id}
+            canWrite={can.editJobMetadata(currentRole)}
+          />
         </View>
 
         {/* Metadata — last edited (created moved to top) */}

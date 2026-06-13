@@ -7,6 +7,7 @@
 import {
   ArrowLeft,
   Printer,
+  Link2,
   CheckCircle,
   Send,
   DollarSign,
@@ -22,6 +23,12 @@ import {
   type InvoiceLang,
 } from '../../i18n/invoice';
 import { formatDateLong } from '../../lib/format';
+import { InvoiceDocument } from './InvoiceDocument';
+import {
+  buildInvoiceViewModel,
+  type InvoiceBranding,
+  type InvoiceTemplateConfig,
+} from '../../lib/invoiceTemplate';
 
 export interface InvoiceDetailClient {
   firstName: string;
@@ -55,13 +62,17 @@ export interface InvoiceDetail {
 export interface InvoiceDetailScreenProps {
   loading: boolean;
   invoice: InvoiceDetail | null;
-  businessName: string;
-  businessLocation: string;
+  /** Business branding for the invoice document header (logo, contact, tax id). */
+  branding: InvoiceBranding;
+  /** Resolved template config (per-invoice override → business default → app default). */
+  templateConfig: InvoiceTemplateConfig;
   updating: boolean;
   onBack: () => void;
   onUpdateStatus: (status: 'sent' | 'paid') => Promise<void> | void;
-  /** Web-only: print/download. Hidden if not provided. */
+  /** Print / download PDF. Hidden if not provided. */
   onPrint?: () => void;
+  /** Copy/share the public invoice link. Hidden if not provided. */
+  onShareLink?: () => void;
   /** Optional: open the edit form. Pencil icon hidden when not provided. */
   onEdit?: () => void;
   /** Optional: trigger delete (caller handles confirm). Trash hidden when not provided. */
@@ -90,12 +101,13 @@ function fmt(n: number) {
 export function InvoiceDetailScreen({
   loading,
   invoice,
-  businessName,
-  businessLocation,
+  branding,
+  templateConfig,
   updating,
   onBack,
   onUpdateStatus,
   onPrint,
+  onShareLink,
   onEdit,
   onDelete,
 }: InvoiceDetailScreenProps) {
@@ -132,6 +144,7 @@ export function InvoiceDetailScreen({
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
 
   const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
+  const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
 
   return (
     <div className="px-6 lg:px-8 pt-6 pb-12">
@@ -176,6 +189,11 @@ export function InvoiceDetailScreen({
             >
               <CheckCircle size={14} className="text-white" />
               {tInv.markPaid}
+            </button>
+          ) : null}
+          {onShareLink ? (
+            <button type="button" onClick={onShareLink} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+              <Link2 size={18} className="text-gray-500" />
             </button>
           ) : null}
           {onPrint ? (
@@ -229,80 +247,10 @@ export function InvoiceDetailScreen({
         </div>
       </div>
 
-      {/* Main invoice card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-6 mb-4">
-        {/* From + Bill To */}
-        <div className="flex justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.from}</p>
-            <p className="text-sm font-semibold text-gray-900">{businessName}</p>
-            <p className="text-xs text-gray-400">{businessLocation}</p>
-          </div>
-          {invoice.clients.length > 0 ? (
-            <div className="flex flex-col items-end">
-              <p className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.billTo}</p>
-              {invoice.clients.map((c, i) => (
-                <div key={i} className={`flex flex-col items-end ${i > 0 ? 'mt-2' : ''}`}>
-                  <p className="text-sm font-semibold text-gray-900">{c.firstName} {c.lastName}</p>
-                  {c.email ? <p className="text-xs text-gray-400">{c.email}</p> : null}
-                  {c.phoneCell ? <p className="text-xs text-gray-400">{c.phoneCell}</p> : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Line items */}
-        <div className="border-t border-gray-100 pt-4">
-          <div className="flex mb-3 px-2">
-            <span className="flex-1 text-xs font-semibold text-gray-400 uppercase">{t.item}</span>
-            <span className="w-12 text-xs font-semibold text-gray-400 uppercase text-center">{t.qty}</span>
-            <span className="w-24 text-xs font-semibold text-gray-400 uppercase text-right">{t.rate}</span>
-            <span className="w-28 text-xs font-semibold text-gray-400 uppercase text-right">{t.total}</span>
-          </div>
-          {invoice.lineItems.map((l, i) => {
-            const qty = Number(l.qty) || 0;
-            const rate = Number(l.rate) || 0;
-            return (
-              <div
-                key={i}
-                className={`flex items-center py-3 px-2 ${i < invoice.lineItems.length - 1 ? 'border-b border-gray-50' : ''}`}
-              >
-                <span className="flex-1 text-sm text-gray-800 font-medium">{l.description}</span>
-                <span className="w-12 text-sm text-gray-500 text-center">{qty}</span>
-                <span className="w-24 text-sm text-gray-500 text-right">{fmt(rate)}</span>
-                <span className="w-28 text-sm font-semibold text-gray-900 text-right">{fmt(qty * rate)}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Totals */}
-        <div className="border-t border-gray-100 pt-4 flex flex-col items-end gap-2">
-          <div className="flex gap-12">
-            <span className="text-sm text-gray-500">{t.subtotal}</span>
-            <span className="text-sm font-medium text-gray-900 w-28 text-right">{fmt(invoice.subtotalAmount)}</span>
-          </div>
-          {invoice.taxRate > 0 ? (
-            <div className="flex gap-12">
-              <span className="text-sm text-gray-500">{t.tax} ({invoice.taxRate}%)</span>
-              <span className="text-sm font-medium text-gray-900 w-28 text-right">{fmt(invoice.taxAmount)}</span>
-            </div>
-          ) : null}
-          <div className="flex gap-12 border-t-2 border-gray-200 pt-3 mt-1">
-            <span className="text-lg font-bold text-gray-900">{t.total}</span>
-            <span className="text-lg font-bold text-primary w-28 text-right">{fmt(invoice.totalAmount)}</span>
-          </div>
-        </div>
+      {/* Invoice document — config-driven, what prints / shares / the client sees */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <InvoiceDocument vm={vm} />
       </div>
-
-      {/* Notes */}
-      {invoice.notes ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.notes}</p>
-          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{invoice.notes}</p>
-        </div>
-      ) : null}
     </div>
   );
 }

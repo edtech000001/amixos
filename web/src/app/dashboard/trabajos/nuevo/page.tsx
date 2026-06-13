@@ -5,14 +5,17 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye } from 'lucide-react';
+import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toggle } from '@/components/ui/Toggle';
+import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
+import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
@@ -388,6 +391,11 @@ function NuevoTrabajoContent() {
           finalJobId = job.id;
         }
 
+        void logAudit(supabase, business!.id, editId ? 'job.updated' : 'job.created', 'job', finalJobId, {
+          title: title.trim(),
+          is_proposal: true,
+        });
+
         // Replace job items
         if (editId) await supabase.from('job_items').delete().eq('job_id', finalJobId);
         if (validItems.length > 0) {
@@ -432,6 +440,10 @@ function NuevoTrabajoContent() {
           finalJobId = job.id;
         }
 
+        void logAudit(supabase, business!.id, editId ? 'job.updated' : 'job.created', 'job', finalJobId, {
+          title: title.trim(),
+        });
+
         // Replace job items
         if (editId) await supabase.from('job_items').delete().eq('job_id', finalJobId);
         if (validItems.length > 0) {
@@ -472,6 +484,25 @@ function NuevoTrabajoContent() {
     }
   };
 
+  // Unsaved-changes guard: back links call confirmDiscard; beforeunload covers
+  // refresh / tab-close. `values` covers every editable field (items filtered
+  // to those with a description so the trailing empty row isn't counted); the
+  // snapshot is taken once data loads (edit/duplicate) or at mount (new), so
+  // untouched forms never prompt. Declared before the loading early-return to
+  // keep hook order stable.
+  const dirty = useDirty(
+    {
+      title, clientId, publishedToCrew, status, priority, address, city, state,
+      scheduledDate, endDate, allDay, timeStart, timeEnd, description,
+      internalNotes, assignedEmployees,
+      manualWorkers: manualWorkers.filter(w => w.trim()),
+      leadEmployeeId, mapLink, clientNotes, issueDate, expiryDate, taxRate, discount,
+      items: items.filter(i => i.description.trim()),
+    },
+    !loadingEdit,
+  );
+  const confirmDiscard = useUnsavedChanges(dirty);
+
   if (loadingEdit) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
@@ -489,7 +520,11 @@ function NuevoTrabajoContent() {
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href={sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos'} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+        <Link
+          href={sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos'}
+          onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos')); }}
+          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+        >
           <ArrowLeft size={18} className="text-gray-500"/>
         </Link>
         <div>
@@ -974,6 +1009,21 @@ function NuevoTrabajoContent() {
           </div>
         </div>
 
+        {/* ── Fotos — uploads need a saved job_id, so the gallery only shows
+            when editing an existing job; new jobs get a hint and land on the
+            detail screen (which has the gallery) after save. */}
+        {editId && business ? (
+          <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <ImagePlus size={15} className="text-primary"/>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{full.dashboard.jobs.detail.photos.heading}</p>
+            </div>
+            <p className="text-sm text-gray-400">{full.dashboard.jobs.detail.photos.addAfterSave}</p>
+          </div>
+        )}
+
         {/* ── Notas */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -1004,7 +1054,11 @@ function NuevoTrabajoContent() {
 
         {/* Actions */}
         <div className="flex gap-3 pb-6">
-          <Link href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'} className="flex-1">
+          <Link
+            href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'}
+            onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos')); }}
+            className="flex-1"
+          >
             <Button variant="secondary" fullWidth>{tc.buttons.cancel}</Button>
           </Link>
           <Button onClick={save} loading={saving} fullWidth>

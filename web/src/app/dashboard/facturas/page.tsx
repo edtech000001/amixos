@@ -11,6 +11,7 @@ import {
   type InvoiceListItem,
 } from '@amixos/shared/screens/dashboard/InvoicesListScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { logAudit } from '@amixos/shared/lib/audit';
 
 interface InvoiceClient { first_name: string; last_name: string }
 interface RawInvoice {
@@ -67,6 +68,11 @@ export default function FacturasPage() {
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
     await supabase.from('invoices').update(update).eq('id', id);
+    if (business) {
+      void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : 'invoice.sent', 'invoice', id, {
+        invoice_number: invoices.find(inv => inv.id === id)?.invoiceNumber,
+      });
+    }
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
   };
 

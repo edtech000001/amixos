@@ -5,8 +5,9 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut, Building2 } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut, Building2, Eye, EyeOff } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -32,6 +33,8 @@ import {
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
+import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
+import { normalizeConfig, type InvoiceTemplateConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
@@ -146,6 +149,10 @@ export default function AjustesPage() {
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState('');
   const [invoiceMsgIsError, setInvoiceMsgIsError] = useState(false);
+  // Invoice template design config (businesses.invoice_template).
+  const [invoiceDesign, setInvoiceDesign] = useState<InvoiceTemplateConfig>(() =>
+    normalizeConfig(business?.invoice_template),
+  );
 
   // ── Invoice required standard fields (draft pattern)
   const [invoiceFieldRequired, setInvoiceFieldRequired] = useState<Record<string, boolean>>(
@@ -183,9 +190,46 @@ export default function AjustesPage() {
   // ── Password
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
   const [pwMsgIsError, setPwMsgIsError] = useState(false);
+
+  // ── Profile name (first/last) — lives in public.profiles, editable here.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState('');
+  const [nameMsgIsError, setNameMsgIsError] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setFirstName(data.first_name ?? '');
+      setLastName(data.last_name ?? '');
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const saveName = async () => {
+    if (!user) return;
+    setSavingName(true); setNameMsg('');
+    const { error } = await supabase
+      .from('profiles')
+      .update({ first_name: firstName.trim(), last_name: lastName.trim() })
+      .eq('id', user.id);
+    setNameMsgIsError(!!error);
+    setNameMsg(error ? t.account.nameSaveError : t.account.nameSaveSuccess);
+    setSavingName(false);
+  };
 
   // ── Client field preferences (draft-until-save)
   // `fieldRequired` / `templates` / `localClientOrder` are the working copy
@@ -271,6 +315,7 @@ export default function AjustesPage() {
       setBizLicense(business.license_number ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
+      setInvoiceDesign(normalizeConfig(business.invoice_template));
       const ireq = business.invoice_field_required ?? {};
       setInvoiceFieldRequired(ireq);
       setDbInvoiceFieldRequired(ireq);
@@ -334,7 +379,10 @@ export default function AjustesPage() {
     }).eq('id', business.id);
     setBizMsgIsError(!!error);
     setBizMsg(error ? t.business.saveError : t.business.saveSuccess);
-    if (!error) await refetchBusiness();
+    if (!error) {
+      void logAudit(supabase, business.id, 'business.updated', 'business', business.id, { name: bizName });
+      await refetchBusiness();
+    }
     setSavingBiz(false);
   };
 
@@ -352,6 +400,7 @@ export default function AjustesPage() {
     const { error } = await supabase.from('businesses').update({
       invoice_due_days: days,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
+      invoice_template: invoiceDesign,
     }).eq('id', business.id);
     setInvoiceMsgIsError(!!error);
     setInvoiceMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
@@ -1527,8 +1576,9 @@ export default function AjustesPage() {
       JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
-      (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, bizInvoiceNotes],
+      (business?.invoice_notes_default ?? '') !== bizInvoiceNotes ||
+      JSON.stringify(normalizeConfig(business?.invoice_template)) !== JSON.stringify(invoiceDesign),
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, bizInvoiceNotes, invoiceDesign],
   );
 
   const discardInvoices = useCallback(() => {
@@ -1537,6 +1587,7 @@ export default function AjustesPage() {
     setLocalInvoiceOrder(dbInvoiceOrder);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
+    setInvoiceDesign(normalizeConfig(business?.invoice_template));
     setInvoiceReqMsg('');
     setInvoiceMsg('');
   }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, business]);
@@ -2324,7 +2375,17 @@ export default function AjustesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.account.subtitle}</p>
-                <div className="flex flex-col gap-2">
+                <div className="max-w-md grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label={t.account.firstNameLabel} value={firstName} onChange={e => setFirstName(e.target.value)} />
+                  <Input label={t.account.lastNameLabel} value={lastName} onChange={e => setLastName(e.target.value)} />
+                </div>
+                {nameMsg && <p className={`text-xs mt-3 ${nameMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{nameMsg}</p>}
+                <div className="mt-4">
+                  <Button onClick={saveName} loading={savingName}>
+                    <Save size={14} className="mr-1.5"/> {t.account.saveNameBtn}
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-gray-100">
                   <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
                   <p className="text-sm text-gray-500">{t.account.roleLabel}: <span className="font-medium text-gray-900">{currentRole ? ROLE_LABELS[currentRole][locale] : '—'}</span></p>
                 </div>
@@ -2376,8 +2437,40 @@ export default function AjustesPage() {
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.password.subtitle}</p>
                 <div className="max-w-md flex flex-col gap-3">
-                  <Input label={t.password.currentPasswordLabel} type="password" placeholder={t.password.currentPasswordPlaceholder} value={currentPw} onChange={e => setCurrentPw(e.target.value)}/>
-                  <Input label={t.password.newPasswordLabel} type="password" placeholder={t.password.newPasswordPlaceholder} value={newPw} onChange={e => setNewPw(e.target.value)}/>
+                  <Input
+                    label={t.password.currentPasswordLabel}
+                    type={showCurrentPw ? 'text' : 'password'}
+                    placeholder={t.password.currentPasswordPlaceholder}
+                    value={currentPw}
+                    onChange={e => setCurrentPw(e.target.value)}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPw(v => !v)}
+                        aria-label={showCurrentPw ? t.password.hidePassword : t.password.showPassword}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                      >
+                        {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    }
+                  />
+                  <Input
+                    label={t.password.newPasswordLabel}
+                    type={showNewPw ? 'text' : 'password'}
+                    placeholder={t.password.newPasswordPlaceholder}
+                    value={newPw}
+                    onChange={e => setNewPw(e.target.value)}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPw(v => !v)}
+                        aria-label={showNewPw ? t.password.hidePassword : t.password.showPassword}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                      >
+                        {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    }
+                  />
                 </div>
                 {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
                 <div className="mt-5">
@@ -2405,6 +2498,34 @@ export default function AjustesPage() {
           {/* ══ FACTURAS ═════════════════════════════════════════════ */}
           {tab === 'facturas' && (
             <div className="flex flex-col gap-5">
+              {/* Invoice design — template picker + structured customizer */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.design.title}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.invoices.design.subtitle}</p>
+                <InvoiceDesigner
+                  value={invoiceDesign}
+                  onChange={setInvoiceDesign}
+                  branding={{
+                    name: business?.name ?? '',
+                    logoUrl: business?.logo_url ?? null,
+                    city: business?.city ?? null,
+                    state: business?.state ?? null,
+                    address: business?.address ?? null,
+                    postalCode: business?.postal_code ?? null,
+                    taxId: business?.tax_id ?? null,
+                    licenseNumber: business?.license_number ?? null,
+                    email: business?.email ?? null,
+                    phone: business?.phone ?? null,
+                    website: business?.website ?? null,
+                  } satisfies InvoiceBranding}
+                />
+                <div className="mt-5">
+                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                    <Save size={14} className="mr-1.5" /> {tc.buttons.saveChanges}
+                  </Button>
+                </div>
+              </div>
+
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
