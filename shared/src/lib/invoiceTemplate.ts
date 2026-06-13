@@ -59,9 +59,15 @@ export const ALL_SECTION_IDS: InvoiceSectionId[] = [
 export interface InvoiceSection {
   id: InvoiceSectionId;
   show: boolean;
-  // Phase 3 (builder) adds OPTIONAL: x?, y?, w?, colSpan?, align? — defaulted
-  // by normalizeConfig, ignored while layoutMode is 'flow'.
+  // Freeform placement (Phase 3), as PERCENT of the canvas (0–100). Optional
+  // and ignored while layoutMode is 'flow', so flow configs are unaffected.
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
 }
+
+export type InvoiceLayoutMode = 'flow' | 'freeform';
 
 export interface InvoiceColumns {
   qty: boolean;
@@ -87,7 +93,9 @@ export interface InvoiceTemplateConfig {
   sections: InvoiceSection[];
   columns: InvoiceColumns;
   text: InvoiceTextBlocks;
-  // Phase 3 adds: layoutMode?: 'flow' | 'freeform'  (absent ⇒ 'flow')
+  // 'flow' (default) stacks sections in order; 'freeform' positions them by the
+  // per-section x/y/w/h rect (the drag-drop builder). Absent ⇒ 'flow'.
+  layoutMode?: InvoiceLayoutMode;
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -166,10 +174,12 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   // Sections: keep known, ordered, deduped; append missing ids as hidden.
   const seen = new Set<InvoiceSectionId>();
   const sections: InvoiceSection[] = [];
+  const pct = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : undefined;
   for (const s of Array.isArray(r.sections) ? r.sections : []) {
     if (s && ALL_SECTION_IDS.includes(s.id) && !seen.has(s.id)) {
       seen.add(s.id);
-      sections.push({ id: s.id, show: s.show !== false });
+      sections.push({ id: s.id, show: s.show !== false, x: pct(s.x), y: pct(s.y), w: pct(s.w), h: pct(s.h) });
     }
   }
   for (const id of ALL_SECTION_IDS) {
@@ -195,6 +205,7 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
       paymentInstructions: str(r.text?.paymentInstructions),
       footer: str(r.text?.footer),
     },
+    layoutMode: r.layoutMode === 'freeform' ? 'freeform' : 'flow',
   };
 }
 
@@ -297,6 +308,10 @@ export interface InvoiceViewModel {
   labels: Record<InvoiceLabelKey, string>;
   /** Visible sections in render order (empty-data sections already dropped). */
   sections: InvoiceSectionId[];
+  /** 'flow' stacks sections; 'freeform' positions them by `rects`. */
+  layoutMode: InvoiceLayoutMode;
+  /** Freeform placement per section, percent of the canvas (0–100). */
+  rects: Partial<Record<InvoiceSectionId, { x: number; y: number; w: number; h: number }>>;
   header: {
     showLogo: boolean;
     logoUrl: string | null;
@@ -384,15 +399,22 @@ export function buildInvoiceViewModel(
     paymentInstructions: !!paymentInstructions,
     footer: !!footer,
   };
-  const sections = cfg.sections
-    .filter(s => s.show && hasData[s.id])
-    .map(s => s.id);
+  const visible = cfg.sections.filter(s => s.show && hasData[s.id]);
+  const sections = visible.map(s => s.id);
+  const rects: Partial<Record<InvoiceSectionId, { x: number; y: number; w: number; h: number }>> = {};
+  for (const s of visible) {
+    if (s.x != null && s.y != null && s.w != null && s.h != null) {
+      rects[s.id] = { x: s.x, y: s.y, w: s.w, h: s.h };
+    }
+  }
 
   return {
     style,
     lang,
     labels,
     sections,
+    layoutMode: cfg.layoutMode === 'freeform' ? 'freeform' : 'flow',
+    rects,
     header: {
       showLogo: cfg.showLogo && !!branding.logoUrl,
       logoUrl: branding.logoUrl,
@@ -528,7 +550,16 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     paymentInstructions: payHtml,
     footer: footerHtml,
   };
-  const body = vm.sections.map(id => sectionHtml[id]).join('\n');
+  const freeform = vm.layoutMode === 'freeform';
+  const body = freeform
+    ? `<div class="inv-canvas">${vm.sections
+        .map(id => {
+          const r = vm.rects[id];
+          if (!r) return '';
+          return `<div class="inv-abs" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%">${sectionHtml[id]}</div>`;
+        })
+        .join('')}</div>`
+    : vm.sections.map(id => sectionHtml[id]).join('\n');
 
   const gap = st.density === 'compact' ? 14 : 22;
   const cellPad = st.density === 'compact' ? '6px 8px' : '9px 8px';
@@ -543,6 +574,9 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; }
     .inv-doc > * { margin-bottom: ${gap}px; }
+    .inv-canvas { position: relative; width: 100%; aspect-ratio: 8.5 / 11; }
+    .inv-canvas > * { margin-bottom: 0; }
+    .inv-abs { position: absolute; overflow: hidden; }
     .inv-header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid ${accent}; padding-bottom: ${gap}px; }
     .inv-logo { max-height: ${logoMax}px; max-width: 220px; object-fit: contain; margin-bottom: 8px; display: block; }
     .inv-bizname { font-weight: 700; font-size: ${st.fontPx + 4}px; }
@@ -630,6 +664,50 @@ export function setText(
   value: string,
 ): InvoiceTemplateConfig {
   return { ...c, text: { ...c.text, [key]: value } };
+}
+
+// ── Freeform builder (Phase 3) ───────────────────────────────────────────────
+
+// Default stacked heights (percent of canvas) used to seed a freeform layout
+// from a flow config the first time the builder is opened.
+const FREEFORM_H: Record<InvoiceSectionId, number> = {
+  header: 16, billTo: 12, lineItems: 30, totals: 12,
+  customFields: 12, notes: 12, paymentInstructions: 10, footer: 6,
+};
+
+function seedRects(sections: InvoiceSection[]): InvoiceSection[] {
+  let y = 3;
+  return sections.map(s => {
+    if (!s.show) return s;
+    if (s.x != null && s.y != null && s.w != null && s.h != null) return s;
+    const h = FREEFORM_H[s.id] ?? 10;
+    const seeded = { ...s, x: 4, y: Math.min(y, 96), w: 92, h };
+    y += h + 2;
+    return seeded;
+  });
+}
+
+export function setLayoutMode(c: InvoiceTemplateConfig, mode: InvoiceLayoutMode): InvoiceTemplateConfig {
+  if (mode === 'freeform') return { ...c, layoutMode: 'freeform', sections: seedRects(c.sections) };
+  return { ...c, layoutMode: 'flow' };
+}
+
+export function setSectionRect(
+  c: InvoiceTemplateConfig,
+  id: InvoiceSectionId,
+  rect: { x: number; y: number; w: number; h: number },
+): InvoiceTemplateConfig {
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const w = Math.max(8, clamp(rect.w));
+  const h = Math.max(4, clamp(rect.h));
+  return {
+    ...c,
+    sections: c.sections.map(s =>
+      s.id === id
+        ? { ...s, x: Math.min(clamp(rect.x), 100 - w), y: Math.min(clamp(rect.y), 100 - h), w, h }
+        : s,
+    ),
+  };
 }
 
 /** A realistic sample for the settings live preview (no real invoice needed). */

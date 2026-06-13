@@ -128,6 +128,32 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     ),
   };
 
+  if (vm.layoutMode === 'freeform') {
+    // No page padding in freeform — section rects provide their own insets, and
+    // this makes the builder wireframe line up with the rendered output.
+    return (
+      <div
+        className="bg-white text-gray-800"
+        style={{ fontFamily: st.cssFontFamily, fontSize: st.fontPx }}
+      >
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11' }}>
+          {vm.sections.map(id => {
+            const r = vm.rects[id];
+            if (!r) return null;
+            return (
+              <div
+                key={id}
+                style={{ position: 'absolute', left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`, overflow: 'hidden' }}
+              >
+                {renderers[id]()}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="bg-white text-gray-800"

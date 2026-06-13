@@ -2,6 +2,7 @@
 // InvoiceTemplateConfig via the shared pure helpers; live preview uses the same
 // InvoiceDocument renderer as the real invoice / PDF / public link.
 
+import { useState, type ReactNode } from 'react';
 import { View, Text, Pressable, TextInput } from 'react-native';
 import { ChevronUp, ChevronDown } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -19,6 +20,7 @@ import {
   reorderSections,
   setColumn,
   setText,
+  setLayoutMode,
   SAMPLE_INVOICE,
   type InvoiceTemplateConfig,
   type InvoicePresetId,
@@ -28,7 +30,40 @@ import {
   type InvoiceLogoSize,
   type InvoiceColumns,
   type InvoiceTextBlocks,
+  type InvoiceLayoutMode,
 } from '@amixos/shared/lib/invoiceTemplate';
+
+const DOC_W = 640; // fixed render width for the preview; scaled to the container
+
+// Render children at a fixed width, scaled to fit — a faithful, never-cramped
+// mini preview. transformOrigin needs RN 0.74+ (this app is 0.74.5).
+//
+// The content is ALWAYS rendered (never gated on width) so its natural height
+// is measured immediately; the frame height is `undefined` (auto) until then.
+// Gating the content on width + driving the outer height from that height is a
+// deadlock — the outer collapses to 0, the content never mounts, height stays 0.
+function ScaledPreview({ children }: { children: ReactNode }) {
+  const [w, setW] = useState(0);
+  const [h, setH] = useState(0);
+  const scale = w > 0 ? w / DOC_W : 1;
+  return (
+    <View
+      onLayout={e => setW(e.nativeEvent.layout.width)}
+      style={{ width: '100%', height: h > 0 ? h * scale : undefined, overflow: 'hidden' }}
+    >
+      <View style={{ width: DOC_W, transform: [{ scale }], transformOrigin: 'top left' }}>
+        <View
+          onLayout={e => {
+            const nh = e.nativeEvent.layout.height;
+            if (nh > 0) setH(nh);
+          }}
+        >
+          {children}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 const PRESET_IDS: InvoicePresetId[] = ['clasica', 'moderna', 'minimalista', 'compacta'];
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
@@ -74,9 +109,23 @@ export function InvoiceDesigner({
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
   const vm = buildInvoiceViewModel(value, SAMPLE_INVOICE, branding);
+  const freeform = value.layoutMode === 'freeform';
 
   return (
     <View className="gap-5">
+      {/* Layout mode */}
+      <Field label={t.layout}>
+        <Seg<InvoiceLayoutMode>
+          value={freeform ? 'freeform' : 'flow'}
+          onChange={m => onChange(setLayoutMode(value, m))}
+          options={[
+            { value: 'flow', label: t.layoutModes.structured },
+            { value: 'freeform', label: t.layoutModes.freeform },
+          ]}
+        />
+        {freeform ? <Text className="text-xs text-gray-400">{t.builderMobileHint}</Text> : null}
+      </Field>
+
       {/* Preset */}
       <Field label={t.preset}>
         <View className="flex-row flex-wrap gap-2">
@@ -179,12 +228,16 @@ export function InvoiceDesigner({
                 {s.show ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
               </Pressable>
               <Text className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</Text>
-              <Pressable disabled={i === 0} onPress={() => onChange(reorderSections(value, i, i - 1))} className="p-1">
-                <ChevronUp size={16} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-              </Pressable>
-              <Pressable disabled={i === value.sections.length - 1} onPress={() => onChange(reorderSections(value, i, i + 1))} className="p-1">
-                <ChevronDown size={16} color={i === value.sections.length - 1 ? '#D1D5DB' : '#6B7280'} />
-              </Pressable>
+              {!freeform ? (
+                <>
+                  <Pressable disabled={i === 0} onPress={() => onChange(reorderSections(value, i, i - 1))} className="p-1">
+                    <ChevronUp size={16} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
+                  </Pressable>
+                  <Pressable disabled={i === value.sections.length - 1} onPress={() => onChange(reorderSections(value, i, i + 1))} className="p-1">
+                    <ChevronDown size={16} color={i === value.sections.length - 1 ? '#D1D5DB' : '#6B7280'} />
+                  </Pressable>
+                </>
+              ) : null}
             </View>
           ))}
         </View>
@@ -216,7 +269,7 @@ export function InvoiceDesigner({
       <Field label={t.preview}>
         <View className="rounded-xl border border-gray-200 bg-gray-50 p-2">
           <View className="bg-white rounded-lg border border-gray-100 overflow-hidden">
-            <InvoiceDocument vm={vm} />
+            <ScaledPreview><InvoiceDocument vm={vm} /></ScaledPreview>
           </View>
         </View>
       </Field>

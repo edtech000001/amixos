@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Alert, TextInput } from 'react-native';
+import { View, Text, Pressable, Alert, TextInput, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Building2,
   User as UserIcon,
@@ -51,7 +52,8 @@ import {
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
 import { SortableList } from '@/components/SortableList';
-import { ChevronUp, ChevronDown, Sparkles, GripVertical } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical } from 'lucide-react-native';
 
 type FieldType = 'text' | 'number' | 'date' | 'boolean' | 'select';
 
@@ -171,6 +173,48 @@ export function BusinessSection() {
   );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Logo upload is immediate (pick → upload → persist → refetch), separate
+  // from the form's save pill — same flow + bucket path as onboarding.
+  const pickAndUploadLogo = async () => {
+    if (!business) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { setMsg({ text: t.business.logoError, isError: true }); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+    if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
+      setMsg({ text: t.business.logoSizeError, isError: true });
+      return;
+    }
+    setUploadingLogo(true);
+    setMsg(null);
+    try {
+      const blob = await fetch(asset.uri).then((r) => r.blob());
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
+      const path = `logos/${business.id}-${Date.now()}.${ext}`;
+      const contentType = asset.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('business-assets')
+        .upload(path, arrayBuffer, { upsert: true, contentType });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('business-assets').getPublicUrl(path);
+      const { error: updErr } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id);
+      if (updErr) throw updErr;
+      await refetchBusiness();
+    } catch {
+      setMsg({ text: t.business.logoError, isError: true });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   useEffect(() => {
     if (!business) return;
@@ -253,6 +297,30 @@ export function BusinessSection() {
           title={t.business.heading}
           subtitle={t.business.subtitle}
         />
+
+        {/* Logo — uploads immediately on pick. */}
+        <View className="flex-row items-center gap-4">
+          {business?.logo_url ? (
+            <Image source={{ uri: business.logo_url }} className="w-16 h-16 rounded-2xl bg-gray-100" resizeMode="cover" />
+          ) : (
+            <View className="w-16 h-16 rounded-2xl bg-gray-100 items-center justify-center">
+              <Building2 size={22} color="#9CA3AF" />
+            </View>
+          )}
+          <View className="flex-1">
+            <Text className="text-sm font-medium text-gray-700">{t.business.logoLabel}</Text>
+            <Pressable
+              onPress={pickAndUploadLogo}
+              disabled={uploadingLogo}
+              className={`mt-1.5 self-start px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
+            >
+              <Text className="text-sm font-semibold text-primary">
+                {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         <Input label={t.business.nameLabel} value={name} onChangeText={setName} autoCapitalize="words" />
 
         <GroupLabel>{t.business.contactHeading}</GroupLabel>
@@ -320,6 +388,7 @@ export function BusinessSection() {
 
 // ─── Facturas section — default due window + terms (moved out of Negocio) ──
 export function FacturasSection() {
+  const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
@@ -361,10 +430,6 @@ export function FacturasSection() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // Invoice template design (businesses.invoice_template).
-  const [design, setDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
-  const [dbDesign, setDbDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
-
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -380,8 +445,6 @@ export function FacturasSection() {
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
     setLocalOrder(o); setDbOrder(o);
-    const dz = normalizeConfig(business.invoice_template);
-    setDesign(dz); setDbDesign(dz);
   }, [business]);
 
   const loadTemplates = useCallback(async () => {
@@ -513,7 +576,6 @@ export function FacturasSection() {
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
-        invoice_template: design,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -524,7 +586,6 @@ export function FacturasSection() {
       setDbRequired(required);
       setDbDueDays(dueDays);
       setDbNotes(notes);
-      setDbDesign(design);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } catch {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -538,9 +599,8 @@ export function FacturasSection() {
       notes !== dbNotes ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
-      JSON.stringify(dbDesign) !== JSON.stringify(design) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, dbRequired, required, dbOrder, localOrder, dbTemplates, templates, dbDesign, design],
+    [dueDays, dbDueDays, notes, dbNotes, dbRequired, required, dbOrder, localOrder, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -590,32 +650,8 @@ export function FacturasSection() {
     setMsg(null);
   };
 
-  const designBranding: InvoiceBranding = {
-    name: business?.name ?? '',
-    logoUrl: business?.logo_url ?? null,
-    city: business?.city ?? null,
-    state: business?.state ?? null,
-    address: business?.address ?? null,
-    postalCode: business?.postal_code ?? null,
-    taxId: business?.tax_id ?? null,
-    licenseNumber: business?.license_number ?? null,
-    email: business?.email ?? null,
-    phone: business?.phone ?? null,
-    website: business?.website ?? null,
-  };
-
   return (
     <View className="gap-5">
-      {/* Invoice design — template picker + structured customizer */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
-        <SectionHeader
-          icon={<FileText size={18} color="#4F46E5" />}
-          title={t.invoices.design.title}
-          subtitle={t.invoices.design.subtitle}
-        />
-        <InvoiceDesigner value={design} onChange={(c) => { setDesign(c); setMsg(null); }} branding={designBranding} />
-      </View>
-
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<FileText size={18} color="#4F46E5" />}
@@ -752,6 +788,21 @@ export function FacturasSection() {
       </View>
 
       <StatusMsg msg={msg} />
+
+      {/* Invoice theme lives here — a drill-in rather than a separate menu item. */}
+      <Pressable
+        onPress={() => router.push('/dashboard/mas/ajustes/factura-tema' as never)}
+        className="bg-white rounded-2xl border border-gray-100 p-4 flex-row items-center gap-3 active:bg-gray-50"
+      >
+        <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+          <Palette size={18} color="#4F46E5" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-gray-900">{t.invoices.design.title}</Text>
+          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>{t.invoices.design.subtitle}</Text>
+        </View>
+        <ChevronRight size={18} color="#9CA3AF" />
+      </Pressable>
 
       <FieldTemplateModal
         open={modalOpen}
@@ -3549,6 +3600,74 @@ function GoogleSyncSection() {
           </Text>
         </Button>
       ) : null}
+    </View>
+  );
+}
+
+// ── Invoice theme — its own settings screen (separate from Facturas fields) ──
+export function InvoiceThemeSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings;
+
+  const [design, setDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
+  const [dbDesign, setDbDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!business) return;
+    const d = normalizeConfig(business.invoice_template);
+    setDesign(d);
+    setDbDesign(d);
+  }, [business]);
+
+  const onSave = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase.from('businesses').update({ invoice_template: design }).eq('id', business.id);
+    if (!error) {
+      await refetchBusiness();
+      setDbDesign(design);
+      setMsg({ text: t.invoices.saveSuccess, isError: false });
+    } else {
+      setMsg({ text: t.invoices.saveError, isError: true });
+    }
+    setSaving(false);
+  };
+
+  const dirty = useMemo(() => JSON.stringify(dbDesign) !== JSON.stringify(design), [dbDesign, design]);
+  useSettingsSaveAction({ dirty, saving, onSave });
+
+  const branding: InvoiceBranding = {
+    name: business?.name ?? '',
+    logoUrl: business?.logo_url ?? null,
+    city: business?.city ?? null,
+    state: business?.state ?? null,
+    address: business?.address ?? null,
+    postalCode: business?.postal_code ?? null,
+    taxId: business?.tax_id ?? null,
+    licenseNumber: business?.license_number ?? null,
+    email: business?.email ?? null,
+    phone: business?.phone ?? null,
+    website: business?.website ?? null,
+  };
+
+  return (
+    <View className="gap-5">
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+        <SectionHeader
+          icon={<FileText size={18} color="#4F46E5" />}
+          title={t.invoices.design.title}
+          subtitle={t.invoices.design.subtitle}
+        />
+        <InvoiceDesigner value={design} onChange={(c) => { setDesign(c); setMsg(null); }} branding={branding} />
+        {msg ? (
+          <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
+        ) : null}
+      </View>
     </View>
   );
 }

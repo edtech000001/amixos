@@ -946,6 +946,7 @@ export type DashboardDict = {
       clientes: string;
       empleados: string;
       facturas: string;
+      facturaTema: string;
       cuenta: string;
       conexiones: string;
       equipo: string;
@@ -1030,6 +1031,12 @@ export type DashboardDict = {
       heading: string;
       subtitle: string;
       nameLabel: string;
+      logoLabel: string;
+      logoUploadBtn: string;
+      logoChangeBtn: string;
+      logoUploading: string;
+      logoError: string;
+      logoSizeError: string;
       contactHeading: string;
       emailLabel: string;
       phoneLabel: string;
@@ -1089,6 +1096,10 @@ export type DashboardDict = {
       design: {
         title: string;
         subtitle: string;
+        layout: string;
+        layoutModes: { structured: string; freeform: string };
+        builderHint: string;
+        builderMobileHint: string;
         preset: string;
         presets: { clasica: string; moderna: string; minimalista: string; compacta: string };
         accent: string;
@@ -1310,6 +1321,50 @@ export type DashboardDict = {
       inventory: { name: string; description: string };
       wedding: { name: string; description: string };
       dealership: { name: string; description: string };
+      messaging: { name: string; description: string };
+    };
+    // Messaging (SMS) module UI strings.
+    messaging: {
+      title: string;
+      subtitle: string;
+      connectTitle: string;
+      providerLabel: string;
+      providerHint: string;
+      twilio: string;
+      clicksend: string;
+      accountSidLabel: string;
+      authTokenLabel: string;
+      usernameLabel: string;
+      apiKeyLabel: string;
+      fromNumberLabel: string;
+      fromNumberHint: string;
+      saveBtn: string;
+      verifying: string;
+      connected: string;
+      connectedVia: string;
+      fromShown: string;
+      change: string;
+      disconnect: string;
+      composeTitle: string;
+      clientLabel: string;
+      selectClient: string;
+      manualNumber: string;
+      toLabel: string;
+      toPlaceholder: string;
+      messageLabel: string;
+      messagePlaceholder: string;
+      sendBtn: string;
+      sending: string;
+      sentToast: string;
+      onlyWriters: string;
+      notConfigured: string;
+      errors: {
+        invalid_credentials: string;
+        missing_credentials: string;
+        not_configured: string;
+        network_error: string;
+        generic: string;
+      };
     };
     // Map-specific UI strings — layer toggles, pin popups, geocoding
     // progress. Lives under `modules` because it's owned by the map
@@ -1678,7 +1733,8 @@ export type DashboardDict = {
     deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
     tooBig: string;
     sectionsCount: string; filesCount: string;
-    selectedCount: string; moveBtn: string; moveTitle: string; moveHere: string;
+    selectedCount: string; moveBtn: string; moveTitle: string; moveHere: string; moveFolderTitle: string; moveHint: string;
+    itemsOne: string; itemsMany: string; itemsEmpty: string;
     newFolder: string; folderNameLabel: string; folderNamePlaceholder: string;
     deleteFolderConfirm: string; emptyFolder: string;
     visibilityLabel: string; visInherit: string;
@@ -2605,6 +2661,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientes: 'Clientes',
         empleados: 'Equipo',
         facturas: 'Facturas',
+        facturaTema: 'Tema de factura',
         cuenta: 'Cuenta',
         conexiones: 'Conexiones',
         equipo: 'Equipo',
@@ -2689,6 +2746,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Información del negocio',
         subtitle: 'Datos básicos de tu empresa.',
         nameLabel: 'Nombre del negocio',
+        logoLabel: 'Logo',
+        logoUploadBtn: 'Subir logo',
+        logoChangeBtn: 'Cambiar logo',
+        logoUploading: 'Subiendo…',
+        logoError: 'No se pudo subir el logo. Intenta de nuevo.',
+        logoSizeError: 'La imagen supera el límite de 2 MB.',
         contactHeading: 'Contacto',
         emailLabel: 'Correo electrónico',
         phoneLabel: 'Teléfono',
@@ -2748,6 +2811,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         design: {
           title: 'Diseño de factura',
           subtitle: 'Elige una plantilla y personalízala. Se aplica a la vista, al PDF y al enlace público.',
+          layout: 'Disposición',
+          layoutModes: { structured: 'Estructurada', freeform: 'Libre' },
+          builderHint: 'Arrastra cada sección para moverla y usa la esquina para cambiar su tamaño.',
+          builderMobileHint: 'La disposición libre se edita desde la web. Aquí puedes ver el resultado.',
           preset: 'Plantilla',
           presets: { clasica: 'Clásica', moderna: 'Moderna', minimalista: 'Minimalista', compacta: 'Compacta' },
           accent: 'Color de acento',
@@ -2962,6 +3029,49 @@ export const dashboard: Record<Locale, DashboardDict> = {
         inventory:    { name: 'Inventario',            description: 'Productos, partes y materiales con conteo de existencias' },
         wedding:      { name: 'Bodas',                 description: 'Invitados, cronograma del evento y planeación' },
         dealership:   { name: 'Concesionario',         description: 'Inventario de autos y ventas del lote' },
+        messaging:    { name: 'Mensajería SMS',        description: 'Envía mensajes de texto a tus clientes con Twilio o ClickSend' },
+      },
+      messaging: {
+        title: 'Mensajería SMS',
+        subtitle: 'Conecta tu proveedor y manda mensajes a tus clientes desde Amixos.',
+        connectTitle: 'Conectar proveedor',
+        providerLabel: 'Proveedor',
+        providerHint: 'Usa tu propia cuenta de Twilio o ClickSend.',
+        twilio: 'Twilio',
+        clicksend: 'ClickSend',
+        accountSidLabel: 'Account SID',
+        authTokenLabel: 'Auth Token',
+        usernameLabel: 'Usuario',
+        apiKeyLabel: 'API Key',
+        fromNumberLabel: 'Número remitente',
+        fromNumberHint: 'El número desde el que se envían los SMS (formato +1...).',
+        saveBtn: 'Conectar',
+        verifying: 'Verificando…',
+        connected: 'Conectado',
+        connectedVia: 'Conectado con {{provider}}',
+        fromShown: 'Desde {{number}}',
+        change: 'Cambiar',
+        disconnect: 'Desconectar',
+        composeTitle: 'Enviar mensaje',
+        clientLabel: 'Cliente',
+        selectClient: 'Selecciona un cliente',
+        manualNumber: 'Número manual',
+        toLabel: 'Para',
+        toPlaceholder: '+1 555 123 4567',
+        messageLabel: 'Mensaje',
+        messagePlaceholder: 'Escribe tu mensaje...',
+        sendBtn: 'Enviar SMS',
+        sending: 'Enviando…',
+        sentToast: '¡Mensaje enviado!',
+        onlyWriters: 'Solo el dueño o administradores pueden conectar el proveedor.',
+        notConfigured: 'Conecta un proveedor para empezar a enviar mensajes.',
+        errors: {
+          invalid_credentials: 'Credenciales inválidas. Revisa tus datos.',
+          missing_credentials: 'Faltan datos de la cuenta.',
+          not_configured: 'No hay proveedor conectado.',
+          network_error: 'No se pudo conectar con el proveedor.',
+          generic: 'Algo salió mal. Intenta de nuevo.',
+        },
       },
       map: {
         layers: {
@@ -3333,6 +3443,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       moveBtn: 'Mover',
       moveTitle: 'Mover a…',
       moveHere: 'Mover aquí',
+      moveFolderTitle: 'Mover carpeta a…',
+      moveHint: 'Toca una carpeta para mover ahí · ›  para abrirla',
+      itemsOne: '1 elemento',
+      itemsMany: '{{count}} elementos',
+      itemsEmpty: 'Vacía',
       newFolder: 'Nueva carpeta',
       folderNameLabel: 'Nombre de la carpeta',
       folderNamePlaceholder: 'Ej. Tractores, Corner, Manuales',
@@ -4260,6 +4375,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientes: 'Clients',
         empleados: 'Team',
         facturas: 'Invoices',
+        facturaTema: 'Invoice theme',
         cuenta: 'Account',
         conexiones: 'Connections',
         equipo: 'Team',
@@ -4344,6 +4460,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Business info',
         subtitle: 'Basic information about your company.',
         nameLabel: 'Business name',
+        logoLabel: 'Logo',
+        logoUploadBtn: 'Upload logo',
+        logoChangeBtn: 'Change logo',
+        logoUploading: 'Uploading…',
+        logoError: "Couldn't upload the logo. Try again.",
+        logoSizeError: 'Image exceeds the 2 MB limit.',
         contactHeading: 'Contact',
         emailLabel: 'Email',
         phoneLabel: 'Phone',
@@ -4403,6 +4525,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         design: {
           title: 'Invoice design',
           subtitle: 'Pick a template and customize it. Applies to the view, the PDF, and the public link.',
+          layout: 'Layout',
+          layoutModes: { structured: 'Structured', freeform: 'Freeform' },
+          builderHint: 'Drag a section to move it, and use the corner handle to resize.',
+          builderMobileHint: 'Freeform layout is edited on the web. Here you can preview the result.',
           preset: 'Template',
           presets: { clasica: 'Classic', moderna: 'Modern', minimalista: 'Minimal', compacta: 'Compact' },
           accent: 'Accent color',
@@ -4617,6 +4743,49 @@ export const dashboard: Record<Locale, DashboardDict> = {
         inventory:    { name: 'Inventory',         description: 'Products, parts, and materials with stock counts' },
         wedding:      { name: 'Wedding Planner',   description: 'Guest counts, event schedule, and planning' },
         dealership:   { name: 'Car Dealership',    description: 'Vehicle inventory and lot sales' },
+        messaging:    { name: 'SMS Messaging',     description: 'Text your clients using your own Twilio or ClickSend account' },
+      },
+      messaging: {
+        title: 'SMS Messaging',
+        subtitle: 'Connect your provider and text clients right from Amixos.',
+        connectTitle: 'Connect a provider',
+        providerLabel: 'Provider',
+        providerHint: 'Use your own Twilio or ClickSend account.',
+        twilio: 'Twilio',
+        clicksend: 'ClickSend',
+        accountSidLabel: 'Account SID',
+        authTokenLabel: 'Auth Token',
+        usernameLabel: 'Username',
+        apiKeyLabel: 'API Key',
+        fromNumberLabel: 'From number',
+        fromNumberHint: 'The number texts are sent from (+1... format).',
+        saveBtn: 'Connect',
+        verifying: 'Verifying…',
+        connected: 'Connected',
+        connectedVia: 'Connected with {{provider}}',
+        fromShown: 'From {{number}}',
+        change: 'Change',
+        disconnect: 'Disconnect',
+        composeTitle: 'Send a message',
+        clientLabel: 'Client',
+        selectClient: 'Select a client',
+        manualNumber: 'Manual number',
+        toLabel: 'To',
+        toPlaceholder: '+1 555 123 4567',
+        messageLabel: 'Message',
+        messagePlaceholder: 'Type your message...',
+        sendBtn: 'Send SMS',
+        sending: 'Sending…',
+        sentToast: 'Message sent!',
+        onlyWriters: 'Only the owner or admins can connect the provider.',
+        notConfigured: 'Connect a provider to start sending messages.',
+        errors: {
+          invalid_credentials: 'Invalid credentials. Double-check your details.',
+          missing_credentials: 'Missing account details.',
+          not_configured: 'No provider connected.',
+          network_error: 'Could not reach the provider.',
+          generic: 'Something went wrong. Try again.',
+        },
       },
       map: {
         layers: {
@@ -4988,6 +5157,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       moveBtn: 'Move',
       moveTitle: 'Move to…',
       moveHere: 'Move here',
+      moveFolderTitle: 'Move folder to…',
+      moveHint: 'Tap a folder to move there · ›  to open it',
+      itemsOne: '1 item',
+      itemsMany: '{{count}} items',
+      itemsEmpty: 'Empty',
       newFolder: 'New folder',
       folderNameLabel: 'Folder name',
       folderNamePlaceholder: 'e.g. Tractors, Corner, Manuals',

@@ -16,7 +16,7 @@ import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
-export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'conexiones' | 'cuenta';
+export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta';
 
 interface Props {
   activeTab?: SettingsTab;

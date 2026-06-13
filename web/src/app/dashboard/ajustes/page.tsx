@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, Sparkles, LogOut, Building2, Eye, EyeOff } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
@@ -49,7 +49,7 @@ interface FieldTemplate {
   sort_order: number;
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'conexiones' | 'cuenta';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta';
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -354,6 +354,39 @@ export default function AjustesPage() {
   }, [business]);
 
   // ── Business
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Logo upload is immediate (pick → upload → persist → refetch), separate
+  // from the form's Save button — same bucket path as onboarding.
+  const onPickLogo = async (file: File | null) => {
+    if (!file || !business) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setBizMsgIsError(true);
+      setBizMsg(t.business.logoSizeError);
+      return;
+    }
+    setUploadingLogo(true);
+    setBizMsg('');
+    try {
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+      const path = `logos/${business.id}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('business-assets')
+        .upload(path, file, { upsert: true, contentType: file.type || undefined });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('business-assets').getPublicUrl(path);
+      const { error: updErr } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id);
+      if (updErr) throw updErr;
+      await refetchBusiness();
+    } catch {
+      setBizMsgIsError(true);
+      setBizMsg(t.business.logoError);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const saveBusiness = async () => {
     if (!business) return;
     // Validate the (optional) email before saving — a typo here means the
@@ -400,12 +433,26 @@ export default function AjustesPage() {
     const { error } = await supabase.from('businesses').update({
       invoice_due_days: days,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
-      invoice_template: invoiceDesign,
     }).eq('id', business.id);
     setInvoiceMsgIsError(!!error);
     setInvoiceMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingInvoice(false);
+  };
+
+  // ── Invoice theme (businesses.invoice_template) — its own tab + save.
+  const [savingTheme, setSavingTheme] = useState(false);
+  const [themeMsg, setThemeMsg] = useState('');
+  const [themeMsgIsError, setThemeMsgIsError] = useState(false);
+  const saveInvoiceTheme = async () => {
+    if (!business) return;
+    setSavingTheme(true); setThemeMsg('');
+    const { error } = await supabase.from('businesses')
+      .update({ invoice_template: invoiceDesign }).eq('id', business.id);
+    setThemeMsgIsError(!!error);
+    setThemeMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
+    if (!error) await refetchBusiness();
+    setSavingTheme(false);
   };
 
   // ── Invoice required standard fields
@@ -1576,9 +1623,13 @@ export default function AjustesPage() {
       JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
-      (business?.invoice_notes_default ?? '') !== bizInvoiceNotes ||
-      JSON.stringify(normalizeConfig(business?.invoice_template)) !== JSON.stringify(invoiceDesign),
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, bizInvoiceNotes, invoiceDesign],
+      (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, bizInvoiceNotes],
+  );
+
+  const invoiceThemeDirty = useMemo(
+    () => JSON.stringify(normalizeConfig(business?.invoice_template)) !== JSON.stringify(invoiceDesign),
+    [business, invoiceDesign],
   );
 
   const discardInvoices = useCallback(() => {
@@ -1587,10 +1638,14 @@ export default function AjustesPage() {
     setLocalInvoiceOrder(dbInvoiceOrder);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
-    setInvoiceDesign(normalizeConfig(business?.invoice_template));
     setInvoiceReqMsg('');
     setInvoiceMsg('');
   }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, business]);
+
+  const discardInvoiceTheme = useCallback(() => {
+    setInvoiceDesign(normalizeConfig(business?.invoice_template));
+    setThemeMsg('');
+  }, [business]);
 
   // ── Employee field template CRUD (draft pattern, mirrors clients) ────
   const loadEmpTemplates = useCallback(async () => {
@@ -1679,7 +1734,7 @@ export default function AjustesPage() {
     setPipelineMsg(''); setJobReqMsg(''); setJobAlertsMsg(''); setCrewModeMsg(''); setAsgnReqMsg('');
   }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobAlerts, dbCrewMode, dbAsgnTemplates, dbAsgnRequired, dbAsgnOrder]);
 
-  const anyDirty = clientsDirty || employeesDirty || invoicesDirty || trabajosDirty;
+  const anyDirty = clientsDirty || employeesDirty || invoicesDirty || invoiceThemeDirty || trabajosDirty;
 
   const tryChangeTab = (next: Tab) => {
     if (next === tab) return;
@@ -1687,6 +1742,7 @@ export default function AjustesPage() {
       clientes: clientsDirty,
       empleados: employeesDirty,
       facturas: invoicesDirty,
+      facturatema: invoiceThemeDirty,
       trabajos: trabajosDirty,
     };
     if (dirtyByTab[tab]) {
@@ -1694,6 +1750,7 @@ export default function AjustesPage() {
       if (tab === 'clientes') discardClients();
       else if (tab === 'empleados') discardEmployees();
       else if (tab === 'facturas') discardInvoices();
+      else if (tab === 'facturatema') discardInvoiceTheme();
       else if (tab === 'trabajos') discardTrabajos();
     }
     setTab(next);
@@ -1724,6 +1781,30 @@ export default function AjustesPage() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
               <p className="text-xs text-gray-400 mb-5">{t.business.subtitle}</p>
+
+              {/* Logo — uploads immediately on pick. */}
+              <div className="flex items-center gap-4 mb-5">
+                {business?.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={business.logo_url} alt="" className="w-16 h-16 rounded-2xl object-cover bg-gray-100 border border-gray-100" />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
+                    <Building2 size={22} className="text-gray-400" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{t.business.logoLabel}</p>
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="mt-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
+                  >
+                    {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3 max-w-md">
                 <Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/>
 
@@ -2496,9 +2577,16 @@ export default function AjustesPage() {
           )}
 
           {/* ══ FACTURAS ═════════════════════════════════════════════ */}
-          {tab === 'facturas' && (
+          {/* ══ TEMA DE FACTURA (invoice design) ═════════════════════ */}
+          {tab === 'facturatema' && (
             <div className="flex flex-col gap-5">
-              {/* Invoice design — template picker + structured customizer */}
+              <button
+                type="button"
+                onClick={() => tryChangeTab('facturas')}
+                className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 self-start"
+              >
+                <ChevronLeft size={16} /> {t.tabs.facturas}
+              </button>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.design.title}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.design.subtitle}</p>
@@ -2519,13 +2607,18 @@ export default function AjustesPage() {
                     website: business?.website ?? null,
                   } satisfies InvoiceBranding}
                 />
+                {themeMsg && <p className={`text-xs mt-3 ${themeMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{themeMsg}</p>}
                 <div className="mt-5">
-                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                  <Button onClick={saveInvoiceTheme} loading={savingTheme}>
                     <Save size={14} className="mr-1.5" /> {tc.buttons.saveChanges}
                   </Button>
                 </div>
               </div>
+            </div>
+          )}
 
+          {tab === 'facturas' && (
+            <div className="flex flex-col gap-5">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
@@ -2654,6 +2747,22 @@ export default function AjustesPage() {
                   <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
                 </Button>
               </div>
+
+              {/* Invoice theme lives here — a drill-in rather than a top nav item. */}
+              <button
+                type="button"
+                onClick={() => tryChangeTab('facturatema')}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-3 text-left hover:border-gray-200 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Palette size={18} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{t.invoices.design.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.invoices.design.subtitle}</p>
+                </div>
+                <ChevronRight size={18} className="text-gray-400 shrink-0" />
+              </button>
             </div>
           )}
 

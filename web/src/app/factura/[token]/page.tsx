@@ -68,13 +68,10 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
   useEffect(() => {
     const load = async () => {
       const supabase = createSupabaseClient();
-      const { data } = await supabase
-        .from('invoices')
-        .select(
-          '*, clients(first_name, last_name, email, phone_cell), invoice_clients(clients(first_name, last_name, email, phone_cell)), businesses(name, logo_url, city, state, address, postal_code, tax_id, license_number, email, phone, website, invoice_template)',
-        )
-        .eq('share_token', token)
-        .single();
+      // Token-gated RPC (061): anon has no direct read on invoices — the
+      // function returns only the one record matching this token, shaped to
+      // match the previous embed (clients / invoice_clients / businesses).
+      const { data } = await supabase.rpc('get_shared_invoice', { p_token: token });
       if (!data) {
         setNotFound(true);
         setLoading(false);
