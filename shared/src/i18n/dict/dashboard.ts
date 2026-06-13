@@ -1096,6 +1096,8 @@ export type DashboardDict = {
       design: {
         title: string;
         subtitle: string;
+        defaultLanguage: string;
+        defaultLanguageHint: string;
         layout: string;
         layoutModes: { structured: string; freeform: string };
         builderHint: string;
@@ -1122,6 +1124,24 @@ export type DashboardDict = {
         paymentInstructionsField: string;
         footerField: string;
         preview: string;
+        elements: {
+          addText: string;
+          addField: string;
+          addLogo: string;
+          selectField: string;
+          textContent: string;
+          fontSize: string;
+          color: string;
+          align: string;
+          deleteEl: string;
+          empty: string;
+        };
+        fields: {
+          businessName: string; businessContact: string; invoiceTitle: string;
+          invoiceNumber: string; status: string; issueDate: string; dueDate: string;
+          billToLabel: string; billToName: string; billToContact: string; lineItems: string;
+          subtotal: string; tax: string; total: string; notes: string; paymentInstructions: string;
+        };
       };
     };
     customFields: {
@@ -1181,6 +1201,13 @@ export type DashboardDict = {
       errorCurrentWrong: string;
       errorPrefix: string;
       successMsg: string;
+    };
+    support: {
+      heading: string;
+      subtitle: string;
+      contactBtn: string;
+      emailSubject: string;
+      noMailApp: string;
     };
     google: {
       heading: string;
@@ -1734,7 +1761,7 @@ export type DashboardDict = {
     tooBig: string;
     sectionsCount: string; filesCount: string;
     selectedCount: string; moveBtn: string; moveTitle: string; moveHere: string; moveFolderTitle: string; moveHint: string;
-    itemsOne: string; itemsMany: string; itemsEmpty: string;
+    itemsOne: string; itemsMany: string; itemsEmpty: string; selectPrompt: string;
     newFolder: string; folderNameLabel: string; folderNamePlaceholder: string;
     deleteFolderConfirm: string; emptyFolder: string;
     visibilityLabel: string; visInherit: string;
@@ -2811,6 +2838,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         design: {
           title: 'Diseño de factura',
           subtitle: 'Elige una plantilla y personalízala. Se aplica a la vista, al PDF y al enlace público.',
+          defaultLanguage: 'Idioma por defecto de la factura',
+          defaultLanguageHint: 'Las facturas nuevas se crean en este idioma. Puedes cambiarlo en cada factura.',
           layout: 'Disposición',
           layoutModes: { structured: 'Estructurada', freeform: 'Libre' },
           builderHint: 'Arrastra cada sección para moverla y usa la esquina para cambiar su tamaño.',
@@ -2837,6 +2866,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
           paymentInstructionsField: 'Instrucciones de pago',
           footerField: 'Pie de página',
           preview: 'Vista previa',
+          elements: {
+            addText: 'Texto',
+            addField: 'Campo',
+            addLogo: 'Logo',
+            selectField: 'Elige un campo…',
+            textContent: 'Texto',
+            fontSize: 'Tamaño',
+            color: 'Color',
+            align: 'Alineación',
+            deleteEl: 'Eliminar',
+            empty: 'Arrastra los elementos para colocarlos. Toca uno para editarlo.',
+          },
+          fields: {
+            businessName: 'Nombre del negocio', businessContact: 'Contacto del negocio',
+            invoiceTitle: 'Título (Factura)', invoiceNumber: 'Número de factura', status: 'Estado',
+            issueDate: 'Fecha de emisión', dueDate: 'Fecha de vencimiento',
+            billToLabel: 'Etiqueta "Facturar a"', billToName: 'Nombre del cliente', billToContact: 'Contacto del cliente',
+            lineItems: 'Tabla de conceptos', subtotal: 'Subtotal', tax: 'Impuesto', total: 'Total',
+            notes: 'Notas', paymentInstructions: 'Instrucciones de pago',
+          },
         },
       },
       customFields: {
@@ -2896,6 +2945,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorCurrentWrong: 'La contraseña actual es incorrecta.',
         errorPrefix: 'Error: {{message}}',
         successMsg: '¡Contraseña actualizada!',
+      },
+      support: {
+        heading: 'Soporte y comentarios',
+        subtitle: '¿Tienes un problema o una idea? Escríbenos y te ayudamos.',
+        contactBtn: 'Enviar correo',
+        emailSubject: 'Amixos — Soporte / Comentarios',
+        noMailApp: 'No se pudo abrir tu app de correo. Escríbenos a {{email}}.',
       },
       google: {
         heading: 'Sincronizar con Google Contactos',
@@ -3448,6 +3504,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       itemsOne: '1 elemento',
       itemsMany: '{{count}} elementos',
       itemsEmpty: 'Vacía',
+      selectPrompt: 'Selecciona archivos o carpetas para mover',
       newFolder: 'Nueva carpeta',
       folderNameLabel: 'Nombre de la carpeta',
       folderNamePlaceholder: 'Ej. Tractores, Corner, Manuales',
@@ -4525,6 +4582,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         design: {
           title: 'Invoice design',
           subtitle: 'Pick a template and customize it. Applies to the view, the PDF, and the public link.',
+          defaultLanguage: 'Default invoice language',
+          defaultLanguageHint: 'New invoices are created in this language. You can change it on each invoice.',
           layout: 'Layout',
           layoutModes: { structured: 'Structured', freeform: 'Freeform' },
           builderHint: 'Drag a section to move it, and use the corner handle to resize.',
@@ -4551,6 +4610,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
           paymentInstructionsField: 'Payment instructions',
           footerField: 'Footer',
           preview: 'Preview',
+          elements: {
+            addText: 'Text',
+            addField: 'Field',
+            addLogo: 'Logo',
+            selectField: 'Pick a field…',
+            textContent: 'Text',
+            fontSize: 'Size',
+            color: 'Color',
+            align: 'Align',
+            deleteEl: 'Delete',
+            empty: 'Drag elements to place them. Tap one to edit it.',
+          },
+          fields: {
+            businessName: 'Business name', businessContact: 'Business contact',
+            invoiceTitle: 'Title (Invoice)', invoiceNumber: 'Invoice number', status: 'Status',
+            issueDate: 'Issue date', dueDate: 'Due date',
+            billToLabel: '"Bill to" label', billToName: 'Client name', billToContact: 'Client contact',
+            lineItems: 'Line-items table', subtotal: 'Subtotal', tax: 'Tax', total: 'Total',
+            notes: 'Notes', paymentInstructions: 'Payment instructions',
+          },
         },
       },
       customFields: {
@@ -4610,6 +4689,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorCurrentWrong: 'Your current password is incorrect.',
         errorPrefix: 'Error: {{message}}',
         successMsg: 'Password updated!',
+      },
+      support: {
+        heading: 'Support & feedback',
+        subtitle: 'Got a problem or an idea? Email us and we\'ll help.',
+        contactBtn: 'Email us',
+        emailSubject: 'Amixos — Support / Feedback',
+        noMailApp: "Couldn't open your mail app. Email us at {{email}}.",
       },
       google: {
         heading: 'Sync with Google Contacts',
@@ -5162,6 +5248,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       itemsOne: '1 item',
       itemsMany: '{{count}} items',
       itemsEmpty: 'Empty',
+      selectPrompt: 'Select files or folders to move',
       newFolder: 'New folder',
       folderNameLabel: 'Folder name',
       folderNamePlaceholder: 'e.g. Tractors, Corner, Manuals',

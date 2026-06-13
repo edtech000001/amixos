@@ -11,6 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
+import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
@@ -89,6 +90,16 @@ function NuevaFacturaContent() {
       dueDefaultedRef.current = true;
     }
   }, [editId, business, issueDate, dueDate]);
+
+  // New invoices start in the business's default language (Invoice theme).
+  // Edit mode skips this (the invoice's own language is loaded below); the ref
+  // guard means a manual change to the dropdown is never overwritten.
+  const langDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || langDefaultedRef.current || !business) return;
+    setLanguage(invoiceDefaultLanguage(business.invoice_template));
+    langDefaultedRef.current = true;
+  }, [editId, business]);
 
   useEffect(() => {
     if (!business) return;

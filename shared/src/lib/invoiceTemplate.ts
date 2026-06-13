@@ -82,6 +82,59 @@ export interface InvoiceTextBlocks {
   footer?: string;
 }
 
+// ── Freeform elements (Canva-style canvas) ──────────────────────────────────
+// In 'freeform' layout the document is a flat list of positioned ELEMENTS the
+// user drags/resizes: the logo, auto-bound data fields, and static text blocks.
+
+/** Auto-bound data fields a user can drop onto the canvas. Each resolves to
+ *  live invoice/business data at render time (see resolveFieldValue / the
+ *  lineItems table). */
+export type InvoiceFieldKey =
+  | 'businessName'
+  | 'businessContact'
+  | 'invoiceTitle'
+  | 'invoiceNumber'
+  | 'status'
+  | 'issueDate'
+  | 'dueDate'
+  | 'billToLabel'
+  | 'billToName'
+  | 'billToContact'
+  | 'lineItems'
+  | 'subtotal'
+  | 'tax'
+  | 'total'
+  | 'notes'
+  | 'paymentInstructions';
+
+export const FREEFORM_FIELD_KEYS: InvoiceFieldKey[] = [
+  'businessName', 'businessContact', 'invoiceTitle', 'invoiceNumber', 'status',
+  'issueDate', 'dueDate', 'billToLabel', 'billToName', 'billToContact',
+  'lineItems', 'subtotal', 'tax', 'total', 'notes', 'paymentInstructions',
+];
+
+export interface InvoiceElementStyle {
+  fontSize?: number;                       // px (at the 720px reference width)
+  bold?: boolean;
+  color?: string;                          // hex; defaults to theme text/accent
+  align?: 'left' | 'center' | 'right';
+}
+
+export type InvoiceElementKind = 'logo' | 'field' | 'text';
+
+export interface InvoiceElement {
+  id: string;
+  kind: InvoiceElementKind;
+  field?: InvoiceFieldKey;                 // when kind === 'field'
+  text?: string;                           // when kind === 'text'
+  // Position + size as PERCENT of the canvas (0–100).
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  style?: InvoiceElementStyle;
+}
+
 export interface InvoiceTemplateConfig {
   version: number;
   presetId: InvoicePresetId;
@@ -93,9 +146,16 @@ export interface InvoiceTemplateConfig {
   sections: InvoiceSection[];
   columns: InvoiceColumns;
   text: InvoiceTextBlocks;
-  // 'flow' (default) stacks sections in order; 'freeform' positions them by the
-  // per-section x/y/w/h rect (the drag-drop builder). Absent ⇒ 'flow'.
+  // 'flow' (default) stacks sections in order; 'freeform' renders `elements`
+  // (the element canvas / drag-drop builder). Absent ⇒ 'flow'.
   layoutMode?: InvoiceLayoutMode;
+  // Freeform elements — the positioned logo / field / text blocks. Seeded from
+  // a sensible default layout the first time freeform is enabled.
+  elements?: InvoiceElement[];
+  // The business-wide default language for NEW invoices. Does NOT affect how an
+  // existing invoice renders — each invoice carries its own `language` field
+  // (set from this default at creation, overridable per invoice).
+  defaultLanguage: InvoiceLang;
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -117,6 +177,7 @@ export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
     sections: fullSections(),
     columns: { qty: true, rate: true, total: true },
     text: {},
+    defaultLanguage: 'es',
   },
   moderna: {
     version: INVOICE_TEMPLATE_VERSION,
@@ -129,6 +190,7 @@ export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
     sections: fullSections(),
     columns: { qty: true, rate: true, total: true },
     text: {},
+    defaultLanguage: 'es',
   },
   minimalista: {
     version: INVOICE_TEMPLATE_VERSION,
@@ -141,6 +203,7 @@ export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
     sections: fullSections(),
     columns: { qty: true, rate: true, total: true },
     text: {},
+    defaultLanguage: 'es',
   },
   compacta: {
     version: INVOICE_TEMPLATE_VERSION,
@@ -153,10 +216,65 @@ export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
     sections: fullSections(),
     columns: { qty: true, rate: true, total: true },
     text: {},
+    defaultLanguage: 'es',
   },
 };
 
 export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.clasica;
+
+// ── Freeform default layout + element validation ─────────────────────────────
+
+/** A sensible starting layout (percent coords) seeded when freeform is first
+ *  enabled — the user then drags/edits from here. Stable ids so re-normalizing
+ *  is idempotent. */
+export function defaultElements(): InvoiceElement[] {
+  return [
+    { id: 'el-logo', kind: 'logo', x: 5, y: 4, w: 22, h: 9 },
+    { id: 'el-bizname', kind: 'field', field: 'businessName', x: 5, y: 15, w: 45, h: 4, style: { bold: true, fontSize: 18 } },
+    { id: 'el-bizcontact', kind: 'field', field: 'businessContact', x: 5, y: 19, w: 45, h: 12, style: { fontSize: 11 } },
+    { id: 'el-title', kind: 'field', field: 'invoiceTitle', x: 60, y: 4, w: 35, h: 7, style: { bold: true, fontSize: 28, align: 'right' } },
+    { id: 'el-number', kind: 'field', field: 'invoiceNumber', x: 60, y: 11, w: 35, h: 4, style: { align: 'right', fontSize: 13 } },
+    { id: 'el-issue', kind: 'field', field: 'issueDate', x: 55, y: 17, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
+    { id: 'el-due', kind: 'field', field: 'dueDate', x: 55, y: 21, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
+    { id: 'el-billlabel', kind: 'field', field: 'billToLabel', x: 5, y: 34, w: 45, h: 3, style: { bold: true, fontSize: 11 } },
+    { id: 'el-billname', kind: 'field', field: 'billToName', x: 5, y: 37, w: 45, h: 4, style: { bold: true, fontSize: 13 } },
+    { id: 'el-billcontact', kind: 'field', field: 'billToContact', x: 5, y: 41, w: 45, h: 8, style: { fontSize: 11 } },
+    { id: 'el-items', kind: 'field', field: 'lineItems', x: 5, y: 51, w: 90, h: 30 },
+    { id: 'el-subtotal', kind: 'field', field: 'subtotal', x: 55, y: 83, w: 40, h: 4, style: { align: 'right', fontSize: 12 } },
+    { id: 'el-tax', kind: 'field', field: 'tax', x: 55, y: 87, w: 40, h: 4, style: { align: 'right', fontSize: 12 } },
+    { id: 'el-total', kind: 'field', field: 'total', x: 55, y: 91, w: 40, h: 5, style: { align: 'right', bold: true, fontSize: 16 } },
+  ];
+}
+
+function normalizeElement(e: unknown): InvoiceElement | null {
+  if (!e || typeof e !== 'object') return null;
+  const el = e as Partial<InvoiceElement>;
+  const kind = el.kind;
+  if (kind !== 'logo' && kind !== 'field' && kind !== 'text') return null;
+  if (kind === 'field' && !(el.field && FREEFORM_FIELD_KEYS.includes(el.field))) return null;
+  const num = (v: unknown, d: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : d;
+  const style = el.style && typeof el.style === 'object' ? el.style : undefined;
+  const out: InvoiceElement = {
+    id: typeof el.id === 'string' && el.id ? el.id : `el-${kind}-${Math.round(num(el.x, 0))}-${Math.round(num(el.y, 0))}`,
+    kind,
+    x: num(el.x, 4),
+    y: num(el.y, 4),
+    w: Math.max(5, num(el.w, 30)),
+    h: Math.max(3, num(el.h, 6)),
+  };
+  if (kind === 'field') out.field = el.field;
+  if (kind === 'text') out.text = typeof el.text === 'string' ? el.text : '';
+  if (style) {
+    out.style = {
+      fontSize: typeof style.fontSize === 'number' ? Math.max(6, Math.min(72, style.fontSize)) : undefined,
+      bold: style.bold === true ? true : undefined,
+      color: typeof style.color === 'string' ? style.color : undefined,
+      align: style.align === 'center' || style.align === 'right' ? style.align : undefined,
+    };
+  }
+  return out;
+}
 
 // ── Normalize / resolve ──────────────────────────────────────────────────────
 
@@ -186,6 +304,16 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     if (!seen.has(id)) sections.push({ id, show: true });
   }
 
+  const layoutMode: InvoiceLayoutMode = r.layoutMode === 'freeform' ? 'freeform' : 'flow';
+  let elements = Array.isArray(r.elements)
+    ? r.elements.map(normalizeElement).filter((e): e is InvoiceElement => e !== null)
+    : undefined;
+  // In freeform mode we always need elements to render — seed the default
+  // layout if none are present yet.
+  if (layoutMode === 'freeform' && (!elements || elements.length === 0)) {
+    elements = defaultElements();
+  }
+
   return {
     version: INVOICE_TEMPLATE_VERSION,
     presetId,
@@ -205,8 +333,16 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
       paymentInstructions: str(r.text?.paymentInstructions),
       footer: str(r.text?.footer),
     },
-    layoutMode: r.layoutMode === 'freeform' ? 'freeform' : 'flow',
+    layoutMode,
+    ...(elements ? { elements } : {}),
+    defaultLanguage: r.defaultLanguage === 'en' ? 'en' : 'es',
   };
+}
+
+/** The business-wide default invoice language stored in the theme config.
+ *  New invoices seed their `language` from this (overridable per invoice). */
+export function invoiceDefaultLanguage(rawConfig: unknown): InvoiceLang {
+  return normalizeConfig(rawConfig).defaultLanguage;
 }
 
 /** Pick the effective config: per-invoice frozen override → business default →
@@ -308,10 +444,12 @@ export interface InvoiceViewModel {
   labels: Record<InvoiceLabelKey, string>;
   /** Visible sections in render order (empty-data sections already dropped). */
   sections: InvoiceSectionId[];
-  /** 'flow' stacks sections; 'freeform' positions them by `rects`. */
+  /** 'flow' stacks sections; 'freeform' renders `elements`. */
   layoutMode: InvoiceLayoutMode;
-  /** Freeform placement per section, percent of the canvas (0–100). */
+  /** Freeform placement per section, percent of the canvas (0–100). [legacy] */
   rects: Partial<Record<InvoiceSectionId, { x: number; y: number; w: number; h: number }>>;
+  /** Freeform elements (logo / field / text), positioned. Empty in flow mode. */
+  elements: InvoiceElement[];
   header: {
     showLogo: boolean;
     logoUrl: string | null;
@@ -415,6 +553,7 @@ export function buildInvoiceViewModel(
     sections,
     layoutMode: cfg.layoutMode === 'freeform' ? 'freeform' : 'flow',
     rects,
+    elements: cfg.layoutMode === 'freeform' ? (cfg.elements ?? []) : [],
     header: {
       showLogo: cfg.showLogo && !!branding.logoUrl,
       logoUrl: branding.logoUrl,
@@ -443,6 +582,31 @@ export function buildInvoiceViewModel(
     paymentInstructions,
     footer,
   };
+}
+
+/** Text content for a bound field element. 'lineItems' renders as a table and
+ *  'logo' as an image — those are handled by the renderers, not here. */
+export function resolveFieldValue(vm: InvoiceViewModel, key: InvoiceFieldKey): string {
+  const h = vm.header;
+  switch (key) {
+    case 'businessName': return h.businessName;
+    case 'businessContact': return h.businessLines.join('\n');
+    case 'invoiceTitle': return h.invoiceTitle;
+    case 'invoiceNumber': return h.invoiceNumber;
+    case 'status': return h.statusLabel;
+    case 'issueDate': return `${h.issueLabel}: ${h.issueValue}`;
+    case 'dueDate': return h.dueValue ? `${h.dueLabel}: ${h.dueValue}` : '';
+    case 'billToLabel': return vm.labels.billTo;
+    case 'billToName': return vm.billTo.map(c => c.name).join('\n');
+    case 'billToContact': return vm.billTo.flatMap(c => c.lines).join('\n');
+    case 'subtotal': return `${vm.labels.subtotal}: ${vm.totals.subtotal}`;
+    case 'tax': return vm.totals.taxLabel ? `${vm.totals.taxLabel}: ${vm.totals.taxValue}` : '';
+    case 'total': return `${vm.labels.total}: ${vm.totals.total}`;
+    case 'notes': return vm.notes ?? '';
+    case 'paymentInstructions': return vm.paymentInstructions ?? '';
+    case 'lineItems': return '';
+    default: return '';
+  }
 }
 
 // ── HTML renderer (web print + mobile expo-print) ────────────────────────────
@@ -551,13 +715,26 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     footer: footerHtml,
   };
   const freeform = vm.layoutMode === 'freeform';
+
+  const elStyleCss = (el: InvoiceElement): string => {
+    const s = el.style ?? {};
+    const parts: string[] = [];
+    if (s.fontSize) parts.push(`font-size:${s.fontSize}px`);
+    if (s.bold) parts.push('font-weight:700');
+    if (s.color) parts.push(`color:${escapeHtml(s.color)}`);
+    if (s.align) parts.push(`text-align:${s.align}`);
+    return parts.join(';');
+  };
+  const elInner = (el: InvoiceElement): string => {
+    if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
+    if (el.kind === 'text') return `<div class="inv-el-text">${br(el.text ?? '')}</div>`;
+    if (el.field === 'lineItems') return itemsHtml;
+    return `<div class="inv-el-text">${br(resolveFieldValue(vm, el.field as InvoiceFieldKey))}</div>`;
+  };
+
   const body = freeform
-    ? `<div class="inv-canvas">${vm.sections
-        .map(id => {
-          const r = vm.rects[id];
-          if (!r) return '';
-          return `<div class="inv-abs" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%">${sectionHtml[id]}</div>`;
-        })
+    ? `<div class="inv-canvas">${vm.elements
+        .map(el => `<div class="inv-abs" style="left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;${elStyleCss(el)}">${elInner(el)}</div>`)
         .join('')}</div>`
     : vm.sections.map(id => sectionHtml[id]).join('\n');
 
@@ -577,6 +754,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-canvas { position: relative; width: 100%; aspect-ratio: 8.5 / 11; }
     .inv-canvas > * { margin-bottom: 0; }
     .inv-abs { position: absolute; overflow: hidden; }
+    .inv-el-logo { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .inv-el-text { white-space: pre-wrap; line-height: 1.35; }
     .inv-header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid ${accent}; padding-bottom: ${gap}px; }
     .inv-logo { max-height: ${logoMax}px; max-width: 220px; object-fit: contain; margin-bottom: 8px; display: block; }
     .inv-bizname { font-weight: 700; font-size: ${st.fontPx + 4}px; }
@@ -665,49 +844,67 @@ export function setText(
 ): InvoiceTemplateConfig {
   return { ...c, text: { ...c.text, [key]: value } };
 }
-
-// ── Freeform builder (Phase 3) ───────────────────────────────────────────────
-
-// Default stacked heights (percent of canvas) used to seed a freeform layout
-// from a flow config the first time the builder is opened.
-const FREEFORM_H: Record<InvoiceSectionId, number> = {
-  header: 16, billTo: 12, lineItems: 30, totals: 12,
-  customFields: 12, notes: 12, paymentInstructions: 10, footer: 6,
-};
-
-function seedRects(sections: InvoiceSection[]): InvoiceSection[] {
-  let y = 3;
-  return sections.map(s => {
-    if (!s.show) return s;
-    if (s.x != null && s.y != null && s.w != null && s.h != null) return s;
-    const h = FREEFORM_H[s.id] ?? 10;
-    const seeded = { ...s, x: 4, y: Math.min(y, 96), w: 92, h };
-    y += h + 2;
-    return seeded;
-  });
+export function setDefaultLanguage(c: InvoiceTemplateConfig, defaultLanguage: InvoiceLang): InvoiceTemplateConfig {
+  return { ...c, defaultLanguage };
 }
 
+// ── Freeform element editor (Phase 3 — element canvas) ───────────────────────
+
 export function setLayoutMode(c: InvoiceTemplateConfig, mode: InvoiceLayoutMode): InvoiceTemplateConfig {
-  if (mode === 'freeform') return { ...c, layoutMode: 'freeform', sections: seedRects(c.sections) };
+  if (mode === 'freeform') {
+    const elements = c.elements && c.elements.length ? c.elements : defaultElements();
+    return { ...c, layoutMode: 'freeform', elements };
+  }
   return { ...c, layoutMode: 'flow' };
 }
 
-export function setSectionRect(
+let elCounter = 0;
+/** Stable-ish id for a newly added element (no Math.random / Date needed). */
+function newElementId(kind: InvoiceElementKind): string {
+  elCounter += 1;
+  return `el-${kind}-${elCounter}`;
+}
+
+export function addFieldElement(c: InvoiceTemplateConfig, field: InvoiceFieldKey): InvoiceTemplateConfig {
+  const el: InvoiceElement = { id: newElementId('field'), kind: 'field', field, x: 8, y: 8, w: 40, h: 6 };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
+export function addTextElement(c: InvoiceTemplateConfig, text = ''): InvoiceTemplateConfig {
+  const el: InvoiceElement = { id: newElementId('text'), kind: 'text', text, x: 8, y: 8, w: 35, h: 5 };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
+export function addLogoElement(c: InvoiceTemplateConfig): InvoiceTemplateConfig {
+  // Only one logo element makes sense — reuse the existing one if present.
+  if ((c.elements ?? []).some(e => e.kind === 'logo')) return c;
+  const el: InvoiceElement = { id: newElementId('logo'), kind: 'logo', x: 5, y: 4, w: 22, h: 9 };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
+export function updateElement(c: InvoiceTemplateConfig, id: string, patch: Partial<InvoiceElement>): InvoiceTemplateConfig {
+  return { ...c, elements: (c.elements ?? []).map(e => (e.id === id ? { ...e, ...patch } : e)) };
+}
+export function updateElementStyle(c: InvoiceTemplateConfig, id: string, patch: Partial<InvoiceElementStyle>): InvoiceTemplateConfig {
+  return {
+    ...c,
+    elements: (c.elements ?? []).map(e => (e.id === id ? { ...e, style: { ...e.style, ...patch } } : e)),
+  };
+}
+export function setElementRect(
   c: InvoiceTemplateConfig,
-  id: InvoiceSectionId,
+  id: string,
   rect: { x: number; y: number; w: number; h: number },
 ): InvoiceTemplateConfig {
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
-  const w = Math.max(8, clamp(rect.w));
-  const h = Math.max(4, clamp(rect.h));
-  return {
-    ...c,
-    sections: c.sections.map(s =>
-      s.id === id
-        ? { ...s, x: Math.min(clamp(rect.x), 100 - w), y: Math.min(clamp(rect.y), 100 - h), w, h }
-        : s,
-    ),
-  };
+  const w = Math.max(5, clamp(rect.w));
+  const h = Math.max(3, clamp(rect.h));
+  return updateElement(c, id, {
+    x: Math.min(clamp(rect.x), 100 - w),
+    y: Math.min(clamp(rect.y), 100 - h),
+    w,
+    h,
+  });
+}
+export function removeElement(c: InvoiceTemplateConfig, id: string): InvoiceTemplateConfig {
+  return { ...c, elements: (c.elements ?? []).filter(e => e.id !== id) };
 }
 
 /** A realistic sample for the settings live preview (no real invoice needed). */

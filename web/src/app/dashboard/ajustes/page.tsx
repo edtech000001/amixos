@@ -5,8 +5,9 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -49,7 +50,7 @@ interface FieldTemplate {
   sort_order: number;
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta' | 'soporte';
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -355,6 +356,9 @@ export default function AjustesPage() {
 
   // ── Business
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoViewerOpen, setLogoViewerOpen] = useState(false);
+  // Viewer backdrop: dark by default; toggle to white so dark logos are visible.
+  const [logoViewerLight, setLogoViewerLight] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
@@ -1782,28 +1786,52 @@ export default function AjustesPage() {
               <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
               <p className="text-xs text-gray-400 mb-5">{t.business.subtitle}</p>
 
-              {/* Logo — uploads immediately on pick. */}
-              <div className="flex items-center gap-4 mb-5">
+              {/* Logo — centered, `contain` so round/wide logos aren't clipped.
+                 Uploads immediately on pick. */}
+              <div className="flex flex-col items-center gap-3 mb-5">
                 {business?.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={business.logo_url} alt="" className="w-16 h-16 rounded-2xl object-cover bg-gray-100 border border-gray-100" />
+                  <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={business.logo_url} alt="" className="w-24 h-24 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
+                  </button>
                 ) : (
-                  <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
-                    <Building2 size={22} className="text-gray-400" />
+                  <div className="w-24 h-24 rounded-2xl bg-gray-100 flex items-center justify-center">
+                    <Building2 size={28} className="text-gray-400" />
                   </div>
                 )}
-                <div>
-                  <p className="text-sm font-medium text-gray-700">{t.business.logoLabel}</p>
-                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
-                  <button
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={uploadingLogo}
-                    className="mt-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
-                  >
-                    {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-                  </button>
-                </div>
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
+                <button
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
+                >
+                  {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+                </button>
               </div>
+
+              {/* Full-screen logo viewer — click the logo to zoom; click anywhere to close. */}
+              {logoViewerOpen && business?.logo_url && (
+                <div
+                  onClick={() => setLogoViewerOpen(false)}
+                  className={`fixed inset-0 z-50 flex items-center justify-center p-8 cursor-zoom-out ${logoViewerLight ? 'bg-white/95' : 'bg-black/70 backdrop-blur-md'}`}
+                >
+                  {/* Background toggle (dark ⇄ white) for dark logos. */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setLogoViewerLight(v => !v); }}
+                    className={`absolute top-5 left-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-gray-900' : 'text-white'}`}
+                  >
+                    <Contrast size={22} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); setLogoViewerOpen(false); }}
+                    className={`absolute top-5 right-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-gray-900' : 'text-white'}`}
+                  >
+                    <X size={24} />
+                  </button>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={business.logo_url} alt="" className="max-w-[85%] max-h-[85%] object-contain" />
+                </div>
+              )}
 
               <div className="flex flex-col gap-3 max-w-md">
                 <Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/>
@@ -2770,6 +2798,28 @@ export default function AjustesPage() {
           {tab === 'conexiones' && (
             <div className="flex flex-col gap-5">
               <GoogleSyncCard />
+            </div>
+          )}
+
+          {/* ══ SOPORTE ══════════════════════════════════════════════ */}
+          {tab === 'soporte' && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <LifeBuoy size={18} className="text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-base font-semibold text-gray-900">{t.support.heading}</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.support.subtitle}</p>
+                  <a
+                    href={buildSupportMailto({ subject: t.support.emailSubject, userEmail: user?.email, businessName: business?.name, platform: 'Web' })}
+                    className="inline-flex items-center gap-1.5 mt-4 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    <LifeBuoy size={15} /> {t.support.contactBtn}
+                  </a>
+                  <p className="text-xs text-gray-400 mt-2">{SUPPORT_EMAIL}</p>
+                </div>
+              </div>
             </div>
           )}
         </div>

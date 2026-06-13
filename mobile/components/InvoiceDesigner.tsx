@@ -7,6 +7,7 @@ import { View, Text, Pressable, TextInput } from 'react-native';
 import { ChevronUp, ChevronDown } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
+import type { InvoiceLang } from '@amixos/shared';
 import {
   INVOICE_PRESETS,
   buildInvoiceViewModel,
@@ -21,6 +22,7 @@ import {
   setColumn,
   setText,
   setLayoutMode,
+  setDefaultLanguage,
   SAMPLE_INVOICE,
   type InvoiceTemplateConfig,
   type InvoicePresetId,
@@ -108,11 +110,25 @@ export function InvoiceDesigner({
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
-  const vm = buildInvoiceViewModel(value, SAMPLE_INVOICE, branding);
+  // Preview in the chosen default language so the labels reflect the setting.
+  const vm = buildInvoiceViewModel(value, { ...SAMPLE_INVOICE, language: value.defaultLanguage }, branding);
   const freeform = value.layoutMode === 'freeform';
 
   return (
     <View className="gap-5">
+      {/* Default invoice language for new invoices */}
+      <Field label={t.defaultLanguage}>
+        <Seg<InvoiceLang>
+          value={value.defaultLanguage}
+          onChange={l => onChange(setDefaultLanguage(value, l))}
+          options={[
+            { value: 'es', label: 'Español' },
+            { value: 'en', label: 'English' },
+          ]}
+        />
+        <Text className="text-xs text-gray-400">{t.defaultLanguageHint}</Text>
+      </Field>
+
       {/* Layout mode */}
       <Field label={t.layout}>
         <Seg<InvoiceLayoutMode>

@@ -20,6 +20,9 @@ interface SaveState {
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
+  // When true, the dirty/back-guard still works but no top-right "Guardar" pill
+  // shows — the section renders its own Save button (e.g. at the bottom).
+  hideHeaderButton?: boolean;
 }
 
 const SettingsPageContext = createContext<{
@@ -45,13 +48,14 @@ export function useSettingsSaveAction(state: SaveState | null) {
         dirty: state.dirty,
         saving: state.saving,
         onSave: () => ref.current?.onSave(),
+        hideHeaderButton: state.hideHeaderButton,
       });
     } else {
       registerSaveState(null);
     }
     return () => registerSaveState(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.dirty, state?.saving]);
+  }, [state?.dirty, state?.saving, state?.hideHeaderButton]);
 }
 
 /**
@@ -98,7 +102,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
           </Pressable>
           <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{title}</Text>
 
-          {saveState && saveState.dirty ? (
+          {saveState && saveState.dirty && !saveState.hideHeaderButton ? (
             <Pressable
               onPress={saveState.onSave}
               disabled={saveState.saving}

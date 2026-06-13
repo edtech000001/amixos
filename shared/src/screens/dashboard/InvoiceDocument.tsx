@@ -4,7 +4,13 @@
 
 import { Fragment, type ReactNode } from 'react';
 import { View, Text, Image, Platform, type TextStyle } from 'react-native';
-import type { InvoiceViewModel, InvoiceSectionId, InvoiceFont } from '../../lib/invoiceTemplate';
+import {
+  resolveFieldValue,
+  type InvoiceViewModel,
+  type InvoiceSectionId,
+  type InvoiceFont,
+  type InvoiceElement,
+} from '../../lib/invoiceTemplate';
 
 function rnFont(font: InvoiceFont): string | undefined {
   if (font === 'serif') return Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' });
@@ -137,23 +143,40 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   };
 
   if (vm.layoutMode === 'freeform') {
-    // No page padding in freeform — section rects provide their own insets, and
-    // this makes the builder wireframe line up with the rendered output.
+    const renderEl = (el: InvoiceElement): ReactNode => {
+      if (el.kind === 'logo') {
+        return vm.header.logoUrl ? (
+          <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+        ) : null;
+      }
+      if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
+      const txt = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
+      const s = el.style ?? {};
+      return (
+        <T
+          style={{
+            fontSize: s.fontSize,
+            fontWeight: s.bold ? '700' : undefined,
+            color: s.color ?? '#1F2937',
+            textAlign: s.align,
+            lineHeight: s.fontSize ? s.fontSize * 1.35 : undefined,
+          }}
+        >
+          {txt}
+        </T>
+      );
+    };
     return (
       <View style={{ backgroundColor: '#FFFFFF' }}>
         <View style={{ width: '100%', aspectRatio: 8.5 / 11 }}>
-          {vm.sections.map(id => {
-            const r = vm.rects[id];
-            if (!r) return null;
-            return (
-              <View
-                key={id}
-                style={{ position: 'absolute', left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`, overflow: 'hidden' }}
-              >
-                {renderers[id]()}
-              </View>
-            );
-          })}
+          {vm.elements.map(el => (
+            <View
+              key={el.id}
+              style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden' }}
+            >
+              {renderEl(el)}
+            </View>
+          ))}
         </View>
       </View>
     );

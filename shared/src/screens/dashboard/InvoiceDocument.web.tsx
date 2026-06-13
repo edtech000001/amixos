@@ -5,8 +5,18 @@
 // so the in-app detail screen, the public /factura page, and the print/PDF
 // HTML all stay visually in sync. Renders sections in vm.sections order.
 
-import type { ReactNode } from 'react';
-import type { InvoiceViewModel, InvoiceSectionId } from '../../lib/invoiceTemplate';
+import type { CSSProperties, ReactNode } from 'react';
+import { resolveFieldValue, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement } from '../../lib/invoiceTemplate';
+
+function elStyle(el: InvoiceElement): CSSProperties {
+  const s = el.style ?? {};
+  return {
+    fontSize: s.fontSize,
+    fontWeight: s.bold ? 700 : undefined,
+    color: s.color,
+    textAlign: s.align,
+  };
+}
 
 export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const st = vm.style;
@@ -129,26 +139,25 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   };
 
   if (vm.layoutMode === 'freeform') {
-    // No page padding in freeform — section rects provide their own insets, and
-    // this makes the builder wireframe line up with the rendered output.
+    const renderEl = (el: InvoiceElement): ReactNode => {
+      if (el.kind === 'logo') {
+        return vm.header.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        ) : null;
+      }
+      if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
+      const text = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
+      return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el) }}>{text}</div>;
+    };
     return (
-      <div
-        className="bg-white text-gray-800"
-        style={{ fontFamily: st.cssFontFamily, fontSize: st.fontPx }}
-      >
+      <div className="bg-white text-gray-800" style={{ fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
         <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11' }}>
-          {vm.sections.map(id => {
-            const r = vm.rects[id];
-            if (!r) return null;
-            return (
-              <div
-                key={id}
-                style={{ position: 'absolute', left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`, overflow: 'hidden' }}
-              >
-                {renderers[id]()}
-              </div>
-            );
-          })}
+          {vm.elements.map(el => (
+            <div key={el.id} style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden' }}>
+              {renderEl(el)}
+            </div>
+          ))}
         </div>
       </div>
     );

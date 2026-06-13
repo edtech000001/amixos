@@ -27,6 +27,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
+import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
 
 interface Client {
   id: string;
@@ -115,6 +116,16 @@ export default function NuevaFacturaRoute() {
       dueDefaultedRef.current = true;
     }
   }, [editId, business, issueDate, dueDate]);
+
+  // New invoices start in the business's default language (Invoice theme).
+  // Edit mode loads the invoice's own language below; the ref guard means a
+  // manual change to the dropdown is never overwritten.
+  const langDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || langDefaultedRef.current || !business) return;
+    setLanguage(invoiceDefaultLanguage(business.invoice_template));
+    langDefaultedRef.current = true;
+  }, [editId, business]);
 
   // Load clients + optionally the invoice being edited.
   useEffect(() => {

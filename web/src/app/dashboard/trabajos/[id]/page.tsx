@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -181,6 +182,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       client_id: job.client_id,
       invoice_number: invNum,
       status: 'draft',
+      language: invoiceDefaultLanguage(business.invoice_template),
       issue_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
       line_items: lineItems,

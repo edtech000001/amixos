@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Alert, TextInput, Image } from 'react-native';
+import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Building2,
@@ -19,6 +19,8 @@ import {
   Bell,
   Eye,
   EyeOff,
+  X,
+  Contrast,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
@@ -174,6 +176,10 @@ export function BusinessSection() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoViewerOpen, setLogoViewerOpen] = useState(false);
+  // Viewer backdrop: dark by default; toggle to white so dark/black logos
+  // (which vanish on a dark backdrop) are visible.
+  const [logoViewerLight, setLogoViewerLight] = useState(false);
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
   // from the form's save pill — same flow + bucket path as onboarding.
@@ -298,28 +304,64 @@ export function BusinessSection() {
           subtitle={t.business.subtitle}
         />
 
-        {/* Logo — uploads immediately on pick. */}
-        <View className="flex-row items-center gap-4">
+        {/* Logo — centered, `contain` so round/wide logos aren't clipped.
+           Uploads immediately on pick. */}
+        <View className="items-center gap-3 py-1">
           {business?.logo_url ? (
-            <Image source={{ uri: business.logo_url }} className="w-16 h-16 rounded-2xl bg-gray-100" resizeMode="cover" />
+            <Pressable onPress={() => setLogoViewerOpen(true)}>
+              <Image source={{ uri: business.logo_url }} className="w-24 h-24 rounded-2xl bg-gray-50" resizeMode="contain" />
+            </Pressable>
           ) : (
-            <View className="w-16 h-16 rounded-2xl bg-gray-100 items-center justify-center">
-              <Building2 size={22} color="#9CA3AF" />
+            <View className="w-24 h-24 rounded-2xl bg-gray-100 items-center justify-center">
+              <Building2 size={28} color="#9CA3AF" />
             </View>
           )}
-          <View className="flex-1">
-            <Text className="text-sm font-medium text-gray-700">{t.business.logoLabel}</Text>
-            <Pressable
-              onPress={pickAndUploadLogo}
-              disabled={uploadingLogo}
-              className={`mt-1.5 self-start px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
-            >
-              <Text className="text-sm font-semibold text-primary">
-                {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-              </Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={pickAndUploadLogo}
+            disabled={uploadingLogo}
+            className={`px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
+          >
+            <Text className="text-sm font-semibold text-primary">
+              {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+            </Text>
+          </Pressable>
         </View>
+
+        {/* Full-screen logo viewer — tap the logo to zoom; tap anywhere / the X
+           to close. Explicit dark backdrop via style (reliable full-screen
+           dim) + statusBarTranslucent so it covers the status bar too. */}
+        <RNModal
+          visible={logoViewerOpen}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setLogoViewerOpen(false)}
+        >
+          <Pressable
+            onPress={() => setLogoViewerOpen(false)}
+            className="items-center justify-center px-8"
+            style={{ flex: 1, backgroundColor: logoViewerLight ? '#FFFFFF' : 'rgba(0,0,0,0.92)' }}
+          >
+            {/* Background toggle (dark ⇄ white) for dark logos. */}
+            <Pressable
+              onPress={() => setLogoViewerLight((v) => !v)}
+              hitSlop={12}
+              style={{ position: 'absolute', top: 56, left: 20 }}
+            >
+              <Contrast size={24} color={logoViewerLight ? '#111827' : '#FFFFFF'} />
+            </Pressable>
+            <Pressable
+              onPress={() => setLogoViewerOpen(false)}
+              hitSlop={12}
+              style={{ position: 'absolute', top: 56, right: 20 }}
+            >
+              <X size={26} color={logoViewerLight ? '#111827' : '#FFFFFF'} />
+            </Pressable>
+            {business?.logo_url ? (
+              <Image source={{ uri: business.logo_url }} style={{ width: '85%', height: '55%' }} resizeMode="contain" />
+            ) : null}
+          </Pressable>
+        </RNModal>
 
         <Input label={t.business.nameLabel} value={name} onChangeText={setName} autoCapitalize="words" />
 
@@ -3639,7 +3681,9 @@ export function InvoiceThemeSection() {
   };
 
   const dirty = useMemo(() => JSON.stringify(dbDesign) !== JSON.stringify(design), [dbDesign, design]);
-  useSettingsSaveAction({ dirty, saving, onSave });
+  // Keep the dirty/unsaved-changes back-guard, but render our own Save button at
+  // the bottom instead of the top-right header pill.
+  useSettingsSaveAction({ dirty, saving, onSave, hideHeaderButton: true });
 
   const branding: InvoiceBranding = {
     name: business?.name ?? '',
@@ -3668,6 +3712,9 @@ export function InvoiceThemeSection() {
           <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
         ) : null}
       </View>
+      <Button onPress={onSave} loading={saving} disabled={!dirty}>
+        {full.common.buttons.save}
+      </Button>
     </View>
   );
 }
