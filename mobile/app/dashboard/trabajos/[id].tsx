@@ -43,7 +43,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -301,7 +301,8 @@ export default function JobDetailRoute() {
       .from('invoices')
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id);
-    const invNum = `INV-${String((count ?? 0) + 1).padStart(4, '0')}`;
+    const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
+    const invNum = `${invoiceNumberPrefix(invoiceLang)}-${String((count ?? 0) + 1).padStart(4, '0')}`;
 
     const lineItems = items.map((i) => ({
       description: `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}`,
@@ -317,7 +318,7 @@ export default function JobDetailRoute() {
         client_id: job.client_id,
         invoice_number: invNum,
         status: 'draft',
-        language: invoiceDefaultLanguage(business.invoice_template),
+        language: invoiceLang,
         issue_date: new Date().toISOString().split('T')[0],
         due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
         line_items: lineItems,

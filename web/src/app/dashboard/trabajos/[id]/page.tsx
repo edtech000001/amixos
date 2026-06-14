@@ -17,7 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -167,8 +167,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     const invoiceDiscount = useStoredFinancials ? job.discount : 0;
     const invoiceTotal = invoiceSubtotal + invoiceTaxAmt - invoiceDiscount;
 
+    const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
     const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id);
-    const invNum = `INV-${String((count ?? 0) + 1).padStart(4, '0')}`;
+    const invNum = `${invoiceNumberPrefix(invoiceLang)}-${String((count ?? 0) + 1).padStart(4, '0')}`;
 
     const lineItems = items.map(i => ({
       description: `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}`,
@@ -182,7 +183,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       client_id: job.client_id,
       invoice_number: invNum,
       status: 'draft',
-      language: invoiceDefaultLanguage(business.invoice_template),
+      language: invoiceLang,
       issue_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
       line_items: lineItems,

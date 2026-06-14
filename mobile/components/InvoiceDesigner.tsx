@@ -3,15 +3,18 @@
 // InvoiceDocument renderer as the real invoice / PDF / public link.
 
 import { useState, type ReactNode } from 'react';
-import { View, Text, Pressable, TextInput } from 'react-native';
-import { ChevronUp, ChevronDown } from 'lucide-react-native';
+import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, useWindowDimensions } from 'react-native';
+import { ChevronUp, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
 import {
-  INVOICE_PRESETS,
+  INVOICE_PRESET_GROUPS,
+  INVOICE_PRESET_IDS,
+  ALL_ARCHETYPES,
   buildInvoiceViewModel,
   applyPreset,
+  setArchetype,
   setAccent,
   setFont,
   setDensity,
@@ -23,9 +26,12 @@ import {
   setText,
   setLayoutMode,
   setDefaultLanguage,
+  invoiceNumberPrefix,
   SAMPLE_INVOICE,
   type InvoiceTemplateConfig,
+  type InvoiceViewModel,
   type InvoicePresetId,
+  type InvoiceDocData,
   type InvoiceBranding,
   type InvoiceFont,
   type InvoiceDensity,
@@ -67,8 +73,103 @@ function ScaledPreview({ children }: { children: ReactNode }) {
   );
 }
 
-const PRESET_IDS: InvoicePresetId[] = ['clasica', 'moderna', 'minimalista', 'compacta'];
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
+
+// A real, scaled-down render of the template for the gallery. Fixed card width
+// ⇒ constant scale; clipped height shows the distinctive header.
+const PRESET_CARD_W = 142;
+function PresetPreview({ vm }: { vm: InvoiceViewModel }) {
+  const scale = PRESET_CARD_W / DOC_W;
+  return (
+    <View style={{ width: PRESET_CARD_W, height: 172, borderRadius: 6, backgroundColor: '#fff', overflow: 'hidden' }}>
+      <View style={{ width: DOC_W, transform: [{ scale }], transformOrigin: 'top left' }} pointerEvents="none">
+        <InvoiceDocument vm={vm} />
+      </View>
+    </View>
+  );
+}
+
+// id → industry group id, for labelling in the theme browser.
+const PRESET_GROUP_OF: Record<string, string> = {};
+INVOICE_PRESET_GROUPS.forEach(g => g.presetIds.forEach(id => { PRESET_GROUP_OF[id] = g.id; }));
+
+type DesignT = ReturnType<typeof useLang>['t']['dashboard']['settings']['invoices']['design'];
+
+type ThemePickerProps = {
+  visible: boolean;
+  onClose: () => void;
+  currentId: InvoicePresetId;
+  onSelect: (id: InvoicePresetId) => void;
+  value: InvoiceTemplateConfig;
+  branding: InvoiceBranding;
+  sample: InvoiceDocData;
+  t: DesignT;
+};
+
+// Full-screen swipeable browser of every template — one full preview per page,
+// swipe left/right to compare, tap to apply. Keeps the settings page compact.
+function ThemeCarousel({ pageW, currentId, onSelect, value, branding, sample, t }: ThemePickerProps & { pageW: number }) {
+  const start = Math.max(0, INVOICE_PRESET_IDS.indexOf(currentId));
+  const [idx, setIdx] = useState(start);
+  const activeId = INVOICE_PRESET_IDS[idx] ?? currentId;
+  const isCurrent = activeId === currentId;
+  return (
+    <>
+      <FlatList
+        data={INVOICE_PRESET_IDS}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        initialScrollIndex={start}
+        getItemLayout={(_, i) => ({ length: pageW, offset: pageW * i, index: i })}
+        keyExtractor={id => id}
+        onMomentumScrollEnd={e => setIdx(Math.round(e.nativeEvent.contentOffset.x / pageW))}
+        renderItem={({ item: id }) => {
+          const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
+          return (
+            <ScrollView style={{ width: pageW }} contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+              <View style={{ borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden', backgroundColor: '#fff' }}>
+                <ScaledPreview><InvoiceDocument vm={pvm} /></ScaledPreview>
+              </View>
+            </ScrollView>
+          );
+        }}
+      />
+      <View style={{ padding: 16, gap: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#fff' }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{t.presets[activeId]}</Text>
+          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+            {t.presetGroups[PRESET_GROUP_OF[activeId] ?? 'universal']}  ·  {idx + 1}/{INVOICE_PRESET_IDS.length}
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => onSelect(activeId)}
+          className="rounded-xl bg-primary py-3 flex-row items-center justify-center gap-2"
+        >
+          {isCurrent ? <Check size={18} color="#fff" /> : null}
+          <Text className="text-white font-semibold">{isCurrent ? t.currentTheme : t.useTheme}</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+function ThemePickerModal(props: ThemePickerProps) {
+  const { width: winW } = useWindowDimensions();
+  const [w, setW] = useState(0);
+  const pageW = w > 0 ? w : winW;
+  return (
+    <Modal visible={props.visible} animationType="slide" onRequestClose={props.onClose} presentationStyle="pageSheet">
+      <View style={{ flex: 1, backgroundColor: '#F9FAFB' }} onLayout={e => setW(e.nativeEvent.layout.width)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#fff' }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>{props.t.themesTitle}</Text>
+          <Pressable onPress={props.onClose} hitSlop={8}><X size={22} color="#6B7280" /></Pressable>
+        </View>
+        {props.visible && pageW > 0 ? <ThemeCarousel {...props} pageW={pageW} /> : null}
+      </View>
+    </Modal>
+  );
+}
 
 function Seg<T extends string>({ value, options, onChange }: {
   value: T;
@@ -110,8 +211,10 @@ export function InvoiceDesigner({
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
-  // Preview in the chosen default language so the labels reflect the setting.
-  const vm = buildInvoiceViewModel(value, { ...SAMPLE_INVOICE, language: value.defaultLanguage }, branding);
+  const [themeOpen, setThemeOpen] = useState(false);
+  // Preview in the chosen default language so the labels + number prefix reflect it.
+  const sample = { ...SAMPLE_INVOICE, language: value.defaultLanguage, invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001` };
+  const vm = buildInvoiceViewModel(value, sample, branding);
   const freeform = value.layoutMode === 'freeform';
 
   return (
@@ -142,23 +245,50 @@ export function InvoiceDesigner({
         {freeform ? <Text className="text-xs text-gray-400">{t.builderMobileHint}</Text> : null}
       </Field>
 
-      {/* Preset */}
+      {/* Template — compact button that opens the swipeable theme browser */}
       <Field label={t.preset}>
+        <Pressable
+          onPress={() => setThemeOpen(true)}
+          className="flex-row items-center gap-3 rounded-xl border border-gray-200 bg-white p-2"
+        >
+          <PresetPreview vm={vm} />
+          <View className="flex-1">
+            <Text className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</Text>
+            <Text className="text-xs text-gray-400 mt-0.5">{t.presetGroups[PRESET_GROUP_OF[value.presetId] ?? 'universal']}</Text>
+            <Text className="text-xs text-primary mt-1">{t.browseThemes}</Text>
+          </View>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </Pressable>
+      </Field>
+
+      <ThemePickerModal
+        visible={themeOpen}
+        onClose={() => setThemeOpen(false)}
+        currentId={value.presetId}
+        onSelect={id => { onChange(applyPreset(id, value)); setThemeOpen(false); }}
+        value={value}
+        branding={branding}
+        sample={sample}
+        t={t}
+      />
+
+      {/* Header style (archetype) */}
+      <Field label={t.archetype}>
         <View className="flex-row flex-wrap gap-2">
-          {PRESET_IDS.map(id => {
-            const active = value.presetId === id;
+          {ALL_ARCHETYPES.map(a => {
+            const active = value.archetype === a;
             return (
               <Pressable
-                key={id}
-                onPress={() => onChange(applyPreset(id))}
-                className={`rounded-xl border p-2 w-[72px] ${active ? 'border-primary' : 'border-gray-200'}`}
+                key={a}
+                onPress={() => onChange(setArchetype(value, a))}
+                className={`rounded-lg border px-3 py-1.5 ${active ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
               >
-                <View className="h-8 rounded-md mb-1.5" style={{ backgroundColor: INVOICE_PRESETS[id].accentColor }} />
-                <Text className="text-[11px] font-medium text-gray-700">{t.presets[id]}</Text>
+                <Text className={`text-sm ${active ? 'text-white' : 'text-gray-600'}`}>{t.archetypes[a]}</Text>
               </Pressable>
             );
           })}
         </View>
+        <Text className="text-xs text-gray-400">{t.archetypeHint}</Text>
       </Field>
 
       {/* Accent */}

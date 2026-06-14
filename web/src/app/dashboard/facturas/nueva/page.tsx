@@ -11,7 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
-import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
@@ -33,9 +33,9 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-function genInvoiceNumber() {
+function genInvoiceNumber(lang: InvoiceLang) {
   const now = new Date();
-  return `FAC-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
+  return `${invoiceNumberPrefix(lang)}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
 }
 
 // Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
@@ -64,7 +64,9 @@ function NuevaFacturaContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
-  const [invoiceNumber, setInvoiceNumber] = useState(genInvoiceNumber());
+  const [invoiceNumber, setInvoiceNumber] = useState(() => genInvoiceNumber('es'));
+  // Once the user types their own number, stop auto-deriving it from language.
+  const numberEditedRef = useRef(false);
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -100,6 +102,13 @@ function NuevaFacturaContent() {
     setLanguage(invoiceDefaultLanguage(business.invoice_template));
     langDefaultedRef.current = true;
   }, [editId, business]);
+
+  // Keep the auto invoice-number prefix in sync with the language (INV-/FAC-)
+  // until the user types their own number.
+  useEffect(() => {
+    if (editId || numberEditedRef.current) return;
+    setInvoiceNumber(genInvoiceNumber(language));
+  }, [language, editId]);
 
   useEffect(() => {
     if (!business) return;
@@ -302,7 +311,7 @@ function NuevaFacturaContent() {
                 ))}
               </select>
             </div>
-            <Input label={t.invoiceNumberLabel} value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} />
+            <Input label={t.invoiceNumberLabel} value={invoiceNumber} onChange={e => { setInvoiceNumber(e.target.value); numberEditedRef.current = true; }} />
             <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
             <Input label={t.dueDateLabel} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
             <div className="flex flex-col gap-1.5">

@@ -6,15 +6,23 @@
 // HTML all stay visually in sync. Renders sections in vm.sections order.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { resolveFieldValue, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement } from '../../lib/invoiceTemplate';
+import { resolveFieldValue, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement } from '../../lib/invoiceTemplate';
 
-function elStyle(el: InvoiceElement): CSSProperties {
+function Logo({ url, maxHeight, maxWidth = 220, center }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" style={{ maxHeight, maxWidth, objectFit: 'contain', marginBottom: 8, display: 'block', ...(center ? { marginLeft: 'auto', marginRight: 'auto' } : null) }} />
+  );
+}
+
+function elStyle(el: InvoiceElement, accent: string): CSSProperties {
   const s = el.style ?? {};
   return {
     fontSize: s.fontSize,
     fontWeight: s.bold ? 700 : undefined,
-    color: s.color,
+    color: s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? accent : undefined),
     textAlign: s.align,
+    fontFamily: s.font ? cssFontFamily(s.font) : undefined,
   };
 }
 
@@ -22,45 +30,114 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const st = vm.style;
   const accent = st.accent;
   const cols = vm.columns;
+  const h = vm.header;
   const small = st.fontPx - 2;
   const gap = st.density === 'compact' ? 14 : 22;
+  const onAcc = onAccentColor(accent);
+  const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
+  const tint = withAlpha(accent, 0.1);
+
+  const metaLines = (subtle?: boolean) => (
+    <>
+      <div style={{ fontSize: small, marginTop: 4, color: subtle ? subtleOnAcc : '#374151' }}>
+        <span style={{ color: subtle ? subtleOnAcc : '#9ca3af' }}>{h.issueLabel}:</span> {h.issueValue}
+      </div>
+      {h.dueValue ? (
+        <div style={{ fontSize: small, color: subtle ? subtleOnAcc : '#374151' }}>
+          <span style={{ color: subtle ? subtleOnAcc : '#9ca3af' }}>{h.dueLabel}:</span> {h.dueValue}
+        </div>
+      ) : null}
+    </>
+  );
+
+  const renderHeader = (): ReactNode => {
+    switch (vm.archetype) {
+      case 'band':
+        return (
+          <div className="flex justify-between gap-6" style={{ background: accent, padding: `${gap}px ${gap + 4}px`, borderRadius: 10 }}>
+            <div>
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
+              <div className="font-bold" style={{ fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</div>
+              {h.businessLines.map((l, i) => (
+                <div key={i} style={{ fontSize: small, marginTop: 2, color: subtleOnAcc }}>{l}</div>
+              ))}
+            </div>
+            <div className="text-right">
+              <div className="font-bold uppercase" style={{ color: onAcc, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
+              <div className="font-semibold" style={{ marginTop: 2, color: onAcc }}>{h.invoiceNumber}</div>
+              <div className="uppercase" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em', color: subtleOnAcc }}>{h.statusLabel}</div>
+              {metaLines(true)}
+            </div>
+          </div>
+        );
+      case 'centered':
+        return (
+          <div className="text-center pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
+            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
+            <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
+            {h.businessLines.map((l, i) => (
+              <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+            ))}
+            <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.12em', fontSize: st.fontPx + 8, marginTop: 12 }}>{h.invoiceTitle}</div>
+            <div className="font-semibold text-gray-600" style={{ fontSize: small, marginTop: 2 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+            <div className="flex justify-center gap-4" style={{ marginTop: 2 }}>{metaLines()}</div>
+          </div>
+        );
+      case 'sidebar':
+        return (
+          <div className="flex gap-4 items-stretch">
+            <div style={{ background: tint, borderRadius: 12, padding: 16, width: '40%' }}>
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} maxWidth={160} /> : null}
+              <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
+              {h.businessLines.map((l, i) => (
+                <div key={i} className="text-gray-600" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+              ))}
+            </div>
+            <div className="flex-1" style={{ paddingTop: 4 }}>
+              <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
+              <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
+              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              {metaLines()}
+            </div>
+          </div>
+        );
+      case 'minimal':
+        return (
+          <div className="pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
+            <div className="flex justify-between items-center">
+              <div className="uppercase text-gray-500 font-semibold" style={{ fontSize: small, letterSpacing: '0.12em' }}>{h.businessName}</div>
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={Math.round(st.logoPx * 0.7)} maxWidth={160} /> : null}
+            </div>
+            <div style={{ width: 32, height: 3, background: accent, borderRadius: 2, margin: '14px 0 8px' }} />
+            <div style={{ fontWeight: 300, fontSize: st.fontPx + 16, color: '#111827', letterSpacing: '0.02em' }}>{h.invoiceTitle}</div>
+            <div className="text-gray-500" style={{ fontSize: small, marginTop: 6 }}>
+              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+            </div>
+          </div>
+        );
+      default: // classic
+        return (
+          <div className="flex justify-between gap-6 pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
+            <div>
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
+              <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
+              {h.businessLines.map((l, i) => (
+                <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+              ))}
+            </div>
+            <div className="text-right">
+              <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
+              <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
+              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              {metaLines()}
+            </div>
+          </div>
+        );
+    }
+  };
 
   const renderers: Record<InvoiceSectionId, () => ReactNode> = {
-    header: () => (
-      <div className="flex justify-between gap-6 pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
-        <div>
-          {vm.header.showLogo && vm.header.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={vm.header.logoUrl}
-              alt=""
-              style={{ maxHeight: st.logoPx, maxWidth: 220, objectFit: 'contain', marginBottom: 8 }}
-            />
-          ) : null}
-          <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{vm.header.businessName}</div>
-          {vm.header.businessLines.map((l, i) => (
-            <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
-          ))}
-        </div>
-        <div className="text-right">
-          <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>
-            {vm.header.invoiceTitle}
-          </div>
-          <div className="font-semibold" style={{ marginTop: 2 }}>{vm.header.invoiceNumber}</div>
-          <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>
-            {vm.header.statusLabel}
-          </div>
-          <div className="text-gray-700" style={{ fontSize: small, marginTop: 4 }}>
-            <span className="text-gray-400">{vm.header.issueLabel}:</span> {vm.header.issueValue}
-          </div>
-          {vm.header.dueValue ? (
-            <div className="text-gray-700" style={{ fontSize: small }}>
-              <span className="text-gray-400">{vm.header.dueLabel}:</span> {vm.header.dueValue}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    ),
+    header: renderHeader,
     billTo: () => (
       <div>
         <SectLabel st={st}>{vm.labels.billTo}</SectLabel>
@@ -148,7 +225,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       }
       if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
       const text = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
-      return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el) }}>{text}</div>;
+      return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
     };
     return (
       <div className="bg-white text-gray-800" style={{ fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>

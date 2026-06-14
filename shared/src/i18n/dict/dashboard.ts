@@ -1103,7 +1103,15 @@ export type DashboardDict = {
         builderHint: string;
         builderMobileHint: string;
         preset: string;
-        presets: { clasica: string; moderna: string; minimalista: string; compacta: string };
+        presets: Record<string, string>;
+        presetGroups: Record<string, string>;
+        browseThemes: string;
+        themesTitle: string;
+        useTheme: string;
+        currentTheme: string;
+        archetype: string;
+        archetypeHint: string;
+        archetypes: Record<string, string>;
         accent: string;
         font: string;
         fonts: { sans: string; serif: string; mono: string };
@@ -1141,7 +1149,11 @@ export type DashboardDict = {
           invoiceNumber: string; status: string; issueDate: string; dueDate: string;
           billToLabel: string; billToName: string; billToContact: string; lineItems: string;
           subtotal: string; tax: string; total: string; notes: string; paymentInstructions: string;
+          headerNote: string; footer: string;
         };
+        elementFont: string;
+        undo: string;
+        redo: string;
       };
     };
     customFields: {
@@ -2845,7 +2857,30 @@ export const dashboard: Record<Locale, DashboardDict> = {
           builderHint: 'Arrastra cada sección para moverla y usa la esquina para cambiar su tamaño.',
           builderMobileHint: 'La disposición libre se edita desde la web. Aquí puedes ver el resultado.',
           preset: 'Plantilla',
-          presets: { clasica: 'Clásica', moderna: 'Moderna', minimalista: 'Minimalista', compacta: 'Compacta' },
+          presets: {
+            general: 'General', profesional: 'Profesional',
+            construccion: 'Construcción', plomeria: 'Plomería', electrico: 'Eléctrico',
+            pintura: 'Pintura', techado: 'Techado', hvac: 'Climatización',
+            jardineria: 'Jardinería', limpieza: 'Limpieza', mudanzas: 'Mudanzas',
+            mecanico: 'Mecánico', detallado: 'Detallado de autos',
+            salon: 'Salón y belleza', catering: 'Catering', fotografia: 'Fotografía', tutoria: 'Tutoría',
+          },
+          presetGroups: {
+            universal: 'Universal',
+            construccion: 'Construcción y oficios',
+            hogar: 'Hogar y exterior',
+            auto: 'Automotriz',
+            eventos: 'Cuidado y eventos',
+          },
+          browseThemes: 'Ver plantillas',
+          themesTitle: 'Elige una plantilla',
+          useTheme: 'Usar esta plantilla',
+          currentTheme: 'Plantilla actual',
+          archetype: 'Estilo de encabezado',
+          archetypeHint: 'Cambia la estructura del encabezado sin cambiar de plantilla.',
+          archetypes: {
+            classic: 'Clásico', band: 'Banda', centered: 'Centrado', sidebar: 'Lateral', minimal: 'Minimalista',
+          },
           accent: 'Color de acento',
           font: 'Tipografía',
           fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
@@ -2885,7 +2920,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
             billToLabel: 'Etiqueta "Facturar a"', billToName: 'Nombre del cliente', billToContact: 'Contacto del cliente',
             lineItems: 'Tabla de conceptos', subtotal: 'Subtotal', tax: 'Impuesto', total: 'Total',
             notes: 'Notas', paymentInstructions: 'Instrucciones de pago',
+            headerNote: 'Nota del encabezado', footer: 'Pie de página',
           },
+          elementFont: 'Fuente',
+          undo: 'Deshacer',
+          redo: 'Rehacer',
         },
       },
       customFields: {
@@ -4589,7 +4628,30 @@ export const dashboard: Record<Locale, DashboardDict> = {
           builderHint: 'Drag a section to move it, and use the corner handle to resize.',
           builderMobileHint: 'Freeform layout is edited on the web. Here you can preview the result.',
           preset: 'Template',
-          presets: { clasica: 'Classic', moderna: 'Modern', minimalista: 'Minimal', compacta: 'Compact' },
+          presets: {
+            general: 'General', profesional: 'Professional',
+            construccion: 'Construction', plomeria: 'Plumbing', electrico: 'Electrical',
+            pintura: 'Painting', techado: 'Roofing', hvac: 'HVAC',
+            jardineria: 'Landscaping', limpieza: 'Cleaning', mudanzas: 'Moving',
+            mecanico: 'Auto repair', detallado: 'Car detailing',
+            salon: 'Salon & beauty', catering: 'Catering', fotografia: 'Photography', tutoria: 'Tutoring',
+          },
+          presetGroups: {
+            universal: 'Universal',
+            construccion: 'Construction & trades',
+            hogar: 'Home & outdoor',
+            auto: 'Automotive',
+            eventos: 'Care & events',
+          },
+          browseThemes: 'Browse templates',
+          themesTitle: 'Choose a template',
+          useTheme: 'Use this template',
+          currentTheme: 'Current template',
+          archetype: 'Header style',
+          archetypeHint: 'Change the header structure without switching template.',
+          archetypes: {
+            classic: 'Classic', band: 'Band', centered: 'Centered', sidebar: 'Sidebar', minimal: 'Minimal',
+          },
           accent: 'Accent color',
           font: 'Font',
           fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
@@ -4629,7 +4691,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
             billToLabel: '"Bill to" label', billToName: 'Client name', billToContact: 'Client contact',
             lineItems: 'Line-items table', subtotal: 'Subtotal', tax: 'Tax', total: 'Total',
             notes: 'Notes', paymentInstructions: 'Payment instructions',
+            headerNote: 'Header note', footer: 'Footer',
           },
+          elementFont: 'Font',
+          undo: 'Undo',
+          redo: 'Redo',
         },
       },
       customFields: {

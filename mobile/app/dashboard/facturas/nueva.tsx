@@ -27,7 +27,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
-import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 
 interface Client {
   id: string;
@@ -58,9 +58,9 @@ const newLine = (): LineItem => ({ id: newId(), description: '', qty: 1, rate: 0
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
-const genInvoiceNumber = () => {
+const genInvoiceNumber = (lang: InvoiceLang) => {
   const now = new Date();
-  return `FAC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+  return `${invoiceNumberPrefix(lang)}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 };
 
 const todayISO = () => new Date().toISOString().split('T')[0];
@@ -85,7 +85,9 @@ export default function NuevaFacturaRoute() {
   const editId = edit ?? null;
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
-  const [invoiceNumber, setInvoiceNumber] = useState(genInvoiceNumber());
+  const [invoiceNumber, setInvoiceNumber] = useState(() => genInvoiceNumber('es'));
+  // Once the user types their own number, stop auto-deriving it from language.
+  const numberEditedRef = useRef(false);
   const [clientIds, setClientIds] = useState<string[]>([]);
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
@@ -126,6 +128,13 @@ export default function NuevaFacturaRoute() {
     setLanguage(invoiceDefaultLanguage(business.invoice_template));
     langDefaultedRef.current = true;
   }, [editId, business]);
+
+  // Keep the auto invoice-number prefix in sync with the language (INV-/FAC-)
+  // until the user types their own number.
+  useEffect(() => {
+    if (editId || numberEditedRef.current) return;
+    setInvoiceNumber(genInvoiceNumber(language));
+  }, [language, editId]);
 
   // Load clients + optionally the invoice being edited.
   useEffect(() => {
@@ -348,7 +357,7 @@ export default function NuevaFacturaRoute() {
             <Input
               label={t.invoiceNumberLabel}
               value={invoiceNumber}
-              onChangeText={setInvoiceNumber}
+              onChangeText={(v) => { setInvoiceNumber(v); numberEditedRef.current = true; }}
             />
 
             <View className="flex flex-col gap-2 mt-3">

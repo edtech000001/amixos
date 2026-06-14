@@ -6,6 +6,9 @@ import { Fragment, type ReactNode } from 'react';
 import { View, Text, Image, Platform, type TextStyle } from 'react-native';
 import {
   resolveFieldValue,
+  fieldUsesAccent,
+  onAccentColor,
+  withAlpha,
   type InvoiceViewModel,
   type InvoiceSectionId,
   type InvoiceFont,
@@ -22,9 +25,13 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const st = vm.style;
   const accent = st.accent;
   const cols = vm.columns;
+  const h = vm.header;
   const small = st.fontPx - 2;
   const gap = st.density === 'compact' ? 14 : 22;
   const ff = rnFont(st.font);
+  const onAcc = onAccentColor(accent);
+  const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
+  const tint = withAlpha(accent, 0.1);
   // Every Text gets the chosen family (RN doesn't inherit font through View).
   const T = ({ style, children, ...rest }: { style?: TextStyle; children: ReactNode; numberOfLines?: number }) => (
     <Text style={[{ fontFamily: ff }, style]} {...rest}>{children}</Text>
@@ -36,33 +43,112 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     </T>
   );
 
-  const renderers: Record<InvoiceSectionId, () => ReactNode> = {
-    header: () => (
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 12 }}>
-        <View style={{ flex: 1 }}>
-          {vm.header.showLogo && vm.header.logoUrl ? (
-            <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ height: st.logoPx, width: 160, marginBottom: 8 }} />
-          ) : null}
-          <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{vm.header.businessName}</T>
-          {vm.header.businessLines.map((l, i) => (
-            <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
-          ))}
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{vm.header.invoiceTitle}</T>
-          <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{vm.header.invoiceNumber}</T>
-          <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{vm.header.statusLabel}</T>
-          <T style={{ color: '#374151', fontSize: small, marginTop: 4 }}>
-            <T style={{ color: '#9CA3AF', fontSize: small }}>{vm.header.issueLabel}: </T>{vm.header.issueValue}
-          </T>
-          {vm.header.dueValue ? (
-            <T style={{ color: '#374151', fontSize: small }}>
-              <T style={{ color: '#9CA3AF', fontSize: small }}>{vm.header.dueLabel}: </T>{vm.header.dueValue}
+  const Logo = ({ width = 160, scale = 1 }: { width?: number; scale?: number }) =>
+    h.showLogo && h.logoUrl ? (
+      <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * scale, width, marginBottom: 8 }} />
+    ) : null;
+
+  const MetaLines = ({ subtle }: { subtle?: boolean }) => (
+    <>
+      <T style={{ color: subtle ? subtleOnAcc : '#374151', fontSize: small, marginTop: 4 }}>
+        <T style={{ color: subtle ? subtleOnAcc : '#9CA3AF', fontSize: small }}>{h.issueLabel}: </T>{h.issueValue}
+      </T>
+      {h.dueValue ? (
+        <T style={{ color: subtle ? subtleOnAcc : '#374151', fontSize: small }}>
+          <T style={{ color: subtle ? subtleOnAcc : '#9CA3AF', fontSize: small }}>{h.dueLabel}: </T>{h.dueValue}
+        </T>
+      ) : null}
+    </>
+  );
+
+  const renderHeader = (): ReactNode => {
+    switch (vm.archetype) {
+      case 'band':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, backgroundColor: accent, borderRadius: 10, padding: gap }}>
+            <View style={{ flex: 1 }}>
+              <Logo />
+              <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</T>
+              {h.businessLines.map((l, i) => (
+                <T key={i} style={{ color: subtleOnAcc, fontSize: small, marginTop: 2 }}>{l}</T>
+              ))}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <T style={{ fontWeight: '700', textTransform: 'uppercase', color: onAcc, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', marginTop: 2, color: onAcc }}>{h.invoiceNumber}</T>
+              <T style={{ textTransform: 'uppercase', color: subtleOnAcc, fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+              <MetaLines subtle />
+            </View>
+          </View>
+        );
+      case 'centered':
+        return (
+          <View style={{ alignItems: 'center', borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 12 }}>
+            <Logo />
+            <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827', textAlign: 'center' }}>{h.businessName}</T>
+            {h.businessLines.map((l, i) => (
+              <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2, textAlign: 'center' }}>{l}</T>
+            ))}
+            <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1.4, fontSize: st.fontPx + 8, marginTop: 12, textAlign: 'center' }}>{h.invoiceTitle}</T>
+            <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 2, textAlign: 'center' }}>{h.invoiceNumber} · {h.statusLabel}</T>
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 2 }}><MetaLines /></View>
+          </View>
+        );
+      case 'sidebar':
+        return (
+          <View style={{ flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
+            <View style={{ backgroundColor: tint, borderRadius: 12, padding: 14, width: '40%' }}>
+              <Logo width={120} />
+              <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
+              {h.businessLines.map((l, i) => (
+                <T key={i} style={{ color: '#4B5563', fontSize: small, marginTop: 2 }}>{l}</T>
+              ))}
+            </View>
+            <View style={{ flex: 1, paddingTop: 4 }}>
+              <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
+              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+              <MetaLines />
+            </View>
+          </View>
+        );
+      case 'minimal':
+        return (
+          <View style={{ borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: small, letterSpacing: 1.4, fontWeight: '600' }}>{h.businessName}</T>
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * 0.7, width: 120 }} /> : null}
+            </View>
+            <View style={{ width: 32, height: 3, backgroundColor: accent, borderRadius: 2, marginTop: 14, marginBottom: 8 }} />
+            <T style={{ fontWeight: '300', fontSize: st.fontPx + 16, color: '#111827', letterSpacing: 0.4 }}>{h.invoiceTitle}</T>
+            <T style={{ color: '#6B7280', fontSize: small, marginTop: 6 }}>
+              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </T>
-          ) : null}
-        </View>
-      </View>
-    ),
+          </View>
+        );
+      default: // classic
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Logo />
+              <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
+              {h.businessLines.map((l, i) => (
+                <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
+              ))}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
+              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+              <MetaLines />
+            </View>
+          </View>
+        );
+    }
+  };
+
+  const renderers: Record<InvoiceSectionId, () => ReactNode> = {
+    header: renderHeader,
     billTo: () => (
       <View>
         <SectLabel>{vm.labels.billTo}</SectLabel>
@@ -152,14 +238,16 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
       const txt = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
       const s = el.style ?? {};
+      const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? accent : '#1F2937');
       return (
         <T
           style={{
             fontSize: s.fontSize,
             fontWeight: s.bold ? '700' : undefined,
-            color: s.color ?? '#1F2937',
+            color,
             textAlign: s.align,
             lineHeight: s.fontSize ? s.fontSize * 1.35 : undefined,
+            fontFamily: s.font ? rnFont(s.font) : ff,
           }}
         >
           {txt}

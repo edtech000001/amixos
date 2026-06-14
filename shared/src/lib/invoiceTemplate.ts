@@ -28,7 +28,34 @@ import { formatDateLong } from './format';
 
 export const INVOICE_TEMPLATE_VERSION = 1;
 
-export type InvoicePresetId = 'clasica' | 'moderna' | 'minimalista' | 'compacta';
+/** Industry-tailored templates. Each is a seed `InvoiceTemplateConfig` pairing a
+ *  layout `archetype` with industry-appropriate color/font/copy. `general` is the
+ *  universal default and the back-compat target for older configs. */
+export type InvoicePresetId =
+  | 'general'
+  | 'profesional'
+  | 'construccion'
+  | 'plomeria'
+  | 'electrico'
+  | 'pintura'
+  | 'techado'
+  | 'hvac'
+  | 'jardineria'
+  | 'limpieza'
+  | 'mudanzas'
+  | 'mecanico'
+  | 'detallado'
+  | 'salon'
+  | 'catering'
+  | 'fotografia'
+  | 'tutoria';
+
+/** Header LAYOUT structure (the most visually distinctive zone). The body below
+ *  (line items, totals, etc.) always flows identically so multi-page print stays
+ *  robust regardless of archetype. */
+export type InvoiceArchetype = 'classic' | 'band' | 'centered' | 'sidebar' | 'minimal';
+export const ALL_ARCHETYPES: InvoiceArchetype[] = ['classic', 'band', 'centered', 'sidebar', 'minimal'];
+
 export type InvoiceFont = 'sans' | 'serif' | 'mono';
 export type InvoiceDensity = 'comfortable' | 'compact';
 export type InvoiceLogoSize = 'sm' | 'md' | 'lg';
@@ -105,12 +132,15 @@ export type InvoiceFieldKey =
   | 'tax'
   | 'total'
   | 'notes'
-  | 'paymentInstructions';
+  | 'paymentInstructions'
+  | 'headerNote'
+  | 'footer';
 
 export const FREEFORM_FIELD_KEYS: InvoiceFieldKey[] = [
   'businessName', 'businessContact', 'invoiceTitle', 'invoiceNumber', 'status',
   'issueDate', 'dueDate', 'billToLabel', 'billToName', 'billToContact',
   'lineItems', 'subtotal', 'tax', 'total', 'notes', 'paymentInstructions',
+  'headerNote', 'footer',
 ];
 
 export interface InvoiceElementStyle {
@@ -118,6 +148,7 @@ export interface InvoiceElementStyle {
   bold?: boolean;
   color?: string;                          // hex; defaults to theme text/accent
   align?: 'left' | 'center' | 'right';
+  font?: InvoiceFont;                      // per-element font; inherits theme font when unset
 }
 
 export type InvoiceElementKind = 'logo' | 'field' | 'text';
@@ -138,6 +169,8 @@ export interface InvoiceElement {
 export interface InvoiceTemplateConfig {
   version: number;
   presetId: InvoicePresetId;
+  /** Header layout structure. Absent on legacy configs ⇒ 'classic' (unchanged). */
+  archetype: InvoiceArchetype;
   accentColor: string;
   font: InvoiceFont;
   density: InvoiceDensity;
@@ -165,62 +198,102 @@ const ACCENT_DEFAULT = '#4F46E5'; // app primary (indigo)
 const fullSections = (): InvoiceSection[] =>
   ALL_SECTION_IDS.map(id => ({ id, show: true }));
 
+/** Seed-config builder so each industry preset is a one-liner. Default copy is
+ *  Spanish (app is Spanish-first); a user can clear/edit it after applying. */
+function preset(
+  id: InvoicePresetId,
+  archetype: InvoiceArchetype,
+  accentColor: string,
+  opts: {
+    font?: InvoiceFont;
+    density?: InvoiceDensity;
+    logoSize?: InvoiceLogoSize;
+    showLogo?: boolean;
+    text?: InvoiceTextBlocks;
+  } = {},
+): InvoiceTemplateConfig {
+  return {
+    version: INVOICE_TEMPLATE_VERSION,
+    presetId: id,
+    archetype,
+    accentColor,
+    font: opts.font ?? 'sans',
+    density: opts.density ?? 'comfortable',
+    showLogo: opts.showLogo ?? true,
+    logoSize: opts.logoSize ?? 'md',
+    sections: fullSections(),
+    columns: { qty: true, rate: true, total: true },
+    text: opts.text ?? {},
+    defaultLanguage: 'es',
+  };
+}
+
 export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
-  clasica: {
-    version: INVOICE_TEMPLATE_VERSION,
-    presetId: 'clasica',
-    accentColor: '#1F2937', // conservative slate
-    font: 'sans',
-    density: 'comfortable',
-    showLogo: true,
-    logoSize: 'md',
-    sections: fullSections(),
-    columns: { qty: true, rate: true, total: true },
-    text: {},
-    defaultLanguage: 'es',
-  },
-  moderna: {
-    version: INVOICE_TEMPLATE_VERSION,
-    presetId: 'moderna',
-    accentColor: ACCENT_DEFAULT,
-    font: 'sans',
-    density: 'comfortable',
-    showLogo: true,
-    logoSize: 'lg',
-    sections: fullSections(),
-    columns: { qty: true, rate: true, total: true },
-    text: {},
-    defaultLanguage: 'es',
-  },
-  minimalista: {
-    version: INVOICE_TEMPLATE_VERSION,
-    presetId: 'minimalista',
-    accentColor: '#111827',
-    font: 'serif',
-    density: 'comfortable',
-    showLogo: false,
-    logoSize: 'sm',
-    sections: fullSections(),
-    columns: { qty: true, rate: true, total: true },
-    text: {},
-    defaultLanguage: 'es',
-  },
-  compacta: {
-    version: INVOICE_TEMPLATE_VERSION,
-    presetId: 'compacta',
-    accentColor: '#1F2937',
-    font: 'sans',
-    density: 'compact',
-    showLogo: true,
-    logoSize: 'sm',
-    sections: fullSections(),
-    columns: { qty: true, rate: true, total: true },
-    text: {},
-    defaultLanguage: 'es',
-  },
+  // Universal
+  general: preset('general', 'classic', '#1F2937'),
+  profesional: preset('profesional', 'sidebar', ACCENT_DEFAULT, { logoSize: 'lg' }),
+  // Construcción y oficios
+  construccion: preset('construccion', 'band', '#D97706', {
+    text: {
+      paymentInstructions: 'Pago neto a 30 días. Aceptamos cheque, transferencia y tarjeta.',
+      footer: 'Gracias por confiar en nuestro trabajo.',
+    },
+  }),
+  plomeria: preset('plomeria', 'band', '#2563EB', {
+    text: { footer: 'Garantía de 90 días en mano de obra.' },
+  }),
+  electrico: preset('electrico', 'band', '#CA8A04', {
+    text: { footer: 'Trabajo realizado conforme al código eléctrico vigente.' },
+  }),
+  pintura: preset('pintura', 'centered', '#7C3AED'),
+  techado: preset('techado', 'band', '#334155', {
+    text: { footer: 'Garantía de materiales y mano de obra disponible bajo solicitud.' },
+  }),
+  hvac: preset('hvac', 'band', '#0284C7', {
+    text: { footer: 'Mantenimiento recomendado cada 6 meses.' },
+  }),
+  // Hogar y exterior
+  jardineria: preset('jardineria', 'sidebar', '#059669', {
+    text: { footer: 'Gracias por mantener su jardín con nosotros.' },
+  }),
+  limpieza: preset('limpieza', 'centered', '#0EA5E9', {
+    text: { footer: 'Gracias por su preferencia.' },
+  }),
+  mudanzas: preset('mudanzas', 'sidebar', '#EA580C'),
+  // Auto
+  mecanico: preset('mecanico', 'sidebar', '#DC2626', {
+    text: { footer: 'Garantía de 30 días o 1,000 millas en reparaciones.' },
+  }),
+  detallado: preset('detallado', 'centered', '#0F172A'),
+  // Cuidado y eventos
+  salon: preset('salon', 'centered', '#DB2777', { font: 'serif' }),
+  catering: preset('catering', 'minimal', '#B45309', { font: 'serif' }),
+  fotografia: preset('fotografia', 'minimal', '#111827', { font: 'serif', showLogo: false }),
+  tutoria: preset('tutoria', 'minimal', '#0D9488', { font: 'serif' }),
 };
 
-export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.clasica;
+/** Older configs used abstract preset ids; map them to the nearest new id so the
+ *  picker still highlights something sensible (the rest of the stored config is
+ *  preserved by normalizeConfig regardless). */
+const PRESET_ALIASES: Record<string, InvoicePresetId> = {
+  clasica: 'general',
+  moderna: 'profesional',
+  minimalista: 'fotografia',
+  compacta: 'general',
+};
+
+/** Ordered industry groups for the gallery picker. Names live in i18n. */
+export const INVOICE_PRESET_GROUPS: { id: string; presetIds: InvoicePresetId[] }[] = [
+  { id: 'universal', presetIds: ['general', 'profesional'] },
+  { id: 'construccion', presetIds: ['construccion', 'plomeria', 'electrico', 'pintura', 'techado', 'hvac'] },
+  { id: 'hogar', presetIds: ['jardineria', 'limpieza', 'mudanzas'] },
+  { id: 'auto', presetIds: ['mecanico', 'detallado'] },
+  { id: 'eventos', presetIds: ['salon', 'catering', 'fotografia', 'tutoria'] },
+];
+
+export const INVOICE_PRESET_IDS: InvoicePresetId[] = INVOICE_PRESET_GROUPS.flatMap(g => g.presetIds);
+
+export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.general;
 
 // ── Freeform default layout + element validation ─────────────────────────────
 
@@ -271,6 +344,7 @@ function normalizeElement(e: unknown): InvoiceElement | null {
       bold: style.bold === true ? true : undefined,
       color: typeof style.color === 'string' ? style.color : undefined,
       align: style.align === 'center' || style.align === 'right' ? style.align : undefined,
+      font: style.font === 'serif' || style.font === 'mono' || style.font === 'sans' ? style.font : undefined,
     };
   }
   return out;
@@ -286,8 +360,12 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   if (!raw || typeof raw !== 'object') return clone(base);
   const r = raw as Partial<InvoiceTemplateConfig>;
 
-  const presetId: InvoicePresetId =
-    r.presetId && INVOICE_PRESETS[r.presetId] ? r.presetId : base.presetId;
+  const rawPreset = typeof r.presetId === 'string' ? r.presetId : '';
+  const presetId: InvoicePresetId = INVOICE_PRESETS[rawPreset as InvoicePresetId]
+    ? (rawPreset as InvoicePresetId)
+    : PRESET_ALIASES[rawPreset] ?? base.presetId;
+  const archetype: InvoiceArchetype =
+    r.archetype && ALL_ARCHETYPES.includes(r.archetype) ? r.archetype : 'classic';
 
   // Sections: keep known, ordered, deduped; append missing ids as hidden.
   const seen = new Set<InvoiceSectionId>();
@@ -317,6 +395,7 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   return {
     version: INVOICE_TEMPLATE_VERSION,
     presetId,
+    archetype,
     accentColor: typeof r.accentColor === 'string' ? r.accentColor : base.accentColor,
     font: r.font === 'serif' || r.font === 'mono' ? r.font : 'sans',
     density: r.density === 'compact' ? 'compact' : 'comfortable',
@@ -343,6 +422,12 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
  *  New invoices seed their `language` from this (overridable per invoice). */
 export function invoiceDefaultLanguage(rawConfig: unknown): InvoiceLang {
   return normalizeConfig(rawConfig).defaultLanguage;
+}
+
+/** Auto-number prefix by language: INV- (English) / FAC- (Spanish). Used as the
+ *  default invoice number; a user-entered custom number overrides it. */
+export function invoiceNumberPrefix(lang: InvoiceLang): string {
+  return lang === 'en' ? 'INV' : 'FAC';
 }
 
 /** Pick the effective config: per-invoice frozen override → business default →
@@ -441,6 +526,8 @@ export interface InvoiceBranding {
 export interface InvoiceViewModel {
   style: StyleTokens;
   lang: InvoiceLang;
+  /** Header layout structure (body sections are archetype-independent). */
+  archetype: InvoiceArchetype;
   labels: Record<InvoiceLabelKey, string>;
   /** Visible sections in render order (empty-data sections already dropped). */
   sections: InvoiceSectionId[];
@@ -549,6 +636,7 @@ export function buildInvoiceViewModel(
   return {
     style,
     lang,
+    archetype: cfg.archetype,
     labels,
     sections,
     layoutMode: cfg.layoutMode === 'freeform' ? 'freeform' : 'flow',
@@ -604,9 +692,49 @@ export function resolveFieldValue(vm: InvoiceViewModel, key: InvoiceFieldKey): s
     case 'total': return `${vm.labels.total}: ${vm.totals.total}`;
     case 'notes': return vm.notes ?? '';
     case 'paymentInstructions': return vm.paymentInstructions ?? '';
+    case 'headerNote': return vm.header.headerNote ?? '';
+    case 'footer': return vm.footer ?? '';
     case 'lineItems': return '';
     default: return '';
   }
+}
+
+/** CSS font stack for a font choice — exposed so renderers can apply a
+ *  per-element font. */
+export function cssFontFamily(font: InvoiceFont): string {
+  return CSS_FONTS[font];
+}
+
+function parseHex(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((hex ?? '').trim());
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+
+/** Readable text color (#FFFFFF or near-black) for text placed ON an accent fill
+ *  — used by the band/sidebar archetypes. */
+export function onAccentColor(hex: string): string {
+  const c = parseHex(hex);
+  if (!c) return '#FFFFFF';
+  // Perceived luminance (sRGB) — light backgrounds get dark text.
+  const lum = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+  return lum > 0.62 ? '#111827' : '#FFFFFF';
+}
+
+/** rgba() string from a hex + alpha — valid in CSS, RN, and print HTML. Falls
+ *  back to the input when the hex can't be parsed. */
+export function withAlpha(hex: string, alpha: number): string {
+  const c = parseHex(hex);
+  if (!c) return hex;
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+}
+
+/** Fields that default to the accent color in freeform when no explicit color
+ *  is set (mirrors how flow uses accent for the title + grand total). */
+export function fieldUsesAccent(field: InvoiceFieldKey | undefined): boolean {
+  return field === 'invoiceTitle' || field === 'total';
 }
 
 // ── HTML renderer (web print + mobile expo-print) ────────────────────────────
@@ -625,22 +753,90 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   const { style: st, header: h, labels: L } = vm;
   const accent = escapeHtml(st.accent);
   const logoMax = st.logoPx;
+  const onAcc = escapeHtml(onAccentColor(st.accent));
+  const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
+  const tint = withAlpha(st.accent, 0.1);
 
-  const headerHtml = `
+  const logoTag = (cls: string) =>
+    h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
+  const bizLines = (cls: string) =>
+    h.businessLines.map(l => `<div class="${cls}">${escapeHtml(l)}</div>`).join('');
+  const meta = (cls: string) => `
+    <div class="inv-metaline ${cls}"><span>${escapeHtml(h.issueLabel)}:</span> ${escapeHtml(h.issueValue)}</div>
+    ${h.dueValue ? `<div class="inv-metaline ${cls}"><span>${escapeHtml(h.dueLabel)}:</span> ${escapeHtml(h.dueValue)}</div>` : ''}`;
+
+  const headerByArchetype = (): string => {
+    switch (vm.archetype) {
+      case 'band':
+        return `
+    <div class="inv-band">
+      <div class="inv-from">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname onacc">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bandline')}
+      </div>
+      <div class="inv-meta">
+        <div class="inv-title onacc">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number onacc">${escapeHtml(h.invoiceNumber)}</div>
+        <div class="inv-status onacc-sub">${escapeHtml(h.statusLabel)}</div>
+        ${meta('onacc-sub')}
+      </div>
+    </div>`;
+      case 'centered':
+        return `
+    <div class="inv-centered">
+      ${logoTag('inv-logo-c')}
+      <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+      ${bizLines('inv-bizline')}
+      <div class="inv-title-c">${escapeHtml(h.invoiceTitle)}</div>
+      <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+      <div class="inv-meta-c">${meta('')}</div>
+    </div>`;
+      case 'sidebar':
+        return `
+    <div class="inv-sidebar">
+      <div class="inv-sidecard">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bizline')}
+      </div>
+      <div class="inv-side-main">
+        <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
+        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
+        ${meta('')}
+      </div>
+    </div>`;
+      case 'minimal':
+        return `
+    <div class="inv-minimal">
+      <div class="inv-min-top">
+        <div class="inv-min-biz">${escapeHtml(h.businessName)}</div>
+        ${logoTag('inv-logo-min')}
+      </div>
+      <div class="inv-accent-rule"></div>
+      <div class="inv-title-min">${escapeHtml(h.invoiceTitle)}</div>
+      <div class="inv-min-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
+    </div>`;
+      default: // classic
+        return `
     <div class="inv-header">
       <div class="inv-from">
-        ${h.showLogo && h.logoUrl ? `<img class="inv-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : ''}
+        ${logoTag('inv-logo')}
         <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
-        ${h.businessLines.map(l => `<div class="inv-bizline">${escapeHtml(l)}</div>`).join('')}
+        ${bizLines('inv-bizline')}
       </div>
       <div class="inv-meta">
         <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
         <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
-        <div class="inv-metaline"><span>${escapeHtml(h.issueLabel)}:</span> ${escapeHtml(h.issueValue)}</div>
-        ${h.dueValue ? `<div class="inv-metaline"><span>${escapeHtml(h.dueLabel)}:</span> ${escapeHtml(h.dueValue)}</div>` : ''}
+        ${meta('')}
       </div>
-    </div>
+    </div>`;
+    }
+  };
+
+  const headerHtml = `${headerByArchetype()}
     ${h.headerNote ? `<div class="inv-note-top">${br(h.headerNote)}</div>` : ''}`;
 
   const billToHtml = `
@@ -721,8 +917,10 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     const parts: string[] = [];
     if (s.fontSize) parts.push(`font-size:${s.fontSize}px`);
     if (s.bold) parts.push('font-weight:700');
-    if (s.color) parts.push(`color:${escapeHtml(s.color)}`);
+    const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? st.accent : undefined);
+    if (color) parts.push(`color:${escapeHtml(color)}`);
     if (s.align) parts.push(`text-align:${s.align}`);
+    if (s.font) parts.push(`font-family:${cssFontFamily(s.font)}`);
     return parts.join(';');
   };
   const elInner = (el: InvoiceElement): string => {
@@ -749,7 +947,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   <style>
     @page { margin: 14mm; }
     * { box-sizing: border-box; }
-    body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; }
+    body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-doc > * { margin-bottom: ${gap}px; }
     .inv-canvas { position: relative; width: 100%; aspect-ratio: 8.5 / 11; }
     .inv-canvas > * { margin-bottom: 0; }
@@ -767,6 +965,32 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-metaline { font-size: ${st.fontPx - 2}px; color: #374151; margin-top: 4px; }
     .inv-metaline span { color: #9ca3af; }
     .inv-note-top { font-size: ${st.fontPx - 1}px; color: #374151; }
+    /* — band archetype — */
+    .inv-band { display: flex; justify-content: space-between; gap: 24px; background: ${accent}; padding: ${gap}px ${gap + 4}px; border-radius: 10px; }
+    .inv-band .inv-bizname.onacc { color: ${onAcc}; }
+    .inv-band .inv-bandline { color: ${subtleOnAcc}; font-size: ${st.fontPx - 2}px; margin-top: 2px; }
+    .inv-band .inv-meta { text-align: right; }
+    .inv-band .inv-title.onacc { text-transform: uppercase; letter-spacing: 0.08em; color: ${onAcc}; font-weight: 700; font-size: ${st.fontPx + 6}px; }
+    .inv-band .inv-number.onacc { color: ${onAcc}; font-weight: 600; margin-top: 2px; }
+    .inv-band .onacc-sub { color: ${subtleOnAcc}; font-size: ${st.fontPx - 2}px; margin-top: 3px; }
+    .inv-band .onacc-sub span { color: ${subtleOnAcc}; }
+    /* — centered archetype — */
+    .inv-centered { text-align: center; padding-bottom: ${gap}px; border-bottom: 2px solid ${accent}; }
+    .inv-logo-c { max-height: ${logoMax}px; max-width: 220px; object-fit: contain; margin: 0 auto 8px; display: block; }
+    .inv-title-c { text-transform: uppercase; letter-spacing: 0.12em; color: ${accent}; font-weight: 700; font-size: ${st.fontPx + 8}px; margin-top: 12px; }
+    .inv-meta-c .inv-metaline { display: inline-block; margin: 4px 8px 0; }
+    /* — sidebar archetype — */
+    .inv-sidebar { display: flex; gap: 18px; align-items: stretch; }
+    .inv-sidecard { background: ${tint}; border-radius: 12px; padding: 16px; width: 40%; }
+    .inv-side-main { flex: 1; padding-top: 4px; }
+    /* — minimal archetype — */
+    .inv-minimal { padding-bottom: ${gap}px; border-bottom: 1px solid #e5e7eb; }
+    .inv-min-top { display: flex; justify-content: space-between; align-items: center; }
+    .inv-min-biz { text-transform: uppercase; letter-spacing: 0.12em; color: #6b7280; font-size: ${st.fontPx - 1}px; font-weight: 600; }
+    .inv-logo-min { max-height: ${Math.round(logoMax * 0.7)}px; max-width: 160px; object-fit: contain; }
+    .inv-accent-rule { width: 32px; height: 3px; background: ${accent}; border-radius: 2px; margin: 14px 0 8px; }
+    .inv-title-min { font-weight: 300; font-size: ${st.fontPx + 16}px; color: #111827; letter-spacing: 0.02em; }
+    .inv-min-meta { color: #6b7280; font-size: ${st.fontPx - 2}px; margin-top: 6px; }
     .inv-sectlabel { text-transform: uppercase; letter-spacing: 0.05em; font-size: ${st.fontPx - 3}px; color: #9ca3af; font-weight: 600; margin-bottom: 6px; }
     .inv-clientname { font-weight: 600; }
     .inv-client + .inv-client { margin-top: 6px; }
@@ -795,8 +1019,15 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
 
 // ── Editor helpers (Phase 2 settings) ────────────────────────────────────────
 
-export function applyPreset(presetId: InvoicePresetId): InvoiceTemplateConfig {
-  return clone(INVOICE_PRESETS[presetId] ?? DEFAULT_INVOICE_TEMPLATE);
+/** Apply an industry template. Replaces layout/style/copy with the preset, but
+ *  preserves the business's chosen default invoice language across switches. */
+export function applyPreset(presetId: InvoicePresetId, current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
+  const next = clone(INVOICE_PRESETS[presetId] ?? DEFAULT_INVOICE_TEMPLATE);
+  if (current) next.defaultLanguage = current.defaultLanguage;
+  return next;
+}
+export function setArchetype(c: InvoiceTemplateConfig, archetype: InvoiceArchetype): InvoiceTemplateConfig {
+  return { ...c, archetype };
 }
 export function setAccent(c: InvoiceTemplateConfig, accentColor: string): InvoiceTemplateConfig {
   return { ...c, accentColor };
