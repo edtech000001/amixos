@@ -28,35 +28,45 @@ import { formatDateLong } from './format';
 
 export const INVOICE_TEMPLATE_VERSION = 1;
 
-/** Industry-tailored templates. Each is a seed `InvoiceTemplateConfig` pairing a
- *  layout `archetype` with industry-appropriate color/font/copy. `general` is the
- *  universal default and the back-compat target for older configs. */
+/** Universal templates — each is a genuinely distinct LAYOUT (not a recolor).
+ *  The accent/font are just defaults the user freely overrides. Display names are
+ *  generic ("Plantilla 1…"). The first 8 reuse their archetype name as id; the
+ *  premium 8 combine an archetype with table/total/footer/decoration styling. */
 export type InvoicePresetId =
-  | 'general'
-  | 'profesional'
-  | 'construccion'
-  | 'plomeria'
-  | 'electrico'
-  | 'pintura'
-  | 'techado'
-  | 'hvac'
-  | 'jardineria'
-  | 'limpieza'
-  | 'mudanzas'
-  | 'mecanico'
-  | 'detallado'
-  | 'salon'
-  | 'catering'
-  | 'fotografia'
-  | 'tutoria';
+  | 'classic' | 'band' | 'sidebar' | 'split' | 'stamp' | 'leftbar' | 'centered' | 'minimal'
+  | 'hero' | 'ledger' | 'masthead' | 'boutique' | 'wave' | 'fresh' | 'orbit' | 'prism';
 
 /** Header LAYOUT structure (the most visually distinctive zone). The body below
  *  (line items, totals, etc.) always flows identically so multi-page print stays
  *  robust regardless of archetype. */
-export type InvoiceArchetype = 'classic' | 'band' | 'centered' | 'sidebar' | 'minimal';
-export const ALL_ARCHETYPES: InvoiceArchetype[] = ['classic', 'band', 'centered', 'sidebar', 'minimal'];
+export type InvoiceArchetype =
+  | 'classic'
+  | 'band'
+  | 'sidebar'
+  | 'split'
+  | 'stamp'
+  | 'leftbar'
+  | 'centered'
+  | 'minimal'
+  // Premium layouts (Canva-style references).
+  | 'hero'        // oversized title, business left
+  | 'wordmark'    // big accent "INVOICE" word right, divider under
+  | 'panel'       // full-width colored masthead panel, light text
+  | 'elegant'     // serif, big left title + circular logo badge
+  | 'titleLeft'   // serif title left, logo right
+  | 'bandCenter'; // centered title inside a full-width band
+export const ALL_ARCHETYPES: InvoiceArchetype[] = [
+  'classic', 'band', 'sidebar', 'split', 'stamp', 'leftbar', 'centered', 'minimal',
+  'hero', 'wordmark', 'panel', 'elegant', 'titleLeft', 'bandCenter',
+];
 
-export type InvoiceFont = 'sans' | 'serif' | 'mono';
+/** Line-items header fill. */
+export type InvoiceTableHeader = 'plain' | 'accent' | 'dark' | 'tint';
+/** Full-bleed page flourish drawn as an absolute SVG layer behind the content. */
+export type InvoiceDecoration = 'none' | 'corners' | 'wave' | 'arc';
+
+export type InvoiceFont = 'sans' | 'serif' | 'mono' | 'times' | 'palatino' | 'trebuchet' | 'verdana';
+export const ALL_FONTS: InvoiceFont[] = ['sans', 'serif', 'mono', 'times', 'palatino', 'trebuchet', 'verdana'];
 export type InvoiceDensity = 'comfortable' | 'compact';
 export type InvoiceLogoSize = 'sm' | 'md' | 'lg';
 
@@ -189,6 +199,12 @@ export interface InvoiceTemplateConfig {
   // existing invoice renders — each invoice carries its own `language` field
   // (set from this default at creation, overridable per invoice).
   defaultLanguage: InvoiceLang;
+  // ── Premium style layer (all optional; defaults reproduce the plain look) ──
+  tableHeader?: InvoiceTableHeader;  // line-items header fill (default 'plain')
+  totalBar?: boolean;                // grand total as a full-width accent bar
+  footerBar?: boolean;               // business contact as an accent footer strip
+  pageTint?: boolean;                // tint the page background with the accent
+  decoration?: InvoiceDecoration;    // full-bleed SVG flourish (default 'none')
 }
 
 // ── Presets ──────────────────────────────────────────────────────────────────
@@ -210,6 +226,11 @@ function preset(
     logoSize?: InvoiceLogoSize;
     showLogo?: boolean;
     text?: InvoiceTextBlocks;
+    tableHeader?: InvoiceTableHeader;
+    totalBar?: boolean;
+    footerBar?: boolean;
+    pageTint?: boolean;
+    decoration?: InvoiceDecoration;
   } = {},
 ): InvoiceTemplateConfig {
   return {
@@ -225,75 +246,56 @@ function preset(
     columns: { qty: true, rate: true, total: true },
     text: opts.text ?? {},
     defaultLanguage: 'es',
+    tableHeader: opts.tableHeader ?? 'plain',
+    totalBar: opts.totalBar ?? false,
+    footerBar: opts.footerBar ?? false,
+    pageTint: opts.pageTint ?? false,
+    decoration: opts.decoration ?? 'none',
   };
 }
 
 export const INVOICE_PRESETS: Record<InvoicePresetId, InvoiceTemplateConfig> = {
-  // Universal
-  general: preset('general', 'classic', '#1F2937'),
-  profesional: preset('profesional', 'sidebar', ACCENT_DEFAULT, { logoSize: 'lg' }),
-  // Construcción y oficios
-  construccion: preset('construccion', 'band', '#D97706', {
-    text: {
-      paymentInstructions: 'Pago neto a 30 días. Aceptamos cheque, transferencia y tarjeta.',
-      footer: 'Gracias por confiar en nuestro trabajo.',
-    },
-  }),
-  plomeria: preset('plomeria', 'band', '#2563EB', {
-    text: { footer: 'Garantía de 90 días en mano de obra.' },
-  }),
-  electrico: preset('electrico', 'band', '#CA8A04', {
-    text: { footer: 'Trabajo realizado conforme al código eléctrico vigente.' },
-  }),
-  pintura: preset('pintura', 'centered', '#7C3AED'),
-  techado: preset('techado', 'band', '#334155', {
-    text: { footer: 'Garantía de materiales y mano de obra disponible bajo solicitud.' },
-  }),
-  hvac: preset('hvac', 'band', '#0284C7', {
-    text: { footer: 'Mantenimiento recomendado cada 6 meses.' },
-  }),
-  // Hogar y exterior
-  jardineria: preset('jardineria', 'sidebar', '#059669', {
-    text: { footer: 'Gracias por mantener su jardín con nosotros.' },
-  }),
-  limpieza: preset('limpieza', 'centered', '#0EA5E9', {
-    text: { footer: 'Gracias por su preferencia.' },
-  }),
-  mudanzas: preset('mudanzas', 'sidebar', '#EA580C'),
-  // Auto
-  mecanico: preset('mecanico', 'sidebar', '#DC2626', {
-    text: { footer: 'Garantía de 30 días o 1,000 millas en reparaciones.' },
-  }),
-  detallado: preset('detallado', 'centered', '#0F172A'),
-  // Cuidado y eventos
-  salon: preset('salon', 'centered', '#DB2777', { font: 'serif' }),
-  catering: preset('catering', 'minimal', '#B45309', { font: 'serif' }),
-  fotografia: preset('fotografia', 'minimal', '#111827', { font: 'serif', showLogo: false }),
-  tutoria: preset('tutoria', 'minimal', '#0D9488', { font: 'serif' }),
+  classic: preset('classic', 'classic', '#1F2937'),
+  band: preset('band', 'band', '#4F46E5', { logoSize: 'lg' }),
+  sidebar: preset('sidebar', 'sidebar', '#059669', { logoSize: 'lg' }),
+  split: preset('split', 'split', '#0EA5E9'),
+  stamp: preset('stamp', 'stamp', '#7C3AED'),
+  leftbar: preset('leftbar', 'leftbar', '#DC2626'),
+  centered: preset('centered', 'centered', '#D97706', { font: 'serif' }),
+  minimal: preset('minimal', 'minimal', '#111827', { font: 'serif', logoSize: 'sm' }),
+  // Premium (Plantilla 9–16)
+  hero: preset('hero', 'hero', '#1D4ED8', { logoSize: 'sm', tableHeader: 'accent', totalBar: true, decoration: 'corners' }),
+  ledger: preset('ledger', 'wordmark', '#DC2626', { tableHeader: 'dark', footerBar: true, decoration: 'corners' }),
+  masthead: preset('masthead', 'panel', '#111827', { footerBar: true }),
+  boutique: preset('boutique', 'elegant', '#8A7E66', { font: 'serif', tableHeader: 'tint', footerBar: true }),
+  wave: preset('wave', 'titleLeft', '#1E3A8A', { font: 'serif', tableHeader: 'accent', totalBar: true, decoration: 'wave' }),
+  fresh: preset('fresh', 'bandCenter', '#5F7A6B', { footerBar: true, pageTint: true }),
+  orbit: preset('orbit', 'classic', '#0F766E', { tableHeader: 'accent', footerBar: true, decoration: 'arc' }),
+  prism: preset('prism', 'panel', '#4F46E5', { tableHeader: 'accent', footerBar: true }),
 };
 
-/** Older configs used abstract preset ids; map them to the nearest new id so the
- *  picker still highlights something sensible (the rest of the stored config is
- *  preserved by normalizeConfig regardless). */
-const PRESET_ALIASES: Record<string, InvoicePresetId> = {
-  clasica: 'general',
-  moderna: 'profesional',
-  minimalista: 'fotografia',
-  compacta: 'general',
-};
-
-/** Ordered industry groups for the gallery picker. Names live in i18n. */
-export const INVOICE_PRESET_GROUPS: { id: string; presetIds: InvoicePresetId[] }[] = [
-  { id: 'universal', presetIds: ['general', 'profesional'] },
-  { id: 'construccion', presetIds: ['construccion', 'plomeria', 'electrico', 'pintura', 'techado', 'hvac'] },
-  { id: 'hogar', presetIds: ['jardineria', 'limpieza', 'mudanzas'] },
-  { id: 'auto', presetIds: ['mecanico', 'detallado'] },
-  { id: 'eventos', presetIds: ['salon', 'catering', 'fotografia', 'tutoria'] },
+/** Display order in the gallery → also drives the "Plantilla N" numbering. */
+export const INVOICE_PRESET_IDS: InvoicePresetId[] = [
+  'classic', 'band', 'sidebar', 'split', 'stamp', 'leftbar', 'centered', 'minimal',
+  'hero', 'ledger', 'masthead', 'boutique', 'wave', 'fresh', 'orbit', 'prism',
 ];
 
-export const INVOICE_PRESET_IDS: InvoicePresetId[] = INVOICE_PRESET_GROUPS.flatMap(g => g.presetIds);
+/** Older configs used industry / abstract preset ids; map them to the nearest
+ *  layout so the picker still highlights sensibly. The stored config's accent +
+ *  archetype are preserved by normalizeConfig regardless, so existing invoices
+ *  keep rendering exactly as before. */
+const PRESET_ALIASES: Record<string, InvoicePresetId> = {
+  // abstract (v1)
+  clasica: 'classic', moderna: 'band', minimalista: 'minimal', compacta: 'classic',
+  // industry (v2)
+  general: 'classic', profesional: 'sidebar',
+  construccion: 'band', plomeria: 'band', electrico: 'band', techado: 'band', hvac: 'band',
+  pintura: 'centered', jardineria: 'sidebar', limpieza: 'centered', mudanzas: 'sidebar',
+  mecanico: 'sidebar', detallado: 'centered',
+  salon: 'centered', catering: 'minimal', fotografia: 'minimal', tutoria: 'minimal',
+};
 
-export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.general;
+export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.classic;
 
 // ── Freeform default layout + element validation ─────────────────────────────
 
@@ -344,7 +346,7 @@ function normalizeElement(e: unknown): InvoiceElement | null {
       bold: style.bold === true ? true : undefined,
       color: typeof style.color === 'string' ? style.color : undefined,
       align: style.align === 'center' || style.align === 'right' ? style.align : undefined,
-      font: style.font === 'serif' || style.font === 'mono' || style.font === 'sans' ? style.font : undefined,
+      font: style.font && ALL_FONTS.includes(style.font) ? style.font : undefined,
     };
   }
   return out;
@@ -397,7 +399,7 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     presetId,
     archetype,
     accentColor: typeof r.accentColor === 'string' ? r.accentColor : base.accentColor,
-    font: r.font === 'serif' || r.font === 'mono' ? r.font : 'sans',
+    font: r.font && ALL_FONTS.includes(r.font) ? r.font : 'sans',
     density: r.density === 'compact' ? 'compact' : 'comfortable',
     showLogo: r.showLogo !== false,
     logoSize: r.logoSize === 'sm' || r.logoSize === 'lg' ? r.logoSize : 'md',
@@ -415,6 +417,17 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     layoutMode,
     ...(elements ? { elements } : {}),
     defaultLanguage: r.defaultLanguage === 'en' ? 'en' : 'es',
+    tableHeader:
+      r.tableHeader === 'accent' || r.tableHeader === 'dark' || r.tableHeader === 'tint'
+        ? r.tableHeader
+        : 'plain',
+    totalBar: r.totalBar === true,
+    footerBar: r.footerBar === true,
+    pageTint: r.pageTint === true,
+    decoration:
+      r.decoration === 'corners' || r.decoration === 'wave' || r.decoration === 'arc'
+        ? r.decoration
+        : 'none',
   };
 }
 
@@ -461,6 +474,23 @@ const CSS_FONTS: Record<InvoiceFont, string> = {
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   serif: 'Georgia, "Times New Roman", Times, serif',
   mono: '"SF Mono", "Roboto Mono", Menlo, Consolas, monospace',
+  times: '"Times New Roman", Times, serif',
+  palatino: '"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif',
+  trebuchet: '"Trebuchet MS", "Segoe UI", Tahoma, sans-serif',
+  verdana: 'Verdana, Geneva, Tahoma, sans-serif',
+};
+
+/** Native font family per platform for the RN renderer. `null` ⇒ system font.
+ *  Android lacks most named fonts, so it falls back to a generic family; the PDF
+ *  (HTML/CSS) still uses the full stack, so the printed output is correct. */
+export const RN_FONTS: Record<InvoiceFont, { ios: string; android: string } | null> = {
+  sans: null,
+  serif: { ios: 'Georgia', android: 'serif' },
+  mono: { ios: 'Menlo', android: 'monospace' },
+  times: { ios: 'Times New Roman', android: 'serif' },
+  palatino: { ios: 'Palatino', android: 'serif' },
+  trebuchet: { ios: 'Trebuchet MS', android: 'sans-serif' },
+  verdana: { ios: 'Verdana', android: 'sans-serif' },
 };
 
 const LOGO_PX: Record<InvoiceLogoSize, number> = { sm: 36, md: 52, lg: 72 };
@@ -528,6 +558,14 @@ export interface InvoiceViewModel {
   lang: InvoiceLang;
   /** Header layout structure (body sections are archetype-independent). */
   archetype: InvoiceArchetype;
+  /** Premium style layer. */
+  tableHeader: InvoiceTableHeader;
+  totalBar: boolean;
+  footerBar: boolean;
+  pageTint: boolean;
+  decoration: InvoiceDecoration;
+  /** Business name + contact lines for the footer strip (when footerBar). */
+  footerContact: string[];
   labels: Record<InvoiceLabelKey, string>;
   /** Visible sections in render order (empty-data sections already dropped). */
   sections: InvoiceSectionId[];
@@ -637,6 +675,12 @@ export function buildInvoiceViewModel(
     style,
     lang,
     archetype: cfg.archetype,
+    tableHeader: cfg.tableHeader ?? 'plain',
+    totalBar: cfg.totalBar === true,
+    footerBar: cfg.footerBar === true,
+    pageTint: cfg.pageTint === true,
+    decoration: cfg.decoration ?? 'none',
+    footerContact: [branding.name, ...businessLines].filter(Boolean),
     labels,
     sections,
     layoutMode: cfg.layoutMode === 'freeform' ? 'freeform' : 'flow',
@@ -723,12 +767,136 @@ export function onAccentColor(hex: string): string {
   return lum > 0.62 ? '#111827' : '#FFFFFF';
 }
 
+/** HSL → #rrggbb. h 0–360, s/l 0–100. */
+export function hslToHex(h: number, s: number, l: number): string {
+  const sn = s / 100;
+  const ln = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sn * Math.min(ln, 1 - ln);
+  const f = (n: number) => {
+    const c = ln - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(255 * c).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/** #rgb/#rrggbb → HSL (h 0–360, s/l 0–100). Falls back to the app indigo. */
+export function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const c = parseHex(hex) ?? { r: 79, g: 70, b: 229 };
+  const r = c.r / 255, g = c.g / 255, b = c.b / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0, s = 0;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) h = (((g - b) / d) % 6 + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
 /** rgba() string from a hex + alpha — valid in CSS, RN, and print HTML. Falls
  *  back to the input when the hex can't be parsed. */
 export function withAlpha(hex: string, alpha: number): string {
   const c = parseHex(hex);
   if (!c) return hex;
   return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+}
+
+/** One drawable shape in a 0–100 (x) × 0–130 (y) normalized canvas. Each renderer
+ *  maps these to its own SVG syntax so the flourish is identical everywhere. */
+export interface DecoShape {
+  kind: 'path' | 'circle';
+  d?: string;
+  cx?: number; cy?: number; r?: number;
+  fill: string;
+  opacity?: number;
+}
+export interface DecoSpec { viewBox: string; shapes: DecoShape[] }
+
+/** Full-bleed decorative shapes for a decoration style. `null` for 'none'. */
+export function decorationShapes(decoration: InvoiceDecoration, accent: string): DecoSpec | null {
+  if (!decoration || decoration === 'none') return null;
+  const VB = '0 0 100 130';
+  if (decoration === 'corners') {
+    return {
+      viewBox: VB,
+      shapes: [
+        { kind: 'path', d: 'M0,0 L40,0 L0,30 Z', fill: accent, opacity: 0.4 },
+        { kind: 'path', d: 'M0,0 L26,0 L0,20 Z', fill: accent, opacity: 0.7 },
+        { kind: 'path', d: 'M0,0 L14,0 L0,11 Z', fill: accent, opacity: 1 },
+        { kind: 'path', d: 'M100,130 L60,130 L100,100 Z', fill: accent, opacity: 0.4 },
+        { kind: 'path', d: 'M100,130 L74,130 L100,110 Z', fill: accent, opacity: 0.7 },
+        { kind: 'path', d: 'M100,130 L86,130 L100,119 Z', fill: accent, opacity: 1 },
+      ],
+    };
+  }
+  if (decoration === 'wave') {
+    return {
+      viewBox: VB,
+      shapes: [
+        { kind: 'path', d: 'M0,0 L100,0 L100,7 C70,17 30,-1 0,9 Z', fill: accent, opacity: 0.5 },
+        { kind: 'path', d: 'M0,0 L100,0 L100,12 C68,24 32,2 0,15 Z', fill: accent, opacity: 1 },
+        { kind: 'path', d: 'M0,130 L100,130 L100,116 C68,128 32,106 0,120 Z', fill: accent, opacity: 1 },
+      ],
+    };
+  }
+  // arc — concentric circles peeking from the top-right corner
+  return {
+    viewBox: VB,
+    shapes: [
+      { kind: 'circle', cx: 96, cy: 8, r: 40, fill: accent, opacity: 0.12 },
+      { kind: 'circle', cx: 104, cy: 0, r: 28, fill: accent, opacity: 0.22 },
+      { kind: 'circle', cx: 110, cy: -4, r: 16, fill: accent, opacity: 0.32 },
+    ],
+  };
+}
+
+export interface DecoBand { height: number; spec: DecoSpec }
+/** How a decoration is drawn + how much the content must be padded to clear it.
+ *  `full` is a stretched edge-to-edge layer (corners/arc); `topBand`/`bottomBand`
+ *  are FIXED-height strips (wave) so the curve never scales with page length and
+ *  the content can be padded a known amount to sit clear of them. */
+export interface DecoRender {
+  full: DecoSpec | null;
+  topBand: DecoBand | null;
+  bottomBand: DecoBand | null;
+  padTop: number;
+  padBottom: number;
+}
+export function decorationRender(decoration: InvoiceDecoration, accent: string): DecoRender {
+  if (decoration === 'wave') {
+    const VB = '0 0 100 26';
+    return {
+      full: null,
+      topBand: {
+        height: 50,
+        spec: {
+          viewBox: VB,
+          shapes: [
+            { kind: 'path', d: 'M0,0 L100,0 L100,19 C70,9 30,27 0,13 Z', fill: accent, opacity: 0.45 },
+            { kind: 'path', d: 'M0,0 L100,0 L100,13 C68,23 32,4 0,17 Z', fill: accent, opacity: 1 },
+          ],
+        },
+      },
+      bottomBand: {
+        height: 50,
+        spec: {
+          viewBox: VB,
+          shapes: [
+            { kind: 'path', d: 'M0,26 L100,26 L100,7 C70,17 30,-1 0,13 Z', fill: accent, opacity: 0.45 },
+            { kind: 'path', d: 'M0,26 L100,26 L100,13 C68,3 32,22 0,9 Z', fill: accent, opacity: 1 },
+          ],
+        },
+      },
+      padTop: 46,
+      padBottom: 58,
+    };
+  }
+  return { full: decorationShapes(decoration, accent), topBand: null, bottomBand: null, padTop: 0, padBottom: 0 };
 }
 
 /** Fields that default to the accent color in freeform when no explicit color
@@ -818,6 +986,137 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-title-min">${escapeHtml(h.invoiceTitle)}</div>
       <div class="inv-min-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
     </div>`;
+      case 'leftbar':
+        return `
+    <div class="inv-leftbar">
+      <div class="inv-leftbar-rule"></div>
+      <div class="inv-leftbar-main">
+        <div class="inv-from">
+          ${logoTag('inv-logo')}
+          <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+          ${bizLines('inv-bizline')}
+        </div>
+        <div class="inv-meta">
+          <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
+          <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
+          <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
+          ${meta('')}
+        </div>
+      </div>
+    </div>`;
+      case 'split':
+        return `
+    <div class="inv-split">
+      <div class="inv-from">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bizline')}
+      </div>
+      <div class="inv-split-panel">
+        <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
+        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
+        ${meta('')}
+      </div>
+    </div>`;
+      case 'stamp':
+        return `
+    <div class="inv-stamp">
+      <div class="inv-from">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bizline')}
+      </div>
+      <div class="inv-stamp-right">
+        <div class="inv-stamp-chip">
+          <div class="inv-stamp-title">${escapeHtml(h.invoiceTitle)}</div>
+          <div class="inv-stamp-num">${escapeHtml(h.invoiceNumber)}</div>
+          <div class="inv-stamp-status">${escapeHtml(h.statusLabel)}</div>
+        </div>
+        <div class="inv-stamp-dates">${meta('')}</div>
+      </div>
+    </div>`;
+      case 'hero':
+        return `
+    <div class="inv-hero">
+      <div class="inv-from">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bizline')}
+      </div>
+      <div class="inv-hero-right">
+        <div class="inv-hero-word">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
+        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
+        ${meta('')}
+      </div>
+    </div>`;
+      case 'wordmark':
+        return `
+    <div class="inv-wordmark">
+      <div class="inv-wordmark-row">
+        <div class="inv-from">
+          ${logoTag('inv-logo')}
+          <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+          ${bizLines('inv-bizline')}
+        </div>
+        <div class="inv-wordmark-word">${escapeHtml(h.invoiceTitle)}</div>
+      </div>
+      <div class="inv-wordmark-rule"></div>
+      <div class="inv-wordmark-meta">
+        <span>${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</span>
+        <span>${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</span>
+      </div>
+    </div>`;
+      case 'panel':
+        return `
+    <div class="inv-panel">
+      <div class="inv-panel-left">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname onacc">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bandline')}
+      </div>
+      <div class="inv-panel-right">
+        <div class="inv-panel-title onacc">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number onacc">${escapeHtml(h.invoiceNumber)}</div>
+        <div class="inv-status onacc-sub">${escapeHtml(h.statusLabel)}</div>
+        ${meta('onacc-sub')}
+      </div>
+    </div>`;
+      case 'elegant':
+        return `
+    <div class="inv-elegant">
+      <div class="inv-elegant-left">
+        <div class="inv-elegant-title">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+        <div class="inv-elegant-dates">${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? `  ·  ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
+      </div>
+      <div class="inv-elegant-badge">
+        ${logoTag('inv-elegant-logo')}
+        <div class="inv-elegant-badge-name">${escapeHtml(h.businessName)}</div>
+      </div>
+    </div>`;
+      case 'titleLeft':
+        return `
+    <div class="inv-titleleft">
+      <div class="inv-titleleft-main">
+        <div class="inv-title-tl">${escapeHtml(h.invoiceTitle)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+        ${meta('')}
+      </div>
+      <div class="inv-titleleft-logo">
+        ${logoTag('inv-logo')}
+        <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
+        ${bizLines('inv-bizline')}
+      </div>
+    </div>`;
+      case 'bandCenter':
+        return `
+    <div class="inv-bandcenter">
+      ${logoTag('inv-logo-c')}
+      <div class="inv-bandcenter-band">${escapeHtml(h.invoiceTitle)}</div>
+      <div class="inv-bandcenter-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
+    </div>`;
       default: // classic
         return `
     <div class="inv-header">
@@ -854,7 +1153,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
 
   const cols = vm.columns;
   const itemsHtml = `
-    <table class="inv-table">
+    <table class="inv-table th-${vm.tableHeader}">
       <thead><tr>
         <th class="ta-l">${escapeHtml(L.item)}</th>
         ${cols.qty ? `<th class="ta-c">${escapeHtml(L.qty)}</th>` : ''}
@@ -875,11 +1174,14 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       </tbody>
     </table>`;
 
-  const totalsHtml = `
-    <div class="inv-totals">
+  const subtaxRows = `
       <div class="inv-totrow"><span>${escapeHtml(L.subtotal)}</span><span>${escapeHtml(vm.totals.subtotal)}</span></div>
-      ${vm.totals.taxLabel ? `<div class="inv-totrow"><span>${escapeHtml(vm.totals.taxLabel)}</span><span>${escapeHtml(vm.totals.taxValue ?? '')}</span></div>` : ''}
-      <div class="inv-totrow grand"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div>
+      ${vm.totals.taxLabel ? `<div class="inv-totrow"><span>${escapeHtml(vm.totals.taxLabel)}</span><span>${escapeHtml(vm.totals.taxValue ?? '')}</span></div>` : ''}`;
+  const totalsHtml = vm.totalBar
+    ? `<div class="inv-totals">${subtaxRows}</div>
+       <div class="inv-totalbar"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div>`
+    : `<div class="inv-totals">${subtaxRows}
+       <div class="inv-totrow grand"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div>
     </div>`;
 
   const customFieldsHtml = `
@@ -939,6 +1241,33 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   const gap = st.density === 'compact' ? 14 : 22;
   const cellPad = st.density === 'compact' ? '6px 8px' : '9px 8px';
 
+  // Decorative SVG layer (shared shape math) + footer contact strip.
+  const deco = decorationRender(vm.decoration, st.accent);
+  const svgShapes = (spec: DecoSpec) =>
+    spec.shapes
+      .map(s =>
+        s.kind === 'circle'
+          ? `<circle cx="${s.cx}" cy="${s.cy}" r="${s.r}" fill="${escapeHtml(s.fill)}"${s.opacity != null ? ` fill-opacity="${s.opacity}"` : ''}/>`
+          : `<path d="${s.d}" fill="${escapeHtml(s.fill)}"${s.opacity != null ? ` fill-opacity="${s.opacity}"` : ''}/>`,
+      )
+      .join('');
+  const decoHtml =
+    (deco.full ? `<svg class="inv-deco" viewBox="${deco.full.viewBox}" preserveAspectRatio="none">${svgShapes(deco.full)}</svg>` : '') +
+    (deco.topBand ? `<svg class="inv-deco-top" viewBox="${deco.topBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.topBand.height}px">${svgShapes(deco.topBand.spec)}</svg>` : '') +
+    (deco.bottomBand ? `<svg class="inv-deco-bot" viewBox="${deco.bottomBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.bottomBand.height}px">${svgShapes(deco.bottomBand.spec)}</svg>` : '');
+  const docPad = deco.padTop || deco.padBottom ? ` style="padding-top:${deco.padTop}px;padding-bottom:${deco.padBottom}px"` : '';
+  const footerBarHtml =
+    vm.footerBar && vm.footerContact.length
+      ? `<div class="inv-footerbar">${vm.footerContact
+          .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
+          .join('<span class="fb-sep">·</span>')}</div>`
+      : '';
+  // "Full-page" presets (decoration / footer strip / tint) get a minimum height
+  // of one letter page so the flourishes anchor to the page edges and the footer
+  // strip sits at the bottom — like a real printed sheet.
+  const fullPage = !freeform && (vm.decoration !== 'none' || vm.footerBar || vm.pageTint);
+  const pageCls = `inv-page${vm.pageTint ? ' tinted' : ''}${fullPage ? ' full' : ''}`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -991,11 +1320,77 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-accent-rule { width: 32px; height: 3px; background: ${accent}; border-radius: 2px; margin: 14px 0 8px; }
     .inv-title-min { font-weight: 300; font-size: ${st.fontPx + 16}px; color: #111827; letter-spacing: 0.02em; }
     .inv-min-meta { color: #6b7280; font-size: ${st.fontPx - 2}px; margin-top: 6px; }
+    /* — leftbar archetype — */
+    .inv-leftbar { display: flex; gap: 16px; align-items: stretch; }
+    .inv-leftbar-rule { width: 5px; border-radius: 3px; background: ${accent}; flex: 0 0 auto; }
+    .inv-leftbar-main { flex: 1; display: flex; justify-content: space-between; gap: 24px; }
+    /* — split archetype — */
+    .inv-split { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+    .inv-split-panel { background: ${tint}; border-radius: 12px; padding: 14px 18px; text-align: right; min-width: 42%; }
+    /* — stamp archetype — */
+    .inv-stamp { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding-bottom: ${gap}px; border-bottom: 1px solid #e5e7eb; }
+    .inv-stamp-right { text-align: right; }
+    .inv-stamp-chip { display: inline-block; background: ${accent}; color: ${onAcc}; border-radius: 8px; padding: 8px 12px; }
+    .inv-stamp-title { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: ${st.fontPx + 4}px; color: ${onAcc}; }
+    .inv-stamp-num { font-weight: 600; font-size: ${st.fontPx}px; color: ${onAcc}; margin-top: 1px; }
+    .inv-stamp-status { font-size: ${st.fontPx - 3}px; text-transform: uppercase; letter-spacing: 0.04em; color: ${subtleOnAcc}; margin-top: 2px; }
+    .inv-stamp-dates { margin-top: 8px; }
+    /* — hero archetype — */
+    .inv-hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+    .inv-hero-right { text-align: right; }
+    .inv-hero-word { font-weight: 800; text-transform: uppercase; letter-spacing: 0.01em; color: ${accent}; font-size: ${st.fontPx + 30}px; line-height: 1; }
+    /* — wordmark archetype — */
+    .inv-wordmark-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+    .inv-wordmark-word { font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: ${accent}; font-size: ${st.fontPx + 16}px; }
+    .inv-wordmark-rule { height: 2px; background: #e5e7eb; margin: 12px 0 8px; }
+    .inv-wordmark-meta { display: flex; justify-content: space-between; gap: 16px; font-size: ${st.fontPx - 2}px; color: #6b7280; }
+    /* — panel archetype — */
+    .inv-panel { display: flex; justify-content: space-between; gap: 24px; background: ${accent}; border-radius: 12px; padding: ${gap + 2}px ${gap + 6}px; }
+    .inv-panel-right { text-align: right; }
+    .inv-panel-title { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; font-size: ${st.fontPx + 12}px; color: ${onAcc}; }
+    .inv-panel .inv-number.onacc { color: ${onAcc}; font-weight: 600; margin-top: 4px; }
+    .inv-panel .onacc-sub { color: ${subtleOnAcc}; font-size: ${st.fontPx - 2}px; margin-top: 3px; }
+    .inv-panel .onacc-sub span { color: ${subtleOnAcc}; }
+    .inv-panel .inv-bizname.onacc { color: ${onAcc}; }
+    .inv-panel .inv-bandline { color: ${subtleOnAcc}; font-size: ${st.fontPx - 2}px; margin-top: 2px; }
+    /* — elegant archetype — */
+    .inv-elegant { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding-bottom: ${gap}px; border-bottom: 1px solid #e5e7eb; }
+    .inv-elegant-title { text-transform: uppercase; letter-spacing: 0.16em; font-weight: 400; font-size: ${st.fontPx + 18}px; color: #111827; }
+    .inv-elegant-dates { color: #9ca3af; font-size: ${st.fontPx - 2}px; margin-top: 6px; }
+    .inv-elegant-badge { width: 122px; height: 122px; border-radius: 50%; background: ${tint}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; flex: 0 0 auto; }
+    .inv-elegant-logo { max-height: 44px; max-width: 80px; object-fit: contain; margin-bottom: 4px; }
+    .inv-elegant-badge-name { font-size: ${st.fontPx - 3}px; letter-spacing: 0.1em; text-transform: uppercase; color: #6b7280; padding: 0 10px; }
+    /* — titleLeft archetype — */
+    .inv-titleleft { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+    .inv-title-tl { text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; font-size: ${st.fontPx + 14}px; color: ${accent}; }
+    .inv-titleleft-logo { text-align: right; }
+    .inv-titleleft-logo .inv-logo { margin-left: auto; }
+    /* — bandCenter archetype — */
+    .inv-bandcenter { text-align: center; }
+    .inv-bandcenter-band { background: ${accent}; color: ${onAcc}; text-transform: uppercase; letter-spacing: 0.3em; font-weight: 700; font-size: ${st.fontPx + 6}px; padding: 10px 0; margin: 8px 0; }
+    .inv-bandcenter-meta { color: #6b7280; font-size: ${st.fontPx - 2}px; }
+    /* — page / decoration / footer bar — */
+    .inv-page { position: relative; overflow: hidden; }
+    .inv-page.full { display: flex; flex-direction: column; aspect-ratio: 8.5 / 11; }
+    .inv-page.full .inv-doc { flex: 1 0 auto; }
+    .inv-page.tinted { background: ${withAlpha(st.accent, 0.06)}; }
+    .inv-deco { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    .inv-deco-top { position: absolute; top: 0; left: 0; width: 100%; z-index: 0; pointer-events: none; }
+    .inv-deco-bot { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 0; pointer-events: none; }
+    .inv-doc { position: relative; z-index: 1; }
+    .inv-footerbar { position: relative; z-index: 1; margin-top: ${gap}px; background: ${accent}; color: ${onAcc}; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 8px; font-size: ${st.fontPx - 2}px; }
+    .inv-footerbar .fb-name { font-weight: 700; }
+    .inv-footerbar .fb-sep { color: ${subtleOnAcc}; }
     .inv-sectlabel { text-transform: uppercase; letter-spacing: 0.05em; font-size: ${st.fontPx - 3}px; color: #9ca3af; font-weight: 600; margin-bottom: 6px; }
     .inv-clientname { font-weight: 600; }
     .inv-client + .inv-client { margin-top: 6px; }
     .inv-table { width: 100%; border-collapse: collapse; }
     .inv-table th { font-size: ${st.fontPx - 3}px; text-transform: uppercase; letter-spacing: 0.04em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; padding: ${cellPad}; }
+    .inv-table.th-accent th { background: ${accent}; color: ${onAcc}; border-bottom: none; }
+    .inv-table.th-accent thead th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+    .inv-table.th-accent thead th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+    .inv-table.th-dark th { background: #1f2937; color: #fff; border-bottom: none; }
+    .inv-table.th-tint th { background: ${tint}; color: #4b5563; border-bottom: none; }
     .inv-table td { padding: ${cellPad}; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
     .inv-table tr { break-inside: avoid; }
     .inv-table thead { display: table-header-group; }
@@ -1006,6 +1401,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-totrow span:last-child { min-width: 110px; text-align: right; }
     .inv-totrow.grand { border-top: 2px solid #e5e7eb; padding-top: 8px; margin-top: 2px; font-weight: 700; font-size: ${st.fontPx + 4}px; }
     .inv-totrow.grand span:last-child { color: ${accent}; }
+    .inv-totalbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; background: ${accent}; color: ${onAcc}; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: ${st.fontPx + 4}px; break-inside: avoid; }
     .inv-block { break-inside: avoid; }
     .inv-cfrow { display: flex; justify-content: space-between; gap: 16px; font-size: ${st.fontPx - 1}px; padding: 2px 0; }
     .inv-cfrow span:first-child { color: #6b7280; }
@@ -1013,7 +1409,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-footer { border-top: 1px solid #e5e7eb; padding-top: 10px; color: #9ca3af; font-size: ${st.fontPx - 2}px; text-align: center; white-space: pre-wrap; }
   </style>
 </head>
-<body><div class="inv-doc">${body}</div></body>
+<body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}</div></body>
 </html>`;
 }
 
@@ -1155,7 +1551,10 @@ export const SAMPLE_INVOICE: InvoiceDocData = {
   notes: 'Gracias por su preferencia.',
   language: 'es',
   clients: [{ firstName: 'Juan', lastName: 'Pérez', email: 'juan@example.com', phoneCell: '(555) 123-4567' }],
-  customFields: [],
+  customFields: [
+    { label: 'Orden de compra', value: 'PO-10234' },
+    { label: 'Términos', value: 'Neto 30' },
+  ],
 };
 
 // ── internals ────────────────────────────────────────────────────────────────

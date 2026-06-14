@@ -6,16 +6,16 @@
 // design is exactly what prints / shares. Includes undo/redo history.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronUp, ChevronDown, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2 } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
 import {
-  INVOICE_PRESET_GROUPS,
-  ALL_ARCHETYPES,
+  INVOICE_PRESET_IDS,
+  ALL_FONTS,
+  cssFontFamily,
   buildInvoiceViewModel,
   applyPreset,
-  setArchetype,
   setAccent,
   setFont,
   setDensity,
@@ -38,7 +38,8 @@ import {
   removeElement,
   SAMPLE_INVOICE,
   type InvoiceTemplateConfig,
-  type InvoiceArchetype,
+  type InvoicePresetId,
+  type InvoiceDocData,
   type InvoiceBranding,
   type InvoiceFont,
   type InvoiceDensity,
@@ -72,14 +73,69 @@ function Seg<T extends string>({ value, options, onChange }: {
 }
 
 // A real, scaled-down render of the template so the gallery shows how each one
-// actually looks. Fixed card width ⇒ constant scale (no measuring needed).
+// actually looks. Fixed card width ⇒ constant scale (no measuring needed). The
+// card is a full letter-size page (8.5×11) so every template is the same height
+// and reads like an actual printed sheet.
 const PRESET_CARD_W = 150;
+const PAGE_RATIO = 11 / 8.5;
 function PresetPreview({ vm }: { vm: InvoiceViewModel }) {
   const scale = PRESET_CARD_W / DOC_W;
   return (
-    <div style={{ width: PRESET_CARD_W, height: 172, overflow: 'hidden', background: '#fff', borderRadius: 6, pointerEvents: 'none' }}>
+    <div style={{ width: PRESET_CARD_W, height: Math.round(PRESET_CARD_W * PAGE_RATIO), overflow: 'hidden', background: '#fff', borderRadius: 6, pointerEvents: 'none', boxShadow: 'inset 0 0 0 1px #f1f5f9' }}>
       <div style={{ width: DOC_W, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <InvoiceDocument vm={vm} />
+      </div>
+    </div>
+  );
+}
+
+// Full-screen modal browsing every template in a paginated grid (keeps the
+// editor itself uncluttered). Mirrors the mobile theme browser.
+const THEMES_PER_PAGE = 6;
+function ThemesModal({ open, onClose, currentId, onSelect, value, branding, sample, t }: {
+  open: boolean;
+  onClose: () => void;
+  currentId: InvoicePresetId;
+  onSelect: (id: InvoicePresetId) => void;
+  value: InvoiceTemplateConfig;
+  branding: InvoiceBranding;
+  sample: InvoiceDocData;
+  t: DesignT;
+}) {
+  const [page, setPage] = useState(0);
+  if (!open) return null;
+  const pages = Math.ceil(INVOICE_PRESET_IDS.length / THEMES_PER_PAGE);
+  const safePage = Math.min(page, pages - 1);
+  const ids = INVOICE_PRESET_IDS.slice(safePage * THEMES_PER_PAGE, safePage * THEMES_PER_PAGE + THEMES_PER_PAGE);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">{t.themesTitle}</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">
+            {ids.map(id => {
+              const active = currentId === id;
+              const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
+              return (
+                <button key={id} type="button" onClick={() => onSelect(id)}
+                  className={`rounded-xl border p-2 transition ${active ? 'border-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <PresetPreview vm={pvm} />
+                  <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.presets[id]}{active ? ` · ${t.currentTheme}` : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {pages > 1 ? (
+          <div className="flex items-center justify-center gap-4 px-5 py-3 border-t border-gray-100">
+            <button type="button" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-30 hover:bg-gray-50"><ChevronLeft size={18} /></button>
+            <span className="text-sm text-gray-500">{safePage + 1} / {pages}</span>
+            <button type="button" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-30 hover:bg-gray-50"><ChevronRight size={18} /></button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -92,9 +148,7 @@ function FontSelect({ value, onChange, t, inheritLabel }: {
     <select value={value ?? ''} onChange={e => onChange(e.target.value ? (e.target.value as InvoiceFont) : undefined)}
       className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700">
       {inheritLabel ? <option value="">{inheritLabel}</option> : null}
-      <option value="sans">{t.fonts.sans}</option>
-      <option value="serif">{t.fonts.serif}</option>
-      <option value="mono">{t.fonts.mono}</option>
+      {ALL_FONTS.map(f => <option key={f} value={f} style={{ fontFamily: cssFontFamily(f) }}>{t.fonts[f]}</option>)}
     </select>
   );
 }
@@ -275,6 +329,8 @@ export function InvoiceDesigner({ value, onChange, branding }: {
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [themesOpen, setThemesOpen] = useState(false);
+  const [secOpen, setSecOpen] = useState(false);
   const [, force] = useState(0);
 
   // Undo/redo history. `change` records a checkpoint per discrete edit; drag
@@ -445,38 +501,18 @@ export function InvoiceDesigner({ value, onChange, branding }: {
         </div>
       ) : (
         // ── STRUCTURED: customizer + scaled preview ───────────────────────
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="flex-1 flex flex-col gap-5 min-w-0">
             <Field label={t.preset}>
-              <div className="flex flex-col gap-4">
-                {INVOICE_PRESET_GROUPS.map(group => (
-                  <div key={group.id}>
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{t.presetGroups[group.id]}</div>
-                    <div className="flex flex-wrap gap-3">
-                      {group.presetIds.map(id => {
-                        const active = value.presetId === id;
-                        const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
-                        return (
-                          <button key={id} type="button" onClick={() => change(applyPreset(id, value))}
-                            className={`rounded-xl border p-1.5 text-left transition ${active ? 'border-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300'}`}>
-                            <PresetPreview vm={pvm} />
-                            <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.presets[id]}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Field>
-
-            <Field label={t.archetype}>
-              <Seg<InvoiceArchetype>
-                value={value.archetype}
-                onChange={v => change(setArchetype(value, v))}
-                options={ALL_ARCHETYPES.map(a => ({ value: a, label: t.archetypes[a] }))}
-              />
-              <p className="text-xs text-gray-400 mt-1">{t.archetypeHint}</p>
+              <button type="button" onClick={() => setThemesOpen(true)}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 p-2 hover:border-gray-300 w-full max-w-sm text-left">
+                <PresetPreview vm={vm} />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</div>
+                  <div className="text-xs text-primary mt-1">{t.browseThemes}</div>
+                </div>
+                <ChevronRight className="text-gray-400" size={20} />
+              </button>
             </Field>
 
             {accentControl}
@@ -501,23 +537,29 @@ export function InvoiceDesigner({ value, onChange, branding }: {
 
             {columnsControl}
 
-            <Field label={t.sections}>
-              <div className="flex flex-col gap-1.5">
-                {value.sections.map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
-                    <input type="checkbox" checked={s.show} onChange={() => change(toggleSection(value, s.id))} />
-                    <span className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</span>
-                    <button type="button" disabled={i === 0} onClick={() => change(reorderSections(value, i, i - 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronUp size={16} /></button>
-                    <button type="button" disabled={i === value.sections.length - 1} onClick={() => change(reorderSections(value, i, i + 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronDown size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            </Field>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={() => setSecOpen(o => !o)} className="flex items-center justify-between text-left">
+                <span className="text-sm font-medium text-gray-700">{t.sections}</span>
+                {secOpen ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
+              </button>
+              {secOpen ? (
+                <div className="flex flex-col gap-1.5">
+                  {value.sections.map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
+                      <input type="checkbox" checked={s.show} onChange={() => change(toggleSection(value, s.id))} />
+                      <span className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</span>
+                      <button type="button" disabled={i === 0} onClick={() => change(reorderSections(value, i, i - 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronUp size={16} /></button>
+                      <button type="button" disabled={i === value.sections.length - 1} onClick={() => change(reorderSections(value, i, i + 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronDown size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             {textBlocksControl}
           </div>
 
-          <div className="lg:w-[420px] shrink-0">
+          <div className="lg:w-[420px] shrink-0 lg:sticky lg:top-4 lg:self-start">
             <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.preview}</p>
             <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50 p-3">
               <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
@@ -527,6 +569,17 @@ export function InvoiceDesigner({ value, onChange, branding }: {
           </div>
         </div>
       )}
+
+      <ThemesModal
+        open={themesOpen}
+        onClose={() => setThemesOpen(false)}
+        currentId={value.presetId}
+        onSelect={id => { change(applyPreset(id, value)); setThemesOpen(false); }}
+        value={value}
+        branding={branding}
+        sample={sample}
+        t={t}
+      />
     </div>
   );
 }

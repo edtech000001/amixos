@@ -2,19 +2,18 @@
 // InvoiceTemplateConfig via the shared pure helpers; live preview uses the same
 // InvoiceDocument renderer as the real invoice / PDF / public link.
 
-import { useState, type ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, useWindowDimensions } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, PanResponder, StyleSheet, useWindowDimensions } from 'react-native';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { ChevronUp, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
 import {
-  INVOICE_PRESET_GROUPS,
   INVOICE_PRESET_IDS,
-  ALL_ARCHETYPES,
+  ALL_FONTS,
   buildInvoiceViewModel,
   applyPreset,
-  setArchetype,
   setAccent,
   setFont,
   setDensity,
@@ -27,6 +26,8 @@ import {
   setLayoutMode,
   setDefaultLanguage,
   invoiceNumberPrefix,
+  hexToHsl,
+  hslToHex,
   SAMPLE_INVOICE,
   type InvoiceTemplateConfig,
   type InvoiceViewModel,
@@ -75,13 +76,14 @@ function ScaledPreview({ children }: { children: ReactNode }) {
 
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
 
-// A real, scaled-down render of the template for the gallery. Fixed card width
-// ⇒ constant scale; clipped height shows the distinctive header.
+// A real, scaled-down render of the template. The box is a full letter-size page
+// (8.5×11) so every template is the same height and reads like a printed sheet.
 const PRESET_CARD_W = 142;
-function PresetPreview({ vm }: { vm: InvoiceViewModel }) {
-  const scale = PRESET_CARD_W / DOC_W;
+const PAGE_RATIO = 11 / 8.5;
+function PresetPreview({ vm, width = PRESET_CARD_W }: { vm: InvoiceViewModel; width?: number }) {
+  const scale = width / DOC_W;
   return (
-    <View style={{ width: PRESET_CARD_W, height: 172, borderRadius: 6, backgroundColor: '#fff', overflow: 'hidden' }}>
+    <View style={{ width, height: Math.round(width * PAGE_RATIO), borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' }}>
       <View style={{ width: DOC_W, transform: [{ scale }], transformOrigin: 'top left' }} pointerEvents="none">
         <InvoiceDocument vm={vm} />
       </View>
@@ -89,11 +91,100 @@ function PresetPreview({ vm }: { vm: InvoiceViewModel }) {
   );
 }
 
-// id → industry group id, for labelling in the theme browser.
-const PRESET_GROUP_OF: Record<string, string> = {};
-INVOICE_PRESET_GROUPS.forEach(g => g.presetIds.forEach(id => { PRESET_GROUP_OF[id] = g.id; }));
-
 type DesignT = ReturnType<typeof useLang>['t']['dashboard']['settings']['invoices']['design'];
+
+const HUE_STOPS = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'];
+
+// A draggable gradient bar (hue or lightness). value/onChange are 0..1.
+function Spectrum({ gid, stops, value, onChange }: { gid: string; stops: string[]; value: number; onChange: (v: number) => void }) {
+  const [w, setW] = useState(0);
+  const wRef = useRef(0);
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const handle = (x: number) => {
+    const width = wRef.current;
+    if (width > 0) cb.current(Math.max(0, Math.min(1, x / width)));
+  };
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: e => handle(e.nativeEvent.locationX),
+      onPanResponderMove: e => handle(e.nativeEvent.locationX),
+    }),
+  ).current;
+  return (
+    <View
+      {...pan.panHandlers}
+      onLayout={e => { wRef.current = e.nativeEvent.layout.width; setW(e.nativeEvent.layout.width); }}
+      style={{ height: 30, borderRadius: 15, overflow: 'hidden', justifyContent: 'center' }}
+    >
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+            {stops.map((c, i) => <Stop key={i} offset={i / (stops.length - 1)} stopColor={c} />)}
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gid})`} />
+      </Svg>
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 4, left: Math.max(2, Math.min(w - 24, value * w - 11)), width: 22, height: 22, borderRadius: 11, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, elevation: 2 }}
+      />
+    </View>
+  );
+}
+
+// Font picker as a dropdown (more options than fit in a segmented control).
+function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f: InvoiceFont) => void; t: DesignT }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+        <Text className="text-sm text-gray-700">{t.fonts[value]}</Text>
+        <ChevronDown size={18} color="#9CA3AF" />
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 justify-center px-8">
+          <Pressable onPress={() => {}} className="bg-white rounded-2xl overflow-hidden">
+            {ALL_FONTS.map(f => (
+              <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-gray-100 ${value === f ? 'bg-primary/10' : ''}`}>
+                <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-gray-700'}`}>{t.fonts[f]}</Text>
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+// Swatches for quick picks + hue/lightness spectrums for any color.
+function ColorPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const { h, s, l } = hexToHsl(value);
+  const sat = Math.max(45, s);
+  const lt = Math.min(80, Math.max(22, l));
+  return (
+    <View className="gap-3">
+      <View className="flex-row flex-wrap gap-2">
+        {ACCENTS.map(c => (
+          <Pressable
+            key={c}
+            onPress={() => onChange(c)}
+            className={`w-8 h-8 rounded-full ${value.toLowerCase() === c.toLowerCase() ? 'border-2 border-gray-900' : ''}`}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+      </View>
+      <Spectrum gid="cp-hue" stops={HUE_STOPS} value={h / 360} onChange={v => onChange(hslToHex(Math.round(v * 360), sat, lt))} />
+      <Spectrum gid="cp-lum" stops={[hslToHex(h, sat, 24), hslToHex(h, sat, 52), hslToHex(h, sat, 82)]} value={(lt - 22) / 58} onChange={v => onChange(hslToHex(h, sat, Math.round(22 + v * 58)))} />
+      <View className="flex-row items-center gap-2">
+        <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: value, borderWidth: 1, borderColor: '#E5E7EB' }} />
+        <Text className="text-xs text-gray-400">{value.toUpperCase()}</Text>
+      </View>
+    </View>
+  );
+}
 
 type ThemePickerProps = {
   visible: boolean;
@@ -127,10 +218,8 @@ function ThemeCarousel({ pageW, currentId, onSelect, value, branding, sample, t 
         renderItem={({ item: id }) => {
           const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
           return (
-            <ScrollView style={{ width: pageW }} contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
-              <View style={{ borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden', backgroundColor: '#fff' }}>
-                <ScaledPreview><InvoiceDocument vm={pvm} /></ScaledPreview>
-              </View>
+            <ScrollView style={{ width: pageW }} contentContainerStyle={{ padding: 20, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+              <PresetPreview vm={pvm} width={pageW - 40} />
             </ScrollView>
           );
         }}
@@ -138,9 +227,7 @@ function ThemeCarousel({ pageW, currentId, onSelect, value, branding, sample, t 
       <View style={{ padding: 16, gap: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#fff' }}>
         <View style={{ alignItems: 'center' }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{t.presets[activeId]}</Text>
-          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
-            {t.presetGroups[PRESET_GROUP_OF[activeId] ?? 'universal']}  ·  {idx + 1}/{INVOICE_PRESET_IDS.length}
-          </Text>
+          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{idx + 1}/{INVOICE_PRESET_IDS.length}</Text>
         </View>
         <Pressable
           onPress={() => onSelect(activeId)}
@@ -212,6 +299,7 @@ export function InvoiceDesigner({
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
   const [themeOpen, setThemeOpen] = useState(false);
+  const [secOpen, setSecOpen] = useState(false);
   // Preview in the chosen default language so the labels + number prefix reflect it.
   const sample = { ...SAMPLE_INVOICE, language: value.defaultLanguage, invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001` };
   const vm = buildInvoiceViewModel(value, sample, branding);
@@ -219,6 +307,15 @@ export function InvoiceDesigner({
 
   return (
     <View className="gap-5">
+      {/* Live preview up top so changes are visible immediately */}
+      <Field label={t.preview}>
+        <View className="rounded-xl border border-gray-200 bg-gray-50 p-2">
+          <View className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+            <ScaledPreview><InvoiceDocument vm={vm} /></ScaledPreview>
+          </View>
+        </View>
+      </Field>
+
       {/* Default invoice language for new invoices */}
       <Field label={t.defaultLanguage}>
         <Seg<InvoiceLang>
@@ -254,7 +351,6 @@ export function InvoiceDesigner({
           <PresetPreview vm={vm} />
           <View className="flex-1">
             <Text className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</Text>
-            <Text className="text-xs text-gray-400 mt-0.5">{t.presetGroups[PRESET_GROUP_OF[value.presetId] ?? 'universal']}</Text>
             <Text className="text-xs text-primary mt-1">{t.browseThemes}</Text>
           </View>
           <ChevronRight size={20} color="#9CA3AF" />
@@ -272,49 +368,13 @@ export function InvoiceDesigner({
         t={t}
       />
 
-      {/* Header style (archetype) */}
-      <Field label={t.archetype}>
-        <View className="flex-row flex-wrap gap-2">
-          {ALL_ARCHETYPES.map(a => {
-            const active = value.archetype === a;
-            return (
-              <Pressable
-                key={a}
-                onPress={() => onChange(setArchetype(value, a))}
-                className={`rounded-lg border px-3 py-1.5 ${active ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-              >
-                <Text className={`text-sm ${active ? 'text-white' : 'text-gray-600'}`}>{t.archetypes[a]}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <Text className="text-xs text-gray-400">{t.archetypeHint}</Text>
-      </Field>
-
-      {/* Accent */}
+      {/* Accent — swatches + spectrum picker for any color */}
       <Field label={t.accent}>
-        <View className="flex-row flex-wrap gap-2">
-          {ACCENTS.map(c => (
-            <Pressable
-              key={c}
-              onPress={() => onChange(setAccent(value, c))}
-              className={`w-8 h-8 rounded-full ${value.accentColor.toLowerCase() === c.toLowerCase() ? 'border-2 border-gray-900' : ''}`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-        </View>
+        <ColorPicker value={value.accentColor} onChange={c => onChange(setAccent(value, c))} />
       </Field>
 
       <Field label={t.font}>
-        <Seg<InvoiceFont>
-          value={value.font}
-          onChange={v => onChange(setFont(value, v))}
-          options={[
-            { value: 'sans', label: t.fonts.sans },
-            { value: 'serif', label: t.fonts.serif },
-            { value: 'mono', label: t.fonts.mono },
-          ]}
-        />
+        <FontDropdown value={value.font} onChange={f => onChange(setFont(value, f))} t={t} />
       </Field>
 
       <Field label={t.density}>
@@ -365,29 +425,35 @@ export function InvoiceDesigner({
         </View>
       </Field>
 
-      {/* Sections */}
-      <Field label={t.sections}>
-        <View className="gap-1.5">
-          {value.sections.map((s, i) => (
-            <View key={s.id} className="flex-row items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
-              <Pressable onPress={() => onChange(toggleSection(value, s.id))} className={`w-5 h-5 rounded border items-center justify-center ${s.show ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
-                {s.show ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
-              </Pressable>
-              <Text className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</Text>
-              {!freeform ? (
-                <>
-                  <Pressable disabled={i === 0} onPress={() => onChange(reorderSections(value, i, i - 1))} className="p-1">
-                    <ChevronUp size={16} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable disabled={i === value.sections.length - 1} onPress={() => onChange(reorderSections(value, i, i + 1))} className="p-1">
-                    <ChevronDown size={16} color={i === value.sections.length - 1 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      </Field>
+      {/* Sections — collapsible to keep the editor compact */}
+      <View className="gap-2">
+        <Pressable onPress={() => setSecOpen(o => !o)} className="flex-row items-center justify-between">
+          <Text className="text-sm font-medium text-gray-700">{t.sections}</Text>
+          {secOpen ? <ChevronUp size={18} color="#6B7280" /> : <ChevronDown size={18} color="#6B7280" />}
+        </Pressable>
+        {secOpen ? (
+          <View className="gap-1.5">
+            {value.sections.map((s, i) => (
+              <View key={s.id} className="flex-row items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
+                <Pressable onPress={() => onChange(toggleSection(value, s.id))} className={`w-5 h-5 rounded border items-center justify-center ${s.show ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                  {s.show ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
+                </Pressable>
+                <Text className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</Text>
+                {!freeform ? (
+                  <>
+                    <Pressable disabled={i === 0} onPress={() => onChange(reorderSections(value, i, i - 1))} className="p-1">
+                      <ChevronUp size={16} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
+                    </Pressable>
+                    <Pressable disabled={i === value.sections.length - 1} onPress={() => onChange(reorderSections(value, i, i + 1))} className="p-1">
+                      <ChevronDown size={16} color={i === value.sections.length - 1 ? '#D1D5DB' : '#6B7280'} />
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
 
       {/* Text blocks */}
       <Field label={t.textBlocks}>
@@ -408,15 +474,6 @@ export function InvoiceDesigner({
               />
             </View>
           ))}
-        </View>
-      </Field>
-
-      {/* Preview */}
-      <Field label={t.preview}>
-        <View className="rounded-xl border border-gray-200 bg-gray-50 p-2">
-          <View className="bg-white rounded-lg border border-gray-100 overflow-hidden">
-            <ScaledPreview><InvoiceDocument vm={vm} /></ScaledPreview>
-          </View>
         </View>
       </Field>
     </View>

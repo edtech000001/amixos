@@ -6,7 +6,7 @@
 // HTML all stay visually in sync. Renders sections in vm.sections order.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { resolveFieldValue, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement } from '../../lib/invoiceTemplate';
+import { resolveFieldValue, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type DecoSpec } from '../../lib/invoiceTemplate';
 
 function Logo({ url, maxHeight, maxWidth = 220, center }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean }) {
   return (
@@ -50,8 +50,59 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     </>
   );
 
+  const fromBlock = (
+    <div>
+      {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
+      <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
+      {h.businessLines.map((l, i) => (
+        <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+      ))}
+    </div>
+  );
+  const metaBlock = (align: 'left' | 'right') => (
+    <div style={{ textAlign: align }}>
+      <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
+      <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
+      <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+      {metaLines()}
+    </div>
+  );
+
   const renderHeader = (): ReactNode => {
     switch (vm.archetype) {
+      case 'leftbar':
+        return (
+          <div className="flex gap-4 items-stretch">
+            <div style={{ width: 5, borderRadius: 3, background: accent, flex: '0 0 auto' }} />
+            <div className="flex-1 flex justify-between gap-6">
+              {fromBlock}
+              {metaBlock('right')}
+            </div>
+          </div>
+        );
+      case 'split':
+        return (
+          <div className="flex justify-between gap-4 items-start">
+            {fromBlock}
+            <div style={{ background: tint, borderRadius: 12, padding: '14px 18px', minWidth: '42%' }}>
+              {metaBlock('right')}
+            </div>
+          </div>
+        );
+      case 'stamp':
+        return (
+          <div className="flex justify-between gap-6 items-start pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
+            {fromBlock}
+            <div className="text-right">
+              <div style={{ display: 'inline-block', background: accent, color: onAcc, borderRadius: 8, padding: '8px 12px' }}>
+                <div className="font-bold uppercase" style={{ letterSpacing: '0.08em', fontSize: st.fontPx + 4, color: onAcc }}>{h.invoiceTitle}</div>
+                <div className="font-semibold" style={{ fontSize: st.fontPx, color: onAcc, marginTop: 1 }}>{h.invoiceNumber}</div>
+                <div className="uppercase" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.04em', color: subtleOnAcc, marginTop: 2 }}>{h.statusLabel}</div>
+              </div>
+              <div style={{ marginTop: 8 }}>{metaLines()}</div>
+            </div>
+          </div>
+        );
       case 'band':
         return (
           <div className="flex justify-between gap-6" style={{ background: accent, padding: `${gap}px ${gap + 4}px`, borderRadius: 10 }}>
@@ -115,6 +166,94 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             </div>
           </div>
         );
+      case 'hero':
+        return (
+          <div className="flex justify-between gap-6 items-start">
+            {fromBlock}
+            <div className="text-right">
+              <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.01em', fontSize: st.fontPx + 30, lineHeight: 1 }}>{h.invoiceTitle}</div>
+              <div className="font-semibold" style={{ marginTop: 6 }}>{h.invoiceNumber}</div>
+              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              {metaLines()}
+            </div>
+          </div>
+        );
+      case 'wordmark':
+        return (
+          <div>
+            <div className="flex justify-between items-start gap-6">
+              {fromBlock}
+              <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.06em', fontSize: st.fontPx + 16 }}>{h.invoiceTitle}</div>
+            </div>
+            <div style={{ height: 2, background: '#e5e7eb', margin: '12px 0 8px' }} />
+            <div className="flex justify-between gap-4 text-gray-500" style={{ fontSize: small }}>
+              <span>{h.invoiceNumber} · {h.statusLabel}</span>
+              <span>{h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}</span>
+            </div>
+          </div>
+        );
+      case 'panel':
+        return (
+          <div className="flex justify-between gap-6" style={{ background: accent, borderRadius: 12, padding: `${gap + 2}px ${gap + 6}px` }}>
+            <div>
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
+              <div className="font-bold" style={{ fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</div>
+              {h.businessLines.map((l, i) => (
+                <div key={i} style={{ fontSize: small, marginTop: 2, color: subtleOnAcc }}>{l}</div>
+              ))}
+            </div>
+            <div className="text-right">
+              <div style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 800, fontSize: st.fontPx + 12, color: onAcc }}>{h.invoiceTitle}</div>
+              <div className="font-semibold" style={{ marginTop: 4, color: onAcc }}>{h.invoiceNumber}</div>
+              <div className="uppercase" style={{ fontSize: st.fontPx - 3, marginTop: 3, letterSpacing: '0.04em', color: subtleOnAcc }}>{h.statusLabel}</div>
+              {metaLines(true)}
+            </div>
+          </div>
+        );
+      case 'elegant':
+        return (
+          <div className="flex justify-between gap-6 items-center pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
+            <div>
+              <div style={{ textTransform: 'uppercase', letterSpacing: '0.16em', fontWeight: 400, fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</div>
+              <div className="text-gray-500" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              <div className="text-gray-400" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
+            </div>
+            <div style={{ width: 122, height: 122, borderRadius: '50%', background: tint, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', flex: '0 0 auto' }}>
+              {h.showLogo && h.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={h.logoUrl} alt="" style={{ maxHeight: 44, maxWidth: 80, objectFit: 'contain', marginBottom: 4 }} />
+              ) : null}
+              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.1em', padding: '0 10px' }}>{h.businessName}</div>
+            </div>
+          </div>
+        );
+      case 'titleLeft':
+        return (
+          <div className="flex justify-between gap-6 items-start">
+            <div>
+              <div style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, fontSize: st.fontPx + 14, color: accent }}>{h.invoiceTitle}</div>
+              <div className="font-semibold text-gray-600" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              {metaLines()}
+            </div>
+            <div className="text-right">
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center={false} /> : null}
+              <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
+              {h.businessLines.map((l, i) => (
+                <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'bandCenter':
+        return (
+          <div className="text-center">
+            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
+            <div style={{ background: accent, color: onAcc, textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700, fontSize: st.fontPx + 6, padding: '10px 0', margin: '8px 0' }}>{h.invoiceTitle}</div>
+            <div className="text-gray-500" style={{ fontSize: small }}>
+              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+            </div>
+          </div>
+        );
       default: // classic
         return (
           <div className="flex justify-between gap-6 pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
@@ -136,6 +275,20 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     }
   };
 
+  const th = vm.tableHeader;
+  const thFilled = th !== 'plain';
+  const thBg = th === 'accent' ? accent : th === 'dark' ? '#1f2937' : th === 'tint' ? tint : undefined;
+  const thColor = th === 'accent' ? onAcc : th === 'dark' ? '#fff' : th === 'tint' ? '#4b5563' : '#9ca3af';
+  const thCell = (align: 'left' | 'center' | 'right', first?: boolean, last?: boolean): CSSProperties => ({
+    textAlign: align,
+    fontWeight: 600,
+    padding: '8px 8px',
+    color: thColor,
+    ...(thFilled
+      ? { background: thBg, ...(th === 'accent' && first ? { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 } : null), ...(th === 'accent' && last ? { borderTopRightRadius: 8, borderBottomRightRadius: 8 } : null) }
+      : { borderBottom: '1px solid #e5e7eb' }),
+  });
+
   const renderers: Record<InvoiceSectionId, () => ReactNode> = {
     header: renderHeader,
     billTo: () => (
@@ -151,29 +304,45 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         ))}
       </div>
     ),
-    lineItems: () => (
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="text-gray-400 uppercase" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.04em' }}>
-            <th className="text-left font-semibold py-2 border-b border-gray-200">{vm.labels.item}</th>
-            {cols.qty ? <th className="text-center font-semibold py-2 border-b border-gray-200 w-16">{vm.labels.qty}</th> : null}
-            {cols.rate ? <th className="text-right font-semibold py-2 border-b border-gray-200 w-28">{vm.labels.rate}</th> : null}
-            {cols.total ? <th className="text-right font-semibold py-2 border-b border-gray-200 w-32">{vm.labels.total}</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {vm.items.map((it, i) => (
-            <tr key={i} style={{ breakInside: 'avoid' }}>
-              <td className="text-left py-2 border-b border-gray-50 align-top">{it.description}</td>
-              {cols.qty ? <td className="text-center py-2 border-b border-gray-50 text-gray-500">{it.qty}</td> : null}
-              {cols.rate ? <td className="text-right py-2 border-b border-gray-50 text-gray-500">{it.rate}</td> : null}
-              {cols.total ? <td className="text-right py-2 border-b border-gray-50 font-semibold text-gray-900">{it.total}</td> : null}
+    lineItems: () => {
+      const lastTotal = cols.total, lastRate = !cols.total && cols.rate, lastQty = !cols.total && !cols.rate && cols.qty;
+      const itemLast = !cols.total && !cols.rate && !cols.qty;
+      return (
+        <table className="w-full border-collapse" style={{ textTransform: 'uppercase' }}>
+          <thead>
+            <tr style={{ fontSize: st.fontPx - 3, letterSpacing: '0.04em' }}>
+              <th style={thCell('left', true, itemLast)}>{vm.labels.item}</th>
+              {cols.qty ? <th style={{ ...thCell('center', false, lastQty), width: 64 }}>{vm.labels.qty}</th> : null}
+              {cols.rate ? <th style={{ ...thCell('right', false, lastRate), width: 112 }}>{vm.labels.rate}</th> : null}
+              {cols.total ? <th style={{ ...thCell('right', false, lastTotal), width: 128 }}>{vm.labels.total}</th> : null}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    ),
-    totals: () => (
+          </thead>
+          <tbody style={{ textTransform: 'none' }}>
+            {vm.items.map((it, i) => (
+              <tr key={i} style={{ breakInside: 'avoid' }}>
+                <td className="text-left py-2 border-b border-gray-50 align-top">{it.description}</td>
+                {cols.qty ? <td className="text-center py-2 border-b border-gray-50 text-gray-500">{it.qty}</td> : null}
+                {cols.rate ? <td className="text-right py-2 border-b border-gray-50 text-gray-500">{it.rate}</td> : null}
+                {cols.total ? <td className="text-right py-2 border-b border-gray-50 font-semibold text-gray-900">{it.total}</td> : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    },
+    totals: () =>
+      vm.totalBar ? (
+        <div style={{ breakInside: 'avoid' }}>
+          <div className="flex flex-col items-end gap-1.5">
+            <Row label={vm.labels.subtotal} value={vm.totals.subtotal} />
+            {vm.totals.taxLabel ? <Row label={vm.totals.taxLabel} value={vm.totals.taxValue ?? ''} /> : null}
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, background: accent, color: onAcc, padding: '10px 16px', borderRadius: 8, fontWeight: 700, fontSize: st.fontPx + 4 }}>
+            <span>{vm.labels.total}</span>
+            <span>{vm.totals.total}</span>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-col items-end gap-1.5" style={{ breakInside: 'avoid' }}>
         <Row label={vm.labels.subtotal} value={vm.totals.subtotal} />
         {vm.totals.taxLabel ? <Row label={vm.totals.taxLabel} value={vm.totals.taxValue ?? ''} /> : null}
@@ -240,17 +409,46 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     );
   }
 
+  const deco = decorationRender(vm.decoration, accent);
+  const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
   return (
     <div
-      className="bg-white text-gray-800"
-      style={{ fontFamily: st.cssFontFamily, fontSize: st.fontPx, padding: st.pad }}
+      className="text-gray-800"
+      style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
     >
-      {vm.sections.map((id, i) => (
-        <div key={id} style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>
-          {renderers[id]()}
+      {deco.full ? <DecoSvg spec={deco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
+      {deco.topBand ? <DecoSvg spec={deco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: deco.topBand.height }} /> : null}
+      {deco.bottomBand ? <DecoSvg spec={deco.bottomBand.spec} style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: deco.bottomBand.height }} /> : null}
+      <div style={{ position: 'relative', zIndex: 1, padding: `${st.pad + deco.padTop}px ${st.pad}px ${st.pad + deco.padBottom}px`, ...(fullPage ? { flex: '1 0 auto' } : null) }}>
+        {vm.sections.map((id, i) => (
+          <div key={id} style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>
+            {renderers[id]()}
+          </div>
+        ))}
+      </div>
+      {vm.footerBar && vm.footerContact.length ? (
+        <div style={{ position: 'relative', zIndex: 1, marginTop: gap, marginLeft: st.pad, marginRight: st.pad, marginBottom: st.pad, background: accent, color: onAcc, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, fontSize: small }}>
+          {vm.footerContact.flatMap((l, i) => {
+            const node = <span key={`t${i}`} style={{ fontWeight: i === 0 ? 700 : 400 }}>{l}</span>;
+            return i === 0 ? [node] : [<span key={`s${i}`} style={{ color: subtleOnAcc }}>·</span>, node];
+          })}
         </div>
-      ))}
+      ) : null}
     </div>
+  );
+}
+
+function DecoSvg({ spec, style }: { spec: DecoSpec; style: CSSProperties }) {
+  return (
+    <svg viewBox={spec.viewBox} preserveAspectRatio="none" style={{ zIndex: 0, pointerEvents: 'none', ...style }}>
+      {spec.shapes.map((s, i) =>
+        s.kind === 'circle' ? (
+          <circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill={s.fill} fillOpacity={s.opacity} />
+        ) : (
+          <path key={i} d={s.d} fill={s.fill} fillOpacity={s.opacity} />
+        ),
+      )}
+    </svg>
   );
 }
 

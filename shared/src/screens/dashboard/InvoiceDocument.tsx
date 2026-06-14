@@ -2,26 +2,45 @@
 // no app chrome. Driven entirely by the view-model so it stays in sync with the
 // web document and the print/PDF HTML. Renders sections in vm.sections order.
 
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { View, Text, Image, Platform, type TextStyle } from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
 import {
   resolveFieldValue,
   fieldUsesAccent,
   onAccentColor,
   withAlpha,
+  decorationRender,
+  RN_FONTS,
   type InvoiceViewModel,
   type InvoiceSectionId,
   type InvoiceFont,
   type InvoiceElement,
+  type DecoSpec,
 } from '../../lib/invoiceTemplate';
 
+function DecoSvg({ spec }: { spec: DecoSpec }) {
+  return (
+    <Svg width="100%" height="100%" viewBox={spec.viewBox} preserveAspectRatio="none">
+      {spec.shapes.map((s, i) =>
+        s.kind === 'circle' ? (
+          <Circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill={s.fill} fillOpacity={s.opacity} />
+        ) : (
+          <Path key={i} d={s.d ?? ''} fill={s.fill} fillOpacity={s.opacity} />
+        ),
+      )}
+    </Svg>
+  );
+}
+
 function rnFont(font: InvoiceFont): string | undefined {
-  if (font === 'serif') return Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' });
-  if (font === 'mono') return Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
-  return undefined; // sans → system
+  const def = RN_FONTS[font];
+  if (!def) return undefined; // sans → system
+  return Platform.select({ ios: def.ios, android: def.android, default: def.android });
 }
 
 export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
+  const [pageW, setPageW] = useState(0);
   const st = vm.style;
   const accent = st.accent;
   const cols = vm.columns;
@@ -61,8 +80,59 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     </>
   );
 
+  const FromBlock = () => (
+    <View style={{ flex: 1 }}>
+      <Logo />
+      <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
+      {h.businessLines.map((l, i) => (
+        <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
+      ))}
+    </View>
+  );
+  const MetaBlock = ({ align }: { align: 'flex-start' | 'flex-end' }) => (
+    <View style={{ alignItems: align }}>
+      <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
+      <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
+      <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+      <MetaLines />
+    </View>
+  );
+
   const renderHeader = (): ReactNode => {
     switch (vm.archetype) {
+      case 'leftbar':
+        return (
+          <View style={{ flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
+            <View style={{ width: 5, borderRadius: 3, backgroundColor: accent }} />
+            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
+              <FromBlock />
+              <MetaBlock align="flex-end" />
+            </View>
+          </View>
+        );
+      case 'split':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <FromBlock />
+            <View style={{ backgroundColor: tint, borderRadius: 12, padding: 14, minWidth: '42%' }}>
+              <MetaBlock align="flex-end" />
+            </View>
+          </View>
+        );
+      case 'stamp':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+            <FromBlock />
+            <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ backgroundColor: accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <T style={{ fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, fontSize: st.fontPx + 4, color: onAcc }}>{h.invoiceTitle}</T>
+                <T style={{ fontWeight: '600', fontSize: st.fontPx, color: onAcc, marginTop: 1 }}>{h.invoiceNumber}</T>
+                <T style={{ textTransform: 'uppercase', fontSize: st.fontPx - 3, letterSpacing: 0.4, color: subtleOnAcc, marginTop: 2 }}>{h.statusLabel}</T>
+              </View>
+              <View style={{ marginTop: 8, alignItems: 'flex-end' }}><MetaLines /></View>
+            </View>
+          </View>
+        );
       case 'band':
         return (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, backgroundColor: accent, borderRadius: 10, padding: gap }}>
@@ -126,6 +196,93 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             </T>
           </View>
         );
+      case 'hero':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
+            <FromBlock />
+            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+              <T style={{ fontWeight: '800', textTransform: 'uppercase', color: accent, fontSize: st.fontPx + 30 }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', marginTop: 6, color: '#111827' }}>{h.invoiceNumber}</T>
+              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+              <MetaLines />
+            </View>
+          </View>
+        );
+      case 'wordmark':
+        return (
+          <View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+              <FromBlock />
+              <T style={{ fontWeight: '800', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 16, flexShrink: 0 }}>{h.invoiceTitle}</T>
+            </View>
+            <View style={{ height: 2, backgroundColor: '#E5E7EB', marginTop: 12, marginBottom: 8 }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+              <T style={{ color: '#6B7280', fontSize: small }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <T style={{ color: '#6B7280', fontSize: small }}>{h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}</T>
+            </View>
+          </View>
+        );
+      case 'panel':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, backgroundColor: accent, borderRadius: 12, padding: 18 }}>
+            <View style={{ flex: 1 }}>
+              <Logo />
+              <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</T>
+              {h.businessLines.map((l, i) => (
+                <T key={i} style={{ color: subtleOnAcc, fontSize: small, marginTop: 2 }}>{l}</T>
+              ))}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <T style={{ textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: '800', fontSize: st.fontPx + 12, color: onAcc }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', marginTop: 4, color: onAcc }}>{h.invoiceNumber}</T>
+              <T style={{ textTransform: 'uppercase', color: subtleOnAcc, fontSize: st.fontPx - 3, marginTop: 3, letterSpacing: 0.4 }}>{h.statusLabel}</T>
+              <MetaLines subtle />
+            </View>
+          </View>
+        );
+      case 'elegant':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <T style={{ textTransform: 'uppercase', letterSpacing: 2, fontWeight: '400', fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</T>
+              <T style={{ color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <T style={{ color: '#9CA3AF', fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</T>
+            </View>
+            <View style={{ width: 110, height: 110, borderRadius: 55, backgroundColor: tint, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: 40, width: 70, marginBottom: 4 }} /> : null}
+              <T style={{ textTransform: 'uppercase', letterSpacing: 1, color: '#6B7280', fontSize: st.fontPx - 3, textAlign: 'center', paddingHorizontal: 8 }}>{h.businessName}</T>
+            </View>
+          </View>
+        );
+      case 'titleLeft':
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <T style={{ textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: '700', fontSize: st.fontPx + 14, color: accent }}>{h.invoiceTitle}</T>
+              <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <MetaLines />
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx, width: 140, marginBottom: 6 }} /> : null}
+              <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
+              {h.businessLines.map((l, i) => (
+                <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
+              ))}
+            </View>
+          </View>
+        );
+      case 'bandCenter':
+        return (
+          <View style={{ alignItems: 'center' }}>
+            <Logo />
+            <View style={{ alignSelf: 'stretch', backgroundColor: accent, paddingVertical: 10, marginVertical: 8 }}>
+              <T style={{ color: onAcc, textTransform: 'uppercase', letterSpacing: 4, fontWeight: '700', fontSize: st.fontPx + 6, textAlign: 'center' }}>{h.invoiceTitle}</T>
+            </View>
+            <T style={{ color: '#6B7280', fontSize: small, textAlign: 'center' }}>
+              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+            </T>
+          </View>
+        );
       default: // classic
         return (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 12 }}>
@@ -147,6 +304,13 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     }
   };
 
+  const th = vm.tableHeader;
+  const thFilled = th !== 'plain';
+  const thBg = th === 'accent' ? accent : th === 'dark' ? '#1F2937' : th === 'tint' ? tint : undefined;
+  const thColor = th === 'accent' ? onAcc : th === 'dark' ? '#FFFFFF' : th === 'tint' ? '#4B5563' : '#9CA3AF';
+  const hPad = thFilled ? 8 : 0;
+  const hCell: TextStyle = { fontSize: st.fontPx - 3, textTransform: 'uppercase', color: thColor, fontWeight: '600' };
+
   const renderers: Record<InvoiceSectionId, () => ReactNode> = {
     header: renderHeader,
     billTo: () => (
@@ -164,14 +328,21 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     ),
     lineItems: () => (
       <View>
-        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 6, marginBottom: 4 }}>
-          <T style={{ flex: 1, fontSize: st.fontPx - 3, textTransform: 'uppercase', color: '#9CA3AF', fontWeight: '600' }}>{vm.labels.item}</T>
-          {cols.qty ? <T style={{ width: 44, textAlign: 'center', fontSize: st.fontPx - 3, textTransform: 'uppercase', color: '#9CA3AF', fontWeight: '600' }}>{vm.labels.qty}</T> : null}
-          {cols.rate ? <T style={{ width: 76, textAlign: 'right', fontSize: st.fontPx - 3, textTransform: 'uppercase', color: '#9CA3AF', fontWeight: '600' }}>{vm.labels.rate}</T> : null}
-          {cols.total ? <T style={{ width: 84, textAlign: 'right', fontSize: st.fontPx - 3, textTransform: 'uppercase', color: '#9CA3AF', fontWeight: '600' }}>{vm.labels.total}</T> : null}
+        <View
+          style={[
+            { flexDirection: 'row', alignItems: 'center' },
+            thFilled
+              ? { backgroundColor: thBg, borderRadius: th === 'accent' ? 8 : 0, paddingVertical: 7, paddingHorizontal: hPad, marginBottom: 4 }
+              : { borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 6, marginBottom: 4 },
+          ]}
+        >
+          <T style={{ flex: 1, ...hCell }}>{vm.labels.item}</T>
+          {cols.qty ? <T style={{ width: 44, textAlign: 'center', ...hCell }}>{vm.labels.qty}</T> : null}
+          {cols.rate ? <T style={{ width: 76, textAlign: 'right', ...hCell }}>{vm.labels.rate}</T> : null}
+          {cols.total ? <T style={{ width: 84, textAlign: 'right', ...hCell }}>{vm.labels.total}</T> : null}
         </View>
         {vm.items.map((it, i) => (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: i < vm.items.length - 1 ? 1 : 0, borderBottomColor: '#F3F4F6' }}>
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, paddingHorizontal: hPad, borderBottomWidth: i < vm.items.length - 1 ? 1 : 0, borderBottomColor: '#F3F4F6' }}>
             <T style={{ flex: 1, color: '#1F2937' }}>{it.description}</T>
             {cols.qty ? <T style={{ width: 44, textAlign: 'center', color: '#6B7280' }}>{it.qty}</T> : null}
             {cols.rate ? <T style={{ width: 76, textAlign: 'right', color: '#6B7280' }}>{it.rate}</T> : null}
@@ -180,24 +351,44 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         ))}
       </View>
     ),
-    totals: () => (
-      <View style={{ alignItems: 'flex-end', gap: 6 }}>
-        <View style={{ flexDirection: 'row', gap: 48 }}>
-          <T style={{ color: '#374151' }}>{vm.labels.subtotal}</T>
-          <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.subtotal}</T>
-        </View>
-        {vm.totals.taxLabel ? (
-          <View style={{ flexDirection: 'row', gap: 48 }}>
-            <T style={{ color: '#374151' }}>{vm.totals.taxLabel}</T>
-            <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.taxValue}</T>
+    totals: () =>
+      vm.totalBar ? (
+        <View>
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <View style={{ flexDirection: 'row', gap: 48 }}>
+              <T style={{ color: '#374151' }}>{vm.labels.subtotal}</T>
+              <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.subtotal}</T>
+            </View>
+            {vm.totals.taxLabel ? (
+              <View style={{ flexDirection: 'row', gap: 48 }}>
+                <T style={{ color: '#374151' }}>{vm.totals.taxLabel}</T>
+                <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.taxValue}</T>
+              </View>
+            ) : null}
           </View>
-        ) : null}
-        <View style={{ flexDirection: 'row', gap: 48, borderTopWidth: 2, borderTopColor: '#E5E7EB', paddingTop: 8, marginTop: 2 }}>
-          <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{vm.labels.total}</T>
-          <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, minWidth: 110, textAlign: 'right', color: accent }}>{vm.totals.total}</T>
+          <View style={{ marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: accent, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16 }}>
+            <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: onAcc }}>{vm.labels.total}</T>
+            <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: onAcc }}>{vm.totals.total}</T>
+          </View>
         </View>
-      </View>
-    ),
+      ) : (
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 48 }}>
+            <T style={{ color: '#374151' }}>{vm.labels.subtotal}</T>
+            <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.subtotal}</T>
+          </View>
+          {vm.totals.taxLabel ? (
+            <View style={{ flexDirection: 'row', gap: 48 }}>
+              <T style={{ color: '#374151' }}>{vm.totals.taxLabel}</T>
+              <T style={{ minWidth: 110, textAlign: 'right', color: '#111827' }}>{vm.totals.taxValue}</T>
+            </View>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 48, borderTopWidth: 2, borderTopColor: '#E5E7EB', paddingTop: 8, marginTop: 2 }}>
+            <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{vm.labels.total}</T>
+            <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, minWidth: 110, textAlign: 'right', color: accent }}>{vm.totals.total}</T>
+          </View>
+        </View>
+      ),
     customFields: () => (
       <View>
         <SectLabel>{vm.labels.customFields}</SectLabel>
@@ -270,13 +461,45 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     );
   }
 
+  const deco = decorationRender(vm.decoration, accent);
+  const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
+  const minHeight = fullPage && pageW > 0 ? pageW * (11 / 8.5) : undefined;
   return (
-    <View style={{ backgroundColor: '#FFFFFF', padding: st.pad }}>
-      {vm.sections.map((id, i) => (
-        <Fragment key={id}>
-          <View style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>{renderers[id]()}</View>
-        </Fragment>
-      ))}
+    <View
+      onLayout={fullPage ? e => setPageW(e.nativeEvent.layout.width) : undefined}
+      style={{ position: 'relative', overflow: 'hidden', backgroundColor: vm.pageTint ? withAlpha(accent, 0.06) : '#FFFFFF', minHeight }}
+    >
+      {deco.full ? (
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
+          <DecoSvg spec={deco.full} />
+        </View>
+      ) : null}
+      {deco.topBand ? (
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: deco.topBand.height, zIndex: 0 }}>
+          <DecoSvg spec={deco.topBand.spec} />
+        </View>
+      ) : null}
+      {deco.bottomBand ? (
+        <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: deco.bottomBand.height, zIndex: 0 }}>
+          <DecoSvg spec={deco.bottomBand.spec} />
+        </View>
+      ) : null}
+      <View style={{ paddingTop: st.pad + deco.padTop, paddingBottom: st.pad + deco.padBottom, paddingHorizontal: st.pad, zIndex: 1, ...(fullPage ? { flex: 1 } : null) }}>
+        {vm.sections.map((id, i) => (
+          <Fragment key={id}>
+            <View style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>{renderers[id]()}</View>
+          </Fragment>
+        ))}
+      </View>
+      {vm.footerBar && vm.footerContact.length ? (
+        <View style={{ zIndex: 1, marginTop: gap, marginHorizontal: st.pad, marginBottom: st.pad, backgroundColor: accent, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+          {vm.footerContact.map((l, i) => (
+            <T key={i} style={{ color: i === 0 ? onAcc : subtleOnAcc, fontWeight: i === 0 ? '700' : '400', fontSize: small }}>
+              {i > 0 ? '   ·   ' : ''}{l}
+            </T>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

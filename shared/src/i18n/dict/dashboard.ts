@@ -1114,7 +1114,7 @@ export type DashboardDict = {
         archetypes: Record<string, string>;
         accent: string;
         font: string;
-        fonts: { sans: string; serif: string; mono: string };
+        fonts: Record<string, string>;
         density: string;
         densities: { comfortable: string; compact: string };
         showLogo: string;
@@ -2858,20 +2858,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           builderMobileHint: 'La disposición libre se edita desde la web. Aquí puedes ver el resultado.',
           preset: 'Plantilla',
           presets: {
-            general: 'General', profesional: 'Profesional',
-            construccion: 'Construcción', plomeria: 'Plomería', electrico: 'Eléctrico',
-            pintura: 'Pintura', techado: 'Techado', hvac: 'Climatización',
-            jardineria: 'Jardinería', limpieza: 'Limpieza', mudanzas: 'Mudanzas',
-            mecanico: 'Mecánico', detallado: 'Detallado de autos',
-            salon: 'Salón y belleza', catering: 'Catering', fotografia: 'Fotografía', tutoria: 'Tutoría',
+            classic: 'Plantilla 1', band: 'Plantilla 2', sidebar: 'Plantilla 3', split: 'Plantilla 4',
+            stamp: 'Plantilla 5', leftbar: 'Plantilla 6', centered: 'Plantilla 7', minimal: 'Plantilla 8',
+            hero: 'Plantilla 9', ledger: 'Plantilla 10', masthead: 'Plantilla 11', boutique: 'Plantilla 12',
+            wave: 'Plantilla 13', fresh: 'Plantilla 14', orbit: 'Plantilla 15', prism: 'Plantilla 16',
           },
-          presetGroups: {
-            universal: 'Universal',
-            construccion: 'Construcción y oficios',
-            hogar: 'Hogar y exterior',
-            auto: 'Automotriz',
-            eventos: 'Cuidado y eventos',
-          },
+          presetGroups: {},
           browseThemes: 'Ver plantillas',
           themesTitle: 'Elige una plantilla',
           useTheme: 'Usar esta plantilla',
@@ -2883,7 +2875,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           },
           accent: 'Color de acento',
           font: 'Tipografía',
-          fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
+          fonts: { sans: 'Sans serif', serif: 'Serif (Georgia)', mono: 'Monoespaciada', times: 'Times', palatino: 'Palatino', trebuchet: 'Trebuchet', verdana: 'Verdana' },
           density: 'Densidad',
           densities: { comfortable: 'Cómoda', compact: 'Compacta' },
           showLogo: 'Mostrar logo',
@@ -2892,7 +2884,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           sections: 'Secciones',
           sectionNames: {
             header: 'Encabezado', billTo: 'Facturar a', lineItems: 'Conceptos', totals: 'Totales',
-            customFields: 'Detalles adicionales', notes: 'Notas', paymentInstructions: 'Instrucciones de pago', footer: 'Pie de página',
+            customFields: 'Campos personalizados', notes: 'Notas', paymentInstructions: 'Instrucciones de pago', footer: 'Pie de página',
           },
           columns: 'Columnas',
           columnNames: { qty: 'Cant.', rate: 'Precio', total: 'Total' },
@@ -4629,20 +4621,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           builderMobileHint: 'Freeform layout is edited on the web. Here you can preview the result.',
           preset: 'Template',
           presets: {
-            general: 'General', profesional: 'Professional',
-            construccion: 'Construction', plomeria: 'Plumbing', electrico: 'Electrical',
-            pintura: 'Painting', techado: 'Roofing', hvac: 'HVAC',
-            jardineria: 'Landscaping', limpieza: 'Cleaning', mudanzas: 'Moving',
-            mecanico: 'Auto repair', detallado: 'Car detailing',
-            salon: 'Salon & beauty', catering: 'Catering', fotografia: 'Photography', tutoria: 'Tutoring',
+            classic: 'Theme 1', band: 'Theme 2', sidebar: 'Theme 3', split: 'Theme 4',
+            stamp: 'Theme 5', leftbar: 'Theme 6', centered: 'Theme 7', minimal: 'Theme 8',
+            hero: 'Theme 9', ledger: 'Theme 10', masthead: 'Theme 11', boutique: 'Theme 12',
+            wave: 'Theme 13', fresh: 'Theme 14', orbit: 'Theme 15', prism: 'Theme 16',
           },
-          presetGroups: {
-            universal: 'Universal',
-            construccion: 'Construction & trades',
-            hogar: 'Home & outdoor',
-            auto: 'Automotive',
-            eventos: 'Care & events',
-          },
+          presetGroups: {},
           browseThemes: 'Browse templates',
           themesTitle: 'Choose a template',
           useTheme: 'Use this template',
@@ -4654,7 +4638,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           },
           accent: 'Accent color',
           font: 'Font',
-          fonts: { sans: 'Sans', serif: 'Serif', mono: 'Mono' },
+          fonts: { sans: 'Sans serif', serif: 'Serif (Georgia)', mono: 'Monospace', times: 'Times', palatino: 'Palatino', trebuchet: 'Trebuchet', verdana: 'Verdana' },
           density: 'Density',
           densities: { comfortable: 'Comfortable', compact: 'Compact' },
           showLogo: 'Show logo',
@@ -4663,7 +4647,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           sections: 'Sections',
           sectionNames: {
             header: 'Header', billTo: 'Bill to', lineItems: 'Line items', totals: 'Totals',
-            customFields: 'Additional details', notes: 'Notes', paymentInstructions: 'Payment instructions', footer: 'Footer',
+            customFields: 'Custom fields', notes: 'Notes', paymentInstructions: 'Payment instructions', footer: 'Footer',
           },
           columns: 'Columns',
           columnNames: { qty: 'Qty', rate: 'Rate', total: 'Total' },
