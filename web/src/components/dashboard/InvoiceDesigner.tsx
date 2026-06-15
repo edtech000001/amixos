@@ -6,7 +6,7 @@
 // design is exactly what prints / shares. Includes undo/redo history.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, Sparkles } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
@@ -27,11 +27,18 @@ import {
   setText,
   setLayoutMode,
   setDefaultLanguage,
+  setDecoration,
+  setPageTint,
   invoiceNumberPrefix,
   FREEFORM_FIELD_KEYS,
+  INVOICE_SHAPE_KINDS,
+  INVOICE_ICON_NAMES,
+  INVOICE_ICONS,
   addFieldElement,
   addTextElement,
   addLogoElement,
+  addShapeElement,
+  addIconElement,
   addCustomFieldElement,
   updateElement,
   updateElementStyle,
@@ -51,6 +58,9 @@ import {
   type InvoiceViewModel,
   type InvoiceElement,
   type InvoiceFieldKey,
+  type InvoiceShapeKind,
+  type InvoiceIconName,
+  type InvoiceDecoration,
 } from '@amixos/shared/lib/invoiceTemplate';
 
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
@@ -195,17 +205,30 @@ function ScaledPreview({ children }: { children: ReactNode }) {
 // ── Element canvas (freeform) — real document + drag/resize/select overlay.
 // Drag commits ONE history checkpoint (onBeginInteraction) then streams raw
 // onChange so undo doesn't step through every pixel.
-function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, setSelectedId }: {
+function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, setSelectedId, styleEditor }: {
   value: InvoiceTemplateConfig;
   onChange: (c: InvoiceTemplateConfig) => void;
   onBeginInteraction: () => void;
   vm: InvoiceViewModel;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
+  /** The style panel for the selected element — floated as a popover anchored to
+   *  it, so edits happen right where you clicked (no scrolling back up). */
+  styleEditor?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; mode: 'move' | 'resize'; sx: number; sy: number; rect: { x: number; y: number; w: number; h: number }; started: boolean } | null>(null);
+  const [canvasW, setCanvasW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setCanvasW(el.clientWidth));
+    ro.observe(el);
+    setCanvasW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
   const els = value.elements ?? [];
+  const selEl = els.find(e => e.id === selectedId) ?? null;
 
   const begin = (e: React.PointerEvent, el: InvoiceElement, mode: 'move' | 'resize') => {
     e.preventDefault();
@@ -260,6 +283,62 @@ function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, se
           </div>
         );
       })}
+      {selEl && styleEditor && canvasW > 0 ? (() => {
+        // Float the panel just above the element (or below it when it sits near
+        // the top), horizontally clamped to stay on the canvas.
+        const popW = Math.min(560, canvasW - 16);
+        const elLeftPx = (selEl.x / 100) * canvasW;
+        const left = Math.max(8, Math.min(canvasW - popW - 8, elLeftPx));
+        const above = selEl.y >= 28;
+        return (
+          <div
+            onPointerDown={e => e.stopPropagation()}
+            className="absolute z-30 shadow-xl rounded-xl"
+            style={{
+              left,
+              width: popW,
+              ...(above
+                ? { bottom: `${100 - selEl.y}%`, marginBottom: 8 }
+                : { top: `${selEl.y + selEl.h}%`, marginTop: 8 }),
+            }}
+          >
+            {styleEditor}
+          </div>
+        );
+      })() : null}
+    </div>
+  );
+}
+
+// Small popover of the built-in icon glyphs (rendered with the shared SVG paths
+// so the preview is exactly what prints).
+function IconMenu({ label, onPick }: { label: string; onPick: (n: InvoiceIconName) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+        <Sparkles size={15} /> {label}
+      </button>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 grid grid-cols-5 gap-1 p-2 bg-white rounded-xl border border-gray-200 shadow-lg">
+            {INVOICE_ICON_NAMES.map(n => {
+              const def = INVOICE_ICONS[n];
+              const paint = def.filled
+                ? { fill: 'currentColor' as const }
+                : { fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+              return (
+                <button key={n} type="button" onClick={() => { onPick(n); setOpen(false); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700">
+                  <svg viewBox="0 0 24 24" width={18} height={18} {...paint}><path d={def.d} /></svg>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -273,10 +352,20 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
 }) {
   const st = el.style ?? {};
   const setStyle = (patch: Partial<NonNullable<InvoiceElement['style']>>) => onChange(updateElementStyle(value, el.id, patch));
+  const isText = el.kind === 'text' || el.kind === 'field' || el.kind === 'customField';
   const name = el.kind === 'text' ? t.elements.textContent
     : el.kind === 'logo' ? t.elements.addLogo
+    : el.kind === 'shape' ? t.elements.shapeKinds[el.shape ?? 'rectangle']
+    : el.kind === 'icon' ? t.elements.addIcon
     : el.kind === 'customField' ? `◆ ${el.customLabel ?? ''}`
     : t.fields[el.field as InvoiceFieldKey];
+  const opacityCtl = (
+    <label className="flex items-center gap-1.5 text-sm text-gray-600">
+      {t.elements.opacity}
+      <input type="range" min={0.1} max={1} step={0.05} value={st.opacity ?? 1}
+        onChange={e => setStyle({ opacity: Number(e.target.value) })} />
+    </label>
+  );
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-3">
@@ -294,7 +383,7 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
           className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y" />
       ) : null}
 
-      {el.kind !== 'logo' ? (
+      {isText ? (
         <div className="flex items-center gap-3 flex-wrap">
           <FontSelect value={st.font} onChange={f => setStyle({ font: f })} t={t} inheritLabel={`${t.elementFont} —`} />
           <label className="flex items-center gap-1.5 text-sm text-gray-600">
@@ -319,6 +408,36 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
               { value: 'right', label: <AlignRight size={14} /> },
             ]}
           />
+        </div>
+      ) : null}
+
+      {el.kind === 'shape' ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+            {t.elements.fillColor}
+            <input type="color" value={st.fill ?? value.accentColor} onChange={e => setStyle({ fill: e.target.value })}
+              className="w-7 h-7 rounded border border-gray-200 cursor-pointer" />
+          </label>
+          {el.shape === 'rectangle' ? (
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              {t.elements.cornerRadius}
+              <input type="number" min={0} max={80} value={st.radius ?? 0}
+                onChange={e => setStyle({ radius: Number(e.target.value) || 0 })}
+                className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm" />
+            </label>
+          ) : null}
+          {opacityCtl}
+        </div>
+      ) : null}
+
+      {el.kind === 'icon' ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+            {t.elements.color}
+            <input type="color" value={st.color ?? value.accentColor} onChange={e => setStyle({ color: e.target.value })}
+              className="w-7 h-7 rounded border border-gray-200 cursor-pointer" />
+          </label>
+          {opacityCtl}
         </div>
       ) : null}
     </div>
@@ -404,6 +523,18 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
     change(next);
     setSelectedId((next.elements ?? []).find(e => e.kind === 'logo')?.id ?? null);
   };
+  const addShapeEl = (shape: InvoiceShapeKind) => {
+    const next = addShapeElement(value, shape);
+    change(next);
+    const list = next.elements ?? [];
+    setSelectedId(list[list.length - 1]?.id ?? null);
+  };
+  const addIconEl = (icon: InvoiceIconName) => {
+    const next = addIconElement(value, icon);
+    change(next);
+    const list = next.elements ?? [];
+    setSelectedId(list[list.length - 1]?.id ?? null);
+  };
 
   const accentControl = (
     <Field label={t.accent}>
@@ -441,6 +572,23 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
       </div>
     </Field>
   );
+  const decorationControl = (
+    <Field label={t.decoration}>
+      <Seg<InvoiceDecoration>
+        value={value.decoration ?? 'none'}
+        onChange={d => change(setDecoration(value, d))}
+        options={(['none', 'corners', 'wave', 'arc'] as InvoiceDecoration[]).map(d => ({ value: d, label: t.decorations[d] }))}
+      />
+    </Field>
+  );
+  const pageTintControl = (
+    <Field label={t.pageTint}>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" checked={!!value.pageTint} onChange={e => change(setPageTint(value, e.target.checked))} />
+        <span className="text-sm text-gray-600">{t.pageTint}</span>
+      </label>
+    </Field>
+  );
   const textBlocksControl = (
     <Field label={t.textBlocks}>
       <div className="flex flex-col gap-3">
@@ -455,19 +603,24 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
     </Field>
   );
 
+  const undoRedo = (
+    <>
+      <button type="button" onClick={undo} disabled={past.current.length === 0}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+        <Undo2 size={15} /> {t.undo}
+      </button>
+      <button type="button" onClick={redo} disabled={future.current.length === 0}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+        <Redo2 size={15} /> {t.redo}
+      </button>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Undo / redo + language + layout mode */}
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={undo} disabled={past.current.length === 0}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-          <Undo2 size={15} /> {t.undo}
-        </button>
-        <button type="button" onClick={redo} disabled={future.current.length === 0}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-          <Redo2 size={15} /> {t.redo}
-        </button>
-      </div>
+      {/* In Structured mode undo/redo lives up top; in Freeform it moves down
+          into the add-element toolbar (more convenient while building). */}
+      {!freeform ? <div className="flex items-center gap-2">{undoRedo}</div> : null}
 
       <Field label={t.defaultLanguage}>
         <Seg<InvoiceLang>
@@ -495,8 +648,9 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
             {fontControl}
             {densityControl}
             {columnsControl}
+            {decorationControl}
+            {pageTintControl}
           </div>
-          {textBlocksControl}
 
           {/* Element toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -522,18 +676,35 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
                 </optgroup>
               ) : null}
             </select>
+            <select value="" onChange={e => { const v = e.target.value; if (v) addShapeEl(v as InvoiceShapeKind); }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+              <option value="">◻ {t.elements.addShape}</option>
+              {INVOICE_SHAPE_KINDS.map(s => <option key={s} value={s}>{t.elements.shapeKinds[s]}</option>)}
+            </select>
+            <IconMenu label={t.elements.addIcon} onPick={addIconEl} />
             <button type="button" onClick={addLogoEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
               <ImageIcon size={15} /> {t.elements.addLogo}
             </button>
+            <div className="ml-auto flex items-center gap-2">{undoRedo}</div>
           </div>
 
-          {selectedEl ? (
-            <StylePanel value={value} onChange={change} el={selectedEl} t={t} onDeselect={() => setSelectedId(null)} />
-          ) : (
-            <p className="text-xs text-gray-400">{t.elements.empty}</p>
-          )}
+          {!selectedEl ? <p className="text-xs text-gray-400">{t.elements.empty}</p> : null}
 
-          <BuilderCanvas value={value} onChange={onChange} onBeginInteraction={pushHistory} vm={vm} selectedId={selectedId} setSelectedId={setSelectedId} />
+          <BuilderCanvas
+            value={value}
+            onChange={onChange}
+            onBeginInteraction={pushHistory}
+            vm={vm}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+            styleEditor={selectedEl ? <StylePanel value={value} onChange={change} el={selectedEl} t={t} onDeselect={() => setSelectedId(null)} /> : null}
+          />
+
+          {/* Text blocks live OUTSIDE the canvas — a separate card so it's clear
+              they're document content, not draggable elements. */}
+          <div className="mt-1 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            {textBlocksControl}
+          </div>
         </div>
       ) : (
         // ── STRUCTURED: customizer + scaled preview ───────────────────────
@@ -541,8 +712,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           <div className="flex-1 flex flex-col gap-5 min-w-0">
             <Field label={t.preset}>
               <button type="button" onClick={() => setThemesOpen(true)}
-                className="flex items-center gap-3 rounded-xl border border-gray-200 p-2 hover:border-gray-300 w-full max-w-sm text-left">
-                <PresetPreview vm={vm} />
+                className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:border-gray-300 w-full max-w-sm text-left">
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</div>
                   <div className="text-xs text-primary mt-1">{t.browseThemes}</div>

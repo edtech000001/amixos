@@ -1139,6 +1139,12 @@ export type DashboardDict = {
           addText: string;
           addField: string;
           addLogo: string;
+          addShape: string;
+          addIcon: string;
+          shapeKinds: { rectangle: string; ellipse: string };
+          fillColor: string;
+          opacity: string;
+          cornerRadius: string;
           selectField: string;
           textContent: string;
           fontSize: string;
@@ -1147,6 +1153,9 @@ export type DashboardDict = {
           deleteEl: string;
           empty: string;
         };
+        decoration: string;
+        decorations: { none: string; corners: string; wave: string; arc: string };
+        pageTint: string;
         fields: {
           businessName: string; businessContact: string; invoiceTitle: string;
           invoiceNumber: string; status: string; issueDate: string; dueDate: string;
@@ -2903,6 +2912,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
             addText: 'Texto',
             addField: 'Campo',
             addLogo: 'Logo',
+            addShape: 'Forma',
+            addIcon: 'Ícono',
+            shapeKinds: { rectangle: 'Rectángulo', ellipse: 'Círculo' },
+            fillColor: 'Relleno',
+            opacity: 'Opacidad',
+            cornerRadius: 'Esquinas',
             selectField: 'Elige un campo…',
             textContent: 'Texto',
             fontSize: 'Tamaño',
@@ -2911,6 +2926,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
             deleteEl: 'Eliminar',
             empty: 'Arrastra los elementos para colocarlos. Toca uno para editarlo.',
           },
+          decoration: 'Decoración',
+          decorations: { none: 'Ninguna', corners: 'Esquinas', wave: 'Onda', arc: 'Arco' },
+          pageTint: 'Tinte de fondo',
           fields: {
             businessName: 'Nombre del negocio', businessContact: 'Contacto del negocio',
             invoiceTitle: 'Título (Factura)', invoiceNumber: 'Número de factura', status: 'Estado',
@@ -4669,6 +4687,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
             addText: 'Text',
             addField: 'Field',
             addLogo: 'Logo',
+            addShape: 'Shape',
+            addIcon: 'Icon',
+            shapeKinds: { rectangle: 'Rectangle', ellipse: 'Circle' },
+            fillColor: 'Fill',
+            opacity: 'Opacity',
+            cornerRadius: 'Corners',
             selectField: 'Pick a field…',
             textContent: 'Text',
             fontSize: 'Size',
@@ -4677,6 +4701,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
             deleteEl: 'Delete',
             empty: 'Drag elements to place them. Tap one to edit it.',
           },
+          decoration: 'Decoration',
+          decorations: { none: 'None', corners: 'Corners', wave: 'Wave', arc: 'Arc' },
+          pageTint: 'Background tint',
           fields: {
             businessName: 'Business name', businessContact: 'Business contact',
             invoiceTitle: 'Title (Invoice)', invoiceNumber: 'Invoice number', status: 'Status',

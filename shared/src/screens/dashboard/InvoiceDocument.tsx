@@ -4,7 +4,7 @@
 
 import { Fragment, useState, type ReactNode } from 'react';
 import { View, Text, Image, Platform, type TextStyle } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Ellipse } from 'react-native-svg';
 import {
   resolveFieldValue,
   customFieldElementText,
@@ -12,11 +12,13 @@ import {
   onAccentColor,
   withAlpha,
   decorationRender,
+  INVOICE_ICONS,
   RN_FONTS,
   type InvoiceViewModel,
   type InvoiceSectionId,
   type InvoiceFont,
   type InvoiceElement,
+  type InvoiceIconName,
   type DecoSpec,
 } from '../../lib/invoiceTemplate';
 
@@ -38,6 +40,36 @@ function rnFont(font: InvoiceFont): string | undefined {
   const def = RN_FONTS[font];
   if (!def) return undefined; // sans → system
   return Platform.select({ ios: def.ios, android: def.android, default: def.android });
+}
+
+// Freeform icon glyph — same 24×24 shared paths the HTML/PDF + web use.
+function IconGlyph({ icon, color }: { icon: InvoiceIconName; color: string }) {
+  const def = INVOICE_ICONS[icon] ?? INVOICE_ICONS.star;
+  const paint = def.filled
+    ? { fill: color }
+    : { fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <Svg width="100%" height="100%" viewBox="0 0 24 24">
+      <Path d={def.d} {...paint} />
+    </Svg>
+  );
+}
+
+// Freeform shape — rendered via SVG so the ellipse / corner radius matches web.
+function ShapeGlyph({ el, accent }: { el: InvoiceElement; accent: string }) {
+  const fill = el.style?.fill ?? accent;
+  if (el.shape === 'ellipse') {
+    return (
+      <Svg width="100%" height="100%">
+        <Ellipse cx="50%" cy="50%" rx="50%" ry="50%" fill={fill} />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width="100%" height="100%">
+      <Rect x="0" y="0" width="100%" height="100%" rx={el.style?.radius ?? 0} fill={fill} />
+    </Svg>
+  );
 }
 
 export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
@@ -421,12 +453,15 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   };
 
   if (vm.layoutMode === 'freeform') {
+    const ffDeco = decorationRender(vm.decoration, accent);
     const renderEl = (el: InvoiceElement): ReactNode => {
       if (el.kind === 'logo') {
         return vm.header.logoUrl ? (
           <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
         ) : null;
       }
+      if (el.kind === 'shape') return <ShapeGlyph el={el} accent={accent} />;
+      if (el.kind === 'icon') return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
       if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
       const txt = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
       const s = el.style ?? {};
@@ -447,12 +482,27 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       );
     };
     return (
-      <View style={{ backgroundColor: '#FFFFFF' }}>
-        <View style={{ width: '100%', aspectRatio: 8.5 / 11 }}>
+      <View style={{ backgroundColor: vm.pageTint ? withAlpha(accent, 0.06) : '#FFFFFF' }}>
+        <View style={{ width: '100%', aspectRatio: 8.5 / 11, overflow: 'hidden' }}>
+          {ffDeco.full ? (
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.full} />
+            </View>
+          ) : null}
+          {ffDeco.topBand ? (
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: ffDeco.topBand.height, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.topBand.spec} />
+            </View>
+          ) : null}
+          {ffDeco.bottomBand ? (
+            <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: ffDeco.bottomBand.height, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.bottomBand.spec} />
+            </View>
+          ) : null}
           {vm.elements.map(el => (
             <View
               key={el.id}
-              style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden' }}
+              style={{ position: 'absolute', zIndex: 1, left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}
             >
               {renderEl(el)}
             </View>

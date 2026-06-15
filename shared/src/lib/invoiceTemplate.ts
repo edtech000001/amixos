@@ -159,15 +159,47 @@ export interface InvoiceElementStyle {
   color?: string;                          // hex; defaults to theme text/accent
   align?: 'left' | 'center' | 'right';
   font?: InvoiceFont;                      // per-element font; inherits theme font when unset
+  // ── shape / icon styling ──
+  fill?: string;                           // shape fill (hex); defaults to the theme accent
+  opacity?: number;                        // 0–1, for shapes/icons (default 1)
+  radius?: number;                         // rectangle corner radius in px (default 0)
 }
 
-export type InvoiceElementKind = 'logo' | 'field' | 'text' | 'customField';
+export type InvoiceElementKind = 'logo' | 'field' | 'text' | 'customField' | 'shape' | 'icon';
+
+/** Decorative shapes a user can drop on the freeform canvas. A thin rectangle
+ *  doubles as a divider/line; an ellipse with equal w/h is a circle. */
+export type InvoiceShapeKind = 'rectangle' | 'ellipse';
+export const INVOICE_SHAPE_KINDS: InvoiceShapeKind[] = ['rectangle', 'ellipse'];
+
+/** Built-in icon set. Each is a single 24×24 SVG `d` path so every renderer
+ *  (HTML/PDF, web React, RN) draws the exact same glyph. `filled` icons paint
+ *  with the element color; the rest stroke it (lucide-style). */
+export type InvoiceIconName =
+  | 'star' | 'heart' | 'check' | 'circle' | 'diamond' | 'triangle'
+  | 'dollar' | 'arrowRight' | 'plus' | 'close';
+export interface InvoiceIconDef { d: string; filled: boolean }
+export const INVOICE_ICONS: Record<InvoiceIconName, InvoiceIconDef> = {
+  star: { filled: true, d: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z' },
+  heart: { filled: true, d: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z' },
+  check: { filled: false, d: 'M20 6 9 17l-5-5' },
+  circle: { filled: true, d: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
+  diamond: { filled: true, d: 'M12 2l10 10-10 10L2 12z' },
+  triangle: { filled: true, d: 'M12 3l9 16H3z' },
+  dollar: { filled: false, d: 'M12 1v22 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' },
+  arrowRight: { filled: false, d: 'M5 12h14 M13 6l6 6-6 6' },
+  plus: { filled: false, d: 'M12 5v14 M5 12h14' },
+  close: { filled: false, d: 'M18 6 6 18 M6 6l12 12' },
+};
+export const INVOICE_ICON_NAMES = Object.keys(INVOICE_ICONS) as InvoiceIconName[];
 
 export interface InvoiceElement {
   id: string;
   kind: InvoiceElementKind;
   field?: InvoiceFieldKey;                 // when kind === 'field'
   text?: string;                           // when kind === 'text'
+  shape?: InvoiceShapeKind;                // when kind === 'shape'
+  icon?: InvoiceIconName;                  // when kind === 'icon'
   // When kind === 'customField' — binds to a per-business custom field by key;
   // resolves to that invoice's value at render time. customLabel is the label to
   // display (snapshotted so the element still reads sensibly if a template is
@@ -331,9 +363,11 @@ function normalizeElement(e: unknown): InvoiceElement | null {
   if (!e || typeof e !== 'object') return null;
   const el = e as Partial<InvoiceElement>;
   const kind = el.kind;
-  if (kind !== 'logo' && kind !== 'field' && kind !== 'text' && kind !== 'customField') return null;
+  if (kind !== 'logo' && kind !== 'field' && kind !== 'text' && kind !== 'customField' && kind !== 'shape' && kind !== 'icon') return null;
   if (kind === 'field' && !(el.field && FREEFORM_FIELD_KEYS.includes(el.field))) return null;
   if (kind === 'customField' && !(typeof el.customKey === 'string' && el.customKey)) return null;
+  if (kind === 'shape' && !(el.shape && INVOICE_SHAPE_KINDS.includes(el.shape))) return null;
+  if (kind === 'icon' && !(el.icon && INVOICE_ICON_NAMES.includes(el.icon))) return null;
   const num = (v: unknown, d: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : d;
   const style = el.style && typeof el.style === 'object' ? el.style : undefined;
@@ -342,11 +376,13 @@ function normalizeElement(e: unknown): InvoiceElement | null {
     kind,
     x: num(el.x, 4),
     y: num(el.y, 4),
-    w: Math.max(5, num(el.w, 30)),
-    h: Math.max(3, num(el.h, 6)),
+    w: Math.max(1, num(el.w, 30)),
+    h: Math.max(1, num(el.h, 6)),
   };
   if (kind === 'field') out.field = el.field;
   if (kind === 'text') out.text = typeof el.text === 'string' ? el.text : '';
+  if (kind === 'shape') out.shape = el.shape;
+  if (kind === 'icon') out.icon = el.icon;
   if (kind === 'customField') {
     out.customKey = el.customKey;
     out.customLabel = typeof el.customLabel === 'string' ? el.customLabel : el.customKey;
@@ -358,6 +394,9 @@ function normalizeElement(e: unknown): InvoiceElement | null {
       color: typeof style.color === 'string' ? style.color : undefined,
       align: style.align === 'center' || style.align === 'right' ? style.align : undefined,
       font: style.font && ALL_FONTS.includes(style.font) ? style.font : undefined,
+      fill: typeof style.fill === 'string' ? style.fill : undefined,
+      opacity: typeof style.opacity === 'number' ? Math.max(0, Math.min(1, style.opacity)) : undefined,
+      radius: typeof style.radius === 'number' ? Math.max(0, Math.min(200, style.radius)) : undefined,
     };
   }
   return out;
@@ -1295,13 +1334,29 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     if (s.fontSize) parts.push(`font-size:${s.fontSize}px`);
     if (s.bold) parts.push('font-weight:700');
     const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? st.accent : undefined);
-    if (color) parts.push(`color:${escapeHtml(color)}`);
+    if (color && el.kind !== 'shape') parts.push(`color:${escapeHtml(color)}`);
     if (s.align) parts.push(`text-align:${s.align}`);
     if (s.font) parts.push(`font-family:${cssFontFamily(s.font)}`);
+    if (s.opacity != null && s.opacity < 1) parts.push(`opacity:${s.opacity}`);
     return parts.join(';');
+  };
+  const iconSvg = (el: InvoiceElement): string => {
+    const def = INVOICE_ICONS[el.icon as InvoiceIconName] ?? INVOICE_ICONS.star;
+    const color = escapeHtml(el.style?.color ?? st.accent);
+    const paint = def.filled
+      ? `fill="${color}"`
+      : `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+    return `<svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block" ${paint}><path d="${def.d}"/></svg>`;
+  };
+  const shapeHtml = (el: InvoiceElement): string => {
+    const fill = escapeHtml(el.style?.fill ?? st.accent);
+    const radius = el.shape === 'ellipse' ? '50%' : `${el.style?.radius ?? 0}px`;
+    return `<div style="width:100%;height:100%;background:${fill};border-radius:${radius}"></div>`;
   };
   const elInner = (el: InvoiceElement): string => {
     if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
+    if (el.kind === 'shape') return shapeHtml(el);
+    if (el.kind === 'icon') return iconSvg(el);
     if (el.kind === 'text') return `<div class="inv-el-text">${br(el.text ?? '')}</div>`;
     if (el.kind === 'customField') return `<div class="inv-el-text">${br(customFieldElementText(vm, el))}</div>`;
     if (el.field === 'lineItems') return itemsHtml;
@@ -1333,7 +1388,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     (deco.bottomBand ? `<svg class="inv-deco-bot" viewBox="${deco.bottomBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.bottomBand.height}px">${svgShapes(deco.bottomBand.spec)}</svg>` : '');
   const docPad = deco.padTop || deco.padBottom ? ` style="padding-top:${deco.padTop}px;padding-bottom:${deco.padBottom}px"` : '';
   const footerBarHtml =
-    vm.footerBar && vm.footerContact.length
+    !freeform && vm.footerBar && vm.footerContact.length
       ? `<div class="inv-footerbar">${vm.footerContact
           .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
           .join('<span class="fb-sep">·</span>')}</div>`
@@ -1550,6 +1605,12 @@ export function setText(
 export function setDefaultLanguage(c: InvoiceTemplateConfig, defaultLanguage: InvoiceLang): InvoiceTemplateConfig {
   return { ...c, defaultLanguage };
 }
+export function setDecoration(c: InvoiceTemplateConfig, decoration: InvoiceDecoration): InvoiceTemplateConfig {
+  return { ...c, decoration };
+}
+export function setPageTint(c: InvoiceTemplateConfig, pageTint: boolean): InvoiceTemplateConfig {
+  return { ...c, pageTint };
+}
 
 // ── Freeform element editor (Phase 3 — element canvas) ───────────────────────
 
@@ -1588,6 +1649,20 @@ export function addLogoElement(c: InvoiceTemplateConfig): InvoiceTemplateConfig 
   const el: InvoiceElement = { id: newElementId('logo'), kind: 'logo', x: 5, y: 4, w: 22, h: 9 };
   return { ...c, elements: [...(c.elements ?? []), el] };
 }
+/** Drop a decorative shape. Defaults to a wide low rectangle (also reads as a
+ *  divider/line) or a modest ellipse; fill defaults to the theme accent. */
+export function addShapeElement(c: InvoiceTemplateConfig, shape: InvoiceShapeKind): InvoiceTemplateConfig {
+  const el: InvoiceElement = shape === 'ellipse'
+    ? { id: newElementId('shape'), kind: 'shape', shape, x: 8, y: 8, w: 14, h: 10, style: { opacity: 1 } }
+    : { id: newElementId('shape'), kind: 'shape', shape, x: 8, y: 8, w: 40, h: 2, style: { opacity: 1 } };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
+/** Drop an icon glyph (small, roughly square; centered within its box). Color
+ *  defaults to the theme accent. */
+export function addIconElement(c: InvoiceTemplateConfig, icon: InvoiceIconName): InvoiceTemplateConfig {
+  const el: InvoiceElement = { id: newElementId('icon'), kind: 'icon', icon, x: 8, y: 8, w: 7, h: 5 };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
 export function updateElement(c: InvoiceTemplateConfig, id: string, patch: Partial<InvoiceElement>): InvoiceTemplateConfig {
   return { ...c, elements: (c.elements ?? []).map(e => (e.id === id ? { ...e, ...patch } : e)) };
 }
@@ -1603,8 +1678,8 @@ export function setElementRect(
   rect: { x: number; y: number; w: number; h: number },
 ): InvoiceTemplateConfig {
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
-  const w = Math.max(5, clamp(rect.w));
-  const h = Math.max(3, clamp(rect.h));
+  const w = Math.max(1, clamp(rect.w));
+  const h = Math.max(1, clamp(rect.h));
   return updateElement(c, id, {
     x: Math.min(clamp(rect.x), 100 - w),
     y: Math.min(clamp(rect.y), 100 - h),

@@ -351,31 +351,35 @@ export function InvoiceDesigner({
         {freeform ? <Text className="text-xs text-gray-400">{t.builderMobileHint}</Text> : null}
       </Field>
 
-      {/* Template — compact button that opens the swipeable theme browser */}
-      <Field label={t.preset}>
-        <Pressable
-          onPress={() => setThemeOpen(true)}
-          className="flex-row items-center gap-3 rounded-xl border border-gray-200 bg-white p-2"
-        >
-          <PresetPreview vm={vm} />
-          <View className="flex-1">
-            <Text className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</Text>
-            <Text className="text-xs text-primary mt-1">{t.browseThemes}</Text>
-          </View>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </Pressable>
-      </Field>
+      {/* Template — compact button that opens the swipeable theme browser.
+          Presets only apply to the Structured layout, so hide it in Freeform. */}
+      {!freeform ? (
+        <>
+          <Field label={t.preset}>
+            <Pressable
+              onPress={() => setThemeOpen(true)}
+              className="flex-row items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5"
+            >
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</Text>
+                <Text className="text-xs text-primary mt-1">{t.browseThemes}</Text>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </Pressable>
+          </Field>
 
-      <ThemePickerModal
-        visible={themeOpen}
-        onClose={() => setThemeOpen(false)}
-        currentId={value.presetId}
-        onSelect={id => { onChange(applyPreset(id, value)); setThemeOpen(false); }}
-        value={value}
-        branding={branding}
-        sample={sample}
-        t={t}
-      />
+          <ThemePickerModal
+            visible={themeOpen}
+            onClose={() => setThemeOpen(false)}
+            currentId={value.presetId}
+            onSelect={id => { onChange(applyPreset(id, value)); setThemeOpen(false); }}
+            value={value}
+            branding={branding}
+            sample={sample}
+            t={t}
+          />
+        </>
+      ) : null}
 
       {/* Accent — swatches + spectrum picker for any color */}
       <Field label={t.accent}>
