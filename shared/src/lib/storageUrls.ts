@@ -16,6 +16,31 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 /** The private bucket holding all non-logo uploads. */
 export const PRIVATE_ASSETS_BUCKET = 'business-private';
 
+/** The public bucket holding business logos (rendered on public invoice pages). */
+export const PUBLIC_ASSETS_BUCKET = 'business-assets';
+
+/**
+ * Extract the in-bucket object path from a public getPublicUrl() string, e.g.
+ * ".../object/public/business-assets/logos/abc-123.png" → "logos/abc-123.png".
+ * Returns null when the URL is empty or doesn't belong to the given bucket.
+ * Used to delete a logo object given only its stored public URL.
+ */
+export function pathFromPublicUrl(
+  url: string | null | undefined,
+  bucket: string = PUBLIC_ASSETS_BUCKET,
+): string | null {
+  if (!url) return null;
+  const marker = `/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const rest = url.slice(idx + marker.length).split('?')[0];
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return rest;
+  }
+}
+
 /** Default signed-URL lifetime. Long enough for a viewing session, short
  *  enough that a leaked URL expires quickly. */
 export const SIGNED_URL_TTL = 60 * 60; // 1 hour, seconds

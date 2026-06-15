@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
@@ -382,6 +383,28 @@ export default function AjustesPage() {
       if (upErr) throw upErr;
       const { data } = supabase.storage.from('business-assets').getPublicUrl(path);
       const { error: updErr } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id);
+      if (updErr) throw updErr;
+      await refetchBusiness();
+    } catch {
+      setBizMsgIsError(true);
+      setBizMsg(t.business.logoError);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // Remove the logo: delete the storage object (best-effort) then clear logo_url.
+  const onRemoveLogo = async () => {
+    if (!business?.logo_url) return;
+    if (!window.confirm(t.business.logoRemoveConfirm)) return;
+    setUploadingLogo(true);
+    setBizMsg('');
+    try {
+      const path = pathFromPublicUrl(business.logo_url);
+      if (path) {
+        await supabase.storage.from(PUBLIC_ASSETS_BUCKET).remove([path]);
+      }
+      const { error: updErr } = await supabase.from('businesses').update({ logo_url: null }).eq('id', business.id);
       if (updErr) throw updErr;
       await refetchBusiness();
     } catch {
@@ -1801,13 +1824,23 @@ export default function AjustesPage() {
                   </div>
                 )}
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
-                <button
-                  onClick={() => logoInputRef.current?.click()}
-                  disabled={uploadingLogo}
-                  className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
-                >
-                  {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
+                  >
+                    {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+                  </button>
+                  {business?.logo_url && !uploadingLogo && (
+                    <button
+                      onClick={onRemoveLogo}
+                      className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
+                    >
+                      {t.business.logoRemoveBtn}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Full-screen logo viewer — click the logo to zoom; click anywhere to close. */}

@@ -1035,6 +1035,8 @@ export type DashboardDict = {
       logoLabel: string;
       logoUploadBtn: string;
       logoChangeBtn: string;
+      logoRemoveBtn: string;
+      logoRemoveConfirm: string;
       logoUploading: string;
       logoError: string;
       logoSizeError: string;
@@ -2790,6 +2792,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         logoLabel: 'Logo',
         logoUploadBtn: 'Subir logo',
         logoChangeBtn: 'Cambiar logo',
+        logoRemoveBtn: 'Quitar logo',
+        logoRemoveConfirm: '¿Quitar el logo? Se eliminará permanentemente.',
         logoUploading: 'Subiendo…',
         logoError: 'No se pudo subir el logo. Intenta de nuevo.',
         logoSizeError: 'La imagen supera el límite de 2 MB.',
@@ -4554,6 +4558,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         logoLabel: 'Logo',
         logoUploadBtn: 'Upload logo',
         logoChangeBtn: 'Change logo',
+        logoRemoveBtn: 'Remove logo',
+        logoRemoveConfirm: 'Remove the logo? It will be permanently deleted.',
         logoUploading: 'Uploading…',
         logoError: "Couldn't upload the logo. Try again.",
         logoSizeError: 'Image exceeds the 2 MB limit.',

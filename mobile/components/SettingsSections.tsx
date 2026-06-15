@@ -26,6 +26,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
+import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { InvoiceDesigner } from './InvoiceDesigner';
 import { normalizeBundle, activeBundleConfig, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
@@ -222,6 +223,36 @@ export function BusinessSection() {
     }
   };
 
+  // Remove the logo: delete the storage object (best-effort) then clear logo_url.
+  const removeLogo = () => {
+    if (!business?.logo_url) return;
+    Alert.alert(t.business.logoLabel, t.business.logoRemoveConfirm, [
+      { text: full.common.buttons.cancel, style: 'cancel' },
+      {
+        text: t.business.logoRemoveBtn,
+        style: 'destructive',
+        onPress: async () => {
+          if (!business) return;
+          setUploadingLogo(true);
+          setMsg(null);
+          try {
+            const path = pathFromPublicUrl(business.logo_url);
+            if (path) {
+              await supabase.storage.from(PUBLIC_ASSETS_BUCKET).remove([path]);
+            }
+            const { error: updErr } = await supabase.from('businesses').update({ logo_url: null }).eq('id', business.id);
+            if (updErr) throw updErr;
+            await refetchBusiness();
+          } catch {
+            setMsg({ text: t.business.logoError, isError: true });
+          } finally {
+            setUploadingLogo(false);
+          }
+        },
+      },
+    ]);
+  };
+
   useEffect(() => {
     if (!business) return;
     setName(business.name ?? '');
@@ -316,15 +347,25 @@ export function BusinessSection() {
               <Building2 size={28} color="#9CA3AF" />
             </View>
           )}
-          <Pressable
-            onPress={pickAndUploadLogo}
-            disabled={uploadingLogo}
-            className={`px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
-          >
-            <Text className="text-sm font-semibold text-primary">
-              {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-            </Text>
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={pickAndUploadLogo}
+              disabled={uploadingLogo}
+              className={`px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
+            >
+              <Text className="text-sm font-semibold text-primary">
+                {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+              </Text>
+            </Pressable>
+            {business?.logo_url && !uploadingLogo && (
+              <Pressable
+                onPress={removeLogo}
+                className="px-3.5 py-1.5 rounded-xl active:bg-red-50"
+              >
+                <Text className="text-sm font-semibold text-red-500">{t.business.logoRemoveBtn}</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Full-screen logo viewer — tap the logo to zoom; tap anywhere / the X
