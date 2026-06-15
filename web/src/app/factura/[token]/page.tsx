@@ -49,6 +49,10 @@ interface RawInvoice {
   notes: string | null;
   language: InvoiceLang;
   template_config: Record<string, unknown> | null;
+  custom_fields: Record<string, string> | null;
+  // Optional: resolved {key,label,value}[] from the RPC (migration 067) — gives
+  // the structured "Custom fields" section proper labels on the public page.
+  custom_fields_resolved: { key: string; label: string; value: string }[] | null;
   clients: RawClient | null;
   invoice_clients: { clients: RawClient }[];
   businesses: RawBusiness | null;
@@ -114,6 +118,15 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       ? [raw.clients]
       : [];
 
+  // Custom fields: prefer the RPC's resolved {key,label,value} (proper labels);
+  // otherwise build from the raw custom_fields map (freeform elements still get
+  // nice labels from their own snapshot).
+  const customFields = raw.custom_fields_resolved?.length
+    ? raw.custom_fields_resolved.filter(f => f.value != null && f.value !== '')
+    : Object.entries(raw.custom_fields ?? {})
+        .filter(([, v]) => v != null && v !== '')
+        .map(([key, value]) => ({ key, label: key, value: String(value) }));
+
   const invoice: InvoiceDocData = {
     invoiceNumber: raw.invoice_number,
     status: raw.status,
@@ -132,6 +145,7 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       email: c.email,
       phoneCell: c.phone_cell,
     })),
+    customFields,
   };
 
   const b = raw.businesses;

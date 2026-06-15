@@ -6,7 +6,7 @@
 // HTML all stay visually in sync. Renders sections in vm.sections order.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { resolveFieldValue, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type DecoSpec } from '../../lib/invoiceTemplate';
+import { resolveFieldValue, customFieldElementText, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type DecoSpec } from '../../lib/invoiceTemplate';
 
 function Logo({ url, maxHeight, maxWidth = 220, center }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean }) {
   return (
@@ -393,7 +393,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         ) : null;
       }
       if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
-      const text = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
+      const text = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
       return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
     };
     return (

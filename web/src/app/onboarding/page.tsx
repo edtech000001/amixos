@@ -58,7 +58,8 @@ export default function OnboardingPage() {
       .upload(path, file, { upsert: true });
 
     if (uploadError) {
-      resolve({ error: t.logo.uploadError });
+      console.error('Logo upload error:', uploadError);
+      resolve({ error: uploadError.message || t.logo.uploadError });
       return;
     }
 
@@ -82,10 +83,13 @@ export default function OnboardingPage() {
           owner_id: user.id,
           name: data.businessName,
           service_type: data.serviceType,
+          address: data.address,
           city: data.city,
           state: data.state,
+          postal_code: data.postalCode,
           country: data.country,
           logo_url: data.logoUrl,
+          operating_hours: data.operatingHours,
         })
         .select()
         .single();
@@ -103,15 +107,13 @@ export default function OnboardingPage() {
       });
       if (memberError) console.warn('Member insert warning:', memberError.message);
 
-      // Activate modules based on selections
-      const modules = [data.serviceType];
-      if (data.needsInventory) modules.push('inventory');
-      if (data.needsVirtualNumber) modules.push('voip');
-
-      const { error: modulesError } = await supabase.from('business_modules').insert(
-        modules.map((key) => ({ business_id: business.id, module_key: key })),
-      );
-      if (modulesError) console.warn('Modules insert warning:', modulesError.message);
+      // Activate the industry-recommended modules the user kept enabled.
+      if (data.features.length > 0) {
+        const { error: modulesError } = await supabase.from('business_modules').insert(
+          data.features.map((key) => ({ business_id: business.id, module_key: key })),
+        );
+        if (modulesError) console.warn('Modules insert warning:', modulesError.message);
+      }
 
       // Hard redirect so SSR session cookies are read fresh on the next page.
       window.location.href = '/dashboard';

@@ -399,6 +399,7 @@ export type DashboardDict = {
       proposalOptionSub: string;
     };
     searchPlaceholder: string;
+    clearFilters: string;
     // Sort + group control on the jobs list. `group.state` means the US
     // state (location), not job status — keep the labels disambiguated.
     sort: {
@@ -2172,6 +2173,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         proposalOptionSub: 'Cotizar antes de trabajar',
       },
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
+      clearFilters: 'Limpiar filtros',
       sort: {
         button: 'Ordenar',
         title: 'Ordenar y agrupar',
@@ -3935,6 +3937,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         proposalOptionSub: 'Estimate before working',
       },
       searchPlaceholder: 'Search by name, client, number, city...',
+      clearFilters: 'Clear filters',
       sort: {
         button: 'Sort',
         title: 'Sort & group',

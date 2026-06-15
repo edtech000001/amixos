@@ -11,11 +11,11 @@ import {
   Building2,
   Wrench,
   HardHat,
-  Scissors,
+  Sparkles,
   Utensils,
-  Home,
+  Trees,
   Phone,
-  Car,
+  Droplets,
   ShoppingBag,
   MoreHorizontal,
   MapPin,
@@ -23,13 +23,25 @@ import {
   Upload,
   X,
   Package,
+  Forklift,
+  FolderOpen,
   Check,
   CheckCircle2,
   ChevronDown,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { Toggle } from '../../ui/Toggle';
+import { DatePicker } from '../../ui/DatePicker';
+import {
+  DAY_KEYS,
+  DEFAULT_OPERATING_HOURS,
+  type DayKey,
+  type OperatingHours,
+} from '../../lib/operatingHours';
+import { featuresForIndustry } from '../../modules/industryFeatures';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -38,13 +50,25 @@ import { Input } from '../../ui/Input';
 export interface OnboardingData {
   businessName: string;
   serviceType: string;
+  address: string;
   city: string;
   state: string;
+  postalCode: string;
   country: string;
   logoUrl: string | null;
-  needsInventory: boolean;
-  needsVirtualNumber: boolean;
+  /** Weekly hours when the user added them, else null (not configured). */
+  operatingHours: OperatingHours | null;
+  /** Recommended module ids the user kept enabled. */
+  features: string[];
 }
+
+// Module ids → icon for the tailored "Extras" step (native lucide set).
+const FEATURE_ICONS: Record<string, LucideIcon> = {
+  map: MapPin,
+  files: FolderOpen,
+  equipment: Forklift,
+  inventory: Package,
+};
 
 /** Result of a logo pick + upload attempt. `null` = user cancelled. */
 export type PickLogoResult = { url: string } | { error: string } | null;
@@ -73,11 +97,11 @@ const TOTAL_STEPS = 5;
 const ICONS: Record<string, typeof Wrench> = {
   construction: HardHat,
   mechanics: Wrench,
-  landscaping: Home,
-  cleaning: Scissors,
+  landscaping: Trees,
+  cleaning: Sparkles,
   restaurant: Utensils,
   phone_repair: Phone,
-  car_dealership: Car,
+  plumbing: Droplets,
   retail: ShoppingBag,
   other: MoreHorizontal,
 };
@@ -113,12 +137,14 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
   const [data, setData] = useState<OnboardingData>({
     businessName: '',
     serviceType: '',
+    address: '',
     city: '',
     state: '',
+    postalCode: '',
     country: 'US',
     logoUrl: null,
-    needsInventory: false,
-    needsVirtualNumber: false,
+    operatingHours: null,
+    features: [],
   });
 
   const update = (fields: Partial<OnboardingData>) =>
@@ -179,15 +205,18 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
         {step === 2 && (
           <StepServiceType
             value={data.serviceType}
-            onChange={(v) => update({ serviceType: v })}
+            onChange={(v) => update({ serviceType: v, features: featuresForIndustry(v) })}
             onNext={next}
             onBack={back}
           />
         )}
         {step === 3 && (
           <StepLocation
+            address={data.address}
             city={data.city}
             state={data.state}
+            postalCode={data.postalCode}
+            operatingHours={data.operatingHours}
             onChange={update}
             onNext={next}
             onBack={back}
@@ -203,9 +232,9 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
           />
         )}
         {step === 5 && (
-          <StepAddOns
-            needsInventory={data.needsInventory}
-            needsVirtualNumber={data.needsVirtualNumber}
+          <StepFeatures
+            serviceType={data.serviceType}
+            features={data.features}
             onChange={update}
             onFinish={handleFinish}
             onBack={back}
@@ -322,7 +351,7 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
                   setError('');
                 }}
                 className={clsx(
-                  'flex-col items-center gap-2 p-3 rounded-xl border-2',
+                  'flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 min-h-[92px]',
                   active
                     ? 'border-primary bg-primary/5'
                     : 'border-gray-100',
@@ -362,25 +391,37 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — Location (city + state)
+// Step 3 — Location (full address + optional business hours)
 // ---------------------------------------------------------------------------
 
 interface StepLocationProps {
+  address: string;
   city: string;
   state: string;
-  onChange: (fields: { city?: string; state?: string }) => void;
+  postalCode: string;
+  operatingHours: OperatingHours | null;
+  onChange: (fields: Partial<OnboardingData>) => void;
   onNext: () => void;
   onBack: () => void;
 }
 
-function StepLocation({ city, state, onChange, onNext, onBack }: StepLocationProps) {
+function StepLocation({ address, city, state, postalCode, operatingHours, onChange, onNext, onBack }: StepLocationProps) {
   const { t: full } = useLang();
   const t = full.onboarding.location;
+  const tb = full.dashboard.settings.business;
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const hours = operatingHours;
+  const toggleHours = (on: boolean) =>
+    onChange({ operatingHours: on ? DEFAULT_OPERATING_HOURS : null });
+  const setDay = (dk: DayKey, patch: Partial<OperatingHours[DayKey]>) => {
+    const base = hours ?? DEFAULT_OPERATING_HOURS;
+    onChange({ operatingHours: { ...base, [dk]: { ...base[dk], ...patch } } });
+  };
+
   const handleNext = () => {
-    if (!city.trim() || !state.trim()) {
+    if (!address.trim() || !city.trim() || !state.trim() || !postalCode.trim()) {
       setError(t.error);
       return;
     }
@@ -400,11 +441,18 @@ function StepLocation({ city, state, onChange, onNext, onBack }: StepLocationPro
 
       <View className="flex-col gap-3">
         <Input
+          label={t.addressLabel}
+          placeholder={t.addressPlaceholder}
+          value={address}
+          onChangeText={(v) => onChange({ address: v })}
+          autoFocus
+        />
+
+        <Input
           label={t.cityLabel}
           placeholder={t.cityPlaceholder}
           value={city}
           onChangeText={(v) => onChange({ city: v })}
-          autoFocus
         />
 
         {/* State picker — universal: tap to open inline list. RN has no
@@ -449,6 +497,47 @@ function StepLocation({ city, state, onChange, onNext, onBack }: StepLocationPro
             </View>
           )}
         </View>
+
+        <Input
+          label={t.zipLabel}
+          placeholder={t.zipPlaceholder}
+          value={postalCode}
+          onChangeText={(v) => onChange({ postalCode: v })}
+          keyboardType="number-pad"
+        />
+      </View>
+
+      {/* Optional business hours — same data as Settings → Negocio. */}
+      <View className="flex-col gap-3 border-t border-gray-100 pt-4">
+        <Toggle
+          value={hours != null}
+          onValueChange={toggleHours}
+          label={t.addHoursLabel}
+          hint={t.addHoursHint}
+        />
+        {hours != null && (
+          <View className="flex-col divide-y divide-gray-50">
+            {DAY_KEYS.map((dk) => {
+              const d = hours[dk];
+              return (
+                <View key={dk} className="flex-row items-center py-2">
+                  <Text className="w-20 text-sm text-gray-800">{tb.days[dk]}</Text>
+                  <Toggle value={d.enabled} onValueChange={(v) => setDay(dk, { enabled: v })} />
+                  <View className="flex-1" />
+                  {d.enabled ? (
+                    <View className="flex-row items-center gap-1">
+                      <DatePicker variant="ghost" mode="time" value={d.start} onChange={(v) => setDay(dk, { start: v })} />
+                      <Text className="text-gray-400">–</Text>
+                      <DatePicker variant="ghost" mode="time" value={d.end} onChange={(v) => setDay(dk, { end: v })} />
+                    </View>
+                  ) : (
+                    <Text className="text-sm text-gray-400">{tb.closedLabel}</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
@@ -563,48 +652,39 @@ function StepLogo({ logoUrl, onChange, onPickLogo, onNext, onBack }: StepLogoPro
 }
 
 // ---------------------------------------------------------------------------
-// Step 5 — Add-ons
+// Step 5 — Tailored extras (industry-recommended modules)
 // ---------------------------------------------------------------------------
 
-interface StepAddOnsProps {
-  needsInventory: boolean;
-  needsVirtualNumber: boolean;
-  onChange: (fields: { needsInventory?: boolean; needsVirtualNumber?: boolean }) => void;
+interface StepFeaturesProps {
+  serviceType: string;
+  features: string[];
+  onChange: (fields: { features?: string[] }) => void;
   onFinish: () => void;
   onBack: () => void;
   loading: boolean;
   error?: string;
 }
 
-function StepAddOns({
-  needsInventory,
-  needsVirtualNumber,
+function StepFeatures({
+  serviceType,
+  features,
   onChange,
   onFinish,
   onBack,
   loading,
   error,
-}: StepAddOnsProps) {
+}: StepFeaturesProps) {
   const { t: full } = useLang();
-  const t = full.onboarding.addOns;
-  const values = { needsInventory, needsVirtualNumber };
+  const t = full.onboarding.features;
+  const modules = full.dashboard.modules.list;
+  const recommended = featuresForIndustry(serviceType);
 
-  const addOns = [
-    {
-      key: 'needsInventory' as const,
-      icon: Package,
-      title: t.inventoryTitle,
-      description: t.inventoryDesc,
-      note: t.inventoryNote,
-    },
-    {
-      key: 'needsVirtualNumber' as const,
-      icon: Phone,
-      title: t.voipTitle,
-      description: t.voipDesc,
-      note: t.voipNote,
-    },
-  ];
+  const toggle = (id: string) =>
+    onChange({
+      features: features.includes(id)
+        ? features.filter((f) => f !== id)
+        : [...features, id],
+    });
 
   return (
     <View className="flex-col gap-6">
@@ -613,46 +693,54 @@ function StepAddOns({
         <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
       </View>
 
-      <View className="flex-col gap-3">
-        {addOns.map(({ key, icon: Icon, title, description, note }) => {
-          const active = values[key];
-          return (
-            <Pressable
-              key={key}
-              onPress={() => onChange({ [key]: !active })}
-              className={clsx(
-                'flex-row gap-4 p-4 rounded-2xl border-2',
-                active ? 'border-primary bg-primary/5' : 'border-gray-100',
-              )}
-            >
-              <View
+      {recommended.length === 0 ? (
+        <View className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-5">
+          <Text className="text-sm text-gray-500 text-center">{t.fallback}</Text>
+        </View>
+      ) : (
+        <View className="flex-col gap-3">
+          {recommended.map((id) => {
+            const active = features.includes(id);
+            const Icon = FEATURE_ICONS[id] ?? Package;
+            const m = modules[id as keyof typeof modules];
+            return (
+              <Pressable
+                key={id}
+                onPress={() => toggle(id)}
                 className={clsx(
-                  'w-10 h-10 rounded-xl items-center justify-center',
-                  active ? 'bg-primary' : 'bg-gray-100',
+                  'flex-row gap-4 p-4 rounded-2xl border-2',
+                  active ? 'border-primary bg-primary/5' : 'border-gray-100',
                 )}
               >
-                {active ? (
-                  <Check size={18} color="#FFFFFF" />
-                ) : (
-                  <Icon size={18} color="#6B7280" />
-                )}
-              </View>
-              <View className="flex-1">
-                <Text
+                <View
                   className={clsx(
-                    'font-semibold text-sm',
-                    active ? 'text-primary' : 'text-gray-800',
+                    'w-10 h-10 rounded-xl items-center justify-center',
+                    active ? 'bg-primary' : 'bg-gray-100',
                   )}
                 >
-                  {title}
-                </Text>
-                <Text className="text-xs text-gray-500 mt-0.5">{description}</Text>
-                <Text className="text-xs text-gray-400 mt-1 italic">{note}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+                  {active ? (
+                    <Check size={18} color="#FFFFFF" />
+                  ) : (
+                    <Icon size={18} color="#6B7280" />
+                  )}
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className={clsx(
+                      'font-semibold text-sm',
+                      active ? 'text-primary' : 'text-gray-800',
+                    )}
+                  >
+                    {m?.name}
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-0.5">{m?.description}</Text>
+                  <Text className="text-xs text-gray-400 mt-1 italic">{t.note}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {error ? (
         <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">

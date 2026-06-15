@@ -50,14 +50,14 @@ export default function OnboardingRoute() {
 
       if (uploadError) {
         console.error('Logo upload error:', uploadError);
-        return { error: t.logo.uploadError };
+        return { error: uploadError.message || t.logo.uploadError };
       }
 
       const { data } = supabase.storage.from('business-assets').getPublicUrl(path);
       return { url: data.publicUrl };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Logo upload error:', err);
-      return { error: t.logo.uploadError };
+      return { error: err?.message || t.logo.uploadError };
     }
   };
 
@@ -76,10 +76,13 @@ export default function OnboardingRoute() {
           owner_id: user.id,
           name: data.businessName,
           service_type: data.serviceType,
+          address: data.address,
           city: data.city,
           state: data.state,
+          postal_code: data.postalCode,
           country: data.country,
           logo_url: data.logoUrl,
+          operating_hours: data.operatingHours,
         })
         .select()
         .single();
@@ -96,14 +99,13 @@ export default function OnboardingRoute() {
       });
       if (memberError) console.warn('Member insert warning:', memberError.message);
 
-      const modules = [data.serviceType];
-      if (data.needsInventory) modules.push('inventory');
-      if (data.needsVirtualNumber) modules.push('voip');
-
-      const { error: modulesError } = await supabase.from('business_modules').insert(
-        modules.map((key) => ({ business_id: business.id, module_key: key })),
-      );
-      if (modulesError) console.warn('Modules insert warning:', modulesError.message);
+      // Activate the industry-recommended modules the user kept enabled.
+      if (data.features.length > 0) {
+        const { error: modulesError } = await supabase.from('business_modules').insert(
+          data.features.map((key) => ({ business_id: business.id, module_key: key })),
+        );
+        if (modulesError) console.warn('Modules insert warning:', modulesError.message);
+      }
 
       // Pull the new business into the auth store before navigating —
       // otherwise the route gate still sees business: null from the

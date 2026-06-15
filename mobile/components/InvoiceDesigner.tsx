@@ -291,17 +291,26 @@ export function InvoiceDesigner({
   value,
   onChange,
   branding,
+  customFields = [],
+  onSwitchMode,
 }: {
   value: InvoiceTemplateConfig;
   onChange: (c: InvoiceTemplateConfig) => void;
   branding: InvoiceBranding;
+  customFields?: { key: string; label: string }[];
+  onSwitchMode?: (m: InvoiceLayoutMode) => void;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
   const [themeOpen, setThemeOpen] = useState(false);
   const [secOpen, setSecOpen] = useState(false);
   // Preview in the chosen default language so the labels + number prefix reflect it.
-  const sample = { ...SAMPLE_INVOICE, language: value.defaultLanguage, invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001` };
+  const sample = {
+    ...SAMPLE_INVOICE,
+    language: value.defaultLanguage,
+    invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001`,
+    ...(customFields.length ? { customFields: customFields.map(c => ({ key: c.key, label: c.label, value: 'Ejemplo' })) } : {}),
+  };
   const vm = buildInvoiceViewModel(value, sample, branding);
   const freeform = value.layoutMode === 'freeform';
 
@@ -333,7 +342,7 @@ export function InvoiceDesigner({
       <Field label={t.layout}>
         <Seg<InvoiceLayoutMode>
           value={freeform ? 'freeform' : 'flow'}
-          onChange={m => onChange(setLayoutMode(value, m))}
+          onChange={m => { if (onSwitchMode) onSwitchMode(m); else onChange(setLayoutMode(value, m)); }}
           options={[
             { value: 'flow', label: t.layoutModes.structured },
             { value: 'freeform', label: t.layoutModes.freeform },

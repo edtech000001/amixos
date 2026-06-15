@@ -32,6 +32,7 @@ import {
   addFieldElement,
   addTextElement,
   addLogoElement,
+  addCustomFieldElement,
   updateElement,
   updateElementStyle,
   setElementRect,
@@ -272,7 +273,10 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
 }) {
   const st = el.style ?? {};
   const setStyle = (patch: Partial<NonNullable<InvoiceElement['style']>>) => onChange(updateElementStyle(value, el.id, patch));
-  const name = el.kind === 'text' ? t.elements.textContent : el.kind === 'logo' ? t.elements.addLogo : t.fields[el.field as InvoiceFieldKey];
+  const name = el.kind === 'text' ? t.elements.textContent
+    : el.kind === 'logo' ? t.elements.addLogo
+    : el.kind === 'customField' ? `◆ ${el.customLabel ?? ''}`
+    : t.fields[el.field as InvoiceFieldKey];
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-3">
@@ -321,10 +325,15 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
   );
 }
 
-export function InvoiceDesigner({ value, onChange, branding }: {
+export function InvoiceDesigner({ value, onChange, branding, customFields = [], onSwitchMode }: {
   value: InvoiceTemplateConfig;
   onChange: (c: InvoiceTemplateConfig) => void;
   branding: InvoiceBranding;
+  /** Per-business custom field templates available to drop onto the canvas. */
+  customFields?: { key: string; label: string }[];
+  /** Switch the active theme (Structured ↔ Freeform are saved independently).
+   *  When omitted, the toggle falls back to flipping layoutMode on this config. */
+  onSwitchMode?: (m: InvoiceLayoutMode) => void;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.settings.invoices.design;
@@ -361,9 +370,22 @@ export function InvoiceDesigner({ value, onChange, branding }: {
   };
 
   const freeform = value.layoutMode === 'freeform';
-  const sample = { ...SAMPLE_INVOICE, language: value.defaultLanguage, invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001` };
+  const sample = {
+    ...SAMPLE_INVOICE,
+    language: value.defaultLanguage,
+    invoiceNumber: `${invoiceNumberPrefix(value.defaultLanguage)}-0001`,
+    // Reflect the business's real custom fields in the preview (placeholder values).
+    ...(customFields.length ? { customFields: customFields.map(c => ({ key: c.key, label: c.label, value: 'Ejemplo' })) } : {}),
+  };
   const vm = buildInvoiceViewModel(value, sample, branding);
   const selectedEl = freeform ? (value.elements ?? []).find(e => e.id === selectedId) ?? null : null;
+
+  const addCustomFieldEl = (key: string, label: string) => {
+    const next = addCustomFieldElement(value, key, label);
+    change(next);
+    const list = next.elements ?? [];
+    setSelectedId(list[list.length - 1]?.id ?? null);
+  };
 
   const addFieldEl = (key: InvoiceFieldKey) => {
     const next = addFieldElement(value, key);
@@ -459,7 +481,7 @@ export function InvoiceDesigner({ value, onChange, branding }: {
       <Field label={t.layout}>
         <Seg<InvoiceLayoutMode>
           value={freeform ? 'freeform' : 'flow'}
-          onChange={m => { change(setLayoutMode(value, m)); setSelectedId(null); }}
+          onChange={m => { setSelectedId(null); if (onSwitchMode) onSwitchMode(m); else change(setLayoutMode(value, m)); }}
           options={[{ value: 'flow', label: t.layoutModes.structured }, { value: 'freeform', label: t.layoutModes.freeform }]}
         />
         {freeform ? <p className="text-xs text-gray-400">{t.builderHint}</p> : null}
@@ -481,10 +503,24 @@ export function InvoiceDesigner({ value, onChange, branding }: {
             <button type="button" onClick={addTextEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
               <Type size={15} /> {t.elements.addText}
             </button>
-            <select value="" onChange={e => { if (e.target.value) addFieldEl(e.target.value as InvoiceFieldKey); }}
+            <select value="" onChange={e => {
+                const v = e.target.value;
+                if (!v) return;
+                if (v.startsWith('custom:')) {
+                  const tpl = customFields.find(c => c.key === v.slice(7));
+                  if (tpl) addCustomFieldEl(tpl.key, tpl.label);
+                } else {
+                  addFieldEl(v as InvoiceFieldKey);
+                }
+              }}
               className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
               <option value="">＋ {t.elements.addField}</option>
               {FREEFORM_FIELD_KEYS.map(k => <option key={k} value={k}>{t.fields[k]}</option>)}
+              {customFields.length ? (
+                <optgroup label={t.sectionNames.customFields}>
+                  {customFields.map(c => <option key={c.key} value={`custom:${c.key}`}>◆ {c.label}</option>)}
+                </optgroup>
+              ) : null}
             </select>
             <button type="button" onClick={addLogoEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
               <ImageIcon size={15} /> {t.elements.addLogo}

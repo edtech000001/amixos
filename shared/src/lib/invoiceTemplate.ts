@@ -161,13 +161,19 @@ export interface InvoiceElementStyle {
   font?: InvoiceFont;                      // per-element font; inherits theme font when unset
 }
 
-export type InvoiceElementKind = 'logo' | 'field' | 'text';
+export type InvoiceElementKind = 'logo' | 'field' | 'text' | 'customField';
 
 export interface InvoiceElement {
   id: string;
   kind: InvoiceElementKind;
   field?: InvoiceFieldKey;                 // when kind === 'field'
   text?: string;                           // when kind === 'text'
+  // When kind === 'customField' — binds to a per-business custom field by key;
+  // resolves to that invoice's value at render time. customLabel is the label to
+  // display (snapshotted so the element still reads sensibly if a template is
+  // later renamed/removed).
+  customKey?: string;
+  customLabel?: string;
   // Position + size as PERCENT of the canvas (0–100).
   x: number;
   y: number;
@@ -325,8 +331,9 @@ function normalizeElement(e: unknown): InvoiceElement | null {
   if (!e || typeof e !== 'object') return null;
   const el = e as Partial<InvoiceElement>;
   const kind = el.kind;
-  if (kind !== 'logo' && kind !== 'field' && kind !== 'text') return null;
+  if (kind !== 'logo' && kind !== 'field' && kind !== 'text' && kind !== 'customField') return null;
   if (kind === 'field' && !(el.field && FREEFORM_FIELD_KEYS.includes(el.field))) return null;
+  if (kind === 'customField' && !(typeof el.customKey === 'string' && el.customKey)) return null;
   const num = (v: unknown, d: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : d;
   const style = el.style && typeof el.style === 'object' ? el.style : undefined;
@@ -340,6 +347,10 @@ function normalizeElement(e: unknown): InvoiceElement | null {
   };
   if (kind === 'field') out.field = el.field;
   if (kind === 'text') out.text = typeof el.text === 'string' ? el.text : '';
+  if (kind === 'customField') {
+    out.customKey = el.customKey;
+    out.customLabel = typeof el.customLabel === 'string' ? el.customLabel : el.customKey;
+  }
   if (style) {
     out.style = {
       fontSize: typeof style.fontSize === 'number' ? Math.max(6, Math.min(72, style.fontSize)) : undefined,
@@ -354,11 +365,35 @@ function normalizeElement(e: unknown): InvoiceElement | null {
 
 // ── Normalize / resolve ──────────────────────────────────────────────────────
 
+/** Structured and Freeform are two independently-saved themes inside one stored
+ *  value; `active` is the one the toggle currently selects. Legacy stored values
+ *  are a single InvoiceTemplateConfig and still work everywhere. */
+export interface InvoiceThemeBundle {
+  version: number;
+  active: InvoiceLayoutMode;
+  flow: InvoiceTemplateConfig;      // the Structured theme
+  freeform: InvoiceTemplateConfig;  // the Freeform theme
+}
+
+function isBundle(raw: unknown): boolean {
+  return !!raw && typeof raw === 'object' && 'flow' in (raw as object) && 'freeform' in (raw as object);
+}
+const asObj = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {});
+
 /** Merge an arbitrary stored config onto DEFAULT, dedupe + order sections, and
  *  append any newly-introduced section ids at the end (hidden). Every consumer
- *  routes stored config through this so old configs survive new fields. */
+ *  routes stored config through this so old configs survive new fields. If the
+ *  stored value is a theme bundle, the ACTIVE theme is resolved transparently —
+ *  so every render path (resolveConfig, invoiceDefaultLanguage, …) is bundle-
+ *  aware without changing its call sites. */
 export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   const base = DEFAULT_INVOICE_TEMPLATE;
+  if (isBundle(raw)) {
+    const b = raw as Partial<InvoiceThemeBundle>;
+    const active: InvoiceLayoutMode = b.active === 'freeform' ? 'freeform' : 'flow';
+    const cfg = active === 'freeform' ? b.freeform : b.flow;
+    return normalizeConfig({ ...asObj(cfg), layoutMode: active });
+  }
   if (!raw || typeof raw !== 'object') return clone(base);
   const r = raw as Partial<InvoiceTemplateConfig>;
 
@@ -429,6 +464,35 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
         ? r.decoration
         : 'none',
   };
+}
+
+/** Normalize a stored value into a full theme bundle for the EDITOR. A legacy
+ *  single config seeds BOTH themes from itself (so nothing is lost), with the
+ *  active theme matching its old layoutMode. */
+export function normalizeBundle(raw: unknown): InvoiceThemeBundle {
+  if (isBundle(raw)) {
+    const b = raw as Partial<InvoiceThemeBundle>;
+    const active: InvoiceLayoutMode = b.active === 'freeform' ? 'freeform' : 'flow';
+    return {
+      version: INVOICE_TEMPLATE_VERSION,
+      active,
+      flow: normalizeConfig({ ...asObj(b.flow), layoutMode: 'flow' }),
+      freeform: normalizeConfig({ ...asObj(b.freeform), layoutMode: 'freeform' }),
+    };
+  }
+  const single = normalizeConfig(raw);
+  const active: InvoiceLayoutMode = single.layoutMode === 'freeform' ? 'freeform' : 'flow';
+  return {
+    version: INVOICE_TEMPLATE_VERSION,
+    active,
+    flow: normalizeConfig({ ...single, layoutMode: 'flow' }),
+    freeform: normalizeConfig({ ...single, layoutMode: 'freeform' }),
+  };
+}
+
+/** The active theme config from a bundle (what currently renders / is edited). */
+export function activeBundleConfig(b: InvoiceThemeBundle): InvoiceTemplateConfig {
+  return b.active === 'freeform' ? b.freeform : b.flow;
 }
 
 /** The business-wide default invoice language stored in the theme config.
@@ -535,7 +599,7 @@ export interface InvoiceDocData {
   notes: string | null;
   language: InvoiceLang;
   clients: InvoiceDocClient[];
-  customFields?: { label: string; value: string }[];
+  customFields?: { label: string; value: string; key?: string }[];
 }
 
 /** Business branding used in the invoice header. */
@@ -593,7 +657,7 @@ export interface InvoiceViewModel {
   columns: InvoiceColumns;
   items: { description: string; qty: string; rate: string; total: string }[];
   totals: { subtotal: string; taxLabel: string | null; taxValue: string | null; total: string };
-  customFields: { label: string; value: string }[];
+  customFields: { label: string; value: string; key?: string }[];
   notes: string | null;
   paymentInstructions: string | null;
   footer: string | null;
@@ -741,6 +805,17 @@ export function resolveFieldValue(vm: InvoiceViewModel, key: InvoiceFieldKey): s
     case 'lineItems': return '';
     default: return '';
   }
+}
+
+/** Text for a custom-field element: "Label: value" using the invoice's value for
+ *  the element's customKey (falls back to the snapshotted label / a dash). */
+export function customFieldElementText(vm: InvoiceViewModel, el: InvoiceElement): string {
+  const match = vm.customFields.find(f => f.key && f.key === el.customKey);
+  // Prefer the element's snapshotted label (works even where templates aren't
+  // readable, e.g. the public page); fall back to the live template label.
+  const label = el.customLabel ?? match?.label ?? '';
+  const value = match?.value ?? '';
+  return value ? `${label}: ${value}` : label;
 }
 
 /** CSS font stack for a font choice — exposed so renderers can apply a
@@ -1228,6 +1303,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   const elInner = (el: InvoiceElement): string => {
     if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
     if (el.kind === 'text') return `<div class="inv-el-text">${br(el.text ?? '')}</div>`;
+    if (el.kind === 'customField') return `<div class="inv-el-text">${br(customFieldElementText(vm, el))}</div>`;
     if (el.field === 'lineItems') return itemsHtml;
     return `<div class="inv-el-text">${br(resolveFieldValue(vm, el.field as InvoiceFieldKey))}</div>`;
   };
@@ -1498,6 +1574,12 @@ export function addFieldElement(c: InvoiceTemplateConfig, field: InvoiceFieldKey
 }
 export function addTextElement(c: InvoiceTemplateConfig, text = ''): InvoiceTemplateConfig {
   const el: InvoiceElement = { id: newElementId('text'), kind: 'text', text, x: 8, y: 8, w: 35, h: 5 };
+  return { ...c, elements: [...(c.elements ?? []), el] };
+}
+/** Drop a per-business custom field onto the canvas. Resolves to that invoice's
+ *  value for `customKey` at render time. */
+export function addCustomFieldElement(c: InvoiceTemplateConfig, customKey: string, customLabel: string): InvoiceTemplateConfig {
+  const el: InvoiceElement = { id: newElementId('customField'), kind: 'customField', customKey, customLabel, x: 8, y: 8, w: 40, h: 6 };
   return { ...c, elements: [...(c.elements ?? []), el] };
 }
 export function addLogoElement(c: InvoiceTemplateConfig): InvoiceTemplateConfig {

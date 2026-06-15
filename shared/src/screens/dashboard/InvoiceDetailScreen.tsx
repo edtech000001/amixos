@@ -54,7 +54,7 @@ export interface InvoiceDetail {
   clients: InvoiceDetailClient[];
   /** Resolved custom fields (label + display value), already ordered and
    *  filtered to non-empty entries by the caller. */
-  customFields?: { label: string; value: string }[];
+  customFields?: { label: string; value: string; key?: string }[];
 }
 
 export interface InvoiceDetailScreenProps {

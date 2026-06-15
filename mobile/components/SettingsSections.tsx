@@ -28,7 +28,7 @@ import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { InvoiceDesigner } from './InvoiceDesigner';
-import { normalizeConfig, type InvoiceTemplateConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -3653,26 +3653,42 @@ export function InvoiceThemeSection() {
   const { t: full } = useLang();
   const t = full.dashboard.settings;
 
-  const [design, setDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
-  const [dbDesign, setDbDesign] = useState<InvoiceTemplateConfig>(() => normalizeConfig(business?.invoice_template));
+  const [bundle, setBundle] = useState<InvoiceThemeBundle>(() => normalizeBundle(business?.invoice_template));
+  const [dbBundle, setDbBundle] = useState<InvoiceThemeBundle>(() => normalizeBundle(business?.invoice_template));
+  const [customFields, setCustomFields] = useState<{ key: string; label: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
   useEffect(() => {
     if (!business) return;
-    const d = normalizeConfig(business.invoice_template);
-    setDesign(d);
-    setDbDesign(d);
+    const b = normalizeBundle(business.invoice_template);
+    setBundle(b);
+    setDbBundle(b);
+    let cancelled = false;
+    supabase
+      .from('invoice_field_templates')
+      .select('field_key, field_label')
+      .eq('business_id', business.id)
+      .then(({ data }) => {
+        if (!cancelled && data) {
+          setCustomFields(
+            data
+              .filter((r: { field_key: string | null }) => r.field_key)
+              .map((r: { field_key: string; field_label: string }) => ({ key: r.field_key, label: r.field_label })),
+          );
+        }
+      });
+    return () => { cancelled = true; };
   }, [business]);
 
   const onSave = async () => {
     if (!business) return;
     setSaving(true);
     setMsg(null);
-    const { error } = await supabase.from('businesses').update({ invoice_template: design }).eq('id', business.id);
+    const { error } = await supabase.from('businesses').update({ invoice_template: bundle }).eq('id', business.id);
     if (!error) {
       await refetchBusiness();
-      setDbDesign(design);
+      setDbBundle(bundle);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } else {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -3680,7 +3696,7 @@ export function InvoiceThemeSection() {
     setSaving(false);
   };
 
-  const dirty = useMemo(() => JSON.stringify(dbDesign) !== JSON.stringify(design), [dbDesign, design]);
+  const dirty = useMemo(() => JSON.stringify(dbBundle) !== JSON.stringify(bundle), [dbBundle, bundle]);
   // Keep the dirty/unsaved-changes back-guard, but render our own Save button at
   // the bottom instead of the top-right header pill.
   useSettingsSaveAction({ dirty, saving, onSave, hideHeaderButton: true });
@@ -3707,7 +3723,14 @@ export function InvoiceThemeSection() {
           title={t.invoices.design.title}
           subtitle={t.invoices.design.subtitle}
         />
-        <InvoiceDesigner value={design} onChange={(c) => { setDesign(c); setMsg(null); }} branding={branding} />
+        <InvoiceDesigner
+          key={bundle.active}
+          value={activeBundleConfig(bundle)}
+          onChange={(c) => { setBundle(b => ({ ...b, [b.active]: c })); setMsg(null); }}
+          onSwitchMode={(m) => setBundle(b => ({ ...b, active: m }))}
+          branding={branding}
+          customFields={customFields}
+        />
         {msg ? (
           <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
         ) : null}

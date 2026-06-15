@@ -5,7 +5,7 @@
 // API as JobsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Plus,
   Search,
@@ -41,6 +41,12 @@ import {
   type JobSortKey,
   type JobGroupKey,
 } from '../../lib/jobSort';
+import {
+  JOBS_FILTERS_KEY,
+  jobsFiltersActive,
+  parseJobsFilters,
+  type JobsFilters,
+} from '../../lib/jobsFilters';
 
 export interface JobListItem {
   id: string;
@@ -140,12 +146,30 @@ export function JobsListScreen({
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
   const tw = full.dashboard.workspaces;
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<TabKey>(initialTab);
+  // Restore the saved view (tab/search/sort/group) so navigating into a job
+  // and back — or refreshing — keeps the filters. An explicit ?tab= deep link
+  // (initialTab !== 'all') still wins for the tab.
+  const saved = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return parseJobsFilters(window.localStorage.getItem(JOBS_FILTERS_KEY));
+  }, []);
+  const savedTab = saved?.tab && (TAB_KEYS as readonly string[]).includes(saved.tab) ? (saved.tab as TabKey) : null;
+  const [search, setSearch] = useState(saved?.search ?? '');
+  const [tab, setTab] = useState<TabKey>(initialTab !== 'all' ? initialTab : (savedTab ?? 'all'));
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<JobSortKey>('recent');
-  const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
+  const [sortBy, setSortBy] = useState<JobSortKey>(saved?.sortBy ?? 'recent');
+  const [groupBy, setGroupBy] = useState<JobGroupKey>(saved?.groupBy ?? 'none');
+
+  // Persist on any change.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const f: JobsFilters = { tab, search, sortBy, groupBy };
+    window.localStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify(f));
+  }, [tab, search, sortBy, groupBy]);
+
+  const filtersActive = jobsFiltersActive({ tab, search, sortBy, groupBy });
+  const clearFilters = () => { setTab('all'); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -459,6 +483,14 @@ export function JobsListScreen({
 
       {/* Tabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-5">
+        {filtersActive ? (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100"
+          >
+            <XCircle size={13} /> {t.clearFilters}
+          </button>
+        ) : null}
         {TAB_KEYS.map((k) => {
           const isActive = tab === k;
           return (

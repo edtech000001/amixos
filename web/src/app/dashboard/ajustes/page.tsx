@@ -35,7 +35,7 @@ import {
 } from '@amixos/shared/lib/jobAlerts';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
-import { normalizeConfig, type InvoiceTemplateConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
@@ -150,9 +150,10 @@ export default function AjustesPage() {
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState('');
   const [invoiceMsgIsError, setInvoiceMsgIsError] = useState(false);
-  // Invoice template design config (businesses.invoice_template).
-  const [invoiceDesign, setInvoiceDesign] = useState<InvoiceTemplateConfig>(() =>
-    normalizeConfig(business?.invoice_template),
+  // Invoice theme bundle (businesses.invoice_template) — Structured + Freeform
+  // saved independently, switched by the Disposición toggle.
+  const [invoiceTheme, setInvoiceTheme] = useState<InvoiceThemeBundle>(() =>
+    normalizeBundle(business?.invoice_template),
   );
 
   // ── Invoice required standard fields (draft pattern)
@@ -316,7 +317,7 @@ export default function AjustesPage() {
       setBizLicense(business.license_number ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
-      setInvoiceDesign(normalizeConfig(business.invoice_template));
+      setInvoiceTheme(normalizeBundle(business.invoice_template));
       const ireq = business.invoice_field_required ?? {};
       setInvoiceFieldRequired(ireq);
       setDbInvoiceFieldRequired(ireq);
@@ -452,7 +453,7 @@ export default function AjustesPage() {
     if (!business) return;
     setSavingTheme(true); setThemeMsg('');
     const { error } = await supabase.from('businesses')
-      .update({ invoice_template: invoiceDesign }).eq('id', business.id);
+      .update({ invoice_template: invoiceTheme }).eq('id', business.id);
     setThemeMsgIsError(!!error);
     setThemeMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
     if (!error) await refetchBusiness();
@@ -1632,8 +1633,8 @@ export default function AjustesPage() {
   );
 
   const invoiceThemeDirty = useMemo(
-    () => JSON.stringify(normalizeConfig(business?.invoice_template)) !== JSON.stringify(invoiceDesign),
-    [business, invoiceDesign],
+    () => JSON.stringify(normalizeBundle(business?.invoice_template)) !== JSON.stringify(invoiceTheme),
+    [business, invoiceTheme],
   );
 
   const discardInvoices = useCallback(() => {
@@ -1647,7 +1648,7 @@ export default function AjustesPage() {
   }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, business]);
 
   const discardInvoiceTheme = useCallback(() => {
-    setInvoiceDesign(normalizeConfig(business?.invoice_template));
+    setInvoiceTheme(normalizeBundle(business?.invoice_template));
     setThemeMsg('');
   }, [business]);
 
@@ -2619,8 +2620,11 @@ export default function AjustesPage() {
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.design.title}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.design.subtitle}</p>
                 <InvoiceDesigner
-                  value={invoiceDesign}
-                  onChange={setInvoiceDesign}
+                  key={invoiceTheme.active}
+                  value={activeBundleConfig(invoiceTheme)}
+                  onChange={c => setInvoiceTheme(b => ({ ...b, [b.active]: c }))}
+                  onSwitchMode={m => setInvoiceTheme(b => ({ ...b, active: m }))}
+                  customFields={invoiceTemplates.filter(tpl => tpl.field_key).map(tpl => ({ key: tpl.field_key, label: tpl.field_label }))}
                   branding={{
                     name: business?.name ?? '',
                     logoUrl: business?.logo_url ?? null,

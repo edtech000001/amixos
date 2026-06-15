@@ -7,21 +7,40 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 import {
   Building2, MapPin, Image as ImageIcon, Upload, X, Package, Phone, Check,
-  CheckCircle2, HardHat, Wrench, Home, Scissors, Utensils, Car, ShoppingBag,
-  MoreHorizontal, type LucideIcon,
+  CheckCircle2, HardHat, Wrench, Trees, Sparkles, Utensils, Droplets, ShoppingBag,
+  Forklift, FolderOpen, MoreHorizontal, type LucideIcon,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
+import {
+  DAY_KEYS,
+  DEFAULT_OPERATING_HOURS,
+  type DayKey,
+  type OperatingHours,
+} from '../../lib/operatingHours';
+import { featuresForIndustry } from '../../modules/industryFeatures';
 
 export interface OnboardingData {
   businessName: string;
   serviceType: string;
+  address: string;
   city: string;
   state: string;
+  postalCode: string;
   country: string;
   logoUrl: string | null;
-  needsInventory: boolean;
-  needsVirtualNumber: boolean;
+  /** Weekly hours when the user added them, else null (not configured). */
+  operatingHours: OperatingHours | null;
+  /** Recommended module ids the user kept enabled. */
+  features: string[];
 }
+
+// Module ids → icon for the tailored "Extras" step (web lucide set).
+const FEATURE_ICONS: Record<string, LucideIcon> = {
+  map: MapPin,
+  files: FolderOpen,
+  equipment: Forklift,
+  inventory: Package,
+};
 
 export type PickLogoResult = { url: string } | { error: string } | null;
 
@@ -35,11 +54,11 @@ const TOTAL_STEPS = 5;
 const ICONS: Record<string, LucideIcon> = {
   construction: HardHat,
   mechanics: Wrench,
-  landscaping: Home,
-  cleaning: Scissors,
+  landscaping: Trees,
+  cleaning: Sparkles,
   restaurant: Utensils,
   phone_repair: Phone,
-  car_dealership: Car,
+  plumbing: Droplets,
   retail: ShoppingBag,
   other: MoreHorizontal,
 };
@@ -67,12 +86,14 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
   const [data, setData] = useState<OnboardingData>({
     businessName: '',
     serviceType: '',
+    address: '',
     city: '',
     state: '',
+    postalCode: '',
     country: 'US',
     logoUrl: null,
-    needsInventory: false,
-    needsVirtualNumber: false,
+    operatingHours: null,
+    features: [],
   });
 
   const update = (fields: Partial<OnboardingData>) => setData((d) => ({ ...d, ...fields }));
@@ -109,10 +130,10 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
 
       <div className="w-full max-w-lg bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
         {step === 1 && <StepBusinessName value={data.businessName} onChange={(v) => update({ businessName: v })} onNext={next} />}
-        {step === 2 && <StepServiceType value={data.serviceType} onChange={(v) => update({ serviceType: v })} onNext={next} onBack={back} />}
-        {step === 3 && <StepLocation city={data.city} state={data.state} onChange={update} onNext={next} onBack={back} />}
+        {step === 2 && <StepServiceType value={data.serviceType} onChange={(v) => update({ serviceType: v, features: featuresForIndustry(v) })} onNext={next} onBack={back} />}
+        {step === 3 && <StepLocation address={data.address} city={data.city} state={data.state} postalCode={data.postalCode} operatingHours={data.operatingHours} onChange={update} onNext={next} onBack={back} />}
         {step === 4 && <StepLogo logoUrl={data.logoUrl} onChange={(url) => update({ logoUrl: url })} onPickLogo={onPickLogo} onNext={next} onBack={back} />}
-        {step === 5 && <StepAddOns needsInventory={data.needsInventory} needsVirtualNumber={data.needsVirtualNumber} onChange={update} onFinish={handleFinish} onBack={back} loading={loading} error={finishError} />}
+        {step === 5 && <StepFeatures serviceType={data.serviceType} features={data.features} onChange={update} onFinish={handleFinish} onBack={back} loading={loading} error={finishError} />}
         {step > TOTAL_STEPS && <StepComplete />}
       </div>
 
@@ -189,7 +210,7 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
               key={key}
               onClick={() => { onChange(key); setError(''); }}
               className={clsx(
-                'flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors',
+                'flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 transition-colors',
                 active ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200',
               )}
             >
@@ -208,12 +229,19 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
   );
 }
 
-function StepLocation({ city, state, onChange, onNext, onBack }: { city: string; state: string; onChange: (f: { city?: string; state?: string }) => void; onNext: () => void; onBack: () => void }) {
+function StepLocation({ address, city, state, postalCode, operatingHours, onChange, onNext, onBack }: { address: string; city: string; state: string; postalCode: string; operatingHours: OperatingHours | null; onChange: (f: Partial<OnboardingData>) => void; onNext: () => void; onBack: () => void }) {
   const { t: full } = useLang();
   const t = full.onboarding.location;
+  const tb = full.dashboard.settings.business;
   const [error, setError] = useState('');
+  const hours = operatingHours;
+  const toggleHours = () => onChange({ operatingHours: hours ? null : DEFAULT_OPERATING_HOURS });
+  const setDay = (dk: DayKey, patch: Partial<OperatingHours[DayKey]>) => {
+    const base = hours ?? DEFAULT_OPERATING_HOURS;
+    onChange({ operatingHours: { ...base, [dk]: { ...base[dk], ...patch } } });
+  };
   const handleNext = () => {
-    if (!city.trim() || !state.trim()) { setError(t.error); return; }
+    if (!address.trim() || !city.trim() || !state.trim() || !postalCode.trim()) { setError(t.error); return; }
     setError('');
     onNext();
   };
@@ -228,8 +256,12 @@ function StepLocation({ city, state, onChange, onNext, onBack }: { city: string;
       </div>
       <div className="flex flex-col gap-3">
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.addressLabel}</label>
+          <input autoFocus value={address} onChange={(e) => onChange({ address: e.target.value })} placeholder={t.addressPlaceholder} className={inputCls} />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.cityLabel}</label>
-          <input autoFocus value={city} onChange={(e) => onChange({ city: e.target.value })} placeholder={t.cityPlaceholder} className={inputCls} />
+          <input value={city} onChange={(e) => onChange({ city: e.target.value })} placeholder={t.cityPlaceholder} className={inputCls} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.stateLabel}</label>
@@ -242,7 +274,53 @@ function StepLocation({ city, state, onChange, onNext, onBack }: { city: string;
             {US_STATES.map((s) => <option key={s} value={s} className="text-gray-900">{s}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.zipLabel}</label>
+          <input value={postalCode} onChange={(e) => onChange({ postalCode: e.target.value })} placeholder={t.zipPlaceholder} inputMode="numeric" className={inputCls} />
+        </div>
       </div>
+
+      {/* Optional business hours — same data as Settings → Negocio. */}
+      <div className="flex flex-col gap-3 border-t border-gray-100 pt-4">
+        <button type="button" onClick={toggleHours} className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">
+            {t.addHoursLabel} <span className="text-gray-400 font-normal">· {t.addHoursHint}</span>
+          </span>
+          <span className={clsx('relative w-11 h-6 rounded-full transition-colors', hours ? 'bg-primary' : 'bg-gray-200')}>
+            <span className={clsx('absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all', hours ? 'left-6' : 'left-1')} />
+          </span>
+        </button>
+        {hours ? (
+          <div className="flex flex-col divide-y divide-gray-50">
+            {DAY_KEYS.map((dk) => {
+              const d = hours[dk];
+              return (
+                <div key={dk} className="flex items-center py-2.5">
+                  <span className="w-24 text-sm text-gray-800">{tb.days[dk]}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDay(dk, { enabled: !d.enabled })}
+                    className={clsx('relative w-11 h-6 rounded-full transition-colors', d.enabled ? 'bg-primary' : 'bg-gray-200')}
+                  >
+                    <span className={clsx('absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all', d.enabled ? 'left-6' : 'left-1')} />
+                  </button>
+                  <div className="flex-1" />
+                  {d.enabled ? (
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                      <input type="time" value={d.start} onChange={(e) => setDay(dk, { start: e.target.value })} className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0" />
+                      <span className="text-gray-400 font-normal">–</span>
+                      <input type="time" value={d.end} onChange={(e) => setDay(dk, { end: e.target.value })} className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0" />
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">{tb.closedLabel}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
       <div className="flex gap-3">
         <button onClick={onBack} className={secondaryBtn}>{t.back}</button>
@@ -315,41 +393,48 @@ function StepLogo({ logoUrl, onChange, onPickLogo, onNext, onBack }: { logoUrl: 
   );
 }
 
-function StepAddOns({ needsInventory, needsVirtualNumber, onChange, onFinish, onBack, loading, error }: { needsInventory: boolean; needsVirtualNumber: boolean; onChange: (f: { needsInventory?: boolean; needsVirtualNumber?: boolean }) => void; onFinish: () => void; onBack: () => void; loading: boolean; error?: string }) {
+function StepFeatures({ serviceType, features, onChange, onFinish, onBack, loading, error }: { serviceType: string; features: string[]; onChange: (f: { features?: string[] }) => void; onFinish: () => void; onBack: () => void; loading: boolean; error?: string }) {
   const { t: full } = useLang();
-  const t = full.onboarding.addOns;
-  const values = { needsInventory, needsVirtualNumber };
-  const addOns = [
-    { key: 'needsInventory' as const, icon: Package, title: t.inventoryTitle, description: t.inventoryDesc, note: t.inventoryNote },
-    { key: 'needsVirtualNumber' as const, icon: Phone, title: t.voipTitle, description: t.voipDesc, note: t.voipNote },
-  ];
+  const t = full.onboarding.features;
+  const modules = full.dashboard.modules.list;
+  const recommended = featuresForIndustry(serviceType);
+  const toggle = (id: string) =>
+    onChange({ features: features.includes(id) ? features.filter((f) => f !== id) : [...features, id] });
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">{t.heading}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
-      <div className="flex flex-col gap-3">
-        {addOns.map(({ key, icon: Icon, title, description, note }) => {
-          const active = values[key];
-          return (
-            <button
-              key={key}
-              onClick={() => onChange({ [key]: !active })}
-              className={clsx('flex gap-4 p-4 rounded-2xl border-2 text-left transition-colors', active ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200')}
-            >
-              <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', active ? 'bg-primary' : 'bg-gray-100')}>
-                {active ? <Check size={18} color="#FFFFFF" /> : <Icon size={18} color="#6B7280" />}
-              </div>
-              <div className="flex-1">
-                <p className={clsx('font-semibold text-sm', active ? 'text-primary' : 'text-gray-800')}>{title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
-                <p className="text-xs text-gray-400 mt-1 italic">{note}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {recommended.length === 0 ? (
+        <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-5">
+          <p className="text-sm text-gray-500 text-center">{t.fallback}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {recommended.map((id) => {
+            const active = features.includes(id);
+            const Icon = FEATURE_ICONS[id] ?? Package;
+            const m = modules[id as keyof typeof modules];
+            return (
+              <button
+                key={id}
+                onClick={() => toggle(id)}
+                className={clsx('flex gap-4 p-4 rounded-2xl border-2 text-left transition-colors', active ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200')}
+              >
+                <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', active ? 'bg-primary' : 'bg-gray-100')}>
+                  {active ? <Check size={18} color="#FFFFFF" /> : <Icon size={18} color="#6B7280" />}
+                </div>
+                <div className="flex-1">
+                  <p className={clsx('font-semibold text-sm', active ? 'text-primary' : 'text-gray-800')}>{m?.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{m?.description}</p>
+                  <p className="text-xs text-gray-400 mt-1 italic">{t.note}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {error ? (
         <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
           <p className="text-red-600 text-sm">{error}</p>

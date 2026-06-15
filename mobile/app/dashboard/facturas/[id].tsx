@@ -84,9 +84,9 @@ export default function FacturaDetailRoute() {
         const value = tpl.field_type === 'boolean'
           ? (v === 'true' ? tc.states.yes : tc.states.no)
           : v;
-        return { label: tpl.field_label, value };
+        return { key: tpl.field_key, label: tpl.field_label, value };
       })
-      .filter((e): e is { label: string; value: string } => e !== null);
+      .filter((e): e is { key: string; label: string; value: string } => e !== null);
     return {
       id: raw.id,
       invoiceNumber: raw.invoice_number,

@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
 import {
   Search,
@@ -35,6 +36,11 @@ import {
   type JobSortKey,
   type JobGroupKey,
 } from '../../lib/jobSort';
+import {
+  JOBS_FILTERS_KEY,
+  jobsFiltersActive,
+  parseJobsFilters,
+} from '../../lib/jobsFilters';
 
 export interface JobListItem {
   id: string;
@@ -150,10 +156,43 @@ export function JobsListScreen({
   const dateLoc = full.dashboard.dateLocale;
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<TabKey>(initialTab);
+  // Persisted view (tab/search/sort/group) — restored on mount so the list
+  // survives navigating into a job + back AND an app refresh; only resets when
+  // the user clears it. AsyncStorage is async, so load once then save changes.
+  const hydrated = useRef(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
+
+  // Load saved filters once. An explicit ?tab deep link (initialTab !== 'all')
+  // still wins for the tab.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(JOBS_FILTERS_KEY)
+      .then(raw => {
+        if (cancelled) return;
+        const s = parseJobsFilters(raw);
+        if (s) {
+          if (initialTab === 'all' && s.tab && (TAB_KEYS as readonly string[]).includes(s.tab)) setTab(s.tab as TabKey);
+          if (typeof s.search === 'string') setSearch(s.search);
+          if (s.sortBy) setSortBy(s.sortBy);
+          if (s.groupBy) setGroupBy(s.groupBy);
+        }
+        hydrated.current = true;
+      })
+      .catch(() => { hydrated.current = true; });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist on change (after the initial load so we don't clobber stored values).
+  useEffect(() => {
+    if (!hydrated.current) return;
+    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tab, search, sortBy, groupBy })).catch(() => {});
+  }, [tab, search, sortBy, groupBy]);
+
+  const filtersActive = jobsFiltersActive({ tab, search, sortBy, groupBy });
+  const clearFilters = () => { setTab('all'); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -386,6 +425,15 @@ export function JobsListScreen({
           showsHorizontalScrollIndicator={false}
           contentContainerClassName="gap-1 pb-1"
         >
+          {filtersActive ? (
+            <Pressable
+              onPress={clearFilters}
+              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50"
+            >
+              <XCircle size={13} color="#DC2626" />
+              <Text className="text-xs font-semibold text-red-600">{t.clearFilters}</Text>
+            </Pressable>
+          ) : null}
           {TAB_KEYS.map(k => {
             const isActive = tab === k;
             return (

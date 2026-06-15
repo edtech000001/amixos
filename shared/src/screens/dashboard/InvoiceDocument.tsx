@@ -7,6 +7,7 @@ import { View, Text, Image, Platform, type TextStyle } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import {
   resolveFieldValue,
+  customFieldElementText,
   fieldUsesAccent,
   onAccentColor,
   withAlpha,
@@ -427,7 +428,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         ) : null;
       }
       if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
-      const txt = el.kind === 'text' ? (el.text ?? '') : resolveFieldValue(vm, el.field!);
+      const txt = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
       const s = el.style ?? {};
       const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? accent : '#1F2937');
       return (
