@@ -502,8 +502,9 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
           label={t.zipLabel}
           placeholder={t.zipPlaceholder}
           value={postalCode}
-          onChangeText={(v) => onChange({ postalCode: v })}
+          onChangeText={(v) => onChange({ postalCode: v.replace(/[^0-9]/g, '').slice(0, 5) })}
           keyboardType="number-pad"
+          maxLength={5}
         />
       </View>
 

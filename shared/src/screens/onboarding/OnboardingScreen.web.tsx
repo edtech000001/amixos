@@ -276,7 +276,7 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.zipLabel}</label>
-          <input value={postalCode} onChange={(e) => onChange({ postalCode: e.target.value })} placeholder={t.zipPlaceholder} inputMode="numeric" className={inputCls} />
+          <input value={postalCode} onChange={(e) => onChange({ postalCode: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) })} placeholder={t.zipPlaceholder} inputMode="numeric" maxLength={5} className={inputCls} />
         </div>
       </div>
 
