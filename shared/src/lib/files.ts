@@ -64,16 +64,15 @@ export interface FileEntry {
   created_at: string;
 }
 
-export const FILES_BUCKET = 'business-assets';
+// Private bucket (migration 066). Reads go through signed URLs — see
+// signedUrl()/useSignedUrl() in ./storageUrls. There is intentionally no
+// public-URL helper here anymore: getPublicUrl on a private bucket is dead.
+export const FILES_BUCKET = 'business-private';
 
 export const FILE_MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export function fileStoragePath(businessId: string, folderId: string, filename: string): string {
   return `files/${businessId}/${folderId}/${filename}`;
-}
-
-export function fileUrl(supabase: SupabaseClient, storagePath: string): string {
-  return supabase.storage.from(FILES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
 export function fileUid(): string {

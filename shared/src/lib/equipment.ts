@@ -1,12 +1,10 @@
 // Shared types + storage helpers for the Equipment module.
 //
-// Storage layout (in the existing `business-assets` bucket):
+// Storage layout (in the private `business-private` bucket, migration 066):
 //   equipment/<business_id>/<equipment_id>/<photo_uuid>.<ext>
-// The first segment after the bucket lets the RLS policy in
-// 045_equipment.sql check business membership without joining the
-// equipment table on every read.
-
-import type { SupabaseClient } from '@supabase/supabase-js';
+// The first segment after the bucket lets the RLS policy check business
+// membership without joining the equipment table on every read. Reads go
+// through signed URLs (see ./storageUrls).
 
 export interface Equipment {
   id: string;
@@ -39,7 +37,7 @@ export interface EquipmentPhoto {
   created_at: string;
 }
 
-export const EQUIPMENT_BUCKET = 'business-assets';
+export const EQUIPMENT_BUCKET = 'business-private';
 
 /** Max photos kept simple for now; the UI surfaces this as a hint. */
 export const MAX_PHOTOS_PER_EQUIPMENT = 12;
@@ -55,14 +53,6 @@ export function equipmentPhotoPath(
   filename: string,
 ): string {
   return `equipment/${businessId}/${equipmentId}/${filename}`;
-}
-
-/** Public URL for an equipment photo by its storage_path. */
-export function equipmentPhotoUrl(
-  supabase: SupabaseClient,
-  storagePath: string,
-): string {
-  return supabase.storage.from(EQUIPMENT_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
 /**

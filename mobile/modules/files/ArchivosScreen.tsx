@@ -23,10 +23,11 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Toggle, Button, Fab } from '@amixos/shared/ui';
 import { can } from '@amixos/shared/lib/permissions';
 import {
-  fetchFilesTree, fileStoragePath, fileUrl, fileUid, fileMeta, fileIsCrewVisible,
+  fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   FILES_BUCKET, FILE_MAX_BYTES,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
+import { signedUrl } from '@amixos/shared/lib/storageUrls';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
 
@@ -98,8 +99,15 @@ export default function ArchivosScreen() {
     setSelectedFolders(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openEntry = (e: FileEntry) => {
-    const href = e.kind === 'link' ? e.url : (e.storage_path ? fileUrl(supabase, e.storage_path) : null);
-    if (href) Linking.openURL(href).catch(() => {});
+    if (e.kind === 'link') {
+      if (e.url) Linking.openURL(e.url).catch(() => {});
+      return;
+    }
+    if (!e.storage_path) return;
+    // Private bucket: mint a short-lived signed URL on demand, then open it.
+    void signedUrl(supabase, e.storage_path).then((href) => {
+      if (href) Linking.openURL(href).catch(() => {});
+    });
   };
   const confirmDelete = (message: string, run: () => Promise<void>) =>
     Alert.alert('', message, [

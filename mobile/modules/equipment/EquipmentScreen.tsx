@@ -42,11 +42,11 @@ import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
   equipmentPhotoPath,
-  equipmentPhotoUrl,
   plateExpirationDays,
   type Equipment,
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
+import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 
 interface EmployeeOption {
   id: string;
@@ -120,6 +120,13 @@ export default function EquipmentScreen() {
   const [error, setError] = useState('');
   const [photos, setPhotos] = useState<EquipmentPhoto[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Photos live in a private bucket — sign the list covers + the open
+  // equipment's photos together, keyed by storage_path.
+  const photoUrls = useSignedUrls(supabase, [
+    ...Object.values(coverPhotos).map((p) => p.storage_path),
+    ...photos.map((p) => p.storage_path),
+  ]);
 
   const TYPE_OPTIONS = useMemo(() => [
     // "—" is the canonical "no selection" label across the app (matches
@@ -425,7 +432,7 @@ export default function EquipmentScreen() {
                 >
                   {cover ? (
                     <Image
-                      source={{ uri: equipmentPhotoUrl(supabase, cover.storage_path) }}
+                      source={{ uri: photoUrls[cover.storage_path] }}
                       style={{ width: '100%', height: 160 }}
                       resizeMode="cover"
                     />
@@ -575,7 +582,7 @@ export default function EquipmentScreen() {
                             className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100 active:opacity-80"
                           >
                             <Image
-                              source={{ uri: equipmentPhotoUrl(supabase, p.storage_path) }}
+                              source={{ uri: photoUrls[p.storage_path] }}
                               style={{ width: '100%', height: '100%' }}
                               resizeMode="cover"
                             />

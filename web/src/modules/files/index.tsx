@@ -20,10 +20,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { can } from '@amixos/shared/lib/permissions';
 import {
-  fetchFilesTree, fileStoragePath, fileUrl, fileUid, fileMeta, fileIsCrewVisible,
+  fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   FILES_BUCKET, FILE_MAX_BYTES,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
+import { signedUrl } from '@amixos/shared/lib/storageUrls';
 
 // A breadcrumb crumb identifies a location: categoryId null = home (list of
 // top-level folders); folderId null = at a top-level folder's root.
@@ -100,8 +101,19 @@ export default function FilesModule() {
     entries.filter(e => e.category_id === cid && e.folder_id === fid).length;
 
   const openFile = (e: FileEntry) => {
-    const href = e.kind === 'link' ? e.url : (e.storage_path ? fileUrl(supabase, e.storage_path) : null);
-    if (href) window.open(href, '_blank', 'noopener');
+    if (e.kind === 'link') {
+      if (e.url) window.open(e.url, '_blank', 'noopener');
+      return;
+    }
+    if (!e.storage_path) return;
+    // Private bucket: open a tab synchronously (keeps the user gesture so the
+    // popup isn't blocked), then point it at a freshly-signed URL.
+    const tab = window.open('about:blank', '_blank');
+    void signedUrl(supabase, e.storage_path).then((href) => {
+      if (!href) { tab?.close(); return; }
+      if (tab) tab.location.href = href;
+      else window.open(href, '_blank', 'noopener');
+    });
   };
   const deleteFolderRow = async (f: FileFolder) => {
     if (!window.confirm(t.deleteFolderConfirm)) return;

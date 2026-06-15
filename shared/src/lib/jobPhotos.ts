@@ -1,17 +1,14 @@
 // Shared types + storage helpers for job photos.
 //
-// Storage layout (in the existing `business-assets` bucket, same one
-// equipment photos and logos use):
+// Storage layout (in the private `business-private` bucket, migration 066):
 //   jobs/<business_id>/<job_id>/<photo_uuid>.<ext>
-// The first segment after the bucket lets the RLS policy in
-// 057_job_photos.sql check business membership without joining the jobs
-// table on every read.
+// The first segment after the bucket lets the RLS policy check business
+// membership without joining the jobs table on every read. Reads go through
+// signed URLs (see ./storageUrls).
 //
 // Deleting a job_photos row also removes its storage object — handled by
 // the AFTER DELETE trigger in 057_job_photos.sql, so a single-photo
 // delete and a whole-job cascade delete both clean up the bucket.
-
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface JobPhoto {
   id: string;
@@ -31,7 +28,9 @@ export function nextRotation(current: number): number {
   return (((current ?? 0) + 90) % 360 + 360) % 360;
 }
 
-export const JOB_PHOTOS_BUCKET = 'business-assets';
+// Private bucket (migration 066). Reads go through signed URLs — see
+// signedUrl()/useSignedUrl() in ./storageUrls.
+export const JOB_PHOTOS_BUCKET = 'business-private';
 
 // Generous guardrail rather than a true limit — high enough that normal
 // before/after documentation never hits it, low enough to stop a runaway
@@ -55,14 +54,6 @@ export function jobPhotoPath(
   filename: string,
 ): string {
   return `jobs/${businessId}/${jobId}/${filename}`;
-}
-
-/** Public URL for a job photo by its storage_path. */
-export function jobPhotoUrl(
-  supabase: SupabaseClient,
-  storagePath: string,
-): string {
-  return supabase.storage.from(JOB_PHOTOS_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
 /** A short unique filename stem, with a fallback for runtimes lacking crypto.randomUUID. */

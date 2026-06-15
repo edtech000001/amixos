@@ -31,11 +31,11 @@ import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
   equipmentPhotoPath,
-  equipmentPhotoUrl,
   plateExpirationDays,
   type Equipment,
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
+import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 
 interface EmployeeOption {
   id: string;
@@ -79,6 +79,13 @@ export default function EquipmentModule() {
   const [error, setError] = useState('');
   const [photos, setPhotos] = useState<EquipmentPhoto[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Photos live in a private bucket — sign the list covers + the open
+  // equipment's photos together, keyed by storage_path.
+  const photoUrls = useSignedUrls(supabase, [
+    ...Object.values(coverPhotos).map((p) => p.storage_path),
+    ...photos.map((p) => p.storage_path),
+  ]);
 
   const TYPE_SUGGESTIONS = useMemo(() => [
     { value: '', label: '—' },
@@ -350,7 +357,7 @@ export default function EquipmentModule() {
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={equipmentPhotoUrl(supabase, cover.storage_path)}
+                      src={photoUrls[cover.storage_path] ?? undefined}
                       alt={e.name}
                       className="w-full h-full object-cover"
                     />
@@ -485,7 +492,7 @@ export default function EquipmentModule() {
                       <div key={p.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={equipmentPhotoUrl(supabase, p.storage_path)}
+                          src={photoUrls[p.storage_path] ?? undefined}
                           alt=""
                           className="w-full h-full object-cover"
                         />

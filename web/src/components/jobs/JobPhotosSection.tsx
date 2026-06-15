@@ -11,11 +11,11 @@ import {
   JOB_PHOTO_MAX_EDGE,
   JOB_PHOTO_QUALITY,
   jobPhotoPath,
-  jobPhotoUrl,
   jobPhotoFilename,
   nextRotation,
   type JobPhoto,
 } from '@amixos/shared/lib/jobPhotos';
+import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 
 interface Props {
   jobId: string;
@@ -133,6 +133,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       i === null ? i : Math.min(Math.max(i + delta, 0), photos.length - 1),
     );
 
+  // Photos live in a private bucket — resolve short-lived signed URLs.
+  const photoUrls = useSignedUrls(supabase, photos.map((p) => p.storage_path));
+
   const atLimit = photos.length >= MAX_PHOTOS_PER_JOB;
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
   const viewerRot = (viewerPhoto?.rotation ?? 0) % 360;
@@ -168,7 +171,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={jobPhotoUrl(supabase, p.storage_path)}
+                src={photoUrls[p.storage_path] ?? undefined}
                 alt=""
                 className="w-full h-full object-cover"
                 style={{ transform: `rotate(${p.rotation ?? 0}deg)` }}
@@ -277,7 +280,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={jobPhotoUrl(supabase, viewerPhoto.storage_path)}
+            src={photoUrls[viewerPhoto.storage_path] ?? undefined}
             alt=""
             className="object-contain"
             // When rotated 90/270 swap the max constraints so the rotated

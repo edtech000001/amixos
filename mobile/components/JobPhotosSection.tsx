@@ -22,11 +22,11 @@ import {
   JOB_PHOTOS_BUCKET,
   MAX_PHOTOS_PER_JOB,
   jobPhotoPath,
-  jobPhotoUrl,
   jobPhotoFilename,
   nextRotation,
   type JobPhoto,
 } from '@amixos/shared/lib/jobPhotos';
+import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 
 interface Props {
   jobId: string;
@@ -169,6 +169,8 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const atLimit = photos.length >= MAX_PHOTOS_PER_JOB;
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
+  // Photos live in a private bucket — resolve short-lived signed URLs.
+  const photoUrls = useSignedUrls(supabase, photos.map((p) => p.storage_path));
   // Available height for the image area (screen minus header/footer/safe-areas).
   const availH = screenH - insets.top - insets.bottom - 120;
 
@@ -181,7 +183,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
     return (
       <View style={{ width: screenW, alignItems: 'center', justifyContent: 'center' }}>
         <Image
-          source={{ uri: jobPhotoUrl(supabase, item.storage_path) }}
+          source={{ uri: photoUrls[item.storage_path] }}
           style={{
             width: swap ? availH : screenW,
             height: swap ? screenW : availH,
@@ -223,7 +225,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               className="rounded-xl overflow-hidden bg-gray-100"
             >
               <Image
-                source={{ uri: jobPhotoUrl(supabase, p.storage_path) }}
+                source={{ uri: photoUrls[p.storage_path] }}
                 style={{ width: tileSize, height: tileSize, transform: [{ rotate: `${p.rotation ?? 0}deg` }] }}
                 resizeMode="cover"
               />
