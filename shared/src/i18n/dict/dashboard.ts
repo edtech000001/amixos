@@ -1166,6 +1166,9 @@ export type DashboardDict = {
         elementFont: string;
         undo: string;
         redo: string;
+        copyTheme: string;
+        copyThemeTitle: string;
+        blankTheme: string;
       };
     };
     customFields: {
@@ -2941,6 +2944,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           elementFont: 'Fuente',
           undo: 'Deshacer',
           redo: 'Rehacer',
+          copyTheme: 'Empezar desde una plantilla',
+          copyThemeTitle: 'Empezar desde una plantilla',
+          blankTheme: 'En blanco',
         },
       },
       customFields: {
@@ -4716,6 +4722,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           elementFont: 'Font',
           undo: 'Undo',
           redo: 'Redo',
+          copyTheme: 'Start from a template',
+          copyThemeTitle: 'Start from a template',
+          blankTheme: 'Blank',
         },
       },
       customFields: {

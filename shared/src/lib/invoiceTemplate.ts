@@ -25,6 +25,7 @@ import {
   type InvoiceLabelKey,
 } from '../i18n/invoice';
 import { formatDateLong } from './format';
+import { INVOICE_ICON_NODES } from './invoiceIconNodes';
 
 export const INVOICE_TEMPLATE_VERSION = 1;
 
@@ -172,26 +173,30 @@ export type InvoiceElementKind = 'logo' | 'field' | 'text' | 'customField' | 'sh
 export type InvoiceShapeKind = 'rectangle' | 'ellipse';
 export const INVOICE_SHAPE_KINDS: InvoiceShapeKind[] = ['rectangle', 'ellipse'];
 
-/** Built-in icon set. Each is a single 24×24 SVG `d` path so every renderer
- *  (HTML/PDF, web React, RN) draws the exact same glyph. `filled` icons paint
- *  with the element color; the rest stroke it (lucide-style). */
-export type InvoiceIconName =
-  | 'star' | 'heart' | 'check' | 'circle' | 'diamond' | 'triangle'
-  | 'dollar' | 'arrowRight' | 'plus' | 'close';
-export interface InvoiceIconDef { d: string; filled: boolean }
-export const INVOICE_ICONS: Record<InvoiceIconName, InvoiceIconDef> = {
-  star: { filled: true, d: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z' },
-  heart: { filled: true, d: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z' },
-  check: { filled: false, d: 'M20 6 9 17l-5-5' },
-  circle: { filled: true, d: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
-  diamond: { filled: true, d: 'M12 2l10 10-10 10L2 12z' },
-  triangle: { filled: true, d: 'M12 3l9 16H3z' },
-  dollar: { filled: false, d: 'M12 1v22 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' },
-  arrowRight: { filled: false, d: 'M5 12h14 M13 6l6 6-6 6' },
-  plus: { filled: false, d: 'M12 5v14 M5 12h14' },
-  close: { filled: false, d: 'M18 6 6 18 M6 6l12 12' },
+/** Icon name — a key into the shared lucide-derived catalog (INVOICE_ICON_NODES),
+ *  which reuses the same ~180 icons the map pins offer (mapPinPresets.ts). All
+ *  three renderers draw the icon's geometry, stroked in the element color. */
+export type InvoiceIconName = string;
+export const INVOICE_ICON_NAMES: InvoiceIconName[] = Object.keys(INVOICE_ICON_NODES);
+/** Fallback when an element's icon is unknown (kept in the catalog). */
+export const DEFAULT_INVOICE_ICON: InvoiceIconName = 'star';
+
+/** Map the original hand-authored icon names to the nearest catalog icon, so
+ *  elements saved before the catalog switch still resolve to something sensible. */
+const LEGACY_ICON_ALIASES: Record<string, InvoiceIconName> = {
+  arrowRight: 'navigation-2', dollar: 'dollar-sign', close: 'circle-x',
+  diamond: 'star', triangle: 'triangle-alert', check: 'circle-check-big',
+  circle: 'info', plus: 'sparkles',
 };
-export const INVOICE_ICON_NAMES = Object.keys(INVOICE_ICONS) as InvoiceIconName[];
+
+/** Resolve any stored icon name to a valid catalog key (never drops the element). */
+function resolveIconName(raw: unknown): InvoiceIconName {
+  if (typeof raw === 'string') {
+    if (INVOICE_ICON_NODES[raw]) return raw;
+    if (LEGACY_ICON_ALIASES[raw]) return LEGACY_ICON_ALIASES[raw];
+  }
+  return DEFAULT_INVOICE_ICON;
+}
 
 export interface InvoiceElement {
   id: string;
@@ -359,6 +364,10 @@ export function defaultElements(): InvoiceElement[] {
   ];
 }
 
+/** Stable ids of the old auto-seeded field layout — used to migrate legacy
+ *  freeform configs (those elements are now redundant with the base design). */
+const LEGACY_FREEFORM_ELEMENT_IDS = new Set(defaultElements().map(e => e.id));
+
 function normalizeElement(e: unknown): InvoiceElement | null {
   if (!e || typeof e !== 'object') return null;
   const el = e as Partial<InvoiceElement>;
@@ -367,7 +376,7 @@ function normalizeElement(e: unknown): InvoiceElement | null {
   if (kind === 'field' && !(el.field && FREEFORM_FIELD_KEYS.includes(el.field))) return null;
   if (kind === 'customField' && !(typeof el.customKey === 'string' && el.customKey)) return null;
   if (kind === 'shape' && !(el.shape && INVOICE_SHAPE_KINDS.includes(el.shape))) return null;
-  if (kind === 'icon' && !(el.icon && INVOICE_ICON_NAMES.includes(el.icon))) return null;
+  // Icon: coerce unknown / legacy names to a real catalog icon (never drop).
   const num = (v: unknown, d: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : d;
   const style = el.style && typeof el.style === 'object' ? el.style : undefined;
@@ -382,7 +391,7 @@ function normalizeElement(e: unknown): InvoiceElement | null {
   if (kind === 'field') out.field = el.field;
   if (kind === 'text') out.text = typeof el.text === 'string' ? el.text : '';
   if (kind === 'shape') out.shape = el.shape;
-  if (kind === 'icon') out.icon = el.icon;
+  if (kind === 'icon') out.icon = resolveIconName(el.icon);
   if (kind === 'customField') {
     out.customKey = el.customKey;
     out.customLabel = typeof el.customLabel === 'string' ? el.customLabel : el.customKey;
@@ -462,10 +471,11 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   let elements = Array.isArray(r.elements)
     ? r.elements.map(normalizeElement).filter((e): e is InvoiceElement => e !== null)
     : undefined;
-  // In freeform mode we always need elements to render — seed the default
-  // layout if none are present yet.
-  if (layoutMode === 'freeform' && (!elements || elements.length === 0)) {
-    elements = defaultElements();
+  // Migration: freeform now renders the structured design as a base + overlays.
+  // Drop the legacy auto-seeded field layout (stable ids from defaultElements)
+  // so old freeform configs don't double-render the header/items/totals.
+  if (elements && elements.length) {
+    elements = elements.filter(e => !LEGACY_FREEFORM_ELEMENT_IDS.has(e.id));
   }
 
   return {
@@ -1341,12 +1351,16 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return parts.join(';');
   };
   const iconSvg = (el: InvoiceElement): string => {
-    const def = INVOICE_ICONS[el.icon as InvoiceIconName] ?? INVOICE_ICONS.star;
+    const nodes = INVOICE_ICON_NODES[el.icon ?? ''] ?? INVOICE_ICON_NODES[DEFAULT_INVOICE_ICON] ?? [];
     const color = escapeHtml(el.style?.color ?? st.accent);
-    const paint = def.filled
-      ? `fill="${color}"`
-      : `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
-    return `<svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block" ${paint}><path d="${def.d}"/></svg>`;
+    const inner = nodes
+      .map(n => {
+        const { t, ...attrs } = n;
+        const a = Object.entries(attrs).map(([k, v]) => `${k}="${escapeHtml(v)}"`).join(' ');
+        return `<${t} ${a}/>`;
+      })
+      .join('');
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">${inner}</svg>`;
   };
   const shapeHtml = (el: InvoiceElement): string => {
     const fill = escapeHtml(el.style?.fill ?? st.accent);
@@ -1363,11 +1377,14 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return `<div class="inv-el-text">${br(resolveFieldValue(vm, el.field as InvoiceFieldKey))}</div>`;
   };
 
-  const body = freeform
-    ? `<div class="inv-canvas">${vm.elements
+  // Base document is always the structured sections. Freeform layers the user's
+  // overlay elements absolutely on top of the whole page.
+  const body = vm.sections.map(id => sectionHtml[id]).join('\n');
+  const overlayHtml = freeform && vm.elements.length
+    ? `<div class="inv-overlay">${vm.elements
         .map(el => `<div class="inv-abs" style="left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;${elStyleCss(el)}">${elInner(el)}</div>`)
         .join('')}</div>`
-    : vm.sections.map(id => sectionHtml[id]).join('\n');
+    : '';
 
   const gap = st.density === 'compact' ? 14 : 22;
   const cellPad = st.density === 'compact' ? '6px 8px' : '9px 8px';
@@ -1388,7 +1405,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     (deco.bottomBand ? `<svg class="inv-deco-bot" viewBox="${deco.bottomBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.bottomBand.height}px">${svgShapes(deco.bottomBand.spec)}</svg>` : '');
   const docPad = deco.padTop || deco.padBottom ? ` style="padding-top:${deco.padTop}px;padding-bottom:${deco.padBottom}px"` : '';
   const footerBarHtml =
-    !freeform && vm.footerBar && vm.footerContact.length
+    vm.footerBar && vm.footerContact.length
       ? `<div class="inv-footerbar">${vm.footerContact
           .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
           .join('<span class="fb-sep">·</span>')}</div>`
@@ -1396,7 +1413,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   // "Full-page" presets (decoration / footer strip / tint) get a minimum height
   // of one letter page so the flourishes anchor to the page edges and the footer
   // strip sits at the bottom — like a real printed sheet.
-  const fullPage = !freeform && (vm.decoration !== 'none' || vm.footerBar || vm.pageTint);
+  const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
   const pageCls = `inv-page${vm.pageTint ? ' tinted' : ''}${fullPage ? ' full' : ''}`;
 
   return `<!DOCTYPE html>
@@ -1409,8 +1426,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-doc > * { margin-bottom: ${gap}px; }
-    .inv-canvas { position: relative; width: 100%; aspect-ratio: 8.5 / 11; }
-    .inv-canvas > * { margin-bottom: 0; }
+    .inv-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+    .inv-overlay > * { margin-bottom: 0; }
     .inv-abs { position: absolute; overflow: hidden; }
     .inv-el-logo { max-width: 100%; max-height: 100%; object-fit: contain; }
     .inv-el-text { white-space: pre-wrap; line-height: 1.35; }
@@ -1540,7 +1557,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-footer { border-top: 1px solid #e5e7eb; padding-top: 10px; color: #9ca3af; font-size: ${st.fontPx - 2}px; text-align: center; white-space: pre-wrap; }
   </style>
 </head>
-<body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}</div></body>
+<body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}${overlayHtml}</div></body>
 </html>`;
 }
 
@@ -1552,6 +1569,22 @@ export function applyPreset(presetId: InvoicePresetId, current?: InvoiceTemplate
   const next = clone(INVOICE_PRESETS[presetId] ?? DEFAULT_INVOICE_TEMPLATE);
   if (current) next.defaultLanguage = current.defaultLanguage;
   return next;
+}
+
+/** Seed a Freeform config from a Structured preset: the theme's full design
+ *  renders as the base; the user layers their own elements (shapes / icons /
+ *  text / logos) on top. Starts with no overlays. */
+export function freeformFromPreset(presetId: InvoicePresetId, current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
+  const base = applyPreset(presetId, current);
+  return { ...base, layoutMode: 'freeform', elements: [] };
+}
+
+/** A blank Freeform starting point — plain default theme as the base, no
+ *  overlays (start from scratch). Preserves the chosen default language. */
+export function blankFreeform(current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
+  const base = clone(DEFAULT_INVOICE_TEMPLATE);
+  if (current) base.defaultLanguage = current.defaultLanguage;
+  return { ...base, layoutMode: 'freeform', elements: [] };
 }
 export function setArchetype(c: InvoiceTemplateConfig, archetype: InvoiceArchetype): InvoiceTemplateConfig {
   return { ...c, archetype };
@@ -1615,11 +1648,10 @@ export function setPageTint(c: InvoiceTemplateConfig, pageTint: boolean): Invoic
 // ── Freeform element editor (Phase 3 — element canvas) ───────────────────────
 
 export function setLayoutMode(c: InvoiceTemplateConfig, mode: InvoiceLayoutMode): InvoiceTemplateConfig {
-  if (mode === 'freeform') {
-    const elements = c.elements && c.elements.length ? c.elements : defaultElements();
-    return { ...c, layoutMode: 'freeform', elements };
-  }
-  return { ...c, layoutMode: 'flow' };
+  // Freeform renders the structured design as a base + the user's overlay
+  // elements on top — so switching modes keeps any overlays but never seeds the
+  // old field layout.
+  return { ...c, layoutMode: mode === 'freeform' ? 'freeform' : 'flow' };
 }
 
 let elCounter = 0;

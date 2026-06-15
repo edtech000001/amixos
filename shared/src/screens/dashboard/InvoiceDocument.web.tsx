@@ -5,8 +5,9 @@
 // so the in-app detail screen, the public /factura page, and the print/PDF
 // HTML all stay visually in sync. Renders sections in vm.sections order.
 
-import type { CSSProperties, ReactNode } from 'react';
-import { resolveFieldValue, customFieldElementText, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, INVOICE_ICONS, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type InvoiceIconName, type DecoSpec } from '../../lib/invoiceTemplate';
+import { createElement, type CSSProperties, type ReactNode } from 'react';
+import { resolveFieldValue, customFieldElementText, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type DecoSpec } from '../../lib/invoiceTemplate';
+import { INVOICE_ICON_NODES } from '../../lib/invoiceIconNodes';
 
 function Logo({ url, maxHeight, maxWidth = 220, center }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean }) {
   return (
@@ -26,15 +27,13 @@ function elStyle(el: InvoiceElement, accent: string): CSSProperties {
   };
 }
 
-// An icon glyph (shared registry) — same 24×24 paths the HTML/PDF + RN use.
-function IconGlyph({ icon, color }: { icon: InvoiceIconName; color: string }) {
-  const def = INVOICE_ICONS[icon] ?? INVOICE_ICONS.star;
-  const paint: CSSProperties = def.filled
-    ? { fill: color }
-    : { fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+// An icon glyph from the shared lucide-derived catalog (same geometry the
+// HTML/PDF + RN renderers use), stroked in the element color.
+function IconGlyph({ icon, color }: { icon: string; color: string }) {
+  const nodes = INVOICE_ICON_NODES[icon] ?? INVOICE_ICON_NODES.star ?? [];
   return (
-    <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block', ...paint }}>
-      <path d={def.d} />
+    <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }}>
+      {nodes.map((n, i) => { const { t, ...attrs } = n; return createElement(t, { key: i, ...attrs }); })}
     </svg>
   );
 }
@@ -397,44 +396,28 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     ),
   };
 
-  if (vm.layoutMode === 'freeform') {
-    const ffDeco = decorationRender(vm.decoration, accent);
-    const renderEl = (el: InvoiceElement): ReactNode => {
-      if (el.kind === 'logo') {
-        return vm.header.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-        ) : null;
-      }
-      if (el.kind === 'shape') {
-        return <div style={{ width: '100%', height: '100%', background: el.style?.fill ?? accent, borderRadius: el.shape === 'ellipse' ? '50%' : (el.style?.radius ?? 0) }} />;
-      }
-      if (el.kind === 'icon') {
-        return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
-      }
-      if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
-      const text = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
-      return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
-    };
-    return (
-      <div className="text-gray-800" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11', overflow: 'hidden' }}>
-          {ffDeco.full ? <DecoSvg spec={ffDeco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
-          {ffDeco.topBand ? <DecoSvg spec={ffDeco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: ffDeco.topBand.height }} /> : null}
-          {ffDeco.bottomBand ? <DecoSvg spec={ffDeco.bottomBand.spec} style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: ffDeco.bottomBand.height }} /> : null}
-          {vm.elements.map(el => (
-            <div key={el.id} style={{ position: 'absolute', zIndex: 1, left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}>
-              {renderEl(el)}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Freeform overlay element (drawn on top of the base document).
+  const renderEl = (el: InvoiceElement): ReactNode => {
+    if (el.kind === 'logo') {
+      return vm.header.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+      ) : null;
+    }
+    if (el.kind === 'shape') {
+      return <div style={{ width: '100%', height: '100%', background: el.style?.fill ?? accent, borderRadius: el.shape === 'ellipse' ? '50%' : (el.style?.radius ?? 0) }} />;
+    }
+    if (el.kind === 'icon') {
+      return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
+    }
+    if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
+    const text = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
+    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
+  };
 
   const deco = decorationRender(vm.decoration, accent);
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
-  return (
+  const flowDoc = (
     <div
       className="text-gray-800"
       style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
@@ -459,6 +442,24 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       ) : null}
     </div>
   );
+
+  if (vm.layoutMode === 'freeform') {
+    return (
+      <div style={{ position: 'relative' }}>
+        {flowDoc}
+        {vm.elements.length ? (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
+            {vm.elements.map(el => (
+              <div key={el.id} style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}>
+                {renderEl(el)}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+  return flowDoc;
 }
 
 function DecoSvg({ spec, style }: { spec: DecoSpec; style: CSSProperties }) {

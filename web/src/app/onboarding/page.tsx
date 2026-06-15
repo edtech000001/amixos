@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
 import {
   OnboardingScreen,
@@ -50,20 +51,28 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Ensure the auth session is hydrated so the storage request carries the
-    // user's token. Without it, an upload firing before the client finishes
-    // loading the session goes out anonymously → the logos RLS policy
-    // (auth.uid() is not null) denies it ("violates row-level security policy").
+    // The cookie-based browser client doesn't reliably attach the user's
+    // token to storage uploads (the request goes out anonymous → the logos
+    // RLS policy `auth.uid() is not null` denies it). Upload with a one-off
+    // client that carries the access token explicitly on every request.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       resolve({ error: t.page.finishGenericError });
       return;
     }
+    const uploadClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+      },
+    );
 
     const ext = file.name.split('.').pop();
     const path = `logos/${Date.now()}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await uploadClient.storage
       .from('business-assets')
       .upload(path, file, { upsert: true });
 

@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -35,10 +36,19 @@ export default function OnboardingRoute() {
     }
 
     try {
-      // Ensure the auth session is hydrated so the storage request carries the
-      // user's token (else the logos RLS policy denies the anonymous upload).
+      // The persisted client doesn't reliably attach the user's token to
+      // storage uploads (request goes out anonymous → logos RLS denies it).
+      // Upload with a one-off client carrying the access token explicitly.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return { error: t.page.finishGenericError };
+      const uploadClient = createClient(
+        process.env.EXPO_PUBLIC_SUPABASE_URL!,
+        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+        },
+      );
 
       // Read the file as an ArrayBuffer for upload to Supabase Storage.
       const response = await fetch(asset.uri);
@@ -49,7 +59,7 @@ export default function OnboardingRoute() {
       const path = `logos/${Date.now()}.${ext}`;
       const contentType = asset.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await uploadClient.storage
         .from('business-assets')
         .upload(path, arrayBuffer, { upsert: true, contentType });
 

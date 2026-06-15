@@ -5,8 +5,8 @@
 // pure helpers; the canvas/preview render the real InvoiceDocument so what you
 // design is exactly what prints / shares. Includes undo/redo history.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, Sparkles } from 'lucide-react';
+import { createElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, Sparkles, LayoutTemplate } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
@@ -27,13 +27,12 @@ import {
   setText,
   setLayoutMode,
   setDefaultLanguage,
-  setDecoration,
   setPageTint,
+  freeformFromPreset,
+  blankFreeform,
   invoiceNumberPrefix,
   FREEFORM_FIELD_KEYS,
   INVOICE_SHAPE_KINDS,
-  INVOICE_ICON_NAMES,
-  INVOICE_ICONS,
   addFieldElement,
   addTextElement,
   addLogoElement,
@@ -60,8 +59,9 @@ import {
   type InvoiceFieldKey,
   type InvoiceShapeKind,
   type InvoiceIconName,
-  type InvoiceDecoration,
 } from '@amixos/shared/lib/invoiceTemplate';
+import { INVOICE_ICON_NODES } from '@amixos/shared/lib/invoiceIconNodes';
+import { PIN_ICON_CATEGORIES, ALL_PIN_ICONS, type PinIconCategory } from '@amixos/shared/lib/mapPinPresets';
 
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
 const DOC_W = 720; // fixed render width for the flow preview; scaled to fit
@@ -147,6 +147,47 @@ function ThemesModal({ open, onClose, currentId, onSelect, value, branding, samp
             <button type="button" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-30 hover:bg-gray-50"><ChevronRight size={18} /></button>
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// Freeform "start from a template" gallery — previews show how each theme looks
+// AS a freeform layout (its style applied to the standard elements). A leading
+// "Blank" card lets the user start from scratch. Mirrors ThemesModal's grid.
+function CopyThemeModal({ open, onClose, onPick, value, branding, sample, t }: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (id: InvoicePresetId | 'blank') => void;
+  value: InvoiceTemplateConfig;
+  branding: InvoiceBranding;
+  sample: InvoiceDocData;
+  t: DesignT;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">{t.copyThemeTitle}</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">
+            <button type="button" onClick={() => onPick('blank')}
+              className="rounded-xl border border-dashed border-gray-300 p-2 transition hover:border-gray-400">
+              <PresetPreview vm={buildInvoiceViewModel(blankFreeform(value), sample, branding)} />
+              <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.blankTheme}</span>
+            </button>
+            {INVOICE_PRESET_IDS.map(id => (
+              <button key={id} type="button" onClick={() => onPick(id)}
+                className="rounded-xl border border-gray-200 p-2 transition hover:border-gray-300">
+                <PresetPreview vm={buildInvoiceViewModel(freeformFromPreset(id, value), sample, branding)} />
+                <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.presets[id]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -259,9 +300,11 @@ function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, se
       onPointerUp={end}
       onPointerLeave={end}
       onPointerDown={() => setSelectedId(null)}
-      style={{ position: 'relative', width: '100%', maxWidth: DOC_W, margin: '0 auto', aspectRatio: '8.5 / 11', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', touchAction: 'none' }}
+      style={{ position: 'relative', width: '100%', maxWidth: DOC_W, margin: '0 auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', touchAction: 'none' }}
     >
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      {/* The base document (theme design) sets the canvas height; overlay element
+          boxes are positioned as a % of it. */}
+      <div style={{ pointerEvents: 'none' }}>
         <InvoiceDocument vm={vm} />
       </div>
       {els.map(el => {
@@ -276,6 +319,13 @@ function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, se
               background: sel ? 'rgba(79,70,229,0.05)' : 'transparent', cursor: 'move', borderRadius: 4,
             }}
           >
+            {/* Editor-only placeholder so the logo slot is visible before a logo
+                is uploaded (real invoices/PDFs render nothing when there's none). */}
+            {el.kind === 'logo' && !vm.header.logoUrl ? (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A5B4FC', pointerEvents: 'none' }}>
+                <ImageIcon size={26} strokeWidth={1.5} />
+              </div>
+            ) : null}
             {sel ? (
               <div onPointerDown={e => begin(e, el, 'resize')}
                 style={{ position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, background: '#4F46E5', borderRadius: 2, cursor: 'nwse-resize' }} />
@@ -310,32 +360,61 @@ function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, se
   );
 }
 
-// Small popover of the built-in icon glyphs (rendered with the shared SVG paths
-// so the preview is exactly what prints).
-function IconMenu({ label, onPick }: { label: string; onPick: (n: InvoiceIconName) => void }) {
+// One icon glyph from the shared lucide catalog (same geometry that prints).
+function IconGlyphSvg({ icon, size = 20 }: { icon: string; size?: number }) {
+  const nodes = INVOICE_ICON_NODES[icon] ?? [];
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      {nodes.map((n, i) => { const { t, ...attrs } = n; return createElement(t, { key: i, ...attrs }); })}
+    </svg>
+  );
+}
+
+// Searchable, categorized icon picker — same ~180-icon catalog the map pins use.
+function IconMenu({ label, onPick, categories, searchPlaceholder, noResults }: {
+  label: string;
+  onPick: (n: string) => void;
+  categories: Record<PinIconCategory['i18nKey'], string>;
+  searchPlaceholder: string;
+  noResults: string;
+}) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const close = () => { setOpen(false); setQ(''); };
+  const query = q.trim().toLowerCase();
+  const filtered = query ? ALL_PIN_ICONS.filter(k => k.includes(query)) : null;
+  const iconBtn = (n: string) => (
+    <button key={n} type="button" title={n} onClick={() => { onPick(n); close(); }}
+      className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700">
+      <IconGlyphSvg icon={n} />
+    </button>
+  );
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen(o => !o)}
+      <button type="button" onClick={() => (open ? close() : setOpen(true))}
         className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
         <Sparkles size={15} /> {label}
       </button>
       {open ? (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-1 grid grid-cols-5 gap-1 p-2 bg-white rounded-xl border border-gray-200 shadow-lg">
-            {INVOICE_ICON_NAMES.map(n => {
-              const def = INVOICE_ICONS[n];
-              const paint = def.filled
-                ? { fill: 'currentColor' as const }
-                : { fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-              return (
-                <button key={n} type="button" onClick={() => { onPick(n); setOpen(false); }}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700">
-                  <svg viewBox="0 0 24 24" width={18} height={18} {...paint}><path d={def.d} /></svg>
-                </button>
-              );
-            })}
+          <div className="fixed inset-0 z-10" onClick={close} />
+          <div className="absolute z-20 mt-1 w-80 bg-white rounded-xl border border-gray-200 shadow-lg p-3">
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={searchPlaceholder}
+              className="w-full mb-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+            <div className="max-h-72 overflow-y-auto">
+              {filtered ? (
+                filtered.length ? (
+                  <div className="grid grid-cols-7 gap-1">{filtered.map(iconBtn)}</div>
+                ) : <p className="text-xs text-gray-400 py-4 text-center">{noResults}</p>
+              ) : (
+                PIN_ICON_CATEGORIES.map(cat => (
+                  <div key={cat.i18nKey} className="mb-2">
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1 px-0.5">{categories[cat.i18nKey]}</div>
+                    <div className="grid grid-cols-7 gap-1">{cat.icons.map(iconBtn)}</div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </>
       ) : null}
@@ -458,6 +537,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
   const t = full.dashboard.settings.invoices.design;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [secOpen, setSecOpen] = useState(false);
   const [, force] = useState(0);
 
@@ -572,15 +652,6 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
       </div>
     </Field>
   );
-  const decorationControl = (
-    <Field label={t.decoration}>
-      <Seg<InvoiceDecoration>
-        value={value.decoration ?? 'none'}
-        onChange={d => change(setDecoration(value, d))}
-        options={(['none', 'corners', 'wave', 'arc'] as InvoiceDecoration[]).map(d => ({ value: d, label: t.decorations[d] }))}
-      />
-    </Field>
-  );
   const pageTintControl = (
     <Field label={t.pageTint}>
       <label className="flex items-center gap-2 cursor-pointer">
@@ -643,12 +714,15 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
       {freeform ? (
         // ── FREEFORM: element canvas ──────────────────────────────────────
         <div className="flex flex-col gap-4">
+          <button type="button" onClick={() => setCopyOpen(true)}
+            className="self-start flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <LayoutTemplate size={15} /> {t.copyTheme}
+          </button>
           <div className="flex flex-wrap gap-5">
             {accentControl}
             {fontControl}
             {densityControl}
             {columnsControl}
-            {decorationControl}
             {pageTintControl}
           </div>
 
@@ -681,7 +755,13 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
               <option value="">◻ {t.elements.addShape}</option>
               {INVOICE_SHAPE_KINDS.map(s => <option key={s} value={s}>{t.elements.shapeKinds[s]}</option>)}
             </select>
-            <IconMenu label={t.elements.addIcon} onPick={addIconEl} />
+            <IconMenu
+              label={t.elements.addIcon}
+              onPick={addIconEl}
+              categories={full.dashboard.modules.map.iconCategories}
+              searchPlaceholder={full.dashboard.modules.map.iconSearchPlaceholder}
+              noResults={full.dashboard.modules.map.iconSearchNoResults}
+            />
             <button type="button" onClick={addLogoEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
               <ImageIcon size={15} /> {t.elements.addLogo}
             </button>
@@ -781,6 +861,20 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
         onClose={() => setThemesOpen(false)}
         currentId={value.presetId}
         onSelect={id => { change(applyPreset(id, value)); setThemesOpen(false); }}
+        value={value}
+        branding={branding}
+        sample={sample}
+        t={t}
+      />
+
+      <CopyThemeModal
+        open={copyOpen}
+        onClose={() => setCopyOpen(false)}
+        onPick={id => {
+          setSelectedId(null);
+          change(id === 'blank' ? blankFreeform(value) : freeformFromPreset(id, value));
+          setCopyOpen(false);
+        }}
         value={value}
         branding={branding}
         sample={sample}
