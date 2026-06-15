@@ -1,4 +1,4 @@
--- 067_logos_policy_harden.sql
+-- 068_logos_policy_harden.sql
 -- FIX: logo uploads during onboarding fail ("Upload error. Try again.").
 --
 -- Migration 065 re-added narrow write policies for the `logos/` prefix of the
