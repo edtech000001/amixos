@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, requireBusinessRole } from '../middleware/auth';
 
 export const employeeRouter = Router();
 
 employeeRouter.use(authenticate);
+
+// Role gates resolve the caller's role from business_members (requires a
+// business_id in the body/query), NOT from the JWT's user_metadata.
 
 // GET /api/v1/employees
 employeeRouter.get('/', async (req, res) => {
@@ -11,7 +14,7 @@ employeeRouter.get('/', async (req, res) => {
 });
 
 // POST /api/v1/employees — owner/manager only
-employeeRouter.post('/', requireRole('owner', 'manager'), async (req, res) => {
+employeeRouter.post('/', requireBusinessRole('owner', 'manager'), async (req, res) => {
   res.json({ success: true, message: 'Add employee — coming soon' });
 });
 
@@ -21,11 +24,11 @@ employeeRouter.get('/:id', async (req, res) => {
 });
 
 // PUT /api/v1/employees/:id
-employeeRouter.put('/:id', requireRole('owner', 'manager'), async (req, res) => {
+employeeRouter.put('/:id', requireBusinessRole('owner', 'manager'), async (req, res) => {
   res.json({ success: true, message: 'Update employee — coming soon' });
 });
 
 // DELETE /api/v1/employees/:id
-employeeRouter.delete('/:id', requireRole('owner'), async (req, res) => {
+employeeRouter.delete('/:id', requireBusinessRole('owner'), async (req, res) => {
   res.json({ success: true, message: 'Delete employee — coming soon' });
 });

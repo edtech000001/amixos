@@ -21,6 +21,14 @@ import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceT
 const genToken = () =>
   Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
+// Escape user-controlled text before it goes into an innerHTML template, so a
+// value like an invoice number can't inject markup. The surrounding template
+// (translation string with static <strong>) stays trusted.
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
+  );
+
 interface RawClient {
   first_name: string;
   last_name: string;
@@ -238,7 +246,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           <p
             className="text-sm text-gray-600"
             dangerouslySetInnerHTML={{
-              __html: tInv.deleteConfirm.replace('{{number}}', invoice?.invoiceNumber ?? ''),
+              __html: tInv.deleteConfirm.replace('{{number}}', escapeHtml(invoice?.invoiceNumber ?? '')),
             }}
           />
           {deleteError ? <p className="text-sm text-red-500">{deleteError}</p> : null}

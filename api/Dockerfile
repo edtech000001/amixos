@@ -37,6 +37,10 @@ RUN npm install --omit=dev
 # Compiled JS from the build stage.
 COPY --from=builder /app/dist ./dist
 
+# Drop root: run as the unprivileged `node` user that the base image ships.
+# Limits the blast radius if the process is ever compromised.
+USER node
+
 # Cloud Run injects $PORT (typically 8080) and the server listens on it
 # via `process.env.PORT || 3001`. EXPOSE is informational — Cloud Run
 # auto-detects the port the container binds to.

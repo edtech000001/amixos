@@ -9,6 +9,7 @@
 // membership (and role, for config) before touching the service-role client.
 
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import {
@@ -22,6 +23,18 @@ import {
 
 export const smsRouter = Router();
 smsRouter.use(authenticate);
+
+// Each /send sends a real, billable SMS via the business's provider. Cap it
+// per authenticated user to blunt toll-fraud / spam loops. This is a per-route
+// backstop on top of the global limiter; pair it with a per-business daily cap
+// once usage data exists. Keyed by user id (falls back to IP if unset).
+const sendLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: AuthRequest) => req.user?.id ?? req.ip ?? 'anon',
+});
 
 const WRITER_ROLES = ['owner', 'admin', 'manager', 'office'];
 
@@ -149,7 +162,7 @@ smsRouter.post('/disconnect', async (req: AuthRequest, res) => {
 });
 
 // ── POST /send ───────────────────────────────────────────────────────────────
-smsRouter.post('/send', async (req: AuthRequest, res) => {
+smsRouter.post('/send', sendLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
