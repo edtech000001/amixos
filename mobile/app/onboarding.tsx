@@ -36,19 +36,21 @@ export default function OnboardingRoute() {
     }
 
     try {
-      // The persisted client doesn't reliably attach the user's token to
-      // storage uploads (request goes out anonymous → logos RLS denies it).
-      // Upload with a one-off client carrying the access token explicitly.
+      // Storage uploads need the user's token in the client's in-memory
+      // session (supabase-js sets the Authorization header from there and
+      // overrides any global header). A dedicated client with setSession()
+      // guarantees the token is sent, else the logos RLS denies it as anon.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return { error: t.page.finishGenericError };
       const uploadClient = createClient(
         process.env.EXPO_PUBLIC_SUPABASE_URL!,
         process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          auth: { persistSession: false, autoRefreshToken: false },
-          global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-        },
+        { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'amixos-logo-upload' } },
       );
+      await uploadClient.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
 
       // Read the file as an ArrayBuffer for upload to Supabase Storage.
       const response = await fetch(asset.uri);
