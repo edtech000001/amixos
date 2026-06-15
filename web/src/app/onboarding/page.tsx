@@ -50,6 +50,16 @@ export default function OnboardingPage() {
       return;
     }
 
+    // Ensure the auth session is hydrated so the storage request carries the
+    // user's token. Without it, an upload firing before the client finishes
+    // loading the session goes out anonymously → the logos RLS policy
+    // (auth.uid() is not null) denies it ("violates row-level security policy").
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      resolve({ error: t.page.finishGenericError });
+      return;
+    }
+
     const ext = file.name.split('.').pop();
     const path = `logos/${Date.now()}.${ext}`;
 

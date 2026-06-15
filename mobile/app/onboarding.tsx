@@ -35,6 +35,11 @@ export default function OnboardingRoute() {
     }
 
     try {
+      // Ensure the auth session is hydrated so the storage request carries the
+      // user's token (else the logos RLS policy denies the anonymous upload).
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { error: t.page.finishGenericError };
+
       // Read the file as an ArrayBuffer for upload to Supabase Storage.
       const response = await fetch(asset.uri);
       const blob = await response.blob();
