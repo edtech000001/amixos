@@ -340,33 +340,58 @@ const PRESET_ALIASES: Record<string, InvoicePresetId> = {
 
 export const DEFAULT_INVOICE_TEMPLATE: InvoiceTemplateConfig = INVOICE_PRESETS.classic;
 
-// ── Freeform default layout + element validation ─────────────────────────────
+// ── Freeform layout (theme decomposed into movable elements) ─────────────────
 
-/** A sensible starting layout (percent coords) seeded when freeform is first
- *  enabled — the user then drags/edits from here. Stable ids so re-normalizing
- *  is idempotent. */
-export function defaultElements(): InvoiceElement[] {
+/** Shared body elements (billing / items / totals) — identical under every
+ *  header style; only the header differs by archetype. */
+function bodyElements(): InvoiceElement[] {
   return [
-    { id: 'el-logo', kind: 'logo', x: 5, y: 4, w: 22, h: 9 },
-    { id: 'el-bizname', kind: 'field', field: 'businessName', x: 5, y: 15, w: 45, h: 4, style: { bold: true, fontSize: 18 } },
-    { id: 'el-bizcontact', kind: 'field', field: 'businessContact', x: 5, y: 19, w: 45, h: 12, style: { fontSize: 11 } },
-    { id: 'el-title', kind: 'field', field: 'invoiceTitle', x: 60, y: 4, w: 35, h: 7, style: { bold: true, fontSize: 28, align: 'right' } },
-    { id: 'el-number', kind: 'field', field: 'invoiceNumber', x: 60, y: 11, w: 35, h: 4, style: { align: 'right', fontSize: 13 } },
-    { id: 'el-issue', kind: 'field', field: 'issueDate', x: 55, y: 17, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
-    { id: 'el-due', kind: 'field', field: 'dueDate', x: 55, y: 21, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
-    { id: 'el-billlabel', kind: 'field', field: 'billToLabel', x: 5, y: 34, w: 45, h: 3, style: { bold: true, fontSize: 11 } },
-    { id: 'el-billname', kind: 'field', field: 'billToName', x: 5, y: 37, w: 45, h: 4, style: { bold: true, fontSize: 13 } },
-    { id: 'el-billcontact', kind: 'field', field: 'billToContact', x: 5, y: 41, w: 45, h: 8, style: { fontSize: 11 } },
-    { id: 'el-items', kind: 'field', field: 'lineItems', x: 5, y: 51, w: 90, h: 30 },
+    { id: 'el-billlabel', kind: 'field', field: 'billToLabel', x: 5, y: 35, w: 45, h: 3, style: { bold: true, fontSize: 11 } },
+    { id: 'el-billname', kind: 'field', field: 'billToName', x: 5, y: 38, w: 45, h: 4, style: { bold: true, fontSize: 13 } },
+    { id: 'el-billcontact', kind: 'field', field: 'billToContact', x: 5, y: 42, w: 45, h: 8, style: { fontSize: 11 } },
+    { id: 'el-items', kind: 'field', field: 'lineItems', x: 5, y: 52, w: 90, h: 28 },
     { id: 'el-subtotal', kind: 'field', field: 'subtotal', x: 55, y: 83, w: 40, h: 4, style: { align: 'right', fontSize: 12 } },
     { id: 'el-tax', kind: 'field', field: 'tax', x: 55, y: 87, w: 40, h: 4, style: { align: 'right', fontSize: 12 } },
     { id: 'el-total', kind: 'field', field: 'total', x: 55, y: 91, w: 40, h: 5, style: { align: 'right', bold: true, fontSize: 16 } },
   ];
 }
 
-/** Stable ids of the old auto-seeded field layout — used to migrate legacy
- *  freeform configs (those elements are now redundant with the base design). */
-const LEGACY_FREEFORM_ELEMENT_IDS = new Set(defaultElements().map(e => e.id));
+/** Decompose a theme into individually-movable freeform elements that reproduce
+ *  its look: a band-style header becomes an accent rectangle + light text; a
+ *  plain header is business-left / accent-title-right. Everything is a real
+ *  element, so in freeform the user can drag/restyle every piece. The band shape
+ *  is listed FIRST so it paints behind the text. */
+export function buildThemeElements(cfg: InvoiceTemplateConfig): InvoiceElement[] {
+  const accent = cfg.accentColor || ACCENT_DEFAULT;
+  const onAcc = onAccentColor(accent);
+  const bandLike = cfg.archetype === 'band' || cfg.archetype === 'panel' || cfg.archetype === 'bandCenter';
+  const header: InvoiceElement[] = bandLike
+    ? [
+        { id: 'el-band', kind: 'shape', shape: 'rectangle', x: 4, y: 4, w: 92, h: 25, style: { fill: accent, radius: 12 } },
+        { id: 'el-bizname', kind: 'field', field: 'businessName', x: 9, y: 9, w: 44, h: 5, style: { bold: true, fontSize: 20, color: onAcc } },
+        { id: 'el-bizcontact', kind: 'field', field: 'businessContact', x: 9, y: 15, w: 44, h: 11, style: { fontSize: 11, color: onAcc } },
+        { id: 'el-title', kind: 'field', field: 'invoiceTitle', x: 52, y: 8, w: 40, h: 7, style: { bold: true, fontSize: 30, align: 'right', color: onAcc } },
+        { id: 'el-number', kind: 'field', field: 'invoiceNumber', x: 52, y: 15, w: 40, h: 4, style: { bold: true, align: 'right', fontSize: 14, color: onAcc } },
+        { id: 'el-status', kind: 'field', field: 'status', x: 52, y: 19, w: 40, h: 3, style: { align: 'right', fontSize: 10, color: onAcc } },
+        { id: 'el-issue', kind: 'field', field: 'issueDate', x: 48, y: 22, w: 44, h: 3, style: { align: 'right', fontSize: 11, color: onAcc } },
+        { id: 'el-due', kind: 'field', field: 'dueDate', x: 48, y: 25, w: 44, h: 3, style: { align: 'right', fontSize: 11, color: onAcc } },
+      ]
+    : [
+        ...(cfg.showLogo ? [{ id: 'el-logo', kind: 'logo', x: 5, y: 4, w: 22, h: 9 } as InvoiceElement] : []),
+        { id: 'el-bizname', kind: 'field', field: 'businessName', x: 5, y: 15, w: 45, h: 4, style: { bold: true, fontSize: 18 } },
+        { id: 'el-bizcontact', kind: 'field', field: 'businessContact', x: 5, y: 19, w: 45, h: 12, style: { fontSize: 11 } },
+        { id: 'el-title', kind: 'field', field: 'invoiceTitle', x: 60, y: 4, w: 35, h: 7, style: { bold: true, fontSize: 28, align: 'right' } },
+        { id: 'el-number', kind: 'field', field: 'invoiceNumber', x: 60, y: 11, w: 35, h: 4, style: { align: 'right', fontSize: 13 } },
+        { id: 'el-issue', kind: 'field', field: 'issueDate', x: 55, y: 17, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
+        { id: 'el-due', kind: 'field', field: 'dueDate', x: 55, y: 21, w: 40, h: 4, style: { align: 'right', fontSize: 11 } },
+      ];
+  return [...header, ...bodyElements()];
+}
+
+/** Back-compat: the plain (classic) decomposition. */
+export function defaultElements(): InvoiceElement[] {
+  return buildThemeElements(DEFAULT_INVOICE_TEMPLATE);
+}
 
 function normalizeElement(e: unknown): InvoiceElement | null {
   if (!e || typeof e !== 'object') return null;
@@ -471,11 +496,15 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
   let elements = Array.isArray(r.elements)
     ? r.elements.map(normalizeElement).filter((e): e is InvoiceElement => e !== null)
     : undefined;
-  // Migration: freeform now renders the structured design as a base + overlays.
-  // Drop the legacy auto-seeded field layout (stable ids from defaultElements)
-  // so old freeform configs don't double-render the header/items/totals.
-  if (elements && elements.length) {
-    elements = elements.filter(e => !LEGACY_FREEFORM_ELEMENT_IDS.has(e.id));
+  // Freeform always needs elements (the theme decomposed into movable pieces) —
+  // seed them from the resolved theme if none are present yet.
+  if (layoutMode === 'freeform' && (!elements || elements.length === 0)) {
+    elements = buildThemeElements({
+      ...base,
+      accentColor: typeof r.accentColor === 'string' ? r.accentColor : base.accentColor,
+      archetype,
+      showLogo: r.showLogo !== false,
+    });
   }
 
   return {
@@ -1377,14 +1406,13 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return `<div class="inv-el-text">${br(resolveFieldValue(vm, el.field as InvoiceFieldKey))}</div>`;
   };
 
-  // Base document is always the structured sections. Freeform layers the user's
-  // overlay elements absolutely on top of the whole page.
-  const body = vm.sections.map(id => sectionHtml[id]).join('\n');
-  const overlayHtml = freeform && vm.elements.length
-    ? `<div class="inv-overlay">${vm.elements
+  // Freeform draws the theme decomposed into positioned elements; flow stacks
+  // the structured sections.
+  const body = freeform
+    ? `<div class="inv-canvas">${vm.elements
         .map(el => `<div class="inv-abs" style="left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;${elStyleCss(el)}">${elInner(el)}</div>`)
         .join('')}</div>`
-    : '';
+    : vm.sections.map(id => sectionHtml[id]).join('\n');
 
   const gap = st.density === 'compact' ? 14 : 22;
   const cellPad = st.density === 'compact' ? '6px 8px' : '9px 8px';
@@ -1405,7 +1433,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     (deco.bottomBand ? `<svg class="inv-deco-bot" viewBox="${deco.bottomBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.bottomBand.height}px">${svgShapes(deco.bottomBand.spec)}</svg>` : '');
   const docPad = deco.padTop || deco.padBottom ? ` style="padding-top:${deco.padTop}px;padding-bottom:${deco.padBottom}px"` : '';
   const footerBarHtml =
-    vm.footerBar && vm.footerContact.length
+    !freeform && vm.footerBar && vm.footerContact.length
       ? `<div class="inv-footerbar">${vm.footerContact
           .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
           .join('<span class="fb-sep">·</span>')}</div>`
@@ -1413,7 +1441,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   // "Full-page" presets (decoration / footer strip / tint) get a minimum height
   // of one letter page so the flourishes anchor to the page edges and the footer
   // strip sits at the bottom — like a real printed sheet.
-  const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
+  const fullPage = !freeform && (vm.decoration !== 'none' || vm.footerBar || vm.pageTint);
   const pageCls = `inv-page${vm.pageTint ? ' tinted' : ''}${fullPage ? ' full' : ''}`;
 
   return `<!DOCTYPE html>
@@ -1426,8 +1454,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-doc > * { margin-bottom: ${gap}px; }
-    .inv-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-    .inv-overlay > * { margin-bottom: 0; }
+    .inv-canvas { position: relative; width: 100%; aspect-ratio: 8.5 / 11; }
+    .inv-canvas > * { margin-bottom: 0; }
     .inv-abs { position: absolute; overflow: hidden; }
     .inv-el-logo { max-width: 100%; max-height: 100%; object-fit: contain; }
     .inv-el-text { white-space: pre-wrap; line-height: 1.35; }
@@ -1557,7 +1585,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-footer { border-top: 1px solid #e5e7eb; padding-top: 10px; color: #9ca3af; font-size: ${st.fontPx - 2}px; text-align: center; white-space: pre-wrap; }
   </style>
 </head>
-<body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}${overlayHtml}</div></body>
+<body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}</div></body>
 </html>`;
 }
 
@@ -1571,20 +1599,20 @@ export function applyPreset(presetId: InvoicePresetId, current?: InvoiceTemplate
   return next;
 }
 
-/** Seed a Freeform config from a Structured preset: the theme's full design
- *  renders as the base; the user layers their own elements (shapes / icons /
- *  text / logos) on top. Starts with no overlays. */
+/** Seed a Freeform config from a Structured preset: the theme is decomposed into
+ *  individually-movable elements (every text is draggable), keeping the theme's
+ *  colors + decoration. */
 export function freeformFromPreset(presetId: InvoicePresetId, current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
   const base = applyPreset(presetId, current);
-  return { ...base, layoutMode: 'freeform', elements: [] };
+  return { ...base, layoutMode: 'freeform', elements: buildThemeElements(base) };
 }
 
-/** A blank Freeform starting point — plain default theme as the base, no
- *  overlays (start from scratch). Preserves the chosen default language. */
+/** A blank Freeform starting point — the plain default theme as movable
+ *  elements (start from scratch). Preserves the chosen default language. */
 export function blankFreeform(current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
   const base = clone(DEFAULT_INVOICE_TEMPLATE);
   if (current) base.defaultLanguage = current.defaultLanguage;
-  return { ...base, layoutMode: 'freeform', elements: [] };
+  return { ...base, layoutMode: 'freeform', elements: buildThemeElements(base) };
 }
 export function setArchetype(c: InvoiceTemplateConfig, archetype: InvoiceArchetype): InvoiceTemplateConfig {
   return { ...c, archetype };
@@ -1648,10 +1676,12 @@ export function setPageTint(c: InvoiceTemplateConfig, pageTint: boolean): Invoic
 // ── Freeform element editor (Phase 3 — element canvas) ───────────────────────
 
 export function setLayoutMode(c: InvoiceTemplateConfig, mode: InvoiceLayoutMode): InvoiceTemplateConfig {
-  // Freeform renders the structured design as a base + the user's overlay
-  // elements on top — so switching modes keeps any overlays but never seeds the
-  // old field layout.
-  return { ...c, layoutMode: mode === 'freeform' ? 'freeform' : 'flow' };
+  if (mode === 'freeform') {
+    // Decompose the current theme into movable elements if none exist yet.
+    const elements = c.elements && c.elements.length ? c.elements : buildThemeElements(c);
+    return { ...c, layoutMode: 'freeform', elements };
+  }
+  return { ...c, layoutMode: 'flow' };
 }
 
 let elCounter = 0;

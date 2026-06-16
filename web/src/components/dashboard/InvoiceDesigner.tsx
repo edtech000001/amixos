@@ -300,11 +300,9 @@ function BuilderCanvas({ value, onChange, onBeginInteraction, vm, selectedId, se
       onPointerUp={end}
       onPointerLeave={end}
       onPointerDown={() => setSelectedId(null)}
-      style={{ position: 'relative', width: '100%', maxWidth: DOC_W, margin: '0 auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', touchAction: 'none' }}
+      style={{ position: 'relative', width: '100%', maxWidth: DOC_W, margin: '0 auto', aspectRatio: '8.5 / 11', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', touchAction: 'none' }}
     >
-      {/* The base document (theme design) sets the canvas height; overlay element
-          boxes are positioned as a % of it. */}
-      <div style={{ pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <InvoiceDocument vm={vm} />
       </div>
       {els.map(el => {

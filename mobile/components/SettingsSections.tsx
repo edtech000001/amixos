@@ -2992,12 +2992,9 @@ export function AccountSection() {
     }
   };
 
-  const confirmLogout = () => {
-    Alert.alert('', '', [
-      { text: full.common.buttons.cancel, style: 'cancel' },
-      { text: full.dashboard.sidebar.logout, style: 'destructive', onPress: logout },
-    ]);
-  };
+  // One-handed: a bottom sheet instead of a centered iOS alert.
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const confirmLogout = () => setLogoutOpen(true);
 
   return (
     <View className="gap-4">
@@ -3134,6 +3131,39 @@ export function AccountSection() {
           {full.dashboard.sidebar.logout}
         </Text>
       </Pressable>
+
+      {/* Sign-out confirmation — bottom sheet (one-handed) */}
+      <RNModal visible={logoutOpen} transparent animationType="fade" onRequestClose={() => setLogoutOpen(false)}>
+        <Pressable onPress={() => setLogoutOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pb-10 pt-4">
+            <View className="items-center mb-4">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="items-center mb-5 gap-2">
+              <View className="w-12 h-12 rounded-2xl bg-red-50 items-center justify-center">
+                <LogOut size={22} color="#EF4444" />
+              </View>
+              <Text className="text-lg font-bold text-gray-900">{full.dashboard.sidebar.logout}</Text>
+              <Text className="text-sm text-gray-500 text-center">{t.account.logoutConfirm}</Text>
+            </View>
+            <View className="gap-2.5">
+              <Pressable
+                onPress={() => { setLogoutOpen(false); logout(); }}
+                style={{ backgroundColor: '#DC2626' }}
+                className="py-3.5 rounded-2xl items-center active:opacity-90"
+              >
+                <Text className="text-base font-semibold text-white">{full.dashboard.sidebar.logout}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setLogoutOpen(false)}
+                className="py-3.5 rounded-2xl bg-gray-100 items-center active:bg-gray-200"
+              >
+                <Text className="text-base font-semibold text-gray-700">{full.common.buttons.cancel}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </RNModal>
     </View>
   );
 }

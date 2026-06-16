@@ -458,39 +458,70 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     ),
   };
 
-  // Freeform overlay element (drawn on top of the base document).
-  const renderEl = (el: InvoiceElement): ReactNode => {
-    if (el.kind === 'logo') {
-      return vm.header.logoUrl ? (
-        <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
-      ) : null;
-    }
-    if (el.kind === 'shape') return <ShapeGlyph el={el} accent={accent} />;
-    if (el.kind === 'icon') return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
-    if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
-    const txt = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
-    const s = el.style ?? {};
-    const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? accent : '#1F2937');
+  if (vm.layoutMode === 'freeform') {
+    const ffDeco = decorationRender(vm.decoration, accent);
+    const renderEl = (el: InvoiceElement): ReactNode => {
+      if (el.kind === 'logo') {
+        return vm.header.logoUrl ? (
+          <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+        ) : null;
+      }
+      if (el.kind === 'shape') return <ShapeGlyph el={el} accent={accent} />;
+      if (el.kind === 'icon') return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
+      if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
+      const txt = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
+      const s = el.style ?? {};
+      const color = s.color ?? (el.kind === 'field' && fieldUsesAccent(el.field) ? accent : '#1F2937');
+      return (
+        <T
+          style={{
+            fontSize: s.fontSize,
+            fontWeight: s.bold ? '700' : undefined,
+            color,
+            textAlign: s.align,
+            lineHeight: s.fontSize ? s.fontSize * 1.35 : undefined,
+            fontFamily: s.font ? rnFont(s.font) : ff,
+          }}
+        >
+          {txt}
+        </T>
+      );
+    };
     return (
-      <T
-        style={{
-          fontSize: s.fontSize,
-          fontWeight: s.bold ? '700' : undefined,
-          color,
-          textAlign: s.align,
-          lineHeight: s.fontSize ? s.fontSize * 1.35 : undefined,
-          fontFamily: s.font ? rnFont(s.font) : ff,
-        }}
-      >
-        {txt}
-      </T>
+      <View style={{ backgroundColor: vm.pageTint ? withAlpha(accent, 0.06) : '#FFFFFF' }}>
+        <View style={{ width: '100%', aspectRatio: 8.5 / 11, overflow: 'hidden' }}>
+          {ffDeco.full ? (
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.full} />
+            </View>
+          ) : null}
+          {ffDeco.topBand ? (
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: ffDeco.topBand.height, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.topBand.spec} />
+            </View>
+          ) : null}
+          {ffDeco.bottomBand ? (
+            <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: ffDeco.bottomBand.height, zIndex: 0 }}>
+              <DecoSvg spec={ffDeco.bottomBand.spec} />
+            </View>
+          ) : null}
+          {vm.elements.map(el => (
+            <View
+              key={el.id}
+              style={{ position: 'absolute', zIndex: 1, left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}
+            >
+              {renderEl(el)}
+            </View>
+          ))}
+        </View>
+      </View>
     );
-  };
+  }
 
   const deco = decorationRender(vm.decoration, accent);
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
   const minHeight = fullPage && pageW > 0 ? pageW * (11 / 8.5) : undefined;
-  const flowDoc = (
+  return (
     <View
       onLayout={fullPage ? e => setPageW(e.nativeEvent.layout.width) : undefined}
       style={{ position: 'relative', overflow: 'hidden', backgroundColor: vm.pageTint ? withAlpha(accent, 0.06) : '#FFFFFF', minHeight }}
@@ -528,25 +559,4 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       ) : null}
     </View>
   );
-
-  if (vm.layoutMode === 'freeform') {
-    return (
-      <View>
-        {flowDoc}
-        {vm.elements.length ? (
-          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2 }}>
-            {vm.elements.map(el => (
-              <View
-                key={el.id}
-                style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}
-              >
-                {renderEl(el)}
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
-    );
-  }
-  return flowDoc;
 }

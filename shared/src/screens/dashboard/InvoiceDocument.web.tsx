@@ -396,28 +396,44 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     ),
   };
 
-  // Freeform overlay element (drawn on top of the base document).
-  const renderEl = (el: InvoiceElement): ReactNode => {
-    if (el.kind === 'logo') {
-      return vm.header.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-      ) : null;
-    }
-    if (el.kind === 'shape') {
-      return <div style={{ width: '100%', height: '100%', background: el.style?.fill ?? accent, borderRadius: el.shape === 'ellipse' ? '50%' : (el.style?.radius ?? 0) }} />;
-    }
-    if (el.kind === 'icon') {
-      return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
-    }
-    if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
-    const text = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
-    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
-  };
+  if (vm.layoutMode === 'freeform') {
+    const ffDeco = decorationRender(vm.decoration, accent);
+    const renderEl = (el: InvoiceElement): ReactNode => {
+      if (el.kind === 'logo') {
+        return vm.header.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        ) : null;
+      }
+      if (el.kind === 'shape') {
+        return <div style={{ width: '100%', height: '100%', background: el.style?.fill ?? accent, borderRadius: el.shape === 'ellipse' ? '50%' : (el.style?.radius ?? 0) }} />;
+      }
+      if (el.kind === 'icon') {
+        return <IconGlyph icon={el.icon ?? 'star'} color={el.style?.color ?? accent} />;
+      }
+      if (el.kind === 'field' && el.field === 'lineItems') return renderers.lineItems();
+      const text = el.kind === 'text' ? (el.text ?? '') : el.kind === 'customField' ? customFieldElementText(vm, el) : resolveFieldValue(vm, el.field!);
+      return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
+    };
+    return (
+      <div className="text-gray-800" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11', overflow: 'hidden' }}>
+          {ffDeco.full ? <DecoSvg spec={ffDeco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
+          {ffDeco.topBand ? <DecoSvg spec={ffDeco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: ffDeco.topBand.height }} /> : null}
+          {ffDeco.bottomBand ? <DecoSvg spec={ffDeco.bottomBand.spec} style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: ffDeco.bottomBand.height }} /> : null}
+          {vm.elements.map(el => (
+            <div key={el.id} style={{ position: 'absolute', zIndex: 1, left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}>
+              {renderEl(el)}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const deco = decorationRender(vm.decoration, accent);
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
-  const flowDoc = (
+  return (
     <div
       className="text-gray-800"
       style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
@@ -442,24 +458,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       ) : null}
     </div>
   );
-
-  if (vm.layoutMode === 'freeform') {
-    return (
-      <div style={{ position: 'relative' }}>
-        {flowDoc}
-        {vm.elements.length ? (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
-            {vm.elements.map(el => (
-              <div key={el.id} style={{ position: 'absolute', left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, overflow: 'hidden', opacity: el.style?.opacity ?? 1 }}>
-                {renderEl(el)}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-  return flowDoc;
 }
 
 function DecoSvg({ spec, style }: { spec: DecoSpec; style: CSSProperties }) {
