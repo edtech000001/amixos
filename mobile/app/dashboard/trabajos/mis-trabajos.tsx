@@ -11,6 +11,7 @@ import {
   JobsListScreen,
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface RawJob {
   id: string;
@@ -53,7 +54,7 @@ interface RawJob {
 export default function MisTrabajosTab() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, businesses } = useApp();
+  const { business, businesses, currentRole } = useApp();
   const user = useAuthStore((s) => s.user);
   const { t: full } = useLang();
   const tMy = full.dashboard.jobs.myJobs;
@@ -142,6 +143,7 @@ export default function MisTrabajosTab() {
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
+        canCreate={can.createJob(currentRole)}
       />
     </SafeAreaView>
   );

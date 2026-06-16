@@ -9,6 +9,7 @@ import {
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 
 interface RawJob {
@@ -48,7 +49,7 @@ export default function TrabajosTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, businesses } = useApp();
+  const { business, businesses, currentRole } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,6 +134,7 @@ export default function TrabajosTab() {
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
+        canCreate={can.createJob(currentRole)}
         alertThresholds={alertThresholds}
       />
     </View>

@@ -86,6 +86,10 @@ export interface JobsListScreenProps {
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
+  /** Whether the viewer may create jobs/proposals. Hides the "+ Nuevo"
+   *  trigger + empty-state link when false. Keep in sync with the native
+   *  variant. Defaults to true. */
+  canCreate?: boolean;
   // Upcoming-job alert tiers (Ajustes → Trabajos, migration 046). Keep in
   // sync with JobsListScreen.tsx — the native variant declares the same prop.
   alertThresholds?: JobAlertThresholds;
@@ -140,6 +144,7 @@ export function JobsListScreen({
   onViewInvoice,
   onNewJob,
   onNewProposal,
+  canCreate = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
@@ -371,12 +376,14 @@ export function JobsListScreen({
           </p>
         </div>
         <div className="relative">
+          {canCreate ? (
           <button
             onClick={() => setNewMenuOpen((v) => !v)}
             className="flex items-center gap-1 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90"
           >
             <Plus size={15} /> {t.newDropdown.trigger} <ChevronDown size={14} />
           </button>
+          ) : null}
           {newMenuOpen ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setNewMenuOpen(false)} />
@@ -521,7 +528,7 @@ export function JobsListScreen({
         <div className="flex flex-col items-center py-20">
           <ClipboardList size={40} className="text-gray-300" />
           <p className="text-sm text-gray-400 mt-3">{search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search && tab === 'all' ? (
+          {!search && tab === 'all' && canCreate ? (
             <button onClick={onNewJob} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
           ) : null}
         </div>

@@ -83,6 +83,12 @@ export interface JobsListScreenProps {
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
+  /**
+   * Whether the viewer may create jobs/proposals. Hides the FAB + empty-state
+   * "create first" link when false (e.g. field crew / viewers — they can't
+   * INSERT jobs under RLS and have no clients to pick). Defaults to true.
+   */
+  canCreate?: boolean;
   // Upcoming-job alert tiers from businesses.job_alert_thresholds. When
   // omitted or disabled, cards render without the indicator.
   alertThresholds?: JobAlertThresholds;
@@ -149,6 +155,7 @@ export function JobsListScreen({
   onViewInvoice,
   onNewJob,
   onNewProposal,
+  canCreate = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
@@ -487,7 +494,7 @@ export function JobsListScreen({
           <Text className="text-sm text-gray-400 mt-3">
             {search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}
           </Text>
-          {!search && tab === 'all' ? (
+          {!search && tab === 'all' && canCreate ? (
             <Pressable onPress={onNewJob} className="mt-1">
               <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
             </Pressable>
@@ -795,8 +802,9 @@ export function JobsListScreen({
       </RNModal>
     </ScrollView>
 
-    {/* New job/proposal — floating action, bottom-right thumb reach */}
-    <Fab onPress={() => setNewMenuOpen(true)} />
+    {/* New job/proposal — floating action, bottom-right thumb reach.
+       Hidden for roles that can't create jobs (field crew / viewers). */}
+    {canCreate ? <Fab onPress={() => setNewMenuOpen(true)} /> : null}
     </View>
   );
 }

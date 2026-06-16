@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -91,7 +92,13 @@ export default function NuevoTrabajoRoute() {
   const insets = useSafeAreaInsets();
   const { edit, duplicate, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string }>();
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, currentRole } = useApp();
+  // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
+  // insert and they have no clients to pick). The entry points are hidden, but
+  // guard the route too in case of a deep link.
+  useEffect(() => {
+    if (currentRole && !can.createJob(currentRole)) router.replace('/dashboard/trabajos');
+  }, [currentRole]);
   const { t: full } = useLang();
   const t = full.dashboard.jobs.new;
   const tc = full.common;

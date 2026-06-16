@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -75,8 +76,14 @@ function NuevoTrabajoContent() {
   };
 
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, currentRole } = useApp();
   const router = useRouter();
+  // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
+  // insert and they have no clients to pick). Entry points are hidden, but
+  // guard the route too in case of a deep link.
+  useEffect(() => {
+    if (currentRole && !can.createJob(currentRole)) router.replace('/dashboard/trabajos');
+  }, [currentRole, router]);
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
   // Duplicate mode: prefill the whole form from an existing job but save as
