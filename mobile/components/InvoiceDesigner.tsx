@@ -3,7 +3,7 @@
 // InvoiceDocument renderer as the real invoice / PDF / public link.
 
 import { useRef, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, PanResponder, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, PanResponder, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { ChevronUp, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -12,6 +12,7 @@ import type { InvoiceLang } from '@amixos/shared';
 import {
   INVOICE_PRESET_IDS,
   ALL_FONTS,
+  RN_FONTS,
   buildInvoiceViewModel,
   applyPreset,
   setAccent,
@@ -135,23 +136,33 @@ function Spectrum({ gid, stops, value, onChange }: { gid: string; stops: string[
   );
 }
 
+// Native font family for previewing a font choice in the picker (matches the
+// renderer's mapping; null/undefined ⇒ system font).
+function fontFamilyFor(f: InvoiceFont): string | undefined {
+  const def = RN_FONTS[f];
+  if (!def) return undefined;
+  return Platform.select({ ios: def.ios, android: def.android, default: def.android });
+}
+
 // Font picker as a dropdown (more options than fit in a segmented control).
 function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f: InvoiceFont) => void; t: DesignT }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-        <Text className="text-sm text-gray-700">{t.fonts[value]}</Text>
+        <Text className="text-sm text-gray-700" style={{ fontFamily: fontFamilyFor(value) }}>{t.fonts[value]}</Text>
         <ChevronDown size={18} color="#9CA3AF" />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 justify-center px-8">
-          <Pressable onPress={() => {}} className="bg-white rounded-2xl overflow-hidden">
-            {ALL_FONTS.map(f => (
-              <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-gray-100 ${value === f ? 'bg-primary/10' : ''}`}>
-                <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-gray-700'}`}>{t.fonts[f]}</Text>
-              </Pressable>
-            ))}
+          <Pressable onPress={() => {}} className="bg-white rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {ALL_FONTS.map(f => (
+                <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-gray-100 ${value === f ? 'bg-primary/10' : ''}`}>
+                  <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-gray-700'}`} style={{ fontFamily: fontFamilyFor(f) }}>{t.fonts[f]}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>

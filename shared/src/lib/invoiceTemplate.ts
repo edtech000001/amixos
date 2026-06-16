@@ -66,8 +66,19 @@ export type InvoiceTableHeader = 'plain' | 'accent' | 'dark' | 'tint';
 /** Full-bleed page flourish drawn as an absolute SVG layer behind the content. */
 export type InvoiceDecoration = 'none' | 'corners' | 'wave' | 'arc';
 
-export type InvoiceFont = 'sans' | 'serif' | 'mono' | 'times' | 'palatino' | 'trebuchet' | 'verdana';
-export const ALL_FONTS: InvoiceFont[] = ['sans', 'serif', 'mono', 'times', 'palatino', 'trebuchet', 'verdana'];
+export type InvoiceFont =
+  // Sans
+  | 'sans' | 'helvetica' | 'gillsans' | 'futura' | 'avenir' | 'optima' | 'trebuchet' | 'verdana'
+  // Serif
+  | 'serif' | 'times' | 'palatino' | 'baskerville' | 'didot' | 'hoefler' | 'typewriter' | 'copperplate'
+  // Mono
+  | 'mono' | 'courier';
+/** Picker order — grouped sans → serif → mono. */
+export const ALL_FONTS: InvoiceFont[] = [
+  'sans', 'helvetica', 'gillsans', 'futura', 'avenir', 'optima', 'trebuchet', 'verdana',
+  'serif', 'times', 'palatino', 'baskerville', 'didot', 'hoefler', 'typewriter', 'copperplate',
+  'mono', 'courier',
+];
 export type InvoiceDensity = 'comfortable' | 'compact';
 export type InvoiceLogoSize = 'sm' | 'md' | 'lg';
 
@@ -613,26 +624,54 @@ export interface StyleTokens {
 }
 
 const CSS_FONTS: Record<InvoiceFont, string> = {
+  // Sans
   sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  serif: 'Georgia, "Times New Roman", Times, serif',
-  mono: '"SF Mono", "Roboto Mono", Menlo, Consolas, monospace',
-  times: '"Times New Roman", Times, serif',
-  palatino: '"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif',
+  helvetica: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  gillsans: '"Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif',
+  futura: 'Futura, "Century Gothic", "Trebuchet MS", sans-serif',
+  avenir: '"Avenir Next", Avenir, "Segoe UI", Corbel, sans-serif',
+  optima: 'Optima, Candara, "Segoe UI", "Gill Sans", sans-serif',
   trebuchet: '"Trebuchet MS", "Segoe UI", Tahoma, sans-serif',
   verdana: 'Verdana, Geneva, Tahoma, sans-serif',
+  // Serif
+  serif: 'Georgia, "Times New Roman", Times, serif',
+  times: '"Times New Roman", Times, serif',
+  palatino: '"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif',
+  baskerville: 'Baskerville, "Baskerville Old Face", "Hoefler Text", Garamond, Georgia, serif',
+  didot: 'Didot, "Bodoni MT", "Hoefler Text", "Playfair Display", Georgia, serif',
+  hoefler: '"Hoefler Text", "Baskerville Old Face", Garamond, Georgia, serif',
+  typewriter: '"American Typewriter", Rockwell, "Courier New", Courier, serif',
+  copperplate: 'Copperplate, "Copperplate Gothic Light", "Big Caslon", "Times New Roman", serif',
+  // Mono
+  mono: '"SF Mono", "Roboto Mono", Menlo, Consolas, monospace',
+  courier: '"Courier New", Courier, monospace',
 };
 
 /** Native font family per platform for the RN renderer. `null` ⇒ system font.
  *  Android lacks most named fonts, so it falls back to a generic family; the PDF
  *  (HTML/CSS) still uses the full stack, so the printed output is correct. */
 export const RN_FONTS: Record<InvoiceFont, { ios: string; android: string } | null> = {
+  // Sans
   sans: null,
-  serif: { ios: 'Georgia', android: 'serif' },
-  mono: { ios: 'Menlo', android: 'monospace' },
-  times: { ios: 'Times New Roman', android: 'serif' },
-  palatino: { ios: 'Palatino', android: 'serif' },
+  helvetica: { ios: 'Helvetica Neue', android: 'sans-serif' },
+  gillsans: { ios: 'Gill Sans', android: 'sans-serif' },
+  futura: { ios: 'Futura', android: 'sans-serif' },
+  avenir: { ios: 'Avenir Next', android: 'sans-serif' },
+  optima: { ios: 'Optima', android: 'sans-serif' },
   trebuchet: { ios: 'Trebuchet MS', android: 'sans-serif' },
   verdana: { ios: 'Verdana', android: 'sans-serif' },
+  // Serif
+  serif: { ios: 'Georgia', android: 'serif' },
+  times: { ios: 'Times New Roman', android: 'serif' },
+  palatino: { ios: 'Palatino', android: 'serif' },
+  baskerville: { ios: 'Baskerville', android: 'serif' },
+  didot: { ios: 'Didot', android: 'serif' },
+  hoefler: { ios: 'Hoefler Text', android: 'serif' },
+  typewriter: { ios: 'American Typewriter', android: 'serif' },
+  copperplate: { ios: 'Copperplate', android: 'serif' },
+  // Mono
+  mono: { ios: 'Menlo', android: 'monospace' },
+  courier: { ios: 'Courier New', android: 'monospace' },
 };
 
 const LOGO_PX: Record<InvoiceLogoSize, number> = { sm: 36, md: 52, lg: 72 };
