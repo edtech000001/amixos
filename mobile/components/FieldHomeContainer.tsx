@@ -12,6 +12,7 @@ import {
   clockOut as doClockOut,
   updateFieldJobStatus,
   type FieldHomeJob,
+  type FieldHomeStats,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
 
@@ -27,6 +28,7 @@ export function FieldHomeContainer() {
 
   const [jobs, setJobs] = useState<FieldHomeJob[]>([]);
   const [open, setOpen] = useState<OpenTimesheet | null>(null);
+  const [stats, setStats] = useState<FieldHomeStats | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -37,6 +39,7 @@ export function FieldHomeContainer() {
     const data = await fetchFieldHome(supabase, business.id, user.id);
     setJobs(data.jobs);
     setOpen(data.openTimesheet);
+    setStats(data.stats);
     setEmployeeId(data.employeeId);
     setLoading(false);
   }, [business?.id, user?.id]);
@@ -50,7 +53,7 @@ export function FieldHomeContainer() {
     setError(false);
     if (open) {
       const ok = await doClockOut(supabase, open);
-      if (ok) setOpen(null); else setError(true);
+      if (ok) { setOpen(null); void load(); } else setError(true);
     } else {
       const ts = await doClockIn(supabase, business.id, user.id, employeeId);
       if (ts) setOpen(ts); else setError(true);
@@ -61,7 +64,8 @@ export function FieldHomeContainer() {
   const onAdvanceStatus = async (jobId: string, next: string) => {
     setError(false);
     const ok = await updateFieldJobStatus(supabase, jobId, next);
-    if (ok) setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: next } : j)));
+    // Optimistic, then refetch so lists + summary counts reconcile.
+    if (ok) { setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: next } : j))); void load(); }
     else setError(true);
   };
 
@@ -73,6 +77,7 @@ export function FieldHomeContainer() {
         businessSlot={<BusinessSwitcher />}
         jobs={jobs}
         openTimesheet={open}
+        stats={stats}
         clockBusy={busy}
         error={error}
         onToggleClock={onToggleClock}

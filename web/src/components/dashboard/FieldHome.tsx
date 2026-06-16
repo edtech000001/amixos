@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase } from 'lucide-react';
+import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, TrendingUp, type LucideIcon } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -17,7 +17,9 @@ import {
   clockIn as doClockIn,
   clockOut as doClockOut,
   updateFieldJobStatus,
+  formatHours,
   type FieldHomeJob,
+  type FieldHomeStats,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
 
@@ -37,6 +39,7 @@ export function FieldHome() {
 
   const [jobs, setJobs] = useState<FieldHomeJob[]>([]);
   const [open, setOpen] = useState<OpenTimesheet | null>(null);
+  const [stats, setStats] = useState<FieldHomeStats | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -47,6 +50,7 @@ export function FieldHome() {
     const data = await fetchFieldHome(supabase, business.id, user.id);
     setJobs(data.jobs);
     setOpen(data.openTimesheet);
+    setStats(data.stats);
     setEmployeeId(data.employeeId);
     setLoading(false);
   }, [business?.id, user?.id]);
@@ -59,7 +63,7 @@ export function FieldHome() {
     setError(false);
     if (open) {
       const ok = await doClockOut(supabase, open);
-      if (ok) setOpen(null); else setError(true);
+      if (ok) { setOpen(null); void load(); } else setError(true);
     } else {
       const ts = await doClockIn(supabase, business.id, user.id, employeeId);
       if (ts) setOpen(ts); else setError(true);
@@ -70,7 +74,9 @@ export function FieldHome() {
   const advance = async (job: FieldHomeJob, next: string) => {
     setError(false);
     const ok = await updateFieldJobStatus(supabase, job.id, next);
-    if (ok) setJobs(prev => prev.map(j => (j.id === job.id ? { ...j, status: next } : j)));
+    // Optimistic, then refetch so the lists + summary counts reconcile
+    // (a completed job leaves the active list and bumps "completed (mo.)").
+    if (ok) { setJobs(prev => prev.map(j => (j.id === job.id ? { ...j, status: next } : j))); void load(); }
     else setError(true);
   };
 
@@ -175,6 +181,24 @@ export function FieldHome() {
             {open ? f.clockOut : f.clockIn}
           </button>
         </div>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {([
+          { label: f.statAssigned, value: String(stats?.assignedActive ?? 0), icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: f.statCompleted, value: String(stats?.completedMonth ?? 0), icon: CheckCircle2, color: 'text-primary', bg: 'bg-primary/10' },
+          { label: f.statHoursWeek, value: formatHours(stats?.hoursWeek ?? 0), icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
+          { label: f.statHoursMonth, value: formatHours(stats?.hoursMonth ?? 0), icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50' },
+        ] as { label: string; value: string; icon: LucideIcon; color: string; bg: string }[]).map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-3`}>
+              <Icon size={18} className={color} />
+            </div>
+            <p className="text-xl font-bold text-gray-900">{value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+          </div>
+        ))}
       </div>
 
       {/* Today */}

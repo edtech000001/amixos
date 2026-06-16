@@ -34,11 +34,34 @@ export interface OpenTimesheet {
   clockIn: string;
 }
 
+export interface FieldHomeStats {
+  /** Active assigned jobs (scheduled / in_progress / accepted). */
+  assignedActive: number;
+  /** Jobs the worker completed this calendar month. */
+  completedMonth: number;
+  /** Logged hours so far this week (completed timesheet sessions). */
+  hoursWeek: number;
+  /** Logged hours so far this calendar month. */
+  hoursMonth: number;
+}
+
 export interface FieldHomeData {
   jobs: FieldHomeJob[];
   openTimesheet: OpenTimesheet | null;
+  stats: FieldHomeStats;
   /** The caller's employees row id in this business, if one exists. */
   employeeId: string | null;
+}
+
+/** Format decimal hours as "Xh Ym" (omits the minutes when zero). */
+export function formatHours(h: number): string {
+  const total = Math.max(0, Math.round(h * 60)); // minutes
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours === 0 && mins === 0) return '0h';
+  if (mins === 0) return `${hours}h`;
+  if (hours === 0) return `${mins}m`;
+  return `${hours}h ${mins}m`;
 }
 
 interface RawAssignment {
@@ -67,7 +90,15 @@ export async function fetchFieldHome(
   businessId: string,
   userId: string,
 ): Promise<FieldHomeData> {
-  const [jobsRes, employeeRes, timesheetRes] = await Promise.all([
+  const now = new Date();
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Week starts Sunday (US). Midnight local so today's hours count.
+  const startWeek = new Date(now);
+  startWeek.setHours(0, 0, 0, 0);
+  startWeek.setDate(startWeek.getDate() - startWeek.getDay());
+  const startMonthDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}-01`;
+
+  const [jobsRes, employeeRes, timesheetRes, completedRes, monthSheetsRes] = await Promise.all([
     supabase
       .from('jobs')
       .select(
@@ -92,6 +123,20 @@ export async function fetchFieldHome(
       .order('clock_in', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Completed-this-month count (RLS scopes to the worker's assigned jobs).
+    supabase
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('completed_date', startMonthDate),
+    // This month's own timesheets — bounded to a month, summed for hours.
+    supabase
+      .from('timesheets')
+      .select('clock_in, clock_out, hours_total')
+      .eq('business_id', businessId)
+      .eq('user_id', userId)
+      .gte('clock_in', startMonth.toISOString()),
   ]);
 
   const rows = (jobsRes.data ?? []) as RawFieldJob[];
@@ -116,12 +161,37 @@ export async function fetchFieldHome(
     };
   });
 
+  // Sum completed sessions (clock_out set). hours_total is the source of
+  // truth; fall back to clock_out − clock_in for rows saved without it.
+  const sheets = (monthSheetsRes.data ?? []) as Array<{
+    clock_in: string;
+    clock_out: string | null;
+    hours_total: number | null;
+  }>;
+  const startWeekMs = startWeek.getTime();
+  let hoursWeek = 0;
+  let hoursMonth = 0;
+  for (const r of sheets) {
+    if (!r.clock_out) continue;
+    const h = r.hours_total != null
+      ? Number(r.hours_total)
+      : Math.max(0, (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3_600_000);
+    hoursMonth += h;
+    if (new Date(r.clock_in).getTime() >= startWeekMs) hoursWeek += h;
+  }
+
   return {
     jobs,
     employeeId: (employeeRes.data as { id: string } | null)?.id ?? null,
     openTimesheet: timesheetRes.data
       ? { id: timesheetRes.data.id, clockIn: timesheetRes.data.clock_in }
       : null,
+    stats: {
+      assignedActive: jobs.length,
+      completedMonth: completedRes.count ?? 0,
+      hoursWeek,
+      hoursMonth,
+    },
   };
 }
 

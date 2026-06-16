@@ -45,6 +45,11 @@ export type DashboardDict = {
     complete: string;
     noClient: string;
     noDate: string;
+    summaryTitle: string;
+    statAssigned: string;
+    statCompleted: string;
+    statHoursWeek: string;
+    statHoursMonth: string;
   };
   home: {
     welcome: string;
@@ -1858,6 +1863,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       complete: 'Completar',
       noClient: 'Sin cliente',
       noDate: 'Sin fecha',
+      summaryTitle: 'Mi resumen',
+      statAssigned: 'Asignados',
+      statCompleted: 'Completados (mes)',
+      statHoursWeek: 'Horas (semana)',
+      statHoursMonth: 'Horas (mes)',
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -3653,6 +3663,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       complete: 'Complete',
       noClient: 'No client',
       noDate: 'No date',
+      summaryTitle: 'My summary',
+      statAssigned: 'Assigned',
+      statCompleted: 'Completed (mo.)',
+      statHoursWeek: 'Hours (week)',
+      statHoursMonth: 'Hours (month)',
     },
     home: {
       welcome: 'Welcome 👋',

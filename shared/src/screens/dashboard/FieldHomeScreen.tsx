@@ -1,8 +1,8 @@
 import { type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase } from 'lucide-react-native';
+import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, TrendingUp, type LucideIcon } from 'lucide-react-native';
 import { useLang } from '../../i18n';
-import type { FieldHomeJob, OpenTimesheet } from '../../lib/fieldHome';
+import { formatHours, type FieldHomeJob, type FieldHomeStats, type OpenTimesheet } from '../../lib/fieldHome';
 
 // Purpose-built home for the "field" role (crew). Presentational — the mobile
 // wrapper owns data + writes via the shared fieldHome module, mirroring how
@@ -15,6 +15,7 @@ export interface FieldHomeScreenProps {
   businessSlot?: ReactNode;
   jobs: FieldHomeJob[];
   openTimesheet: OpenTimesheet | null;
+  stats: FieldHomeStats | null;
   clockBusy: boolean;
   error: boolean;
   onToggleClock: () => void;
@@ -39,6 +40,7 @@ export function FieldHomeScreen({
   businessSlot,
   jobs,
   openTimesheet,
+  stats,
   clockBusy,
   error,
   onToggleClock,
@@ -176,6 +178,24 @@ export function FieldHomeScreen({
             )}
           </Pressable>
         </View>
+      </View>
+
+      {/* Summary stats — 2×2 grid */}
+      <View className="flex-row flex-wrap justify-between mb-3">
+        {([
+          { label: f.statAssigned, value: String(stats?.assignedActive ?? 0), icon: Briefcase, color: '#059669', bg: 'bg-emerald-50' },
+          { label: f.statCompleted, value: String(stats?.completedMonth ?? 0), icon: CheckCircle2, color: '#4F46E5', bg: 'bg-primary/10' },
+          { label: f.statHoursWeek, value: formatHours(stats?.hoursWeek ?? 0), icon: Clock, color: '#F97316', bg: 'bg-orange-50' },
+          { label: f.statHoursMonth, value: formatHours(stats?.hoursMonth ?? 0), icon: TrendingUp, color: '#7C3AED', bg: 'bg-violet-50' },
+        ] as { label: string; value: string; icon: LucideIcon; color: string; bg: string }[]).map(({ label, value, icon: Icon, color, bg }) => (
+          <View key={label} className="w-[48%] bg-white rounded-2xl border border-gray-100 p-4 mb-3">
+            <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
+              <Icon size={18} color={color} />
+            </View>
+            <Text className="text-xl font-bold text-gray-900">{value}</Text>
+            <Text className="text-xs text-gray-500 mt-0.5">{label}</Text>
+          </View>
+        ))}
       </View>
 
       {/* Today */}
