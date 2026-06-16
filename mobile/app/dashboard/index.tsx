@@ -12,7 +12,17 @@ import {
 } from '@amixos/shared/screens/dashboard/DashboardHomeScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { type DashboardLayout } from '@amixos/shared/lib/dashboardWidgets';
+import { isFieldOnly } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { FieldHomeContainer } from '@/components/FieldHomeContainer';
+
+// Field crew get a purpose-built home (assigned jobs + clock in/out) instead
+// of the owner's widget grid. Branch once the role is known.
+export default function DashboardHome() {
+  const { currentRole, loading } = useApp();
+  if (!loading && isFieldOnly(currentRole)) return <FieldHomeContainer />;
+  return <OwnerDashboardHome />;
+}
 
 interface RawRecentInvoice {
   id: string;
@@ -31,11 +41,11 @@ interface RawUpcomingJob {
   clients: { first_name: string; last_name: string } | null;
 }
 
-export default function DashboardHome() {
+function OwnerDashboardHome() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, loading: appLoading, refetchBusiness } = useApp();
+  const { business, currentRole, loading: appLoading, refetchBusiness } = useApp();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<DashboardRecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<DashboardUpcomingJob[]>([]);
@@ -161,6 +171,7 @@ export default function DashboardHome() {
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
       <DashboardHomeScreen
         loading={appLoading || loading}
+        role={currentRole}
         businessName={business?.name ?? ''}
         businessSlot={<BusinessSwitcher />}
         stats={stats}

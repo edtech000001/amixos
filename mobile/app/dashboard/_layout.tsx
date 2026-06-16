@@ -6,6 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AnimatedDock } from '@/components/AnimatedDock';
+import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useAuthStore } from '@/lib/auth/store';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
@@ -82,7 +84,13 @@ export default function DashboardLayout() {
 function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
+  const { currentRole } = useApp();
   const insets = useSafeAreaInsets();
+  // Role-gated dock tabs. The screens stay registered (so deep links still
+  // resolve) but href:null drops them from the dock for roles that can't read
+  // them — field crew see no Clientes/Facturas tabs (RLS would return empty).
+  const showClientes = can.seeAllClients(currentRole);
+  const showFacturas = can.seeInvoices(currentRole);
   const { status } = useGoogleSyncBanner();
   const [bannerHeight, setBannerHeight] = useState(0);
   const bannerVisible = status.kind !== 'idle';
@@ -117,6 +125,7 @@ function DashboardTabs() {
           <Tabs.Screen
             name="clientes/index"
             options={{
+              href: showClientes ? undefined : null,
               title: sb.clientes,
               tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
             }}
@@ -131,6 +140,7 @@ function DashboardTabs() {
           <Tabs.Screen
             name="facturas/index"
             options={{
+              href: showFacturas ? undefined : null,
               title: sb.facturas,
               tabBarIcon: ({ color, size }) => <FileText color={color} size={size} />,
             }}

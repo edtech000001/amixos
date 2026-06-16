@@ -10,7 +10,7 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
+import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -53,6 +53,10 @@ interface FieldTemplate {
 
 type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta' | 'soporte';
 
+// Tabs that change business config — admin-only. The rest ('cuenta','soporte')
+// are personal and visible to every member.
+const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'facturas', 'facturatema', 'conexiones'];
+
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
 const DEFAULT_EMPLOYEE_FIELD_KEYS = [
@@ -92,6 +96,16 @@ export default function AjustesPage() {
   const tFields = full.dashboard.clients.fields;
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'negocio');
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  // Non-admins can only see their own account + support (SettingsNav hides the
+  // config tabs). If one lands on a config tab — via a stale URL or the
+  // default 'negocio' — bounce them to 'cuenta' once the role is known.
+  useEffect(() => {
+    if (currentRole && !can.manageBusinessSettings(currentRole) && CONFIG_TABS.includes(tab)) {
+      setTab('cuenta');
+    }
+  }, [currentRole, tab]);
 
   // Map default client field keys to translated labels
   const DEFAULT_CLIENT_FIELDS: { key: string; label: string }[] = [
@@ -2627,14 +2641,33 @@ export default function AjustesPage() {
                   (removed from the sidebar to avoid two competing entry points). */}
               <button
                 type="button"
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  window.location.href = '/auth/login';
-                }}
+                onClick={() => setLogoutOpen(true)}
                 className="flex items-center justify-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={16} /> {full.dashboard.sidebar.logout}
               </button>
+
+              {logoutOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setLogoutOpen(false)} />
+                  <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col items-center text-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center"><LogOut size={22} className="text-red-600" /></div>
+                    <div className="text-lg font-bold text-gray-900">{full.dashboard.sidebar.logout}</div>
+                    <div className="text-sm text-gray-500">{t.account.logoutConfirm}</div>
+                    <div className="flex gap-3 w-full mt-2">
+                      <button type="button" onClick={() => setLogoutOpen(false)}
+                        className="flex-1 py-2.5 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200">
+                        {full.common.buttons.cancel}
+                      </button>
+                      <button type="button"
+                        onClick={async () => { await supabase.auth.signOut(); window.location.href = '/auth/login'; }}
+                        className="flex-1 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700">
+                        {full.dashboard.sidebar.logout}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -14,6 +14,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface MenuItem {
   key: string;
@@ -22,12 +23,14 @@ interface MenuItem {
   icon: LucideIcon;
   path?: string;
   onPress?: () => void;
+  /** Omitted = visible to everyone. */
+  show?: boolean;
 }
 
 export default function MasMenu() {
   const router = useRouter();
   const { t } = useLang();
-  const { business } = useApp();
+  const { business, currentRole } = useApp();
   const sb = t.dashboard.sidebar;
   const store = t.dashboard.settings.store;
   const modulesDict = t.dashboard.modules.list;
@@ -68,6 +71,7 @@ export default function MasMenu() {
       description: sb.descriptions.empleados,
       icon: UsersRound,
       path: '/dashboard/mas/empleados',
+      show: can.seeEmployees(currentRole),
     },
     {
       key: 'calendario',
@@ -75,13 +79,16 @@ export default function MasMenu() {
       description: sb.descriptions.calendario,
       icon: Calendar,
       path: '/dashboard/mas/calendario',
+      show: can.seeAllJobs(currentRole),
     },
     // Enabled modules slot in after core nav so the "what's on" group is
     // contiguous. Empty when no modules are active.
     ...moduleItems,
-  ];
+  ].filter(item => item.show !== false);
 
   // Configuration surfaces — visually separated from the tools above.
+  // Tienda (enabling modules) is admin-only; Ajustes stays for everyone
+  // (it holds the personal account tab — config tabs are gated inside).
   const settingsItems: MenuItem[] = [
     {
       key: 'tienda',
@@ -89,6 +96,7 @@ export default function MasMenu() {
       description: sb.descriptions.tienda,
       icon: StoreIcon,
       path: '/dashboard/mas/ajustes/tienda',
+      show: can.manageBusinessSettings(currentRole),
     },
     {
       key: 'ajustes',
@@ -97,7 +105,7 @@ export default function MasMenu() {
       icon: Settings,
       path: '/dashboard/mas/ajustes',
     },
-  ];
+  ].filter(item => item.show !== false);
 
   // Card group — matches the Ajustes index layout: 10×10 icon tile in
   // primary tint, bold name, small description, chevron on the right.

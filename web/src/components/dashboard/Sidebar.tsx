@@ -14,15 +14,26 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
+import { can, type Role } from '@amixos/shared/lib/permissions';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', key: 'inicio' as const, icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/trabajos', key: 'trabajos' as const, icon: ClipboardList },
-  { href: '/dashboard/clientes', key: 'clientes' as const, icon: Users },
-  { href: '/dashboard/facturas', key: 'facturas' as const, icon: FileText },
-  { href: '/dashboard/empleados', key: 'empleados' as const, icon: UsersRound },
-  { href: '/dashboard/calendario', key: 'calendario' as const, icon: Calendar },
-  { href: '/dashboard/reportes', key: 'reportes' as const, icon: BarChart3 },
+// Each nav item declares which roles may see it (mirrors the read-side RLS).
+// `inicio` + `trabajos` are universal — a field worker lands on their own home
+// and still reaches their assigned-jobs list. The rest follow their `can.*`
+// capability so a member never sees a section the DB would return empty.
+const NAV_ITEMS: {
+  href: string;
+  key: 'inicio' | 'trabajos' | 'clientes' | 'facturas' | 'empleados' | 'calendario' | 'reportes';
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  show: (role: Role | null) => boolean;
+}[] = [
+  { href: '/dashboard', key: 'inicio', icon: LayoutDashboard, exact: true, show: () => true },
+  { href: '/dashboard/trabajos', key: 'trabajos', icon: ClipboardList, show: () => true },
+  { href: '/dashboard/clientes', key: 'clientes', icon: Users, show: can.seeAllClients },
+  { href: '/dashboard/facturas', key: 'facturas', icon: FileText, show: can.seeInvoices },
+  { href: '/dashboard/empleados', key: 'empleados', icon: UsersRound, show: can.seeEmployees },
+  { href: '/dashboard/calendario', key: 'calendario', icon: Calendar, show: can.seeAllJobs },
+  { href: '/dashboard/reportes', key: 'reportes', icon: BarChart3, show: can.seeReports },
 ];
 
 export function Sidebar() {
@@ -34,7 +45,7 @@ export function Sidebar() {
   const isSettingsRoute =
     pathname.startsWith('/dashboard/ajustes') &&
     !pathname.startsWith('/dashboard/ajustes/tienda');
-  const { business } = useApp();
+  const { business, currentRole } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
   const store = full.dashboard.settings.store;
@@ -62,7 +73,7 @@ export function Sidebar() {
           Coming-soon modules don't appear here even if pre-enabled in DB —
           gated by useEnabledModules + filter on status. */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ href, key, icon: Icon, exact }) => {
+        {NAV_ITEMS.filter(item => item.show(currentRole)).map(({ href, key, icon: Icon, exact }) => {
           const active = isActive(href, exact);
           return (
             <Link
@@ -106,21 +117,26 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Bottom — Tienda + Ajustes + Logout grouped as admin-ish surfaces. */}
+      {/* Bottom — Tienda + Ajustes + Logout grouped as admin-ish surfaces.
+          Tienda (enabling modules) is a business-settings act → admins only.
+          Ajustes stays visible to everyone since it also holds the personal
+          account tab; the settings rail itself gates the config tabs. */}
       <div className="px-3 py-4 border-t border-gray-100 flex flex-col gap-0.5">
-        <Link
-          href="/dashboard/ajustes/tienda"
-          onClick={() => setOpen(false)}
-          className={clsx(
-            'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-            isActive('/dashboard/ajustes/tienda')
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-          )}
-        >
-          <StoreIcon size={18} />
-          {store.heading}
-        </Link>
+        {can.manageBusinessSettings(currentRole) && (
+          <Link
+            href="/dashboard/ajustes/tienda"
+            onClick={() => setOpen(false)}
+            className={clsx(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+              isActive('/dashboard/ajustes/tienda')
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+            )}
+          >
+            <StoreIcon size={18} />
+            {store.heading}
+          </Link>
+        )}
         <Link
           href="/dashboard/ajustes"
           onClick={() => setOpen(false)}

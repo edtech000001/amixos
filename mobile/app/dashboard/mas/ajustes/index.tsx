@@ -46,42 +46,48 @@ export default function AjustesIndex() {
     else Alert.alert('', t.support.noMailApp.replace('{{email}}', SUPPORT_EMAIL));
   };
 
+  // Business-config sections are admin-only (managers+ down can't change
+  // settings — see ROLE_DESCRIPTIONS). Cuenta (own account) + Soporte stay
+  // visible to every member.
+  const isAdmin = can.manageBusinessSettings(currentRole);
   const items: SettingsItem[] = [
-    {
-      key: 'negocio',
-      label: t.tabs.negocio,
-      description: t.business.subtitle,
-      icon: Building2,
-      path: '/dashboard/mas/ajustes/negocio',
-    },
-    {
-      key: 'trabajos',
-      label: t.tabs.trabajos,
-      description: t.pipeline.subtitle,
-      icon: Briefcase,
-      path: '/dashboard/mas/ajustes/trabajos',
-    },
-    {
-      key: 'clientes',
-      label: t.tabs.clientes,
-      description: t.requiredFields.subtitle,
-      icon: Users,
-      path: '/dashboard/mas/ajustes/clientes',
-    },
-    {
-      key: 'empleados',
-      label: t.tabs.empleados,
-      description: t.employeesSection.subtitle,
-      icon: Briefcase,
-      path: '/dashboard/mas/ajustes/empleados',
-    },
-    {
-      key: 'facturas',
-      label: t.tabs.facturas,
-      description: t.invoices.subtitle,
-      icon: FileText,
-      path: '/dashboard/mas/ajustes/facturas',
-    },
+    ...(isAdmin ? [
+      {
+        key: 'negocio',
+        label: t.tabs.negocio,
+        description: t.business.subtitle,
+        icon: Building2,
+        path: '/dashboard/mas/ajustes/negocio',
+      },
+      {
+        key: 'trabajos',
+        label: t.tabs.trabajos,
+        description: t.pipeline.subtitle,
+        icon: Briefcase,
+        path: '/dashboard/mas/ajustes/trabajos',
+      },
+      {
+        key: 'clientes',
+        label: t.tabs.clientes,
+        description: t.requiredFields.subtitle,
+        icon: Users,
+        path: '/dashboard/mas/ajustes/clientes',
+      },
+      {
+        key: 'empleados',
+        label: t.tabs.empleados,
+        description: t.employeesSection.subtitle,
+        icon: Briefcase,
+        path: '/dashboard/mas/ajustes/empleados',
+      },
+      {
+        key: 'facturas',
+        label: t.tabs.facturas,
+        description: t.invoices.subtitle,
+        icon: FileText,
+        path: '/dashboard/mas/ajustes/facturas',
+      },
+    ] : []),
     // Equipo (team) moved out of Ajustes — now lives as a top-level
     // entry in Más under Empleados (see mas/index.tsx + mas/equipo.tsx).
     ...(can.seeAuditLog(currentRole) ? [{
@@ -91,13 +97,13 @@ export default function AjustesIndex() {
       icon: Activity,
       path: '/dashboard/mas/ajustes/actividad',
     }] : []),
-    {
+    ...(isAdmin ? [{
       key: 'conexiones',
       label: t.tabs.conexiones,
       description: t.google.subtitle,
       icon: Cloud,
       path: '/dashboard/mas/ajustes/conexiones',
-    },
+    }] : []),
     {
       key: 'cuenta',
       label: t.tabs.cuenta,

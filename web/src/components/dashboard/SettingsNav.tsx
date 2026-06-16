@@ -29,16 +29,21 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
   const t = full.dashboard.settings;
   const { currentRole } = useApp();
 
-  const TABS: { key: SettingsTab; label: string; icon: typeof Building2 }[] = [
-    { key: 'negocio', label: t.tabs.negocio, icon: Building2 },
-    { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList },
-    { key: 'clientes', label: t.tabs.clientes, icon: Users },
-    { key: 'empleados', label: t.tabs.empleados, icon: Users },
-    { key: 'facturas', label: t.tabs.facturas, icon: FileText },
-    { key: 'conexiones', label: t.tabs.conexiones, icon: Link2 },
-    { key: 'cuenta', label: t.tabs.cuenta, icon: User },
-    { key: 'soporte', label: t.support.heading, icon: LifeBuoy },
+  // Config tabs (business + field/template setup) are an admin act — managers
+  // and below can't change settings (see ROLE_DESCRIPTIONS). `cuenta` (the
+  // member's own account/password) and `soporte` stay visible to everyone.
+  const isAdmin = can.manageBusinessSettings(currentRole);
+  const ALL_TABS: { key: SettingsTab; label: string; icon: typeof Building2; show: boolean }[] = [
+    { key: 'negocio', label: t.tabs.negocio, icon: Building2, show: isAdmin },
+    { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList, show: isAdmin },
+    { key: 'clientes', label: t.tabs.clientes, icon: Users, show: isAdmin },
+    { key: 'empleados', label: t.tabs.empleados, icon: Users, show: isAdmin },
+    { key: 'facturas', label: t.tabs.facturas, icon: FileText, show: isAdmin },
+    { key: 'conexiones', label: t.tabs.conexiones, icon: Link2, show: isAdmin },
+    { key: 'cuenta', label: t.tabs.cuenta, icon: User, show: true },
+    { key: 'soporte', label: t.support.heading, icon: LifeBuoy, show: true },
   ];
+  const TABS = ALL_TABS.filter(tab => tab.show);
 
   const onActividad = pathname.startsWith('/dashboard/ajustes/actividad');
 

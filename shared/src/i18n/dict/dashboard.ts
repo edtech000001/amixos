@@ -29,6 +29,23 @@ export type DashboardDict = {
     };
     misTrabajos: string;
   };
+  // Purpose-built home for the "field" role (crew). Replaces the widget grid.
+  fieldHome: {
+    greeting: string;
+    clockIn: string;
+    clockOut: string;
+    clockedInSince: string;
+    notClockedIn: string;
+    clockError: string;
+    todayTitle: string;
+    upcomingTitle: string;
+    empty: string;
+    lead: string;
+    start: string;
+    complete: string;
+    noClient: string;
+    noDate: string;
+  };
   home: {
     welcome: string;
     newInvoice: string;
@@ -1206,6 +1223,7 @@ export type DashboardDict = {
       businessesHeading: string;
       businessesSubtitle: string;
       businessesEmpty: string;
+      logoutConfirm: string;
     };
     language: {
       heading: string;
@@ -1824,6 +1842,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         misTrabajos: 'Trabajos donde eres líder.',
       },
       misTrabajos: 'Mis Trabajos',
+    },
+    fieldHome: {
+      greeting: 'Hola 👋',
+      clockIn: 'Marcar entrada',
+      clockOut: 'Marcar salida',
+      clockedInSince: 'Trabajando desde {{time}}',
+      notClockedIn: 'No has marcado entrada',
+      clockError: 'No se pudo guardar. Intenta de nuevo.',
+      todayTitle: 'Mis trabajos de hoy',
+      upcomingTitle: 'Próximos trabajos',
+      empty: 'No tienes trabajos asignados.',
+      lead: 'Líder',
+      start: 'Comenzar',
+      complete: 'Completar',
+      noClient: 'Sin cliente',
+      noDate: 'Sin fecha',
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -2984,6 +3018,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         businessesHeading: 'Tus negocios',
         businessesSubtitle: 'Negocios donde eres miembro y tu rol en cada uno.',
         businessesEmpty: 'Aún no eres miembro de ningún negocio.',
+        logoutConfirm: '¿Seguro que quieres cerrar sesión?',
       },
       language: {
         heading: 'Idioma',
@@ -3602,6 +3637,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         misTrabajos: "Jobs where you're the lead.",
       },
       misTrabajos: 'My Jobs',
+    },
+    fieldHome: {
+      greeting: 'Hi 👋',
+      clockIn: 'Clock in',
+      clockOut: 'Clock out',
+      clockedInSince: 'Working since {{time}}',
+      notClockedIn: 'Not clocked in',
+      clockError: 'Could not save. Try again.',
+      todayTitle: 'My jobs today',
+      upcomingTitle: 'Upcoming jobs',
+      empty: 'You have no assigned jobs.',
+      lead: 'Lead',
+      start: 'Start',
+      complete: 'Complete',
+      noClient: 'No client',
+      noDate: 'No date',
     },
     home: {
       welcome: 'Welcome 👋',
@@ -4762,6 +4813,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         businessesHeading: 'Your businesses',
         businessesSubtitle: 'Businesses you belong to and your role in each one.',
         businessesEmpty: 'You are not a member of any business yet.',
+        logoutConfirm: 'Are you sure you want to sign out?',
       },
       language: {
         heading: 'Language',

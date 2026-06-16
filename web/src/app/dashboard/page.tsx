@@ -45,7 +45,9 @@ import {
   type DashboardWidgetId,
   type DashboardWidgetSize,
 } from '@amixos/shared/lib/dashboardWidgets';
+import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { FieldHome } from '@/components/dashboard/FieldHome';
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -226,7 +228,7 @@ function SortableWidget({
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, loading: appLoading, refetchBusiness } = useApp();
+  const { business, currentRole, loading: appLoading, refetchBusiness } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard;
 
@@ -256,11 +258,11 @@ export default function DashboardPage() {
   // doesn't clobber in-progress edits).
   useEffect(() => {
     if (!business) return;
-    const resolved = resolveDashboardLayout(business.dashboard_layout);
+    const resolved = resolveDashboardLayout(business.dashboard_layout, currentRole);
     setVisibleIds(resolved.visible.map(w => w.id));
     setHiddenIds(resolved.hidden);
     setSizes(Object.fromEntries(resolved.visible.map(w => [w.id, w.size])));
-  }, [business?.id]);
+  }, [business?.id, currentRole]);
 
   useEffect(() => {
     if (!business) return;
@@ -424,12 +426,15 @@ export default function DashboardPage() {
     return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' }).format(date);
   };
 
+  // Only surface actions this role can actually perform — a hidden action
+  // would just hit a silent RLS rejection (the quickActions widget itself is
+  // dropped for roles that can do none, via resolveDashboardLayout).
   const quickActions = [
-    { label: t.home.quickActions.newInvoice, icon: FileText, onClick: () => router.push('/dashboard/facturas/nueva'), classes: 'bg-primary/10 text-primary hover:bg-primary/15' },
-    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes?new=1'), classes: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-    { label: t.home.quickActions.newJob, icon: Briefcase, onClick: () => router.push('/dashboard/trabajos/nuevo'), classes: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' },
-    { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-50 text-orange-600 hover:bg-orange-100' },
-  ];
+    { label: t.home.quickActions.newInvoice, icon: FileText, onClick: () => router.push('/dashboard/facturas/nueva'), classes: 'bg-primary/10 text-primary hover:bg-primary/15', show: can.createInvoice(currentRole) },
+    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes?new=1'), classes: 'bg-blue-50 text-blue-600 hover:bg-blue-100', show: can.createClient(currentRole) },
+    { label: t.home.quickActions.newJob, icon: Briefcase, onClick: () => router.push('/dashboard/trabajos/nuevo'), classes: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100', show: can.createJob(currentRole) },
+    { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-50 text-orange-600 hover:bg-orange-100', show: can.editCalendar(currentRole) },
+  ].filter(a => a.show);
 
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
@@ -691,6 +696,12 @@ export default function DashboardPage() {
         return null;
     }
   };
+
+  // Field crew get a purpose-built home (assigned jobs + clock in/out), not
+  // the owner's widget grid. Branch once the role is known.
+  if (!appLoading && isFieldOnly(currentRole)) {
+    return <FieldHome />;
+  }
 
   if (appLoading || loading) {
     return (

@@ -29,6 +29,7 @@ import {
   type DashboardWidgetId,
   type DashboardWidgetSize,
 } from '../../lib/dashboardWidgets';
+import { can, type Role } from '../../lib/permissions';
 
 // NOTE: this screen is mobile-only (web has its own dashboard page), so it
 // can import react-native-sortables / reanimated directly — same rule as the
@@ -64,6 +65,8 @@ export interface DashboardUpcomingJob {
 
 export interface DashboardHomeScreenProps {
   loading: boolean;
+  /** Caller's role — filters widgets + quick actions to what they can use. */
+  role?: Role | null;
   businessName: string;
   /**
    * Optional UI rendered in place of the plain business name in the header.
@@ -173,6 +176,7 @@ function MiniBars({ monthly, light }: { monthly: number[]; light?: boolean }) {
 
 export function DashboardHomeScreen({
   loading,
+  role = null,
   businessName,
   businessSlot,
   stats,
@@ -206,11 +210,11 @@ export function DashboardHomeScreen({
   // same value back on refetch, so JSON-keying avoids clobbering edits).
   const layoutKey = JSON.stringify(layout ?? null);
   useEffect(() => {
-    const resolved = resolveDashboardLayout(layout);
+    const resolved = resolveDashboardLayout(layout, role);
     setVisibleIds(resolved.visible.map(w => w.id));
     setHiddenIds(resolved.hidden);
     setSizes(Object.fromEntries(resolved.visible.map(w => [w.id, w.size])));
-  }, [layoutKey]);
+  }, [layoutKey, role]);
 
   const containerWidth = screenWidth - H_PAD * 2;
   const widthFor = (size: DashboardWidgetSize) =>
@@ -464,12 +468,14 @@ export function DashboardHomeScreen({
 
     switch (id) {
       case 'quickActions': {
+        // Only actions this role can perform (the tile itself is dropped for
+        // roles that can do none — see resolveDashboardLayout).
         const actions = [
-          { label: t.home.quickActions.newInvoice, icon: FileText, onPress: onNewInvoicePress, bg: 'bg-primary/10', color: '#4F46E5' },
-          { label: t.home.quickActions.newClient, icon: UserPlus, onPress: onNewClientPress, bg: 'bg-blue-50', color: '#2563EB' },
-          { label: t.home.quickActions.newJob, icon: Briefcase, onPress: onNewJobPress, bg: 'bg-emerald-50', color: '#059669' },
-          { label: t.home.quickActions.calendar, icon: CalendarDays, onPress: onCalendarPress, bg: 'bg-orange-50', color: '#EA580C' },
-        ];
+          { label: t.home.quickActions.newInvoice, icon: FileText, onPress: onNewInvoicePress, bg: 'bg-primary/10', color: '#4F46E5', show: can.createInvoice(role) },
+          { label: t.home.quickActions.newClient, icon: UserPlus, onPress: onNewClientPress, bg: 'bg-blue-50', color: '#2563EB', show: can.createClient(role) },
+          { label: t.home.quickActions.newJob, icon: Briefcase, onPress: onNewJobPress, bg: 'bg-emerald-50', color: '#059669', show: can.createJob(role) },
+          { label: t.home.quickActions.calendar, icon: CalendarDays, onPress: onCalendarPress, bg: 'bg-orange-50', color: '#EA580C', show: can.editCalendar(role) },
+        ].filter(a => a.show);
         if (size === 'sm') {
           // Compact half-width tile: 2x2 icon-only buttons. Each button gets
           // its height from padding (not a vertical flex, which collapses in
