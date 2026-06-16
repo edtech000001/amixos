@@ -69,10 +69,33 @@ export default function OnboardingPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'amixos-logo-upload' } },
     );
-    await uploadClient.auth.setSession({
+    const setRes = await uploadClient.auth.setSession({
       access_token: session.access_token,
       refresh_token: session.refresh_token,
     });
+
+    // TEMP DIAGNOSTIC — decode the token + server-validate it so we can see why
+    // auth.uid() is null. Remove once the upload works.
+    try {
+      const claims = JSON.parse(atob(session.access_token.split('.')[1]));
+      const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const sessUrlRef = /https?:\/\/([^.]+)\./.exec(envUrl || '')?.[1];
+      const { data: u, error: ue } = await uploadClient.auth.getUser();
+      console.log('[logo-diag]', {
+        envUrlRef: sessUrlRef,
+        tokenIssuer: claims.iss,
+        role: claims.role,
+        sub: claims.sub?.slice(0, 8),
+        exp: new Date(claims.exp * 1000).toISOString(),
+        now: new Date().toISOString(),
+        expired: claims.exp * 1000 < Date.now(),
+        setSessionErr: setRes.error?.message,
+        uploadClientUserId: u?.user?.id?.slice(0, 8),
+        uploadClientUserErr: ue?.message,
+      });
+    } catch (e) {
+      console.log('[logo-diag] decode failed', e);
+    }
 
     const ext = file.name.split('.').pop();
     const path = `logos/${Date.now()}.${ext}`;
