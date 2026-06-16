@@ -139,11 +139,11 @@ export function FieldHomeScreen({
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}>
       <View className="mb-6">
-        <Text className="text-2xl font-bold text-gray-900">{f.greeting}</Text>
+        <Text className="text-2xl font-bold text-gray-900">{f.greeting}{!businessSlot && businessName ? ',' : ''}</Text>
         {businessSlot ? (
           <View className="mt-2 self-start">{businessSlot}</View>
         ) : businessName ? (
-          <Text className="text-sm text-gray-500 mt-1">{businessName}</Text>
+          <Text className="text-lg font-semibold text-gray-800 mt-1">{businessName}</Text>
         ) : null}
       </View>
 

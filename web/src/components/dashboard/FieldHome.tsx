@@ -8,20 +8,25 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, TrendingUp, type LucideIcon } from 'lucide-react';
+import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, TrendingUp, Plus, type LucideIcon } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
   fetchFieldHome,
+  fetchFieldClients,
+  logFieldJob,
   clockIn as doClockIn,
   clockOut as doClockOut,
   updateFieldJobStatus,
   formatHours,
   type FieldHomeJob,
   type FieldHomeStats,
+  type FieldClient,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
+import { firstName } from '@amixos/shared/lib/userName';
+import { LogJobModal } from '@/components/dashboard/LogJobModal';
 
 const JOB_STATUS_PILL: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
@@ -44,6 +49,9 @@ export function FieldHome() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [clients, setClients] = useState<FieldClient[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!business || !user) return;
@@ -78,6 +86,28 @@ export function FieldHome() {
     // (a completed job leaves the active list and bumps "completed (mo.)").
     if (ok) { setJobs(prev => prev.map(j => (j.id === job.id ? { ...j, status: next } : j))); void load(); }
     else setError(true);
+  };
+
+  const openLog = () => {
+    setLogOpen(true);
+    if (clients.length === 0 && business) {
+      setClientsLoading(true);
+      void fetchFieldClients(supabase, business.id).then(setClients).finally(() => setClientsLoading(false));
+    }
+  };
+
+  const handleLog = async (input: { title: string; clientId: string | null; description: string | null }) => {
+    if (!business) return false;
+    const ok = await logFieldJob(supabase, {
+      businessId: business.id,
+      employeeId,
+      title: input.title,
+      clientId: input.clientId,
+      completedDate: new Date().toISOString().split('T')[0],
+      description: input.description,
+    });
+    if (ok) void load();
+    return ok;
   };
 
   const fmtTime = (iso: string) =>
@@ -153,9 +183,18 @@ export function FieldHome() {
 
   return (
     <div className="p-6 lg:p-8 max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{f.greeting}</h1>
-        {business?.name && <p className="text-sm text-gray-500 mt-0.5">{business.name}</p>}
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{f.greeting}{firstName(user?.name) ? ',' : ''}</h1>
+          {/* Crew don't get the business logo/name header — greet them by name. */}
+          {firstName(user?.name) && <p className="text-lg font-semibold text-gray-800 mt-1">{firstName(user?.name)}</p>}
+        </div>
+        <button
+          onClick={openLog}
+          className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 shrink-0"
+        >
+          <Plus size={16} /> {f.logJob}
+        </button>
       </div>
 
       {error && (
@@ -225,6 +264,14 @@ export function FieldHome() {
           </div>
         </>
       )}
+
+      <LogJobModal
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+        clients={clients}
+        clientsLoading={clientsLoading}
+        onSubmit={handleLog}
+      />
     </div>
   );
 }

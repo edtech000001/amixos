@@ -13,6 +13,8 @@
 // The supabase client is passed in untyped — web and mobile use different
 // @supabase versions and we don't want this module coupled to either.
 
+import { fetchAll } from './supabaseFetch';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
 
@@ -228,6 +230,74 @@ export async function clockOut(
     .update({ clock_out: out.toISOString(), hours_total: Math.round(hours * 100) / 100 })
     .eq('id', timesheet.id);
   return !error;
+}
+
+export interface FieldClient {
+  id: string;
+  name: string;
+}
+
+/** Client list for the quick-log picker (needs migration 070's field read). */
+export async function fetchFieldClients(
+  supabase: SupabaseLike,
+  businessId: string,
+): Promise<FieldClient[]> {
+  const rows = await fetchAll<{ id: string; first_name: string | null; last_name: string | null; company: string | null }>(
+    (from, to) =>
+      supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('business_id', businessId)
+        .order('first_name', { ascending: true })
+        .range(from, to),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.company || '—',
+  }));
+}
+
+export interface LogFieldJobInput {
+  businessId: string;
+  /** The logger's employees row id (migration 069). Null = can't self-assign. */
+  employeeId: string | null;
+  title: string;
+  clientId: string | null;
+  /** YYYY-MM-DD. */
+  completedDate: string;
+  description?: string | null;
+}
+
+/**
+ * Log a completed job as a field worker. Inserts the job (status=completed,
+ * enforced by migration 070's INSERT policy) and self-assigns the logger as
+ * lead so it surfaces in their field home + completed-this-month stat (both
+ * scoped by is_assigned_to_job). Returns false if the job insert fails.
+ */
+export async function logFieldJob(
+  supabase: SupabaseLike,
+  input: LogFieldJobInput,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('jobs')
+    .insert({
+      business_id: input.businessId,
+      title: input.title,
+      status: 'completed',
+      completed_date: input.completedDate,
+      client_id: input.clientId,
+      description: input.description ?? null,
+    })
+    .select('id')
+    .single();
+  if (error || !data) return false;
+  if (input.employeeId) {
+    // Best-effort — the job is logged even if the self-assignment fails.
+    await supabase
+      .from('job_assignments')
+      .insert({ job_id: data.id, employee_id: input.employeeId, is_lead: true });
+  }
+  return true;
 }
 
 /** Advance a job's status, stamping the matching timestamp column. */

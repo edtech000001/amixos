@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import type { Role } from '@amixos/shared/lib/permissions';
+import { displayNameFromUser } from '@amixos/shared/lib/userName';
 
 export interface Business {
   id: string;
@@ -101,6 +102,8 @@ export interface MapPinConfig {
 export interface AppUser {
   id: string;
   email: string;
+  /** Display name from auth metadata (email local-part fallback). */
+  name: string;
 }
 
 interface AppContextValue {
@@ -199,7 +202,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        const u = { id: session.user.id, email: session.user.email ?? '' };
+        const u = { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) };
         setUser(u);
         await fetchBusinesses(u.id);
       } else if (window.location.pathname.startsWith('/dashboard')) {

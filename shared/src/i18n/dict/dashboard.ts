@@ -50,6 +50,19 @@ export type DashboardDict = {
     statCompleted: string;
     statHoursWeek: string;
     statHoursMonth: string;
+    logJob: string;
+    logTitle: string;
+    jobTitleLabel: string;
+    jobTitlePlaceholder: string;
+    clientLabel: string;
+    clientSearch: string;
+    noClientOption: string;
+    dateLabel: string;
+    notesLabel: string;
+    titleRequired: string;
+    saveError2: string;
+    saved: string;
+    noResults: string;
   };
   home: {
     welcome: string;
@@ -1868,6 +1881,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
       statCompleted: 'Completados (mes)',
       statHoursWeek: 'Horas (semana)',
       statHoursMonth: 'Horas (mes)',
+      logJob: 'Registrar trabajo',
+      logTitle: 'Registrar trabajo',
+      jobTitleLabel: 'Título del trabajo',
+      jobTitlePlaceholder: '¿Qué hiciste?',
+      clientLabel: 'Cliente (opcional)',
+      clientSearch: 'Buscar cliente...',
+      noClientOption: '— Sin cliente —',
+      dateLabel: 'Fecha',
+      notesLabel: 'Notas (opcional)',
+      titleRequired: 'Escribe un título',
+      saveError2: 'No se pudo registrar. Intenta de nuevo.',
+      saved: 'Trabajo registrado',
+      noResults: 'Sin resultados',
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -3668,6 +3694,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
       statCompleted: 'Completed (mo.)',
       statHoursWeek: 'Hours (week)',
       statHoursMonth: 'Hours (month)',
+      logJob: 'Log job',
+      logTitle: 'Log a job',
+      jobTitleLabel: 'Job title',
+      jobTitlePlaceholder: 'What did you do?',
+      clientLabel: 'Client (optional)',
+      clientSearch: 'Search client...',
+      noClientOption: '— No client —',
+      dateLabel: 'Date',
+      notesLabel: 'Notes (optional)',
+      titleRequired: 'Enter a title',
+      saveError2: 'Could not log. Try again.',
+      saved: 'Job logged',
+      noResults: 'No results',
     },
     home: {
       welcome: 'Welcome 👋',

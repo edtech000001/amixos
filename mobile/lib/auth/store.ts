@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { Role } from '@amixos/shared/lib/permissions';
+import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { createSupabaseClient } from '../supabase';
 
 // The auth state machine. Booleans hide intermediate states (logging in,
@@ -19,6 +20,8 @@ export type AuthStatus =
 export interface AppUser {
   id: string;
   email: string;
+  /** Display name from auth metadata (email local-part fallback). */
+  name: string;
 }
 
 export interface Business {
@@ -301,7 +304,7 @@ export const useAuthStore = create<AuthStore>()(
           case 'INITIAL_SESSION':
             if (session?.user) {
               set({
-                user: { id: session.user.id, email: session.user.email ?? '' },
+                user: { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) },
                 status: 'authenticated',
                 businessLoaded: false,
                 businessLoadError: false,
@@ -314,7 +317,7 @@ export const useAuthStore = create<AuthStore>()(
           case 'SIGNED_IN':
             if (session?.user) {
               set({
-                user: { id: session.user.id, email: session.user.email ?? '' },
+                user: { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) },
                 status: 'authenticated',
                 error: null,
                 businessLoaded: false,
@@ -329,7 +332,7 @@ export const useAuthStore = create<AuthStore>()(
           case 'TOKEN_REFRESHED':
           case 'USER_UPDATED':
             if (session?.user) {
-              set({ user: { id: session.user.id, email: session.user.email ?? '' } });
+              set({ user: { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) } });
             }
             break;
           case 'PASSWORD_RECOVERY':
