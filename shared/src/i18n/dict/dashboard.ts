@@ -587,6 +587,7 @@ export type DashboardDict = {
         empty: string;
         uploading: string;
         uploadError: string;
+        deleteError: string;
         limitHit: string;
         deleteConfirm: string;
         viewerClose: string;
@@ -2421,6 +2422,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           empty: 'Aún no hay fotos de este trabajo.',
           uploading: 'Subiendo...',
           uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
+          deleteError: 'No se pudo eliminar la foto. Intenta de nuevo.',
           limitHit: 'Máximo {{max}} fotos por trabajo.',
           deleteConfirm: '¿Eliminar esta foto?',
           viewerClose: 'Cerrar',
@@ -4255,6 +4257,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           empty: 'No photos for this job yet.',
           uploading: 'Uploading...',
           uploadError: "Couldn't upload the photo. Try again.",
+          deleteError: "Couldn't delete the photo. Try again.",
           limitHit: 'Maximum {{max}} photos per job.',
           deleteConfirm: 'Delete this photo?',
           viewerClose: 'Close',

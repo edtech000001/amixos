@@ -112,9 +112,19 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   const removePhoto = async (photo: JobPhoto) => {
     if (!window.confirm(t.deleteConfirm)) return;
-    // Deleting the row fires the AFTER DELETE trigger (migration 057) which
-    // removes the storage object — no orphaned file left behind.
-    await supabase.from('job_photos').delete().eq('id', photo.id);
+    // Deleting the row fires the AFTER DELETE trigger (057, hardened in 073)
+    // which removes the storage object. Surface failures instead of swallowing
+    // them — a silent error here looked like "delete does nothing" because
+    // load() just re-showed the still-present row.
+    // .select() so we can tell a real delete (returns the row) from an RLS
+    // no-op (returns [] with no error) — both used to look like success.
+    const { data: deleted, error: delErr } = await supabase
+      .from('job_photos').delete().eq('id', photo.id).select('id');
+    if (delErr || !deleted?.length) {
+      setError(t.deleteError);
+      return;
+    }
+    setError('');
     setViewerIndex(null);
     await load();
   };
