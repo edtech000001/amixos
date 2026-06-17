@@ -20,7 +20,7 @@ import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatDateTimeLong, formatTime12h } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 
@@ -37,6 +37,7 @@ interface Job {
   issue_date: string | null; expiry_date: string | null;
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
+  scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
   share_token: string | null; created_by: string | null; cancelled_at: string | null;
   delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
   created_at: string; updated_at: string;
@@ -142,12 +143,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (!job || !business) return;
     const prevStatus = job.status;
     setUpdatingStatus(true);
+    const now = new Date().toISOString();
     const update: any = { status: newStatus };
-    if (newStatus === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
-    if (newStatus === 'sent') update.sent_at = new Date().toISOString();
-    if (newStatus === 'accepted') update.accepted_at = new Date().toISOString();
-    if (newStatus === 'declined') update.declined_at = new Date().toISOString();
-    if (newStatus === 'cancelled') update.cancelled_at = new Date().toISOString();
+    if (newStatus === 'completed') update.completed_date = now.split('T')[0];
+    if (newStatus === 'sent') update.sent_at = now;
+    if (newStatus === 'accepted') update.accepted_at = now;
+    if (newStatus === 'declined') update.declined_at = now;
+    if (newStatus === 'cancelled') update.cancelled_at = now;
+    // Work-phase step timestamps (migration 072) — drive the stepper times.
+    if (newStatus === 'scheduled') update.scheduled_at = now;
+    if (newStatus === 'in_progress') update.in_progress_at = now;
+    if (newStatus === 'completed') update.completed_at = now;
+    if (newStatus === 'invoiced') update.invoiced_at = now;
     await supabase.from('jobs').update(update).eq('id', id);
     setJob(prev => prev ? { ...prev, ...update } : prev);
     void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
@@ -198,7 +205,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     }).select().single();
 
     if (!error && invoice) {
-      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', id);
+      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id, invoiced_at: new Date().toISOString() }).eq('id', id);
       void logAudit(supabase, business.id, 'invoice.created', 'invoice', invoice.id, {
         invoice_number: invNum,
         total_amount: invoiceTotal,
@@ -355,21 +362,21 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ? pipeline[pipelineIdx - 1]
       : null;
 
-  // Map pipeline steps to their timestamps
+  // When each pipeline step was reached (migration 072). Falls back to the older
+  // columns for jobs that moved through a step before the timestamp existed.
   const stepTimestamp: Record<string, string | null> = {
     proposal: job.created_at,
+    posible: job.created_at,
     sent: job.sent_at,
     accepted: job.accepted_at,
-    scheduled: job.scheduled_date,
-    in_progress: null,
-    completed: job.completed_date,
-    invoiced: job.invoice_id ? job.updated_at : null,
+    scheduled: job.scheduled_at,
+    in_progress: job.in_progress_at,
+    completed: job.completed_at ?? job.completed_date,
+    invoiced: job.invoiced_at ?? (job.invoice_id ? job.updated_at : null),
   };
-  const fmtDate = (d: string | null) => (d ? formatDateLong(d, dateLoc) : null);
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
-  const clientPhone = job.clients?.phone_cell;
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
 
@@ -504,9 +511,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <span className={`text-xs font-semibold ${isCurrent ? s.color : isPast ? 'text-gray-400' : 'text-gray-300'}`}>
                       {s.label}
                     </span>
-                    {(isPast || isCurrent) && fmtDate(stepTimestamp[s.key]) && (
-                      <span className="text-[10px] text-gray-400">{fmtDate(stepTimestamp[s.key])}</span>
-                    )}
+                    {(isPast || isCurrent) && stepTimestamp[s.key] ? (() => {
+                      const { date, time } = formatStamp(stepTimestamp[s.key], dateLoc);
+                      return (
+                        <span className="text-[10px] text-gray-400 text-center leading-tight">
+                          {date}{time ? <><br />{time}</> : null}
+                        </span>
+                      );
+                    })() : null}
                   </div>
                   {i < pipeline.length - 1 && (
                     <div className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < pipelineIdx ? 'bg-gray-300' : 'bg-gray-100'}`}/>
@@ -739,11 +751,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     </div>
                   </div>
                 </div>
-              )}
-              {clientPhone && (
-                <a href={`tel:${clientPhone}`} className="flex items-center gap-2 text-xs text-primary font-medium hover:underline">
-                  {td.callClient}
-                </a>
               )}
               {job.description && (
                 <div>

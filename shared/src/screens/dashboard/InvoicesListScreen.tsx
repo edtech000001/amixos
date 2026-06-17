@@ -127,6 +127,7 @@ export function InvoicesListScreen({
           placeholder={t.searchPlaceholder}
           value={search}
           onChangeText={setSearch}
+          onClear={() => setSearch('')}
           leftIcon={<Search size={16} color="#9CA3AF" />}
           autoCapitalize="none"
           autoCorrect={false}

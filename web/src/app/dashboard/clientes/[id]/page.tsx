@@ -18,6 +18,7 @@ import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { buildClientCsv } from '@amixos/shared/lib/clientShare';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
 import { useContactOutcomePrompt } from '@/modules/communications/useContactOutcomePrompt';
 
@@ -114,7 +115,7 @@ function ContactRow({ icon, label, value, href, onActivate }: { icon: React.Reac
 export default function ClienteDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const searchParams = useSearchParams();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const td = t.detail;
   const tc = full.common;
@@ -518,16 +519,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          {/* Communication log */}
-          <CommunicationLog
-            supabase={supabase}
-            businessId={business?.id ?? ''}
-            clientId={client.id}
-            createdBy={user?.id ?? null}
-            contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
-            reloadToken={commReload}
-          />
-
           {/* Custom fields */}
           {templates.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -628,6 +619,18 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               </div>
             )}
           </div>
+
+          {/* Communication log — below the invoices list. */}
+          <div className="mt-5">
+            <CommunicationLog
+              supabase={supabase}
+              businessId={business?.id ?? ''}
+              clientId={client.id}
+              createdBy={user?.id ?? null}
+              contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
+              reloadToken={commReload}
+            />
+          </div>
         </div>
       </div>
 
@@ -686,10 +689,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
-                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
                 </div>
-                <Input label={t.fields.zipCode} value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))}/>
+                <Input label={t.fields.zipCode} value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) }))} inputMode="numeric"/>
               </div>
             </div>
           </section>

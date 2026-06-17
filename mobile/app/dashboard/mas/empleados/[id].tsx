@@ -28,6 +28,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
 import {
@@ -488,9 +489,10 @@ export default function EmpleadoDetailRoute() {
             <Select label={t.modal.stateLabel} value={form.state}
               onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
               placeholder={t.modal.stateNone}
-              options={[{ value: '', label: t.modal.stateNone }, ...US_STATES.map((s) => ({ value: s, label: s }))]} />
+              searchable
+              options={[{ value: '', label: t.modal.stateNone }, ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) }))]} />
             <Input label={t.modal.zipLabel} placeholder={t.modal.zipPlaceholder}
-              value={form.zip_code} onChangeText={(v) => setForm((f) => ({ ...f, zip_code: v }))}
+              value={form.zip_code} onChangeText={(v) => setForm((f) => ({ ...f, zip_code: v.replace(/[^0-9]/g, '').slice(0, 5) }))}
               keyboardType="number-pad" />
 
             <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">{t.modal.emergencyContactHeading}</Text>

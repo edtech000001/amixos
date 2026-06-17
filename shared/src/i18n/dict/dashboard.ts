@@ -18,6 +18,9 @@ export type DashboardDict = {
     // Short one-liners shown under each label on mobile's Más list. Keeps
     // that menu visually consistent with Ajustes (card with description).
     descriptions: {
+      clientes: string;
+      trabajos: string;
+      facturas: string;
       empleados: string;
       equipo: string;
       calendario: string;
@@ -327,6 +330,7 @@ export type DashboardDict = {
         neverContacted: string;
         add: string;
         empty: string;
+        emptyFiltered: string;
         withContact: string;
         types: {
           call: string;
@@ -1872,6 +1876,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'Más',
       logout: 'Cerrar sesión',
       descriptions: {
+        clientes: 'Tu lista de clientes y contactos.',
+        trabajos: 'Trabajos, cotizaciones y su progreso.',
+        facturas: 'Crea y envía facturas a tus clientes.',
         empleados: 'Gestiona tu equipo, accesos, horarios y pagos.',
         equipo: 'Invita usuarios y gestiona roles de acceso.',
         calendario: 'Citas, trabajos programados y horarios.',
@@ -2173,6 +2180,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           neverContacted: 'Sin contacto',
           add: 'Registrar contacto',
           empty: 'Aún no has contactado a este cliente.',
+          emptyFiltered: 'Ningún contacto coincide con los filtros.',
           withContact: 'con {{name}}',
           types: {
             call: 'Llamada',
@@ -3707,6 +3715,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'More',
       logout: 'Sign out',
       descriptions: {
+        clientes: 'Your clients and contacts.',
+        trabajos: 'Jobs, proposals, and their progress.',
+        facturas: 'Create and send invoices to clients.',
         empleados: 'Manage your team, access, schedules, and pay.',
         equipo: 'Invite users and manage access roles.',
         calendario: 'Appointments, scheduled jobs, and hours.',
@@ -4008,6 +4019,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           neverContacted: 'No contact yet',
           add: 'Log contact',
           empty: "You haven't contacted this client yet.",
+          emptyFiltered: 'No contacts match the filters.',
           withContact: 'with {{name}}',
           types: {
             call: 'Call',

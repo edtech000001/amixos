@@ -36,6 +36,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import {
@@ -99,7 +100,7 @@ export default function NuevoTrabajoRoute() {
   useEffect(() => {
     if (currentRole && !can.createJob(currentRole)) router.replace('/dashboard/trabajos');
   }, [currentRole]);
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs.new;
   const tc = full.common;
   const tStatuses = full.dashboard.jobs.statuses;
@@ -832,10 +833,11 @@ export default function NuevoTrabajoRoute() {
                     value={state}
                     onValueChange={setState}
                     placeholder={t.stateNone}
+                    searchable
                     options={[
                       // "—" first so a previously-picked state can be cleared.
                       { value: '', label: t.stateNone },
-                      ...US_STATES.map((s) => ({ value: s, label: s })),
+                      ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) })),
                     ]}
                   />
                 </View>

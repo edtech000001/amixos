@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 
@@ -143,8 +144,18 @@ export function InventoryScreen({
             placeholder={t.searchPlaceholder}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
           />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
         </div>
       </div>
 

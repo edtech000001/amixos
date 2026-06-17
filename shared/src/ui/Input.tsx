@@ -1,4 +1,5 @@
-import { TextInput, Text, View, type TextInputProps, type NativeSyntheticEvent, type TextInputFocusEventData } from 'react-native';
+import { TextInput, Text, View, Pressable, type TextInputProps, type NativeSyntheticEvent, type TextInputFocusEventData } from 'react-native';
+import { X } from 'lucide-react-native';
 import { clsx } from 'clsx';
 import { forwardRef, useState, type ReactNode } from 'react';
 
@@ -8,13 +9,17 @@ interface InputProps extends TextInputProps {
   leftIcon?: ReactNode;
   // Interactive slot on the right (e.g. a password-reveal eye toggle).
   rightIcon?: ReactNode;
+  // When set, a clear (✕) button appears on the right while the field has
+  // text — tapping it calls onClear. Used for search bars.
+  onClear?: () => void;
   containerClassName?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, leftIcon, rightIcon, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
+  { label, error, leftIcon, rightIcon, onClear, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
   ref,
 ) {
+  const showClear = !!onClear && typeof rest.value === 'string' && rest.value.length > 0;
   const [focused, setFocused] = useState(false);
 
   const handleFocus = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
@@ -62,7 +67,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           )}
           {...rest}
         />
-        {rightIcon && <View className="ml-2">{rightIcon}</View>}
+        {showClear ? (
+          <Pressable onPress={onClear} hitSlop={8} accessibilityLabel="Clear" className="ml-2">
+            <X size={16} color="#9CA3AF" />
+          </Pressable>
+        ) : rightIcon ? (
+          <View className="ml-2">{rightIcon}</View>
+        ) : null}
       </View>
       {error && <Text className="text-xs font-medium text-red-500">{error}</Text>}
     </View>

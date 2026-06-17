@@ -2,8 +2,6 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  UsersRound,
-  Calendar,
   Settings,
   Store as StoreIcon,
   ChevronRight,
@@ -15,6 +13,8 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can } from '@amixos/shared/lib/permissions';
+import { eligibleDockApps, effectiveDockKeys } from '@/lib/dockApps';
+import { useDockStore } from '@/lib/dockStore';
 
 interface MenuItem {
   key: string;
@@ -54,6 +54,21 @@ export default function MasMenu() {
     };
   });
 
+  // Apps the user can pin to the dock but hasn't — surfaced here so removing
+  // one from the dock (Navegación) never makes it unreachable. Pinned apps are
+  // reached via the dock, so they're omitted here.
+  const dockKeys = useDockStore(s => s.keys);
+  const pinned = new Set(effectiveDockKeys(dockKeys, currentRole));
+  const unpinnedItems: MenuItem[] = eligibleDockApps(currentRole)
+    .filter(a => !pinned.has(a.key))
+    .map(a => ({
+      key: a.key,
+      label: sb[a.labelKey],
+      description: sb.descriptions[a.labelKey],
+      icon: a.Icon,
+      path: a.path,
+    }));
+
   // Core tools + any enabled modules — the "what you do" group.
   const mainItems: MenuItem[] = [
     // "Mis Trabajos" — Project-Leader shortcut. Empty list for users who
@@ -65,22 +80,9 @@ export default function MasMenu() {
       icon: HardHat,
       path: '/dashboard/trabajos/mis-trabajos',
     },
-    {
-      key: 'empleados',
-      label: sb.empleados,
-      description: sb.descriptions.empleados,
-      icon: UsersRound,
-      path: '/dashboard/mas/empleados',
-      show: can.seeEmployees(currentRole),
-    },
-    {
-      key: 'calendario',
-      label: sb.calendario,
-      description: sb.descriptions.calendario,
-      icon: Calendar,
-      path: '/dashboard/mas/calendario',
-      show: can.seeAllJobs(currentRole),
-    },
+    // Apps not pinned to the dock (Clientes, Trabajos, Facturas, Calendario,
+    // Empleados, Inventario — minus whatever is in the dock).
+    ...unpinnedItems,
     // Enabled modules slot in after core nav so the "what's on" group is
     // contiguous. Empty when no modules are active.
     ...moduleItems,

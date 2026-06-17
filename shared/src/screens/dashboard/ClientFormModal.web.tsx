@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Building2, Phone, Mail, MapPin, X } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
+import { usStateName } from '../../lib/usStates';
 
 export interface ClientFieldTemplate {
   field_key: string;
@@ -85,7 +86,7 @@ export function ClientFormModal({
   onClose,
   onSubmit,
 }: ClientFormModalProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
 
@@ -298,7 +299,7 @@ export function ClientFormModal({
                   onChange={e => set('state', e.target.value)}
                 >
                   <option value="">—</option>
-                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                 </select>
               </Field>
               <Field label={rLabel('zip_code', t.fields.zipCode)}>
@@ -306,7 +307,7 @@ export function ClientFormModal({
                   className={INPUT_CLS}
                   placeholder={t.fields.placeholders.zipCode}
                   value={form.zip_code}
-                  onChange={e => set('zip_code', e.target.value)}
+                  onChange={e => set('zip_code', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))}
                   inputMode="numeric"
                 />
               </Field>

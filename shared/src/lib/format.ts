@@ -23,6 +23,8 @@ const MONTHS_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+const MONTHS_EN_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_ES_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 /**
  * Format a time as "1:00 PM" / "10:30 AM" — always uppercase AM/PM, no
@@ -77,6 +79,25 @@ export function formatDateLong(
   const isEs = (locale ?? '').toLowerCase().startsWith('es');
   const months = isEs ? MONTHS_ES : MONTHS_EN;
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/**
+ * Compact date + time for tight UI (e.g. under each pipeline step). Returns the
+ * pieces separately so the caller can stack them: `{ date: "Jun 15", time:
+ * "9:30 PM" }`. `time` is '' for date-only inputs ("YYYY-MM-DD"), since those
+ * carry no meaningful time.
+ */
+export function formatStamp(
+  input: string | Date | null | undefined,
+  locale?: string,
+): { date: string; time: string } {
+  const d = toDate(input);
+  if (!d) return { date: '', time: '' };
+  const isEs = (locale ?? '').toLowerCase().startsWith('es');
+  const months = isEs ? MONTHS_ES_SHORT : MONTHS_EN_SHORT;
+  const date = isEs ? `${d.getDate()} ${months[d.getMonth()]}` : `${months[d.getMonth()]} ${d.getDate()}`;
+  const hasTime = typeof input === 'string' ? input.includes('T') : true;
+  return { date, time: hasTime ? formatTime12h(d) : '' };
 }
 
 /**

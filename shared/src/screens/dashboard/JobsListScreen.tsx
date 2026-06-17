@@ -18,6 +18,7 @@ import {
   Check,
   AlertTriangle,
   Clock,
+  List,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -80,6 +81,9 @@ export interface JobListItem {
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
+type StatusTabKey = Exclude<TabKey, 'all'>;
+// Selectable status filters (everything except the "all" reset). Multi-select.
+const STATUS_TAB_KEYS = TAB_KEYS.filter((k): k is StatusTabKey => k !== 'all');
 
 export interface JobsListScreenProps {
   loading: boolean;
@@ -171,8 +175,12 @@ export function JobsListScreen({
   const dateLoc = full.dashboard.dateLocale;
   const overdueBadgeLabel = full.dashboard.settings.jobAlerts.overdueBadge;
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<TabKey>(initialTab);
-  // Persisted view (tab/search/sort/group) — restored on mount so the list
+  // Multi-select status filters. Empty = "all". A ?tab deep link seeds it.
+  const [tabs, setTabs] = useState<StatusTabKey[]>(initialTab !== 'all' ? [initialTab as StatusTabKey] : []);
+  const tabSet = useMemo(() => new Set(tabs), [tabs]);
+  const toggleTab = (k: StatusTabKey) =>
+    setTabs(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
+  // Persisted view (tabs/search/sort/group) — restored on mount so the list
   // survives navigating into a job + back AND an app refresh; only resets when
   // the user clears it. AsyncStorage is async, so load once then save changes.
   const hydrated = useRef(false);
@@ -190,7 +198,9 @@ export function JobsListScreen({
         if (cancelled) return;
         const s = parseJobsFilters(raw);
         if (s) {
-          if (initialTab === 'all' && s.tab && (TAB_KEYS as readonly string[]).includes(s.tab)) setTab(s.tab as TabKey);
+          if (initialTab === 'all' && Array.isArray(s.tabs)) {
+            setTabs(s.tabs.filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
+          }
           if (typeof s.search === 'string') setSearch(s.search);
           if (s.sortBy) setSortBy(s.sortBy);
           if (s.groupBy) setGroupBy(s.groupBy);
@@ -204,11 +214,11 @@ export function JobsListScreen({
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tab, search, sortBy, groupBy })).catch(() => {});
-  }, [tab, search, sortBy, groupBy]);
+    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tabs, search, sortBy, groupBy })).catch(() => {});
+  }, [tabs, search, sortBy, groupBy]);
 
-  const filtersActive = jobsFiltersActive({ tab, search, sortBy, groupBy });
-  const clearFilters = () => { setTab('all'); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy });
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -223,11 +233,16 @@ export function JobsListScreen({
     delegated: tw.delegatedFilterTab,
   };
 
+  // Multi-select: a job matches if it satisfies ANY selected tab. No tabs = all.
   const matchesTab = (j: JobListItem) => {
-    if (tab === 'all') return true;
-    if (tab === 'propuestas') return PROPOSAL_STATUSES.includes(j.status);
-    if (tab === 'delegated') return !!j.delegatedToBusinessName;
-    return j.status === tab;
+    if (tabs.length === 0) return true;
+    return tabs.some(tk =>
+      tk === 'propuestas'
+        ? PROPOSAL_STATUSES.includes(j.status)
+        : tk === 'delegated'
+          ? !!j.delegatedToBusinessName
+          : j.status === tk,
+    );
   };
 
   const filtered = useMemo(() => {
@@ -240,7 +255,7 @@ export function JobsListScreen({
       );
       return matchSearch && matchesTab(j);
     });
-  }, [jobs, search, tab]);
+  }, [jobs, search, tabs]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -389,7 +404,7 @@ export function JobsListScreen({
     <View className="flex-1 bg-surface">
     <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header */}
-      <View className="flex-row items-center justify-between mb-5">
+      <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">
@@ -411,21 +426,17 @@ export function JobsListScreen({
             ) : null}
           </Text>
         </View>
-      </View>
-
-      {/* Search + Tabs */}
-      <View className="flex-col gap-3 mb-5">
-        <View className="flex-row items-center gap-2">
-          <View className="flex-1">
-            <Input
-              placeholder={t.searchPlaceholder}
-              value={search}
-              onChangeText={setSearch}
-              leftIcon={<Search size={16} color="#9CA3AF" />}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+        {/* Filter controls live up here so the search bar gets the full width. */}
+        <View className="flex-row items-center gap-2 ml-2">
+          {filtersActive ? (
+            <Pressable
+              onPress={clearFilters}
+              accessibilityLabel={t.clearFilters}
+              className="w-11 h-11 rounded-xl border border-red-200 bg-red-50 items-center justify-center active:opacity-80"
+            >
+              <XCircle size={16} color="#DC2626" />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setSortMenuOpen(true)}
             accessibilityLabel={t.sort.button}
@@ -436,26 +447,41 @@ export function JobsListScreen({
             <ArrowUpDown size={16} color={sortActive ? '#4F46E5' : '#6B7280'} />
           </Pressable>
         </View>
+      </View>
+
+      {/* Search + Tabs */}
+      <View className="flex-col gap-3 mb-5">
+        <Input
+          placeholder={t.searchPlaceholder}
+          value={search}
+          onChangeText={setSearch}
+          onClear={() => setSearch('')}
+          leftIcon={<Search size={16} color="#9CA3AF" />}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerClassName="gap-1 pb-1"
         >
-          {filtersActive ? (
-            <Pressable
-              onPress={clearFilters}
-              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50"
-            >
-              <XCircle size={13} color="#DC2626" />
-              <Text className="text-xs font-semibold text-red-600">{t.clearFilters}</Text>
-            </Pressable>
-          ) : null}
-          {TAB_KEYS.map(k => {
-            const isActive = tab === k;
+          {/* "All" reset — an icon. Active (highlighted) when no status filter
+             is applied; tapping it clears the selection back to all. */}
+          <Pressable
+            onPress={() => setTabs([])}
+            accessibilityLabel={tabLabels.all}
+            className={`flex-row items-center justify-center w-9 h-9 rounded-xl ${
+              tabs.length === 0 ? 'bg-primary' : 'bg-gray-100'
+            }`}
+          >
+            <List size={16} color={tabs.length === 0 ? '#FFFFFF' : '#6B7280'} />
+          </Pressable>
+          {STATUS_TAB_KEYS.map(k => {
+            const isActive = tabSet.has(k);
             return (
               <Pressable
                 key={k}
-                onPress={() => setTab(k)}
+                onPress={() => toggleTab(k)}
                 className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${
                   isActive ? 'bg-primary' : 'bg-gray-100'
                 }`}
@@ -501,9 +527,9 @@ export function JobsListScreen({
         <View className="items-center py-20">
           <ClipboardList size={40} color="#D1D5DB" />
           <Text className="text-sm text-gray-400 mt-3">
-            {search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}
+            {search || tabs.length > 0 ? t.emptyNoMatch : t.emptyAll}
           </Text>
-          {!search && tab === 'all' && canCreate ? (
+          {!search && tabs.length === 0 && canCreate ? (
             <Pressable onPress={onNewJob} className="mt-1">
               <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
             </Pressable>
@@ -558,8 +584,10 @@ export function JobsListScreen({
               : null;
 
             return (
+              // Outer view carries the shadow; inner clips content (RN clips
+              // shadows under overflow-hidden).
+              <View key={job.id} className="bg-white rounded-2xl shadow-sm">
               <View
-                key={job.id}
                 className={`rounded-2xl border overflow-hidden ${
                   overdue
                     ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
@@ -698,6 +726,7 @@ export function JobsListScreen({
                 </Pressable>
 
                 {renderActionBar(job)}
+              </View>
               </View>
             );
           })}

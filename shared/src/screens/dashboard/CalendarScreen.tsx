@@ -31,6 +31,7 @@ import {
   type CalEventType,
   type CalView,
   SELECTABLE_EVENT_TYPES,
+  CAL_EVENT_TYPES,
   startOfDay,
   addDays,
   sameDay,
@@ -237,8 +238,24 @@ export function CalendarScreen({
     }
   };
 
+  // The legend doubles as type filters: all event types start enabled, so the
+  // calendar shows everything by default; tapping a legend item hides that
+  // type from the grid + agenda. Not persisted — resets to all-on each open.
+  const [typeFilter, setTypeFilter] = useState<Set<CalEventType>>(() => new Set(CAL_EVENT_TYPES));
+  const toggleType = (ty: CalEventType) =>
+    setTypeFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(ty)) next.delete(ty);
+      else next.add(ty);
+      return next;
+    });
+  const visibleItems = useMemo(
+    () => items.filter(it => typeFilter.has(it.eventType as CalEventType)),
+    [items, typeFilter],
+  );
+
   const agendaDay = view === 'day' ? cursor : selectedDay;
-  const agendaItems = useMemo(() => itemsForDay(items, agendaDay), [items, agendaDay]);
+  const agendaItems = useMemo(() => itemsForDay(visibleItems, agendaDay), [visibleItems, agendaDay]);
 
   // Availability panel: a week grid of who's busy (from assigned jobs) on each
   // day. It fetches its own week so it works regardless of the main view; when
@@ -406,7 +423,7 @@ export function CalendarScreen({
         {view === 'month' ? (
           <MonthGrid
             cursor={cursor}
-            items={items}
+            items={visibleItems}
             today={today}
             selectedDay={selectedDay}
             dateLocale={dateLocale}
@@ -417,7 +434,7 @@ export function CalendarScreen({
         ) : view === 'week' ? (
           <WeekStrip
             cursor={cursor}
-            items={items}
+            items={visibleItems}
             today={today}
             selectedDay={selectedDay}
             dateLocale={dateLocale}
@@ -425,15 +442,29 @@ export function CalendarScreen({
           />
         ) : null}
 
-        {/* Legend (month/week only) */}
+        {/* Legend doubles as type filters (month/week only). Tap to toggle a
+           type; all start enabled. Disabled types dim + strike through. */}
         {view !== 'day' ? (
           <View className="flex-row flex-wrap gap-x-3 gap-y-1.5 mt-4">
-            {SELECTABLE_EVENT_TYPES.concat('job').map(k => (
-              <View key={k} className="flex-row items-center gap-1.5">
-                <View className={`w-2.5 h-2.5 rounded-full ${TYPE_BAR[k as CalEventType]}`} />
-                <Text className="text-xs text-gray-500">{t.eventTypes[k as CalEventType]}</Text>
-              </View>
-            ))}
+            {SELECTABLE_EVENT_TYPES.concat('job').map(k => {
+              const key = k as CalEventType;
+              const active = typeFilter.has(key);
+              return (
+                <Pressable
+                  key={k}
+                  onPress={() => toggleType(key)}
+                  className="flex-row items-center gap-1.5 py-0.5 active:opacity-60"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={t.eventTypes[key]}
+                >
+                  <View className={`w-2.5 h-2.5 rounded-full ${active ? TYPE_BAR[key] : 'bg-gray-300'}`} />
+                  <Text className={`text-xs ${active ? 'text-gray-500' : 'text-gray-300 line-through'}`}>
+                    {t.eventTypes[key]}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
 

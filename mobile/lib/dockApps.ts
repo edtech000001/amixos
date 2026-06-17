@@ -17,8 +17,10 @@ export interface DockApp {
   key: string;
   /** expo-router Tabs.Screen route name. */
   routeName: string;
+  /** Navigation path used from the Más list (when the app isn't pinned). */
+  path: string;
   Icon: LucideIcon;
-  /** i18n label key under t.dashboard.sidebar. */
+  /** i18n key under t.dashboard.sidebar (label) AND t.dashboard.sidebar.descriptions. */
   labelKey: DockLabelKey;
   /** In the default dock (when the user hasn't customized it). */
   defaultOn: boolean;
@@ -27,14 +29,15 @@ export interface DockApp {
 }
 
 /** Dock order is the catalog order (Inicio … these … Más). Selection only — the
- *  user can't reorder, just pick which appear. */
+ *  user can't reorder, just pick which appear. Apps NOT pinned to the dock are
+ *  surfaced in the Más screen (via `path`) so nothing is ever unreachable. */
 export const DOCK_APPS: DockApp[] = [
-  { key: 'clientes', routeName: 'clientes/index', Icon: Users, labelKey: 'clientes', defaultOn: true, gate: can.seeAllClients },
-  { key: 'trabajos', routeName: 'trabajos/index', Icon: ClipboardList, labelKey: 'trabajos', defaultOn: true },
-  { key: 'facturas', routeName: 'facturas/index', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
-  { key: 'calendario', routeName: 'mas/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
-  { key: 'empleados', routeName: 'mas/empleados/index', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
-  { key: 'inventario', routeName: 'mas/inventario', Icon: Package, labelKey: 'inventario', defaultOn: false, gate: can.seeAllJobs },
+  { key: 'clientes', routeName: 'clientes/index', path: '/dashboard/clientes', Icon: Users, labelKey: 'clientes', defaultOn: true, gate: can.seeAllClients },
+  { key: 'trabajos', routeName: 'trabajos/index', path: '/dashboard/trabajos', Icon: ClipboardList, labelKey: 'trabajos', defaultOn: true },
+  { key: 'facturas', routeName: 'facturas/index', path: '/dashboard/facturas', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
+  { key: 'calendario', routeName: 'mas/calendario', path: '/dashboard/mas/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
+  { key: 'empleados', routeName: 'mas/empleados/index', path: '/dashboard/mas/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
+  { key: 'inventario', routeName: 'mas/inventario', path: '/dashboard/mas/inventario', Icon: Package, labelKey: 'inventario', defaultOn: false, gate: can.seeAllJobs },
 ];
 
 /** Selectable middle apps: default 3 (Inicio + 3 + Más = 5), max 4 (= 6 total). */

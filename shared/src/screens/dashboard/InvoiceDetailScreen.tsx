@@ -215,7 +215,7 @@ export function InvoiceDetailScreen({
 
       {/* Summary cards */}
       <View className="flex-row flex-wrap gap-4 mb-6">
-        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 p-4 flex-row items-center gap-3">
+        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex-row items-center gap-3">
           <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
             <DollarSign size={18} className="text-primary" />
           </View>
@@ -224,7 +224,7 @@ export function InvoiceDetailScreen({
             <Text className="text-lg font-bold text-gray-900">{fmt(invoice.totalAmount)}</Text>
           </View>
         </View>
-        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 p-4 flex-row items-center gap-3">
+        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex-row items-center gap-3">
           <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center">
             <Calendar size={18} className="text-blue-500" />
           </View>
@@ -235,7 +235,7 @@ export function InvoiceDetailScreen({
             </Text>
           </View>
         </View>
-        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 p-4 flex-row items-center gap-3">
+        <View className="flex-1 min-w-[240px] bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex-row items-center gap-3">
           <View className="w-10 h-10 rounded-xl bg-amber-50 items-center justify-center">
             <FileText size={18} className="text-amber-500" />
           </View>
@@ -249,8 +249,10 @@ export function InvoiceDetailScreen({
       </View>
 
       {/* Invoice document — config-driven, what prints / shares / the client sees */}
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-4">
-        <InvoiceDocument vm={vm} />
+      <View className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
+        <View className="rounded-2xl overflow-hidden">
+          <InvoiceDocument vm={vm} />
+        </View>
       </View>
     </ScrollView>
   );

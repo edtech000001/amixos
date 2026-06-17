@@ -593,7 +593,7 @@ export default function ClienteDetailRoute() {
               contactMethod: primaryPhone,
               clientId: client.id,
             })}
-            className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
+            className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
                 : 'bg-gray-50 border-gray-100 opacity-50'
@@ -616,7 +616,7 @@ export default function ClienteDetailRoute() {
               contactMethod: primaryPhone,
               clientId: client.id,
             })}
-            className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
+            className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryPhone
                 ? 'bg-white border-gray-100 active:bg-gray-50'
                 : 'bg-gray-50 border-gray-100 opacity-50'
@@ -639,7 +639,7 @@ export default function ClienteDetailRoute() {
               contactMethod: primaryEmail,
               clientId: client.id,
             })}
-            className={`flex-1 items-center justify-center py-3 rounded-2xl border ${
+            className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryEmail
                 ? 'bg-white border-gray-100 active:bg-gray-50'
                 : 'bg-gray-50 border-gray-100 opacity-50'
@@ -682,7 +682,7 @@ export default function ClienteDetailRoute() {
         </View>
 
         {/* Contact card */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 gap-3">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-3">
           <Text className="text-xs font-semibold text-gray-400 uppercase">{td.contact}</Text>
           {primaryPhone ? (
             <Pressable
@@ -756,7 +756,7 @@ export default function ClienteDetailRoute() {
         </View>
 
         {/* Contact people card */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xs font-semibold text-gray-400 uppercase">
               {td.contactPeople}
@@ -880,21 +880,9 @@ export default function ClienteDetailRoute() {
           )}
         </View>
 
-        {/* Communication log */}
-        <View className="mb-4">
-          <CommunicationLog
-            supabase={supabase}
-            businessId={business?.id ?? ''}
-            clientId={client.id}
-            createdBy={user?.id ?? null}
-            contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
-            reloadToken={commReload}
-          />
-        </View>
-
         {/* Custom fields card */}
         {templates.length > 0 ? (
-          <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 gap-2.5">
+          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-2.5">
             <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">
               {t.sections.customFields}
             </Text>
@@ -916,7 +904,7 @@ export default function ClienteDetailRoute() {
 
         {/* Notes */}
         {client.notes ? (
-          <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
             <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
               {t.sections.notes}
             </Text>
@@ -925,7 +913,7 @@ export default function ClienteDetailRoute() {
         ) : null}
 
         {/* Summary card */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 gap-2">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-2">
           <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{td.summary}</Text>
           <View className="flex-row justify-between">
             <Text className="text-sm text-gray-500">{td.totalPaid}</Text>
@@ -939,20 +927,12 @@ export default function ClienteDetailRoute() {
             <Text className="text-sm text-gray-500">{td.invoicesCount}</Text>
             <Text className="text-sm font-semibold text-gray-900">{stats.count}</Text>
           </View>
-          <View className="flex-row justify-between pt-1.5 border-t border-gray-50">
-            <Text className="text-[11px] text-gray-400">{td.addedAt}</Text>
-            <Text className="text-[11px] text-gray-500">{fmtDateTime(client.created_at)}</Text>
-          </View>
-          {client.updated_at && client.updated_at !== client.created_at ? (
-            <View className="flex-row justify-between">
-              <Text className="text-[11px] text-gray-400">{td.modifiedAt}</Text>
-              <Text className="text-[11px] text-gray-500">{fmtDateTime(client.updated_at)}</Text>
-            </View>
-          ) : null}
         </View>
 
-        {/* Invoices list */}
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        {/* Invoices list — inner View clips the rows to rounded corners; the
+           outer keeps the shadow (RN clips shadows under overflow-hidden). */}
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
+          <View className="rounded-2xl overflow-hidden">
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-50">
             <Text className="text-sm font-semibold text-gray-900">{td.invoicesTitle}</Text>
             <Pressable
@@ -1019,6 +999,27 @@ export default function ClienteDetailRoute() {
               );
             })
           )}
+          </View>
+        </View>
+
+        {/* Communication log — placed last, below the invoices list. */}
+        <View className="mb-4">
+          <CommunicationLog
+            supabase={supabase}
+            businessId={business?.id ?? ''}
+            clientId={client.id}
+            createdBy={user?.id ?? null}
+            contacts={contacts.map(c => ({ id: c.id, name: c.name }))}
+            reloadToken={commReload}
+          />
+        </View>
+
+        {/* Created / last-edited footer — mirrors the job detail screen. */}
+        <View className="px-1 pb-2 gap-0.5">
+          <Text className="text-[10px] text-gray-400">{td.addedAt} · {fmtDateTime(client.created_at)}</Text>
+          {client.updated_at && client.updated_at !== client.created_at ? (
+            <Text className="text-[10px] text-gray-400">{td.modifiedAt} · {fmtDateTime(client.updated_at)}</Text>
+          ) : null}
         </View>
       </ScrollView>
 

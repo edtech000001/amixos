@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Modal as RNModal,
   TextInput,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -25,7 +25,6 @@ import {
   Trash2,
   Pencil,
   Copy,
-  Phone,
   RotateCcw,
   Building2,
   Navigation,
@@ -44,7 +43,7 @@ import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatStamp } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 
@@ -83,6 +82,10 @@ interface Job {
   accepted_at: string | null;
   declined_at: string | null;
   cancelled_at: string | null;
+  scheduled_at: string | null;
+  in_progress_at: string | null;
+  completed_at: string | null;
+  invoiced_at: string | null;
   delegated_to_business_id: string | null;
   delegated_from_business_id: string | null;
   delegated_at: string | null;
@@ -141,6 +144,8 @@ interface PipelineStep {
   label: string;
   icon: LucideIcon;
   color: string;
+  /** Compact "when this step was reached" stamp, shown under the label. */
+  stamp?: { date: string; time: string } | null;
 }
 
 export default function JobDetailRoute() {
@@ -218,9 +223,16 @@ export default function JobDetailRoute() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    void load();
-  }, [id, business?.id]);
+  // useFocusEffect (not useEffect): the edit screen returns here via
+  // router.replace with the SAME id, so a useEffect keyed on [id, business?.id]
+  // would never re-run — leaving the detail showing stale pre-edit data
+  // (description, address, internal/worker notes) until a manual refresh.
+  // Reloading on focus picks up edits as soon as the user lands back here.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [id, business?.id]),
+  );
 
   // Generate (or reuse) the public share token + open the iOS/Android share
   // sheet with the proposal URL. Returns true if the share sheet opened.
@@ -289,12 +301,18 @@ export default function JobDetailRoute() {
     if (!job) return;
     const prevStatus = job.status;
     setUpdatingStatus(true);
+    const now = new Date().toISOString();
     const update: Record<string, string | null> = { status: newStatus };
-    if (newStatus === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
-    if (newStatus === 'sent') update.sent_at = new Date().toISOString();
-    if (newStatus === 'accepted') update.accepted_at = new Date().toISOString();
-    if (newStatus === 'declined') update.declined_at = new Date().toISOString();
-    if (newStatus === 'cancelled') update.cancelled_at = new Date().toISOString();
+    if (newStatus === 'completed') update.completed_date = now.split('T')[0];
+    if (newStatus === 'sent') update.sent_at = now;
+    if (newStatus === 'accepted') update.accepted_at = now;
+    if (newStatus === 'declined') update.declined_at = now;
+    if (newStatus === 'cancelled') update.cancelled_at = now;
+    // Work-phase step timestamps (migration 072) — drive the stepper times.
+    if (newStatus === 'scheduled') update.scheduled_at = now;
+    if (newStatus === 'in_progress') update.in_progress_at = now;
+    if (newStatus === 'completed') update.completed_at = now;
+    if (newStatus === 'invoiced') update.invoiced_at = now;
     await supabase.from('jobs').update(update).eq('id', job.id);
     setJob((prev) => (prev ? ({ ...prev, ...update } as Job) : prev));
     void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
@@ -364,7 +382,7 @@ export default function JobDetailRoute() {
       .single();
 
     if (!error && invoice) {
-      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', job.id);
+      await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id, invoiced_at: new Date().toISOString() }).eq('id', job.id);
       void logAudit(supabase, business.id, 'invoice.created', 'invoice', invoice.id, {
         invoice_number: invNum,
         total_amount: total,
@@ -455,12 +473,31 @@ export default function JobDetailRoute() {
     : job.status === 'posible'
       ? [POSIBLE_STEP, ...WORK_PIPELINE]
       : WORK_PIPELINE;
-  const pipeline = fullPipeline.filter((s) => !disabled[s.key]);
+  // When each step was reached. Falls back to completed_date for jobs completed
+  // before the work-phase timestamp columns existed (migration 072).
+  const stepStampValue = (key: string): string | null => {
+    switch (key) {
+      case 'proposal':
+      case 'posible': return job.created_at;
+      case 'sent': return job.sent_at;
+      case 'accepted': return job.accepted_at;
+      case 'scheduled': return job.scheduled_at;
+      case 'in_progress': return job.in_progress_at;
+      case 'completed': return job.completed_at ?? job.completed_date;
+      case 'invoiced': return job.invoiced_at;
+      default: return null;
+    }
+  };
+  const pipeline = fullPipeline
+    .filter((s) => !disabled[s.key])
+    .map((s) => {
+      const raw = stepStampValue(s.key);
+      return { ...s, stamp: raw ? formatStamp(raw, dateLoc) : null };
+    });
   const pipelineIdx = pipeline.findIndex((s) => s.key === job.status);
   const isCancelled = job.status === 'cancelled' || job.status === 'declined';
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
-  const clientPhone = job.clients?.phone_cell;
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const total = isProposal && job.total_amount > 0 ? job.total_amount : itemSubtotal;
 
@@ -678,7 +715,7 @@ export default function JobDetailRoute() {
         </View>
 
         {/* Details card */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5 gap-3">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 gap-3">
           <Text className="text-xs font-semibold text-gray-400 uppercase">
             {td.detailsHeading}
           </Text>
@@ -726,19 +763,6 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {clientPhone ? (
-            <Pressable
-              onPress={() => openLink(`tel:${clientPhone.replace(/\D/g, '')}`)}
-              className="flex-row items-center gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
-            >
-              <Phone size={16} color="#6B7280" />
-              <View className="flex-1">
-                <Text className="text-xs text-gray-500">{td.callClient}</Text>
-                <Text className="text-sm text-primary">{clientPhone}</Text>
-              </View>
-            </Pressable>
-          ) : null}
-
           {job.description ? (
             <View>
               <Text className="text-xs text-gray-500 mb-1">{td.description}</Text>
@@ -776,7 +800,7 @@ export default function JobDetailRoute() {
         />
 
         {/* Items list */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
           <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
             {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
           </Text>
@@ -831,7 +855,7 @@ export default function JobDetailRoute() {
         </View>
 
         {/* Photos */}
-        <View className="bg-white rounded-2xl border border-gray-100 p-5">
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <JobPhotosSection
             jobId={job.id}
             businessId={job.business_id}
@@ -840,7 +864,7 @@ export default function JobDetailRoute() {
         </View>
 
         {/* Metadata — last edited (created moved to top) */}
-        <View className="gap-1 px-1">
+        <View className="gap-1 px-1 mt-4">
           <Text className="text-[10px] text-gray-400">
             {td.lastEditedOn.replace('{{date}}', fmtDateTime(job.updated_at))}
           </Text>
@@ -1024,7 +1048,7 @@ function PipelineStrip({
   }, [currentIdx]);
 
   return (
-    <View className="bg-white rounded-2xl border border-gray-100 mb-5">
+    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-5">
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -1059,6 +1083,14 @@ function PipelineStrip({
                 >
                   {s.label}
                 </Text>
+                {(isPast || isCurrent) && s.stamp?.date ? (
+                  <View className="items-center mt-0.5">
+                    <Text className="text-[9px] text-gray-400 text-center" numberOfLines={1}>{s.stamp.date}</Text>
+                    {s.stamp.time ? (
+                      <Text className="text-[9px] text-gray-300 text-center" numberOfLines={1}>{s.stamp.time}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
               {!isLast ? (
                 <View
@@ -1235,7 +1267,7 @@ function ActualsSection({
     }));
 
   return (
-    <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-5">
+    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
       <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{tA.heading}</Text>
       <Text className="text-xs text-gray-500 mb-3">{tA.subtitle}</Text>
 

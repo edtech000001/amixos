@@ -15,6 +15,7 @@ import {
   ChevronRight,
   CheckCircle2,
   XCircle,
+  X,
   FileText,
   Users,
   ArrowRight,
@@ -433,9 +434,29 @@ export function JobsListScreen({
             placeholder={t.searchPlaceholder}
             autoCapitalize="none"
             autoCorrect="off"
-            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label={t.clearFilters}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
         </div>
+        {filtersActive ? (
+          <button
+            onClick={clearFilters}
+            title={t.clearFilters}
+            aria-label={t.clearFilters}
+            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-50 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
+          >
+            <XCircle size={16} />
+          </button>
+        ) : null}
         <div className="relative shrink-0">
           <button
             onClick={() => setSortMenuOpen(o => !o)}
@@ -499,14 +520,6 @@ export function JobsListScreen({
 
       {/* Tabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-5">
-        {filtersActive ? (
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100"
-          >
-            <XCircle size={13} /> {t.clearFilters}
-          </button>
-        ) : null}
         {TAB_KEYS.map((k) => {
           const isActive = tab === k;
           return (

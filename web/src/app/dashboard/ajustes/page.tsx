@@ -1908,7 +1908,7 @@ export default function AjustesPage() {
                     {BIZ_US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value)}/>
+                <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} inputMode="numeric"/>
 
                 <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.legalHeading}</p>
                 <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>

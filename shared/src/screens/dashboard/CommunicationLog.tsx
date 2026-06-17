@@ -17,7 +17,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
 import { formatRelativeLong, formatDateTimeLong } from '../../lib/format';
-import { Modal, Select, Input, Button, DatePicker } from '../../ui';
+import { Modal, Input, Button, DatePicker } from '../../ui';
 import {
   fetchClientCommunications,
   logClientCommunication,
@@ -101,6 +101,18 @@ export function CommunicationLog({
   const t = full.dashboard.clients.detail.commLog;
 
   const [entries, setEntries] = useState<ClientCommunicationEntry[] | null>(null);
+
+  // Type filter chips at the top of the timeline. All types start enabled, so
+  // by default the full log shows; tapping a chip hides that type. Not
+  // persisted — every open starts with everything enabled.
+  const [typeFilter, setTypeFilter] = useState<Set<CommType>>(() => new Set(ALL_TYPES));
+  const toggleType = (ty: CommType) =>
+    setTypeFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(ty)) next.delete(ty);
+      else next.add(ty);
+      return next;
+    });
 
   // Form modal state.
   const [formOpen, setFormOpen] = useState(false);
@@ -223,6 +235,18 @@ export function CommunicationLog({
     [contacts, t],
   );
 
+  // Only show a filter chip for types that actually appear in this client's
+  // log (no point offering "Email" if they've never emailed). Keep ALL_TYPES
+  // order for a stable layout.
+  const presentTypes = useMemo(
+    () => (entries ? ALL_TYPES.filter(ty => entries.some(e => e.type === ty)) : []),
+    [entries],
+  );
+  const visibleEntries = useMemo(
+    () => (entries ?? []).filter(e => typeFilter.has(e.type)),
+    [entries, typeFilter],
+  );
+
   return (
     <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <View className="flex-row items-center justify-between mb-4">
@@ -250,19 +274,56 @@ export function CommunicationLog({
           <Text className="text-sm text-gray-400">{t.empty}</Text>
         </View>
       ) : (
-        <View className="gap-3">
-          {entries.map(e => (
-            <CommRow
-              key={e.id}
-              entry={e}
-              t={t}
-              locale={locale}
-              canWrite={canWrite}
-              onEdit={() => openEdit(e)}
-              onDelete={() => remove(e)}
-            />
-          ))}
-        </View>
+        <>
+          {/* Type filter chips — only when more than one type is present. */}
+          {presentTypes.length > 1 ? (
+            <View className="flex-row flex-wrap gap-2 mb-4">
+              {presentTypes.map(ty => {
+                const Icon = ICONS[ty];
+                const color = COLORS[ty];
+                const active = typeFilter.has(ty);
+                return (
+                  <Pressable
+                    key={ty}
+                    onPress={() => toggleType(ty)}
+                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
+                      active ? 'border-transparent' : 'border-gray-200 bg-white active:bg-gray-50'
+                    }`}
+                    style={active ? { backgroundColor: `${color}1A` } : undefined}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={t.types[ty]}
+                  >
+                    <Icon size={13} color={active ? color : '#9CA3AF'} />
+                    <Text className="text-xs font-medium" style={{ color: active ? color : '#9CA3AF' }}>
+                      {t.types[ty]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {visibleEntries.length === 0 ? (
+            <View className="py-6 items-center">
+              <Text className="text-sm text-gray-400">{t.emptyFiltered}</Text>
+            </View>
+          ) : (
+            <View className="gap-3">
+              {visibleEntries.map(e => (
+                <CommRow
+                  key={e.id}
+                  entry={e}
+                  t={t}
+                  locale={locale}
+                  canWrite={canWrite}
+                  onEdit={() => openEdit(e)}
+                  onDelete={() => remove(e)}
+                />
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       <Modal
@@ -272,35 +333,37 @@ export function CommunicationLog({
         size="sm"
       >
         <View className="gap-4">
-          <Select
+          {/* Inline pills instead of Select (a Select opens a nested RNModal,
+             which renders empty inside this form modal on iOS). */}
+          <PillGroup
             label={t.form.typeLabel}
             value={fType}
-            onValueChange={v => onTypeChange(v as CommType)}
             options={typeOptions}
+            onChange={v => onTypeChange(v as CommType)}
           />
           {outcomesFor(fType).length > 0 ? (
-            <Select
+            <PillGroup
               label={t.form.outcomeLabel}
               value={fOutcome}
-              onValueChange={v => setFOutcome(v as CommOutcome | '')}
               options={outcomeOptions}
+              onChange={v => setFOutcome(v as CommOutcome | '')}
             />
           ) : null}
-          <Select
+          <PillGroup
             label={t.form.directionLabel}
             value={fDirection}
-            onValueChange={v => setFDirection(v as CommDirection)}
             options={[
               { value: 'outbound', label: t.form.directionOutbound },
               { value: 'inbound', label: t.form.directionInbound },
             ]}
+            onChange={v => setFDirection(v as CommDirection)}
           />
           {contacts.length > 0 ? (
-            <Select
+            <PillGroup
               label={t.form.contactLabel}
               value={fContact}
-              onValueChange={setFContact}
               options={contactOptions}
+              onChange={setFContact}
             />
           ) : null}
           <DatePicker
@@ -328,6 +391,44 @@ export function CommunicationLog({
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+// Inline single-select via wrapping pills — avoids the nested-RNModal picker
+// (Select) which renders empty inside the form modal on iOS.
+function PillGroup({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-semibold text-gray-700">{label}</Text>
+      <View className="flex-row flex-wrap gap-2">
+        {options.map(o => {
+          const active = o.value === value;
+          return (
+            <Pressable
+              key={o.value || '__none__'}
+              onPress={() => onChange(o.value)}
+              className={`px-3.5 py-2 rounded-xl border ${
+                active ? 'bg-primary border-primary' : 'bg-white border-gray-200 active:bg-gray-50'
+              }`}
+            >
+              <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-700'}`}>
+                {o.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }

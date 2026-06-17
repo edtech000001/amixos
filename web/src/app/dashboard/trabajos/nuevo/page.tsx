@@ -16,6 +16,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { formatTime12h } from '@amixos/shared/lib/format';
@@ -62,7 +63,7 @@ function NuevoTrabajoFallback() {
 }
 
 function NuevoTrabajoContent() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs.new;
   const tc = full.common;
   const tStatuses = full.dashboard.jobs.statuses;
@@ -735,7 +736,7 @@ function NuevoTrabajoContent() {
                   <select value={state} onChange={e => setState(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                     <option value="">{t.stateNone}</option>
-                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
                 </div>
               </div>

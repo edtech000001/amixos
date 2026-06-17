@@ -431,7 +431,7 @@ export function BusinessSection() {
         <Input label={t.business.addressLabel} value={address} onChangeText={setAddress} autoCapitalize="words" />
         <Input label={t.business.cityLabel} value={city} onChangeText={setCity} autoCapitalize="words" />
         <Select label={t.business.stateLabel} value={usState} onValueChange={setUsState} options={stateOptions} />
-        <Input label={t.business.zipLabel} value={zip} onChangeText={setZip} keyboardType="number-pad" />
+        <Input label={t.business.zipLabel} value={zip} onChangeText={v => setZip(v.replace(/[^0-9]/g, '').slice(0, 5))} keyboardType="number-pad" />
 
         <GroupLabel>{t.business.legalHeading}</GroupLabel>
         <Input label={t.business.taxIdLabel} value={taxId} onChangeText={setTaxId} />

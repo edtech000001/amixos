@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Modal as RNModal, ScrollView, Platform } from 'react-native';
-import { ChevronDown, Check } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { View, Text, Pressable, TextInput, Modal as RNModal, ScrollView, Platform } from 'react-native';
+import { ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { clsx } from 'clsx';
 
 export interface SelectOption {
@@ -19,6 +19,12 @@ interface SelectProps {
   // (e.g. CSV import field that didn't auto-match). Ignored if `error`
   // is set, since red error wins over amber attention.
   highlight?: boolean;
+  // Adds a filter box at the top of the native picker — useful for long
+  // lists (e.g. US states). Matches the option label or value. No effect on
+  // web, where the native <select> already has built-in type-ahead.
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  searchEmptyText?: string;
   containerClassName?: string;
 }
 
@@ -35,6 +41,9 @@ export function Select({
   placeholder,
   error,
   highlight,
+  searchable,
+  searchPlaceholder,
+  searchEmptyText,
   containerClassName,
 }: SelectProps) {
   const borderClass = error
@@ -43,8 +52,17 @@ export function Select({
       ? 'border-amber-400 bg-amber-50'
       : 'border-gray-200';
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const selected = options.find(o => o.value === value);
   const displayText = selected?.label ?? placeholder ?? '';
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !query.trim()) return options;
+    const q = query.trim().toLowerCase();
+    return options.filter(
+      o => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+    );
+  }, [searchable, query, options]);
 
   return (
     <View className={clsx('flex flex-col gap-2', containerClassName)}>
@@ -71,7 +89,7 @@ export function Select({
       ) : (
         <>
           <Pressable
-            onPress={() => setOpen(true)}
+            onPress={() => { setQuery(''); setOpen(true); }}
             className={clsx(
               'flex-row items-center justify-between rounded-2xl border px-4 py-3.5',
               borderClass,
@@ -108,15 +126,45 @@ export function Select({
             >
               <Pressable
                 onPress={(e: any) => e.stopPropagation?.()}
-                className="bg-white rounded-2xl w-full max-w-md max-h-[70%] overflow-hidden"
+                className={clsx(
+                  'bg-white rounded-2xl w-full max-w-md overflow-hidden',
+                  // Fixed height when searchable so the modal doesn't shrink /
+                  // jump as results are filtered; otherwise size to content.
+                  searchable ? 'h-[70%]' : 'max-h-[70%]',
+                )}
               >
                 {label ? (
                   <View className="px-5 py-4 border-b border-gray-100">
                     <Text className="text-base font-semibold text-gray-900">{label}</Text>
                   </View>
                 ) : null}
-                <ScrollView>
-                  {options.map(o => {
+                {searchable ? (
+                  <View className="px-4 py-3 border-b border-gray-100 flex-row items-center gap-2">
+                    <Search size={16} color="#9CA3AF" />
+                    <TextInput
+                      value={query}
+                      onChangeText={setQuery}
+                      placeholder={searchPlaceholder ?? 'Buscar…'}
+                      placeholderTextColor="#9CA3AF"
+                      autoFocus
+                      autoCorrect={false}
+                      autoCapitalize="none"
+                      className="flex-1 text-base text-gray-900 py-1"
+                    />
+                    {query.length > 0 ? (
+                      <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear">
+                        <X size={16} color="#9CA3AF" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+                <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+                  {filteredOptions.length === 0 ? (
+                    <Text className="text-sm text-gray-400 px-5 py-4">
+                      {searchEmptyText ?? 'Sin resultados.'}
+                    </Text>
+                  ) : null}
+                  {filteredOptions.map(o => {
                     const isSelected = o.value === value;
                     return (
                       <Pressable

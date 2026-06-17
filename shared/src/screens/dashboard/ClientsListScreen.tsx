@@ -252,6 +252,7 @@ export function ClientsListScreen({
           placeholder={t.searchPlaceholder}
           value={search}
           onChangeText={onSearchChange}
+          onClear={() => onSearchChange('')}
           leftIcon={<Search size={16} color="#9CA3AF" />}
           // Search is case-insensitive — turn off iOS smart-capitalize +
           // autocorrect so the input doesn't start each query with a

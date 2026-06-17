@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable } from 'react-native';
 import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
+import { usStateName } from '../../lib/usStates';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -80,7 +81,7 @@ export function ClientFormModal({
   onClose,
   onSubmit,
 }: ClientFormModalProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
 
@@ -112,7 +113,7 @@ export function ClientFormModal({
 
   const stateOptions: SelectOption[] = [
     { value: '', label: '—' },
-    ...US_STATES.map(s => ({ value: s, label: s })),
+    ...US_STATES.map(s => ({ value: s, label: usStateName(s, locale) })),
   ];
 
   return (
@@ -233,13 +234,14 @@ export function ClientFormModal({
               value={form.state}
               onValueChange={v => set('state', v)}
               options={stateOptions}
+              searchable
             />
             <Input
               label={rLabel('zip_code', t.fields.zipCode)}
               placeholder={t.fields.placeholders.zipCode}
               value={form.zip_code}
-              onChangeText={v => set('zip_code', v)}
-              keyboardType="numbers-and-punctuation"
+              onChangeText={v => set('zip_code', v.replace(/[^0-9]/g, '').slice(0, 5))}
+              keyboardType="number-pad"
             />
           </View>
         </View>

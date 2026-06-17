@@ -20,6 +20,7 @@ import { Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface FieldTemplate {
@@ -60,7 +61,7 @@ export default function NuevoClienteRoute() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const syncBanner = useGoogleSyncBanner();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
 
@@ -150,7 +151,7 @@ export default function NuevoClienteRoute() {
 
   const stateOptions: SelectOption[] = [
     { value: '', label: '—' },
-    ...US_STATES.map(s => ({ value: s, label: s })),
+    ...US_STATES.map(s => ({ value: s, label: usStateName(s, locale) })),
   ];
 
   const goBack = () => {
@@ -377,13 +378,14 @@ export default function NuevoClienteRoute() {
               value={state}
               onValueChange={setState}
               options={stateOptions}
+              searchable
             />
             <Input
               label={rLabel('zip_code', t.fields.zipCode)}
               placeholder={t.fields.placeholders.zipCode}
               value={zipCode}
-              onChangeText={setZipCode}
-              keyboardType="numbers-and-punctuation"
+              onChangeText={v => setZipCode(v.replace(/[^0-9]/g, '').slice(0, 5))}
+              keyboardType="number-pad"
             />
           </Section>
 

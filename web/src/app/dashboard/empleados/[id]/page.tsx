@@ -22,6 +22,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
 import { diffEmployeeChanges, logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
@@ -385,7 +386,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
         ) : (
           <EditForm
             form={form} setForm={setForm} templates={templates} t={t} tc={tc}
-            rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES}
+            rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES} lang={lang}
           />
         )}
 
@@ -504,7 +505,7 @@ type FormState = {
 };
 
 function EditForm({
-  form, setForm, templates, t, tc, rLabel, payTypes, payUnit, usStates,
+  form, setForm, templates, t, tc, rLabel, payTypes, payUnit, usStates, lang,
 }: {
   form: FormState;
   setForm: (fn: (f: FormState) => FormState) => void;
@@ -515,6 +516,7 @@ function EditForm({
   payTypes: Record<string, string>;
   payUnit: Record<string, string>;
   usStates: string[];
+  lang: 'es' | 'en';
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -544,10 +546,10 @@ function EditForm({
         <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
         <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
           <option value="">{t.modal.stateNone}</option>
-          {usStates.map(s => <option key={s} value={s}>{s}</option>)}
+          {usStates.map(s => <option key={s} value={s}>{usStateName(s, lang)}</option>)}
         </select>
       </div>
-      <Input label={rLabel('zip_code', t.modal.zipLabel)} placeholder={t.modal.zipPlaceholder} value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))} />
+      <Input label={rLabel('zip_code', t.modal.zipLabel)} placeholder={t.modal.zipPlaceholder} value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) }))} inputMode="numeric" />
 
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
       <div className="grid grid-cols-2 gap-3">
