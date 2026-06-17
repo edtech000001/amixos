@@ -26,6 +26,9 @@ interface RawJob {
   job_state: string | null;
   scheduled_date: string | null;
   time_start: string | null;
+  end_date: string | null;
+  estimated_hours: number | null;
+  time_end: string | null;
   total_amount: number;
   estimate_number: string | null;
   issue_date: string | null;
@@ -106,6 +109,9 @@ export default function MisTrabajosTab() {
     totalAmount: j.total_amount,
     scheduledDate: j.scheduled_date,
     timeStart: j.time_start,
+    endDate: j.end_date,
+    estimatedHours: j.estimated_hours,
+    timeEnd: j.time_end,
     issueDate: j.issue_date,
     expiryDate: j.expiry_date,
     jobAddress: j.job_address,

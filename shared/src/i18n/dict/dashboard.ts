@@ -487,6 +487,7 @@ export type DashboardDict = {
       urgent: string;
     };
     expired: string;
+    leadPrefix: string;
     emptyNoMatch: string;
     emptyAll: string;
     createFirst: string;
@@ -549,6 +550,10 @@ export type DashboardDict = {
       openInMaps: string;
       noCustomFields: string;
       coordinates: string;
+      shareLocation: string;
+      sendToCrew: string;
+      crewTextClient: string;
+      crewTextDate: string;
       workersHeading: string;
       // Line items
       itemsHeadingProposal: string;
@@ -988,6 +993,19 @@ export type DashboardDict = {
       equipo: string;
       actividad: string;
       tienda: string;
+      navegacion: string;
+    };
+    navigation: {
+      subtitle: string;
+      title: string;
+      intro: string;
+      inicioLabel: string;
+      masLabel: string;
+      fixedBadge: string;
+      maxNote: string;
+      maxReached: string;
+      minReached: string;
+      savedError: string;
     };
     employeesSection: {
       title: string;
@@ -1022,6 +1040,9 @@ export type DashboardDict = {
       daysSuffixMany: string;
       addLevelBtn: string;
       removeLevelLabel: string;
+      overdueHeading: string;
+      overdueSubtitle: string;
+      overdueBadge: string;
       colors: {
         red: string;
         orange: string;
@@ -2308,6 +2329,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         urgent: 'Urgente',
       },
       expired: '⚠ Vencida',
+      leadPrefix: 'Líder',
       emptyNoMatch: 'Sin resultados.',
       emptyAll: 'No tienes trabajos aún.',
       createFirst: 'Crear el primero →',
@@ -2366,6 +2388,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         openInMaps: 'Abrir en Mapas',
         noCustomFields: 'Sin campos personalizados.',
         coordinates: 'Coordenadas',
+        shareLocation: 'Compartir ubicación',
+        sendToCrew: 'Enviar a cuadrilla',
+        crewTextClient: 'Cliente',
+        crewTextDate: 'Fecha',
         workersHeading: 'Trabajadores',
         itemsHeadingProposal: 'Detalle de servicios',
         itemsHeadingJob: 'Materiales y mano de obra',
@@ -2792,6 +2818,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         equipo: 'Equipo',
         actividad: 'Actividad',
         tienda: 'Tienda de módulos',
+        navegacion: 'Navegación',
+      },
+      navigation: {
+        subtitle: 'Elige qué apps aparecen en la barra inferior.',
+        title: 'Barra de navegación',
+        intro: 'Elige hasta {{max}} apps para la barra inferior. Inicio y Más siempre están.',
+        inicioLabel: 'Inicio',
+        masLabel: 'Más',
+        fixedBadge: 'Fijo',
+        maxNote: 'Hasta {{max}} apps personalizables',
+        maxReached: 'Puedes elegir hasta {{max}} apps. Quita una para agregar otra.',
+        minReached: 'Debes mantener al menos una app.',
+        savedError: 'No se pudo guardar. Intenta de nuevo.',
       },
       employeesSection: {
         title: 'Campos de empleados',
@@ -2826,6 +2865,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         daysSuffixMany: 'días antes',
         addLevelBtn: 'Agregar nivel',
         removeLevelLabel: 'Eliminar nivel',
+        overdueHeading: 'Indicador de atrasados',
+        overdueSubtitle: 'Marca en rojo los trabajos que ya pasaron su fecha programada y aún no se completan.',
+        overdueBadge: 'Atrasado',
         colors: {
           red: 'Rojo',
           orange: 'Naranja',
@@ -4121,6 +4163,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         urgent: 'Urgent',
       },
       expired: '⚠ Expired',
+      leadPrefix: 'Lead',
       emptyNoMatch: 'No results.',
       emptyAll: 'No jobs yet.',
       createFirst: 'Create the first one →',
@@ -4179,6 +4222,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         openInMaps: 'Open in Maps',
         noCustomFields: 'No custom fields.',
         coordinates: 'Coordinates',
+        shareLocation: 'Share location',
+        sendToCrew: 'Send to crew',
+        crewTextClient: 'Client',
+        crewTextDate: 'Date',
         workersHeading: 'Workers',
         itemsHeadingProposal: 'Service details',
         itemsHeadingJob: 'Materials and labor',
@@ -4605,6 +4652,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         equipo: 'Team',
         actividad: 'Activity',
         tienda: 'Module Store',
+        navegacion: 'Navigation',
+      },
+      navigation: {
+        subtitle: 'Choose which apps appear in the bottom bar.',
+        title: 'Navigation bar',
+        intro: 'Pick up to {{max}} apps for the bottom bar. Home and More are always shown.',
+        inicioLabel: 'Home',
+        masLabel: 'More',
+        fixedBadge: 'Fixed',
+        maxNote: 'Up to {{max}} custom apps',
+        maxReached: 'You can pick up to {{max}} apps. Remove one to add another.',
+        minReached: 'You must keep at least one app.',
+        savedError: "Couldn't save. Please try again.",
       },
       employeesSection: {
         title: 'Employee fields',
@@ -4639,6 +4699,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         daysSuffixMany: 'days before',
         addLevelBtn: 'Add level',
         removeLevelLabel: 'Remove level',
+        overdueHeading: 'Overdue indicator',
+        overdueSubtitle: 'Flag jobs in red when they\'re past their scheduled date and not yet completed.',
+        overdueBadge: 'Overdue',
         colors: {
           red: 'Red',
           orange: 'Orange',

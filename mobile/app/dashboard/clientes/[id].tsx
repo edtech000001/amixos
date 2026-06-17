@@ -68,6 +68,8 @@ interface Client {
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  lat: number | null;
+  lng: number | null;
   notes: string | null;
   custom_fields: Record<string, string> | null;
   created_at: string;
@@ -140,13 +142,16 @@ const EMPTY_CONTACT = {
 
 export default function ClienteDetailRoute() {
   const router = useRouter();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  // Honor ?from=map so the back arrow returns to the map module instead
-  // of the clientes list. Same client detail page is reused from both
-  // entry points — this is the only place we differentiate.
+  const { id, from, jobId } = useLocalSearchParams<{ id: string; from?: string; jobId?: string }>();
+  // Honor ?from=map so the back arrow returns to the map module instead of the
+  // clientes list. ?from=job&jobId=… returns to that specific job. We navigate
+  // explicitly (not router.back()) because clientes/[id] and trabajos/[id] live
+  // in the same Tabs navigator, where back() can land on the wrong tab root.
   const goBack = () => {
     if (from === 'map') {
       router.replace('/dashboard/mas/modulos/map' as never);
+    } else if (from === 'job' && jobId) {
+      router.replace(`/dashboard/trabajos/${jobId}` as never);
     } else {
       router.replace('/dashboard/clientes' as never);
     }
@@ -500,6 +505,18 @@ export default function ClienteDetailRoute() {
   ]
     .filter(Boolean)
     .join('\n');
+  // Maps link for the address — prefers geocoded coords, falls back to the
+  // address string. Opens in whichever maps app the device uses.
+  const clientMapsUrl = (() => {
+    if (client.lat != null && client.lng != null) {
+      return `https://maps.google.com/?q=${client.lat},${client.lng}`;
+    }
+    const q = [client.address, client.address_line2, client.city, client.state, client.zip_code]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return q ? `https://maps.google.com/?q=${encodeURIComponent(q)}` : '';
+  })();
   const initials = `${client.first_name.charAt(0)}${client.last_name.charAt(0)}`.toUpperCase();
 
   return (
@@ -716,13 +733,22 @@ export default function ClienteDetailRoute() {
             </Pressable>
           ) : null}
           {fullAddress ? (
-            <View className="flex-row items-start gap-3">
+            <Pressable
+              onPress={() => clientMapsUrl && openLink(clientMapsUrl)}
+              disabled={!clientMapsUrl}
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+            >
               <MapPin size={15} color="#9CA3AF" />
               <View className="flex-1">
                 <Text className="text-xs text-gray-400">{t.fields.addressLine1}</Text>
                 <Text className="text-sm text-gray-900 font-medium">{fullAddress}</Text>
+                {clientMapsUrl ? (
+                  <Text className="text-xs text-primary font-medium mt-0.5">
+                    {full.dashboard.jobs.detail.openInMaps}
+                  </Text>
+                ) : null}
               </View>
-            </View>
+            </Pressable>
           ) : null}
           {!primaryPhone && !officePhone && !primaryEmail && !homeEmail && !fullAddress ? (
             <Text className="text-xs text-gray-400">{td.noContactInfo}</Text>

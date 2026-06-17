@@ -1,14 +1,16 @@
 import { Tabs } from 'expo-router';
-import { Home, ClipboardList, Users, FileText, LayoutGrid } from 'lucide-react-native';
+import { Home, LayoutGrid } from 'lucide-react-native';
 import { Alert, View } from 'react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AnimatedDock } from '@/components/AnimatedDock';
 import { useApp } from '@/lib/AppContext';
-import { can } from '@amixos/shared/lib/permissions';
+import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
+import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
+import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
   GoogleSyncBanner,
@@ -84,13 +86,22 @@ export default function DashboardLayout() {
 function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
-  const { currentRole } = useApp();
+  const { currentRole, user } = useApp();
   const insets = useSafeAreaInsets();
-  // Role-gated dock tabs. The screens stay registered (so deep links still
-  // resolve) but href:null drops them from the dock for roles that can't read
-  // them — field crew see no Clientes/Facturas tabs (RLS would return empty).
-  const showClientes = can.seeAllClients(currentRole);
-  const showFacturas = can.seeInvoices(currentRole);
+  // User-chosen dock apps (synced via profiles.dock_apps). Load once; the
+  // Navegación settings screen saves through the same store so the dock updates
+  // live. effectiveDockKeys folds in role gating + min/max, so an unselected or
+  // role-blocked app simply gets href:null and drops off the dock.
+  const supabase = useMemo(() => createSupabaseClient(), []);
+  const dockKeys = useDockStore(s => s.keys);
+  const loadDock = useDockStore(s => s.load);
+  useEffect(() => {
+    if (user?.id) loadDock(supabase, user.id);
+  }, [user?.id, supabase, loadDock]);
+  const activeDock = useMemo(
+    () => new Set(effectiveDockKeys(dockKeys, currentRole)),
+    [dockKeys, currentRole],
+  );
   const { status } = useGoogleSyncBanner();
   const [bannerHeight, setBannerHeight] = useState(0);
   const bannerVisible = status.kind !== 'idle';
@@ -122,29 +133,26 @@ function DashboardTabs() {
               tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
             }}
           />
-          <Tabs.Screen
-            name="clientes/index"
-            options={{
-              href: showClientes ? undefined : null,
-              title: sb.clientes,
-              tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
-            }}
-          />
-          <Tabs.Screen
-            name="trabajos/index"
-            options={{
-              title: sb.trabajos,
-              tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size} />,
-            }}
-          />
-          <Tabs.Screen
-            name="facturas/index"
-            options={{
-              href: showFacturas ? undefined : null,
-              title: sb.facturas,
-              tabBarIcon: ({ color, size }) => <FileText color={color} size={size} />,
-            }}
-          />
+
+          {/* Inicio … chosen apps … Más. Each candidate app is shown only when
+             the user selected it (and the role allows it); otherwise href:null
+             keeps the route registered (reachable from Más / deep links) but
+             off the dock. Dock order = catalog order. */}
+          {DOCK_APPS.map(app => {
+            const Icon = app.Icon;
+            return (
+              <Tabs.Screen
+                key={app.routeName}
+                name={app.routeName}
+                options={{
+                  href: activeDock.has(app.key) ? undefined : null,
+                  title: sb[app.labelKey],
+                  tabBarIcon: ({ color, size }) => <Icon color={color} size={size} />,
+                }}
+              />
+            );
+          })}
+
           <Tabs.Screen
             name="mas/index"
             options={{
@@ -193,16 +201,11 @@ function DashboardTabs() {
               unmountOnBlur: true,
             }}
           />
-          {/* The empleados file → directory move means the route is no
-             longer a leaf at `mas/empleados`; it's `mas/empleados/index`
-             + `mas/empleados/[id]`. Both need explicit href:null,
-             otherwise expo-router auto-surfaces them as empty dock tabs. */}
-          <Tabs.Screen name="mas/empleados/index" options={{ href: null }} />
+          {/* empleados/calendario/inventario are dock candidates (declared in the
+             DOCK_APPS map above); only their child/detail routes stay hidden. */}
           <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
           <Tabs.Screen name="mas/empleados/nuevo" options={{ href: null }} />
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
-          <Tabs.Screen name="mas/inventario" options={{ href: null }} />
-          <Tabs.Screen name="mas/calendario" options={{ href: null }} />
           {/* ajustes/ is a Stack with its own _layout — register the folder once. */}
           <Tabs.Screen name="mas/ajustes" options={{ href: null }} />
           {/* Module routes — dynamic [moduleId] page. Without href:null Expo

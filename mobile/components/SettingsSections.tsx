@@ -1436,6 +1436,10 @@ export function JobAlertsSection() {
     setValue(v => ({ ...v, enabled: !v.enabled }));
     setMsg(null);
   };
+  const toggleOverdue = () => {
+    setValue(v => ({ ...v, overdue: !v.overdue }));
+    setMsg(null);
+  };
   const addLevel = () => {
     setValue(v => ({ ...v, levels: [...v.levels, { days: 1, color: 'red' as JobAlertColor }] }));
     setMsg(null);
@@ -1461,6 +1465,7 @@ export function JobAlertsSection() {
     const payload: JobAlertThresholds = {
       enabled: value.enabled,
       levels: [...value.levels].sort((a, b) => a.days - b.days),
+      overdue: value.overdue,
     };
     const { error } = await supabase
       .from('businesses')
@@ -1563,6 +1568,15 @@ export function JobAlertsSection() {
           )}
         </View>
       )}
+
+      {/* Overdue indicator — independent of the day-tier levels above. */}
+      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+        <View className="flex-1 mr-3">
+          <Text className="text-sm font-medium text-gray-900">{t.jobAlerts.overdueHeading}</Text>
+          <Text className="text-xs text-gray-500 mt-0.5">{t.jobAlerts.overdueSubtitle}</Text>
+        </View>
+        <Toggle value={value.overdue} onValueChange={toggleOverdue} />
+      </View>
 
       <StatusMsg msg={msg} />
     </View>
@@ -3473,6 +3487,12 @@ function GoogleSyncSection() {
         setMsg({ text: `${t.connectError} [HTTP ${res.status}]`, isError: true });
       } else {
         await fetchStatus();
+        // Load the contact groups now. On a RECONNECT, status.connected was
+        // already true (the old token was revoked, not disconnected), so the
+        // status-driven effect below won't re-fire to load them — fetch them
+        // explicitly so the group dropdown populates without navigating away
+        // and back in.
+        void fetchGroups();
         // Prompt to backfill existing clients. We do this AFTER refreshing
         // status so the UI is already in the connected state behind the alert.
         await maybeOfferBackfill();

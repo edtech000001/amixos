@@ -223,6 +223,7 @@ export default function NuevoTrabajoRoute() {
           setDescription(job.description ?? '');
           setInternalNotes(job.internal_notes ?? '');
           setWorkerNotes(job.worker_notes ?? '');
+          setMapLink(job.job_map_link ?? '');
           if (job.job_lat != null && job.job_lng != null) {
             setJobLat(job.job_lat);
             setJobLng(job.job_lng);
@@ -406,6 +407,7 @@ export default function NuevoTrabajoRoute() {
         job_address: address.trim() || null,
         job_city: city.trim() || null,
         job_state: state || null,
+        job_map_link: mapLink.trim() || null,
         job_lat: jobLat,
         job_lng: jobLng,
         internal_notes: internalNotes.trim() || null,

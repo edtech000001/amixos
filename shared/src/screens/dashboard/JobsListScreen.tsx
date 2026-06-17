@@ -16,14 +16,18 @@ import {
   Building2,
   ArrowUpDown,
   Check,
+  AlertTriangle,
+  Clock,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
+import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
 import {
   matchJobAlert,
+  isJobOverdue,
   JOB_ALERT_STYLE,
   DEFAULT_JOB_ALERT_THRESHOLDS,
   type JobAlertThresholds,
@@ -51,6 +55,10 @@ export interface JobListItem {
   totalAmount: number;
   scheduledDate: string | null;
   timeStart: string | null;
+  /** Multi-day finish + manual estimate + end time, for the duration label. */
+  endDate?: string | null;
+  estimatedHours?: number | null;
+  timeEnd?: string | null;
   issueDate: string | null;
   expiryDate: string | null;
   jobAddress: string | null;
@@ -161,6 +169,7 @@ export function JobsListScreen({
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
+  const overdueBadgeLabel = full.dashboard.settings.jobAlerts.overdueBadge;
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<TabKey>(initialTab);
   // Persisted view (tab/search/sort/group) — restored on mount so the list
@@ -532,6 +541,13 @@ export function JobsListScreen({
               ? matchJobAlert(alertThresholds, job.scheduledDate)
               : null;
             const alertStyle = alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null;
+            // Past the scheduled date and not done — red date + "overdue" badge.
+            const overdue = !isProposal && isJobOverdue(alertThresholds, job.scheduledDate, job.status);
+            // How long the project runs (multi-day span / estimated hours / time window).
+            const durationText = formatProjectDuration(
+              { startDate: job.scheduledDate, endDate: job.endDate, estimatedHours: job.estimatedHours, timeStart: job.timeStart, timeEnd: job.timeEnd },
+              full.common.duration,
+            );
             // chip copy: "Hoy" / "Mañana" / "En N días".
             const alertChipLabel = alertMatch
               ? alertMatch.daysUntil === 0
@@ -544,59 +560,63 @@ export function JobsListScreen({
             return (
               <View
                 key={job.id}
-                className={`bg-white rounded-2xl border border-gray-100 overflow-hidden ${
-                  alertStyle ? `border-l-4 ${alertStyle.borderClass}` : ''
+                className={`rounded-2xl border overflow-hidden ${
+                  overdue
+                    ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
+                    : alertStyle
+                      ? `bg-white border-gray-100 border-l-4 ${alertStyle.borderClass}`
+                      : 'bg-white border-gray-100'
                 }`}
               >
                 <Pressable
                   onPress={() => onJobPress(job.id)}
-                  className="flex-row items-start gap-4 p-5 active:bg-gray-50"
+                  className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-gray-50'}`}
                 >
                   <View className={`w-2.5 h-2.5 rounded-full mt-1.5 ${dot}`} />
 
                   <View className="flex-1 min-w-0">
-                    <View className="flex-row items-start justify-between gap-3 mb-1.5">
-                      <View className="flex-1 min-w-0">
-                        <View className="flex-row items-center gap-2">
-                          {job.estimateNumber ? (
-                            <Text className="text-xs font-mono text-gray-400">
-                              {job.estimateNumber}
-                            </Text>
-                          ) : null}
-                          <Text className="text-sm font-bold text-gray-900 flex-1" numberOfLines={1}>
-                            {job.title}
-                          </Text>
-                        </View>
-                        {job.clientName ? (
-                          <Text className="text-xs text-gray-500 mt-0.5">
-                            {job.clientName}
-                            {job.clientCompany ? ` · ${job.clientCompany}` : ''}
-                          </Text>
-                        ) : null}
+                    {/* Title — full width on its own line so it isn't squeezed
+                       by the status pills. */}
+                    <View className="flex-row items-center gap-2">
+                      {job.estimateNumber ? (
+                        <Text className="text-xs font-mono text-gray-400">
+                          {job.estimateNumber}
+                        </Text>
+                      ) : null}
+                      <Text className="text-sm font-bold text-gray-900 flex-1" numberOfLines={1}>
+                        {job.title}
+                      </Text>
+                    </View>
+                    {job.clientName ? (
+                      <Text className="text-xs text-gray-500 mt-0.5">
+                        {job.clientName}
+                        {job.clientCompany ? ` · ${job.clientCompany}` : ''}
+                      </Text>
+                    ) : null}
+
+                    {/* Status indicators — their own line, wrap as needed. */}
+                    <View className="flex-row flex-wrap items-center gap-2 mt-2">
+                      {!isProposal && job.priority !== 'normal' ? (
+                        <Text className={`text-xs font-semibold ${priorityColor}`}>
+                          {priorityLabel}
+                        </Text>
+                      ) : null}
+                      <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
+                        <Text className={`text-xs font-semibold ${pillText}`}>
+                          {statusLabel}
+                        </Text>
                       </View>
-                      <View className="flex-row items-center gap-2">
-                        {!isProposal && job.priority !== 'normal' ? (
-                          <Text className={`text-xs font-semibold ${priorityColor}`}>
-                            {priorityLabel}
-                          </Text>
-                        ) : null}
-                        <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
-                          <Text className={`text-xs font-semibold ${pillText}`}>
-                            {statusLabel}
-                          </Text>
+                      {/* Crew-visibility marker. Default migration value
+                         is true, so this badge only fires when the owner
+                         explicitly kept the job in their private scheduler. */}
+                      {job.publishedToCrew === false ? (
+                        <View className="px-2 py-0.5 rounded-full bg-gray-200">
+                          <Text className="text-[10px] font-semibold text-gray-600">{t.new.privateBadge}</Text>
                         </View>
-                        {/* Crew-visibility marker. Default migration value
-                           is true, so this badge only fires when the owner
-                           explicitly kept the job in their private scheduler. */}
-                        {job.publishedToCrew === false ? (
-                          <View className="px-2 py-0.5 rounded-full bg-gray-200">
-                            <Text className="text-[10px] font-semibold text-gray-600">{t.new.privateBadge}</Text>
-                          </View>
-                        ) : null}
-                        {expired ? (
-                          <Text className="text-xs text-orange-500 font-medium">{t.expired}</Text>
-                        ) : null}
-                      </View>
+                      ) : null}
+                      {expired ? (
+                        <Text className="text-xs text-orange-500 font-medium">{t.expired}</Text>
+                      ) : null}
                     </View>
 
                     {/* Meta row */}
@@ -614,11 +634,19 @@ export function JobsListScreen({
                       ) : null}
                       {!isProposal && job.scheduledDate ? (
                         <View className="flex-row items-center gap-1">
-                          <Calendar size={12} color="#9CA3AF" />
-                          <Text className="text-xs text-gray-400">
+                          {overdue
+                            ? <AlertTriangle size={13} color="#DC2626" accessibilityLabel={overdueBadgeLabel} />
+                            : <Calendar size={12} color="#9CA3AF" />}
+                          <Text className={`text-xs ${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
                             {formatDateLong(job.scheduledDate, dateLoc)}
                             {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
                           </Text>
+                        </View>
+                      ) : null}
+                      {durationText ? (
+                        <View className="flex-row items-center gap-1">
+                          <Clock size={12} color="#9CA3AF" />
+                          <Text className="text-xs text-gray-400">{durationText}</Text>
                         </View>
                       ) : null}
                       {alertStyle && alertChipLabel ? (
@@ -637,15 +665,6 @@ export function JobsListScreen({
                           </Text>
                         </View>
                       ) : null}
-                      {job.workerNames.length > 0 ? (
-                        <View className="flex-row items-center gap-1">
-                          <Users size={12} color="#9CA3AF" />
-                          <Text className="text-xs text-gray-400">
-                            {job.workerNames.slice(0, 2).join(', ')}
-                            {job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}
-                          </Text>
-                        </View>
-                      ) : null}
                       {job.totalAmount > 0 ? (
                         <Text className="text-xs font-bold text-gray-700">
                           {fmt(job.totalAmount)}
@@ -660,6 +679,19 @@ export function JobsListScreen({
                         </View>
                       ) : null}
                     </View>
+
+                    {/* Lead / crew — its own right-aligned line near the bottom
+                       so the lead is easy to scan, distinct from the meta row. */}
+                    {job.leadName || job.workerNames.length > 0 ? (
+                      <View className="flex-row items-center gap-1 mt-2">
+                        <Users size={12} color="#9CA3AF" />
+                        <Text className="text-xs text-gray-500 font-medium">
+                          {job.leadName
+                            ? `${t.leadPrefix}: ${job.leadName}`
+                            : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <ChevronRight size={16} color="#9CA3AF" />

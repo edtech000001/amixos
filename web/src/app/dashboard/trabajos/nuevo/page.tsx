@@ -133,8 +133,10 @@ function NuevoTrabajoContent() {
   const [crewSearch, setCrewSearch] = useState('');
   const crewDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Map link
+  // Map link (saved raw) + coordinates extracted from it (drive the map pin)
   const [mapLink, setMapLink] = useState('');
+  const [jobLat, setJobLat] = useState<number | null>(null);
+  const [jobLng, setJobLng] = useState<number | null>(null);
 
   // Proposal-only fields
   const [clientNotes, setClientNotes] = useState('');
@@ -189,6 +191,9 @@ function NuevoTrabajoContent() {
           setAddress(job.job_address || '');
           setCity(job.job_city || '');
           setState(job.job_state || '');
+          setMapLink(job.job_map_link || '');
+          setJobLat(job.job_lat ?? null);
+          setJobLng(job.job_lng ?? null);
           setScheduledDate(job.scheduled_date || '');
           setEndDate(job.end_date || '');
           setAllDay(!!job.all_day);
@@ -304,11 +309,24 @@ function NuevoTrabajoContent() {
 
   const parseMapLink = (link: string) => {
     setMapLink(link);
-    // No autofill — Google's /place/ slug puts business name, address, city,
-    // state, country in unpredictable order, so guessing by comma-split was
-    // misaligning fields. Mobile captures the coordinates (job_lat / job_lng);
-    // web's form doesn't surface a coords field yet, so we just store the
-    // raw link and let the user type the address.
+    // We save the raw link AND try to pull coordinates out of it (the coords
+    // drive the Map module pin). Address / city / state are NOT auto-filled —
+    // Google's /place/ slug orders fields unpredictably, so a comma-split was
+    // misaligning them; the user types the address. Shortened links
+    // (maps.app.goo.gl/…) carry no coords in the URL and can't be resolved
+    // from the browser (CORS), so those save the link only.
+    if (!link.trim()) { setJobLat(null); setJobLng(null); return; }
+    const m =
+      link.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+      link.match(/[?&](?:q|ll)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+      link.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+    if (!m) return;
+    const lat = parseFloat(m[1]);
+    const lng = parseFloat(m[2]);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+    setJobLat(lat);
+    setJobLng(lng);
   };
 
   const toggleEmployee = (id: string) => {
@@ -424,6 +442,9 @@ function NuevoTrabajoContent() {
           job_address: address.trim() || null,
           job_city: city.trim() || null,
           job_state: state || null,
+          job_map_link: mapLink.trim() || null,
+          job_lat: jobLat,
+          job_lng: jobLng,
           scheduled_date: scheduledDate || null,
           end_date: endDate || null,
           all_day: allDay,
@@ -698,6 +719,9 @@ function NuevoTrabajoContent() {
                   className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
                 {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
                   <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
+                )}
+                {jobLat != null && jobLng != null && (
+                  <p className="text-xs text-emerald-600 font-mono">{full.dashboard.jobs.detail.coordinates}: {jobLat}, {jobLng}</p>
                 )}
               </div>
               <div className="border-t border-gray-100 pt-3"/>

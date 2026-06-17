@@ -9,6 +9,7 @@ import {
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
+  MessageSquare, Navigation,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -28,6 +29,7 @@ interface Job {
   client_id: string | null; invoice_id: string | null;
   title: string; description: string | null; status: string; priority: string;
   job_address: string | null; job_city: string | null; job_state: string | null;
+  job_map_link: string | null; job_lat: number | null; job_lng: number | null;
   scheduled_date: string | null; end_date: string | null; estimated_hours: number | null;
   time_start: string | null; time_end: string | null;
   completed_date: string | null; total_amount: number; internal_notes: string | null;
@@ -273,6 +275,49 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setTimeout(() => setShareCopied(false), 2000);
   };
 
+  // Build a maps link for the job. Prefers the original pasted link (the user's
+  // exact pin), then coordinates, then the address. Returns '' if no location.
+  const buildMapsUrl = () => {
+    if (!job) return '';
+    if (job.job_map_link?.trim()) return job.job_map_link.trim();
+    if (job.job_lat != null && job.job_lng != null) {
+      return `https://maps.google.com/?q=${job.job_lat},${job.job_lng}`;
+    }
+    const addr = [job.job_address, job.job_city, job.job_state].filter(Boolean).join(' ');
+    return addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : '';
+  };
+
+  // Share via the Web Share API when available (mobile browsers), otherwise
+  // copy to clipboard and flash a "copied" hint keyed by `key`.
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const shareText = async (text: string, key: string) => {
+    if (!text) return;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try { await navigator.share({ text }); } catch { /* user cancelled */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const shareLocation = () => shareText(buildMapsUrl(), 'loc');
+
+  // Share a crew-ready summary: maps pin link, job name, client, scheduled date.
+  const shareJobToCrew = () => {
+    if (!job) return;
+    const cn = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
+    const lines = [
+      buildMapsUrl(),
+      job.title,
+      cn ? `${td.crewTextClient} - ${cn}` : '',
+      job.scheduled_date ? `${td.crewTextDate} - ${formatDateLong(job.scheduled_date, dateLoc)}` : '',
+    ].filter(Boolean);
+    shareText(lines.join('\n'), 'crew');
+  };
+
   const openPrintView = async () => {
     if (!job) return;
     let token = job.share_token;
@@ -345,7 +390,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             <h1 className="text-xl font-bold text-gray-900">{job.title}</h1>
             {clientName && (
-              <Link href={`/dashboard/clientes/${job.client_id}`}
+              <Link href={`/dashboard/clientes/${job.client_id}?from=job&job=${job.id}`}
                 className="text-sm text-primary hover:underline font-medium">
                 {clientName}{job.clients?.company ? ` · ${job.clients.company}` : ''}
               </Link>
@@ -384,6 +429,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <Download size={16}/>
                 </button>
               </>
+            )}
+            {job.status !== 'cancelled' && job.status !== 'declined' && (
+              <button onClick={shareJobToCrew}
+                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors relative"
+                title={td.sendToCrew}>
+                <MessageSquare size={16}/>
+                {copiedKey === 'crew' && (
+                  <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded whitespace-nowrap">
+                    {td.shareCopied}
+                  </span>
+                )}
+              </button>
             )}
             {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) && (
               <button
@@ -658,7 +715,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   </div>
                 );
               })()}
-              {(job.job_address || job.job_city) && (
+              {(job.job_address || job.job_city || job.job_lat != null || job.job_map_link) && (
                 <div className="flex items-start gap-2.5">
                   <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0"/>
                   <div>
@@ -667,6 +724,19 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     {(job.job_city || job.job_state) && (
                       <p className="text-sm text-gray-600">{[job.job_city, job.job_state].filter(Boolean).join(', ')}</p>
                     )}
+                    {job.job_lat != null && job.job_lng != null && (
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{job.job_lat}, {job.job_lng}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <a href={buildMapsUrl()} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-primary font-medium hover:underline">
+                        <Navigation size={12}/> {td.openInMaps}
+                      </a>
+                      <button onClick={shareLocation}
+                        className="flex items-center gap-1 text-xs text-primary font-medium hover:underline">
+                        <Share2 size={12}/> {copiedKey === 'loc' ? td.shareCopied : td.shareLocation}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

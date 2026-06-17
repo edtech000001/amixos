@@ -21,12 +21,20 @@ export interface JobAlertLevel {
 export interface JobAlertThresholds {
   enabled: boolean;
   levels: JobAlertLevel[];
+  /** Highlight jobs past their scheduled date (red date + "overdue" badge). */
+  overdue: boolean;
 }
 
 export const DEFAULT_JOB_ALERT_THRESHOLDS: JobAlertThresholds = {
   enabled: false,
   levels: [],
+  overdue: false,
 };
+
+// Statuses exempt from the "overdue" flag even when past the scheduled date:
+// the job is done/cancelled, or already in progress (being worked on, so a
+// passed start date isn't a problem).
+const OVERDUE_EXEMPT_STATUSES = new Set(['in_progress', 'completed', 'invoiced', 'cancelled']);
 
 // Shared colour map used by both the list-card indicator and the
 // settings preview. Tailwind utility classes so the same value works on
@@ -49,8 +57,9 @@ export const JOB_ALERT_STYLE: Record<JobAlertColor, {
 // the list page.
 export function normalizeJobAlertThresholds(raw: unknown): JobAlertThresholds {
   if (!raw || typeof raw !== 'object') return DEFAULT_JOB_ALERT_THRESHOLDS;
-  const obj = raw as { enabled?: unknown; levels?: unknown };
+  const obj = raw as { enabled?: unknown; levels?: unknown; overdue?: unknown };
   const enabled = obj.enabled === true;
+  const overdue = obj.overdue === true;
   const levels: JobAlertLevel[] = Array.isArray(obj.levels)
     ? obj.levels
         .map((l): JobAlertLevel | null => {
@@ -65,7 +74,23 @@ export function normalizeJobAlertThresholds(raw: unknown): JobAlertThresholds {
         })
         .filter((l): l is JobAlertLevel => l !== null)
     : [];
-  return { enabled, levels };
+  return { enabled, levels, overdue };
+}
+
+// True when the "overdue" indicator is on and this job is past its scheduled
+// date but not yet done/cancelled. Callers should skip proposal-stage jobs
+// (no real scheduled date), mirroring matchJobAlert.
+export function isJobOverdue(
+  thresholds: JobAlertThresholds,
+  scheduledDate: string | null | undefined,
+  status: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!thresholds.overdue) return false;
+  if (!scheduledDate) return false;
+  if (status && OVERDUE_EXEMPT_STATUSES.has(status)) return false;
+  const daysUntil = daysUntilDate(scheduledDate, now);
+  return Number.isFinite(daysUntil) && daysUntil < 0;
 }
 
 // Whole number of days from today (local midnight) to the given date

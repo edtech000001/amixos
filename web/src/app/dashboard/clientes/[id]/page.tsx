@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -35,6 +36,7 @@ interface Client {
   email_office: string | null; email_home: string | null;
   address: string | null; address_line2: string | null;
   city: string | null; state: string | null; zip_code: string | null;
+  lat: number | null; lng: number | null;
   notes: string | null;
   custom_fields: Record<string, string> | null;
   created_at: string; updated_at: string;
@@ -102,12 +104,16 @@ function ContactRow({ icon, label, value, href, onActivate }: { icon: React.Reac
   // onActivate wins over href: routes the contact through the confirm-
   // outcome prompt so it gets logged, instead of a bare tel:/mailto: link.
   if (onActivate) return <button type="button" onClick={onActivate} className="text-left hover:text-primary transition-colors">{content}</button>;
-  if (href) return <a href={href} className="hover:text-primary transition-colors">{content}</a>;
+  if (href) {
+    const external = href.startsWith('http');
+    return <a href={href} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="hover:text-primary transition-colors">{content}</a>;
+  }
   return <div>{content}</div>;
 }
 
 export default function ClienteDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const searchParams = useSearchParams();
   const { t: full } = useLang();
   const t = full.dashboard.clients;
   const td = t.detail;
@@ -381,6 +387,18 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     client.zip_code,
   ].filter(Boolean).join('\n');
 
+  // Maps link for the address — prefers geocoded coords, falls back to the
+  // address string. Opens in a new tab.
+  const clientMapsUrl = (() => {
+    if (client.lat != null && client.lng != null) return `https://maps.google.com/?q=${client.lat},${client.lng}`;
+    const q = [client.address, client.address_line2, client.city, client.state, client.zip_code].filter(Boolean).join(' ');
+    return q ? `https://maps.google.com/?q=${encodeURIComponent(q)}` : '';
+  })();
+
+  // ?from=job&job=… → back arrow returns to that job instead of the list.
+  const fromJob = searchParams.get('from') === 'job' ? searchParams.get('job') : null;
+  const backHref = fromJob ? `/dashboard/trabajos/${fromJob}` : '/dashboard/clientes';
+
   const dateLoc = full.dashboard.dateLocale;
 
   return (
@@ -388,7 +406,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard/clientes" className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+          <Link href={backHref} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
             <ArrowLeft size={18} className="text-gray-500"/>
           </Link>
           <div className="flex items-center gap-3">
@@ -439,7 +457,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               {primaryEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailOffice} value={primaryEmail} onActivate={() => fireContact({ type: 'email', target: `mailto:${primaryEmail}`, contactMethod: primaryEmail, clientId: client.id })}/>}
               {homeEmail && <ContactRow icon={<Mail size={15}/>} label={t.fields.emailHome} value={homeEmail} onActivate={() => fireContact({ type: 'email', target: `mailto:${homeEmail}`, contactMethod: homeEmail, clientId: client.id })}/>}
               {fullAddress && (
-                <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress}/>
+                <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress} href={clientMapsUrl || undefined}/>
               )}
               {!primaryPhone && !primaryEmail && !fullAddress && (
                 <p className="text-xs text-gray-400">{td.noContactInfo}</p>

@@ -11,6 +11,7 @@ import {
   Cloud,
   Activity,
   LifeBuoy,
+  LayoutGrid,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -104,6 +105,13 @@ export default function AjustesIndex() {
       icon: Cloud,
       path: '/dashboard/mas/ajustes/conexiones',
     }] : []),
+    {
+      key: 'navegacion',
+      label: t.tabs.navegacion,
+      description: t.navigation.subtitle,
+      icon: LayoutGrid,
+      path: '/dashboard/mas/ajustes/navegacion',
+    },
     {
       key: 'cuenta',
       label: t.tabs.cuenta,

@@ -23,12 +23,16 @@ import {
   Building2,
   ArrowUpDown,
   Check,
+  AlertTriangle,
+  Clock,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
+import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
 import {
   matchJobAlert,
+  isJobOverdue,
   JOB_ALERT_STYLE,
   DEFAULT_JOB_ALERT_THRESHOLDS,
   type JobAlertThresholds,
@@ -57,6 +61,10 @@ export interface JobListItem {
   totalAmount: number;
   scheduledDate: string | null;
   timeStart: string | null;
+  /** Multi-day finish + manual estimate + end time, for the duration label. */
+  endDate?: string | null;
+  estimatedHours?: number | null;
+  timeEnd?: string | null;
   issueDate: string | null;
   expiryDate: string | null;
   jobAddress: string | null;
@@ -151,6 +159,7 @@ export function JobsListScreen({
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
   const tw = full.dashboard.workspaces;
+  const overdueBadgeLabel = full.dashboard.settings.jobAlerts.overdueBadge;
   // Restore the saved view (tab/search/sort/group) so navigating into a job
   // and back — or refreshing — keeps the filters. An explicit ?tab= deep link
   // (initialTab !== 'all') still wins for the tab.
@@ -561,6 +570,13 @@ export function JobsListScreen({
               ? matchJobAlert(alertThresholds, job.scheduledDate)
               : null;
             const alertStyle = alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null;
+            // Past the scheduled date and not done — red date + "overdue" badge.
+            const overdue = !isProposal && isJobOverdue(alertThresholds, job.scheduledDate, job.status);
+            // How long the project runs (multi-day span / estimated hours / time window).
+            const durationText = formatProjectDuration(
+              { startDate: job.scheduledDate, endDate: job.endDate, estimatedHours: job.estimatedHours, timeStart: job.timeStart, timeEnd: job.timeEnd },
+              full.common.duration,
+            );
             // chip copy: "Hoy" / "Mañana" / "En N días".
             const alertChipLabel = alertMatch
               ? alertMatch.daysUntil === 0
@@ -573,33 +589,36 @@ export function JobsListScreen({
             return (
               <div
                 key={job.id}
-                className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${
-                  alertStyle ? `border-l-4 ${alertStyle.borderClass}` : ''
+                className={`rounded-2xl border shadow-sm overflow-hidden ${
+                  overdue
+                    ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
+                    : alertStyle
+                      ? `bg-white border-gray-100 border-l-4 ${alertStyle.borderClass}`
+                      : 'bg-white border-gray-100'
                 }`}
               >
-                <button onClick={() => onJobPress(job.id)} className="w-full flex items-start gap-4 p-5 hover:bg-gray-50 text-left">
+                <button onClick={() => onJobPress(job.id)} className={`w-full flex items-start gap-4 p-5 text-left ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}>
                   <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3 mb-1.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {job.estimateNumber ? <span className="text-xs font-mono text-gray-400 shrink-0">{job.estimateNumber}</span> : null}
-                          <span className="text-sm font-bold text-gray-900 truncate">{job.title}</span>
-                        </div>
-                        {job.clientName ? (
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">
-                            {job.clientName}
-                            {job.clientCompany ? ` · ${job.clientCompany}` : ''}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!isProposal && job.priority !== 'normal' ? (
-                          <span className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</span>
-                        ) : null}
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
-                        {expired ? <span className="text-xs text-orange-500 font-medium">{t.expired}</span> : null}
-                      </div>
+                    {/* Title — full width on its own line so it isn't squeezed
+                       by the status pills. */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      {job.estimateNumber ? <span className="text-xs font-mono text-gray-400 shrink-0">{job.estimateNumber}</span> : null}
+                      <span className="text-sm font-bold text-gray-900 truncate">{job.title}</span>
+                    </div>
+                    {job.clientName ? (
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
+                        {job.clientName}
+                        {job.clientCompany ? ` · ${job.clientCompany}` : ''}
+                      </p>
+                    ) : null}
+                    {/* Status indicators — their own line, wrap as needed. */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {!isProposal && job.priority !== 'normal' ? (
+                        <span className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</span>
+                      ) : null}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
+                      {expired ? <span className="text-xs text-orange-500 font-medium">{t.expired}</span> : null}
                     </div>
 
                     {/* Meta row */}
@@ -617,10 +636,16 @@ export function JobsListScreen({
                         </span>
                       ) : null}
                       {!isProposal && job.scheduledDate ? (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <Calendar size={12} />
+                        <span className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                          {overdue ? <AlertTriangle size={13} aria-label={overdueBadgeLabel} /> : <Calendar size={12} />}
                           {formatDateLong(job.scheduledDate, dateLoc)}
                           {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
+                        </span>
+                      ) : null}
+                      {durationText ? (
+                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <Clock size={12} />
+                          {durationText}
                         </span>
                       ) : null}
                       {job.jobCity || job.jobAddress ? (
@@ -628,13 +653,6 @@ export function JobsListScreen({
                           <MapPin size={12} />
                           {job.jobCity || job.jobAddress}
                           {job.jobState ? `, ${job.jobState}` : ''}
-                        </span>
-                      ) : null}
-                      {job.workerNames.length > 0 ? (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <Users size={12} />
-                          {job.workerNames.slice(0, 2).join(', ')}
-                          {job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}
                         </span>
                       ) : null}
                       {job.totalAmount > 0 ? <span className="text-xs font-bold text-gray-700">{fmt(job.totalAmount)}</span> : null}
@@ -645,6 +663,17 @@ export function JobsListScreen({
                         </span>
                       ) : null}
                     </div>
+
+                    {/* Lead / crew — its own right-aligned line near the bottom
+                       so the lead is easy to scan, distinct from the meta row. */}
+                    {job.leadName || job.workerNames.length > 0 ? (
+                      <div className="flex items-center gap-1 text-xs text-gray-500 font-medium mt-2">
+                        <Users size={12} />
+                        {job.leadName
+                          ? `${t.leadPrefix}: ${job.leadName}`
+                          : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
+                      </div>
+                    ) : null}
                   </div>
                   <ChevronRight size={16} className="text-gray-400 shrink-0 mt-1" />
                 </button>

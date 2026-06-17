@@ -1441,6 +1441,10 @@ export default function AjustesPage() {
     setJobAlerts(prev => ({ ...prev, enabled: !prev.enabled }));
     setJobAlertsMsg('');
   };
+  const toggleJobAlertsOverdue = () => {
+    setJobAlerts(prev => ({ ...prev, overdue: !prev.overdue }));
+    setJobAlertsMsg('');
+  };
   const addJobAlertLevel = () => {
     // Default to "red, 1 day before" — most common first tier. Owner can
     // edit before saving.
@@ -1470,6 +1474,7 @@ export default function AjustesPage() {
     const payload: JobAlertThresholds = {
       enabled: jobAlerts.enabled,
       levels: [...jobAlerts.levels].sort((a, b) => a.days - b.days),
+      overdue: jobAlerts.overdue,
     };
     const { error } = await supabase.from('businesses')
       .update({ job_alert_thresholds: payload })
@@ -2146,6 +2151,16 @@ export default function AjustesPage() {
                     )}
                   </div>
                 )}
+
+                {/* Overdue indicator — independent of the upcoming-day tiers
+                   above; flags jobs already past their scheduled date. */}
+                <div className="flex items-start justify-between gap-4 mt-5 pt-4 border-t border-gray-100">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{t.jobAlerts.overdueHeading}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.jobAlerts.overdueSubtitle}</p>
+                  </div>
+                  <Toggle checked={jobAlerts.overdue} onChange={toggleJobAlertsOverdue} />
+                </div>
 
                 {jobAlertsMsg && <p className={`text-xs mt-4 ${jobAlertsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{jobAlertsMsg}</p>}
                 {jobAlertsDirty && (

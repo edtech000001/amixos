@@ -55,12 +55,33 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   });
 
   const activeRoute = state.routes[state.index];
-  // If the active route is a hidden child (e.g. mas/empleados under mas/),
-  // keep the parent tab highlighted. Match by the first path segment.
-  const activeRootSegment = activeRoute?.name?.split('/')[0];
-  const matched = visibleRoutes.findIndex(r =>
-    r.key === activeRoute?.key || r.name?.split('/')[0] === activeRootSegment,
-  );
+  // Highlight the tab the active route belongs to. Several visible tabs can now
+  // share a path root (e.g. mas/index + mas/calendario), so we match by the
+  // LONGEST shared path prefix, not just the first segment:
+  //   - exact key match wins (the active route is itself a tab),
+  //   - else the visible tab sharing the most leading segments (so
+  //     mas/empleados/[id] → the Empleados tab when it's shown),
+  //   - else, for any other mas/* child (Ajustes, Tienda, …) the "Más" tab is
+  //     the gateway, so prefer it over an unrelated mas/* app tab.
+  const aSegs = (activeRoute?.name ?? '').split('/');
+  const sharedLen = (name: string | undefined) => {
+    const s = (name ?? '').split('/');
+    let i = 0;
+    while (i < s.length && i < aSegs.length && s[i] === aSegs[i]) i++;
+    return i;
+  };
+  let matched = visibleRoutes.findIndex(r => r.key === activeRoute?.key);
+  if (matched < 0) {
+    let best = 0;
+    visibleRoutes.forEach((r, i) => {
+      const len = sharedLen(r.name);
+      if (len > best) { best = len; matched = i; }
+    });
+    if (best <= 1 && aSegs[0] === 'mas') {
+      const masIdx = visibleRoutes.findIndex(r => r.name === 'mas/index');
+      if (masIdx >= 0) matched = masIdx;
+    }
+  }
   const activeIndex = matched >= 0 ? matched : 0;
 
   const [barWidth, setBarWidth] = useState(0);

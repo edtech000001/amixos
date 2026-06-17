@@ -29,9 +29,8 @@ import {
   RotateCcw,
   Building2,
   Navigation,
-  User,
-  Mail,
   MessageSquare,
+  Share2,
   X,
   Sparkles,
   type LucideIcon,
@@ -61,6 +60,7 @@ interface Job {
   job_address: string | null;
   job_city: string | null;
   job_state: string | null;
+  job_map_link: string | null;
   job_lat: number | null;
   job_lng: number | null;
   scheduled_date: string | null;
@@ -124,6 +124,18 @@ const openLink = (url: string) => {
   Linking.openURL(url).catch(() => {});
 };
 
+// Build a maps link for the job. Prefers the original pasted link (the user's
+// exact pin), then coordinates, then the address. Works on iOS and Android.
+// Returns '' if the job has no location at all.
+const buildMapsUrl = (job: Job): string => {
+  if (job.job_map_link?.trim()) return job.job_map_link.trim();
+  if (job.job_lat != null && job.job_lng != null) {
+    return `https://maps.google.com/?q=${job.job_lat},${job.job_lng}`;
+  }
+  const addr = `${job.job_address ?? ''} ${job.job_city ?? ''} ${job.job_state ?? ''}`.trim();
+  return addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : '';
+};
+
 interface PipelineStep {
   key: string;
   label: string;
@@ -157,7 +169,6 @@ export default function JobDetailRoute() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [delegateOpen, setDelegateOpen] = useState(false);
   const [delegating, setDelegating] = useState(false);
-  const [clientModalOpen, setClientModalOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const businesses = useAuthStore((s) => s.businesses);
@@ -232,6 +243,24 @@ export default function JobDetailRoute() {
     } catch {
       Alert.alert('', td.shareError);
       return false;
+    }
+  };
+
+  // Opens the native share sheet with a crew-ready summary of the job — the
+  // maps pin link, job name, client and scheduled date. The user picks the
+  // recipient (Messages, WhatsApp, etc.) and channel from the share sheet.
+  const shareJobToCrew = async () => {
+    if (!job) return;
+    const lines = [
+      buildMapsUrl(job),
+      job.title,
+      clientName ? `${td.crewTextClient} - ${clientName}` : '',
+      job.scheduled_date ? `${td.crewTextDate} - ${fmtDate(job.scheduled_date)}` : '',
+    ].filter(Boolean);
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch {
+      Alert.alert('', td.shareError);
     }
   };
 
@@ -543,7 +572,14 @@ export default function JobDetailRoute() {
           ) : null}
           <Text className="text-2xl font-bold text-gray-900">{job.title}</Text>
           {clientName ? (
-            <Pressable onPress={() => setClientModalOpen(true)}>
+            <Pressable
+              onPress={() =>
+                job.client_id &&
+                router.push(
+                  `/dashboard/clientes/${job.client_id}?from=job&jobId=${job.id}` as never,
+                )
+              }
+            >
               <Text className="text-sm text-primary font-medium mt-1">
                 {clientName}
                 {job.clients?.company ? ` · ${job.clients.company}` : ''}
@@ -629,6 +665,16 @@ export default function JobDetailRoute() {
               ) : null}
             </View>
           ) : null}
+
+          {!isCancelled ? (
+            <Pressable
+              onPress={shareJobToCrew}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
+            >
+              <MessageSquare size={16} color="#374151" />
+              <Text className="text-sm font-semibold text-gray-700">{td.sendToCrew}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Details card */}
@@ -659,7 +705,7 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
 
-          {(job.job_address || job.job_lat != null) ? (
+          {(job.job_address || job.job_lat != null || job.job_map_link) ? (
             <Pressable
               onPress={() => setLocationModalOpen(true)}
               className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
@@ -672,7 +718,9 @@ export default function JobDetailRoute() {
                     ? `${job.job_address}${job.job_city ? `, ${job.job_city}` : ''}${
                         job.job_state ? ` ${job.job_state}` : ''
                       }`
-                    : `${job.job_lat?.toFixed(5)}, ${job.job_lng?.toFixed(5)}`}
+                    : job.job_lat != null
+                      ? `${job.job_lat?.toFixed(5)}, ${job.job_lng?.toFixed(5)}`
+                      : td.openInMaps}
                 </Text>
               </View>
             </Pressable>
@@ -875,50 +923,6 @@ export default function JobDetailRoute() {
         </Pressable>
       </RNModal>
 
-      {/* Client details modal */}
-      <RNModal
-        visible={clientModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setClientModalOpen(false)}
-      >
-        <Pressable
-          onPress={() => setClientModalOpen(false)}
-          className="flex-1 justify-end bg-black/40"
-        >
-          <Pressable
-            onPress={() => {}}
-            className="bg-white rounded-t-3xl pt-3"
-            style={{ maxHeight: '85%' }}
-          >
-            <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
-            </View>
-            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-              <Text className="text-lg font-bold text-gray-900">{td.clientModalTitle}</Text>
-              <Pressable onPress={() => setClientModalOpen(false)} hitSlop={8}>
-                <X size={20} color="#9CA3AF" />
-              </Pressable>
-            </View>
-            <ScrollView contentContainerClassName="px-5 py-5 pb-12">
-              {job.clients ? (
-                <ClientModalBody
-                  client={job.clients}
-                  onCallPress={(num) => openLink(`tel:${num.replace(/\D/g, '')}`)}
-                  onSmsPress={(num) => openLink(`sms:${num.replace(/\D/g, '')}`)}
-                  onEmailPress={(addr) => openLink(`mailto:${addr}`)}
-                  onOpenFullPress={() =>
-                    job.client_id && router.push(`/dashboard/clientes/${job.client_id}` as never)
-                  }
-                  goToClientLabel={full.dashboard.clients.title}
-                  noCustomFieldsLabel={td.noCustomFields}
-                />
-              ) : null}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </RNModal>
-
       {/* Location details modal */}
       <RNModal
         visible={locationModalOpen}
@@ -967,20 +971,24 @@ export default function JobDetailRoute() {
 
               <Pressable
                 onPress={() => {
-                  // Prefer coords for accuracy; fall back to address.
-                  if (job.job_lat != null && job.job_lng != null) {
-                    openLink(`https://maps.google.com/?q=${job.job_lat},${job.job_lng}`);
-                  } else if (job.job_address) {
-                    const q = encodeURIComponent(
-                      `${job.job_address} ${job.job_city ?? ''} ${job.job_state ?? ''}`.trim(),
-                    );
-                    openLink(`https://maps.google.com/?q=${q}`);
-                  }
+                  const url = buildMapsUrl(job);
+                  if (url) openLink(url);
                 }}
                 className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-80"
               >
                 <Navigation size={16} color="#FFFFFF" />
                 <Text className="text-white font-semibold text-sm">{td.openInMaps}</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const url = buildMapsUrl(job);
+                  if (url) Share.share({ message: url, url }).catch(() => {});
+                }}
+                className="flex-row items-center justify-center gap-2 border border-gray-200 py-3.5 rounded-2xl active:bg-gray-50"
+              >
+                <Share2 size={16} color="#374151" />
+                <Text className="text-gray-700 font-semibold text-sm">{td.shareLocation}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -1066,120 +1074,6 @@ function PipelineStrip({
           );
         })}
       </ScrollView>
-    </View>
-  );
-}
-
-function ClientModalBody({
-  client,
-  onCallPress,
-  onSmsPress,
-  onEmailPress,
-  onOpenFullPress,
-  goToClientLabel,
-  noCustomFieldsLabel,
-}: {
-  client: NonNullable<Job['clients']>;
-  onCallPress: (num: string) => void;
-  onSmsPress: (num: string) => void;
-  onEmailPress: (addr: string) => void;
-  onOpenFullPress: () => void;
-  goToClientLabel: string;
-  noCustomFieldsLabel: string;
-}) {
-  const phones = [client.phone_cell, client.phone_office].filter(Boolean) as string[];
-  const emails = [client.email_office, client.email_home].filter(Boolean) as string[];
-  const addressLines = [
-    client.address,
-    [client.city, client.state, client.zip_code].filter(Boolean).join(' '),
-  ].filter((s) => s && s.trim());
-  const customEntries = client.custom_fields
-    ? Object.entries(client.custom_fields).filter(([, v]) => v && String(v).trim())
-    : [];
-
-  return (
-    <View className="gap-4">
-      <View>
-        <Text className="text-2xl font-bold text-gray-900">
-          {client.first_name} {client.last_name}
-        </Text>
-        {client.company ? (
-          <Text className="text-sm text-gray-500 mt-0.5">{client.company}</Text>
-        ) : null}
-      </View>
-
-      {phones.length > 0 ? (
-        <View className="gap-2">
-          {phones.map((p) => (
-            <View key={p} className="flex-row items-center -mx-2">
-              <Pressable
-                onPress={() => onCallPress(p)}
-                className="flex-row items-center gap-3 flex-1 px-2 py-2 rounded-lg active:bg-gray-50"
-              >
-                <Phone size={16} color="#6B7280" />
-                <Text className="text-sm text-primary flex-1">{p}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => onSmsPress(p)}
-                hitSlop={8}
-                className="px-2 py-2 rounded-lg active:bg-gray-50"
-              >
-                <MessageSquare size={16} color="#4F46E5" />
-              </Pressable>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      {emails.length > 0 ? (
-        <View className="gap-2">
-          {emails.map((e) => (
-            <Pressable
-              key={e}
-              onPress={() => onEmailPress(e)}
-              className="flex-row items-center gap-3 -mx-2 px-2 py-2 rounded-lg active:bg-gray-50"
-            >
-              <Mail size={16} color="#6B7280" />
-              <Text className="text-sm text-primary flex-1">{e}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {addressLines.length > 0 ? (
-        <View className="flex-row items-start gap-3">
-          <MapPin size={16} color="#6B7280" />
-          <View className="flex-1">
-            {addressLines.map((line, i) => (
-              <Text key={i} className="text-sm text-gray-900">
-                {line}
-              </Text>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      {/* Custom fields */}
-      <View className="border-t border-gray-100 pt-4">
-        <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
-          {/* Reusing the noCustomFields key for the label too — short and works */}
-          {customEntries.length === 0 ? noCustomFieldsLabel : ''}
-        </Text>
-        {customEntries.map(([key, val]) => (
-          <View key={key} className="mb-2">
-            <Text className="text-xs text-gray-500">{key}</Text>
-            <Text className="text-sm text-gray-900">{String(val)}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Pressable
-        onPress={onOpenFullPress}
-        className="flex-row items-center justify-center gap-2 bg-gray-100 py-3 rounded-2xl active:bg-gray-200 mt-2"
-      >
-        <User size={16} color="#374151" />
-        <Text className="text-sm font-semibold text-gray-700">{goToClientLabel} →</Text>
-      </Pressable>
     </View>
   );
 }
