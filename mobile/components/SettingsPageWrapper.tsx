@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, Alert } from 'react-native';
-import { NestableScrollContainer } from 'react-native-draggable-flatlist';
+import Animated, { useAnimatedRef, type AnimatedRef } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -27,7 +27,15 @@ interface SaveState {
 
 const SettingsPageContext = createContext<{
   registerSaveState: (state: SaveState | null) => void;
-}>({ registerSaveState: () => {} });
+  // The page's scroll container — passed to SortableList so react-native-sortables
+  // can auto-scroll while dragging (and so drag/scroll don't fight each other).
+  scrollRef: AnimatedRef<Animated.ScrollView> | null;
+}>({ registerSaveState: () => {}, scrollRef: null });
+
+/** Section-side hook: the page scroll ref, for SortableList auto-scroll. */
+export function useSettingsScrollRef() {
+  return useContext(SettingsPageContext).scrollRef;
+}
 
 /**
  * Section-side hook: register your save state with the wrapper. Stash the
@@ -71,6 +79,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   const tc = t.common.buttons;
   const ts = t.dashboard.settings;
   const [saveState, setSaveState] = useState<SaveState | null>(null);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
   const registerSaveState = useCallback((s: SaveState | null) => setSaveState(s), []);
 
@@ -90,7 +99,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   };
 
   return (
-    <SettingsPageContext.Provider value={{ registerSaveState }}>
+    <SettingsPageContext.Provider value={{ registerSaveState, scrollRef }}>
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
           <Pressable
@@ -117,17 +126,17 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
             </Pressable>
           ) : null}
         </View>
-        {/* NestableScrollContainer (from react-native-draggable-flatlist) so
-           SortableList instances inside a section can drag without the
-           nested-FlatList warning. Acts as a plain ScrollView when no
-           NestableDraggableFlatList is present. */}
-        <NestableScrollContainer
+        {/* A plain Animated.ScrollView. SortableList (react-native-sortables)
+           drags only after a long-press, so a normal swipe scrolls the page;
+           the scrollRef lets the list auto-scroll while you drag near an edge. */}
+        <Animated.ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}
           keyboardShouldPersistTaps="handled"
         >
           {children}
-        </NestableScrollContainer>
+        </Animated.ScrollView>
       </SafeAreaView>
     </SettingsPageContext.Provider>
   );

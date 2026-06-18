@@ -470,11 +470,11 @@ export function JobsListScreen({
           <Pressable
             onPress={() => setTabs([])}
             accessibilityLabel={tabLabels.all}
-            className={`flex-row items-center justify-center w-9 h-9 rounded-xl ${
+            className={`flex-row items-center justify-center px-2.5 py-1.5 rounded-xl ${
               tabs.length === 0 ? 'bg-primary' : 'bg-gray-100'
             }`}
           >
-            <List size={16} color={tabs.length === 0 ? '#FFFFFF' : '#6B7280'} />
+            <List size={15} color={tabs.length === 0 ? '#FFFFFF' : '#6B7280'} />
           </Pressable>
           {STATUS_TAB_KEYS.map(k => {
             const isActive = tabSet.has(k);

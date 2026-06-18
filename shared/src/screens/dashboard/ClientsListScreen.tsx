@@ -1,10 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   View,
   Text,
   Pressable,
   FlatList,
+  ScrollView,
+  Modal as RNModal,
   type ViewToken,
 } from 'react-native';
 import {
@@ -17,12 +20,15 @@ import {
   Users,
   Upload,
   X,
+  Layers,
+  Check,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
-import { groupClientsByLetter, type ClientSection } from '../../lib/clientSections';
+import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientSection, type ClientGroupKey } from '../../lib/clientSections';
+import { usStateName } from '../../lib/usStates';
 
 export interface ClientListItem {
   id: string;
@@ -35,6 +41,8 @@ export interface ClientListItem {
   state: string | null;
   /** Contact people for this client — surfaced in search + the matched row. */
   contacts?: { name: string; role: string | null }[];
+  /** Custom field values (key → value) — used for "group by custom field". */
+  customFields?: Record<string, string> | null;
 }
 
 export interface ClientsListScreenProps {
@@ -53,6 +61,8 @@ export interface ClientsListScreenProps {
   onBulkDeletePress: () => void;
   onClearSelection: () => void;
   bulkDeleting: boolean;
+  /** Custom-field definitions, for the "group by custom field" menu options. */
+  customFieldTemplates?: { field_key: string; field_label: string }[];
   /** Optional slot rendered at the bottom (e.g. modals on web). */
   bottomSlot?: ReactNode;
 }
@@ -85,10 +95,40 @@ export function ClientsListScreen({
   onBulkDeletePress,
   onClearSelection,
   bulkDeleting,
+  customFieldTemplates = [],
   bottomSlot,
 }: ClientsListScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
+
+  // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
+  // choice persists across navigation + refresh via AsyncStorage.
+  const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const groupHydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(CLIENTS_GROUP_KEY)
+      .then(raw => { if (!cancelled) setGroupBy(parseClientGroupKey(raw)); })
+      .finally(() => { groupHydrated.current = true; });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!groupHydrated.current) return;
+    void AsyncStorage.setItem(CLIENTS_GROUP_KEY, groupBy).catch(() => {});
+  }, [groupBy]);
+  const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
+    { key: 'name', label: t.group.name },
+    { key: 'company', label: t.group.company },
+    { key: 'state', label: t.group.state },
+    { key: 'city', label: t.group.city },
+    ...customFieldTemplates.map(tpl => ({ key: `custom:${tpl.field_key}` as ClientGroupKey, label: tpl.field_label })),
+  ], [t, customFieldTemplates]);
+  const emptyLabel =
+    groupBy === 'company' ? t.group.noCompany :
+    groupBy === 'state' ? t.group.noState :
+    groupBy === 'city' ? t.group.noCity :
+    t.group.noValue;
 
   const filtered = useMemo(
     // Matches own fields + contact people; state name ↔ abbr expansion is
@@ -98,10 +138,10 @@ export function ClientsListScreen({
   );
 
   const searching = search.trim().length > 0;
-  // Alphabetical sections (A–Z + trailing '#'); flat while searching.
+  // Sections by the chosen group key; A–Z by default. Flat while searching.
   const sections = useMemo(
-    () => groupClientsByLetter(filtered, searching),
-    [filtered, searching],
+    () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
+    [filtered, groupBy, searching, emptyLabel, locale],
   );
   const letters = useMemo(
     () => sections.map(s => s.title).filter(Boolean),
@@ -235,6 +275,18 @@ export function ClientsListScreen({
           </Text>
         </View>
         <View className="flex-row gap-2">
+          {/* Group-by control — highlighted when not the default A–Z. */}
+          <Pressable
+            onPress={() => setGroupMenuOpen(true)}
+            className={`flex-row items-center gap-1.5 px-4 py-2.5 rounded-xl border active:opacity-80 ${
+              groupBy !== 'name' ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+            }`}
+          >
+            <Layers size={15} color={groupBy !== 'name' ? '#4F46E5' : '#374151'} />
+            <Text className={`text-sm font-semibold ${groupBy !== 'name' ? 'text-primary' : 'text-gray-700'}`}>
+              {t.group.button}
+            </Text>
+          </Pressable>
           {onImportPress ? (
             <Pressable
               onPress={onImportPress}
@@ -395,8 +447,9 @@ export function ClientsListScreen({
         keyboardShouldPersistTaps="handled"
       />
 
-      {/* A–Z index — hugs the right edge (the Fab sits 20px in, no overlap) */}
-      {showList && !searching && letters.length > 1 ? (
+      {/* A–Z index — only meaningful for the alphabetical (name) grouping.
+         Hugs the right edge (the Fab sits 20px in, no overlap). */}
+      {showList && !searching && groupBy === 'name' && letters.length > 1 ? (
         <AlphabetScrubber
           letters={letters}
           activeLetter={activeLetter}
@@ -406,6 +459,42 @@ export function ClientsListScreen({
 
       {/* New client — floating action, bottom-right thumb reach */}
       <Fab onPress={onNewClientPress} />
+
+      {/* Group-by bottom sheet — pills, mirrors the jobs sort menu. */}
+      <RNModal
+        visible={groupMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGroupMenuOpen(false)}
+      >
+        <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-6 pt-3 pb-10">
+            <View className="self-center w-10 h-1 rounded-full bg-gray-200 mb-4" />
+            <Text className="text-base font-bold text-gray-900 mb-4">{t.group.title}</Text>
+            <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled">
+              <View className="flex-row flex-wrap gap-2">
+                {groupOptions.map(o => {
+                  const selected = groupBy === o.key;
+                  return (
+                    <Pressable
+                      key={o.key}
+                      onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                      className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
+                        selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      {selected ? <Check size={13} color="#FFFFFF" /> : null}
+                      <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </RNModal>
     </View>
   );
 }

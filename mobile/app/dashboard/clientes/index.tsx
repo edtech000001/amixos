@@ -29,6 +29,7 @@ interface Client {
   email_home: string | null;
   city: string | null;
   state: string | null;
+  custom_fields: Record<string, string> | null;
 }
 
 function fmtPhone(raw: string): string {
@@ -56,11 +57,13 @@ export default function ClientesTab() {
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Custom-field definitions — for the "group by custom field" menu options.
+  const [templates, setTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
 
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const [cl, contactRows] = await Promise.all([
+    const [cl, contactRows, tplRes] = await Promise.all([
       fetchAll<Client>((from, to) =>
         supabase
           .from('clients')
@@ -77,7 +80,14 @@ export default function ClientesTab() {
           .eq('business_id', businessId)
           .order('is_primary', { ascending: false })
           .range(from, to)),
+      // Field templates are bounded config (one row per custom field).
+      supabase
+        .from('client_field_templates')
+        .select('field_key, field_label')
+        .eq('business_id', businessId)
+        .order('sort_order'),
     ]);
+    setTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? []);
     const byClient = new Map<string, { name: string; role: string | null }[]>();
     for (const ct of contactRows) {
       const arr = byClient.get(ct.client_id);
@@ -110,6 +120,7 @@ export default function ClientesTab() {
         city: c.city,
         state: c.state,
         contacts: contactsByClient.get(c.id),
+        customFields: c.custom_fields,
       })),
     [clients, contactsByClient],
   );
@@ -234,6 +245,7 @@ export default function ClientesTab() {
       <ClientsListScreen
         loading={loading}
         clients={items}
+        customFieldTemplates={templates}
         search={search}
         onSearchChange={(text) => {
           setSearch(text);

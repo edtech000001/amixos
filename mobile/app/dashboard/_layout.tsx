@@ -9,7 +9,7 @@ import { AnimatedDock } from '@/components/AnimatedDock';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
-import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
+import { DOCK_APPS } from '@/lib/dockApps';
 import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
@@ -88,20 +88,16 @@ function DashboardTabs() {
   const sb = t.dashboard.sidebar;
   const { currentRole, user } = useApp();
   const insets = useSafeAreaInsets();
-  // User-chosen dock apps (synced via profiles.dock_apps). Load once; the
-  // Navegación settings screen saves through the same store so the dock updates
-  // live. effectiveDockKeys folds in role gating + min/max, so an unselected or
-  // role-blocked app simply gets href:null and drops off the dock.
+  // Load the user's dock-app selection (synced via profiles.dock_apps) once.
+  // Every role-eligible app stays REGISTERED as a tab below (href fixed by role
+  // only) — which apps actually appear in the dock is decided visually by
+  // AnimatedDock from the store. So toggling apps in Navegación is just a dock
+  // re-render, not a tab-navigator reconfigure (which felt sluggish).
   const supabase = useMemo(() => createSupabaseClient(), []);
-  const dockKeys = useDockStore(s => s.keys);
   const loadDock = useDockStore(s => s.load);
   useEffect(() => {
     if (user?.id) loadDock(supabase, user.id);
   }, [user?.id, supabase, loadDock]);
-  const activeDock = useMemo(
-    () => new Set(effectiveDockKeys(dockKeys, currentRole)),
-    [dockKeys, currentRole],
-  );
   const { status } = useGoogleSyncBanner();
   const [bannerHeight, setBannerHeight] = useState(0);
   const bannerVisible = status.kind !== 'idle';
@@ -134,18 +130,19 @@ function DashboardTabs() {
             }}
           />
 
-          {/* Inicio … chosen apps … Más. Each candidate app is shown only when
-             the user selected it (and the role allows it); otherwise href:null
-             keeps the route registered (reachable from Más / deep links) but
-             off the dock. Dock order = catalog order. */}
+          {/* Every dock-eligible app is registered (href fixed by role so the
+             navigator never reconfigures on selection). AnimatedDock decides
+             which of these actually show, from the user's saved selection. A
+             role-blocked app gets href:null and is fully off the dock. */}
           {DOCK_APPS.map(app => {
             const Icon = app.Icon;
+            const eligible = !app.gate || app.gate(currentRole);
             return (
               <Tabs.Screen
                 key={app.routeName}
                 name={app.routeName}
                 options={{
-                  href: activeDock.has(app.key) ? undefined : null,
+                  href: eligible ? undefined : null,
                   title: sb[app.labelKey],
                   tabBarIcon: ({ color, size }) => <Icon color={color} size={size} />,
                 }}
@@ -201,11 +198,15 @@ function DashboardTabs() {
               unmountOnBlur: true,
             }}
           />
-          {/* empleados/calendario/inventario are dock candidates (declared in the
-             DOCK_APPS map above); only their child/detail routes stay hidden. */}
+          {/* empleados/calendario are dock candidates (declared in the DOCK_APPS
+             map above); only their child/detail routes stay hidden. */}
           <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
           <Tabs.Screen name="mas/empleados/nuevo" options={{ href: null }} />
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
+          {/* Inventario is a MODULE (mas/inventario is a redirect to
+             mas/modulos/inventory) — kept off the dock; reached via Más only
+             when the module is enabled. */}
+          <Tabs.Screen name="mas/inventario" options={{ href: null }} />
           {/* ajustes/ is a Stack with its own _layout — register the folder once. */}
           <Tabs.Screen name="mas/ajustes" options={{ href: null }} />
           {/* Module routes — dynamic [moduleId] page. Without href:null Expo

@@ -26,6 +26,7 @@ import {
   Check,
   AlertTriangle,
   Clock,
+  List,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -84,6 +85,9 @@ export interface JobListItem {
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
+type StatusTabKey = Exclude<TabKey, 'all'>;
+// Selectable status filters (everything except the "all" reset). Multi-select.
+const STATUS_TAB_KEYS = TAB_KEYS.filter((k): k is StatusTabKey => k !== 'all');
 
 export interface JobsListScreenProps {
   loading: boolean;
@@ -168,9 +172,13 @@ export function JobsListScreen({
     if (typeof window === 'undefined') return null;
     return parseJobsFilters(window.localStorage.getItem(JOBS_FILTERS_KEY));
   }, []);
-  const savedTab = saved?.tab && (TAB_KEYS as readonly string[]).includes(saved.tab) ? (saved.tab as TabKey) : null;
+  const savedTabs = (saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k));
   const [search, setSearch] = useState(saved?.search ?? '');
-  const [tab, setTab] = useState<TabKey>(initialTab !== 'all' ? initialTab : (savedTab ?? 'all'));
+  // Multi-select status filters. Empty = "all". A ?tab deep link seeds it.
+  const [tabs, setTabs] = useState<StatusTabKey[]>(initialTab !== 'all' ? [initialTab as StatusTabKey] : savedTabs);
+  const tabSet = useMemo(() => new Set(tabs), [tabs]);
+  const toggleTab = (k: StatusTabKey) =>
+    setTabs(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>(saved?.sortBy ?? 'recent');
@@ -179,12 +187,12 @@ export function JobsListScreen({
   // Persist on any change.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const f: JobsFilters = { tab, search, sortBy, groupBy };
+    const f: JobsFilters = { tabs, search, sortBy, groupBy };
     window.localStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify(f));
-  }, [tab, search, sortBy, groupBy]);
+  }, [tabs, search, sortBy, groupBy]);
 
-  const filtersActive = jobsFiltersActive({ tab, search, sortBy, groupBy });
-  const clearFilters = () => { setTab('all'); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy });
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -198,11 +206,16 @@ export function JobsListScreen({
     delegated: tw.delegatedFilterTab,
   };
 
+  // Multi-select: a job matches if it satisfies ANY selected tab. No tabs = all.
   const matchesTab = (j: JobListItem) => {
-    if (tab === 'all') return true;
-    if (tab === 'propuestas') return PROPOSAL_STATUSES.includes(j.status);
-    if (tab === 'delegated') return !!j.delegatedToBusinessName;
-    return j.status === tab;
+    if (tabs.length === 0) return true;
+    return tabs.some(tk =>
+      tk === 'propuestas'
+        ? PROPOSAL_STATUSES.includes(j.status)
+        : tk === 'delegated'
+          ? !!j.delegatedToBusinessName
+          : j.status === tk,
+    );
   };
 
   const filtered = useMemo(() => {
@@ -216,7 +229,7 @@ export function JobsListScreen({
       return matchSearch && matchesTab(j);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, search, tab]);
+  }, [jobs, search, tabs]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -518,14 +531,25 @@ export function JobsListScreen({
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — multi-select status filters. The leading "all" reset is an icon,
+         highlighted when no status filter is applied. */}
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-5">
-        {TAB_KEYS.map((k) => {
-          const isActive = tab === k;
+        <button
+          onClick={() => setTabs([])}
+          title={tabLabels.all}
+          aria-label={tabLabels.all}
+          className={`flex items-center justify-center shrink-0 px-2.5 py-1.5 rounded-xl ${
+            tabs.length === 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          <List size={15} />
+        </button>
+        {STATUS_TAB_KEYS.map((k) => {
+          const isActive = tabSet.has(k);
           return (
             <button
               key={k}
-              onClick={() => setTab(k)}
+              onClick={() => toggleTab(k)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 text-xs font-semibold ${
                 isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
@@ -549,8 +573,8 @@ export function JobsListScreen({
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <ClipboardList size={40} className="text-gray-300" />
-          <p className="text-sm text-gray-400 mt-3">{search || tab !== 'all' ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search && tab === 'all' && canCreate ? (
+          <p className="text-sm text-gray-400 mt-3">{search || tabs.length > 0 ? t.emptyNoMatch : t.emptyAll}</p>
+          {!search && tabs.length === 0 && canCreate ? (
             <button onClick={onNewJob} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
           ) : null}
         </div>

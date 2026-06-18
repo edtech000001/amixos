@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingDown, TrendingUp } from 'lucide-react';
+import { TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -81,6 +81,21 @@ export default function InventoryModule() {
     return entry ? t.units[entry[0]] : dbValue;
   };
 
+  // Previously-used categories — offered as a datalist while typing.
+  const categorySuggestions = useMemo(
+    () => Array.from(new Set(items.map(i => i.category).filter((c): c is string => !!c && c.trim() !== ''))).sort(),
+    [items],
+  );
+
+  // Auto-generate a SKU: a short prefix from the name + a unique 4-digit suffix.
+  const genSku = () => {
+    const base = form.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'SKU';
+    const existing = new Set(items.map(i => i.sku).filter(Boolean));
+    let sku = '';
+    do { sku = `${base}-${Math.floor(1000 + Math.random() * 9000)}`; } while (existing.has(sku));
+    setForm(f => ({ ...f, sku }));
+  };
+
   const openAdd = () => { setForm({ ...EMPTY }); setError(''); setModal('add'); };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id); if (!item) return;
@@ -130,9 +145,22 @@ export default function InventoryModule() {
         <div className="flex flex-col gap-4">
           <Input label={t.modal.nameLabel} placeholder={t.modal.namePlaceholder} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.modal.skuLabel} placeholder={t.modal.skuPlaceholder} value={form.sku ?? ''} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} />
-            <Input label={t.modal.categoryLabel} placeholder={t.modal.categoryPlaceholder} value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+            <Input
+              label={t.modal.skuLabel}
+              placeholder={t.modal.skuPlaceholder}
+              value={form.sku ?? ''}
+              onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
+              rightIcon={
+                <button type="button" onClick={genSku} title={t.modal.generateSku} aria-label={t.modal.generateSku} className="p-1 text-primary hover:opacity-70">
+                  <Sparkles size={16} />
+                </button>
+              }
+            />
+            <Input label={t.modal.categoryLabel} placeholder={t.modal.categoryPlaceholder} value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} list="inventory-categories" />
           </div>
+          <datalist id="inventory-categories">
+            {categorySuggestions.map(c => <option key={c} value={c} />)}
+          </datalist>
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.modal.quantityLabel} type="number" min="0" value={form.quantity || ''} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
             <div className="flex flex-col gap-1.5">

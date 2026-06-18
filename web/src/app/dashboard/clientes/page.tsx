@@ -263,6 +263,7 @@ export default function ClientesPage() {
     city: c.city,
     state: c.state,
     contacts: contactsByClient.get(c.id),
+    customFields: c.custom_fields,
   })), [clients, contactsByClient]);
 
   // Keep this in lockstep with the list screen's own filter so select-all /
@@ -748,6 +749,7 @@ export default function ClientesPage() {
     <ClientsListScreen
       loading={loading}
       clients={listItems}
+      customFieldTemplates={templates}
       search={search}
       onSearchChange={(text) => { setSearch(text); setSelectedIds(new Set()); }}
       selectedIds={selectedIds}

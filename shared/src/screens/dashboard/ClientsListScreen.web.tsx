@@ -5,11 +5,12 @@
 // API as ClientsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { Fragment, memo, useMemo, type ReactNode } from 'react';
-import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X } from 'lucide-react';
+import { Fragment, memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
-import { groupClientsByLetter } from '../../lib/clientSections';
+import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
+import { usStateName } from '../../lib/usStates';
 
 export interface ClientListItem {
   id: string;
@@ -22,6 +23,8 @@ export interface ClientListItem {
   state: string | null;
   /** Contact people for this client — surfaced in search + the matched row. */
   contacts?: { name: string; role: string | null }[];
+  /** Custom field values (key → value) — used for "group by custom field". */
+  customFields?: Record<string, string> | null;
 }
 
 export interface ClientsListScreenProps {
@@ -40,6 +43,8 @@ export interface ClientsListScreenProps {
   onBulkDeletePress: () => void;
   onClearSelection: () => void;
   bulkDeleting: boolean;
+  /** Custom-field definitions, for the "group by custom field" menu options. */
+  customFieldTemplates?: { field_key: string; field_label: string }[];
   bottomSlot?: ReactNode;
 }
 
@@ -59,10 +64,33 @@ export function ClientsListScreen({
   onBulkDeletePress,
   onClearSelection,
   bulkDeleting,
+  customFieldTemplates = [],
   bottomSlot,
 }: ClientsListScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
+
+  // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
+  // choice persists across navigation + refresh via localStorage.
+  const [groupBy, setGroupBy] = useState<ClientGroupKey>(() =>
+    typeof window !== 'undefined' ? parseClientGroupKey(window.localStorage.getItem(CLIENTS_GROUP_KEY)) : 'name',
+  );
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(CLIENTS_GROUP_KEY, groupBy);
+  }, [groupBy]);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
+    { key: 'name', label: t.group.name },
+    { key: 'company', label: t.group.company },
+    { key: 'state', label: t.group.state },
+    { key: 'city', label: t.group.city },
+    ...customFieldTemplates.map(tpl => ({ key: `custom:${tpl.field_key}` as ClientGroupKey, label: tpl.field_label })),
+  ], [t, customFieldTemplates]);
+  const emptyLabel =
+    groupBy === 'company' ? t.group.noCompany :
+    groupBy === 'state' ? t.group.noState :
+    groupBy === 'city' ? t.group.noCity :
+    t.group.noValue;
 
   const filtered = useMemo(
     // Matches own fields + contact people; state name ↔ abbr expansion is
@@ -72,10 +100,10 @@ export function ClientsListScreen({
   );
 
   const searching = search.trim().length > 0;
-  // Alphabetical sections (A–Z + trailing '#'); flat while searching.
+  // Sections by the chosen group key; A–Z by default. Flat while searching.
   const sections = useMemo(
-    () => groupClientsByLetter(filtered, searching),
-    [filtered, searching],
+    () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
+    [filtered, groupBy, searching, emptyLabel, locale],
   );
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
@@ -96,6 +124,42 @@ export function ClientsListScreen({
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Group-by control — highlighted when not the default A–Z. */}
+          <div className="relative">
+            <button
+              onClick={() => setGroupMenuOpen(o => !o)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                groupBy !== 'name' ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Layers size={15} /> {t.group.button}
+            </button>
+            {groupMenuOpen ? (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 z-20 bg-white rounded-2xl border border-gray-100 shadow-lg p-3 w-64">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{t.group.title}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupOptions.map(o => {
+                      const selected = groupBy === o.key;
+                      return (
+                        <button
+                          key={o.key}
+                          onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                            selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          {selected ? <Check size={12} /> : null}
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
           {onImportPress ? (
             <button onClick={onImportPress} className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
               <Upload size={15} /> {t.importBtn}

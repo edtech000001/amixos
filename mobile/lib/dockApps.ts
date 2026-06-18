@@ -5,12 +5,14 @@
 // MIN_DOCK_MIDDLE. The choice is stored per user in profiles.dock_apps and
 // applied in app/dashboard/_layout.tsx by flipping each route's `href`.
 
-import { ClipboardList, Users, FileText, Calendar, UsersRound, Package, type LucideIcon } from 'lucide-react-native';
+import { ClipboardList, Users, FileText, Calendar, UsersRound, type LucideIcon } from 'lucide-react-native';
 import { can } from '@amixos/shared/lib/permissions';
 import type { Role } from '@amixos/shared/lib/permissions';
 
-/** Keys of the labels we read from t.dashboard.sidebar for each app. */
-export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados' | 'inventario';
+/** Keys of the labels we read from t.dashboard.sidebar for each app. Only
+ *  CORE apps belong here — modules (Inventario, Mapa, Archivos, …) are gated by
+ *  activation and live in the module system, never the static dock catalog. */
+export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados';
 
 export interface DockApp {
   /** Stable key persisted in profiles.dock_apps. */
@@ -37,7 +39,6 @@ export const DOCK_APPS: DockApp[] = [
   { key: 'facturas', routeName: 'facturas/index', path: '/dashboard/facturas', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
   { key: 'calendario', routeName: 'mas/calendario', path: '/dashboard/mas/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
   { key: 'empleados', routeName: 'mas/empleados/index', path: '/dashboard/mas/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
-  { key: 'inventario', routeName: 'mas/inventario', path: '/dashboard/mas/inventario', Icon: Package, labelKey: 'inventario', defaultOn: false, gate: can.seeAllJobs },
 ];
 
 /** Selectable middle apps: default 3 (Inicio + 3 + Más = 5), max 4 (= 6 total). */

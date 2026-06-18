@@ -91,20 +91,6 @@ export default function AjustesIndex() {
     ] : []),
     // Equipo (team) moved out of Ajustes — now lives as a top-level
     // entry in Más under Empleados (see mas/index.tsx + mas/equipo.tsx).
-    ...(can.seeAuditLog(currentRole) ? [{
-      key: 'actividad',
-      label: t.tabs.actividad,
-      description: t.activity.subtitle,
-      icon: Activity,
-      path: '/dashboard/mas/ajustes/actividad',
-    }] : []),
-    ...(isAdmin ? [{
-      key: 'conexiones',
-      label: t.tabs.conexiones,
-      description: t.google.subtitle,
-      icon: Cloud,
-      path: '/dashboard/mas/ajustes/conexiones',
-    }] : []),
     {
       key: 'navegacion',
       label: t.tabs.navegacion,
@@ -112,6 +98,20 @@ export default function AjustesIndex() {
       icon: LayoutGrid,
       path: '/dashboard/mas/ajustes/navegacion',
     },
+    ...(isAdmin ? [{
+      key: 'conexiones',
+      label: t.tabs.conexiones,
+      description: t.google.subtitle,
+      icon: Cloud,
+      path: '/dashboard/mas/ajustes/conexiones',
+    }] : []),
+    ...(can.seeAuditLog(currentRole) ? [{
+      key: 'actividad',
+      label: t.tabs.actividad,
+      description: t.activity.subtitle,
+      icon: Activity,
+      path: '/dashboard/mas/ajustes/actividad',
+    }] : []),
     {
       key: 'cuenta',
       label: t.tabs.cuenta,

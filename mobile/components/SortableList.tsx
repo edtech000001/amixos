@@ -1,12 +1,19 @@
 import { type ReactNode } from 'react';
-import { NestableDraggableFlatList, type RenderItemParams } from 'react-native-draggable-flatlist';
+import Sortable from 'react-native-sortables';
+import { useSettingsScrollRef } from '@/components/SettingsPageWrapper';
 
-// Vertical sortable list for the mobile Settings screens. Caller provides
-// items with stable ids and a render function that gets `drag` + `isActive`.
+// Vertical sortable list for the mobile Settings screens. Caller provides items
+// with stable ids and a render function.
 //
-// Uses NestableDraggableFlatList so it can live inside the existing
-// SettingsPageWrapper's NestableScrollContainer (DnD inside a scrollable
-// settings page without the usual nested-FlatList warnings).
+// Uses react-native-sortables (same library as the dashboard widgets): drag
+// only activates after a LONG-PRESS, so a normal swipe scrolls the settings
+// page instead of grabbing a row. It also auto-scrolls while dragging near an
+// edge via the page's scroll ref. This replaces react-native-draggable-flatlist,
+// whose NestableScrollContainer made the page hard/impossible to scroll.
+//
+// `drag`/`isActive` in the render callback are kept for API compatibility but
+// are no-ops now — the whole row is the drag target (long-press anywhere) and
+// the library applies its own active-item styling.
 
 interface Props<T extends { id: string }> {
   items: T[];
@@ -18,21 +25,24 @@ interface Props<T extends { id: string }> {
   ) => ReactNode;
 }
 
+const noop = () => {};
+
 export function SortableList<T extends { id: string }>({
   items,
   onReorder,
   renderItem,
 }: Props<T>) {
-  const render = ({ item, drag, isActive, getIndex }: RenderItemParams<T>) =>
-    renderItem(item, getIndex() ?? 0, { drag, isActive }) as JSX.Element;
-
+  const scrollRef = useSettingsScrollRef();
   return (
-    <NestableDraggableFlatList
+    <Sortable.Grid
       data={items}
+      columns={1}
+      rowGap={0}
       keyExtractor={(it) => it.id}
+      dragActivationDelay={200}
+      scrollableRef={scrollRef ?? undefined}
       onDragEnd={({ data }) => onReorder(data)}
-      renderItem={render}
-      activationDistance={6}
+      renderItem={({ item, index }) => renderItem(item, index, { drag: noop, isActive: false }) as JSX.Element}
     />
   );
 }

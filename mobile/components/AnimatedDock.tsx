@@ -9,6 +9,13 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useApp } from '@/lib/AppContext';
+import { useDockStore } from '@/lib/dockStore';
+import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
+
+// Dock-eligible app routes → their stable key. Routes NOT in here (Inicio, Más,
+// pushed detail screens) are never selection-filtered.
+const APP_KEY_BY_ROUTE = new Map(DOCK_APPS.map(a => [a.routeName, a.key]));
 
 // Visual constants. Tweak here to retune the dock's silhouette.
 const BAR_HEIGHT = 50;
@@ -34,11 +41,17 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { currentRole } = useApp();
+  // The user's dock-app selection — applied here (not via route href) so
+  // toggling apps is a cheap dock re-render, not a tab-navigator reconfigure.
+  const dockKeys = useDockStore(s => s.keys);
+  const selectedApps = new Set(effectiveDockKeys(dockKeys, currentRole));
 
   // expo-router puts hidden screens (href: null) into state.routes too. It
   // marks them by setting tabBarButton: () => null AND tabBarItemStyle:
   // { display: 'none' }. Filter both — the `href` option itself isn't
-  // forwarded to the descriptor's options.
+  // forwarded to the descriptor's options. Then drop dock-eligible apps the
+  // user hasn't selected (they stay registered + reachable from Más).
   const visibleRoutes = state.routes.filter(r => {
     const opts = descriptors[r.key].options as {
       tabBarButton?: unknown;
@@ -51,6 +64,8 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     } else if (style?.display === 'none') {
       return false;
     }
+    const appKey = APP_KEY_BY_ROUTE.get(r.name);
+    if (appKey && !selectedApps.has(appKey)) return false;
     return true;
   });
 
@@ -60,9 +75,10 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // LONGEST shared path prefix, not just the first segment:
   //   - exact key match wins (the active route is itself a tab),
   //   - else the visible tab sharing the most leading segments (so
-  //     mas/empleados/[id] → the Empleados tab when it's shown),
-  //   - else, for any other mas/* child (Ajustes, Tienda, …) the "Más" tab is
-  //     the gateway, so prefer it over an unrelated mas/* app tab.
+  //     trabajos/[id] → the Trabajos tab, mas/empleados/[id] → Empleados),
+  //   - else (no real match — e.g. Facturas opened from Más when it isn't
+  //     pinned, or any mas/* child like Ajustes/Tienda) highlight the "Más" hub
+  //     it was reached through, instead of defaulting to the first tab.
   const aSegs = (activeRoute?.name ?? '').split('/');
   const sharedLen = (name: string | undefined) => {
     const s = (name ?? '').split('/');
@@ -77,7 +93,10 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       const len = sharedLen(r.name);
       if (len > best) { best = len; matched = i; }
     });
-    if (best <= 1 && aSegs[0] === 'mas') {
+    // No prefix match (best 0), or an ambiguous mas/* child (best 1 under mas) →
+    // fall back to the Más hub. A real app match (e.g. clientes/[id] → Clientes,
+    // best 1 under a non-mas segment) is kept as-is.
+    if (best === 0 || (best === 1 && aSegs[0] === 'mas')) {
       const masIdx = visibleRoutes.findIndex(r => r.name === 'mas/index');
       if (masIdx >= 0) matched = masIdx;
     }

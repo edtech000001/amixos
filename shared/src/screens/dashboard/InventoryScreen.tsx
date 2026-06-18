@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
-  Plus,
   Search,
   Package,
   AlertTriangle,
@@ -11,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { Fab } from '../../ui/Fab';
 
 export interface InventoryItem {
   id: string;
@@ -78,25 +78,17 @@ export function InventoryScreen({
   ).replace('{{count}}', String(lowStockCount));
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
-      {/* Header */}
-      <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
-        <View className="flex-1">
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">
-            {summaryText}
-            {lowStockCount > 0 ? (
-              <Text className="text-orange-500 font-medium"> · {summaryLowStockText}</Text>
-            ) : null}
-          </Text>
-        </View>
-        <Pressable
-          onPress={onAddItem}
-          className="flex-row items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
-        >
-          <Plus size={15} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">{t.addItem}</Text>
-        </Pressable>
+    <View className="flex-1 bg-surface">
+    <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
+      {/* Header — the "add item" action lives in the bottom-right FAB. */}
+      <View className="mb-5">
+        <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
+        <Text className="text-sm text-gray-500 mt-0.5">
+          {summaryText}
+          {lowStockCount > 0 ? (
+            <Text className="text-orange-500 font-medium"> · {summaryLowStockText}</Text>
+          ) : null}
+        </Text>
       </View>
 
       {/* Low stock banner */}
@@ -115,34 +107,34 @@ export function InventoryScreen({
         </View>
       ) : null}
 
-      {/* Filter + Search */}
-      <View className="flex-row gap-3 mb-4 flex-wrap">
-        <View className="flex-row gap-1 bg-gray-100 p-1 rounded-xl">
-          {(['todos', 'bajo_stock'] as const).map(f => (
-            <Pressable
-              key={f}
-              onPress={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg ${filter === f ? 'bg-white' : ''}`}
+      {/* Search — its own full-width line. */}
+      <View className="mb-3">
+        <Input
+          placeholder={t.searchPlaceholder}
+          value={search}
+          onChangeText={setSearch}
+          onClear={() => setSearch('')}
+          leftIcon={<Search size={16} color="#9CA3AF" />}
+        />
+      </View>
+
+      {/* Filters — below the search. */}
+      <View className="flex-row gap-1 bg-gray-100 p-1 rounded-xl self-start mb-4">
+        {(['todos', 'bajo_stock'] as const).map(f => (
+          <Pressable
+            key={f}
+            onPress={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg ${filter === f ? 'bg-white' : ''}`}
+          >
+            <Text
+              className={`text-xs font-semibold ${
+                filter === f ? 'text-gray-900' : 'text-gray-500'
+              }`}
             >
-              <Text
-                className={`text-xs font-semibold ${
-                  filter === f ? 'text-gray-900' : 'text-gray-500'
-                }`}
-              >
-                {f === 'todos' ? t.filters.all : t.filters.lowStock}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View className="flex-1 min-w-[180px]">
-          <Input
-            placeholder={t.searchPlaceholder}
-            value={search}
-            onChangeText={setSearch}
-            onClear={() => setSearch('')}
-            leftIcon={<Search size={16} color="#9CA3AF" />}
-          />
-        </View>
+              {f === 'todos' ? t.filters.all : t.filters.lowStock}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {/* List */}
@@ -245,8 +237,10 @@ export function InventoryScreen({
           })}
         </View>
       )}
-
-      {modalsSlot}
     </ScrollView>
+
+      <Fab onPress={onAddItem} />
+      {modalsSlot}
+    </View>
   );
 }

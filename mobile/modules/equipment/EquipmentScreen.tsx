@@ -3,7 +3,7 @@
 // add/edit/delete, attach photos (camera or library), and assign to
 // an active employee.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,16 +16,20 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ChevronLeft,
-  Plus,
   Search,
   Trash2,
   X,
+  Check,
+  ChevronDown,
+  ScanLine,
   Image as ImageIcon,
   Camera,
   ImagePlus,
@@ -36,7 +40,7 @@ import {
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
-import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
+import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import {
   EQUIPMENT_BUCKET,
@@ -47,6 +51,7 @@ import {
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
+import { formatDateLong } from '@amixos/shared/lib/format';
 
 interface EmployeeOption {
   id: string;
@@ -66,6 +71,8 @@ interface EquipForm {
   plate_expiration: string;
   paid_off: boolean;
   loan_lender: string;
+  value: string;
+  loan_amount: string;
   assigned_employee_id: string;
   notes: string;
 }
@@ -82,16 +89,123 @@ const EMPTY_FORM: EquipForm = {
   plate_expiration: '',
   paid_off: false,
   loan_lender: '',
+  value: '',
+  loan_amount: '',
   assigned_employee_id: '',
   notes: '',
 };
+
+// Group digits with thousands separators for display ("10000" → "10,000").
+function fmtThousands(digits: string): string {
+  return digits ? Number(digits).toLocaleString('en-US') : '';
+}
+
+// Inline single-select that expands within the form. A shared Select opens a
+// nested RNModal whose option list renders empty inside this form sheet on iOS,
+// so we use an inline expanding list (with optional search) instead.
+function InlinePicker({
+  label,
+  value,
+  placeholder,
+  options,
+  onSelect,
+  searchable,
+  searchPlaceholder,
+  noResultsText,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  onSelect: (v: string) => void;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  noResultsText?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find(o => o.value === value);
+  const hasValue = !!(selected && selected.value);
+  const list = searchable && query.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+  return (
+    <View className="gap-1.5">
+      <Text className="text-sm font-semibold text-gray-700">{label}</Text>
+      <Pressable
+        onPress={() => { setOpen(o => !o); setQuery(''); }}
+        className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+      >
+        <Text className={`text-base flex-1 ${hasValue ? 'text-gray-900' : 'text-gray-400'}`}>
+          {hasValue ? selected!.label : placeholder}
+        </Text>
+        <ChevronDown size={16} color="#9CA3AF" />
+      </Pressable>
+      {open ? (
+        <View className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          {searchable ? (
+            <View className="flex-row items-center gap-2 px-3 py-2 border-b border-gray-100">
+              <Search size={14} color="#9CA3AF" />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={searchPlaceholder}
+                placeholderTextColor="#9CA3AF"
+                autoFocus
+                autoCorrect={false}
+                className="flex-1 py-1 text-sm text-gray-900"
+              />
+            </View>
+          ) : null}
+          <ScrollView className="max-h-56" nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {list.length === 0 ? (
+              <Text className="text-sm text-gray-400 px-4 py-3">{noResultsText}</Text>
+            ) : list.map(o => {
+              const sel = o.value === value;
+              return (
+                <Pressable
+                  key={o.value || '__none__'}
+                  onPress={() => { onSelect(o.value); setOpen(false); }}
+                  className={`flex-row items-center justify-between px-4 py-3 ${sel ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                >
+                  <Text className={`text-sm flex-1 ${sel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{o.label}</Text>
+                  {sel ? <Check size={16} color="#4F46E5" /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// Whole-dollar currency (the inputs are digit-only, so no cents to show).
+function fmtMoney(n: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+// One labeled read-only row in the detail sheet; renders nothing when empty.
+function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <View>
+      <Text className="text-xs font-medium text-gray-400">{label}</Text>
+      <Text className="text-base text-gray-900 mt-0.5">{value}</Text>
+    </View>
+  );
+}
 
 export default function EquipmentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
 
@@ -113,13 +227,42 @@ export default function EquipmentScreen() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [coverPhotos, setCoverPhotos] = useState<Record<string, EquipmentPhoto>>({});
   const [search, setSearch] = useState('');
-  const [modal, setModal] = useState<'add' | 'edit' | null>(null);
+  const [modal, setModal] = useState<'add' | 'edit' | 'detail' | null>(null);
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [form, setForm] = useState<EquipForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [photos, setPhotos] = useState<EquipmentPhoto[]>([]);
+  // Photos picked while ADDING (no equipment row yet) — local URIs uploaded
+  // once the row is created on save.
+  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // VIN barcode scanner (expo-camera). scannedRef de-dupes the rapid-fire
+  // onBarcodeScanned callbacks down to a single capture.
+  const [scanning, setScanning] = useState(false);
+  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const scannedRef = useRef(false);
+
+  const startVinScan = async () => {
+    if (!camPermission?.granted) {
+      const res = await requestCamPermission();
+      if (!res.granted) { setError(t.scanPermissionDenied); return; }
+    }
+    scannedRef.current = false;
+    setError('');
+    setScanning(true);
+  };
+
+  const onVinScanned = useCallback((res: { data: string }) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    const raw = (res.data || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // VINs are exactly 17 chars (no I/O/Q) — pull that pattern out of any
+    // longer barcode payload, else fall back to the first 17.
+    const match = raw.match(/[A-HJ-NPR-Z0-9]{17}/);
+    setForm(f => ({ ...f, vin: match ? match[0] : raw.slice(0, 17) }));
+    setScanning(false);
+  }, []);
 
   // Photos live in a private bucket — sign the list covers + the open
   // equipment's photos together, keyed by storage_path.
@@ -215,8 +358,16 @@ export default function EquipmentScreen() {
     setSelected(null);
     setForm(EMPTY_FORM);
     setPhotos([]);
+    setPendingPhotos([]);
     setError('');
     setModal('add');
+  };
+
+  const openDetail = (e: Equipment) => {
+    setSelected(e);
+    setError('');
+    void loadPhotosFor(e.id);
+    setModal('detail');
   };
 
   const openEdit = (e: Equipment) => {
@@ -233,6 +384,8 @@ export default function EquipmentScreen() {
       plate_expiration: e.plate_expiration ?? '',
       paid_off: e.paid_off,
       loan_lender: e.loan_lender ?? '',
+      value: e.value != null ? String(e.value) : '',
+      loan_amount: e.loan_amount != null ? String(e.loan_amount) : '',
       assigned_employee_id: e.assigned_employee_id ?? '',
       notes: e.notes ?? '',
     });
@@ -261,6 +414,8 @@ export default function EquipmentScreen() {
       plate_expiration: form.plate_expiration || null,
       paid_off: form.paid_off,
       loan_lender: form.paid_off ? null : form.loan_lender.trim() || null,
+      value: form.value ? Number(form.value) : null,
+      loan_amount: form.paid_off ? null : form.loan_amount ? Number(form.loan_amount) : null,
       assigned_employee_id: form.assigned_employee_id || null,
       notes: form.notes.trim() || null,
     };
@@ -269,8 +424,21 @@ export default function EquipmentScreen() {
         .from('equipment').insert({ ...payload, created_by: user?.id ?? null })
         .select().single();
       if (err) { setError(t.saveError); setSaving(false); return; }
-      setSelected(created as Equipment);
-      setModal('edit'); // switch to edit so the user can attach photos
+      const newRow = created as Equipment;
+      // Flush any photos queued while adding, now that the row exists.
+      if (pendingPhotos.length > 0) {
+        try {
+          for (let i = 0; i < pendingPhotos.length; i++) {
+            await uploadPhotoFromUri(pendingPhotos[i], newRow.id, i);
+          }
+        } catch {
+          setError(t.photoUploadError);
+        }
+        setPendingPhotos([]);
+        await loadPhotosFor(newRow.id);
+      }
+      setSelected(newRow);
+      setModal('edit'); // switch to edit so the user can keep adding photos
     } else if (selected) {
       const { error: err } = await supabase.from('equipment').update(payload).eq('id', selected.id);
       if (err) { setError(t.saveError); setSaving(false); return; }
@@ -296,9 +464,40 @@ export default function EquipmentScreen() {
   };
 
   // ── Photo capture / upload ─────────────────────────────────────────
+  // Upload one local image URI to the private bucket + record its row.
+  const uploadPhotoFromUri = async (uri: string, equipmentId: string, sortOrder: number) => {
+    if (!business) return;
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const arrayBuffer = await new Response(blob).arrayBuffer();
+    const ext = (uri.split('.').pop() ?? 'jpg').toLowerCase();
+    // Random suffix — RN doesn't ship crypto.randomUUID universally on older
+    // runtimes, so fall back to a timestamp+random combo.
+    const uid =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const path = equipmentPhotoPath(business.id, equipmentId, `${uid}.${ext}`);
+    const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    const { error: upErr } = await supabase.storage
+      .from(EQUIPMENT_BUCKET)
+      .upload(path, arrayBuffer, { upsert: false, contentType });
+    if (upErr) throw upErr;
+    const { error: insErr } = await supabase.from('equipment_photos').insert({
+      business_id: business.id,
+      equipment_id: equipmentId,
+      storage_path: path,
+      sort_order: sortOrder,
+      created_by: user?.id ?? null,
+    });
+    if (insErr) throw insErr;
+  };
+
   const pickPhoto = async (source: 'camera' | 'library') => {
-    if (!business || !selected) return;
-    if (photos.length >= MAX_PHOTOS_PER_EQUIPMENT) {
+    if (!business) return;
+    // Cap counts the live photos (edit) or the queued ones (add).
+    const count = selected ? photos.length : pendingPhotos.length;
+    if (count >= MAX_PHOTOS_PER_EQUIPMENT) {
       setError(t.photoLimitHit.replace('{{n}}', String(MAX_PHOTOS_PER_EQUIPMENT)));
       return;
     }
@@ -316,35 +515,17 @@ export default function EquipmentScreen() {
             quality: 0.85,
           });
     if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+    const uri = result.assets[0].uri;
+
+    // Add mode: no equipment row yet — queue locally, upload on save.
+    if (!selected) {
+      setPendingPhotos((prev) => [...prev, uri]);
+      return;
+    }
 
     setUploadingPhoto(true); setError('');
     try {
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const ext = (asset.uri.split('.').pop() ?? 'jpg').toLowerCase();
-      // Random suffix — RN doesn't ship crypto.randomUUID universally on
-      // older runtimes, so fall back to a timestamp+random combo.
-      const uid =
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-      const filename = `${uid}.${ext}`;
-      const path = equipmentPhotoPath(business.id, selected.id, filename);
-      const contentType = asset.mimeType ?? `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      const { error: upErr } = await supabase.storage
-        .from(EQUIPMENT_BUCKET)
-        .upload(path, arrayBuffer, { upsert: false, contentType });
-      if (upErr) throw upErr;
-      const { error: insErr } = await supabase.from('equipment_photos').insert({
-        business_id: business.id,
-        equipment_id: selected.id,
-        storage_path: path,
-        sort_order: photos.length,
-        created_by: user?.id ?? null,
-      });
-      if (insErr) throw insErr;
+      await uploadPhotoFromUri(uri, selected.id, photos.length);
       await loadPhotosFor(selected.id);
       await loadEquipment();
     } catch {
@@ -352,6 +533,9 @@ export default function EquipmentScreen() {
     }
     setUploadingPhoto(false);
   };
+
+  const removePending = (uri: string) =>
+    setPendingPhotos((prev) => prev.filter((u) => u !== uri));
 
   const removePhoto = (photo: EquipmentPhoto) => {
     Alert.alert('', t.photoDeleteConfirm, [
@@ -381,14 +565,6 @@ export default function EquipmentScreen() {
           <Text className="text-lg font-semibold text-gray-900">{t.title}</Text>
           <Text className="text-xs text-gray-500">{t.subtitle}</Text>
         </View>
-        <Pressable
-          onPress={openAdd}
-          hitSlop={8}
-          className="px-3 py-1.5 rounded-full bg-primary active:opacity-80 flex-row items-center gap-1"
-        >
-          <Plus size={14} color="#FFFFFF" />
-          <Text className="text-sm font-semibold text-white">{t.addBtn}</Text>
-        </Pressable>
       </View>
 
       {/* Search */}
@@ -402,6 +578,11 @@ export default function EquipmentScreen() {
             placeholderTextColor="#9CA3AF"
             className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
           />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
+              <X size={16} color="#9CA3AF" />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -427,7 +608,7 @@ export default function EquipmentScreen() {
               return (
                 <Pressable
                   key={e.id}
-                  onPress={() => openEdit(e)}
+                  onPress={() => openDetail(e)}
                   className="bg-white rounded-2xl border border-gray-100 overflow-hidden active:bg-gray-50"
                 >
                   {cover ? (
@@ -475,10 +656,13 @@ export default function EquipmentScreen() {
         )}
       </ScrollView>
 
+      {/* Add equipment — floating action, one-handed thumb reach. */}
+      <Fab onPress={openAdd} />
+
       {/* Add / edit modal — same floating sheet pattern as the empleados
          modal so the look is consistent. */}
       <RNModal
-        visible={modal !== null}
+        visible={modal === 'add' || modal === 'edit'}
         transparent
         animationType="fade"
         onRequestClose={() => { setModal(null); setSelected(null); }}
@@ -510,23 +694,30 @@ export default function EquipmentScreen() {
                   value={form.name}
                   onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
                 />
-                <Select
+                <InlinePicker
                   label={t.typeLabel}
                   value={form.equipment_type}
-                  onValueChange={(v) => setForm((f) => ({ ...f, equipment_type: v }))}
                   placeholder={t.typePlaceholder}
                   options={TYPE_OPTIONS}
+                  onSelect={(v) => setForm((f) => ({ ...f, equipment_type: v }))}
+                  noResultsText={t.selectNoResults}
                 />
                 <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
                   onChangeText={(v) => setForm((f) => ({ ...f, make: v }))} />
                 <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
                   onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
                 <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
-                  value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v }))} />
+                  value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v.replace(/[^0-9]/g, '') }))} />
                 <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
-                  value={form.mileage} onChangeText={(v) => setForm((f) => ({ ...f, mileage: v }))} />
+                  value={fmtThousands(form.mileage)}
+                  onChangeText={(v) => setForm((f) => ({ ...f, mileage: v.replace(/[^0-9]/g, '') }))} />
                 <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
-                  onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters" />
+                  onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters"
+                  rightIcon={
+                    <Pressable onPress={startVinScan} hitSlop={8} accessibilityLabel={t.scanVinHint}>
+                      <ScanLine size={18} color="#4F46E5" />
+                    </Pressable>
+                  } />
 
                 {/* Registration */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
@@ -537,26 +728,38 @@ export default function EquipmentScreen() {
 
                 {/* Ownership */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
+                {/* Value is always shown; lender + loan amount only when not paid off. */}
+                <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="number-pad"
+                  value={fmtThousands(form.value)}
+                  onChangeText={(v) => setForm((f) => ({ ...f, value: v.replace(/[^0-9]/g, '') }))} />
                 <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
                   <Text className="text-base text-gray-900">{t.paidOffLabel}</Text>
                   <Toggle value={form.paid_off} onValueChange={(v) => setForm((f) => ({ ...f, paid_off: v }))} />
                 </View>
                 {!form.paid_off ? (
-                  <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
-                    onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
+                  <>
+                    <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
+                      onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
+                    <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="number-pad"
+                      value={fmtThousands(form.loan_amount)}
+                      onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: v.replace(/[^0-9]/g, '') }))} />
+                  </>
                 ) : null}
 
                 {/* Assignment */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
-                <Select
+                <InlinePicker
                   label={t.assignedToLabel}
                   value={form.assigned_employee_id}
-                  onValueChange={(v) => setForm((f) => ({ ...f, assigned_employee_id: v }))}
                   placeholder={t.assignedToNone}
                   options={[
                     { value: '', label: t.assignedToNone },
                     ...employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
                   ]}
+                  onSelect={(v) => setForm((f) => ({ ...f, assigned_employee_id: v }))}
+                  searchable
+                  searchPlaceholder={t.assignedToSearch}
+                  noResultsText={t.selectNoResults}
                 />
 
                 {/* Notes */}
@@ -565,13 +768,30 @@ export default function EquipmentScreen() {
                   style={{ minHeight: 70, textAlignVertical: 'top' }} />
 
                 {/* Photos — only after the equipment exists. */}
-                {modal === 'edit' && selected ? (
+                {/* Photos — available while adding (queued locally) and editing
+                   (uploaded immediately). */}
+                {(modal === 'add' || (modal === 'edit' && selected)) ? (
                   <>
                     <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.photosHeading}</Text>
-                    {photos.length === 0 ? (
+                    {(modal === 'add' ? pendingPhotos.length : photos.length) === 0 ? (
                       <View className="py-8 items-center rounded-2xl border-2 border-dashed border-gray-200 gap-2">
                         <ImageIcon size={20} color="#9CA3AF" />
                         <Text className="text-sm text-gray-500">{t.photoEmpty}</Text>
+                      </View>
+                    ) : modal === 'add' ? (
+                      <View className="flex-row flex-wrap gap-2">
+                        {pendingPhotos.map((uri) => (
+                          <View key={uri} className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100">
+                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                            <Pressable
+                              onPress={() => removePending(uri)}
+                              hitSlop={6}
+                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
+                            >
+                              <X size={12} color="#EF4444" />
+                            </Pressable>
+                          </View>
+                        ))}
                       </View>
                     ) : (
                       <View className="flex-row flex-wrap gap-2">
@@ -640,8 +860,120 @@ export default function EquipmentScreen() {
                 </View>
               </ScrollView>
             </View>
+
+            {/* VIN barcode scanner — full-screen camera overlay (rendered
+               in-place, not a nested modal which would break inside the sheet
+               on iOS). */}
+            {scanning ? (
+              <View style={StyleSheet.absoluteFill} className="bg-black">
+                <CameraView
+                  style={StyleSheet.absoluteFill}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'datamatrix', 'qr', 'pdf417'] }}
+                  onBarcodeScanned={onVinScanned}
+                />
+                <View style={StyleSheet.absoluteFill} pointerEvents="none" className="items-center justify-center">
+                  <View className="w-72 h-28 border-2 border-white/80 rounded-2xl" />
+                  <Text className="text-white text-sm mt-5 px-10 text-center">{t.scanVinHint}</Text>
+                </View>
+                <Pressable
+                  onPress={() => setScanning(false)}
+                  style={{ top: insets.top + 12 }}
+                  className="absolute right-5 w-10 h-10 rounded-full bg-black/50 items-center justify-center"
+                >
+                  <X size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </KeyboardAvoidingView>
+      </RNModal>
+
+      {/* Detail view — read-only summary; tapping a list row lands here, not
+         straight in the edit form. Edit / Delete live in the footer. */}
+      <RNModal
+        visible={modal === 'detail'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setModal(null); setSelected(null); }}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => { setModal(null); setSelected(null); }} style={sheetScrim} />
+          {selected ? (
+            <View
+              className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
+              style={{ maxHeight: '85%', ...sheetShadow }}
+            >
+              <View className="items-center mb-2">
+                <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              </View>
+              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
+                <Text className="text-lg font-bold text-gray-900 flex-1 mr-3" numberOfLines={1}>{selected.name}</Text>
+                <Pressable onPress={() => { setModal(null); setSelected(null); }} hitSlop={8}>
+                  <X size={20} color="#9CA3AF" />
+                </Pressable>
+              </View>
+              <ScrollView contentContainerClassName="px-5 py-5 pb-8 gap-4" keyboardShouldPersistTaps="handled">
+                {photos.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+                    {photos.map((p) => (
+                      <Image
+                        key={p.id}
+                        source={{ uri: photoUrls[p.storage_path] }}
+                        style={{ width: 220, height: 150, borderRadius: 14, backgroundColor: '#F3F4F6' }}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </ScrollView>
+                ) : null}
+
+                <DetailRow label={t.typeLabel} value={selected.equipment_type} />
+                <DetailRow
+                  label={t.makeLabel}
+                  value={[selected.year, selected.make, selected.model].filter(Boolean).join(' ') || null}
+                />
+                <DetailRow label={t.vinLabel} value={selected.vin} />
+                <DetailRow
+                  label={t.mileageLabel}
+                  value={selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null}
+                />
+                <DetailRow label={t.plateNumberLabel} value={selected.plate_number} />
+                <DetailRow
+                  label={t.plateExpirationLabel}
+                  value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
+                />
+                <DetailRow label={t.valueLabel} value={selected.value != null ? fmtMoney(selected.value) : null} />
+                {selected.paid_off ? (
+                  <DetailRow label={t.ownershipHeading} value={t.paidOffLabel} />
+                ) : (
+                  <>
+                    <DetailRow label={t.loanLenderLabel} value={selected.loan_lender} />
+                    <DetailRow
+                      label={t.loanAmountLabel}
+                      value={selected.loan_amount != null ? fmtMoney(selected.loan_amount) : null}
+                    />
+                  </>
+                )}
+                <DetailRow
+                  label={t.assignedToLabel}
+                  value={employeeName(selected.assigned_employee_id) ?? t.unassignedBadge}
+                />
+                <DetailRow label={t.notesLabel} value={selected.notes} />
+
+                <View className="flex-row gap-3 pt-3">
+                  <View className="flex-1">
+                    <Button variant="secondary" onPress={onDelete} fullWidth>
+                      <Text className="text-red-600 font-semibold">{t.deleteBtn}</Text>
+                    </Button>
+                  </View>
+                  <View className="flex-1">
+                    <Button onPress={() => openEdit(selected)} fullWidth>{t.editBtn}</Button>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          ) : null}
+        </View>
       </RNModal>
     </SafeAreaView>
   );

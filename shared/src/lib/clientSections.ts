@@ -25,6 +25,81 @@ export function clientSectionLetter(c: NamedClient): string {
   return /[A-Z]/.test(first) ? first : '#';
 }
 
+// Group key for the clients list: alphabetical by name (default), by a client
+// field, or by a custom field (`custom:<field_key>`).
+export type ClientGroupKey =
+  | 'name'
+  | 'company'
+  | 'state'
+  | 'city'
+  | `custom:${string}`;
+
+interface GroupableClient extends NamedClient {
+  company?: string | null;
+  city?: string | null;
+  state?: string | null;
+  customFields?: Record<string, string> | null;
+}
+
+// Persisted group-by preference (web: localStorage, mobile: AsyncStorage).
+export const CLIENTS_GROUP_KEY = 'amixos.clients.groupBy';
+
+/** Coerce a stored value into a valid ClientGroupKey; defaults to 'name'. */
+export function parseClientGroupKey(raw: string | null | undefined): ClientGroupKey {
+  if (raw === 'company' || raw === 'state' || raw === 'city') return raw;
+  if (raw && raw.startsWith('custom:')) return raw as ClientGroupKey;
+  return 'name';
+}
+
+/**
+ * Group clients by the chosen key into titled sections (mirrors the jobs list).
+ * `name` delegates to the A–Z grouping; the others bucket by the field value,
+ * sort clients by name within each bucket, sort buckets alphabetically, and pin
+ * the "missing value" bucket (title = opts.emptyLabel) last. `state` titles are
+ * spelled out via opts.formatState. Searching collapses to one flat section.
+ */
+export function groupClients<T extends GroupableClient>(
+  clients: T[],
+  groupBy: ClientGroupKey,
+  searching: boolean,
+  opts: { emptyLabel: string; formatState?: (s: string) => string },
+): ClientSection<T>[] {
+  if (groupBy === 'name') return groupClientsByLetter(clients, searching);
+
+  const sorted = [...clients].sort((a, b) =>
+    clientDisplayName(a).localeCompare(clientDisplayName(b), 'es', { sensitivity: 'base' }),
+  );
+  if (searching) return sorted.length > 0 ? [{ title: '', data: sorted }] : [];
+
+  const valueOf = (c: T): string | null => {
+    if (groupBy === 'company') return c.company ?? null;
+    if (groupBy === 'state') return c.state ?? null;
+    if (groupBy === 'city') return c.city ?? null;
+    return c.customFields?.[groupBy.slice('custom:'.length)] ?? null;
+  };
+
+  const map = new Map<string, { title: string; empty: boolean; data: T[] }>();
+  for (const c of sorted) {
+    const raw = valueOf(c)?.trim();
+    const empty = !raw;
+    const title = empty
+      ? opts.emptyLabel
+      : groupBy === 'state' && opts.formatState
+        ? opts.formatState(raw as string)
+        : (raw as string);
+    const existing = map.get(title);
+    if (existing) existing.data.push(c);
+    else map.set(title, { title, empty, data: [c] });
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => {
+      if (a.empty !== b.empty) return a.empty ? 1 : -1;
+      return a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
+    })
+    .map(({ title, data }) => ({ title, data }));
+}
+
 /**
  * Sort clients alphabetically and group them into letter sections.
  * While searching, returns a single untitled section (few results — letter

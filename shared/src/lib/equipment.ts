@@ -20,6 +20,10 @@ export interface Equipment {
   plate_expiration: string | null;  // ISO date
   paid_off: boolean;
   loan_lender: string | null;
+  /** What the asset is worth (always shown); outstanding loan balance when
+   *  not paid off. Both nullable. Migration 076. */
+  value: number | null;
+  loan_amount: number | null;
   assigned_employee_id: string | null;
   notes: string | null;
   created_by: string | null;

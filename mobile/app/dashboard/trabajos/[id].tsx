@@ -308,12 +308,20 @@ export default function JobDetailRoute() {
     if (newStatus === 'accepted') update.accepted_at = now;
     if (newStatus === 'declined') update.declined_at = now;
     if (newStatus === 'cancelled') update.cancelled_at = now;
-    // Work-phase step timestamps (migration 072) — drive the stepper times.
+    // Work-phase step timestamps (migration 074) — drive the stepper times.
     if (newStatus === 'scheduled') update.scheduled_at = now;
     if (newStatus === 'in_progress') update.in_progress_at = now;
     if (newStatus === 'completed') update.completed_at = now;
     if (newStatus === 'invoiced') update.invoiced_at = now;
-    await supabase.from('jobs').update(update).eq('id', job.id);
+    // Surface failures instead of silently reverting — e.g. a missing column
+    // (un-run migration) makes Postgres reject the whole UPDATE, which used to
+    // look like "status didn't save" once the screen refetched.
+    const { error } = await supabase.from('jobs').update(update).eq('id', job.id);
+    if (error) {
+      setUpdatingStatus(false);
+      Alert.alert('', td.statusUpdateError);
+      return;
+    }
     setJob((prev) => (prev ? ({ ...prev, ...update } as Job) : prev));
     void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
       from: prevStatus, to: newStatus, job_title: job.title,
@@ -474,7 +482,7 @@ export default function JobDetailRoute() {
       ? [POSIBLE_STEP, ...WORK_PIPELINE]
       : WORK_PIPELINE;
   // When each step was reached. Falls back to completed_date for jobs completed
-  // before the work-phase timestamp columns existed (migration 072).
+  // before the work-phase timestamp columns existed (migration 074).
   const stepStampValue = (key: string): string | null => {
     switch (key) {
       case 'proposal':

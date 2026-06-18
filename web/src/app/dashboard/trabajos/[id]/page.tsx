@@ -150,12 +150,20 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (newStatus === 'accepted') update.accepted_at = now;
     if (newStatus === 'declined') update.declined_at = now;
     if (newStatus === 'cancelled') update.cancelled_at = now;
-    // Work-phase step timestamps (migration 072) — drive the stepper times.
+    // Work-phase step timestamps (migration 074) — drive the stepper times.
     if (newStatus === 'scheduled') update.scheduled_at = now;
     if (newStatus === 'in_progress') update.in_progress_at = now;
     if (newStatus === 'completed') update.completed_at = now;
     if (newStatus === 'invoiced') update.invoiced_at = now;
-    await supabase.from('jobs').update(update).eq('id', id);
+    // Surface failures instead of silently reverting — e.g. a missing column
+    // (un-run migration) makes Postgres reject the whole UPDATE, which used to
+    // look like "status didn't save" once the page reloaded.
+    const { error } = await supabase.from('jobs').update(update).eq('id', id);
+    if (error) {
+      setUpdatingStatus(false);
+      window.alert(td.statusUpdateError);
+      return;
+    }
     setJob(prev => prev ? { ...prev, ...update } : prev);
     void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
       from: prevStatus, to: newStatus, job_title: job.title,
@@ -362,7 +370,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ? pipeline[pipelineIdx - 1]
       : null;
 
-  // When each pipeline step was reached (migration 072). Falls back to the older
+  // When each pipeline step was reached (migration 074). Falls back to the older
   // columns for jobs that moved through a step before the timestamp existed.
   const stepTimestamp: Record<string, string | null> = {
     proposal: job.created_at,

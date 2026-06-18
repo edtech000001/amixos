@@ -40,6 +40,12 @@
           "imageWidth": 180,
           "backgroundColor": "#FFFFFF"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Amixos usa la cámara para escanear el código VIN y tomar fotos del equipo."
+        }
       ]
     ],
     "experiments": {

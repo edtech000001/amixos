@@ -224,6 +224,18 @@ export type DashboardDict = {
     countTotal: string;
     countFound: string;
     newClient: string;
+    group: {
+      button: string;
+      title: string;
+      name: string;
+      company: string;
+      state: string;
+      city: string;
+      noCompany: string;
+      noState: string;
+      noCity: string;
+      noValue: string;
+    };
     importBtn: string;
     importHint: string;
     searchPlaceholder: string;
@@ -526,6 +538,7 @@ export type DashboardDict = {
       shareAndMark: string;
       markOnly: string;
       shareError: string;
+      statusUpdateError: string;
       generateInvoiceBtn: string;
       viewInvoiceBtn: string;
       // Pipeline action buttons (detail-specific phrasing)
@@ -905,6 +918,10 @@ export type DashboardDict = {
       lowStockThresholdLabel: string;
       errorNameRequired: string;
       errorSave: string;
+      scanHint: string;
+      cameraDenied: string;
+      scanSku: string;
+      generateSku: string;
     };
     adjustModal: {
       title: string;
@@ -1750,6 +1767,16 @@ export type DashboardDict = {
       deleteConfirmTitle: string;
       deleteConfirmMsg: string;
       nameRequiredError: string;
+      assignedToSearch: string;
+      selectNoResults: string;
+      scanVinHint: string;
+      scanPermissionDenied: string;
+      valueLabel: string;
+      valuePlaceholder: string;
+      loanAmountLabel: string;
+      loanAmountPlaceholder: string;
+      detailTitle: string;
+      editBtn: string;
     };
   };
   reports: {
@@ -2074,6 +2101,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
       countTotal: '{{count}} en total',
       countFound: '{{count}} encontrados',
       newClient: 'Nuevo cliente',
+      group: {
+        button: 'Agrupar',
+        title: 'Agrupar por',
+        name: 'Nombre (A–Z)',
+        company: 'Empresa',
+        state: 'Estado',
+        city: 'Ciudad',
+        noCompany: 'Sin empresa',
+        noState: 'Sin estado',
+        noCity: 'Sin ciudad',
+        noValue: 'Sin valor',
+      },
       importBtn: 'Importar clientes desde CSV',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
       searchPlaceholder: 'Buscar clientes...',
@@ -2368,6 +2407,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareAndMark: 'Compartir y marcar enviada',
         markOnly: 'Solo marcar enviada',
         shareError: 'No se pudo compartir',
+        statusUpdateError: 'No se pudo actualizar el estado. Intenta de nuevo.',
         printTooltip: 'Descargar PDF',
         editTooltip: 'Editar trabajo',
         duplicateTooltip: 'Duplicar trabajo',
@@ -2735,6 +2775,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lowStockThresholdLabel: 'Stock mínimo (alerta)',
         errorNameRequired: 'El nombre es requerido',
         errorSave: 'Error al guardar.',
+        scanHint: 'Apunta la cámara al código de barras',
+        cameraDenied: 'Necesitamos acceso a la cámara para escanear.',
+        scanSku: 'Escanear código',
+        generateSku: 'Generar SKU',
       },
       adjustModal: {
         title: 'Ajustar stock — {{name}}',
@@ -3562,6 +3606,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirmTitle: 'Eliminar equipo',
           deleteConfirmMsg: 'Esta acción no se puede deshacer. ¿Continuar?',
           nameRequiredError: 'El nombre es requerido.',
+          assignedToSearch: 'Buscar empleado...',
+          selectNoResults: 'Sin resultados',
+          scanVinHint: 'Apunta la cámara al código de barras del VIN',
+          scanPermissionDenied: 'Permite el acceso a la cámara para escanear.',
+          valueLabel: 'Valor',
+          valuePlaceholder: '0',
+          loanAmountLabel: 'Monto del préstamo',
+          loanAmountPlaceholder: '0',
+          detailTitle: 'Detalles del equipo',
+          editBtn: 'Editar',
         },
     },
     reports: {
@@ -3913,6 +3967,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
       countTotal: '{{count}} total',
       countFound: '{{count}} found',
       newClient: 'New client',
+      group: {
+        button: 'Group',
+        title: 'Group by',
+        name: 'Name (A–Z)',
+        company: 'Company',
+        state: 'State',
+        city: 'City',
+        noCompany: 'No company',
+        noState: 'No state',
+        noCity: 'No city',
+        noValue: 'No value',
+      },
       importBtn: 'Import clients from CSV',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
       searchPlaceholder: 'Search clients...',
@@ -4207,6 +4273,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareAndMark: 'Share and mark sent',
         markOnly: 'Mark sent only',
         shareError: 'Could not share',
+        statusUpdateError: "Couldn't update the status. Try again.",
         printTooltip: 'Download PDF',
         editTooltip: 'Edit job',
         duplicateTooltip: 'Duplicate job',
@@ -4574,6 +4641,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lowStockThresholdLabel: 'Low stock threshold',
         errorNameRequired: 'Name is required',
         errorSave: 'Save error.',
+        scanHint: 'Point the camera at the barcode',
+        cameraDenied: 'Camera access is needed to scan.',
+        scanSku: 'Scan code',
+        generateSku: 'Generate SKU',
       },
       adjustModal: {
         title: 'Adjust stock — {{name}}',
@@ -5401,6 +5472,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirmTitle: 'Delete equipment',
           deleteConfirmMsg: 'This cannot be undone. Continue?',
           nameRequiredError: 'Name is required.',
+          assignedToSearch: 'Search employee...',
+          selectNoResults: 'No results',
+          scanVinHint: 'Point the camera at the VIN barcode',
+          scanPermissionDenied: 'Allow camera access to scan.',
+          valueLabel: 'Value',
+          valuePlaceholder: '0',
+          loanAmountLabel: 'Loan amount',
+          loanAmountPlaceholder: '0',
+          detailTitle: 'Equipment details',
+          editBtn: 'Edit',
         },
     },
     reports: {
