@@ -131,6 +131,7 @@ export default function EmpleadosPage() {
   const [accessRole, setAccessRole] = useState<Role>('office');
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState('');
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
@@ -202,8 +203,8 @@ export default function EmpleadosPage() {
     const mappedMembers: AccessMember[] = ((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map(m => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
     }));
-    const mappedInvites: AccessInvite[] = ((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string }>).map(i => ({
-      id: i.id, email: i.email, role: i.role as Role,
+    const mappedInvites: AccessInvite[] = ((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string; acceptUrl?: string }>).map(i => ({
+      id: i.id, email: i.email, role: i.role as Role, acceptUrl: i.acceptUrl,
     }));
     setMembers(mappedMembers);
     setInvites(mappedInvites);
@@ -429,6 +430,20 @@ export default function EmpleadosPage() {
       return;
     }
     await loadPeople(); setAccessBusy(false);
+  };
+
+  // Copy the invite's accept link for manual sharing (email delivery via
+  // Supabase can be slow / land in spam).
+  const copyInviteLink = async (inviteId: string) => {
+    const url = invites.find(i => i.id === inviteId)?.acceptUrl;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteLinkCopied(true);
+      setTimeout(() => setInviteLinkCopied(false), 2000);
+    } catch {
+      window.prompt(teamT.copyLinkBtn, url);
+    }
   };
 
   const revokeInvite = async (inviteId: string) => {
@@ -720,14 +735,25 @@ export default function EmpleadosPage() {
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
                   <span className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</span>
                   {canManageAccess ? (
-                    <button
-                      type="button"
-                      disabled={accessBusy}
-                      onClick={() => revokeInvite(selAccess.inviteId)}
-                      className="ml-auto px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                    >
-                      {teamT.revokeBtn}
-                    </button>
+                    <div className="ml-auto flex items-center gap-1">
+                      {invites.find(i => i.id === selAccess!.inviteId)?.acceptUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => copyInviteLink(selAccess!.inviteId)}
+                          className="px-3 py-1.5 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          {inviteLinkCopied ? teamT.linkCopied : teamT.copyLinkBtn}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={accessBusy}
+                        onClick={() => revokeInvite(selAccess!.inviteId)}
+                        className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {teamT.revokeBtn}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               ) : canManageAccess ? (

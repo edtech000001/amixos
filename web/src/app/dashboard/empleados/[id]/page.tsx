@@ -144,8 +144,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     setMembers(((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map(m => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
     })));
-    setInvites(((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string }>).map(i => ({
-      id: i.id, email: i.email, role: i.role as Role,
+    setInvites(((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string; acceptUrl?: string }>).map(i => ({
+      id: i.id, email: i.email, role: i.role as Role, acceptUrl: i.acceptUrl,
     })));
     setForm({
       first_name: e.first_name, last_name: e.last_name, phone: e.phone ?? '', role: e.role,
@@ -594,6 +594,16 @@ function AccessSection({
   teamT: ReturnType<typeof useLang>['t']['dashboard']['settings']['team'];
   t: ReturnType<typeof useLang>['t']['dashboard']['employees'];
 }) {
+  const [copied, setCopied] = useState(false);
+  const copyInviteLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt(teamT.copyLinkBtn, url);
+    }
+  };
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</p>
@@ -620,9 +630,16 @@ function AccessSection({
           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
           <span className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</span>
           {canManage ? (
-            <button type="button" disabled={busy} onClick={() => onRevoke(selAccess.inviteId)} className="ml-auto px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-              {teamT.revokeBtn}
-            </button>
+            <div className="ml-auto flex items-center gap-1">
+              {selAccess.acceptUrl ? (
+                <button type="button" onClick={() => copyInviteLink(selAccess.acceptUrl!)} className="px-3 py-1.5 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors">
+                  {copied ? teamT.linkCopied : teamT.copyLinkBtn}
+                </button>
+              ) : null}
+              <button type="button" disabled={busy} onClick={() => onRevoke(selAccess.inviteId)} className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                {teamT.revokeBtn}
+              </button>
+            </div>
           ) : null}
         </div>
       ) : canManage ? (

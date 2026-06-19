@@ -12,7 +12,7 @@ import type { Role } from './permissions';
 
 export type AccessStatus =
   | { kind: 'active'; role: Role; memberId: string; isYou: boolean }
-  | { kind: 'invited'; role: Role; inviteId: string }
+  | { kind: 'invited'; role: Role; inviteId: string; acceptUrl?: string }
   | { kind: 'none' };
 
 export interface AccessMember {
@@ -28,6 +28,9 @@ export interface AccessInvite {
   id: string;
   email: string;
   role: Role;
+  /** Full accept link (built server-side from FRONTEND_URL) for manual sharing
+   *  when the invite email doesn't arrive. */
+  acceptUrl?: string;
 }
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -47,7 +50,7 @@ export function resolveAccess(
     const m = members.find((x) => norm(x.email) === email);
     if (m) return { kind: 'active', role: m.role, memberId: m.id, isYou: m.isYou };
     const inv = invites.find((x) => norm(x.email) === email);
-    if (inv) return { kind: 'invited', role: inv.role, inviteId: inv.id };
+    if (inv) return { kind: 'invited', role: inv.role, inviteId: inv.id, acceptUrl: inv.acceptUrl };
   }
   return { kind: 'none' };
 }

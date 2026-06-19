@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  Share,
   Modal as RNModal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -148,8 +149,8 @@ export default function EmpleadoDetailRoute() {
     setMembers(((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map((m) => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
     })));
-    setInvites(((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string }>).map((i) => ({
-      id: i.id, email: i.email, role: i.role as Role,
+    setInvites(((invitesRes?.data ?? []) as Array<{ id: string; email: string; role: string; acceptUrl?: string }>).map((i) => ({
+      id: i.id, email: i.email, role: i.role as Role, acceptUrl: i.acceptUrl,
     })));
     setForm({
       first_name: e.first_name, last_name: e.last_name, phone: e.phone ?? '', role: e.role,
@@ -241,6 +242,14 @@ export default function EmpleadoDetailRoute() {
       return;
     }
     await load(); setAccessBusy(false);
+  };
+
+  // Share the invite's accept link (native share sheet incl. copy) for manual
+  // sharing — Supabase invite emails can be slow or land in spam.
+  const shareInviteLink = async (inviteId: string) => {
+    const url = invites.find((i) => i.id === inviteId)?.acceptUrl;
+    if (!url) return;
+    try { await Share.share({ message: url }); } catch { /* dismissed */ }
   };
 
   const revokeInvite = async (inviteId: string, email: string) => {
@@ -556,13 +565,23 @@ export default function EmpleadoDetailRoute() {
                 </View>
                 <Text className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</Text>
                 {canManageAccess ? (
-                  <Pressable
-                    onPress={() => revokeInvite(selAccess.inviteId, employee.email ?? '')}
-                    disabled={accessBusy}
-                    className="ml-auto px-3 py-1.5 rounded-2xl bg-red-50 active:bg-red-100"
-                  >
-                    <Text className="text-sm font-semibold text-red-600">{teamT.revokeBtn}</Text>
-                  </Pressable>
+                  <View className="ml-auto flex-row items-center gap-1">
+                    {invites.find((i) => i.id === selAccess.inviteId)?.acceptUrl ? (
+                      <Pressable
+                        onPress={() => shareInviteLink(selAccess.inviteId)}
+                        className="px-3 py-1.5 rounded-2xl bg-primary/10 active:bg-primary/20"
+                      >
+                        <Text className="text-sm font-semibold text-primary">{teamT.copyLinkBtn}</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => revokeInvite(selAccess.inviteId, employee.email ?? '')}
+                      disabled={accessBusy}
+                      className="px-3 py-1.5 rounded-2xl bg-red-50 active:bg-red-100"
+                    >
+                      <Text className="text-sm font-semibold text-red-600">{teamT.revokeBtn}</Text>
+                    </Pressable>
+                  </View>
                 ) : null}
               </View>
             ) : canManageAccess ? (
