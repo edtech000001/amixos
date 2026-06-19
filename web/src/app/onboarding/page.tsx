@@ -51,14 +51,12 @@ export default function OnboardingPage() {
       return;
     }
 
-    // The cookie/SSR client returns the session from cookies but doesn't load
-    // it into the in-memory session that supabase-js uses to set the storage
-    // Authorization header — so storage uploads go out anonymous and the logos
-    // RLS policy (`auth.uid() is not null`) denies them. A global Authorization
-    // header doesn't help: supabase-js overrides it with its own resolver.
-    // Fix: a dedicated client with the session set via setSession(), so its
-    // resolver returns the real user token. (Isolated storageKey so it doesn't
-    // collide with the app's auth state.)
+    // The cookie/SSR client doesn't attach the user token to storage uploads,
+    // so they go out anonymous and the logos RLS policy denies them ("new row
+    // violates row-level security policy"). setSession() on a throwaway client
+    // proved unreliable. Fix: give the upload client an `accessToken` resolver
+    // — supabase-js uses it for the Authorization header on EVERY request
+    // (storage included), so the upload is authenticated.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       resolve({ error: t.page.finishGenericError });
@@ -67,19 +65,19 @@ export default function OnboardingPage() {
     const uploadClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'amixos-logo-upload' } },
+      { accessToken: async () => session.access_token },
     );
-    await uploadClient.auth.setSession({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-    });
 
     const ext = file.name.split('.').pop();
     const path = `logos/${Date.now()}.${ext}`;
 
+    // Plain insert (no upsert): the path is a unique timestamp, and upsert's
+    // ON CONFLICT path needs SELECT visibility that the logos policies don't
+    // grant — which was surfacing as "new row violates row-level security
+    // policy" even though a plain insert is allowed.
     const { error: uploadError } = await uploadClient.storage
       .from('business-assets')
-      .upload(path, file, { upsert: true });
+      .upload(path, file, { upsert: false });
 
     if (uploadError) {
       console.error('Logo upload error:', uploadError);
