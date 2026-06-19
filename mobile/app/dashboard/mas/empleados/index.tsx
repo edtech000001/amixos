@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
+import { queuedInsert } from '@/lib/offline/mutate';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -499,18 +500,33 @@ export default function EmpleadosRoute() {
     const name = emp ? `${emp.first_name} ${emp.last_name}` : tsForm.worker_name;
     setSaving(true);
     setError('');
-    await supabase.from('timesheets').insert({
-      business_id: business.id,
-      employee_id: tsForm.employee_id || null,
-      worker_name: name,
-      work_date: tsForm.work_date,
-      hours_worked: tsForm.hours_worked,
-      job_description: tsForm.job_description || null,
-      status: 'completed',
-    });
-    await loadTimesheets();
-    setSaving(false);
-    setTsModalOpen(false);
+    try {
+      // queuedInsert writes through when online, or parks the entry in the
+      // offline outbox (drained on reconnect) when there's no signal — crews
+      // log hours in the field and it syncs later. The banner reports progress.
+      const { queued } = await queuedInsert({
+        table: 'timesheets',
+        businessId: business.id,
+        label: `Horas: ${name || 'trabajador'} · ${tsForm.hours_worked} h`,
+        payload: {
+          business_id: business.id,
+          employee_id: tsForm.employee_id || null,
+          worker_name: name,
+          work_date: tsForm.work_date,
+          hours_worked: tsForm.hours_worked,
+          job_description: tsForm.job_description || null,
+          status: 'completed',
+        },
+      });
+      // Only refresh from the server when the row actually landed there.
+      // Offline, the list reload would just fail — the banner covers feedback.
+      if (!queued) await loadTimesheets();
+      setTsModalOpen(false);
+    } catch {
+      setError('No se pudo guardar.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ─── App access (invite / change role / revoke / remove) ───────────────

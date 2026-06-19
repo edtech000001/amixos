@@ -1,0 +1,86 @@
+// Drains the outbox: replays queued writes to Supabase, oldest first.
+//
+// Triggered on: app launch, reconnect (via network.onReconnect), foreground,
+// each new enqueue, and the banner's "Reintentar" button. A module-level lock
+// guarantees only one drain runs at a time.
+//
+// Pass policy: a drain processes only 'pending' ops. A transport failure
+// reverts the op to 'pending' and stops the pass (we've lost connectivity —
+// no point hammering). A real (non-network) failure marks the op 'error' and
+// moves on, so one bad op can't block the rest. Errored ops are re-armed to
+// 'pending' by retryErrors() on reconnect / manual retry.
+
+import { createSupabaseClient } from '@/lib/supabase';
+import { useOutboxStore, type OutboxOp } from './outbox';
+import { useNetworkStore, onReconnect } from './network';
+import { isNetworkError } from './util';
+
+async function applyOp(op: OutboxOp): Promise<void> {
+  const supabase = createSupabaseClient();
+  if (op.op === 'insert') {
+    const { error } = await supabase.from(op.table).insert(op.payload);
+    if (error) throw error;
+    return;
+  }
+  // update
+  let q = supabase.from(op.table).update(op.payload);
+  for (const [k, v] of Object.entries(op.match ?? {})) {
+    q = q.eq(k, v as never);
+  }
+  const { error } = await q;
+  if (error) throw error;
+}
+
+let draining = false;
+
+export async function drainOutbox(): Promise<void> {
+  if (draining) return;
+  if (!useNetworkStore.getState().isOnline) return;
+  draining = true;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (!useNetworkStore.getState().isOnline) break;
+      const store = useOutboxStore.getState();
+      const next = store.ops.find((o) => o.status === 'pending');
+      if (!next) break;
+
+      store.patch(next.id, { status: 'syncing' });
+      try {
+        await applyOp(next);
+        useOutboxStore.getState().remove(next.id);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          // Lost the connection mid-drain — put it back and stop the pass.
+          useOutboxStore.getState().patch(next.id, { status: 'pending' });
+          useNetworkStore.getState().setOnline(false);
+          break;
+        }
+        // Server rejected it — won't fix itself on retry. Park as error.
+        useOutboxStore.getState().patch(next.id, {
+          status: 'error',
+          attempts: next.attempts + 1,
+          error: (err as { message?: string })?.message ?? 'Error desconocido',
+        });
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+// Re-arm errored ops and drain. Used by reconnect + the banner retry button:
+// a failure might have been a transient blip rather than a true rejection.
+export function retryAndDrain(): void {
+  useOutboxStore.getState().retryErrors();
+  void drainOutbox();
+}
+
+let wired = false;
+// Call once at app start. Drains immediately and on every reconnect.
+export function startSyncRunner(): void {
+  if (wired) return;
+  wired = true;
+  onReconnect(() => retryAndDrain());
+  void drainOutbox();
+}

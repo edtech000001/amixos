@@ -10,6 +10,7 @@ import {
   Share,
   Modal as RNModal,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -258,19 +259,51 @@ export default function JobDetailRoute() {
     }
   };
 
-  // Opens the native share sheet with a crew-ready summary of the job — the
-  // maps pin link, job name, client and scheduled date. The user picks the
-  // recipient (Messages, WhatsApp, etc.) and channel from the share sheet.
+  // Texts the assigned crew lead a ready-to-send summary: the maps pin link,
+  // job name, client and scheduled date. We open the SMS composer directly
+  // (sms: with a body) rather than the OS share sheet because iOS Messages
+  // drops the surrounding text when a shared message leads with a URL — the
+  // composer keeps the full body verbatim. Pre-addresses the lead when they
+  // have a phone on file; otherwise opens an unaddressed draft + falls back to
+  // the share sheet if SMS isn't available.
   const shareJobToCrew = async () => {
     if (!job) return;
     const lines = [
       buildMapsUrl(job),
       job.title,
-      clientName ? `${td.crewTextClient} - ${clientName}` : '',
-      job.scheduled_date ? `${td.crewTextDate} - ${fmtDate(job.scheduled_date)}` : '',
+      clientName ? `${td.crewTextClient}: ${clientName}` : '',
+      job.scheduled_date ? `${td.crewTextDate}: ${fmtDate(job.scheduled_date)}` : '',
     ].filter(Boolean);
+    const message = lines.join('\n');
+
+    // Look up the assigned lead's phone to pre-address the text.
+    let leadDigits = '';
     try {
-      await Share.share({ message: lines.join('\n') });
+      const { data } = await supabase
+        .from('job_assignments')
+        .select('employees(phone)')
+        .eq('job_id', job.id)
+        .eq('is_lead', true)
+        .limit(1)
+        .maybeSingle();
+      const phone = (data?.employees as { phone?: string | null } | null)?.phone;
+      if (phone) leadDigits = phone.replace(/\D/g, '');
+    } catch {
+      /* no lead / no read access — fall through to an unaddressed draft */
+    }
+
+    // iOS uses `&body=`, Android uses `?body=`.
+    const sep = Platform.OS === 'ios' ? '&' : '?';
+    const smsUrl = `sms:${leadDigits}${sep}body=${encodeURIComponent(message)}`;
+    const canSms = await Linking.canOpenURL(smsUrl).catch(() => false);
+    if (canSms) {
+      openLink(smsUrl);
+      return;
+    }
+    // Simulator / no SMS app — fall back to the share sheet so the draft is
+    // still usable.
+    try {
+      await Share.share({ message });
     } catch {
       Alert.alert('', td.shareError);
     }

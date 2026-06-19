@@ -1777,6 +1777,23 @@ export type DashboardDict = {
       loanAmountPlaceholder: string;
       detailTitle: string;
       editBtn: string;
+      groups: {
+        button: string;
+        title: string;
+        none: string;
+        lead: string;
+        type: string;
+        property: string;
+        expiration: string;
+        unassigned: string;
+        noType: string;
+        paid: string;
+        financed: string;
+        expired: string;
+        expiringSoon: string;
+        valid: string;
+        noPlate: string;
+      };
     };
   };
   reports: {
@@ -3616,6 +3633,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
           loanAmountPlaceholder: '0',
           detailTitle: 'Detalles del equipo',
           editBtn: 'Editar',
+          groups: {
+            button: 'Agrupar',
+            title: 'Agrupar por',
+            none: 'Ninguno',
+            lead: 'Encargado',
+            type: 'Tipo',
+            property: 'Propiedad',
+            expiration: 'Vencimiento de placa',
+            unassigned: 'Sin asignar',
+            noType: 'Sin tipo',
+            paid: 'Pagado',
+            financed: 'Financiado',
+            expired: 'Placas vencidas',
+            expiringSoon: 'Por vencer',
+            valid: 'Vigentes',
+            noPlate: 'Sin placa',
+          },
         },
     },
     reports: {
@@ -5482,6 +5516,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
           loanAmountPlaceholder: '0',
           detailTitle: 'Equipment details',
           editBtn: 'Edit',
+          groups: {
+            button: 'Group',
+            title: 'Group by',
+            none: 'None',
+            lead: 'Assigned lead',
+            type: 'Type',
+            property: 'Ownership',
+            expiration: 'Plate expiration',
+            unassigned: 'Unassigned',
+            noType: 'No type',
+            paid: 'Paid off',
+            financed: 'Financed',
+            expired: 'Expired plates',
+            expiringSoon: 'Expiring soon',
+            valid: 'Current',
+            noPlate: 'No plate',
+          },
         },
     },
     reports: {

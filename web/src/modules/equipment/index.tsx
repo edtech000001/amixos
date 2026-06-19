@@ -18,6 +18,11 @@ import {
   AlertTriangle,
   User,
   Save,
+  RotateCw,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Check,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -37,6 +42,13 @@ import {
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { formatDateLong } from '@amixos/shared/lib/format';
+import { nextRotation } from '@amixos/shared/lib/jobPhotos';
+import {
+  groupEquipment,
+  parseEquipmentGroupKey,
+  EQUIPMENT_GROUP_KEY,
+  type EquipmentGroupKey,
+} from '@amixos/shared/lib/equipmentGroups';
 
 interface EmployeeOption {
   id: string;
@@ -105,6 +117,8 @@ export default function EquipmentModule() {
   // is created on save.
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Full-screen photo viewer (detail view) — index into `photos`, or null.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   // Photos live in a private bucket — sign the list covers + the open
   // equipment's photos together, keyed by storage_path.
@@ -204,6 +218,42 @@ export default function EquipmentModule() {
     );
   }, [equipment, search]);
 
+  // Group-by — persists across navigation + refresh via localStorage.
+  const [groupBy, setGroupBy] = useState<EquipmentGroupKey>(() =>
+    typeof window !== 'undefined'
+      ? parseEquipmentGroupKey(window.localStorage.getItem(EQUIPMENT_GROUP_KEY))
+      : 'none',
+  );
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy);
+  }, [groupBy]);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const groupOptions: { key: EquipmentGroupKey; label: string }[] = [
+    { key: 'none', label: t.groups.none },
+    { key: 'lead', label: t.groups.lead },
+    { key: 'type', label: t.groups.type },
+    { key: 'property', label: t.groups.property },
+    { key: 'expiration', label: t.groups.expiration },
+  ];
+  const sections = useMemo(
+    () =>
+      groupEquipment(filtered, groupBy, search.trim().length > 0, {
+        leadName: employeeName,
+        labels: {
+          unassigned: t.groups.unassigned,
+          noType: t.groups.noType,
+          paid: t.groups.paid,
+          financed: t.groups.financed,
+          expired: t.groups.expired,
+          expiringSoon: t.groups.expiringSoon,
+          valid: t.groups.valid,
+          noPlate: t.groups.noPlate,
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, groupBy, search, employees],
+  );
+
   const openAdd = () => {
     setSelected(null);
     setForm(EMPTY_FORM);
@@ -285,18 +335,15 @@ export default function EquipmentModule() {
           setError(t.photoUploadError);
         }
         setPendingPhotos([]);
-        await loadPhotosFor(newRow.id);
       }
-      // Set the selected to the new row so further photo uploads land on the
-      // right equipment_id and the modal re-opens in edit mode.
-      setSelected(newRow);
-      setModal('edit');
     } else if (selected) {
       const { error: err } = await supabase.from('equipment').update(payload).eq('id', selected.id);
       if (err) { setError(t.saveError); setSaving(false); return; }
     }
     await loadEquipment();
     setSaving(false);
+    setModal(null);
+    setSelected(null);
   };
 
   const onDelete = async () => {
@@ -380,6 +427,25 @@ export default function EquipmentModule() {
     await loadEquipment();
   };
 
+  // ── Full-screen photo viewer (detail view) ─────────────────────────
+  const rotateCurrent = async () => {
+    if (viewerIndex === null) return;
+    const photo = photos[viewerIndex];
+    if (!photo) return;
+    const rotation = nextRotation(photo.rotation ?? 0);
+    setPhotos(prev => prev.map(p => (p.id === photo.id ? { ...p, rotation } : p)));
+    await supabase.from('equipment_photos').update({ rotation }).eq('id', photo.id);
+  };
+
+  const goTo = (delta: number) =>
+    setViewerIndex(i =>
+      i === null ? i : Math.min(Math.max(i + delta, 0), photos.length - 1),
+    );
+
+  const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
+  const viewerRot = (viewerPhoto?.rotation ?? 0) % 360;
+  const viewerSwap = viewerRot === 90 || viewerRot === 270;
+
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="p-6">
@@ -399,14 +465,46 @@ export default function EquipmentModule() {
         </Button>
       </div>
 
-      <div className="relative mb-5 max-w-md">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={t.searchPlaceholder}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+      <div className="flex items-center gap-3 mb-5">
+        <div className="relative max-w-md flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        {/* Group-by dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setGroupMenuOpen(o => !o)}
+            onBlur={() => setTimeout(() => setGroupMenuOpen(false), 150)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
+              groupBy === 'none'
+                ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                : 'border-primary/30 bg-primary/10 text-primary'
+            }`}
+          >
+            <Layers size={15} />
+            {groupBy === 'none' ? t.groups.button : groupOptions.find(o => o.key === groupBy)?.label}
+          </button>
+          {groupMenuOpen ? (
+            <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-1">
+              <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{t.groups.title}</p>
+              {groupOptions.map(o => (
+                <button
+                  key={o.key}
+                  onMouseDown={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  <span className={groupBy === o.key ? 'text-primary font-semibold' : 'text-gray-700'}>{o.label}</span>
+                  {groupBy === o.key ? <Check size={15} className="text-primary" /> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -416,8 +514,16 @@ export default function EquipmentModule() {
           <p className="text-xs text-gray-500 mt-1">{t.emptyHint}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map(e => {
+        <div className="flex flex-col gap-6">
+          {sections.map(section => (
+            <div key={section.title || '__all'}>
+              {section.title ? (
+                <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2.5">
+                  {section.title} <span className="text-gray-400">· {section.data.length}</span>
+                </h2>
+              ) : null}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {section.data.map(e => {
             const cover = coverPhotos[e.id];
             const days = plateExpirationDays(e.plate_expiration);
             const plateBadge =
@@ -469,6 +575,9 @@ export default function EquipmentModule() {
               </button>
             );
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -514,6 +623,7 @@ export default function EquipmentModule() {
           {/* Ownership — Value always; lender + loan amount only when not paid off. */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</p>
           <Input label={t.valueLabel} placeholder={t.valuePlaceholder} type="number" min="0"
+            leftIcon={<span className="text-gray-500">$</span>}
             value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} />
           <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
             <span className="text-sm text-gray-900">{t.paidOffLabel}</span>
@@ -524,6 +634,7 @@ export default function EquipmentModule() {
               <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                 onChange={e => setForm(f => ({ ...f, loan_lender: e.target.value }))} />
               <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} type="number" min="0"
+                leftIcon={<span className="text-gray-500">$</span>}
                 value={form.loan_amount} onChange={e => setForm(f => ({ ...f, loan_amount: e.target.value }))} />
             </>
           ) : null}
@@ -655,14 +766,21 @@ export default function EquipmentModule() {
           <div className="flex flex-col gap-4 max-h-[75vh] overflow-y-auto pr-1">
             {photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
-                {photos.map(p => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                {photos.map((p, idx) => (
+                  <button
                     key={p.id}
-                    src={photoUrls[p.storage_path] ?? undefined}
-                    alt=""
-                    className="aspect-square rounded-lg object-cover bg-gray-100"
-                  />
+                    type="button"
+                    onClick={() => setViewerIndex(idx)}
+                    className="aspect-square rounded-lg overflow-hidden bg-gray-100"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photoUrls[p.storage_path] ?? undefined}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      style={{ transform: `rotate(${(p.rotation ?? 0) % 360}deg)` }}
+                    />
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -683,6 +801,20 @@ export default function EquipmentModule() {
                 label={t.plateExpirationLabel}
                 value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
               />
+              {/* Plate expiry countdown badge, same as the list cards. */}
+              {(() => {
+                const days = plateExpirationDays(selected.plate_expiration);
+                const badge =
+                  days === null ? null
+                  : days < 0 ? { text: t.plateExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
+                  : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                  : null;
+                return badge ? (
+                  <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
+                    <AlertTriangle size={12} /> {badge.text}
+                  </span>
+                ) : null;
+              })()}
               <DetailRow label={t.valueLabel} value={selected.value != null ? fmtMoney(selected.value) : null} />
               {selected.paid_off ? (
                 <DetailRow label={t.ownershipHeading} value={t.paidOffLabel} />
@@ -713,6 +845,63 @@ export default function EquipmentModule() {
           </div>
         ) : null}
       </Modal>
+
+      {/* Full-screen photo viewer — click a detail photo to open; rotate to fix
+         orientation (persisted). Mirrors the job-photos viewer. */}
+      {viewerPhoto ? (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
+          onClick={() => setViewerIndex(null)}
+        >
+          <div className="absolute top-0 inset-x-0 flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setViewerIndex(null)}
+              aria-label={tc.buttons.cancel}
+              className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+            >
+              <X size={20} />
+            </button>
+            <span className="text-sm text-white/70">{(viewerIndex ?? 0) + 1} / {photos.length}</span>
+            <button
+              onClick={() => void rotateCurrent()}
+              aria-label="Rotate"
+              className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+            >
+              <RotateCw size={18} />
+            </button>
+          </div>
+
+          {(viewerIndex ?? 0) > 0 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); goTo(-1); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+            >
+              <ChevronLeft size={24} />
+            </button>
+          ) : null}
+          {(viewerIndex ?? 0) < photos.length - 1 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); goTo(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+            >
+              <ChevronRight size={24} />
+            </button>
+          ) : null}
+
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoUrls[viewerPhoto.storage_path] ?? undefined}
+            alt=""
+            className="object-contain"
+            style={{
+              transform: `rotate(${viewerRot}deg)`,
+              maxWidth: viewerSwap ? '90vh' : '92vw',
+              maxHeight: viewerSwap ? '92vw' : '90vh',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

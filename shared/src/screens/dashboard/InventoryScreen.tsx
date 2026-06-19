@@ -159,78 +159,51 @@ export function InventoryScreen({
           ) : null}
         </View>
       ) : (
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <View className="flex-row px-5 py-3 border-b border-gray-50">
-            <Text className="flex-1 text-xs font-semibold text-gray-400 uppercase">
-              {t.cols.item}
-            </Text>
-            <Text className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">
-              {t.cols.stock}
-            </Text>
-            <Text className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">
-              {t.cols.unit}
-            </Text>
-            <Text className="w-20 text-xs font-semibold text-gray-400 uppercase text-right">
-              {t.cols.unitCost}
-            </Text>
-            <Text className="w-24 text-xs font-semibold text-gray-400 uppercase text-right">
-              {t.cols.actions}
-            </Text>
-          </View>
-          {filtered.map((item, i) => {
+        <View className="gap-3">
+          {filtered.map(item => {
             const low = item.quantity <= item.lowStockThreshold;
+            const meta = [
+              item.category,
+              item.sku ? t.itemMeta.skuPrefix.replace('{{sku}}', item.sku) : null,
+            ].filter(Boolean).join(' · ');
             return (
-              <View
-                key={item.id}
-                className={`flex-row items-center px-5 py-3.5 ${
-                  i < filtered.length - 1 ? 'border-b border-gray-50' : ''
-                }`}
-              >
-                <View className="flex-1 min-w-0">
-                  <View className="flex-row items-center gap-2">
-                    <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    {low ? <AlertTriangle size={13} color="#FB923C" /> : null}
+              <View key={item.id} className="bg-white rounded-2xl border border-gray-100 p-4">
+                {/* Name + prominent stock */}
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="flex-1 min-w-0">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="text-base font-semibold text-gray-900 shrink" numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      {low ? <AlertTriangle size={14} color="#FB923C" /> : null}
+                    </View>
+                    {meta ? (
+                      <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>{meta}</Text>
+                    ) : null}
                   </View>
-                  <Text className="text-xs text-gray-400 mt-0.5">
-                    {item.category ? item.category : ''}
-                    {item.sku ? ` · ${t.itemMeta.skuPrefix.replace('{{sku}}', item.sku)}` : ''}
-                    {` · ${t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}`}
-                  </Text>
+                  <View className="items-end">
+                    <Text className={`text-xl font-bold ${low ? 'text-orange-500' : 'text-gray-900'}`}>
+                      {item.quantity}
+                    </Text>
+                    <Text className="text-[11px] text-gray-400">{unitLabel(item.unit)}</Text>
+                  </View>
                 </View>
-                <Text
-                  className={`w-16 text-center text-sm font-bold ${
-                    low ? 'text-orange-500' : 'text-gray-900'
-                  }`}
-                >
-                  {item.quantity}
-                </Text>
-                <Text className="w-16 text-center text-xs text-gray-500">
-                  {unitLabel(item.unit)}
-                </Text>
-                <Text className="w-20 text-right text-sm text-gray-700">
-                  ${item.unitCost.toFixed(2)}
-                </Text>
-                <View className="w-24 flex-row items-center justify-end gap-1">
-                  <Pressable
-                    onPress={() => onAdjustItem(item.id)}
-                    className="p-1.5 rounded-lg active:bg-primary/10"
-                  >
-                    <TrendingUp size={14} className="text-primary" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onEditItem(item.id)}
-                    className="p-1.5 rounded-lg active:bg-gray-100"
-                  >
-                    <Pencil size={14} color="#9CA3AF" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onDeleteItem(item.id)}
-                    className="p-1.5 rounded-lg active:bg-red-50"
-                  >
-                    <Trash2 size={14} color="#F87171" />
-                  </Pressable>
+                {/* Cost + min + actions */}
+                <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                  <Text className="text-xs text-gray-500">
+                    ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
+                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
+                      <TrendingUp size={16} color="#4F46E5" />
+                    </Pressable>
+                    <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-gray-100">
+                      <Pencil size={16} color="#9CA3AF" />
+                    </Pressable>
+                    <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-50">
+                      <Trash2 size={16} color="#F87171" />
+                    </Pressable>
+                  </View>
                 </View>
               </View>
             );

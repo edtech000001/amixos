@@ -158,7 +158,10 @@ export function Select({
                     ) : null}
                   </View>
                 ) : null}
-                <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+                {/* flex-1 only in the searchable (fixed-height) sheet — on a
+                    content-sized sheet it collapses the list to ~0 height,
+                    making options unclickable. */}
+                <ScrollView className={clsx(searchable && 'flex-1')} keyboardShouldPersistTaps="handled">
                   {filteredOptions.length === 0 ? (
                     <Text className="text-sm text-gray-400 px-5 py-4">
                       {searchEmptyText ?? 'Sin resultados.'}

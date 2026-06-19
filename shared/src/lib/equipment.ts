@@ -37,6 +37,8 @@ export interface EquipmentPhoto {
   equipment_id: string;
   storage_path: string;
   sort_order: number;
+  /** Display-only rotation in degrees (0/90/180/270), migration 077. */
+  rotation: number;
   created_by: string | null;
   created_at: string;
 }

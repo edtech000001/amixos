@@ -327,8 +327,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     const lines = [
       buildMapsUrl(),
       job.title,
-      cn ? `${td.crewTextClient} - ${cn}` : '',
-      job.scheduled_date ? `${td.crewTextDate} - ${formatDateLong(job.scheduled_date, dateLoc)}` : '',
+      cn ? `${td.crewTextClient}: ${cn}` : '',
+      job.scheduled_date ? `${td.crewTextDate}: ${formatDateLong(job.scheduled_date, dateLoc)}` : '',
     ].filter(Boolean);
     shareText(lines.join('\n'), 'crew');
   };

@@ -130,6 +130,9 @@ export default function NuevoTrabajoRoute() {
   // when the job is ready for the assigned crew to see.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
+  // The job's status when the edit form loaded — used to stamp the pipeline
+  // timestamp only on a real status change at save time.
+  const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -212,6 +215,7 @@ export default function NuevoTrabajoRoute() {
           setStatus(
             job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
           );
+          setLoadedStatus(job.status);
           setPriority(job.priority ?? 'normal');
           setAddress(job.job_address ?? '');
           setCity(job.job_city ?? '');
@@ -471,7 +475,16 @@ export default function NuevoTrabajoRoute() {
         };
 
         if (editId) {
-          const { error: upErr } = await supabase.from('jobs').update(jobData).eq('id', editId);
+          // Persist the (possibly changed) status — previously omitted, so
+          // status edits silently didn't apply. Stamp the pipeline timestamp
+          // only on a real transition (mirrors the detail stepper / 074).
+          const jobUpdate: Record<string, unknown> = { ...jobData, status };
+          if (status !== loadedStatus) {
+            const nowIso = new Date().toISOString();
+            if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
+            else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
+          }
+          const { error: upErr } = await supabase.from('jobs').update(jobUpdate).eq('id', editId);
           if (upErr) throw new Error(upErr.message);
           jobId = editId;
         } else {

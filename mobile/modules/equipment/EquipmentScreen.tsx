@@ -3,7 +3,7 @@
 // add/edit/delete, attach photos (camera or library), and assign to
 // an active employee.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,10 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  FlatList,
+  Dimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,12 +28,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ChevronLeft,
+  ChevronRight,
   Search,
   Trash2,
+  Pencil,
   X,
   Check,
   ChevronDown,
   ScanLine,
+  RotateCw,
+  Layers,
   Image as ImageIcon,
   Camera,
   ImagePlus,
@@ -52,6 +60,14 @@ import {
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { formatDateLong } from '@amixos/shared/lib/format';
+import { nextRotation } from '@amixos/shared/lib/jobPhotos';
+import {
+  groupEquipment,
+  parseEquipmentGroupKey,
+  EQUIPMENT_GROUP_KEY,
+  type EquipmentGroupKey,
+} from '@amixos/shared/lib/equipmentGroups';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface EmployeeOption {
   id: string;
@@ -189,13 +205,32 @@ function fmtMoney(n: number): string {
   }).format(n);
 }
 
-// One labeled read-only row in the detail sheet; renders nothing when empty.
-function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
+// Soft card shadow — explicit because RN iOS ignores NativeWind's shadow-sm.
+const cardShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 3,
+  elevation: 2,
+};
+
+type DetailRowData = { label: string; value: string | null | undefined };
+
+// A grouped white card holding several labeled rows (divider between each),
+// with an optional footer (e.g. a status badge). Renders nothing if every row
+// is empty and there's no footer.
+function DetailCard({ rows, footer }: { rows: DetailRowData[]; footer?: ReactNode }) {
+  const visible = rows.filter((r) => r.value);
+  if (visible.length === 0 && !footer) return null;
   return (
-    <View>
-      <Text className="text-xs font-medium text-gray-400">{label}</Text>
-      <Text className="text-base text-gray-900 mt-0.5">{value}</Text>
+    <View className="rounded-2xl bg-white border border-gray-100" style={cardShadow}>
+      {visible.map((r, i) => (
+        <View key={r.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+          <Text className="text-xs font-medium text-gray-400">{r.label}</Text>
+          <Text className="text-base text-gray-900 mt-0.5">{r.value}</Text>
+        </View>
+      ))}
+      {footer ? <View className="px-4 pb-3.5 pt-0.5">{footer}</View> : null}
     </View>
   );
 }
@@ -203,11 +238,35 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 export default function EquipmentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenW, height: screenH } = Dimensions.get('window');
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
+
+  // Group-by — persists across navigation + refresh via AsyncStorage.
+  const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const groupHydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(EQUIPMENT_GROUP_KEY)
+      .then((raw) => { if (!cancelled) setGroupBy(parseEquipmentGroupKey(raw)); })
+      .finally(() => { groupHydrated.current = true; });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!groupHydrated.current) return;
+    void AsyncStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy).catch(() => {});
+  }, [groupBy]);
+  const groupOptions: { key: EquipmentGroupKey; label: string }[] = [
+    { key: 'none', label: t.groups.none },
+    { key: 'lead', label: t.groups.lead },
+    { key: 'type', label: t.groups.type },
+    { key: 'property', label: t.groups.property },
+    { key: 'expiration', label: t.groups.expiration },
+  ];
 
   const sheetScrim = {
     position: 'absolute' as const,
@@ -237,6 +296,12 @@ export default function EquipmentScreen() {
   // once the row is created on save.
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Full-screen photo viewer (detail view) — index into `photos`, or null.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const viewerListRef = useRef<FlatList<EquipmentPhoto>>(null);
+  // Bottom-sheet delete confirmation (one-hand friendly; replaces Alert).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // VIN barcode scanner (expo-camera). scannedRef de-dupes the rapid-fire
   // onBarcodeScanned callbacks down to a single capture.
   const [scanning, setScanning] = useState(false);
@@ -354,6 +419,26 @@ export default function EquipmentScreen() {
     );
   }, [equipment, search]);
 
+  // Grouped sections (or a single flat section when grouping is off / searching).
+  const sections = useMemo(
+    () =>
+      groupEquipment(filtered, groupBy, search.trim().length > 0, {
+        leadName: employeeName,
+        labels: {
+          unassigned: t.groups.unassigned,
+          noType: t.groups.noType,
+          paid: t.groups.paid,
+          financed: t.groups.financed,
+          expired: t.groups.expired,
+          expiringSoon: t.groups.expiringSoon,
+          valid: t.groups.valid,
+          noPlate: t.groups.noPlate,
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, groupBy, search, employees],
+  );
+
   const openAdd = () => {
     setSelected(null);
     setForm(EMPTY_FORM);
@@ -435,32 +520,31 @@ export default function EquipmentScreen() {
           setError(t.photoUploadError);
         }
         setPendingPhotos([]);
-        await loadPhotosFor(newRow.id);
       }
-      setSelected(newRow);
-      setModal('edit'); // switch to edit so the user can keep adding photos
     } else if (selected) {
       const { error: err } = await supabase.from('equipment').update(payload).eq('id', selected.id);
       if (err) { setError(t.saveError); setSaving(false); return; }
     }
     await loadEquipment();
     setSaving(false);
+    setModal(null);
+    setSelected(null);
   };
 
+  // Opens the bottom-sheet confirmation (one-hand friendly vs a centered Alert).
   const onDelete = () => {
     if (!selected) return;
-    Alert.alert(t.deleteConfirmTitle, t.deleteConfirmMsg, [
-      { text: tc.buttons.cancel, style: 'cancel' },
-      {
-        text: tc.buttons.delete,
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.from('equipment').delete().eq('id', selected.id);
-          setModal(null); setSelected(null);
-          await loadEquipment();
-        },
-      },
-    ]);
+    setConfirmingDelete(true);
+  };
+
+  const doDelete = async () => {
+    if (!selected) return;
+    setDeleting(true);
+    await supabase.from('equipment').delete().eq('id', selected.id);
+    setDeleting(false);
+    setConfirmingDelete(false);
+    setModal(null); setSelected(null);
+    await loadEquipment();
   };
 
   // ── Photo capture / upload ─────────────────────────────────────────
@@ -553,6 +637,53 @@ export default function EquipmentScreen() {
     ]);
   };
 
+  // ── Full-screen photo viewer (detail view) ─────────────────────────
+  const rotateCurrent = async () => {
+    if (viewerIndex === null) return;
+    const photo = photos[viewerIndex];
+    if (!photo) return;
+    const rotation = nextRotation(photo.rotation ?? 0);
+    // Optimistic local update so the rotation feels instant, then persist.
+    setPhotos((prev) => prev.map((p) => (p.id === photo.id ? { ...p, rotation } : p)));
+    await supabase.from('equipment_photos').update({ rotation }).eq('id', photo.id);
+  };
+
+  const goTo = (delta: number) => {
+    if (viewerIndex === null) return;
+    const next = Math.min(Math.max(viewerIndex + delta, 0), photos.length - 1);
+    if (next === viewerIndex) return;
+    setViewerIndex(next);
+    viewerListRef.current?.scrollToIndex({ index: next, animated: true });
+  };
+
+  const onViewerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
+    setViewerIndex((prev) => (prev === idx ? prev : idx));
+  };
+
+  const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
+  const viewerAvailH = screenH - insets.top - insets.bottom - 120;
+
+  // One swipeable page per photo, sized so the rotated image stays inside the
+  // viewport (90/270 swap the on-screen footprint).
+  const renderViewerPage = ({ item }: { item: EquipmentPhoto }) => {
+    const r = (item.rotation ?? 0) % 360;
+    const swap = r === 90 || r === 270;
+    return (
+      <View style={{ width: screenW, alignItems: 'center', justifyContent: 'center' }}>
+        <Image
+          source={{ uri: photoUrls[item.storage_path] }}
+          style={{
+            width: swap ? viewerAvailH : screenW,
+            height: swap ? screenW : viewerAvailH,
+            transform: [{ rotate: `${r}deg` }],
+          }}
+          resizeMode="contain"
+        />
+      </View>
+    );
+  };
+
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -565,6 +696,18 @@ export default function EquipmentScreen() {
           <Text className="text-lg font-semibold text-gray-900">{t.title}</Text>
           <Text className="text-xs text-gray-500">{t.subtitle}</Text>
         </View>
+        <Pressable
+          onPress={() => setGroupMenuOpen(true)}
+          hitSlop={8}
+          className={`flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg ${groupBy === 'none' ? 'active:bg-gray-100' : 'bg-primary/10'}`}
+        >
+          <Layers size={16} color={groupBy === 'none' ? '#6B7280' : '#4F46E5'} />
+          {groupBy !== 'none' ? (
+            <Text className="text-xs font-semibold text-primary">
+              {groupOptions.find((o) => o.key === groupBy)?.label}
+            </Text>
+          ) : null}
+        </Pressable>
       </View>
 
       {/* Search */}
@@ -595,63 +738,72 @@ export default function EquipmentScreen() {
             <Text className="text-xs text-gray-500 mt-1 text-center">{t.emptyHint}</Text>
           </View>
         ) : (
-          <View className="gap-3">
-            {filtered.map((e) => {
-              const cover = coverPhotos[e.id];
-              const days = plateExpirationDays(e.plate_expiration);
-              const plateBadge =
-                days === null ? null
-                : days < 0 ? { text: t.plateExpired, bg: 'bg-red-50', fg: 'text-red-700' }
-                : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700' }
-                : null;
-              const assigned = employeeName(e.assigned_employee_id);
-              return (
-                <Pressable
-                  key={e.id}
-                  onPress={() => openDetail(e)}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden active:bg-gray-50"
-                >
-                  {cover ? (
-                    <Image
-                      source={{ uri: photoUrls[cover.storage_path] }}
-                      style={{ width: '100%', height: 160 }}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={{ height: 120 }} className="bg-gray-50 items-center justify-center">
-                      <ImageIcon size={28} color="#D1D5DB" />
-                    </View>
-                  )}
-                  <View className="p-4 gap-1">
-                    <View className="flex-row items-center justify-between gap-2">
-                      <Text className="text-base font-semibold text-gray-900 flex-1" numberOfLines={1}>{e.name}</Text>
-                      {e.paid_off ? (
-                        <View className="bg-emerald-50 px-2 py-0.5 rounded-full">
-                          <Text className="text-[10px] font-semibold text-emerald-700">{t.paidOffBadge}</Text>
+          <View className="gap-5">
+            {sections.map((section) => (
+              <View key={section.title || '__all'} className="gap-3">
+                {section.title ? (
+                  <Text className="text-xs font-bold text-gray-500 uppercase tracking-wide px-1">
+                    {section.title} <Text className="text-gray-400">· {section.data.length}</Text>
+                  </Text>
+                ) : null}
+                {section.data.map((e) => {
+                  const cover = coverPhotos[e.id];
+                  const days = plateExpirationDays(e.plate_expiration);
+                  const plateBadge =
+                    days === null ? null
+                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-50', fg: 'text-red-700' }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700' }
+                    : null;
+                  const assigned = employeeName(e.assigned_employee_id);
+                  return (
+                    <Pressable
+                      key={e.id}
+                      onPress={() => openDetail(e)}
+                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden active:bg-gray-50"
+                    >
+                      {cover ? (
+                        <Image
+                          source={{ uri: photoUrls[cover.storage_path] }}
+                          style={{ width: '100%', height: 160 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={{ height: 120 }} className="bg-gray-50 items-center justify-center">
+                          <ImageIcon size={28} color="#D1D5DB" />
                         </View>
-                      ) : e.loan_lender ? (
-                        <View className="bg-amber-50 px-2 py-0.5 rounded-full">
-                          <Text className="text-[10px] font-semibold text-amber-700">{t.loanBadge}</Text>
+                      )}
+                      <View className="p-4 gap-1">
+                        <View className="flex-row items-center justify-between gap-2">
+                          <Text className="text-base font-semibold text-gray-900 flex-1" numberOfLines={1}>{e.name}</Text>
+                          {e.paid_off ? (
+                            <View className="bg-emerald-50 px-2 py-0.5 rounded-full">
+                              <Text className="text-[10px] font-semibold text-emerald-700">{t.paidOffBadge}</Text>
+                            </View>
+                          ) : e.loan_lender ? (
+                            <View className="bg-amber-50 px-2 py-0.5 rounded-full">
+                              <Text className="text-[10px] font-semibold text-amber-700">{t.loanBadge}</Text>
+                            </View>
+                          ) : null}
                         </View>
-                      ) : null}
-                    </View>
-                    <Text className="text-xs text-gray-500" numberOfLines={1}>
-                      {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
-                    </Text>
-                    <View className="flex-row items-center gap-1.5 mt-1">
-                      <UserIcon size={12} color="#6B7280" />
-                      <Text className="text-xs text-gray-500">{assigned ?? t.unassignedBadge}</Text>
-                    </View>
-                    {plateBadge ? (
-                      <View className={`mt-1 self-start flex-row items-center gap-1 ${plateBadge.bg} px-2 py-0.5 rounded-full`}>
-                        <AlertTriangle size={10} color={days! < 0 ? '#B91C1C' : '#B45309'} />
-                        <Text className={`text-[10px] font-semibold ${plateBadge.fg}`}>{plateBadge.text}</Text>
+                        <Text className="text-xs text-gray-500" numberOfLines={1}>
+                          {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
+                        </Text>
+                        <View className="flex-row items-center gap-1.5 mt-1">
+                          <UserIcon size={12} color="#6B7280" />
+                          <Text className="text-xs text-gray-500">{assigned ?? t.unassignedBadge}</Text>
+                        </View>
+                        {plateBadge ? (
+                          <View className={`mt-1 self-start flex-row items-center gap-1 ${plateBadge.bg} px-2 py-0.5 rounded-full`}>
+                            <AlertTriangle size={10} color={days! < 0 ? '#B91C1C' : '#B45309'} />
+                            <Text className={`text-[10px] font-semibold ${plateBadge.fg}`}>{plateBadge.text}</Text>
+                          </View>
+                        ) : null}
                       </View>
-                    ) : null}
-                  </View>
-                </Pressable>
-              );
-            })}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         )}
       </ScrollView>
@@ -730,6 +882,7 @@ export default function EquipmentScreen() {
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
                 {/* Value is always shown; lender + loan amount only when not paid off. */}
                 <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="number-pad"
+                  leftIcon={<Text className="text-base text-gray-500">$</Text>}
                   value={fmtThousands(form.value)}
                   onChangeText={(v) => setForm((f) => ({ ...f, value: v.replace(/[^0-9]/g, '') }))} />
                 <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
@@ -741,6 +894,7 @@ export default function EquipmentScreen() {
                     <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                       onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
                     <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="number-pad"
+                      leftIcon={<Text className="text-base text-gray-500">$</Text>}
                       value={fmtThousands(form.loan_amount)}
                       onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: v.replace(/[^0-9]/g, '') }))} />
                   </>
@@ -846,17 +1000,10 @@ export default function EquipmentScreen() {
 
                 {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
 
-                <View className="flex-row gap-3 pt-3">
-                  {modal === 'edit' && selected ? (
-                    <View className="flex-1">
-                      <Button variant="secondary" onPress={onDelete} fullWidth>
-                        <Text className="text-red-600 font-semibold">{t.deleteBtn}</Text>
-                      </Button>
-                    </View>
-                  ) : null}
-                  <View className="flex-1">
-                    <Button onPress={save} loading={saving} fullWidth>{tc.buttons.save}</Button>
-                  </View>
+                {/* Delete lives on the detail page (not here) — opening the
+                   confirm sheet from inside this modal would nest modals. */}
+                <View className="pt-3">
+                  <Button onPress={save} loading={saving} fullWidth>{tc.buttons.save}</Button>
                 </View>
               </ScrollView>
             </View>
@@ -889,90 +1036,248 @@ export default function EquipmentScreen() {
         </KeyboardAvoidingView>
       </RNModal>
 
-      {/* Detail view — read-only summary; tapping a list row lands here, not
-         straight in the edit form. Edit / Delete live in the footer. */}
-      <RNModal
-        visible={modal === 'detail'}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setModal(null); setSelected(null); }}
-      >
-        <View className="flex-1 justify-end">
-          <Pressable onPress={() => { setModal(null); setSelected(null); }} style={sheetScrim} />
-          {selected ? (
-            <View
-              className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
-              style={{ maxHeight: '85%', ...sheetShadow }}
+      {/* Detail view — a full-screen PAGE, not a modal, so the delete sheet
+         and the photo viewer (both RNModals) present cleanly above it. iOS
+         won't reliably stack transparent modals, which is why clicking
+         delete / a photo did nothing when this was a modal. */}
+      {modal === 'detail' && selected ? (
+        <View
+          style={[StyleSheet.absoluteFill, { backgroundColor: '#F9FAFB', zIndex: 30, elevation: 30, paddingTop: insets.top }]}
+        >
+          <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-gray-100 bg-white">
+            <Pressable
+              onPress={() => { setModal(null); setSelected(null); }}
+              hitSlop={12}
+              className="p-2 -ml-2 rounded-lg active:bg-gray-100"
             >
-              <View className="items-center mb-2">
-                <View className="w-10 h-1 bg-gray-200 rounded-full" />
-              </View>
-              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-                <Text className="text-lg font-bold text-gray-900 flex-1 mr-3" numberOfLines={1}>{selected.name}</Text>
-                <Pressable onPress={() => { setModal(null); setSelected(null); }} hitSlop={8}>
-                  <X size={20} color="#9CA3AF" />
-                </Pressable>
-              </View>
-              <ScrollView contentContainerClassName="px-5 py-5 pb-8 gap-4" keyboardShouldPersistTaps="handled">
+              <ChevronLeft size={22} color="#111827" />
+            </Pressable>
+            <Text className="text-lg font-bold text-gray-900 flex-1 mx-1" numberOfLines={1}>{selected.name}</Text>
+            <Pressable
+              onPress={() => openEdit(selected)}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-gray-100"
+            >
+              <Pencil size={18} color="#6B7280" />
+            </Pressable>
+            <Pressable
+              onPress={onDelete}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-red-50"
+            >
+              <Trash2 size={18} color="#EF4444" />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerClassName="px-5 pt-5 pb-32 gap-4" keyboardShouldPersistTaps="handled">
                 {photos.length > 0 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                    {photos.map((p) => (
-                      <Image
+                    {photos.map((p, idx) => (
+                      <Pressable
                         key={p.id}
-                        source={{ uri: photoUrls[p.storage_path] }}
-                        style={{ width: 220, height: 150, borderRadius: 14, backgroundColor: '#F3F4F6' }}
-                        resizeMode="cover"
-                      />
+                        onPress={() => setViewerIndex(idx)}
+                        className="rounded-2xl overflow-hidden bg-gray-100 active:opacity-80"
+                      >
+                        <Image
+                          source={{ uri: photoUrls[p.storage_path] }}
+                          style={{ width: 170, height: 170, transform: [{ rotate: `${(p.rotation ?? 0) % 360}deg` }] }}
+                          resizeMode="cover"
+                        />
+                      </Pressable>
                     ))}
                   </ScrollView>
                 ) : null}
 
-                <DetailRow label={t.typeLabel} value={selected.equipment_type} />
-                <DetailRow
-                  label={t.makeLabel}
-                  value={[selected.year, selected.make, selected.model].filter(Boolean).join(' ') || null}
+                {/* Vehicle */}
+                <DetailCard
+                  rows={[
+                    { label: t.typeLabel, value: selected.equipment_type },
+                    { label: t.makeLabel, value: [selected.year, selected.make, selected.model].filter(Boolean).join(' ') || null },
+                    { label: t.vinLabel, value: selected.vin },
+                    { label: t.mileageLabel, value: selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null },
+                  ]}
                 />
-                <DetailRow label={t.vinLabel} value={selected.vin} />
-                <DetailRow
-                  label={t.mileageLabel}
-                  value={selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null}
-                />
-                <DetailRow label={t.plateNumberLabel} value={selected.plate_number} />
-                <DetailRow
-                  label={t.plateExpirationLabel}
-                  value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
-                />
-                <DetailRow label={t.valueLabel} value={selected.value != null ? fmtMoney(selected.value) : null} />
-                {selected.paid_off ? (
-                  <DetailRow label={t.ownershipHeading} value={t.paidOffLabel} />
-                ) : (
-                  <>
-                    <DetailRow label={t.loanLenderLabel} value={selected.loan_lender} />
-                    <DetailRow
-                      label={t.loanAmountLabel}
-                      value={selected.loan_amount != null ? fmtMoney(selected.loan_amount) : null}
+                {/* Plate (+ expiry countdown badge, same as the list cards) */}
+                {(() => {
+                  const days = plateExpirationDays(selected.plate_expiration);
+                  const badge =
+                    days === null ? null
+                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-50', fg: 'text-red-700', icon: '#B91C1C' }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700', icon: '#B45309' }
+                    : null;
+                  return (
+                    <DetailCard
+                      rows={[
+                        { label: t.plateNumberLabel, value: selected.plate_number },
+                        { label: t.plateExpirationLabel, value: selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null },
+                      ]}
+                      footer={badge ? (
+                        <View className={`self-start flex-row items-center gap-1 ${badge.bg} px-2 py-1 rounded-full`}>
+                          <AlertTriangle size={11} color={badge.icon} />
+                          <Text className={`text-[11px] font-semibold ${badge.fg}`}>{badge.text}</Text>
+                        </View>
+                      ) : null}
                     />
-                  </>
-                )}
-                <DetailRow
-                  label={t.assignedToLabel}
-                  value={employeeName(selected.assigned_employee_id) ?? t.unassignedBadge}
+                  );
+                })()}
+                {/* Value + ownership */}
+                <DetailCard
+                  rows={[
+                    { label: t.valueLabel, value: selected.value != null ? fmtMoney(selected.value) : null },
+                    ...(selected.paid_off
+                      ? [{ label: t.ownershipHeading, value: t.paidOffLabel }]
+                      : [
+                          { label: t.loanLenderLabel, value: selected.loan_lender },
+                          { label: t.loanAmountLabel, value: selected.loan_amount != null ? fmtMoney(selected.loan_amount) : null },
+                        ]),
+                  ]}
                 />
-                <DetailRow label={t.notesLabel} value={selected.notes} />
+                {/* Assignment */}
+                <DetailCard
+                  rows={[
+                    { label: t.assignedToLabel, value: employeeName(selected.assigned_employee_id) ?? t.unassignedBadge },
+                  ]}
+                />
+                {/* Notes */}
+                <DetailCard rows={[{ label: t.notesLabel, value: selected.notes }]} />
+          </ScrollView>
+        </View>
+      ) : null}
 
-                <View className="flex-row gap-3 pt-3">
-                  <View className="flex-1">
-                    <Button variant="secondary" onPress={onDelete} fullWidth>
-                      <Text className="text-red-600 font-semibold">{t.deleteBtn}</Text>
-                    </Button>
-                  </View>
-                  <View className="flex-1">
-                    <Button onPress={() => openEdit(selected)} fullWidth>{t.editBtn}</Button>
-                  </View>
-                </View>
-              </ScrollView>
+      {/* Full-screen photo viewer — swipe between photos, rotate to fix
+         orientation (persisted). Mirrors the job-photos viewer. */}
+      <RNModal
+        visible={viewerPhoto !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerIndex(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <View
+            style={{
+              paddingTop: insets.top + 8,
+              paddingHorizontal: 16,
+              paddingBottom: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Pressable onPress={() => setViewerIndex(null)} hitSlop={10}>
+              <X size={26} color="#FFFFFF" />
+            </Pressable>
+            <Text className="text-sm font-medium text-white/80">
+              {viewerIndex !== null ? `${viewerIndex + 1} / ${photos.length}` : ''}
+            </Text>
+            <Pressable onPress={rotateCurrent} hitSlop={10} accessibilityLabel="Rotate">
+              <RotateCw size={22} color="#FFFFFF" />
+            </Pressable>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={viewerListRef}
+              data={photos}
+              keyExtractor={(p) => p.id}
+              extraData={photos}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={viewerIndex ?? 0}
+              getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}
+              onMomentumScrollEnd={onViewerScrollEnd}
+              renderItem={renderViewerPage}
+            />
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 12,
+              paddingBottom: insets.bottom + 12,
+            }}
+          >
+            <Pressable
+              onPress={() => goTo(-1)}
+              disabled={viewerIndex === 0}
+              hitSlop={10}
+              className="w-12 h-12 rounded-full items-center justify-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)', opacity: viewerIndex === 0 ? 0.3 : 1 }}
+            >
+              <ChevronLeft size={26} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              onPress={() => goTo(1)}
+              disabled={viewerIndex === photos.length - 1}
+              hitSlop={10}
+              className="w-12 h-12 rounded-full items-center justify-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)', opacity: viewerIndex === photos.length - 1 ? 0.3 : 1 }}
+            >
+              <ChevronRight size={26} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Delete confirmation — bottom sheet (one-hand friendly). */}
+      <RNModal
+        visible={confirmingDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmingDelete(false)}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setConfirmingDelete(false)} style={sheetScrim} />
+          <View
+            className="bg-white rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
+            style={{ paddingBottom: insets.bottom + 16, ...sheetShadow }}
+          >
+            <Text className="text-lg font-bold text-gray-900">{t.deleteConfirmTitle}</Text>
+            <Text className="text-sm text-gray-500 mt-1.5">{t.deleteConfirmMsg}</Text>
+            <View className="flex-row gap-3 mt-5">
+              <View className="flex-1">
+                <Button variant="secondary" onPress={() => setConfirmingDelete(false)} fullWidth>
+                  {tc.buttons.cancel}
+                </Button>
+              </View>
+              <View className="flex-1">
+                <Button variant="danger" onPress={doDelete} loading={deleting} fullWidth>
+                  {tc.buttons.delete}
+                </Button>
+              </View>
             </View>
-          ) : null}
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Group-by — bottom sheet. */}
+      <RNModal
+        visible={groupMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGroupMenuOpen(false)}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setGroupMenuOpen(false)} style={sheetScrim} />
+          <View
+            className="bg-white rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
+            style={{ paddingBottom: insets.bottom + 12, ...sheetShadow }}
+          >
+            <Text className="text-lg font-bold text-gray-900 mb-1">{t.groups.title}</Text>
+            {groupOptions.map((o) => (
+              <Pressable
+                key={o.key}
+                onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                className="flex-row items-center justify-between py-3.5 border-b border-gray-50"
+              >
+                <Text className={`text-base ${groupBy === o.key ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                  {o.label}
+                </Text>
+                {groupBy === o.key ? <Check size={18} color="#4F46E5" /> : null}
+              </Pressable>
+            ))}
+          </View>
         </View>
       </RNModal>
     </SafeAreaView>

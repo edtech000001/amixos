@@ -12,6 +12,9 @@ import { useAuthStore } from '@/lib/auth/store';
 import { DOCK_APPS } from '@/lib/dockApps';
 import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
+import { startNetworkMonitor } from '@/lib/offline/network';
+import { startSyncRunner } from '@/lib/offline/syncRunner';
 import {
   GoogleSyncBanner,
   GoogleSyncBannerProvider,
@@ -98,6 +101,14 @@ function DashboardTabs() {
   useEffect(() => {
     if (user?.id) loadDock(supabase, user.id);
   }, [user?.id, supabase, loadDock]);
+
+  // Offline write queue: watch connectivity and drain the outbox on reconnect.
+  // Both are idempotent, so mounting once here is enough for the whole app.
+  useEffect(() => {
+    const stop = startNetworkMonitor();
+    startSyncRunner();
+    return stop;
+  }, []);
   const { status } = useGoogleSyncBanner();
   const [bannerHeight, setBannerHeight] = useState(0);
   const bannerVisible = status.kind !== 'idle';
@@ -113,6 +124,7 @@ function DashboardTabs() {
         onLayout={e => setBannerHeight(e.nativeEvent.layout.height)}
         style={{ position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 1000 }}
       >
+        <OfflineSyncBanner />
         <GoogleSyncBanner />
       </View>
       <View style={{ flex: 1, marginTop: offset }}>
