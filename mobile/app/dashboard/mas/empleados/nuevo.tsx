@@ -140,7 +140,7 @@ export default function NuevoEmpleadoRoute() {
 
   // Guard the back arrow + hardware back when the form has been touched.
   const dirty = useDirty(form, true);
-  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+  const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
 
   const save = async () => {
     if (!business) return;
@@ -328,6 +328,7 @@ export default function NuevoEmpleadoRoute() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {unsavedSheet}
     </SafeAreaView>
   );
 }

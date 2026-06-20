@@ -36,7 +36,7 @@ import {
 } from '@amixos/shared/lib/jobAlerts';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
-import { normalizeBundle, activeBundleConfig, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
@@ -161,6 +161,9 @@ export default function AjustesPage() {
   const [bizInvoiceNotes, setBizInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
   const [invoiceDueDays, setInvoiceDueDays] = useState(
     business?.invoice_due_days != null ? String(business.invoice_due_days) : '',
+  );
+  const [invoiceStartNumber, setInvoiceStartNumber] = useState(
+    String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER),
   );
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState('');
@@ -332,6 +335,7 @@ export default function AjustesPage() {
       setBizLicense(business.license_number ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
+      setInvoiceStartNumber(String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
       setInvoiceTheme(normalizeBundle(business.invoice_template));
       const ireq = business.invoice_field_required ?? {};
       setInvoiceFieldRequired(ireq);
@@ -471,9 +475,17 @@ export default function AjustesPage() {
       setInvoiceMsg(t.invoices.saveError);
       return;
     }
+    const startTrim = invoiceStartNumber.trim();
+    const startNum = startTrim === '' ? DEFAULT_INVOICE_START_NUMBER : Number(startTrim);
+    if (!Number.isInteger(startNum) || startNum < 1) {
+      setInvoiceMsgIsError(true);
+      setInvoiceMsg(t.invoices.saveError);
+      return;
+    }
     setSavingInvoice(true); setInvoiceMsg('');
     const { error } = await supabase.from('businesses').update({
       invoice_due_days: days,
+      invoice_start_number: startNum,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
     }).eq('id', business.id);
     setInvoiceMsgIsError(!!error);
@@ -1670,8 +1682,9 @@ export default function AjustesPage() {
       JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
+      String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -1684,6 +1697,7 @@ export default function AjustesPage() {
     setInvoiceFieldRequired(dbInvoiceFieldRequired);
     setLocalInvoiceOrder(dbInvoiceOrder);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
+    setInvoiceStartNumber(String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
     setInvoiceReqMsg('');
     setInvoiceMsg('');
@@ -1826,39 +1840,43 @@ export default function AjustesPage() {
           {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
           {tab === 'negocio' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
-              <p className="text-xs text-gray-400 mb-5">{t.business.subtitle}</p>
-
-              {/* Logo — centered, `contain` so round/wide logos aren't clipped.
-                 Uploads immediately on pick. */}
-              <div className="flex flex-col items-center gap-3 mb-5">
-                {business?.logo_url ? (
-                  <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={business.logo_url} alt="" className="w-24 h-24 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
-                  </button>
-                ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gray-100 flex items-center justify-center">
-                    <Building2 size={28} className="text-gray-400" />
-                  </div>
-                )}
-                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={uploadingLogo}
-                    className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
-                  >
-                    {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-                  </button>
-                  {business?.logo_url && !uploadingLogo && (
-                    <button
-                      onClick={onRemoveLogo}
-                      className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
-                    >
-                      {t.business.logoRemoveBtn}
+              {/* Header: title left, logo top-right — fills the space instead of
+                 stacking a narrow column under a centered logo. */}
+              <div className="flex items-start justify-between gap-6 mb-6 max-w-4xl">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
+                  <p className="text-xs text-gray-400">{t.business.subtitle}</p>
+                </div>
+                {/* Logo — `contain` so round/wide logos aren't clipped. Uploads on pick. */}
+                <div className="flex flex-col items-center gap-3 shrink-0">
+                  {business?.logo_url ? (
+                    <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={business.logo_url} alt="" className="w-24 h-24 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
                     </button>
+                  ) : (
+                    <div className="w-24 h-24 rounded-2xl bg-gray-100 flex items-center justify-center">
+                      <Building2 size={28} className="text-gray-400" />
+                    </div>
                   )}
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={uploadingLogo}
+                      className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
+                    >
+                      {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+                    </button>
+                    {business?.logo_url && !uploadingLogo && (
+                      <button
+                        onClick={onRemoveLogo}
+                        className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
+                      >
+                        {t.business.logoRemoveBtn}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1886,16 +1904,19 @@ export default function AjustesPage() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 max-w-md">
-                <Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/>
+              {/* Fields — 2-column grid so they fill the width instead of a
+                 single narrow column. Long fields (name, website, street) span
+                 both columns; section headers span both too. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3.5 max-w-4xl">
+                <div className="sm:col-span-2"><Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/></div>
 
-                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.contactHeading}</p>
+                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.contactHeading}</p>
                 <Input label={t.business.emailLabel} type="email" value={bizEmail} onChange={e => setBizEmail(e.target.value)}/>
                 <Input label={t.business.phoneLabel} value={formatPhoneInput(bizPhone)} onChange={e => setBizPhone(formatPhoneInput(e.target.value))}/>
-                <Input label={t.business.websiteLabel} value={bizWebsite} onChange={e => setBizWebsite(e.target.value)}/>
+                <div className="sm:col-span-2"><Input label={t.business.websiteLabel} value={bizWebsite} onChange={e => setBizWebsite(e.target.value)}/></div>
 
-                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.addressHeading}</p>
-                <Input label={t.business.addressLabel} value={bizAddress} onChange={e => setBizAddress(e.target.value)}/>
+                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.addressHeading}</p>
+                <div className="sm:col-span-2"><Input label={t.business.addressLabel} value={bizAddress} onChange={e => setBizAddress(e.target.value)}/></div>
                 <Input label={t.business.cityLabel} value={bizCity} onChange={e => setBizCity(e.target.value)}/>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.business.stateLabel}</label>
@@ -1910,45 +1931,46 @@ export default function AjustesPage() {
                 </div>
                 <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} inputMode="numeric"/>
 
-                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.legalHeading}</p>
+                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.legalHeading}</p>
                 <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>
                 <Input label={t.business.licenseLabel} value={bizLicense} onChange={e => setBizLicense(e.target.value)}/>
+              </div>
 
-                <p className="text-xs font-semibold text-gray-400 uppercase mt-3">{t.business.operatingHoursHeading}</p>
-                <p className="text-xs text-gray-400 -mt-1">{t.business.operatingHoursSub}</p>
-                <div className="flex flex-col divide-y divide-gray-50">
-                  {DAY_KEYS.map((dk: DayKey) => {
-                    const d = operatingHours[dk];
-                    const setDay = (patch: Partial<typeof d>) =>
-                      setOperatingHours(prev => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
-                    return (
-                      <div key={dk} className="flex items-center py-2.5">
-                        <span className="w-28 text-sm text-gray-800">{t.business.days[dk]}</span>
-                        <Toggle checked={d.enabled} onChange={(v) => setDay({ enabled: v })} />
-                        <div className="flex-1" />
-                        {d.enabled ? (
-                          <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                            <input
-                              type="time"
-                              value={d.start}
-                              onChange={e => setDay({ start: e.target.value })}
-                              className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
-                            />
-                            <span className="text-gray-400 font-normal">–</span>
-                            <input
-                              type="time"
-                              value={d.end}
-                              onChange={e => setDay({ end: e.target.value })}
-                              className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
-                            />
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">{t.business.closedLabel}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              {/* Operating hours — 2-column grid of days to use the width. */}
+              <p className="text-xs font-semibold text-gray-400 uppercase mt-6">{t.business.operatingHoursHeading}</p>
+              <p className="text-xs text-gray-400 mb-1">{t.business.operatingHoursSub}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 max-w-4xl">
+                {DAY_KEYS.map((dk: DayKey) => {
+                  const d = operatingHours[dk];
+                  const setDay = (patch: Partial<typeof d>) =>
+                    setOperatingHours(prev => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
+                  return (
+                    <div key={dk} className="flex items-center py-2.5 border-b border-gray-50">
+                      <span className="w-28 text-sm text-gray-800">{t.business.days[dk]}</span>
+                      <Toggle checked={d.enabled} onChange={(v) => setDay({ enabled: v })} />
+                      <div className="flex-1" />
+                      {d.enabled ? (
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                          <input
+                            type="time"
+                            value={d.start}
+                            onChange={e => setDay({ start: e.target.value })}
+                            className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                          />
+                          <span className="text-gray-400 font-normal">–</span>
+                          <input
+                            type="time"
+                            value={d.end}
+                            onChange={e => setDay({ end: e.target.value })}
+                            className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">{t.business.closedLabel}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {bizMsg && <p className={`text-xs mt-3 ${bizMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
               <div className="mt-5">
@@ -2745,6 +2767,16 @@ export default function AjustesPage() {
                       onChange={e => setInvoiceDueDays(e.target.value)}
                     />
                     <p className="text-xs text-gray-400 mt-1.5">{t.invoices.dueDaysHint}</p>
+                  </div>
+                  <div>
+                    <Input
+                      label={t.invoices.startNumberLabel}
+                      type="number"
+                      min="1"
+                      value={invoiceStartNumber}
+                      onChange={e => setInvoiceStartNumber(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.startNumberHint}</p>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-gray-700">{t.invoices.notesLabel}</label>

@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Home, LayoutGrid, Check, Lock } from 'lucide-react-native';
+import { ChevronLeft, Home, LayoutGrid, Lock, GripVertical, Minus, Plus } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useDockStore } from '@/lib/dockStore';
+import { SortableList } from '@/components/SortableList';
 import {
   eligibleDockApps,
   effectiveDockKeys,
@@ -27,19 +28,40 @@ export default function NavegacionSettings() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const eligible = useMemo(() => eligibleDockApps(currentRole), [currentRole]);
-  const selected = useMemo(() => new Set(effectiveDockKeys(keys, currentRole)), [keys, currentRole]);
+  // The middle selection, in the user's saved order.
+  const selectedKeys = useMemo(() => effectiveDockKeys(keys, currentRole), [keys, currentRole]);
+  const byKey = useMemo(() => new Map(eligible.map(a => [a.key, a])), [eligible]);
+  // Selected apps as ordered DockApp objects (drag list); available = the rest.
+  const selectedApps = useMemo(
+    () => selectedKeys.map(k => byKey.get(k)).filter((a): a is DockApp => !!a),
+    [selectedKeys, byKey],
+  );
+  const availableApps = useMemo(
+    () => eligible.filter(a => !selectedKeys.includes(a.key)),
+    [eligible, selectedKeys],
+  );
   const maxLabel = String(MAX_DOCK_MIDDLE);
 
-  const toggle = (app: DockApp) => {
-    const isOn = selected.has(app.key);
-    if (isOn && selected.size <= MIN_DOCK_MIDDLE) { setMsg(t.minReached); return; }
-    if (!isOn && selected.size >= MAX_DOCK_MIDDLE) { setMsg(t.maxReached.replace('{{max}}', maxLabel)); return; }
+  const persist = (next: string[]) => {
+    if (!user?.id) return;
+    save(supabase, user.id, next).then(({ error }) => { if (error) setMsg(t.savedError); });
+  };
+
+  const onReorder = (items: { id: string }[]) => {
     setMsg(null);
-    const nextSet = new Set(selected);
-    if (isOn) nextSet.delete(app.key); else nextSet.add(app.key);
-    // Persist in catalog order so the dock order is deterministic.
-    const next = eligible.filter(a => nextSet.has(a.key)).map(a => a.key);
-    if (user?.id) save(supabase, user.id, next).then(({ error }) => { if (error) setMsg(t.savedError); });
+    persist(items.map(it => it.id));
+  };
+
+  const removeApp = (app: DockApp) => {
+    if (selectedKeys.length <= MIN_DOCK_MIDDLE) { setMsg(t.minReached); return; }
+    setMsg(null);
+    persist(selectedKeys.filter(k => k !== app.key));
+  };
+
+  const addApp = (app: DockApp) => {
+    if (selectedKeys.length >= MAX_DOCK_MIDDLE) { setMsg(t.maxReached.replace('{{max}}', maxLabel)); return; }
+    setMsg(null);
+    persist([...selectedKeys, app.key]);
   };
 
   const FixedRow = ({ label, Icon }: { label: string; Icon: typeof Home }) => (
@@ -55,6 +77,12 @@ export default function NavegacionSettings() {
     </View>
   );
 
+  const SectionLabel = ({ label }: { label: string }) => (
+    <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400 mt-6 mb-2 px-1">
+      {label}
+    </Text>
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-1">
@@ -64,7 +92,7 @@ export default function NavegacionSettings() {
       </View>
       <ScrollView contentContainerClassName="px-6 pt-2 pb-36">
         <Text className="text-2xl font-bold text-gray-900 mb-1">{t.title}</Text>
-        <Text className="text-sm text-gray-500 mb-5">{t.intro.replace('{{max}}', maxLabel)}</Text>
+        <Text className="text-sm text-gray-500 mb-2">{t.intro.replace('{{max}}', maxLabel)}</Text>
 
         {msg ? (
           <View className="mb-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-2.5">
@@ -72,39 +100,70 @@ export default function NavegacionSettings() {
           </View>
         ) : null}
 
+        {/* In the bar — Inicio (fixed) → draggable selection → Más (fixed) */}
+        <SectionLabel label={t.inBarLabel} />
         <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          {/* Inicio — always first, fixed */}
           <FixedRow label={t.inicioLabel} Icon={Home} />
 
-          {eligible.map(app => {
-            const Icon = app.Icon;
-            const on = selected.has(app.key);
-            return (
-              <Pressable
-                key={app.key}
-                onPress={() => toggle(app)}
-                className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50 active:bg-gray-50"
-              >
-                <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-                  <Icon size={18} color="#4F46E5" />
+          <SortableList<{ id: string; app: DockApp }>
+            items={selectedApps.map(a => ({ id: a.key, app: a }))}
+            onReorder={onReorder}
+            renderItem={({ app }) => {
+              const Icon = app.Icon;
+              const canRemove = selectedKeys.length > MIN_DOCK_MIDDLE;
+              return (
+                <View className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50 bg-white">
+                  <GripVertical size={18} color="#D1D5DB" />
+                  <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+                    <Icon size={18} color="#4F46E5" />
+                  </View>
+                  <Text className="flex-1 text-base font-semibold text-gray-900">{sb[app.labelKey]}</Text>
+                  <Pressable
+                    onPress={() => removeApp(app)}
+                    hitSlop={8}
+                    className={`w-7 h-7 rounded-full items-center justify-center ${
+                      canRemove ? 'bg-red-50' : 'bg-gray-100'
+                    }`}
+                  >
+                    <Minus size={16} color={canRemove ? '#DC2626' : '#D1D5DB'} strokeWidth={3} />
+                  </Pressable>
                 </View>
-                <Text className="flex-1 text-base font-semibold text-gray-900">{sb[app.labelKey]}</Text>
-                <View
-                  className={`w-6 h-6 rounded-md items-center justify-center border ${
-                    on ? 'bg-primary border-primary' : 'border-gray-300 bg-white'
-                  }`}
-                >
-                  {on ? <Check size={15} color="#FFFFFF" strokeWidth={3} /> : null}
-                </View>
-              </Pressable>
-            );
-          })}
+              );
+            }}
+          />
 
-          {/* Más — always last, fixed */}
           <FixedRow label={t.masLabel} Icon={LayoutGrid} />
         </View>
+        <Text className="text-xs text-gray-400 mt-2 px-1">{t.reorderHint}</Text>
 
-        <Text className="text-xs text-gray-400 mt-3 px-1">{t.maxNote.replace('{{max}}', maxLabel)}</Text>
+        {/* Available — not in the bar; tap + to add (reachable from Más meanwhile) */}
+        {availableApps.length ? (
+          <>
+            <SectionLabel label={t.availableLabel} />
+            <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              {availableApps.map(app => {
+                const Icon = app.Icon;
+                return (
+                  <Pressable
+                    key={app.key}
+                    onPress={() => addApp(app)}
+                    className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50 active:bg-gray-50"
+                  >
+                    <View className="w-10 h-10 rounded-xl bg-gray-100 items-center justify-center">
+                      <Icon size={18} color="#6B7280" />
+                    </View>
+                    <Text className="flex-1 text-base font-semibold text-gray-900">{sb[app.labelKey]}</Text>
+                    <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
+                      <Plus size={16} color="#4F46E5" strokeWidth={3} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        <Text className="text-xs text-gray-400 mt-4 px-1">{t.maxNote.replace('{{max}}', maxLabel)}</Text>
       </ScrollView>
     </SafeAreaView>
   );

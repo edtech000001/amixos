@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X,
+  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -303,6 +303,27 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   );
   const canManageAccess = can.manageMembers(currentRole);
 
+  // Hard-delete this employee (+ revoke app access if any). Owner/admin only,
+  // never the owner or yourself. FKs are set null / cascade, so it's safe.
+  const isSelfOrOwner = selAccess?.kind === 'active' && (selAccess.isYou || selAccess.role === 'owner');
+  const canDeleteEmployee = canManageAccess && !isSelfOrOwner;
+  const deleteEmployee = async () => {
+    if (!employee || !business) return;
+    const name = `${employee.first_name} ${employee.last_name}`.trim();
+    if (!confirm(t.deleteConfirm.replace('{{name}}', name))) return;
+    setAccessBusy(true); setAccessError('');
+    if (selAccess?.kind === 'active' && !selAccess.isYou && selAccess.role !== 'owner') {
+      await supabase.from('business_members').delete().eq('id', selAccess.memberId);
+    }
+    const { error } = await supabase.from('employees').delete().eq('id', employee.id);
+    if (error) { setAccessError(error.message); setAccessBusy(false); return; }
+    await supabase.from('audit_log').insert({
+      business_id: business.id, action: 'employee.deleted',
+      entity_type: 'employee', entity_id: employee.id, details: { name },
+    });
+    router.push('/dashboard/empleados');
+  };
+
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
     return <div className="p-6 text-sm text-gray-400">{tc.states.loading}...</div>;
@@ -413,6 +434,19 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           >
             <Clock size={15} className="text-primary" />
             <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
+          </button>
+        ) : null}
+
+        {/* Delete — view mode, owner/admin only (not self / owner). */}
+        {isView && canDeleteEmployee ? (
+          <button
+            type="button"
+            onClick={deleteEmployee}
+            disabled={accessBusy}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            <Trash2 size={15} className="text-red-600" />
+            <span className="text-sm font-semibold text-red-600">{t.deleteBtn}</span>
           </button>
         ) : null}
 
@@ -532,7 +566,7 @@ function EditForm({
       <Input label={rLabel('hire_date', t.modal.hireDateLabel)} type="date" value={form.hire_date} onChange={e => setForm(f => ({ ...f, hire_date: e.target.value }))} />
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
-        <select value={form.pay_type} onChange={e => setForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+        <select value={form.pay_type} onChange={e => setForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
           {Object.entries(payTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </div>
@@ -544,7 +578,7 @@ function EditForm({
       <Input label={rLabel('city', t.modal.cityLabel)} placeholder={t.modal.cityPlaceholder} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
-        <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+        <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
           <option value="">{t.modal.stateNone}</option>
           {usStates.map(s => <option key={s} value={s}>{usStateName(s, lang)}</option>)}
         </select>
@@ -616,7 +650,7 @@ function AccessSection({
           </div>
           {canManage && !selAccess.isYou && selAccess.role !== 'owner' ? (
             <div className="flex items-center gap-2">
-              <select value={selAccess.role} disabled={busy} onChange={e => onChangeRole(selAccess.memberId, e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <select value={selAccess.role} disabled={busy} onChange={e => onChangeRole(selAccess.memberId, e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
               </select>
               <button type="button" disabled={busy} onClick={() => onRemove(selAccess.memberId)} className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
@@ -646,7 +680,7 @@ function AccessSection({
         <div className="flex flex-col gap-2">
           <p className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</p>
           <div className="flex items-center gap-2">
-            <select value={role} disabled={busy} onChange={e => setRole(e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+            <select value={role} disabled={busy} onChange={e => setRole(e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
             </select>
             <button type="button" disabled={busy || !email} onClick={() => onInvite(email, role)} className="px-3 py-2 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
@@ -693,7 +727,7 @@ function CustomFieldInput({ template, value, onChange }: {
     return (
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">{label}</label>
-        <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+        <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>

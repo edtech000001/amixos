@@ -8,7 +8,6 @@ import {
   Modal as RNModal,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -33,7 +32,7 @@ import {
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import { type Role } from '@amixos/shared/lib/permissions';
 
 interface RawEmployee {
   id: string;
@@ -141,11 +140,9 @@ export default function EmpleadosRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
-  const { t: full, locale } = useLang();
+  const { t: full } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
-  const teamT = full.dashboard.settings.team;
-  const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const insets = useSafeAreaInsets();
 
   // Floating bottom-sheet look (matches the client picker): a heavier scrim so
@@ -180,11 +177,6 @@ export default function EmpleadosRoute() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // App-access controls inside the person modal (invite/role/revoke).
-  const [accessRole, setAccessRole] = useState<Role>('office');
-  const [accessBusy, setAccessBusy] = useState(false);
-  const [accessError, setAccessError] = useState('');
-
   const PAY_TYPE_OPTIONS = [
     { value: 'hourly', label: t.payTypes.hourly },
     { value: 'salary', label: t.payTypes.salary },
@@ -369,8 +361,6 @@ export default function EmpleadosRoute() {
       custom_fields: e.custom_fields ?? {},
     });
     setError('');
-    setAccessError('');
-    setAccessRole('office');
     // Row taps open the read-only detail view first; the user clicks the
     // pencil in the header to switch to the editable form.
     setEmpModal('view');
@@ -490,21 +480,29 @@ export default function EmpleadosRoute() {
   };
   const saveTimesheet = async () => {
     if (!business) return;
+    // Hours are always logged against a registered employee — no free-text
+    // worker name. Require a selection before saving.
+    if (!tsForm.employee_id) {
+      setError(t.timesheetModal.errorEmployeeRequired);
+      return;
+    }
     if (!tsForm.hours_worked) {
       setError(t.timesheetModal.errorHoursRequired);
       return;
     }
-    const emp = tsForm.employee_id
-      ? employees.find((e) => e.id === tsForm.employee_id)
-      : null;
-    const name = emp ? `${emp.first_name} ${emp.last_name}` : tsForm.worker_name;
+    const emp = employees.find((e) => e.id === tsForm.employee_id);
+    const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
     setSaving(true);
     setError('');
+    // Only the WRITE failing counts as "couldn't save". The list reload is a
+    // separate concern — a failed refresh must not masquerade as a save error
+    // (it would lie to the user when the row actually landed / was queued).
+    let queued = false;
     try {
       // queuedInsert writes through when online, or parks the entry in the
       // offline outbox (drained on reconnect) when there's no signal — crews
       // log hours in the field and it syncs later. The banner reports progress.
-      const { queued } = await queuedInsert({
+      const res = await queuedInsert({
         table: 'timesheets',
         businessId: business.id,
         label: `Horas: ${name || 'trabajador'} · ${tsForm.hours_worked} h`,
@@ -518,109 +516,32 @@ export default function EmpleadosRoute() {
           status: 'completed',
         },
       });
-      // Only refresh from the server when the row actually landed there.
-      // Offline, the list reload would just fail — the banner covers feedback.
-      if (!queued) await loadTimesheets();
-      setTsModalOpen(false);
-    } catch {
-      setError('No se pudo guardar.');
-    } finally {
+      queued = res.queued;
+    } catch (err) {
+      // Surface the real cause in dev so failures are diagnosable instead of a
+      // blanket "couldn't save". Production keeps the friendly message.
+      const msg = (err as { message?: string })?.message;
+      setError(__DEV__ && msg ? `No se pudo guardar: ${msg}` : 'No se pudo guardar.');
       setSaving(false);
-    }
-  };
-
-  // ─── App access (invite / change role / revoke / remove) ───────────────
-  // Managed straight from the person modal. RLS is the real lock; these
-  // controls only show for owner/admin. Each action reloads the unified
-  // people view so the badge reflects the new state.
-  const confirmAsync = (title: string, confirmLabel: string) =>
-    new Promise<boolean>((resolve) => {
-      Alert.alert(title, undefined, [
-        { text: tc.buttons.cancel, style: 'cancel', onPress: () => resolve(false) },
-        { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
-      ]);
-    });
-
-  const inviteToApp = async (email: string, role: Role) => {
-    if (!business || !email) return;
-    setAccessBusy(true); setAccessError('');
-    const res = await fetch(`${getApiBaseUrl()}/api/v1/invites`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getJwt()}` },
-      body: JSON.stringify({ business_id: business.id, email, role }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const codeMap: Record<string, string> = {
-        invite_self: teamT.errorInviteSelf,
-        already_member: teamT.errorAlreadyMember,
-        already_invited: teamT.errorAlreadyInvited,
-      };
-      setAccessError(codeMap[body.code] ?? teamT.inviteFailedToast);
-      setAccessBusy(false);
       return;
     }
-    await loadPeople(); setAccessBusy(false);
-  };
-
-  const revokeInvite = async (inviteId: string, email: string) => {
-    if (!(await confirmAsync(teamT.confirmRevoke.replace('{{email}}', email), teamT.revokeBtn))) return;
-    setAccessBusy(true); setAccessError('');
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${await getJwt()}` },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setAccessError(`${body.message ?? 'Error'} (${res.status})`);
-        setAccessBusy(false);
-        return;
+    // Saved (or queued offline). Refresh the list when it actually hit the
+    // server; a reload failure here is non-fatal — the write already succeeded.
+    if (!queued) {
+      try {
+        await loadTimesheets();
+      } catch {
+        /* stale list is fine; next focus/refetch reconciles it */
       }
-    } catch (e: any) {
-      setAccessError(e?.message ?? 'Network error');
-      setAccessBusy(false);
-      return;
     }
-    await loadPeople(); setAccessBusy(false);
+    setSaving(false);
+    setTsModalOpen(false);
   };
 
-  const changeAccessRole = async (memberId: string, role: Role) => {
-    const m = members.find((x) => x.id === memberId);
-    if (!m || !business) return;
-    setAccessBusy(true); setAccessError('');
-    await supabase.from('business_members').update({ role }).eq('id', memberId);
-    await supabase.from('audit_log').insert({
-      business_id: business.id,
-      action: 'member.role_changed',
-      entity_type: 'member',
-      entity_id: m.userId,
-      details: { email: m.email, from: m.role, to: role },
-    });
-    await loadPeople(); setAccessBusy(false);
-  };
-
-  const removeAccess = async (memberId: string) => {
-    const m = members.find((x) => x.id === memberId);
-    if (!m || !business) return;
-    if (!(await confirmAsync(teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''), teamT.removeBtn))) return;
-    setAccessBusy(true); setAccessError('');
-    await supabase.from('business_members').delete().eq('id', memberId);
-    await supabase.from('audit_log').insert({
-      business_id: business.id,
-      action: 'member.removed',
-      entity_type: 'member',
-      entity_id: m.userId,
-      details: { email: m.email, role: m.role },
-    });
-    await loadPeople(); setAccessBusy(false);
-  };
-
+  // App-access management (invite / change role / remove) lives in the person
+  // detail route — mas/empleados/[id].tsx — not here. This screen only needs
+  // the access BADGE on each row, derived in loadPeople() from members+invites.
   const selEmp = selEmpId ? employees.find((e) => e.id === selEmpId) ?? null : null;
-  const selAccess = selEmp
-    ? resolveAccess({ userId: selEmp.user_id ?? null, email: selEmp.email }, members, invites)
-    : null;
-  const canManageAccess = can.manageMembers(currentRole);
 
   const empModalTitle =
     empModal === 'add'
@@ -702,7 +623,8 @@ export default function EmpleadosRoute() {
                 contentContainerClassName="px-5 py-5 pb-10 gap-3"
                 keyboardShouldPersistTaps="handled"
               >
-                {/* Employee picker (or manual name fallback) */}
+                {/* Employee picker — hours are always logged against a
+                    registered employee (no free-text name). */}
                 <View className="flex flex-col gap-2">
                   <Text className="text-sm font-semibold text-gray-700">
                     {t.timesheetModal.employeeLabel}
@@ -719,20 +641,11 @@ export default function EmpleadosRoute() {
                     >
                       {selectedTsEmp
                         ? `${selectedTsEmp.first_name} ${selectedTsEmp.last_name}`
-                        : t.timesheetModal.employeeManualOption}
+                        : t.timesheetModal.selectEmployee}
                     </Text>
                     <ChevronDown size={16} color="#9CA3AF" />
                   </Pressable>
                 </View>
-
-                {!tsForm.employee_id ? (
-                  <Input
-                    label={t.timesheetModal.workerNameLabel}
-                    placeholder={t.timesheetModal.workerNamePlaceholder}
-                    value={tsForm.worker_name}
-                    onChangeText={(v) => setTsForm((f) => ({ ...f, worker_name: v }))}
-                  />
-                ) : null}
 
                 <View className="flex-row gap-3">
                   <View className="flex-1">
@@ -784,78 +697,60 @@ export default function EmpleadosRoute() {
                 </View>
               </ScrollView>
             </View>
+
+            {/* Employee picker — an in-modal overlay, NOT a nested <Modal>.
+                iOS presents only one Modal at a time, so a picker modal opened
+                from this sheet would silently fail to appear. Absolute overlay
+                inside the same Modal avoids that. */}
+            {empPickerOpen ? (
+              <View
+                className="justify-end"
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              >
+                <Pressable onPress={() => setEmpPickerOpen(false)} style={sheetScrim} />
+                <View
+                  className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+                  style={{ maxHeight: '70%', ...sheetShadow }}
+                >
+                  <View className="items-center mb-2">
+                    <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                  </View>
+                  <View className="px-5 mb-3">
+                    <Text className="text-base font-semibold text-gray-900">
+                      {t.timesheetModal.employeeLabel}
+                    </Text>
+                  </View>
+                  <ScrollView keyboardShouldPersistTaps="handled">
+                    {activeEmployees.map((e) => {
+                      const isSel = tsForm.employee_id === e.id;
+                      return (
+                        <Pressable
+                          key={e.id}
+                          onPress={() => {
+                            setTsForm((f) => ({ ...f, employee_id: e.id }));
+                            setEmpPickerOpen(false);
+                          }}
+                          className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                            isSel ? 'bg-primary/5' : ''
+                          }`}
+                        >
+                          <Text
+                            className={`text-sm ${
+                              isSel ? 'text-primary font-semibold' : 'text-gray-900'
+                            }`}
+                          >
+                            {e.first_name} {e.last_name}
+                          </Text>
+                          {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+            ) : null}
           </View>
         </KeyboardAvoidingView>
-      </RNModal>
-
-      {/* Employee picker for the timesheet modal */}
-      <RNModal
-        visible={empPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEmpPickerOpen(false)}
-      >
-        <View className="flex-1 justify-end">
-          <Pressable
-            onPress={() => setEmpPickerOpen(false)}
-            style={sheetScrim}
-          />
-          <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
-            style={{ maxHeight: '70%', ...sheetShadow }}
-          >
-            <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
-            </View>
-            <View className="px-5 mb-3">
-              <Text className="text-base font-semibold text-gray-900">
-                {t.timesheetModal.employeeLabel}
-              </Text>
-            </View>
-            <ScrollView>
-              <Pressable
-                onPress={() => {
-                  setTsForm((f) => ({ ...f, employee_id: '' }));
-                  setEmpPickerOpen(false);
-                }}
-                className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
-              >
-                <Text
-                  className={`text-sm ${
-                    !tsForm.employee_id ? 'text-primary font-semibold' : 'text-gray-500'
-                  }`}
-                >
-                  {t.timesheetModal.employeeManualOption}
-                </Text>
-                {!tsForm.employee_id ? <Check size={16} color="#4F46E5" /> : null}
-              </Pressable>
-              {activeEmployees.map((e) => {
-                const isSel = tsForm.employee_id === e.id;
-                return (
-                  <Pressable
-                    key={e.id}
-                    onPress={() => {
-                      setTsForm((f) => ({ ...f, employee_id: e.id }));
-                      setEmpPickerOpen(false);
-                    }}
-                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
-                      isSel ? 'bg-primary/5' : ''
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm ${
-                        isSel ? 'text-primary font-semibold' : 'text-gray-900'
-                      }`}
-                    >
-                      {e.first_name} {e.last_name}
-                    </Text>
-                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
       </RNModal>
     </>
   );

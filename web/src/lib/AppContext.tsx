@@ -21,6 +21,8 @@ export interface Business {
   license_number: string | null;
   invoice_notes_default: string | null;
   invoice_due_days: number | null;
+  // Starting invoice number for the sequential generator (migration 079).
+  invoice_start_number: number;
   invoice_field_required: Record<string, boolean>;
   invoice_field_order: string[] | null;
   // Default invoice template config (JSONB). See shared/src/lib/invoiceTemplate.
@@ -163,7 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_field_required, invoice_field_order, invoice_template, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
+        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_template, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
         // Deterministic order: the fallback "first business" must be the
         // same on web and mobile, or per-business state (e.g. the Google
         // connection) looks inconsistent across devices.

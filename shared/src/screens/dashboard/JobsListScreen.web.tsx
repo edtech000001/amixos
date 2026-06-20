@@ -50,6 +50,7 @@ import {
 import {
   JOBS_FILTERS_KEY,
   jobsFiltersActive,
+  jobInDateRange,
   parseJobsFilters,
   type JobsFilters,
 } from '../../lib/jobsFilters';
@@ -73,6 +74,7 @@ export interface JobListItem {
   jobCity: string | null;
   jobState: string | null;
   invoiceId: string | null;
+  clientId: string | null;
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
@@ -83,6 +85,9 @@ export interface JobListItem {
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
+// Closed/terminal work hidden from the default (no-tab) "active" view — still
+// reachable by selecting the corresponding status tab.
+const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
@@ -96,6 +101,9 @@ export interface JobsListScreenProps {
   onJobPress: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => Promise<void> | void;
   onGenerateInvoice: (id: string) => void;
+  /** Batch-invoice: create one invoice from several completed same-client jobs.
+   *  When omitted, the select-to-invoice toolbar is hidden. */
+  onCreateInvoice?: (jobIds: string[]) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
@@ -154,6 +162,7 @@ export function JobsListScreen({
   onJobPress,
   onUpdateStatus,
   onGenerateInvoice,
+  onCreateInvoice,
   onViewInvoice,
   onNewJob,
   onNewProposal,
@@ -183,16 +192,21 @@ export function JobsListScreen({
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>(saved?.sortBy ?? 'recent');
   const [groupBy, setGroupBy] = useState<JobGroupKey>(saved?.groupBy ?? 'none');
+  // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
+  const [dateFrom, setDateFrom] = useState<string | null>(saved?.dateFrom ?? null);
+  const [dateTo, setDateTo] = useState<string | null>(saved?.dateTo ?? null);
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
 
   // Persist on any change.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const f: JobsFilters = { tabs, search, sortBy, groupBy };
+    const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo };
     window.localStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify(f));
-  }, [tabs, search, sortBy, groupBy]);
+  }, [tabs, search, sortBy, groupBy, dateFrom, dateTo]);
 
-  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy });
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
+  const dateActive = !!dateFrom || !!dateTo;
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -206,9 +220,11 @@ export function JobsListScreen({
     delegated: tw.delegatedFilterTab,
   };
 
-  // Multi-select: a job matches if it satisfies ANY selected tab. No tabs = all.
+  // Multi-select: a job matches if it satisfies ANY selected tab. With no tabs
+  // (the default "active" view) we hide closed work — invoiced + cancelled —
+  // so the working list stays clean. Those are one tap away via their tab.
   const matchesTab = (j: JobListItem) => {
-    if (tabs.length === 0) return true;
+    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status);
     return tabs.some(tk =>
       tk === 'propuestas'
         ? PROPOSAL_STATUSES.includes(j.status)
@@ -226,10 +242,10 @@ export function JobsListScreen({
           .join(' '),
         search,
       );
-      return matchSearch && matchesTab(j);
+      return matchSearch && matchesTab(j) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, search, tabs]);
+  }, [jobs, search, tabs, dateFrom, dateTo]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -255,9 +271,6 @@ export function JobsListScreen({
 
   const pendingValue = jobs
     .filter((j) => j.status === 'sent' && !isExpired(j))
-    .reduce((s, j) => s + j.totalAmount, 0);
-  const totalRevenue = jobs
-    .filter((j) => j.status === 'completed' || j.status === 'invoiced')
     .reduce((s, j) => s + j.totalAmount, 0);
   const inProgressRevenue = jobs
     .filter((j) => j.status === 'in_progress')
@@ -370,8 +383,43 @@ export function JobsListScreen({
     return null;
   };
 
+  // ── Select-to-invoice (batch) ───────────────────────────────────────
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const isInvoiceable = (j: JobListItem) => j.status === 'completed' && !j.invoiceId;
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
+  // All picked jobs must share a client to land on one invoice.
+  const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
+  const visibleInvoiceable = sections.flatMap(s => s.jobs).filter(isInvoiceable);
+  const allSelected = visibleInvoiceable.length > 0 && visibleInvoiceable.every(j => selectedIds.has(j.id));
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (visibleInvoiceable.every(j => prev.has(j.id))) {
+        visibleInvoiceable.forEach(j => next.delete(j.id));
+      } else {
+        visibleInvoiceable.forEach(j => next.add(j.id));
+      }
+      return next;
+    });
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const runCreateInvoice = async () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || creatingInvoice) return;
+    setCreatingInvoice(true);
+    await onCreateInvoice(selectedJobs.map(j => j.id));
+    setCreatingInvoice(false);
+    exitSelect();
+  };
+
   return (
-    <div className="p-6 lg:p-8 max-w-6xl">
+    <div className="p-6 lg:p-8 max-w-6xl pb-24">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
@@ -388,12 +436,6 @@ export function JobsListScreen({
               <span className="text-amber-600 font-medium">
                 {' · '}
                 {t.inProgressValue.replace('{{amount}}', fmt(inProgressRevenue))}
-              </span>
-            ) : null}
-            {totalRevenue > 0 ? (
-              <span className="text-emerald-600 font-medium">
-                {' · '}
-                {t.completedValue.replace('{{amount}}', fmt(totalRevenue))}
               </span>
             ) : null}
           </p>
@@ -470,6 +512,65 @@ export function JobsListScreen({
             <XCircle size={16} />
           </button>
         ) : null}
+        {onCreateInvoice ? (
+          <button
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            title={t.batchInvoice.selectButton}
+            className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              selectMode
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <FileText size={15} /> {selectMode ? t.batchInvoice.cancel : t.batchInvoice.selectButton}
+          </button>
+        ) : null}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setDateMenuOpen(o => !o)}
+            title={t.dateFilter.button}
+            aria-label={t.dateFilter.button}
+            className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
+              dateActive
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Calendar size={16} />
+          </button>
+          {dateMenuOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setDateMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  {t.dateFilter.title}
+                </p>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.dateFilter.from}</label>
+                <input
+                  type="date"
+                  value={dateFrom ?? ''}
+                  onChange={e => setDateFrom(e.target.value || null)}
+                  className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.dateFilter.to}</label>
+                <input
+                  type="date"
+                  value={dateTo ?? ''}
+                  onChange={e => setDateTo(e.target.value || null)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                {dateActive ? (
+                  <button
+                    onClick={() => { setDateFrom(null); setDateTo(null); }}
+                    className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                  >
+                    {t.dateFilter.clear}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
         <div className="relative shrink-0">
           <button
             onClick={() => setSortMenuOpen(o => !o)}
@@ -623,19 +724,37 @@ export function JobsListScreen({
                   : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
               : null;
 
+            // Select mode: completed + un-invoiced jobs are pickable; others dim.
+            const selectable = selectMode && isInvoiceable(job);
+            const picked = selectedIds.has(job.id);
             return (
               <div
                 key={job.id}
-                className={`rounded-2xl border shadow-sm overflow-hidden ${
-                  overdue
+                className={`rounded-2xl border shadow-sm overflow-hidden transition-opacity ${
+                  selectMode && !selectable ? 'opacity-40' : ''
+                } ${
+                  picked
+                    ? 'bg-primary/5 border-primary ring-1 ring-primary'
+                    : overdue
                     ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
                     : alertStyle
                       ? `bg-white border-gray-100 border-l-4 ${alertStyle.borderClass}`
                       : 'bg-white border-gray-100'
                 }`}
               >
-                <button onClick={() => onJobPress(job.id)} className={`w-full flex items-start gap-4 p-5 text-left ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}>
-                  <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
+                <button
+                  onClick={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
+                  className={`w-full flex items-start gap-4 p-5 text-left ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}
+                >
+                  {selectMode ? (
+                    <span className={`w-5 h-5 mt-0.5 shrink-0 rounded-md border flex items-center justify-center ${
+                      picked ? 'bg-primary border-primary' : selectable ? 'border-gray-300' : 'border-gray-200'
+                    }`}>
+                      {picked ? <Check size={13} className="text-white" /> : null}
+                    </span>
+                  ) : (
+                    <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
+                  )}
                   <div className="flex-1 min-w-0">
                     {/* Title — full width on its own line so it isn't squeezed
                        by the status pills. */}
@@ -712,9 +831,9 @@ export function JobsListScreen({
                       </div>
                     ) : null}
                   </div>
-                  <ChevronRight size={16} className="text-gray-400 shrink-0 mt-1" />
+                  {selectMode ? null : <ChevronRight size={16} className="text-gray-400 shrink-0 mt-1" />}
                 </button>
-                {renderActionBar(job)}
+                {selectMode ? null : renderActionBar(job)}
               </div>
             );
           })}
@@ -722,6 +841,36 @@ export function JobsListScreen({
           ))}
         </div>
       )}
+
+      {/* Sticky batch-invoice action bar */}
+      {selectMode ? (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <div className="max-w-6xl mx-auto flex items-center gap-3">
+            <span className="text-sm text-gray-600">
+              {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
+            </span>
+            {visibleInvoiceable.length > 0 ? (
+              <button onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+                {allSelected ? t.batchInvoice.deselectAll : t.batchInvoice.selectAll}
+              </button>
+            ) : null}
+            {!sameClient ? (
+              <span className="text-xs font-medium text-amber-600">{t.batchInvoice.sameClientHint}</span>
+            ) : null}
+            <div className="flex-1" />
+            <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+              {t.batchInvoice.cancel}
+            </button>
+            <button
+              onClick={runCreateInvoice}
+              disabled={selectedJobs.length === 0 || !sameClient || creatingInvoice}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-40"
+            >
+              <FileText size={15} /> {creatingInvoice ? t.batchInvoice.creating : t.batchInvoice.createButton}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

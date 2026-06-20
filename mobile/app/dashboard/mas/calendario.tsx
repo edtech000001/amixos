@@ -180,6 +180,13 @@ export default function CalendarioRoute() {
     if (rangeRef.current) load(rangeRef.current.start, rangeRef.current.end);
   }, [load]);
 
+  // Re-fetch when the active business changes (switching workspaces). The
+  // visible range stays the same, so onRangeChange won't fire on its own —
+  // without this the calendar keeps showing the previous business's items.
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
   const onRangeChange = useCallback(
     (start: Date, end: Date) => {
       rangeRef.current = { start, end };
@@ -229,7 +236,7 @@ export default function CalendarioRoute() {
         onFetchRange={fetchItems}
         onSaveEvent={saveEvent}
         onDeleteEvent={deleteEvent}
-        onJobPress={id => router.push(`/dashboard/trabajos/${id}` as never)}
+        onJobPress={id => router.push(`/dashboard/trabajos/${id}?from=calendar` as never)}
       />
     </SafeAreaView>
   );

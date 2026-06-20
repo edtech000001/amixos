@@ -18,7 +18,8 @@ import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -131,6 +132,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (j) {
       setJob(j as Job);
       if (j.tax_rate > 0) setTaxRate(j.tax_rate);
+    } else {
+      // Deleted / not found — clear so we show the not-found state instead of a
+      // previously-loaded job.
+      setJob(null);
     }
     setAssignments(a ?? []);
     setItems(it ?? []);
@@ -171,6 +176,81 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setUpdatingStatus(false);
   };
 
+  // ── Inline job-items editor (labor / material / equipment / other) ──
+  // The items card edits in place — rows sync from the loaded items; a Save
+  // bar appears only when there are unsaved changes.
+  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string };
+  const ITEM_TYPES = ['labor', 'material', 'equipment', 'other'];
+  const [editRows, setEditRows] = useState<EditRow[]>([]);
+  const [savingItems, setSavingItems] = useState(false);
+  const [itemsDirty, setItemsDirty] = useState(false);
+  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0' });
+  // Re-seed the editable rows whenever the saved items change (initial load +
+  // after a save), clearing the dirty flag.
+  useEffect(() => {
+    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) })));
+    setItemsDirty(false);
+  }, [items]);
+  const updateRow = (rid: string, field: keyof EditRow, value: string) => {
+    setEditRows(prev => prev.map(r => (r.id === rid ? { ...r, [field]: value } : r)));
+    setItemsDirty(true);
+  };
+  const addRow = () => { setEditRows(prev => [...prev, newRow()]); setItemsDirty(true); };
+  const removeRow = (rid: string) => { setEditRows(prev => prev.filter(r => r.id !== rid)); setItemsDirty(true); };
+  const discardItems = () => {
+    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) })));
+    setItemsDirty(false);
+  };
+  const saveItems = async () => {
+    if (!job || !business) return;
+    setSavingItems(true);
+    const valid = editRows
+      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0 }))
+      // Keep a row if it has a description OR a cost — a bare amount + cost
+      // (no description) is valid; the invoice falls back to the job title.
+      .filter(r => r.description !== '' || r.unit_price > 0);
+    await supabase.from('job_items').delete().eq('job_id', id);
+    if (valid.length) await supabase.from('job_items').insert(valid.map(v => ({ job_id: id, ...v })));
+    const subtotal = valid.reduce((s, v) => s + v.quantity * v.unit_price, 0);
+    const tax = subtotal * ((job.tax_rate ?? 0) / 100);
+    const total = subtotal + tax - (job.discount ?? 0);
+    await supabase.from('jobs').update({ subtotal_amount: subtotal, tax_amount: tax, total_amount: total }).eq('id', id);
+    const { data: it } = await supabase.from('job_items').select('*').eq('job_id', id).order('created_at');
+    setItems((it ?? []) as JobItem[]); // triggers the re-seed effect (clears dirty)
+    setJob(prev => (prev ? { ...prev, subtotal_amount: subtotal, tax_amount: tax, total_amount: total } : prev));
+    setSavingItems(false);
+  };
+  const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
+  const editSubtotal = editRows.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unit_price) || 0), 0);
+
+  const [unInvoicing, setUnInvoicing] = useState(false);
+  // Undo an accidental "facturado": detach the job from its invoice, revert to
+  // completed, strip its line items, and offer to delete a now-empty invoice.
+  const unInvoice = async () => {
+    if (!job?.invoice_id || !business) return;
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('id, status, line_items, tax_rate, discount, invoice_number')
+      .eq('id', job.invoice_id)
+      .single();
+    if (!inv) return;
+    const sentOrPaid = ['sent', 'paid', 'overdue'].includes(inv.status);
+    if (!window.confirm(sentOrPaid ? td.unInvoiceSentWarning : td.unInvoiceConfirm)) return;
+    setUnInvoicing(true);
+    const { remaining } = await removeJobFromInvoice(supabase, {
+      jobId: job.id,
+      invoice: { id: inv.id, line_items: inv.line_items, tax_rate: inv.tax_rate, discount: inv.discount },
+    });
+    if (remaining === 0 && window.confirm(td.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number))) {
+      await supabase.from('invoices').delete().eq('id', inv.id);
+    }
+    void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
+      from: 'invoiced', to: 'completed', job_title: job.title,
+    });
+    setJob(prev => (prev ? { ...prev, status: 'completed', invoice_id: null } : prev));
+    setUnInvoicing(false);
+  };
+
   const generateInvoice = async () => {
     if (!job || !business) return;
     setInvoicing(true);
@@ -186,14 +266,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
     const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
     const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id);
-    const invNum = `${invoiceNumberPrefix(invoiceLang)}-${String((count ?? 0) + 1).padStart(4, '0')}`;
+    const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 
-    const lineItems = items.map(i => ({
-      description: `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}`,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-      total: i.total,
-    }));
+    const lineItems = items.map(i => {
+      const desc = i.description.trim();
+      return {
+        // qty/rate is the canonical invoice line-item shape (document + PDF).
+        description: desc ? `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${desc}` : job.title,
+        qty: i.quantity,
+        rate: i.unit_price,
+        job_id: id, // tag so the job can later be moved/removed from this invoice
+      };
+    });
 
     const { data: invoice, error } = await supabase.from('invoices').insert({
       business_id: business.id,
@@ -388,12 +472,20 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
 
+  // Back target — return to the invoice when this job was opened from one
+  // (?from=invoice&invoice=<id>), otherwise the jobs list.
+  const backSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const backHref =
+    backSearch?.get('from') === 'invoice' && backSearch.get('invoice')
+      ? `/dashboard/facturas/${backSearch.get('invoice')}`
+      : '/dashboard/trabajos';
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-start gap-3">
-          <Link href="/dashboard/trabajos" className="p-2 rounded-xl hover:bg-gray-100 transition-colors mt-0.5">
+          <Link href={backHref} className="p-2 rounded-xl hover:bg-gray-100 transition-colors mt-0.5">
             <ArrowLeft size={18} className="text-gray-500"/>
           </Link>
           <div>
@@ -414,13 +506,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <div className="flex gap-2">
-            {canInvoice && (
-              <Button onClick={() => setInvoiceModal(true)} size="sm">
-                <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
-              </Button>
-            )}
+            {/* Generate-invoice lives in the pipeline action row below; no
+               duplicate here. */}
             {job.invoice_id && (
-              <Link href={`/dashboard/facturas/${job.invoice_id}`}>
+              <Link href={`/dashboard/facturas/${job.invoice_id}?from=job&job=${job.id}`}>
                 <Button variant="secondary" size="sm">
                   <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn} <ArrowRight size={13} className="ml-1"/>
                 </Button>
@@ -605,6 +694,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <Button variant="secondary" size="sm" onClick={() => updateStatus('cancelled')} loading={updatingStatus}>
                 <XCircle size={14} className="mr-1.5"/> {tc.buttons.cancel}
               </Button>
+            )}
+
+            {/* Un-invoice — undo an accidental "facturado". */}
+            {job.status === 'invoiced' && job.invoice_id && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => { window.location.href = `/dashboard/facturas/${job.invoice_id}?from=job&job=${job.id}`; }}>
+                  <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={unInvoice} loading={unInvoicing}>
+                  <RotateCcw size={14} className="mr-1.5"/> {td.unInvoiceBtn}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -828,14 +929,48 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         {/* Right — Line items */}
         <div className="md:col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-gray-900">
                 {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
               </h2>
-              <span className="text-sm font-bold text-gray-900">{fmt(hasFinancials ? job.total_amount : itemSubtotal)}</span>
+              <span className="text-sm font-bold text-gray-900">
+                {fmt(canEditItems ? editSubtotal : hasFinancials ? job.total_amount : itemSubtotal)}
+              </span>
             </div>
 
-            {items.length === 0 ? (
+            {canEditItems ? (
+              /* Inline editor — rows are editable in place; Save appears only when dirty. */
+              <div className="p-5 flex flex-col gap-2">
+                <div className="grid grid-cols-[96px_1fr_52px_84px_22px] gap-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-0.5">
+                  <span>{t.new.colType}</span><span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span/>
+                </div>
+                {editRows.map(r => (
+                  <div key={r.id} className="grid grid-cols-[96px_1fr_52px_84px_22px] gap-2 items-center">
+                    <select value={r.item_type} onChange={e => updateRow(r.id, 'item_type', e.target.value)}
+                      className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                      {ITEM_TYPES.map(k => <option key={k} value={k}>{ITEM_TYPE_LABELS[k] ?? k}</option>)}
+                    </select>
+                    <input value={r.description} onChange={e => updateRow(r.id, 'description', e.target.value)} placeholder={t.new.colDescription}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                    <input value={r.quantity} inputMode="decimal" onChange={e => updateRow(r.id, 'quantity', e.target.value.replace(/[^0-9.]/g, ''))}
+                      className="rounded-lg border border-gray-200 bg-white px-1.5 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                    <div className="relative">
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <input value={r.unit_price} inputMode="decimal" onChange={e => updateRow(r.id, 'unit_price', e.target.value.replace(/[^0-9.]/g, ''))}
+                        className="w-full rounded-lg border border-gray-200 bg-white pl-4 pr-1.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                    </div>
+                    <button onClick={() => removeRow(r.id)} className="text-gray-300 hover:text-red-500" aria-label="Remove"><XCircle size={16}/></button>
+                  </div>
+                ))}
+                <button onClick={addRow} className="self-start text-sm font-semibold text-primary hover:underline mt-1">+ {td.addItemsBtn}</button>
+                {itemsDirty ? (
+                  <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-gray-100">
+                    <Button variant="secondary" size="sm" onClick={discardItems}>{tc.buttons.cancel}</Button>
+                    <Button size="sm" onClick={saveItems} loading={savingItems}>{tc.buttons.save}</Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : items.length === 0 ? (
               <div className="px-5 py-10 text-center text-gray-400">
                 <DollarSign size={28} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{td.noItems}</p>
@@ -892,13 +1027,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </>
             )}
 
-            {canInvoice && (
-              <div className="px-5 pb-5">
-                <Button onClick={() => setInvoiceModal(true)} fullWidth>
-                  <FileText size={15} className="mr-2"/> {td.convertToInvoice}
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1036,6 +1164,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title={td.deleteJobTitle} size="sm">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-gray-600">{td.deleteJobConfirm}</p>
+          {job.invoice_id && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              {td.deleteInvoiceWarning}
+            </p>
+          )}
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setDeleteModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <button

@@ -14,10 +14,23 @@ export interface Equipment {
   make: string | null;
   model: string | null;
   year: number | null;
+  /** Body color, free text. Migration 078. */
+  color: string | null;
   vin: string | null;
+  /** Universal asset ID for non-vehicle equipment. Migration 079. */
+  serial_number: string | null;
   mileage: number | null;
   plate_number: string | null;
   plate_expiration: string | null;  // ISO date
+  // Insurance + acquisition + location — universal asset fields. Migration 079.
+  insurance_carrier: string | null;
+  insurance_policy_number: string | null;
+  insurance_agent: string | null;
+  insurance_agent_phone: string | null;
+  insurance_expiration: string | null;   // ISO date
+  purchase_date: string | null;          // ISO date
+  warranty_expiration: string | null;    // ISO date
+  location: string | null;
   paid_off: boolean;
   loan_lender: string | null;
   /** What the asset is worth (always shown); outstanding loan balance when

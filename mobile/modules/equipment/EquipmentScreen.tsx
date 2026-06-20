@@ -37,6 +37,7 @@ import {
   ChevronDown,
   ScanLine,
   RotateCw,
+  Star,
   Layers,
   Image as ImageIcon,
   Camera,
@@ -44,6 +45,12 @@ import {
   AlertTriangle,
   User as UserIcon,
   Forklift,
+  Truck,
+  List,
+  Tag,
+  Wallet,
+  CalendarClock,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -59,7 +66,7 @@ import {
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import {
   groupEquipment,
@@ -81,10 +88,20 @@ interface EquipForm {
   make: string;
   model: string;
   year: string;
+  color: string;
   vin: string;
+  serial_number: string;
   mileage: string;
   plate_number: string;
   plate_expiration: string;
+  insurance_carrier: string;
+  insurance_policy_number: string;
+  insurance_agent: string;
+  insurance_agent_phone: string;
+  insurance_expiration: string;
+  purchase_date: string;
+  warranty_expiration: string;
+  location: string;
   paid_off: boolean;
   loan_lender: string;
   value: string;
@@ -99,10 +116,20 @@ const EMPTY_FORM: EquipForm = {
   make: '',
   model: '',
   year: '',
+  color: '',
   vin: '',
+  serial_number: '',
   mileage: '',
   plate_number: '',
   plate_expiration: '',
+  insurance_carrier: '',
+  insurance_policy_number: '',
+  insurance_agent: '',
+  insurance_agent_phone: '',
+  insurance_expiration: '',
+  purchase_date: '',
+  warranty_expiration: '',
+  location: '',
   paid_off: false,
   loan_lender: '',
   value: '',
@@ -111,9 +138,23 @@ const EMPTY_FORM: EquipForm = {
   notes: '',
 };
 
-// Group digits with thousands separators for display ("10000" → "10,000").
-function fmtThousands(digits: string): string {
-  return digits ? Number(digits).toLocaleString('en-US') : '';
+// Group with thousands separators for display ("10000" → "10,000"), preserving
+// any decimals the user has typed ("1234.5" → "1,234.5", trailing "." kept).
+function fmtThousands(raw: string): string {
+  if (!raw) return '';
+  const [int, dec] = raw.split('.');
+  const intFmt = int ? Number(int).toLocaleString('en-US') : '';
+  return dec !== undefined ? `${intFmt}.${dec}` : intFmt;
+}
+
+// Keep digits + a single decimal point (max 2 places) for a money input.
+function sanitizeMoney(s: string): string {
+  let cleaned = s.replace(/[^0-9.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot !== -1) {
+    cleaned = cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+  }
+  return cleaned;
 }
 
 // Inline single-select that expands within the form. A shared Select opens a
@@ -196,12 +237,13 @@ function InlinePicker({
   );
 }
 
-// Whole-dollar currency (the inputs are digit-only, so no cents to show).
+// Currency — shows cents only when present (whole amounts stay clean).
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(n);
 }
 
@@ -260,12 +302,12 @@ export default function EquipmentScreen() {
     if (!groupHydrated.current) return;
     void AsyncStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy).catch(() => {});
   }, [groupBy]);
-  const groupOptions: { key: EquipmentGroupKey; label: string }[] = [
-    { key: 'none', label: t.groups.none },
-    { key: 'lead', label: t.groups.lead },
-    { key: 'type', label: t.groups.type },
-    { key: 'property', label: t.groups.property },
-    { key: 'expiration', label: t.groups.expiration },
+  const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
+    { key: 'none', label: t.groups.none, Icon: List },
+    { key: 'lead', label: t.groups.lead, Icon: UserIcon },
+    { key: 'type', label: t.groups.type, Icon: Tag },
+    { key: 'property', label: t.groups.property, Icon: Wallet },
+    { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
   ];
 
   const sheetScrim = {
@@ -463,10 +505,20 @@ export default function EquipmentScreen() {
       make: e.make ?? '',
       model: e.model ?? '',
       year: e.year != null ? String(e.year) : '',
+      color: e.color ?? '',
       vin: e.vin ?? '',
+      serial_number: e.serial_number ?? '',
       mileage: e.mileage != null ? String(e.mileage) : '',
       plate_number: e.plate_number ?? '',
       plate_expiration: e.plate_expiration ?? '',
+      insurance_carrier: e.insurance_carrier ?? '',
+      insurance_policy_number: e.insurance_policy_number ?? '',
+      insurance_agent: e.insurance_agent ?? '',
+      insurance_agent_phone: e.insurance_agent_phone ?? '',
+      insurance_expiration: e.insurance_expiration ?? '',
+      purchase_date: e.purchase_date ?? '',
+      warranty_expiration: e.warranty_expiration ?? '',
+      location: e.location ?? '',
       paid_off: e.paid_off,
       loan_lender: e.loan_lender ?? '',
       value: e.value != null ? String(e.value) : '',
@@ -493,10 +545,20 @@ export default function EquipmentScreen() {
       make: form.make.trim() || null,
       model: form.model.trim() || null,
       year: form.year ? parseInt(form.year, 10) : null,
+      color: form.color.trim() || null,
       vin: form.vin.trim() || null,
+      serial_number: form.serial_number.trim() || null,
       mileage: form.mileage ? parseInt(form.mileage, 10) : null,
       plate_number: form.plate_number.trim() || null,
       plate_expiration: form.plate_expiration || null,
+      insurance_carrier: form.insurance_carrier.trim() || null,
+      insurance_policy_number: form.insurance_policy_number.trim() || null,
+      insurance_agent: form.insurance_agent.trim() || null,
+      insurance_agent_phone: form.insurance_agent_phone.trim() || null,
+      insurance_expiration: form.insurance_expiration || null,
+      purchase_date: form.purchase_date || null,
+      warranty_expiration: form.warranty_expiration || null,
+      location: form.location.trim() || null,
       paid_off: form.paid_off,
       loan_lender: form.paid_off ? null : form.loan_lender.trim() || null,
       value: form.value ? Number(form.value) : null,
@@ -637,6 +699,22 @@ export default function EquipmentScreen() {
     ]);
   };
 
+  // Make a photo the cover (list thumbnail): move it to sort_order 0 and
+  // renumber the rest, preserving their relative order.
+  const setCover = async (photo: EquipmentPhoto) => {
+    if (!selected || photos[0]?.id === photo.id) return;
+    const reordered = [photo, ...photos.filter((p) => p.id !== photo.id)];
+    setPhotos(reordered.map((p, i) => ({ ...p, sort_order: i }))); // optimistic
+    setViewerIndex(0);
+    viewerListRef.current?.scrollToIndex({ index: 0, animated: true });
+    await Promise.all(
+      reordered.map((p, i) =>
+        supabase.from('equipment_photos').update({ sort_order: i }).eq('id', p.id),
+      ),
+    );
+    await loadEquipment();
+  };
+
   // ── Full-screen photo viewer (detail view) ─────────────────────────
   const rotateCurrent = async () => {
     if (viewerIndex === null) return;
@@ -696,17 +774,14 @@ export default function EquipmentScreen() {
           <Text className="text-lg font-semibold text-gray-900">{t.title}</Text>
           <Text className="text-xs text-gray-500">{t.subtitle}</Text>
         </View>
+        {/* Group-by — icon-only, highlighted when active (matches clients). */}
         <Pressable
           onPress={() => setGroupMenuOpen(true)}
-          hitSlop={8}
-          className={`flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg ${groupBy === 'none' ? 'active:bg-gray-100' : 'bg-primary/10'}`}
+          className={`p-2.5 rounded-xl border active:opacity-80 ${
+            groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+          }`}
         >
-          <Layers size={16} color={groupBy === 'none' ? '#6B7280' : '#4F46E5'} />
-          {groupBy !== 'none' ? (
-            <Text className="text-xs font-semibold text-primary">
-              {groupOptions.find((o) => o.key === groupBy)?.label}
-            </Text>
-          ) : null}
+          <Layers size={18} color={groupBy !== 'none' ? '#4F46E5' : '#374151'} />
         </Pressable>
       </View>
 
@@ -768,8 +843,8 @@ export default function EquipmentScreen() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <View style={{ height: 120 }} className="bg-gray-50 items-center justify-center">
-                          <ImageIcon size={28} color="#D1D5DB" />
+                        <View style={{ height: 160 }} className="bg-gray-50 items-center justify-center">
+                          <Truck size={40} color="#D1D5DB" />
                         </View>
                       )}
                       <View className="p-4 gap-1">
@@ -860,6 +935,8 @@ export default function EquipmentScreen() {
                   onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
                 <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
                   value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v.replace(/[^0-9]/g, '') }))} />
+                <Input label={t.colorLabel} placeholder={t.colorPlaceholder} value={form.color}
+                  onChangeText={(v) => setForm((f) => ({ ...f, color: v }))} />
                 <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
                   value={fmtThousands(form.mileage)}
                   onChangeText={(v) => setForm((f) => ({ ...f, mileage: v.replace(/[^0-9]/g, '') }))} />
@@ -870,6 +947,8 @@ export default function EquipmentScreen() {
                       <ScanLine size={18} color="#4F46E5" />
                     </Pressable>
                   } />
+                <Input label={t.serialNumberLabel} placeholder={t.serialNumberPlaceholder} value={form.serial_number}
+                  onChangeText={(v) => setForm((f) => ({ ...f, serial_number: v }))} autoCapitalize="characters" />
 
                 {/* Registration */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
@@ -878,13 +957,26 @@ export default function EquipmentScreen() {
                 <DatePicker label={t.plateExpirationLabel} value={form.plate_expiration}
                   onChange={(v) => setForm((f) => ({ ...f, plate_expiration: v }))} />
 
+                {/* Insurance */}
+                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.insuranceHeading}</Text>
+                <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
+                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_carrier: v }))} />
+                <Input label={t.insurancePolicyLabel} placeholder={t.insurancePolicyPlaceholder} value={form.insurance_policy_number}
+                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_policy_number: v }))} />
+                <Input label={t.insuranceAgentLabel} placeholder={t.insuranceAgentPlaceholder} value={form.insurance_agent}
+                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent: v }))} />
+                <Input label={t.insuranceAgentPhoneLabel} placeholder={t.insuranceAgentPhonePlaceholder} keyboardType="phone-pad"
+                  value={form.insurance_agent_phone} onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent_phone: v }))} />
+                <DatePicker label={t.insuranceExpirationLabel} value={form.insurance_expiration}
+                  onChange={(v) => setForm((f) => ({ ...f, insurance_expiration: v }))} />
+
                 {/* Ownership */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
                 {/* Value is always shown; lender + loan amount only when not paid off. */}
-                <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="number-pad"
+                <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="decimal-pad"
                   leftIcon={<Text className="text-base text-gray-500">$</Text>}
                   value={fmtThousands(form.value)}
-                  onChangeText={(v) => setForm((f) => ({ ...f, value: v.replace(/[^0-9]/g, '') }))} />
+                  onChangeText={(v) => setForm((f) => ({ ...f, value: sanitizeMoney(v) }))} />
                 <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
                   <Text className="text-base text-gray-900">{t.paidOffLabel}</Text>
                   <Toggle value={form.paid_off} onValueChange={(v) => setForm((f) => ({ ...f, paid_off: v }))} />
@@ -893,12 +985,16 @@ export default function EquipmentScreen() {
                   <>
                     <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                       onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
-                    <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="number-pad"
+                    <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="decimal-pad"
                       leftIcon={<Text className="text-base text-gray-500">$</Text>}
                       value={fmtThousands(form.loan_amount)}
-                      onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: v.replace(/[^0-9]/g, '') }))} />
+                      onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: sanitizeMoney(v) }))} />
                   </>
                 ) : null}
+                <DatePicker label={t.purchaseDateLabel} value={form.purchase_date}
+                  onChange={(v) => setForm((f) => ({ ...f, purchase_date: v }))} />
+                <DatePicker label={t.warrantyExpirationLabel} value={form.warranty_expiration}
+                  onChange={(v) => setForm((f) => ({ ...f, warranty_expiration: v }))} />
 
                 {/* Assignment */}
                 <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
@@ -915,6 +1011,8 @@ export default function EquipmentScreen() {
                   searchPlaceholder={t.assignedToSearch}
                   noResultsText={t.selectNoResults}
                 />
+                <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
+                  onChangeText={(v) => setForm((f) => ({ ...f, location: v }))} />
 
                 {/* Notes */}
                 <Input label={t.notesLabel} placeholder={t.notesPlaceholder} value={form.notes}
@@ -1082,6 +1180,12 @@ export default function EquipmentScreen() {
                           style={{ width: 170, height: 170, transform: [{ rotate: `${(p.rotation ?? 0) % 360}deg` }] }}
                           resizeMode="cover"
                         />
+                        {idx === 0 ? (
+                          <View className="absolute top-2 left-2 flex-row items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full">
+                            <Star size={10} color="#FBBF24" fill="#FBBF24" />
+                            <Text className="text-[10px] font-semibold text-white">{t.coverBadge}</Text>
+                          </View>
+                        ) : null}
                       </Pressable>
                     ))}
                   </ScrollView>
@@ -1091,7 +1195,11 @@ export default function EquipmentScreen() {
                 <DetailCard
                   rows={[
                     { label: t.typeLabel, value: selected.equipment_type },
-                    { label: t.makeLabel, value: [selected.year, selected.make, selected.model].filter(Boolean).join(' ') || null },
+                    { label: t.makeLabel, value: selected.make },
+                    { label: t.modelLabel, value: selected.model },
+                    { label: t.yearLabel, value: selected.year != null ? String(selected.year) : null },
+                    { label: t.colorLabel, value: selected.color },
+                    { label: t.serialNumberLabel, value: selected.serial_number },
                     { label: t.vinLabel, value: selected.vin },
                     { label: t.mileageLabel, value: selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null },
                   ]}
@@ -1119,7 +1227,33 @@ export default function EquipmentScreen() {
                     />
                   );
                 })()}
-                {/* Value + ownership */}
+                {/* Insurance (+ renewal countdown badge) */}
+                {(selected.insurance_carrier || selected.insurance_policy_number || selected.insurance_agent || selected.insurance_agent_phone || selected.insurance_expiration) ? (() => {
+                  const days = plateExpirationDays(selected.insurance_expiration);
+                  const badge =
+                    days === null ? null
+                    : days < 0 ? { text: t.insuranceExpired, bg: 'bg-red-50', fg: 'text-red-700', icon: '#B91C1C' }
+                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700', icon: '#B45309' }
+                    : null;
+                  return (
+                    <DetailCard
+                      rows={[
+                        { label: t.insuranceCarrierLabel, value: selected.insurance_carrier },
+                        { label: t.insurancePolicyLabel, value: selected.insurance_policy_number },
+                        { label: t.insuranceAgentLabel, value: selected.insurance_agent },
+                        { label: t.insuranceAgentPhoneLabel, value: selected.insurance_agent_phone },
+                        { label: t.insuranceExpirationLabel, value: selected.insurance_expiration ? formatDateLong(selected.insurance_expiration, locale) : null },
+                      ]}
+                      footer={badge ? (
+                        <View className={`self-start flex-row items-center gap-1 ${badge.bg} px-2 py-1 rounded-full`}>
+                          <AlertTriangle size={11} color={badge.icon} />
+                          <Text className={`text-[11px] font-semibold ${badge.fg}`}>{badge.text}</Text>
+                        </View>
+                      ) : null}
+                    />
+                  );
+                })() : null}
+                {/* Value + ownership + acquisition */}
                 <DetailCard
                   rows={[
                     { label: t.valueLabel, value: selected.value != null ? fmtMoney(selected.value) : null },
@@ -1129,16 +1263,26 @@ export default function EquipmentScreen() {
                           { label: t.loanLenderLabel, value: selected.loan_lender },
                           { label: t.loanAmountLabel, value: selected.loan_amount != null ? fmtMoney(selected.loan_amount) : null },
                         ]),
+                    { label: t.purchaseDateLabel, value: selected.purchase_date ? formatDateLong(selected.purchase_date, locale) : null },
+                    { label: t.warrantyExpirationLabel, value: selected.warranty_expiration ? formatDateLong(selected.warranty_expiration, locale) : null },
                   ]}
                 />
                 {/* Assignment */}
                 <DetailCard
                   rows={[
                     { label: t.assignedToLabel, value: employeeName(selected.assigned_employee_id) ?? t.unassignedBadge },
+                    { label: t.locationLabel, value: selected.location },
                   ]}
                 />
                 {/* Notes */}
                 <DetailCard rows={[{ label: t.notesLabel, value: selected.notes }]} />
+                {/* Audit timestamps */}
+                <DetailCard
+                  rows={[
+                    { label: t.createdLabel, value: selected.created_at ? formatDateTimeLong(selected.created_at, locale) : null },
+                    { label: t.updatedLabel, value: selected.updated_at ? formatDateTimeLong(selected.updated_at, locale) : null },
+                  ]}
+                />
           </ScrollView>
         </View>
       ) : null}
@@ -1168,9 +1312,22 @@ export default function EquipmentScreen() {
             <Text className="text-sm font-medium text-white/80">
               {viewerIndex !== null ? `${viewerIndex + 1} / ${photos.length}` : ''}
             </Text>
-            <Pressable onPress={rotateCurrent} hitSlop={10} accessibilityLabel="Rotate">
-              <RotateCw size={22} color="#FFFFFF" />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+              <Pressable
+                onPress={() => viewerPhoto && void setCover(viewerPhoto)}
+                hitSlop={10}
+                accessibilityLabel={t.setCoverBtn}
+              >
+                <Star
+                  size={22}
+                  color={viewerIndex === 0 ? '#FBBF24' : '#FFFFFF'}
+                  fill={viewerIndex === 0 ? '#FBBF24' : 'none'}
+                />
+              </Pressable>
+              <Pressable onPress={rotateCurrent} hitSlop={10} accessibilityLabel="Rotate">
+                <RotateCw size={22} color="#FFFFFF" />
+              </Pressable>
+            </View>
           </View>
 
           <View style={{ flex: 1 }}>
@@ -1261,22 +1418,33 @@ export default function EquipmentScreen() {
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setGroupMenuOpen(false)} style={sheetScrim} />
           <View
-            className="bg-white rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
+            className="bg-white rounded-3xl px-4 pt-3 mx-3 overflow-hidden"
             style={{ paddingBottom: insets.bottom + 12, ...sheetShadow }}
           >
-            <Text className="text-lg font-bold text-gray-900 mb-1">{t.groups.title}</Text>
-            {groupOptions.map((o) => (
-              <Pressable
-                key={o.key}
-                onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                className="flex-row items-center justify-between py-3.5 border-b border-gray-50"
-              >
-                <Text className={`text-base ${groupBy === o.key ? 'text-primary font-semibold' : 'text-gray-900'}`}>
-                  {o.label}
-                </Text>
-                {groupBy === o.key ? <Check size={18} color="#4F46E5" /> : null}
-              </Pressable>
-            ))}
+            <View className="items-center mb-3">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <Text className="text-lg font-bold text-gray-900 px-1 mb-3">{t.groups.title}</Text>
+            <View className="gap-1">
+              {groupOptions.map((o) => {
+                const active = groupBy === o.key;
+                return (
+                  <Pressable
+                    key={o.key}
+                    onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-gray-50'}`}
+                  >
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-gray-100'}`}>
+                      <o.Icon size={18} color={active ? '#FFFFFF' : '#6B7280'} />
+                    </View>
+                    <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                      {o.label}
+                    </Text>
+                    {active ? <Check size={20} color="#4F46E5" /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
       </RNModal>

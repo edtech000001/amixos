@@ -6,14 +6,14 @@
 // Storage layout for photos lives in shared/lib/equipment.ts; this
 // component is the UI on top.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Forklift,
   Plus,
   Search,
   Trash2,
   X,
-  Image as ImageIcon,
+  Truck,
   Upload,
   AlertTriangle,
   User,
@@ -23,6 +23,12 @@ import {
   ChevronRight,
   Layers,
   Check,
+  Star,
+  List,
+  Tag,
+  Wallet,
+  CalendarClock,
+  type LucideIcon,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -41,7 +47,7 @@ import {
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import {
   groupEquipment,
@@ -62,10 +68,20 @@ const EMPTY_FORM = {
   make: '',
   model: '',
   year: '',
+  color: '',
   vin: '',
+  serial_number: '',
   mileage: '',
   plate_number: '',
   plate_expiration: '',
+  insurance_carrier: '',
+  insurance_policy_number: '',
+  insurance_agent: '',
+  insurance_agent_phone: '',
+  insurance_expiration: '',
+  purchase_date: '',
+  warranty_expiration: '',
+  location: '',
   paid_off: false,
   loan_lender: '',
   value: '',
@@ -74,13 +90,35 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-// Whole-dollar currency (inputs accept whole numbers, so no cents to show).
+// Currency — shows cents only when present (whole amounts stay clean).
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(n);
+}
+
+// Keep digits + a single decimal point (max 2 places) for a money input. The
+// form stores this raw string; Number() parses it on save.
+function sanitizeMoney(s: string): string {
+  let cleaned = s.replace(/[^0-9.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot !== -1) {
+    // one dot only, and at most 2 decimals
+    cleaned = cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+  }
+  return cleaned;
+}
+
+// Display a raw money string with thousands separators, preserving whatever
+// decimals the user has typed (incl. a trailing "." mid-entry).
+function withCommas(raw: string): string {
+  if (!raw) return '';
+  const [int, dec] = raw.split('.');
+  const intFmt = int ? Number(int).toLocaleString('en-US') : '';
+  return dec !== undefined ? `${intFmt}.${dec}` : intFmt;
 }
 
 // One labeled read-only row in the detail view; renders nothing when empty.
@@ -90,6 +128,16 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
     <div>
       <p className="text-xs font-medium text-gray-400">{label}</p>
       <p className="text-sm text-gray-900 mt-0.5 whitespace-pre-wrap">{value}</p>
+    </div>
+  );
+}
+
+// A grouped card of detail rows (mirrors the mobile detail layout) — a soft
+// card holding a 2-column grid of DetailRows.
+function DetailCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50/40 px-4 py-3.5 grid grid-cols-2 gap-x-4 gap-y-3">
+      {children}
     </div>
   );
 }
@@ -228,12 +276,12 @@ export default function EquipmentModule() {
     if (typeof window !== 'undefined') window.localStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy);
   }, [groupBy]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const groupOptions: { key: EquipmentGroupKey; label: string }[] = [
-    { key: 'none', label: t.groups.none },
-    { key: 'lead', label: t.groups.lead },
-    { key: 'type', label: t.groups.type },
-    { key: 'property', label: t.groups.property },
-    { key: 'expiration', label: t.groups.expiration },
+  const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
+    { key: 'none', label: t.groups.none, Icon: List },
+    { key: 'lead', label: t.groups.lead, Icon: User },
+    { key: 'type', label: t.groups.type, Icon: Tag },
+    { key: 'property', label: t.groups.property, Icon: Wallet },
+    { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
   ];
   const sections = useMemo(
     () =>
@@ -278,10 +326,20 @@ export default function EquipmentModule() {
       make: e.make ?? '',
       model: e.model ?? '',
       year: e.year != null ? String(e.year) : '',
+      color: e.color ?? '',
       vin: e.vin ?? '',
+      serial_number: e.serial_number ?? '',
       mileage: e.mileage != null ? String(e.mileage) : '',
       plate_number: e.plate_number ?? '',
       plate_expiration: e.plate_expiration ?? '',
+      insurance_carrier: e.insurance_carrier ?? '',
+      insurance_policy_number: e.insurance_policy_number ?? '',
+      insurance_agent: e.insurance_agent ?? '',
+      insurance_agent_phone: e.insurance_agent_phone ?? '',
+      insurance_expiration: e.insurance_expiration ?? '',
+      purchase_date: e.purchase_date ?? '',
+      warranty_expiration: e.warranty_expiration ?? '',
+      location: e.location ?? '',
       paid_off: e.paid_off,
       loan_lender: e.loan_lender ?? '',
       value: e.value != null ? String(e.value) : '',
@@ -308,10 +366,20 @@ export default function EquipmentModule() {
       make: form.make.trim() || null,
       model: form.model.trim() || null,
       year: form.year ? parseInt(form.year, 10) : null,
+      color: form.color.trim() || null,
       vin: form.vin.trim() || null,
+      serial_number: form.serial_number.trim() || null,
       mileage: form.mileage ? parseInt(form.mileage, 10) : null,
       plate_number: form.plate_number.trim() || null,
       plate_expiration: form.plate_expiration || null,
+      insurance_carrier: form.insurance_carrier.trim() || null,
+      insurance_policy_number: form.insurance_policy_number.trim() || null,
+      insurance_agent: form.insurance_agent.trim() || null,
+      insurance_agent_phone: form.insurance_agent_phone.trim() || null,
+      insurance_expiration: form.insurance_expiration || null,
+      purchase_date: form.purchase_date || null,
+      warranty_expiration: form.warranty_expiration || null,
+      location: form.location.trim() || null,
       paid_off: form.paid_off,
       loan_lender: form.paid_off ? null : (form.loan_lender.trim() || null),
       value: form.value ? Number(form.value) : null,
@@ -427,6 +495,21 @@ export default function EquipmentModule() {
     await loadEquipment();
   };
 
+  // Make a photo the cover (list thumbnail) by moving it to sort_order 0 and
+  // renumbering the rest, preserving their relative order.
+  const setCover = async (photo: EquipmentPhoto) => {
+    if (!selected || photos[0]?.id === photo.id) return;
+    const reordered = [photo, ...photos.filter((p) => p.id !== photo.id)];
+    setPhotos(reordered.map((p, i) => ({ ...p, sort_order: i }))); // optimistic
+    setViewerIndex(0); // the cover is now first; keep viewing it
+    await Promise.all(
+      reordered.map((p, i) =>
+        supabase.from('equipment_photos').update({ sort_order: i }).eq('id', p.id),
+      ),
+    );
+    await loadEquipment(); // refresh the list cover thumbnail
+  };
+
   // ── Full-screen photo viewer (detail view) ─────────────────────────
   const rotateCurrent = async () => {
     if (viewerIndex === null) return;
@@ -466,7 +549,7 @@ export default function EquipmentModule() {
       </div>
 
       <div className="flex items-center gap-3 mb-5">
-        <div className="relative max-w-md flex-1">
+        <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
@@ -490,18 +573,24 @@ export default function EquipmentModule() {
             {groupBy === 'none' ? t.groups.button : groupOptions.find(o => o.key === groupBy)?.label}
           </button>
           {groupMenuOpen ? (
-            <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-1">
-              <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{t.groups.title}</p>
-              {groupOptions.map(o => (
-                <button
-                  key={o.key}
-                  onMouseDown={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50"
-                >
-                  <span className={groupBy === o.key ? 'text-primary font-semibold' : 'text-gray-700'}>{o.label}</span>
-                  {groupBy === o.key ? <Check size={15} className="text-primary" /> : null}
-                </button>
-              ))}
+            <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-gray-100 bg-white shadow-lg p-1.5">
+              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{t.groups.title}</p>
+              {groupOptions.map(o => {
+                const active = groupBy === o.key;
+                return (
+                  <button
+                    key={o.key}
+                    onMouseDown={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm ${active ? 'bg-primary/10' : 'hover:bg-gray-50'}`}
+                  >
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      <o.Icon size={15} />
+                    </span>
+                    <span className={`flex-1 text-left ${active ? 'text-primary font-semibold' : 'text-gray-700'}`}>{o.label}</span>
+                    {active ? <Check size={15} className="text-primary" /> : null}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -538,16 +627,21 @@ export default function EquipmentModule() {
                 onClick={() => openDetail(e)}
                 className="text-left bg-white rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all overflow-hidden flex flex-col"
               >
-                <div className="relative w-full aspect-video bg-gray-50 flex items-center justify-center">
+                {/* Fixed aspect box; the image is absolutely positioned so it
+                   fills the ratio instead of stretching the box to its own
+                   height — keeps every card's photo identical in size. */}
+                <div className="relative w-full aspect-video bg-gray-50 overflow-hidden">
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={photoUrls[cover.storage_path] ?? undefined}
                       alt={e.name}
-                      className="w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
                   ) : (
-                    <ImageIcon size={32} className="text-gray-300" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Truck size={40} className="text-gray-300" />
+                    </div>
                   )}
                   {plateBadge ? (
                     <span className={`absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${plateBadge.cls}`}>
@@ -586,30 +680,41 @@ export default function EquipmentModule() {
         open={modal === 'add' || modal === 'edit'}
         onClose={() => { setModal(null); setSelected(null); }}
         title={modal === 'add' ? t.addTitle : t.editTitle}
+        size="xl"
       >
-        <div className="flex flex-col gap-4 max-h-[75vh] overflow-y-auto pr-1">
-          {/* Basic info */}
+        <div className="flex flex-col gap-4">
+          {/* Basic info — 2-column grid so fields aren't a narrow stack. */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.basicInfoHeading}</p>
-          <Input label={t.nameLabel} placeholder={t.namePlaceholder} value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.typeLabel}</label>
-            <select value={form.equipment_type}
-              onChange={e => setForm(f => ({ ...f, equipment_type: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-              {TYPE_SUGGESTIONS.map(o => <option key={o.value || '__none'} value={o.value}>{o.label}</option>)}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
+            <div className="sm:col-span-2">
+              <Input label={t.nameLabel} placeholder={t.namePlaceholder} value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">{t.typeLabel}</label>
+              <select value={form.equipment_type}
+                onChange={e => setForm(f => ({ ...f, equipment_type: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                {TYPE_SUGGESTIONS.map(o => <option key={o.value || '__none'} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
+              onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
+            <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
+              onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+            <Input label={t.yearLabel} placeholder={t.yearPlaceholder} type="number" min="1900" max="2100"
+              value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))} />
+            <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} type="number" min="0"
+              value={form.mileage} onChange={e => setForm(f => ({ ...f, mileage: e.target.value }))} />
+            <Input label={t.colorLabel} placeholder={t.colorPlaceholder} value={form.color}
+              onChange={e => setForm(f => ({ ...f, color: e.target.value }))} />
+            <Input label={t.serialNumberLabel} placeholder={t.serialNumberPlaceholder} value={form.serial_number}
+              onChange={e => setForm(f => ({ ...f, serial_number: e.target.value }))} />
+            <div className="sm:col-span-2">
+              <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
+                onChange={e => setForm(f => ({ ...f, vin: e.target.value }))} />
+            </div>
           </div>
-          <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
-            onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
-          <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
-            onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
-          <Input label={t.yearLabel} placeholder={t.yearPlaceholder} type="number" min="1900" max="2100"
-            value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))} />
-          <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} type="number" min="0"
-            value={form.mileage} onChange={e => setForm(f => ({ ...f, mileage: e.target.value }))} />
-          <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
-            onChange={e => setForm(f => ({ ...f, vin: e.target.value }))} />
 
           {/* Registration */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.registrationHeading}</p>
@@ -620,37 +725,65 @@ export default function EquipmentModule() {
               onChange={e => setForm(f => ({ ...f, plate_expiration: e.target.value }))} />
           </div>
 
+          {/* Insurance */}
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.insuranceHeading}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
+            <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
+              onChange={e => setForm(f => ({ ...f, insurance_carrier: e.target.value }))} />
+            <Input label={t.insurancePolicyLabel} placeholder={t.insurancePolicyPlaceholder} value={form.insurance_policy_number}
+              onChange={e => setForm(f => ({ ...f, insurance_policy_number: e.target.value }))} />
+            <Input label={t.insuranceAgentLabel} placeholder={t.insuranceAgentPlaceholder} value={form.insurance_agent}
+              onChange={e => setForm(f => ({ ...f, insurance_agent: e.target.value }))} />
+            <Input label={t.insuranceAgentPhoneLabel} placeholder={t.insuranceAgentPhonePlaceholder}
+              value={formatPhoneInput(form.insurance_agent_phone)}
+              onChange={e => setForm(f => ({ ...f, insurance_agent_phone: formatPhoneInput(e.target.value) }))} />
+            <div className="sm:col-span-2">
+              <Input label={t.insuranceExpirationLabel} type="date" value={form.insurance_expiration}
+                onChange={e => setForm(f => ({ ...f, insurance_expiration: e.target.value }))} />
+            </div>
+          </div>
+
           {/* Ownership — Value always; lender + loan amount only when not paid off. */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</p>
-          <Input label={t.valueLabel} placeholder={t.valuePlaceholder} type="number" min="0"
+          <Input label={t.valueLabel} placeholder={t.valuePlaceholder} inputMode="numeric"
             leftIcon={<span className="text-gray-500">$</span>}
-            value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} />
+            value={withCommas(form.value)} onChange={e => setForm(f => ({ ...f, value: sanitizeMoney(e.target.value) }))} />
           <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
             <span className="text-sm text-gray-900">{t.paidOffLabel}</span>
             <Toggle checked={form.paid_off} onChange={v => setForm(f => ({ ...f, paid_off: v }))} />
           </label>
           {!form.paid_off ? (
-            <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
               <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                 onChange={e => setForm(f => ({ ...f, loan_lender: e.target.value }))} />
-              <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} type="number" min="0"
+              <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} inputMode="numeric"
                 leftIcon={<span className="text-gray-500">$</span>}
-                value={form.loan_amount} onChange={e => setForm(f => ({ ...f, loan_amount: e.target.value }))} />
-            </>
+                value={withCommas(form.loan_amount)} onChange={e => setForm(f => ({ ...f, loan_amount: sanitizeMoney(e.target.value) }))} />
+            </div>
           ) : null}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
+            <Input label={t.purchaseDateLabel} type="date" value={form.purchase_date}
+              onChange={e => setForm(f => ({ ...f, purchase_date: e.target.value }))} />
+            <Input label={t.warrantyExpirationLabel} type="date" value={form.warranty_expiration}
+              onChange={e => setForm(f => ({ ...f, warranty_expiration: e.target.value }))} />
+          </div>
 
           {/* Assignment */}
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.assignmentHeading}</p>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.assignedToLabel}</label>
-            <select value={form.assigned_employee_id}
-              onChange={e => setForm(f => ({ ...f, assigned_employee_id: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-              <option value="">{t.assignedToNone}</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">{t.assignedToLabel}</label>
+              <select value={form.assigned_employee_id}
+                onChange={e => setForm(f => ({ ...f, assigned_employee_id: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                <option value="">{t.assignedToNone}</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
+                ))}
+              </select>
+            </div>
+            <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
+              onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
           </div>
 
           {/* Notes */}
@@ -756,14 +889,17 @@ export default function EquipmentModule() {
         </div>
       </Modal>
 
-      {/* Detail view — read-only; clicking a card lands here, not the edit form. */}
+      {/* Detail view — read-only; clicking a card lands here, not the edit form.
+         Matches the edit modal's width (xl). */}
       <Modal
         open={modal === 'detail'}
         onClose={() => { setModal(null); setSelected(null); }}
         title={selected?.name ?? t.detailTitle}
+        size="xl"
       >
         {selected ? (
-          <div className="flex flex-col gap-4 max-h-[75vh] overflow-y-auto pr-1">
+          // Centered column of grouped cards, mirroring the mobile detail layout.
+          <div className="flex flex-col gap-3 w-full max-w-2xl mx-auto">
             {photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((p, idx) => (
@@ -771,8 +907,14 @@ export default function EquipmentModule() {
                     key={p.id}
                     type="button"
                     onClick={() => setViewerIndex(idx)}
-                    className="aspect-square rounded-lg overflow-hidden bg-gray-100"
+                    className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
                   >
+                    {/* First photo is the cover/list thumbnail. */}
+                    {idx === 0 ? (
+                      <span className="absolute top-1 left-1 z-10 inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-black/60 text-white">
+                        <Star size={9} fill="currentColor" /> {t.coverBadge}
+                      </span>
+                    ) : null}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photoUrls[p.storage_path] ?? undefined}
@@ -785,36 +927,74 @@ export default function EquipmentModule() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {/* Vehicle */}
+            <DetailCard>
               <DetailRow label={t.typeLabel} value={selected.equipment_type} />
-              <DetailRow
-                label={t.makeLabel}
-                value={[selected.year, selected.make, selected.model].filter(Boolean).join(' ') || null}
-              />
+              <DetailRow label={t.makeLabel} value={selected.make} />
+              <DetailRow label={t.modelLabel} value={selected.model} />
+              <DetailRow label={t.yearLabel} value={selected.year != null ? String(selected.year) : null} />
+              <DetailRow label={t.colorLabel} value={selected.color} />
+              <DetailRow label={t.serialNumberLabel} value={selected.serial_number} />
               <DetailRow label={t.vinLabel} value={selected.vin} />
               <DetailRow
                 label={t.mileageLabel}
                 value={selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null}
               />
-              <DetailRow label={t.plateNumberLabel} value={selected.plate_number} />
-              <DetailRow
-                label={t.plateExpirationLabel}
-                value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
-              />
-              {/* Plate expiry countdown badge, same as the list cards. */}
-              {(() => {
-                const days = plateExpirationDays(selected.plate_expiration);
-                const badge =
-                  days === null ? null
-                  : days < 0 ? { text: t.plateExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
-                  : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
-                  : null;
-                return badge ? (
-                  <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
-                    <AlertTriangle size={12} /> {badge.text}
-                  </span>
-                ) : null;
-              })()}
+            </DetailCard>
+
+            {/* Registration (+ expiry countdown badge) */}
+            {(selected.plate_number || selected.plate_expiration) ? (
+              <DetailCard>
+                <DetailRow label={t.plateNumberLabel} value={selected.plate_number} />
+                <DetailRow
+                  label={t.plateExpirationLabel}
+                  value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
+                />
+                {(() => {
+                  const days = plateExpirationDays(selected.plate_expiration);
+                  const badge =
+                    days === null ? null
+                    : days < 0 ? { text: t.plateExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : null;
+                  return badge ? (
+                    <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
+                      <AlertTriangle size={12} /> {badge.text}
+                    </span>
+                  ) : null;
+                })()}
+              </DetailCard>
+            ) : null}
+
+            {/* Insurance (+ renewal countdown badge) */}
+            {(selected.insurance_carrier || selected.insurance_policy_number || selected.insurance_agent || selected.insurance_agent_phone || selected.insurance_expiration) ? (
+              <DetailCard>
+                <DetailRow label={t.insuranceCarrierLabel} value={selected.insurance_carrier} />
+                <DetailRow label={t.insurancePolicyLabel} value={selected.insurance_policy_number} />
+                <DetailRow label={t.insuranceAgentLabel} value={selected.insurance_agent} />
+                <DetailRow label={t.insuranceAgentPhoneLabel} value={selected.insurance_agent_phone} />
+                <DetailRow
+                  label={t.insuranceExpirationLabel}
+                  value={selected.insurance_expiration ? formatDateLong(selected.insurance_expiration, locale) : null}
+                />
+                {(() => {
+                  const days = plateExpirationDays(selected.insurance_expiration);
+                  const badge =
+                    days === null ? null
+                    : days < 0 ? { text: t.insuranceExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
+                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : null;
+                  return badge ? (
+                    <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
+                      <AlertTriangle size={12} /> {badge.text}
+                    </span>
+                  ) : null;
+                })()}
+              </DetailCard>
+            ) : null}
+
+            {/* Value + ownership + acquisition */}
+            <DetailCard>
               <DetailRow label={t.valueLabel} value={selected.value != null ? fmtMoney(selected.value) : null} />
               {selected.paid_off ? (
                 <DetailRow label={t.ownershipHeading} value={t.paidOffLabel} />
@@ -827,14 +1007,35 @@ export default function EquipmentModule() {
                   />
                 </>
               )}
+              <DetailRow label={t.purchaseDateLabel} value={selected.purchase_date ? formatDateLong(selected.purchase_date, locale) : null} />
+              <DetailRow label={t.warrantyExpirationLabel} value={selected.warranty_expiration ? formatDateLong(selected.warranty_expiration, locale) : null} />
+            </DetailCard>
+
+            {/* Assignment */}
+            <DetailCard>
               <DetailRow
                 label={t.assignedToLabel}
                 value={employeeName(selected.assigned_employee_id) ?? t.unassignedBadge}
               />
-            </div>
-            <DetailRow label={t.notesLabel} value={selected.notes} />
+              <DetailRow label={t.locationLabel} value={selected.location} />
+            </DetailCard>
 
-            <div className="flex gap-3 pt-2">
+            {/* Notes */}
+            {selected.notes ? (
+              <DetailCard>
+                <div className="col-span-2">
+                  <DetailRow label={t.notesLabel} value={selected.notes} />
+                </div>
+              </DetailCard>
+            ) : null}
+
+            {/* Audit timestamps */}
+            <DetailCard>
+              <DetailRow label={t.createdLabel} value={selected.created_at ? formatDateTimeLong(selected.created_at, locale) : null} />
+              <DetailRow label={t.updatedLabel} value={selected.updated_at ? formatDateTimeLong(selected.updated_at, locale) : null} />
+            </DetailCard>
+
+            <div className="flex gap-3 pt-1">
               <Button variant="secondary" onClick={onDelete}>
                 <Trash2 size={14} className="mr-1.5" />
                 {t.deleteBtn}
@@ -853,7 +1054,10 @@ export default function EquipmentModule() {
           className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
           onClick={() => setViewerIndex(null)}
         >
-          <div className="absolute top-0 inset-x-0 flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
+          {/* Controls need z-10: the photo has a CSS transform (rotation),
+             which creates a stacking context that would otherwise paint over
+             the counter/buttons since the img comes later in the DOM. */}
+          <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setViewerIndex(null)}
               aria-label={tc.buttons.cancel}
@@ -862,19 +1066,30 @@ export default function EquipmentModule() {
               <X size={20} />
             </button>
             <span className="text-sm text-white/70">{(viewerIndex ?? 0) + 1} / {photos.length}</span>
-            <button
-              onClick={() => void rotateCurrent()}
-              aria-label="Rotate"
-              className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
-            >
-              <RotateCw size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Set the current photo as the list/cover thumbnail. */}
+              <button
+                onClick={() => void setCover(viewerPhoto)}
+                aria-label={t.setCoverBtn}
+                title={t.setCoverBtn}
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${(viewerIndex ?? 0) === 0 ? 'bg-amber-400/90 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              >
+                <Star size={18} fill={(viewerIndex ?? 0) === 0 ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                onClick={() => void rotateCurrent()}
+                aria-label="Rotate"
+                className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+              >
+                <RotateCw size={18} />
+              </button>
+            </div>
           </div>
 
           {(viewerIndex ?? 0) > 0 ? (
             <button
               onClick={(e) => { e.stopPropagation(); goTo(-1); }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
             >
               <ChevronLeft size={24} />
             </button>
@@ -882,7 +1097,7 @@ export default function EquipmentModule() {
           {(viewerIndex ?? 0) < photos.length - 1 ? (
             <button
               onClick={(e) => { e.stopPropagation(); goTo(1); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
             >
               <ChevronRight size={24} />
             </button>

@@ -167,6 +167,22 @@ export type DashboardDict = {
       paid: string;
       overdue: string;
     };
+    filters2: {
+      button: string;
+      title: string;
+      company: string;
+      state: string;
+      allCompanies: string;
+      allStates: string;
+      clear: string;
+    };
+    group: {
+      button: string;
+      title: string;
+      none: string;
+      company: string;
+      state: string;
+    };
     searchPlaceholder: string;
     summarySingle: string;
     summaryPlural: string;
@@ -177,12 +193,36 @@ export type DashboardDict = {
     dueShort: string;
     markSent: string;
     markPaid: string;
+    sendInvoice: string;
+    emailSubject: string;
+    emailBody: string;
+    sendNoEmail: string;
+    createdLabel: string;
+    lastEditedLabel: string;
     print: string;
     linkCopied: string;
     notFound: string;
     editTitle: string;
     deleteTitle: string;
     deleteConfirm: string;
+    jobsSection: {
+      title: string;
+      empty: string;
+      addBtn: string;
+      removeBtn: string;
+      moveBtn: string;
+      moveTitle: string;
+      moveEmpty: string;
+      addTitle: string;
+      addEmpty: string;
+      addConfirm: string;
+      manualHeading: string;
+      manualDescPlaceholder: string;
+      manualAddBtn: string;
+      jobsHeading: string;
+      removeItemConfirm: string;
+      editItemTitle: string;
+    };
     deleting: string;
     errorDelete: string;
     new: {
@@ -451,6 +491,16 @@ export type DashboardDict = {
     };
     searchPlaceholder: string;
     clearFilters: string;
+    batchInvoice: {
+      selectButton: string;
+      cancel: string;
+      createButton: string;
+      creating: string;
+      selectedCount: string;
+      sameClientHint: string;
+      selectAll: string;
+      deselectAll: string;
+    };
     // Sort + group control on the jobs list. `group.state` means the US
     // state (location), not job status — keep the labels disambiguated.
     sort: {
@@ -473,6 +523,15 @@ export type DashboardDict = {
       noLead: string;
       noCompany: string;
       noState: string;
+    };
+    dateFilter: {
+      button: string;
+      title: string;
+      from: string;
+      to: string;
+      apply: string;
+      clear: string;
+      summary: string;
     };
     tabs: {
       all: string;
@@ -541,6 +600,12 @@ export type DashboardDict = {
       statusUpdateError: string;
       generateInvoiceBtn: string;
       viewInvoiceBtn: string;
+      unInvoiceBtn: string;
+      unInvoiceConfirm: string;
+      unInvoiceSentWarning: string;
+      unInvoiceDeleteEmpty: string;
+      editItemsBtn: string;
+      addItemsBtn: string;
       // Pipeline action buttons (detail-specific phrasing)
       scheduleWork: string;
       invoiceDirectly: string;
@@ -592,6 +657,7 @@ export type DashboardDict = {
       // Delete confirmation modal
       deleteJobTitle: string;
       deleteJobConfirm: string;
+      deleteInvoiceWarning: string;
       deleting: string;
       deleteBtn: string;
       // Job photos (migration 051)
@@ -736,6 +802,8 @@ export type DashboardDict = {
     summary: string;
     logHours: string;
     addBtn: string;
+    deleteBtn: string;
+    deleteConfirm: string;
     tabs: {
       empleados: string;
       horas: string;
@@ -838,6 +906,8 @@ export type DashboardDict = {
       jobDescriptionLabel: string;
       jobDescriptionPlaceholder: string;
       errorHoursRequired: string;
+      selectEmployee: string;
+      errorEmployeeRequired: string;
     };
     history: {
       title: string;
@@ -1021,6 +1091,9 @@ export type DashboardDict = {
       subtitle: string;
       title: string;
       intro: string;
+      inBarLabel: string;
+      availableLabel: string;
+      reorderHint: string;
       inicioLabel: string;
       masLabel: string;
       fixedBadge: string;
@@ -1169,6 +1242,8 @@ export type DashboardDict = {
       subtitle: string;
       dueDaysLabel: string;
       dueDaysHint: string;
+      startNumberLabel: string;
+      startNumberHint: string;
       notesLabel: string;
       notesPlaceholder: string;
       saveError: string;
@@ -1739,6 +1814,8 @@ export type DashboardDict = {
       modelPlaceholder: string;
       yearLabel: string;
       yearPlaceholder: string;
+      colorLabel: string;
+      colorPlaceholder: string;
       vinLabel: string;
       vinPlaceholder: string;
       mileageLabel: string;
@@ -1777,6 +1854,28 @@ export type DashboardDict = {
       loanAmountPlaceholder: string;
       detailTitle: string;
       editBtn: string;
+      createdLabel: string;
+      updatedLabel: string;
+      setCoverBtn: string;
+      coverBadge: string;
+      serialNumberLabel: string;
+      serialNumberPlaceholder: string;
+      insuranceHeading: string;
+      insuranceCarrierLabel: string;
+      insuranceCarrierPlaceholder: string;
+      insurancePolicyLabel: string;
+      insurancePolicyPlaceholder: string;
+      insuranceAgentLabel: string;
+      insuranceAgentPlaceholder: string;
+      insuranceAgentPhoneLabel: string;
+      insuranceAgentPhonePlaceholder: string;
+      insuranceExpirationLabel: string;
+      insuranceExpired: string;
+      insuranceExpiresSoon: string;
+      purchaseDateLabel: string;
+      warrantyExpirationLabel: string;
+      locationLabel: string;
+      locationPlaceholder: string;
       groups: {
         button: string;
         title: string;
@@ -2062,6 +2161,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         paid: 'Pagadas',
         overdue: 'Vencidas',
       },
+      filters2: {
+        button: 'Filtros',
+        title: 'Filtrar',
+        company: 'Empresa',
+        state: 'Estado',
+        allCompanies: 'Todas las empresas',
+        allStates: 'Todos los estados',
+        clear: 'Borrar filtros',
+      },
+      group: {
+        button: 'Agrupar',
+        title: 'Agrupar por',
+        none: 'Ninguno',
+        company: 'Empresa',
+        state: 'Estado',
+      },
       searchPlaceholder: 'Buscar factura o cliente...',
       summarySingle: '{{count}} factura',
       summaryPlural: '{{count}} facturas',
@@ -2072,10 +2187,34 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dueShort: 'Vence {{date}}',
       markSent: 'Marcar enviada',
       markPaid: 'Marcar pagada',
+      sendInvoice: 'Enviar factura',
+      emailSubject: 'Factura {{number}}',
+      emailBody: 'Hola,\n\nAdjunto encontrarás tu factura. Puedes verla aquí:\n{{link}}\n\nGracias por tu preferencia.',
+      sendNoEmail: 'Este cliente no tiene un correo guardado.',
+      createdLabel: 'Creada',
+      lastEditedLabel: 'Última edición',
       print: 'Imprimir / PDF',
       linkCopied: 'Enlace de la factura copiado',
       notFound: 'Factura no encontrada.',
       editTitle: 'Editar factura',
+      jobsSection: {
+        title: 'Trabajos en esta factura',
+        empty: 'No hay trabajos vinculados.',
+        addBtn: 'Agregar trabajo',
+        removeBtn: 'Quitar',
+        moveBtn: 'Mover',
+        moveTitle: 'Mover a otra factura',
+        moveEmpty: 'No hay otras facturas en borrador para este cliente.',
+        addTitle: 'Agregar a la factura',
+        addEmpty: 'No hay trabajos completados sin facturar para este cliente.',
+        addConfirm: 'Agregar',
+        manualHeading: 'Concepto manual',
+        manualDescPlaceholder: 'Descripción (ej. Viaje)',
+        manualAddBtn: 'Agregar concepto',
+        jobsHeading: 'Trabajos completados',
+        removeItemConfirm: '¿Quitar este concepto de la factura?',
+        editItemTitle: 'Editar concepto',
+      },
       deleteTitle: 'Eliminar factura',
       deleteConfirm: '¿Eliminar la factura <strong>{{number}}</strong>? Esta acción no se puede deshacer.',
       deleting: 'Eliminando...',
@@ -2344,6 +2483,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
       clearFilters: 'Limpiar filtros',
+      batchInvoice: {
+        selectButton: 'Facturar',
+        cancel: 'Cancelar',
+        createButton: 'Crear factura',
+        creating: 'Creando...',
+        selectedCount: '{{count}} seleccionado(s)',
+        sameClientHint: 'Solo trabajos del mismo cliente',
+        selectAll: 'Seleccionar todo',
+        deselectAll: 'Quitar todo',
+      },
       sort: {
         button: 'Ordenar',
         title: 'Ordenar y agrupar',
@@ -2364,6 +2513,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noLead: 'Sin líder',
         noCompany: 'Sin empresa',
         noState: 'Sin estado',
+      },
+      dateFilter: {
+        button: 'Filtrar por fecha',
+        title: 'Filtrar por fecha',
+        from: 'Desde',
+        to: 'Hasta',
+        apply: 'Aplicar',
+        clear: 'Borrar fechas',
+        summary: '{{from}} — {{to}}',
       },
       tabs: {
         all: 'Todos',
@@ -2431,6 +2589,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteTooltip: 'Eliminar trabajo',
         generateInvoiceBtn: 'Generar factura',
         viewInvoiceBtn: 'Ver factura',
+        unInvoiceBtn: 'Quitar de factura',
+        unInvoiceConfirm: '¿Quitar este trabajo de la factura? Volverá a "Completado".',
+        unInvoiceSentWarning: 'Esta factura ya fue enviada o pagada. Quitar el trabajo modificará una factura existente. ¿Continuar?',
+        unInvoiceDeleteEmpty: 'La factura {{number}} quedó sin trabajos. ¿Eliminarla?',
+        editItemsBtn: 'Editar',
+        addItemsBtn: 'Agregar ítems',
         scheduleWork: 'Programar trabajo',
         invoiceDirectly: 'Facturar directamente',
         cancelledBanner: 'Este trabajo fue cancelado.',
@@ -2476,6 +2640,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         createInvoiceBtn: 'Crear factura →',
         deleteJobTitle: 'Eliminar trabajo',
         deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
+        deleteInvoiceWarning: 'Este trabajo tiene una factura vinculada — permanecerá en Facturas.',
         deleting: 'Eliminando...',
         deleteBtn: 'Eliminar',
         photos: {
@@ -2615,6 +2780,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       summary: '{{active}} activos · {{hours}}h esta semana',
       logHours: 'Registrar horas',
       addBtn: 'Agregar',
+      deleteBtn: 'Eliminar empleado',
+      deleteConfirm: '¿Eliminar a {{name}}? Esta acción no se puede deshacer y borra su historial.',
       tabs: {
         empleados: 'Equipo',
         horas: 'Horas',
@@ -2713,6 +2880,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobDescriptionLabel: 'Descripción del trabajo',
         jobDescriptionPlaceholder: 'Instalación de pivote, Sección Norte',
         errorHoursRequired: 'Las horas son requeridas',
+        selectEmployee: 'Seleccionar empleado',
+        errorEmployeeRequired: 'Selecciona un empleado',
       },
       history: {
         title: 'Historial',
@@ -2894,7 +3063,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
         title: 'Barra de navegación',
-        intro: 'Elige hasta {{max}} apps para la barra inferior. Inicio y Más siempre están.',
+        intro: 'Elige hasta {{max}} apps para la barra inferior y arrástralas para ordenarlas. Inicio y Más siempre están.',
+        inBarLabel: 'En la barra',
+        availableLabel: 'Disponibles',
+        reorderHint: 'Mantén presionada una app y arrástrala para reordenar.',
         inicioLabel: 'Inicio',
         masLabel: 'Más',
         fixedBadge: 'Fijo',
@@ -3043,6 +3215,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Términos por defecto y campos personalizados de tus facturas.',
         dueDaysLabel: 'Días de vencimiento por defecto',
         dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Déjalo vacío para no usar un valor por defecto.',
+        startNumberLabel: 'Número inicial de factura',
+        startNumberHint: 'La primera factura usará este número y las siguientes se numeran en orden (FAC-1000, FAC-1001…). No cambia las facturas ya creadas.',
         notesLabel: 'Notas / términos por defecto',
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
         saveError: 'Error al guardar.',
@@ -3595,6 +3769,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           modelPlaceholder: 'F-150, Silverado, S650...',
           yearLabel: 'Año',
           yearPlaceholder: '2024',
+          colorLabel: 'Color',
+          colorPlaceholder: 'Blanco, negro, rojo...',
           vinLabel: 'VIN',
           vinPlaceholder: '17 caracteres',
           mileageLabel: 'Millaje',
@@ -3633,6 +3809,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
           loanAmountPlaceholder: '0',
           detailTitle: 'Detalles del equipo',
           editBtn: 'Editar',
+          createdLabel: 'Creado',
+          updatedLabel: 'Última edición',
+          setCoverBtn: 'Usar como portada',
+          coverBadge: 'Portada',
+          serialNumberLabel: 'Número de serie',
+          serialNumberPlaceholder: 'Número de serie',
+          insuranceHeading: 'Seguro',
+          insuranceCarrierLabel: 'Aseguradora',
+          insuranceCarrierPlaceholder: 'State Farm, Progressive...',
+          insurancePolicyLabel: 'Número de póliza',
+          insurancePolicyPlaceholder: 'Número de póliza',
+          insuranceAgentLabel: 'Agente',
+          insuranceAgentPlaceholder: 'Nombre del agente',
+          insuranceAgentPhoneLabel: 'Teléfono del agente',
+          insuranceAgentPhonePlaceholder: '(555) 123-4567',
+          insuranceExpirationLabel: 'Vencimiento del seguro',
+          insuranceExpired: 'Seguro vencido',
+          insuranceExpiresSoon: 'Vence en {{days}} d',
+          purchaseDateLabel: 'Fecha de compra',
+          warrantyExpirationLabel: 'Vencimiento de garantía',
+          locationLabel: 'Ubicación',
+          locationPlaceholder: 'Taller, obra, almacén...',
           groups: {
             button: 'Agrupar',
             title: 'Agrupar por',
@@ -3945,6 +4143,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         paid: 'Paid',
         overdue: 'Overdue',
       },
+      filters2: {
+        button: 'Filters',
+        title: 'Filter',
+        company: 'Company',
+        state: 'State',
+        allCompanies: 'All companies',
+        allStates: 'All states',
+        clear: 'Clear filters',
+      },
+      group: {
+        button: 'Group',
+        title: 'Group by',
+        none: 'None',
+        company: 'Company',
+        state: 'State',
+      },
       searchPlaceholder: 'Search invoice or client...',
       summarySingle: '{{count}} invoice',
       summaryPlural: '{{count}} invoices',
@@ -3955,10 +4169,34 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dueShort: 'Due {{date}}',
       markSent: 'Mark sent',
       markPaid: 'Mark paid',
+      sendInvoice: 'Send invoice',
+      emailSubject: 'Invoice {{number}}',
+      emailBody: 'Hi,\n\nPlease find your invoice attached. You can view it here:\n{{link}}\n\nThank you for your business.',
+      sendNoEmail: 'This client has no email on file.',
+      createdLabel: 'Created',
+      lastEditedLabel: 'Last edited',
       print: 'Print / PDF',
       linkCopied: 'Invoice link copied',
       notFound: 'Invoice not found.',
       editTitle: 'Edit invoice',
+      jobsSection: {
+        title: 'Jobs on this invoice',
+        empty: 'No jobs linked.',
+        addBtn: 'Add job',
+        removeBtn: 'Remove',
+        moveBtn: 'Move',
+        moveTitle: 'Move to another invoice',
+        moveEmpty: 'No other draft invoices for this client.',
+        addTitle: 'Add to invoice',
+        addEmpty: 'No un-invoiced completed jobs for this client.',
+        addConfirm: 'Add',
+        manualHeading: 'Custom item',
+        manualDescPlaceholder: 'Description (e.g. Travel)',
+        manualAddBtn: 'Add item',
+        jobsHeading: 'Completed jobs',
+        removeItemConfirm: 'Remove this item from the invoice?',
+        editItemTitle: 'Edit item',
+      },
       deleteTitle: 'Delete invoice',
       deleteConfirm: 'Delete invoice <strong>{{number}}</strong>? This cannot be undone.',
       deleting: 'Deleting...',
@@ -4227,6 +4465,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Search by name, client, number, city...',
       clearFilters: 'Clear filters',
+      batchInvoice: {
+        selectButton: 'Invoice',
+        cancel: 'Cancel',
+        createButton: 'Create invoice',
+        creating: 'Creating...',
+        selectedCount: '{{count}} selected',
+        sameClientHint: 'Same-client jobs only',
+        selectAll: 'Select all',
+        deselectAll: 'Deselect all',
+      },
       sort: {
         button: 'Sort',
         title: 'Sort & group',
@@ -4247,6 +4495,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noLead: 'No lead',
         noCompany: 'No company',
         noState: 'No state',
+      },
+      dateFilter: {
+        button: 'Filter by date',
+        title: 'Filter by date',
+        from: 'From',
+        to: 'To',
+        apply: 'Apply',
+        clear: 'Clear dates',
+        summary: '{{from}} — {{to}}',
       },
       tabs: {
         all: 'All',
@@ -4314,6 +4571,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteTooltip: 'Delete job',
         generateInvoiceBtn: 'Generate invoice',
         viewInvoiceBtn: 'View invoice',
+        unInvoiceBtn: 'Remove from invoice',
+        unInvoiceConfirm: 'Remove this job from the invoice? It will return to "Completed".',
+        unInvoiceSentWarning: 'This invoice was already sent or paid. Removing the job will change an existing invoice. Continue?',
+        unInvoiceDeleteEmpty: 'Invoice {{number}} has no jobs left. Delete it?',
+        editItemsBtn: 'Edit',
+        addItemsBtn: 'Add items',
         scheduleWork: 'Schedule work',
         invoiceDirectly: 'Invoice directly',
         cancelledBanner: 'This job was cancelled.',
@@ -4359,6 +4622,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         createInvoiceBtn: 'Create invoice →',
         deleteJobTitle: 'Delete job',
         deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
+        deleteInvoiceWarning: 'This job has a linked invoice — it will stay in Facturas.',
         deleting: 'Deleting...',
         deleteBtn: 'Delete',
         photos: {
@@ -4498,6 +4762,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       summary: '{{active}} active · {{hours}}h this week',
       logHours: 'Log hours',
       addBtn: 'Add',
+      deleteBtn: 'Delete employee',
+      deleteConfirm: 'Delete {{name}}? This cannot be undone and removes their history.',
       tabs: {
         empleados: 'Team',
         horas: 'Hours',
@@ -4596,6 +4862,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobDescriptionLabel: 'Job description',
         jobDescriptionPlaceholder: 'Pivot installation, North section',
         errorHoursRequired: 'Hours are required',
+        selectEmployee: 'Select employee',
+        errorEmployeeRequired: 'Select an employee',
       },
       history: {
         title: 'History',
@@ -4777,7 +5045,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',
         title: 'Navigation bar',
-        intro: 'Pick up to {{max}} apps for the bottom bar. Home and More are always shown.',
+        intro: 'Pick up to {{max}} apps for the bottom bar and drag to reorder them. Home and More are always shown.',
+        inBarLabel: 'In the bar',
+        availableLabel: 'Available',
+        reorderHint: 'Press and hold an app, then drag to reorder.',
         inicioLabel: 'Home',
         masLabel: 'More',
         fixedBadge: 'Fixed',
@@ -4926,6 +5197,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Default terms and custom fields for your invoices.',
         dueDaysLabel: 'Default due window (days)',
         dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty for no default.',
+        startNumberLabel: 'Starting invoice number',
+        startNumberHint: 'Your first invoice uses this number and the rest are numbered in order (INV-1000, INV-1001…). Existing invoices are unchanged.',
         notesLabel: 'Default notes / terms',
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
         saveError: 'Save error.',
@@ -5478,6 +5751,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           modelPlaceholder: 'F-150, Silverado, S650...',
           yearLabel: 'Year',
           yearPlaceholder: '2024',
+          colorLabel: 'Color',
+          colorPlaceholder: 'White, black, red...',
           vinLabel: 'VIN',
           vinPlaceholder: '17 characters',
           mileageLabel: 'Mileage',
@@ -5516,6 +5791,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
           loanAmountPlaceholder: '0',
           detailTitle: 'Equipment details',
           editBtn: 'Edit',
+          createdLabel: 'Created',
+          updatedLabel: 'Last edited',
+          setCoverBtn: 'Use as cover',
+          coverBadge: 'Cover',
+          serialNumberLabel: 'Serial number',
+          serialNumberPlaceholder: 'Serial number',
+          insuranceHeading: 'Insurance',
+          insuranceCarrierLabel: 'Carrier',
+          insuranceCarrierPlaceholder: 'State Farm, Progressive...',
+          insurancePolicyLabel: 'Policy number',
+          insurancePolicyPlaceholder: 'Policy number',
+          insuranceAgentLabel: 'Agent',
+          insuranceAgentPlaceholder: 'Agent name',
+          insuranceAgentPhoneLabel: 'Agent phone',
+          insuranceAgentPhonePlaceholder: '(555) 123-4567',
+          insuranceExpirationLabel: 'Insurance expiration',
+          insuranceExpired: 'Insurance expired',
+          insuranceExpiresSoon: 'Expires in {{days}}d',
+          purchaseDateLabel: 'Purchase date',
+          warrantyExpirationLabel: 'Warranty expiration',
+          locationLabel: 'Location',
+          locationPlaceholder: 'Shop, job site, storage...',
           groups: {
             button: 'Group',
             title: 'Group by',

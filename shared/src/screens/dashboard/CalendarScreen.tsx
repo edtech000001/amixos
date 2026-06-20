@@ -257,6 +257,19 @@ export function CalendarScreen({
   const agendaDay = view === 'day' ? cursor : selectedDay;
   const agendaItems = useMemo(() => itemsForDay(visibleItems, agendaDay), [visibleItems, agendaDay]);
 
+  // Tapping a day (or a "+N more" chip) focuses it and scrolls the agenda —
+  // which lists ALL of that day's events — into view. On a phone the agenda
+  // sits below the grid, so without this the update is off-screen and a
+  // "+7" tap feels like nothing happened.
+  const scrollRef = useRef<ScrollView>(null);
+  const agendaYRef = useRef(0);
+  const focusDay = (d: Date) => {
+    setSelectedDay(d);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, agendaYRef.current - 12), animated: true });
+    });
+  };
+
   // Availability panel: a week grid of who's busy (from assigned jobs) on each
   // day. It fetches its own week so it works regardless of the main view; when
   // no fetcher is supplied it falls back to the already-loaded items.
@@ -356,7 +369,7 @@ export function CalendarScreen({
     <View className="flex-1 bg-surface">
       {/* Padding lives on an inner View (not contentContainerClassName) so it
           applies on web too, where react-native-web doesn't run NativeWind. */}
-      <ScrollView className="flex-1">
+      <ScrollView className="flex-1" ref={scrollRef}>
        <View className="px-5 pt-6 pb-36 lg:px-8">
         {/* Header — on web the add button lives here; on native the FAB
             (bottom-right, thumb reach) is the single add affordance. */}
@@ -428,7 +441,7 @@ export function CalendarScreen({
             selectedDay={selectedDay}
             dateLocale={dateLocale}
             moreLabel={t.moreCount}
-            onDayPress={setSelectedDay}
+            onDayPress={focusDay}
             onItemPress={onItemPress}
           />
         ) : view === 'week' ? (
@@ -438,7 +451,7 @@ export function CalendarScreen({
             today={today}
             selectedDay={selectedDay}
             dateLocale={dateLocale}
-            onDayPress={setSelectedDay}
+            onDayPress={focusDay}
           />
         ) : null}
 
@@ -469,7 +482,7 @@ export function CalendarScreen({
         ) : null}
 
         {/* Agenda list for the focused day */}
-        <View className="mt-6">
+        <View className="mt-6" onLayout={e => { agendaYRef.current = e.nativeEvent.layout.y; }}>
           <AgendaHeader day={agendaDay} count={agendaItems.length} dateLocale={dateLocale} t={t} />
           {agendaItems.length === 0 ? (
             <Pressable

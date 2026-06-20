@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Alert, Share } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,12 +7,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import {
   InvoiceDetailScreen,
   type InvoiceDetail,
 } from '@amixos/shared/screens/dashboard/InvoiceDetailScreen';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
+import { formatDateLong } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   resolveConfig,
@@ -29,6 +32,11 @@ interface RawClient {
   last_name: string;
   email: string | null;
   phone_cell: string | null;
+  company: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
 }
 interface RawInvoice {
   id: string;
@@ -43,6 +51,8 @@ interface RawInvoice {
   total_amount: number;
   notes: string | null;
   language: InvoiceLang;
+  created_at: string;
+  updated_at: string | null;
   custom_fields: Record<string, string> | null;
   clients: RawClient | null;
   invoice_clients: { clients: RawClient }[];
@@ -55,18 +65,221 @@ interface InvoiceFieldTemplate {
 }
 
 export default function FacturaDetailRoute() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string }>();
   const id = String(params.id);
   const router = useRouter();
+  // ?from=job&jobId=… → back returns to that job (not the invoice list). We
+  // navigate explicitly because facturas/[id] and trabajos/[id] share the same
+  // Tabs navigator, where back() can land on the wrong tab.
+  const goBack = () => {
+    if (params.from === 'job' && params.jobId) {
+      router.replace(`/dashboard/trabajos/${params.jobId}` as never);
+    } else {
+      router.replace('/dashboard/facturas' as never);
+    }
+  };
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const { t: full } = useLang();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
+  const { confirm, confirmSheet } = useConfirmSheet();
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [invoiceConfigRaw, setInvoiceConfigRaw] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // ── Jobs attached to this invoice (Phase 2 management) ──────────────
+  const tj = full.dashboard.jobs;
+  const jobsT = tInv.jobsSection;
+  const itemTypeLabels = {
+    labor: tj.new.itemTypeLabor,
+    material: tj.new.itemTypeMaterial,
+    equipment: tj.new.itemTypeEquipment,
+    other: tj.new.itemTypeOther,
+  };
+  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string }[]>([]);
+  const [invClientId, setInvClientId] = useState<string | null>(null);
+  const [jobBusy, setJobBusy] = useState(false);
+  const [moveJobId, setMoveJobId] = useState<string | null>(null);
+  const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null }[]>([]);
+  const [addPicked, setAddPicked] = useState<Set<string>>(new Set());
+  const [manualDesc, setManualDesc] = useState('');
+  const [manualQty, setManualQty] = useState('1');
+  const [manualRate, setManualRate] = useState('');
+
+  // Amount input filter: digits + decimals + one optional leading minus, so a
+  // manual line can be a deduction (e.g. "-500" to reduce the total).
+  const cleanAmount = (v: string) => v.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '');
+  // The numeric keyboard has no minus key, so a ± button flips the sign.
+  const toggleSign = (v: string) => (v.startsWith('-') ? v.slice(1) : v ? `-${v}` : '-');
+
+  // Edit-a-manual-line state.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [editDesc, setEditDesc] = useState('');
+  const [editQty, setEditQty] = useState('1');
+  const [editRate, setEditRate] = useState('');
+
+  const editManual = (index: number) => {
+    const li = invoice?.lineItems[index];
+    if (!li) return;
+    setEditIndex(index);
+    setEditDesc(li.description ?? '');
+    setEditQty(String(li.qty ?? 1));
+    setEditRate(li.rate != null ? String(li.rate) : '');
+    setEditOpen(true);
+  };
+
+  const doEditSave = async () => {
+    if (editIndex === null) return;
+    const desc = editDesc.trim();
+    if (!desc) return;
+    setJobBusy(true);
+    await updateLineItemAt(supabase, {
+      invoiceId: id,
+      index: editIndex,
+      description: desc,
+      qty: parseFloat(editQty) || 1,
+      rate: parseFloat(editRate) || 0,
+    });
+    setEditOpen(false);
+    setEditIndex(null);
+    await reloadInvoice();
+    setJobBusy(false);
+  };
+
+  const removeManual = (index: number) => {
+    confirm({
+      title: jobsT.removeItemConfirm,
+      confirmText: jobsT.removeBtn,
+      destructive: true,
+      onConfirm: () => void (async () => {
+        setJobBusy(true);
+        await removeLineItemAt(supabase, { invoiceId: id, index });
+        await reloadInvoice();
+        setJobBusy(false);
+      })(),
+    });
+  };
+
+  const loadJobs = useCallback(async () => {
+    const { data } = await supabase.from('jobs').select('id, title').eq('invoice_id', id).order('created_at');
+    setAttachedJobs((data ?? []) as { id: string; title: string }[]);
+  }, [id, supabase]);
+
+  const fetchInvoiceRow = async () => {
+    const { data } = await supabase
+      .from('invoices')
+      .select('id, status, line_items, tax_rate, discount, invoice_number, client_id')
+      .eq('id', id)
+      .single();
+    return data as { id: string; status: string; line_items: unknown; tax_rate: number; discount: number; invoice_number: string; client_id: string | null } | null;
+  };
+
+  const reloadInvoice = useCallback(async () => {
+    const { data } = await supabase.from('invoices')
+      .select('*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))')
+      .eq('id', id).single();
+    if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
+    await loadJobs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, supabase, loadJobs]);
+
+  const removeJob = (jobId: string) => {
+    void (async () => {
+      const inv = await fetchInvoiceRow();
+      if (!inv) return;
+      const sentOrPaid = ['sent', 'paid', 'overdue'].includes(inv.status);
+      confirm({
+        title: sentOrPaid ? tj.detail.unInvoiceSentWarning : tj.detail.unInvoiceConfirm,
+        confirmText: jobsT.removeBtn,
+        destructive: true,
+        onConfirm: () => void (async () => {
+          setJobBusy(true);
+          const { remaining } = await removeJobFromInvoice(supabase, {
+            jobId,
+            invoice: { id: inv.id, line_items: inv.line_items as never, tax_rate: inv.tax_rate, discount: inv.discount },
+          });
+          setJobBusy(false);
+          if (remaining === 0) {
+            confirm({
+              title: tj.detail.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number),
+              confirmText: tc.buttons.delete,
+              destructive: true,
+              onConfirm: () => void (async () => { await supabase.from('invoices').delete().eq('id', inv.id); router.replace('/dashboard/facturas' as never); })(),
+              onCancel: () => void reloadInvoice(),
+            });
+            return;
+          }
+          await reloadInvoice();
+        })(),
+      });
+    })();
+  };
+
+  const openMove = async (jobId: string) => {
+    const { data } = await supabase
+      .from('invoices').select('id, invoice_number')
+      .eq('business_id', business!.id).eq('status', 'draft').eq('client_id', invClientId).neq('id', id);
+    setMoveTargets((data ?? []) as { id: string; invoice_number: string }[]);
+    setMoveJobId(jobId);
+  };
+
+  const doMove = async (targetId: string) => {
+    if (!moveJobId) return;
+    setJobBusy(true);
+    const from = await fetchInvoiceRow();
+    const { data: to } = await supabase.from('invoices').select('id, line_items, tax_rate, discount').eq('id', targetId).single();
+    if (from && to) {
+      const t2 = to as { id: string; line_items: unknown; tax_rate: number; discount: number };
+      await moveJobToInvoice(supabase, {
+        jobId: moveJobId,
+        from: { id: from.id, line_items: from.line_items as never, tax_rate: from.tax_rate, discount: from.discount },
+        to: { id: t2.id, line_items: t2.line_items as never, tax_rate: t2.tax_rate, discount: t2.discount },
+      });
+    }
+    setMoveJobId(null);
+    await reloadInvoice();
+    setJobBusy(false);
+  };
+
+  const openAdd = async () => {
+    const { data } = await supabase
+      .from('jobs').select('id, title, scheduled_date')
+      .eq('business_id', business!.id).eq('client_id', invClientId).eq('status', 'completed').is('invoice_id', null);
+    setAddCandidates((data ?? []) as { id: string; title: string; scheduled_date: string | null }[]);
+    setAddPicked(new Set());
+    setAddOpen(true);
+  };
+
+  const doAdd = async () => {
+    const desc = manualDesc.trim();
+    const rate = parseFloat(manualRate) || 0;
+    const hasManual = !!desc && rate !== 0;
+    if (!hasManual && addPicked.size === 0) { setAddOpen(false); return; }
+    setJobBusy(true);
+    // Manual line first, so the subsequent job fetch already includes it.
+    if (hasManual) {
+      await addManualLineItem(supabase, { invoiceId: id, description: desc, qty: parseFloat(manualQty) || 1, rate });
+    }
+    if (addPicked.size > 0) {
+      const inv = await fetchInvoiceRow();
+      if (inv) {
+        await addJobsToInvoice(supabase, {
+          invoice: { id: inv.id, client_id: inv.client_id, line_items: inv.line_items as never, tax_rate: inv.tax_rate, discount: inv.discount },
+          jobIds: Array.from(addPicked),
+          itemTypeLabels,
+        });
+      }
+    }
+    setManualDesc(''); setManualQty('1'); setManualRate('');
+    setAddOpen(false);
+    await reloadInvoice();
+    setJobBusy(false);
+  };
   const [updating, setUpdating] = useState(false);
 
   const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
@@ -100,12 +313,19 @@ export default function FacturaDetailRoute() {
       totalAmount: raw.total_amount,
       notes: raw.notes,
       language: raw.language ?? 'es',
+      createdAt: raw.created_at,
+      updatedAt: raw.updated_at,
       customFields,
       clients: clientList.map(c => ({
         firstName: c.first_name,
         lastName: c.last_name,
         email: c.email,
         phoneCell: c.phone_cell,
+        company: c.company,
+        address: c.address,
+        city: c.city,
+        state: c.state,
+        zip: c.zip_code,
       })),
     };
   };
@@ -113,11 +333,13 @@ export default function FacturaDetailRoute() {
   useEffect(() => {
     if (!business) return;
     void (async () => {
+      // Sync a draft invoice's line items with its jobs' current items first.
+      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase
           .from('invoices')
           .select(
-            '*, clients(first_name, last_name, email, phone_cell), invoice_clients(clients(first_name, last_name, email, phone_cell))',
+            '*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))',
           )
           .eq('id', id)
           .single(),
@@ -130,9 +352,11 @@ export default function FacturaDetailRoute() {
       const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
       if (data) {
         setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
-        const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null };
+        const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null; client_id: string | null };
         setShareToken(raw.share_token ?? null);
         setInvoiceConfigRaw(raw.template_config ?? null);
+        setInvClientId(raw.client_id ?? null);
+        void loadJobs();
       }
       setLoading(false);
     })();
@@ -155,35 +379,31 @@ export default function FacturaDetailRoute() {
 
   const confirmDelete = () => {
     if (!invoice || !business) return;
-    Alert.alert(
-      tInv.deleteTitle,
-      tInv.deleteConfirm
+    confirm({
+      title: tInv.deleteTitle,
+      body: tInv.deleteConfirm
         .replace('{{number}}', invoice.invoiceNumber)
         .replace(/<\/?strong>/g, ''),
-      [
-        { text: tc.buttons.cancel, style: 'cancel' },
-        {
-          text: tc.buttons.delete,
-          style: 'destructive',
-          onPress: async () => {
-            void logAudit(supabase, business.id, 'invoice.deleted', 'invoice', id, {
-              invoice_number: invoice.invoiceNumber,
-              total_amount: invoice.totalAmount,
-              status: invoice.status,
-            });
-            // Clear FK from jobs so the invoice can be deleted.
-            await supabase.from('jobs').update({ invoice_id: null }).eq('invoice_id', id);
-            await supabase.from('invoice_clients').delete().eq('invoice_id', id);
-            const { error } = await supabase.from('invoices').delete().eq('id', id);
-            if (error) {
-              Alert.alert('', tInv.errorDelete);
-              return;
-            }
-            router.replace('/dashboard/facturas' as never);
-          },
-        },
-      ],
-    );
+      confirmText: tc.buttons.delete,
+      destructive: true,
+      onConfirm: () => void (async () => {
+        void logAudit(supabase, business.id, 'invoice.deleted', 'invoice', id, {
+          invoice_number: invoice.invoiceNumber,
+          total_amount: invoice.totalAmount,
+          status: invoice.status,
+        });
+        // Detach related jobs AND revert them to "completed" (otherwise
+        // they'd be stuck in the "invoiced" step with no invoice).
+        await supabase.from('jobs').update({ status: 'completed', invoice_id: null, invoiced_at: null }).eq('invoice_id', id);
+        await supabase.from('invoice_clients').delete().eq('invoice_id', id);
+        const { error } = await supabase.from('invoices').delete().eq('id', id);
+        if (error) {
+          Alert.alert('', tInv.errorDelete);
+          return;
+        }
+        router.replace('/dashboard/facturas' as never);
+      })(),
+    });
   };
 
   const branding: InvoiceBranding = {
@@ -230,6 +450,22 @@ export default function FacturaDetailRoute() {
     await Share.share({ message: url, url });
   };
 
+  // Email the invoice: open the mail composer pre-filled with the client's
+  // address + the public link, then mark the invoice sent.
+  const sendInvoice = async () => {
+    if (!invoice) return;
+    const email = invoice.clients[0]?.email ?? '';
+    if (!email) { Alert.alert('', tInv.sendNoEmail); return; }
+    const token = await ensureShareToken();
+    const base = process.env.EXPO_PUBLIC_WEB_URL ?? '';
+    const url = `${base}/factura/${token}`;
+    const subject = tInv.emailSubject.replace('{{number}}', invoice.invoiceNumber);
+    const body = tInv.emailBody.replace('{{link}}', url);
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try { await Linking.openURL(mailto); } catch { /* no mail app */ }
+    await updateStatus('sent');
+  };
+
   const canDelete = can.deleteInvoice(currentRole);
 
   return (
@@ -240,13 +476,169 @@ export default function FacturaDetailRoute() {
         branding={branding}
         templateConfig={templateConfig}
         updating={updating}
-        onBack={() => router.replace('/dashboard/facturas' as never)}
+        onBack={goBack}
         onUpdateStatus={updateStatus}
         onPrint={invoice ? exportPdf : undefined}
         onShareLink={invoice ? shareLink : undefined}
         onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
+        onMoveJob={openMove}
+        onRemoveJob={removeJob}
+        onAddJob={openAdd}
+        onRemoveManualItem={removeManual}
+        onEditManualItem={editManual}
+        onJobPress={(jobId) => router.push(`/dashboard/trabajos/${jobId}?from=invoice&invoice=${id}` as never)}
+        jobBusy={jobBusy}
+        onSendInvoice={sendInvoice}
       />
+
+      {/* Move-to-another-invoice picker */}
+      <RNModal visible={moveJobId !== null} transparent animationType="fade" onRequestClose={() => setMoveJobId(null)}>
+        <Pressable onPress={() => setMoveJobId(null)} className="flex-1 bg-black/40 justify-end">
+          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.moveTitle}</Text>
+            {moveTargets.length === 0 ? (
+              <Text className="text-sm text-gray-400 pb-4">{jobsT.moveEmpty}</Text>
+            ) : (
+              moveTargets.map(inv => (
+                <Pressable key={inv.id} onPress={() => doMove(inv.id)} disabled={jobBusy} className="py-3 border-b border-gray-50">
+                  <Text className="text-sm font-mono text-gray-700">{inv.invoice_number}</Text>
+                </Pressable>
+              ))
+            )}
+          </Pressable>
+        </Pressable>
+      </RNModal>
+
+      {/* Add-completed-jobs picker */}
+      <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
+        <Pressable onPress={() => setAddOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.addTitle}</Text>
+
+            {/* Manual line item */}
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{jobsT.manualHeading}</Text>
+            <TextInput
+              value={manualDesc}
+              onChangeText={setManualDesc}
+              placeholder={jobsT.manualDescPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 mb-2"
+            />
+            <View className="flex-row gap-2 mb-4">
+              <TextInput
+                value={manualQty}
+                onChangeText={v => setManualQty(v.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder={tj.new.colQty}
+                placeholderTextColor="#9CA3AF"
+                className="w-20 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center text-gray-900"
+              />
+              <Pressable
+                onPress={() => setManualRate(toggleSign(manualRate))}
+                className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
+                  manualRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                }`}
+              >
+                <Text className={`text-base font-bold ${manualRate.startsWith('-') ? 'text-white' : 'text-gray-600'}`}>±</Text>
+              </Pressable>
+              <View className="flex-1 relative justify-center">
+                <Text className="absolute left-3 z-10 text-gray-400">$</Text>
+                <TextInput
+                  value={manualRate}
+                  onChangeText={v => setManualRate(cleanAmount(v))}
+                  keyboardType="decimal-pad"
+                  placeholder={tj.detail.colUnitPriceShort}
+                  placeholderTextColor="#9CA3AF"
+                  className="bg-white border border-gray-200 rounded-xl pl-6 pr-3 py-2.5 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+
+            {/* Completed jobs */}
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{jobsT.jobsHeading}</Text>
+            {addCandidates.length === 0 ? (
+              <Text className="text-sm text-gray-400 pb-2">{jobsT.addEmpty}</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 280 }}>
+                {addCandidates.map(j => {
+                  const picked = addPicked.has(j.id);
+                  return (
+                    <Pressable
+                      key={j.id}
+                      onPress={() => setAddPicked(prev => { const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n; })}
+                      className={`flex-row items-center gap-3 px-2 py-3 rounded-xl ${picked ? 'bg-primary/10' : ''}`}
+                    >
+                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                        {picked ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm text-gray-800" numberOfLines={1}>{j.title}</Text>
+                        {j.scheduled_date ? (
+                          <Text className="text-xs text-gray-400 mt-0.5">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <Pressable onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
+              <Text className="text-sm font-semibold text-white">{jobsT.addConfirm}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </RNModal>
+
+      {/* Edit a manual line item */}
+      <RNModal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
+        <Pressable onPress={() => setEditOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.editItemTitle}</Text>
+            <TextInput
+              value={editDesc}
+              onChangeText={setEditDesc}
+              placeholder={jobsT.manualDescPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 mb-2"
+            />
+            <View className="flex-row gap-2 mb-4">
+              <TextInput
+                value={editQty}
+                onChangeText={v => setEditQty(v.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder={tj.new.colQty}
+                placeholderTextColor="#9CA3AF"
+                className="w-20 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center text-gray-900"
+              />
+              <Pressable
+                onPress={() => setEditRate(toggleSign(editRate))}
+                className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
+                  editRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                }`}
+              >
+                <Text className={`text-base font-bold ${editRate.startsWith('-') ? 'text-white' : 'text-gray-600'}`}>±</Text>
+              </Pressable>
+              <View className="flex-1 relative justify-center">
+                <Text className="absolute left-3 z-10 text-gray-400">$</Text>
+                <TextInput
+                  value={editRate}
+                  onChangeText={v => setEditRate(cleanAmount(v))}
+                  keyboardType="decimal-pad"
+                  placeholder={tj.detail.colUnitPriceShort}
+                  placeholderTextColor="#9CA3AF"
+                  className="bg-white border border-gray-200 rounded-xl pl-6 pr-3 py-2.5 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+            <Pressable onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+              <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </RNModal>
+
+      {confirmSheet}
     </SafeAreaView>
   );
 }

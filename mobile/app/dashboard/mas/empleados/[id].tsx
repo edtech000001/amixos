@@ -23,6 +23,7 @@ import {
   Clock,
   X,
   DollarSign,
+  Trash2,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -307,6 +308,28 @@ export default function EmpleadoDetailRoute() {
   );
   const canManageAccess = can.manageMembers(currentRole);
 
+  // Hard-delete this employee (and revoke their app access if any). Owner/admin
+  // only, and never the owner or yourself. FKs are on delete set null / cascade,
+  // so this is safe. Soft removal = the deactivate (UserX) toggle in the header.
+  const isSelfOrOwner = selAccess?.kind === 'active' && (selAccess.isYou || selAccess.role === 'owner');
+  const canDeleteEmployee = canManageAccess && !isSelfOrOwner;
+  const deleteEmployee = async () => {
+    if (!employee || !business) return;
+    const name = `${employee.first_name} ${employee.last_name}`.trim();
+    if (!(await confirmAsync(t.deleteConfirm.replace('{{name}}', name), t.deleteBtn))) return;
+    setAccessBusy(true); setAccessError('');
+    if (selAccess?.kind === 'active' && !selAccess.isYou && selAccess.role !== 'owner') {
+      await supabase.from('business_members').delete().eq('id', selAccess.memberId);
+    }
+    const { error } = await supabase.from('employees').delete().eq('id', employee.id);
+    if (error) { setAccessError(error.message); setAccessBusy(false); return; }
+    await supabase.from('audit_log').insert({
+      business_id: business.id, action: 'employee.deleted',
+      entity_type: 'employee', entity_id: employee.id, details: { name },
+    });
+    router.replace('/dashboard/mas/empleados');
+  };
+
   // Back always returns to the empleados list. router.back() inside the
   // Tabs navigator pops past the list into the home tab when [id] is
   // pushed directly, so replace explicitly to the list route.
@@ -323,7 +346,7 @@ export default function EmpleadoDetailRoute() {
     setMode('edit');
   };
   const dirty = mode === 'edit' && JSON.stringify(form) !== editBaselineRef.current;
-  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+  const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
 
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
@@ -621,6 +644,18 @@ export default function EmpleadoDetailRoute() {
           </Pressable>
         ) : null}
 
+        {/* Delete — view mode, owner/admin only (not self / owner). */}
+        {isView && canDeleteEmployee ? (
+          <Pressable
+            onPress={deleteEmployee}
+            disabled={accessBusy}
+            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 active:bg-red-100 disabled:opacity-50"
+          >
+            <Trash2 size={16} color="#DC2626" />
+            <Text className="text-sm font-semibold text-red-600">{t.deleteBtn}</Text>
+          </Pressable>
+        ) : null}
+
         {/* Save row — edit mode only */}
         {!isView ? (
           <View className="flex-row gap-3 pt-1">
@@ -655,6 +690,7 @@ export default function EmpleadoDetailRoute() {
           </Pressable>
         </Pressable>
       </RNModal>
+      {unsavedSheet}
     </SafeAreaView>
   );
 }

@@ -1,7 +1,13 @@
 // Single source of truth for what each role can do. Both web and mobile
 // import from here so a gate can never drift between platforms.
 //
-// Server-side enforcement lives in RLS policies (migration 022). This file is
+// Permissions are modeled as DATA — a resource×action grid plus a set of
+// system capabilities — per role (see RolePermissions). DEFAULT_ROLE_PERMISSIONS
+// holds the built-in defaults; a business can later override these (role editor,
+// stored in DB) and `can.*` will read the loaded matrix instead. For now the
+// `can.*` helpers read the defaults, preserving today's behavior exactly.
+//
+// Server-side enforcement lives in RLS policies (migration 022+). This file is
 // the client-side mirror: hide buttons, filter lists, swap in read-only UI.
 // Never rely on it for security — RLS is the lock; this just keeps the UI
 // from offering things the lock will reject.
@@ -26,87 +32,251 @@ export const ROLE_DESCRIPTIONS: Record<Role, { es: string; en: string }> = {
   viewer:  { es: 'Solo lectura. Para contadores y socios.',                          en: 'Read-only. For accountants and partners.' },
 };
 
-const ADMINS: Role[] = ['owner', 'admin'];
-const WRITERS: Role[] = ['owner', 'admin', 'manager', 'office'];
-const MANAGERS: Role[] = ['owner', 'admin', 'manager'];
+// ─── Permission catalog (the editable grid) ────────────────────────────────
+// Resources are the rows of the role editor; each has up to four actions.
+// `view` is a 3-state scope so field-style roles can be limited to records
+// they're assigned to (jobs, clients) rather than the whole table.
 
-function isAny(role: Role | null | undefined, allowed: Role[]): boolean {
-  return !!role && allowed.includes(role);
+export type ViewScope = 'none' | 'assigned' | 'all';
+
+export type ResourceKey =
+  | 'jobs'
+  | 'clients'
+  | 'invoices'
+  | 'employees'
+  | 'calendar'
+  | 'inventory'
+  | 'reports';
+
+export interface ResourcePerm {
+  view: ViewScope;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
+// Which actions/columns each resource actually supports — drives the editor
+// grid (unsupported cells render greyed) and documents where 'assigned' view
+// is meaningful. Calendar/inventory are view+edit only; reports is view-only.
+export const RESOURCE_ACTIONS: Record<
+  ResourceKey,
+  { create: boolean; edit: boolean; delete: boolean; assignedView: boolean }
+> = {
+  jobs:      { create: true,  edit: true,  delete: true,  assignedView: true },
+  clients:   { create: true,  edit: true,  delete: true,  assignedView: true },
+  invoices:  { create: true,  edit: true,  delete: true,  assignedView: false },
+  employees: { create: true,  edit: true,  delete: true,  assignedView: false },
+  calendar:  { create: false, edit: true,  delete: false, assignedView: false },
+  inventory: { create: false, edit: true,  delete: false, assignedView: false },
+  reports:   { create: false, edit: false, delete: false, assignedView: false },
+};
+
+export const RESOURCE_KEYS = Object.keys(RESOURCE_ACTIONS) as ResourceKey[];
+
+// System capabilities that aren't resource×CRUD. Most are owner/admin-level or
+// derived; the editor surfaces a curated subset (e.g. "Manage settings"),
+// while the rest stay governed by sensible defaults.
+export type CapabilityKey =
+  | 'manageSettings'        // Ajustes config: fields, pipeline, templates
+  | 'manageMembers'         // invite / manage team + roles
+  | 'manageBilling'         // owner only
+  | 'deleteBusiness'        // owner only
+  | 'viewAuditLog'
+  | 'viewAllTimesheets'     // see everyone's timesheets (vs own)
+  | 'writeOwnTimesheet'     // clock in/out
+  | 'delegateJob'           // cross-business job delegation
+  | 'logCompletedJob'       // field quick-log of a completed job
+  | 'assignWorkers'         // assign crew to jobs
+  | 'manageFiles'           // document library categories/uploads
+  | 'manageIntegrations'    // SMS/Google creds, etc.
+  | 'manageAssignmentFields'; // per-worker assignment field templates
+
+export interface RolePermissions {
+  resources: Record<ResourceKey, ResourcePerm>;
+  caps: Record<CapabilityKey, boolean>;
+}
+
+// Small builders to keep the matrix readable.
+const R = (view: ViewScope, create = false, edit = false, del = false): ResourcePerm => ({
+  view, create, edit, delete: del,
+});
+const caps = (overrides: Partial<Record<CapabilityKey, boolean>>): Record<CapabilityKey, boolean> => ({
+  manageSettings: false, manageMembers: false, manageBilling: false, deleteBusiness: false,
+  viewAuditLog: false, viewAllTimesheets: false, writeOwnTimesheet: false, delegateJob: false,
+  logCompletedJob: false, assignWorkers: false, manageFiles: false, manageIntegrations: false,
+  manageAssignmentFields: false,
+  ...overrides,
+});
+
+const ALL_RESOURCES = (view: ViewScope, c: boolean, e: boolean, d: boolean): Record<ResourceKey, ResourcePerm> => ({
+  jobs: R(view, c, e, d), clients: R(view, c, e, d), invoices: R(view, c, e, d),
+  employees: R(view, c, e, d), calendar: R(view, c, e, d), inventory: R(view, c, e, d),
+  reports: R(view, c, e, d),
+});
+
+// ─── Default permissions per role ──────────────────────────────────────────
+// These reproduce the previous hardcoded behavior exactly; the role editor
+// will later let a business override them (persisted in DB).
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
+  owner: {
+    resources: ALL_RESOURCES('all', true, true, true),
+    caps: caps({
+      manageSettings: true, manageMembers: true, manageBilling: true, deleteBusiness: true,
+      viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
+      logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
+      manageAssignmentFields: true,
+    }),
+  },
+  admin: {
+    resources: ALL_RESOURCES('all', true, true, true),
+    caps: caps({
+      manageSettings: true, manageMembers: true, manageBilling: false, deleteBusiness: false,
+      viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
+      logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
+      manageAssignmentFields: true,
+    }),
+  },
+  manager: {
+    resources: {
+      jobs: R('all', true, true, false),
+      clients: R('all', true, true, false),
+      invoices: R('all', true, true, false),
+      employees: R('all', true, true, false),
+      calendar: R('all', false, true, false),
+      inventory: R('all', false, true, false),
+      reports: R('all'),
+    },
+    caps: caps({
+      viewAllTimesheets: true, writeOwnTimesheet: true, assignWorkers: true,
+      manageFiles: true, manageIntegrations: true,
+    }),
+  },
+  office: {
+    resources: {
+      jobs: R('all', true, true, false),
+      clients: R('all', true, true, false),
+      invoices: R('all', true, true, false),
+      employees: R('none'),
+      calendar: R('all', false, true, false),
+      inventory: R('all', false, true, false),
+      reports: R('none'),
+    },
+    caps: caps({
+      writeOwnTimesheet: true, manageFiles: true, manageIntegrations: true,
+    }),
+  },
+  field: {
+    resources: {
+      jobs: R('assigned', false, false, false),
+      clients: R('assigned', false, false, false),
+      invoices: R('none'),
+      employees: R('none'),
+      calendar: R('none'),
+      inventory: R('none'),
+      reports: R('none'),
+    },
+    caps: caps({ writeOwnTimesheet: true, logCompletedJob: true }),
+  },
+  viewer: {
+    resources: {
+      jobs: R('all', false, false, false),
+      clients: R('all', false, false, false),
+      invoices: R('all', false, false, false),
+      employees: R('all', false, false, false),
+      calendar: R('all', false, false, false),
+      inventory: R('all', false, false, false),
+      reports: R('all'),
+    },
+    caps: caps({ viewAllTimesheets: true }),
+  },
+};
+
+/** The permission set for a role (built-in defaults). */
+export function permissionsForRole(role: Role | null | undefined): RolePermissions | null {
+  return role ? DEFAULT_ROLE_PERMISSIONS[role] : null;
 }
 
 // ─── Top-level capability checks ──────────────────────────────────────────
+// Thin readers over the matrix. Signature unchanged from before, so callers
+// don't need to change; later these can accept a loaded RolePermissions.
+
+const res = (role: Role | null, key: ResourceKey): ResourcePerm | null =>
+  role ? DEFAULT_ROLE_PERMISSIONS[role].resources[key] : null;
+const cap = (role: Role | null, key: CapabilityKey): boolean =>
+  role ? DEFAULT_ROLE_PERMISSIONS[role].caps[key] : false;
 
 export const can = {
   // Business settings, member management, billing, delete.
-  manageBusinessSettings: (role: Role | null) => isAny(role, ADMINS),
-  manageMembers:          (role: Role | null) => isAny(role, ADMINS),
-  manageBilling:          (role: Role | null) => role === 'owner',
-  deleteBusiness:         (role: Role | null) => role === 'owner',
+  manageBusinessSettings: (role: Role | null) => cap(role, 'manageSettings'),
+  manageMembers:          (role: Role | null) => cap(role, 'manageMembers'),
+  manageBilling:          (role: Role | null) => cap(role, 'manageBilling'),
+  deleteBusiness:         (role: Role | null) => cap(role, 'deleteBusiness'),
 
   // Cross-business job delegation — only owner/admin.
-  delegateJob: (role: Role | null) => isAny(role, ADMINS),
+  delegateJob: (role: Role | null) => cap(role, 'delegateJob'),
 
   // Clients
-  createClient: (role: Role | null) => isAny(role, WRITERS),
-  editClient:   (role: Role | null) => isAny(role, WRITERS),
-  deleteClient: (role: Role | null) => isAny(role, ADMINS),
+  createClient: (role: Role | null) => !!res(role, 'clients')?.create,
+  editClient:   (role: Role | null) => !!res(role, 'clients')?.edit,
+  deleteClient: (role: Role | null) => !!res(role, 'clients')?.delete,
   // Field workers see clients only via assigned jobs (handled in RLS + list filters).
-  seeAllClients: (role: Role | null) => isAny(role, ['owner','admin','manager','office','viewer']),
+  seeAllClients: (role: Role | null) => res(role, 'clients')?.view === 'all',
 
   // Jobs
-  createJob:        (role: Role | null) => isAny(role, WRITERS),
-  editJobMetadata:  (role: Role | null) => isAny(role, WRITERS),
+  createJob:        (role: Role | null) => !!res(role, 'jobs')?.create,
+  editJobMetadata:  (role: Role | null) => !!res(role, 'jobs')?.edit,
   // Status change: writers always; field worker if assigned (checked separately).
-  changeJobStatus:  (role: Role | null) => isAny(role, WRITERS),
+  changeJobStatus:  (role: Role | null) => !!res(role, 'jobs')?.edit,
   changeJobStatusIfAssigned: (role: Role | null) => role === 'field',
-  deleteJob:        (role: Role | null) => isAny(role, ADMINS),
+  deleteJob:        (role: Role | null) => !!res(role, 'jobs')?.delete,
   // Field workers see only their assigned jobs.
-  seeAllJobs:       (role: Role | null) => isAny(role, ['owner','admin','manager','office','viewer']),
+  seeAllJobs:       (role: Role | null) => res(role, 'jobs')?.view === 'all',
 
   // Invoices — field workers fully excluded.
-  seeInvoices:    (role: Role | null) => isAny(role, ['owner','admin','manager','office','viewer']),
-  createInvoice:  (role: Role | null) => isAny(role, WRITERS),
-  editInvoice:    (role: Role | null) => isAny(role, WRITERS),
-  deleteInvoice:  (role: Role | null) => isAny(role, ADMINS),
+  seeInvoices:    (role: Role | null) => res(role, 'invoices')?.view === 'all',
+  createInvoice:  (role: Role | null) => !!res(role, 'invoices')?.create,
+  editInvoice:    (role: Role | null) => !!res(role, 'invoices')?.edit,
+  deleteInvoice:  (role: Role | null) => !!res(role, 'invoices')?.delete,
   // Whether financial totals (revenue widgets, line item prices) are visible.
-  seeFinancials:  (role: Role | null) => isAny(role, ['owner','admin','manager','office','viewer']),
+  seeFinancials:  (role: Role | null) => res(role, 'invoices')?.view === 'all',
 
   // Employees — managers+ only; office staff don't see coworker pay info.
-  seeEmployees:   (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),
-  createEmployee: (role: Role | null) => isAny(role, MANAGERS),
-  editEmployee:   (role: Role | null) => isAny(role, MANAGERS),
-  deleteEmployee: (role: Role | null) => isAny(role, ADMINS),
+  seeEmployees:   (role: Role | null) => res(role, 'employees')?.view === 'all',
+  createEmployee: (role: Role | null) => !!res(role, 'employees')?.create,
+  editEmployee:   (role: Role | null) => !!res(role, 'employees')?.edit,
+  deleteEmployee: (role: Role | null) => !!res(role, 'employees')?.delete,
 
   // Assignments — assigning workers to jobs is a manager+ act.
-  assignWorkers: (role: Role | null) => isAny(role, MANAGERS),
+  assignWorkers: (role: Role | null) => cap(role, 'assignWorkers'),
   // Per-worker custom-field templates for assignments (Ajustes → Trabajos).
-  manageAssignmentFields: (role: Role | null) => isAny(role, ADMINS),
+  manageAssignmentFields: (role: Role | null) => cap(role, 'manageAssignmentFields'),
   // Logging actuals (hours, custom fields) on a job_assignment row. UI gate
   // only — RLS enforces that field workers can only update rows on the job
   // they lead, while writers can update any.
-  logJobActuals: (role: Role | null) => isAny(role, ['owner','admin','manager','office','field']),
+  logJobActuals: (role: Role | null) => !!res(role, 'jobs')?.edit || cap(role, 'logCompletedJob'),
 
   // Timesheets — field workers can write their own; managers+ see all.
-  seeAllTimesheets:    (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),
-  writeOwnTimesheet:   (role: Role | null) => !!role && role !== 'viewer',
+  seeAllTimesheets:    (role: Role | null) => cap(role, 'viewAllTimesheets'),
+  writeOwnTimesheet:   (role: Role | null) => cap(role, 'writeOwnTimesheet'),
 
   // Inventory + calendar — same baseline as clients.
-  editInventory: (role: Role | null) => isAny(role, WRITERS),
-  editCalendar:  (role: Role | null) => isAny(role, WRITERS),
+  editInventory: (role: Role | null) => !!res(role, 'inventory')?.edit,
+  editCalendar:  (role: Role | null) => !!res(role, 'calendar')?.edit,
 
   // Files / document library — everyone reads (RLS + crew_visible decide what
   // a field crew actually sees); writers manage categories/sections/uploads.
-  manageFiles: (role: Role | null) => isAny(role, WRITERS),
+  manageFiles: (role: Role | null) => cap(role, 'manageFiles'),
 
   // Third-party integrations (SMS provider creds, etc.). Writers configure;
   // mirrors the WRITER_ROLES gate the API enforces server-side.
-  manageIntegrations: (role: Role | null) => isAny(role, WRITERS),
+  manageIntegrations: (role: Role | null) => cap(role, 'manageIntegrations'),
 
   // Reports
-  seeReports: (role: Role | null) => isAny(role, ['owner','admin','manager','viewer']),
+  seeReports: (role: Role | null) => res(role, 'reports')?.view === 'all',
 
   // Audit log viewer
-  seeAuditLog: (role: Role | null) => isAny(role, ADMINS),
+  seeAuditLog: (role: Role | null) => cap(role, 'viewAuditLog'),
 };
 
 // ─── Special-case helpers ────────────────────────────────────────────────

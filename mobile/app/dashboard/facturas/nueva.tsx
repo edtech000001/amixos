@@ -27,7 +27,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
-import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 
 interface Client {
   id: string;
@@ -58,11 +58,6 @@ const newLine = (): LineItem => ({ id: newId(), description: '', qty: 1, rate: 0
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
-const genInvoiceNumber = (lang: InvoiceLang) => {
-  const now = new Date();
-  return `${invoiceNumberPrefix(lang)}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-};
-
 const todayISO = () => new Date().toISOString().split('T')[0];
 // Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
 function addDaysISO(iso: string, days: number): string {
@@ -85,9 +80,14 @@ export default function NuevaFacturaRoute() {
   const editId = edit ?? null;
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
-  const [invoiceNumber, setInvoiceNumber] = useState(() => genInvoiceNumber('es'));
-  // Once the user types their own number, stop auto-deriving it from language.
+  // Auto-filled with the next sequential number once the invoice count loads
+  // (see effect below). Empty until then; the user can also type their own.
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  // Once the user types their own number, stop auto-deriving it.
   const numberEditedRef = useRef(false);
+  // Existing-invoice count for this business (null = not loaded yet). Drives the
+  // sequential auto-number: business.invoice_start_number + count.
+  const invoiceCountRef = useRef<number | null>(null);
   const [clientIds, setClientIds] = useState<string[]>([]);
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
@@ -129,12 +129,13 @@ export default function NuevaFacturaRoute() {
     langDefaultedRef.current = true;
   }, [editId, business]);
 
-  // Keep the auto invoice-number prefix in sync with the language (INV-/FAC-)
-  // until the user types their own number.
+  // Keep the auto invoice number in sync with language (INV-/FAC-) and the
+  // business's starting number, until the user types their own. Waits for the
+  // invoice count to load so the sequence is correct.
   useEffect(() => {
-    if (editId || numberEditedRef.current) return;
-    setInvoiceNumber(genInvoiceNumber(language));
-  }, [language, editId]);
+    if (editId || numberEditedRef.current || invoiceCountRef.current === null) return;
+    setInvoiceNumber(nextInvoiceNumber(language, business?.invoice_start_number, invoiceCountRef.current));
+  }, [language, editId, business]);
 
   // Load clients + optionally the invoice being edited.
   useEffect(() => {
@@ -156,6 +157,19 @@ export default function NuevaFacturaRoute() {
       if (cancelled) return;
       setClients((cl ?? []) as Client[]);
       setTemplates((tpls ?? []) as FieldTemplate[]);
+
+      // New invoice: load the count so the auto-number = start + count.
+      if (!editId) {
+        const { count } = await supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('business_id', business.id);
+        if (cancelled) return;
+        invoiceCountRef.current = count ?? 0;
+        if (!numberEditedRef.current) {
+          setInvoiceNumber(nextInvoiceNumber(language, business.invoice_start_number, invoiceCountRef.current));
+        }
+      }
 
       if (editId) {
         const [{ data: inv }, { data: links }] = await Promise.all([
@@ -233,7 +247,7 @@ export default function NuevaFacturaRoute() {
     },
     !loadingEdit,
   );
-  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+  const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
 
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
@@ -705,6 +719,7 @@ export default function NuevaFacturaRoute() {
           </View>
         </View>
       </RNModal>
+      {unsavedSheet}
     </SafeAreaView>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Building2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -9,6 +10,12 @@ import { useLang } from '@/i18n/LangProvider';
  * Click the active business name to drop down a list of every business the
  * user is a member of. Picking one flips the entire app's data context via
  * setActiveBusiness. Hidden when the user only belongs to one business.
+ *
+ * The menu is rendered in a PORTAL to document.body and positioned under the
+ * button. The switcher lives in a `sticky` sidebar narrower than the menu, and
+ * `sticky` creates a stacking context — so an in-flow absolute menu gets
+ * clipped/painted over by the main content it overflows into. Portaling escapes
+ * that entirely so the menu is always on top.
  */
 export function BusinessSwitcher() {
   const { businesses, business, activeBusinessId, setActiveBusiness } = useApp();
@@ -16,15 +23,31 @@ export function BusinessSwitcher() {
   const tw = full.dashboard.workspaces;
 
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const update = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 8, left: r.left });
     };
+    update();
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    // Reposition if the layout shifts under the open menu.
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+      document.removeEventListener('mousedown', onDocClick);
+    };
   }, [open]);
 
   if (!business) return null;
@@ -43,8 +66,9 @@ export function BusinessSwitcher() {
   }
 
   return (
-    <div className="relative z-[1000]" ref={ref}>
+    <div className="relative">
       <button
+        ref={btnRef}
         onClick={() => setOpen((v) => !v)}
         className="max-w-full flex items-center gap-2 border border-gray-200 bg-white rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-gray-50 transition-colors"
         aria-label={tw.switcherLabel}
@@ -58,8 +82,13 @@ export function BusinessSwitcher() {
         <ChevronDown size={14} className="text-primary shrink-0" />
       </button>
 
-      {open ? (
-        <div className="absolute z-[1001] left-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden">
+      {open && pos
+        ? createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="w-72 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
+        >
           <div className="px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
             {tw.switcherLabel}
           </div>
@@ -92,8 +121,10 @@ export function BusinessSwitcher() {
               </button>
             );
           })}
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

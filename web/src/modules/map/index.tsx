@@ -138,6 +138,16 @@ function isWeatherExpired(p: { expires_at?: string | null }): boolean {
   return new Date(p.expires_at).getTime() < Date.now();
 }
 
+// Local calendar day (yyyy-mm-dd) of an ISO timestamp. Uses local time, NOT
+// `.slice(0,10)` (which takes the UTC date) — otherwise an alert ending at
+// 8:15 PM EDT lands on the next UTC day and leaks past a date filter.
+function localDay(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Short relative-duration label. Matches the mobile helper.
 function formatRelativeAgo(
   fromIso: string,
@@ -231,6 +241,7 @@ export default function MapModule() {
   const { business, user } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
+  const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
   const { isLoaded } = useJsApiLoader({
@@ -251,6 +262,12 @@ export default function MapModule() {
   // "Storm focus" mode — when on, hide every pin EXCEPT weather alerts
   // and non-weather pins within `proximity_radius_miles` of any alert.
   const [stormFocus, setStormFocus] = useState(false);
+  // Weather date-range filter — hide alerts whose active window doesn't
+  // overlap [from, to] (yyyy-mm-dd). null = open-ended on that side.
+  const [weatherDateFrom, setWeatherDateFrom] = useState<string | null>(null);
+  const [weatherDateTo, setWeatherDateTo] = useState<string | null>(null);
+  const [weatherDateOpen, setWeatherDateOpen] = useState(false);
+  const weatherDateActive = !!weatherDateFrom || !!weatherDateTo;
   // Outreach mode — when on, client pins contacted within
   // deviceSettings.outreachDays are dimmed + flagged with a green ✓ so the
   // user can see who's still left to call during storm triage. The
@@ -397,11 +414,27 @@ export default function MapModule() {
   // current search query.
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    const groups = groupWeatherAlertsBySameCode(weatherPins);
+    // Date-range filter: keep an alert whose active window
+    // [effective, ends/expires] overlaps [from, to]. Compare on the date
+    // portion (yyyy-mm-dd) so timezones/times don't skew the edges.
+    let pinsForGroup = weatherPins;
+    if (weatherDateFrom || weatherDateTo) {
+      pinsForGroup = weatherPins.filter(a => {
+        const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
+        const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
+        if (!s && !e) return false;
+        const start = s || e;
+        const end = e || s;
+        if (weatherDateFrom && end < weatherDateFrom) return false;
+        if (weatherDateTo && start > weatherDateTo) return false;
+        return true;
+      });
+    }
+    const groups = groupWeatherAlertsBySameCode(pinsForGroup);
     const q = search.trim().toLowerCase();
     if (!q) return groups;
     return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, weatherPins, search]);
+  }, [weatherEnabled, weatherLayerOn, weatherPins, search, weatherDateFrom, weatherDateTo]);
 
   const siblingsByWeatherId = useMemo(() => {
     const map = new Map<string, WeatherPin[]>();
@@ -699,6 +732,16 @@ export default function MapModule() {
               <Crosshair size={18} className={stormFocus ? 'text-red-600' : 'text-gray-700'} />
             </button>
           ) : null}
+          {weatherEnabled ? (
+            <button
+              onClick={() => setWeatherDateOpen(v => !v)}
+              className={`p-2 rounded-lg border ${weatherDateActive ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              aria-label={tdate.button}
+              title={tdate.button}
+            >
+              <Calendar size={18} className={weatherDateActive ? 'text-primary' : 'text-gray-700'} />
+            </button>
+          ) : null}
           <button
             onClick={() => setOutreach(v => !v)}
             className={`p-2 rounded-lg border ${outreach ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
@@ -741,6 +784,43 @@ export default function MapModule() {
             </>
           )}
         </div>
+        {/* Weather date-range filter — appears when the calendar control is
+           toggled; hides alerts whose window falls outside [from, to]. */}
+        {weatherEnabled && weatherDateOpen ? (
+          <div className="mt-2 p-3 rounded-xl border border-gray-200 bg-white">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-[11px] text-gray-500 mb-1">{tdate.from}</label>
+                <input
+                  type="date"
+                  value={weatherDateFrom ?? ''}
+                  onChange={e => setWeatherDateFrom(e.target.value || null)}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[11px] text-gray-500 mb-1">{tdate.to}</label>
+                <input
+                  type="date"
+                  value={weatherDateTo ?? ''}
+                  onChange={e => setWeatherDateTo(e.target.value || null)}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              {weatherDateActive ? (
+                <button
+                  onClick={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }}
+                  className="mb-1 p-1.5 text-gray-400 hover:text-gray-600"
+                  aria-label={tdate.clear}
+                  title={tdate.clear}
+                >
+                  <X size={16} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {/* Storm-focus active banner — under the search bar so the
            "what's being filtered" context lives next to the filter inputs. */}
         {stormFocus && weatherEnabled ? (

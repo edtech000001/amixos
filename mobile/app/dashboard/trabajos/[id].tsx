@@ -42,7 +42,8 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
+import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
+import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatStamp } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -151,12 +152,17 @@ interface PipelineStep {
 
 export default function JobDetailRoute() {
   const router = useRouter();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  // ?from=map → back arrow returns to the map module. Otherwise default
+  const { id, from, invoice: fromInvoice } = useLocalSearchParams<{ id: string; from?: string; invoice?: string }>();
+  // ?from=map → back returns to the map module; ?from=calendar → back returns
+  // to the calendar; ?from=invoice → back to that invoice. Otherwise default
   // behavior (trabajos list).
   const goBack = () => {
     if (from === 'map') {
       router.replace('/dashboard/mas/modulos/map' as never);
+    } else if (from === 'calendar') {
+      router.replace('/dashboard/mas/calendario' as never);
+    } else if (from === 'invoice' && fromInvoice) {
+      router.replace(`/dashboard/facturas/${fromInvoice}` as never);
     } else {
       router.replace('/dashboard/trabajos' as never);
     }
@@ -171,8 +177,12 @@ export default function JobDetailRoute() {
 
   const [job, setJob] = useState<Job | null>(null);
   const [items, setItems] = useState<JobItem[]>([]);
+  const [itemsEditOpen, setItemsEditOpen] = useState(false);
+  const [editRows, setEditRows] = useState<{ id: string; item_type: string; description: string; quantity: string; unit_price: string }[]>([]);
+  const [savingItems, setSavingItems] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [unInvoicing, setUnInvoicing] = useState(false);
   const [delegateOpen, setDelegateOpen] = useState(false);
   const [delegating, setDelegating] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -219,7 +229,10 @@ export default function JobDetailRoute() {
         .single(),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
     ]);
-    if (j) setJob(j as Job);
+    // Set null (not "leave as-is") when the row is gone — otherwise a deleted
+    // job id reuses this screen's previous job, showing the wrong record
+    // instead of the not-found state.
+    setJob(j ? (j as Job) : null);
     setItems((it as JobItem[] | null) ?? []);
     setLoading(false);
   };
@@ -390,7 +403,7 @@ export default function JobDetailRoute() {
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id);
     const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
-    const invNum = `${invoiceNumberPrefix(invoiceLang)}-${String((count ?? 0) + 1).padStart(4, '0')}`;
+    const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 
     const lineItems = items.map((i) => ({
       description: `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}`,
@@ -469,7 +482,10 @@ export default function JobDetailRoute() {
   };
 
   const confirmDelete = () => {
-    Alert.alert(td.deleteJobTitle, td.deleteJobConfirm, [
+    const msg = job?.invoice_id
+      ? `${td.deleteJobConfirm}\n\n${td.deleteInvoiceWarning}`
+      : td.deleteJobConfirm;
+    Alert.alert(td.deleteJobTitle, msg, [
       { text: full.common.buttons.cancel, style: 'cancel' },
       {
         text: td.deleteBtn,
@@ -497,9 +513,23 @@ export default function JobDetailRoute() {
   }
 
   if (!job) {
+    // Deleted/missing job — don't show the empty detail layout. Pop a one-hand
+    // bottom alert; OK returns the user to where they came from.
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <Text className="text-sm text-gray-500">{t.notFound}</Text>
+      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+        <RNModal visible transparent animationType="fade" onRequestClose={goBack}>
+          <Pressable onPress={goBack} className="flex-1 bg-black/40 justify-end">
+            <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
+              <Text className="text-xl font-bold text-gray-900">{t.notFound}</Text>
+              <Pressable
+                onPress={goBack}
+                className="mt-5 py-3.5 rounded-2xl items-center bg-primary active:opacity-80"
+              >
+                <Text className="text-base font-semibold text-white">OK</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </RNModal>
       </SafeAreaView>
     );
   }
@@ -582,6 +612,85 @@ export default function JobDetailRoute() {
     const prev = pipeline[idx - 1];
     return { label: prev.label, next: prev.key };
   })();
+
+  // Undo an accidental "facturado": detach from the invoice, revert to
+  // completed, strip its line items, offer to delete a now-empty invoice.
+  const unInvoice = () => {
+    if (!job?.invoice_id || !business) return;
+    const invoiceId = job.invoice_id;
+    void (async () => {
+      const { data: inv } = await supabase
+        .from('invoices')
+        .select('id, status, line_items, tax_rate, discount, invoice_number')
+        .eq('id', invoiceId)
+        .single();
+      if (!inv) return;
+      const sentOrPaid = ['sent', 'paid', 'overdue'].includes(inv.status);
+      Alert.alert('', sentOrPaid ? td.unInvoiceSentWarning : td.unInvoiceConfirm, [
+        { text: full.common.buttons.cancel, style: 'cancel' },
+        {
+          text: td.unInvoiceBtn,
+          style: 'destructive',
+          onPress: async () => {
+            setUnInvoicing(true);
+            const { remaining } = await removeJobFromInvoice(supabase, {
+              jobId: job.id,
+              invoice: { id: inv.id, line_items: inv.line_items, tax_rate: inv.tax_rate, discount: inv.discount },
+            });
+            void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
+              from: 'invoiced', to: 'completed', job_title: job.title,
+            });
+            setJob((prev) => (prev ? { ...prev, status: 'completed', invoice_id: null } : prev));
+            setUnInvoicing(false);
+            if (remaining === 0) {
+              Alert.alert('', td.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number), [
+                { text: full.common.buttons.cancel, style: 'cancel' },
+                {
+                  text: full.common.buttons.delete,
+                  style: 'destructive',
+                  onPress: async () => { await supabase.from('invoices').delete().eq('id', inv.id); },
+                },
+              ]);
+            }
+          },
+        },
+      ]);
+    })();
+  };
+
+  // ── Inline job-items editor ─────────────────────────────────────────
+  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string };
+  const ITEM_TYPES = ['labor', 'material', 'equipment', 'other'];
+  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0' });
+  const openItemsEdit = () => {
+    setEditRows(items.length
+      ? items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) }))
+      : [newRow()]);
+    setItemsEditOpen(true);
+  };
+  const updateRow = (rid: string, field: keyof EditRow, value: string) =>
+    setEditRows(prev => prev.map(r => (r.id === rid ? { ...r, [field]: value } : r)));
+  const saveItems = async () => {
+    if (!job) return;
+    setSavingItems(true);
+    const valid = editRows
+      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0 }))
+      // Keep a row if it has a description OR a cost — a bare amount + cost
+      // (no description) is valid; the invoice falls back to the job title.
+      .filter(r => r.description !== '' || r.unit_price > 0);
+    await supabase.from('job_items').delete().eq('job_id', job.id);
+    if (valid.length) await supabase.from('job_items').insert(valid.map(v => ({ job_id: job.id, ...v })));
+    const subtotal = valid.reduce((s, v) => s + v.quantity * v.unit_price, 0);
+    const tax = subtotal * ((job.tax_rate ?? 0) / 100);
+    const total = subtotal + tax - (job.discount ?? 0);
+    await supabase.from('jobs').update({ subtotal_amount: subtotal, tax_amount: tax, total_amount: total }).eq('id', job.id);
+    const { data: it } = await supabase.from('job_items').select('*').eq('job_id', job.id).order('created_at');
+    setItems((it as JobItem[] | null) ?? []);
+    setJob(prev => (prev ? { ...prev, subtotal_amount: subtotal, tax_amount: tax, total_amount: total } : prev));
+    setSavingItems(false);
+    setItemsEditOpen(false);
+  };
+  const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -710,11 +819,22 @@ export default function JobDetailRoute() {
 
           {job.invoice_id ? (
             <Pressable
-              onPress={() => router.push(`/dashboard/facturas/${job.invoice_id}` as never)}
+              onPress={() => router.push(`/dashboard/facturas/${job.invoice_id}?from=job&jobId=${job.id}` as never)}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
             >
               <FileText size={16} color="#374151" />
               <Text className="text-sm font-semibold text-gray-700">{td.viewInvoiceBtn}</Text>
+            </Pressable>
+          ) : null}
+
+          {job.status === 'invoiced' && job.invoice_id ? (
+            <Pressable
+              onPress={unInvoice}
+              disabled={unInvoicing}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
+            >
+              <RotateCcw size={16} color="#374151" />
+              <Text className="text-sm font-semibold text-gray-700">{td.unInvoiceBtn}</Text>
             </Pressable>
           ) : null}
 
@@ -842,12 +962,26 @@ export default function JobDetailRoute() {
 
         {/* Items list */}
         <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
-            {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-xs font-semibold text-gray-400 uppercase">
+              {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
+            </Text>
+            {canEditItems && items.length > 0 ? (
+              <Pressable onPress={openItemsEdit} hitSlop={8}>
+                <Text className="text-xs font-semibold text-primary">{td.editItemsBtn}</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           {items.length === 0 ? (
-            <Text className="text-sm text-gray-400 py-2">{td.noItems}</Text>
+            <View className="py-2 items-start gap-2">
+              <Text className="text-sm text-gray-400">{td.noItems}</Text>
+              {canEditItems ? (
+                <Pressable onPress={openItemsEdit} hitSlop={8}>
+                  <Text className="text-sm font-semibold text-primary">{td.addItemsBtn}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : (
             <View>
               {items.map((it, i) => (
@@ -919,6 +1053,70 @@ export default function JobDetailRoute() {
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Job-items editor */}
+      <RNModal visible={itemsEditOpen} transparent animationType="slide" onRequestClose={() => setItemsEditOpen(false)}>
+        <View className="flex-1 bg-black/40 justify-end">
+          <View className="bg-white rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-gray-200 rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-gray-100">
+              <Text className="text-lg font-bold text-gray-900">{isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}</Text>
+              <Pressable onPress={() => setItemsEditOpen(false)} hitSlop={8}><X size={20} color="#9CA3AF" /></Pressable>
+            </View>
+            <ScrollView contentContainerClassName="px-5 py-4 gap-3" keyboardShouldPersistTaps="handled">
+              {editRows.map(r => (
+                <View key={r.id} className="bg-gray-50 rounded-2xl p-3 gap-2">
+                  <View className="flex-row items-start justify-between gap-2">
+                    <View className="flex-1 flex-row flex-wrap gap-1.5">
+                      {ITEM_TYPES.map(tk => {
+                        const on = r.item_type === tk;
+                        return (
+                          <Pressable
+                            key={tk}
+                            onPress={() => updateRow(r.id, 'item_type', tk)}
+                            className={`px-3 py-1.5 rounded-full border ${on ? 'bg-primary border-primary' : 'bg-white border-gray-200'}`}
+                          >
+                            <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-600'}`}>
+                              {ITEM_TYPE_LABELS[tk] ?? tk}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Pressable onPress={() => setEditRows(prev => prev.filter(x => x.id !== r.id))} hitSlop={8} className="pt-1">
+                      <Trash2 size={16} color="#EF4444" />
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    value={r.description}
+                    onChangeText={v => updateRow(r.id, 'description', v)}
+                    placeholder={t.new.colDescription}
+                    placeholderTextColor="#9CA3AF"
+                    className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                  />
+                  <View className="flex-row gap-2">
+                    <View className="flex-1">
+                      <Text className="text-[11px] text-gray-400 mb-1">{t.new.colQty}</Text>
+                      <TextInput value={r.quantity} onChangeText={v => updateRow(r.id, 'quantity', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-[11px] text-gray-400 mb-1">{td.colUnitPriceShort}</Text>
+                      <TextInput value={r.unit_price} onChangeText={v => updateRow(r.id, 'unit_price', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900" />
+                    </View>
+                  </View>
+                </View>
+              ))}
+              <Pressable onPress={() => setEditRows(prev => [...prev, newRow()])} className="self-start py-1">
+                <Text className="text-sm font-semibold text-primary">+ {td.addItemsBtn}</Text>
+              </Pressable>
+            </ScrollView>
+            <View className="flex-row gap-3 px-5 pt-3 pb-8 border-t border-gray-100">
+              <Button variant="secondary" onPress={() => setItemsEditOpen(false)} className="flex-1">{full.common.buttons.cancel}</Button>
+              <Button onPress={saveItems} loading={savingItems} className="flex-1">{full.common.buttons.save}</Button>
+            </View>
+          </View>
+        </View>
+      </RNModal>
 
       {/* Delegate target picker */}
       <RNModal

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
+  ListChecks,
   Users,
   ArrowRight,
   Send,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
+import { DatePicker } from '../../ui/DatePicker';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
@@ -44,6 +46,7 @@ import {
 import {
   JOBS_FILTERS_KEY,
   jobsFiltersActive,
+  jobInDateRange,
   parseJobsFilters,
 } from '../../lib/jobsFilters';
 
@@ -66,6 +69,7 @@ export interface JobListItem {
   jobCity: string | null;
   jobState: string | null;
   invoiceId: string | null;
+  clientId: string | null;
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
@@ -79,6 +83,9 @@ export interface JobListItem {
 }
 
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
+// Closed/terminal work hidden from the default (no-tab) "active" view — still
+// reachable by selecting the corresponding status tab.
+const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
@@ -92,6 +99,9 @@ export interface JobsListScreenProps {
   onJobPress: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => Promise<void> | void;
   onGenerateInvoice: (id: string) => void;
+  /** Batch-invoice: one invoice from several completed same-client jobs.
+   *  When omitted, the select-to-invoice toolbar is hidden. */
+  onCreateInvoice?: (jobIds: string[]) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
@@ -164,6 +174,7 @@ export function JobsListScreen({
   onJobPress,
   onUpdateStatus,
   onGenerateInvoice,
+  onCreateInvoice,
   onViewInvoice,
   onNewJob,
   onNewProposal,
@@ -188,6 +199,10 @@ export function JobsListScreen({
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
+  // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
 
   // Load saved filters once. An explicit ?tab deep link (initialTab !== 'all')
   // still wins for the tab.
@@ -204,6 +219,8 @@ export function JobsListScreen({
           if (typeof s.search === 'string') setSearch(s.search);
           if (s.sortBy) setSortBy(s.sortBy);
           if (s.groupBy) setGroupBy(s.groupBy);
+          if (s.dateFrom) setDateFrom(s.dateFrom);
+          if (s.dateTo) setDateTo(s.dateTo);
         }
         hydrated.current = true;
       })
@@ -214,11 +231,12 @@ export function JobsListScreen({
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tabs, search, sortBy, groupBy })).catch(() => {});
-  }, [tabs, search, sortBy, groupBy]);
+    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo })).catch(() => {});
+  }, [tabs, search, sortBy, groupBy, dateFrom, dateTo]);
 
-  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy });
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); };
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
+  const dateActive = !!dateFrom || !!dateTo;
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -233,9 +251,10 @@ export function JobsListScreen({
     delegated: tw.delegatedFilterTab,
   };
 
-  // Multi-select: a job matches if it satisfies ANY selected tab. No tabs = all.
+  // Multi-select: a job matches if it satisfies ANY selected tab. With no tabs
+  // (the default "active" view) we hide closed work — invoiced + cancelled.
   const matchesTab = (j: JobListItem) => {
-    if (tabs.length === 0) return true;
+    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status);
     return tabs.some(tk =>
       tk === 'propuestas'
         ? PROPOSAL_STATUSES.includes(j.status)
@@ -253,9 +272,9 @@ export function JobsListScreen({
           .join(' '),
         search,
       );
-      return matchSearch && matchesTab(j);
+      return matchSearch && matchesTab(j) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
     });
-  }, [jobs, search, tabs]);
+  }, [jobs, search, tabs, dateFrom, dateTo]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -266,6 +285,20 @@ export function JobsListScreen({
     [filtered, sortBy, groupBy, t, locale],
   );
   const sortActive = sortBy !== 'recent' || groupBy !== 'none';
+
+  // Icons for the sort/group sheet rows (matches the Equipment group sheet style).
+  const SORT_ICON: Record<JobSortKey, typeof Clock> = {
+    recent: Clock,
+    status: ListChecks,
+    startDate: Calendar,
+    lead: Users,
+  };
+  const GROUP_ICON: Record<JobGroupKey, typeof Clock> = {
+    none: List,
+    lead: Users,
+    company: Building2,
+    state: MapPin,
+  };
 
   const counts = useMemo(() =>
     TAB_KEYS.reduce((acc, k) => {
@@ -278,8 +311,6 @@ export function JobsListScreen({
   [jobs]);
 
   const pendingValue = jobs.filter(j => j.status === 'sent' && !isExpired(j))
-    .reduce((s, j) => s + j.totalAmount, 0);
-  const totalRevenue = jobs.filter(j => j.status === 'completed' || j.status === 'invoiced')
     .reduce((s, j) => s + j.totalAmount, 0);
   const inProgressRevenue = jobs.filter(j => j.status === 'in_progress')
     .reduce((s, j) => s + j.totalAmount, 0);
@@ -400,6 +431,41 @@ export function JobsListScreen({
     return null;
   };
 
+  // ── Select-to-invoice (batch) ───────────────────────────────────────
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const isInvoiceable = (j: JobListItem) => j.status === 'completed' && !j.invoiceId;
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
+  const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
+  const visibleInvoiceable = sections.flatMap(s => s.jobs).filter(isInvoiceable);
+  const allSelected = visibleInvoiceable.length > 0 && visibleInvoiceable.every(j => selectedIds.has(j.id));
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (visibleInvoiceable.every(j => prev.has(j.id))) {
+        visibleInvoiceable.forEach(j => next.delete(j.id));
+      } else {
+        visibleInvoiceable.forEach(j => next.add(j.id));
+      }
+      return next;
+    });
+  const canCreateInvoice = selectedJobs.length > 0 && sameClient && !creatingInvoice;
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const runCreateInvoice = async () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || creatingInvoice) return;
+    setCreatingInvoice(true);
+    await onCreateInvoice(selectedJobs.map(j => j.id));
+    setCreatingInvoice(false);
+    exitSelect();
+  };
+
   return (
     <View className="flex-1 bg-surface">
     <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
@@ -419,11 +485,6 @@ export function JobsListScreen({
                 {' · '}{t.inProgressValue.replace('{{amount}}', fmt(inProgressRevenue))}
               </Text>
             ) : null}
-            {totalRevenue > 0 ? (
-              <Text className="text-emerald-600 font-medium">
-                {' · '}{t.completedValue.replace('{{amount}}', fmt(totalRevenue))}
-              </Text>
-            ) : null}
           </Text>
         </View>
         {/* Filter controls live up here so the search bar gets the full width. */}
@@ -438,6 +499,15 @@ export function JobsListScreen({
             </Pressable>
           ) : null}
           <Pressable
+            onPress={() => setDateMenuOpen(o => !o)}
+            accessibilityLabel={t.dateFilter.button}
+            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+              dateActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+            }`}
+          >
+            <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
+          </Pressable>
+          <Pressable
             onPress={() => setSortMenuOpen(true)}
             accessibilityLabel={t.sort.button}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
@@ -446,6 +516,28 @@ export function JobsListScreen({
           >
             <ArrowUpDown size={16} color={sortActive ? '#4F46E5' : '#6B7280'} />
           </Pressable>
+          {selectMode && visibleInvoiceable.length > 0 ? (
+            <Pressable
+              onPress={toggleSelectAll}
+              accessibilityLabel={allSelected ? t.batchInvoice.deselectAll : t.batchInvoice.selectAll}
+              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+                allSelected ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              }`}
+            >
+              <ListChecks size={16} color={allSelected ? '#4F46E5' : '#6B7280'} />
+            </Pressable>
+          ) : null}
+          {onCreateInvoice ? (
+            <Pressable
+              onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              accessibilityLabel={t.batchInvoice.selectButton}
+              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+                selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              }`}
+            >
+              <FileText size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -460,6 +552,41 @@ export function JobsListScreen({
           autoCapitalize="none"
           autoCorrect={false}
         />
+        {/* Date-range filter — inline (not a nested modal) so the DatePicker's
+            own iOS modal opens at the top level. */}
+        {dateMenuOpen ? (
+          <View className="rounded-2xl border border-gray-200 bg-white p-4 gap-3">
+            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              {t.dateFilter.title}
+            </Text>
+            <DatePicker
+              label={t.dateFilter.from}
+              value={dateFrom ?? ''}
+              onChange={v => setDateFrom(v || null)}
+            />
+            <DatePicker
+              label={t.dateFilter.to}
+              value={dateTo ?? ''}
+              onChange={v => setDateTo(v || null)}
+            />
+            <View className="flex-row gap-2 mt-1">
+              {dateActive ? (
+                <Pressable
+                  onPress={() => { setDateFrom(null); setDateTo(null); }}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center active:bg-gray-200"
+                >
+                  <Text className="text-sm font-semibold text-gray-700">{t.dateFilter.clear}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => setDateMenuOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-primary items-center active:opacity-90"
+              >
+                <Text className="text-sm font-semibold text-white">{full.common.buttons.done}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -583,13 +710,17 @@ export function JobsListScreen({
                   : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
               : null;
 
+            const selectable = selectMode && isInvoiceable(job);
+            const picked = selectedIds.has(job.id);
             return (
               // Outer view carries the shadow; inner clips content (RN clips
               // shadows under overflow-hidden).
-              <View key={job.id} className="bg-white rounded-2xl shadow-sm">
+              <View key={job.id} className={`bg-white rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
               <View
                 className={`rounded-2xl border overflow-hidden ${
-                  overdue
+                  picked
+                    ? 'bg-primary/5 border-primary'
+                    : overdue
                     ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
                     : alertStyle
                       ? `bg-white border-gray-100 border-l-4 ${alertStyle.borderClass}`
@@ -597,10 +728,18 @@ export function JobsListScreen({
                 }`}
               >
                 <Pressable
-                  onPress={() => onJobPress(job.id)}
+                  onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
                   className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-gray-50'}`}
                 >
-                  <View className={`w-2.5 h-2.5 rounded-full mt-1.5 ${dot}`} />
+                  {selectMode ? (
+                    <View className={`w-5 h-5 mt-0.5 rounded-md border items-center justify-center ${
+                      picked ? 'bg-primary border-primary' : selectable ? 'border-gray-300' : 'border-gray-200'
+                    }`}>
+                      {picked ? <Check size={13} color="#FFFFFF" /> : null}
+                    </View>
+                  ) : (
+                    <View className={`w-2.5 h-2.5 rounded-full mt-1.5 ${dot}`} />
+                  )}
 
                   <View className="flex-1 min-w-0">
                     {/* Title — full width on its own line so it isn't squeezed
@@ -722,10 +861,10 @@ export function JobsListScreen({
                     ) : null}
                   </View>
 
-                  <ChevronRight size={16} color="#9CA3AF" />
+                  {selectMode ? null : <ChevronRight size={16} color="#9CA3AF" />}
                 </Pressable>
 
-                {renderActionBar(job)}
+                {selectMode ? null : renderActionBar(job)}
               </View>
               </View>
             );
@@ -762,21 +901,25 @@ export function JobsListScreen({
             <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
               {t.sort.sortByTitle}
             </Text>
-            <View className="flex-row flex-wrap gap-2 mb-6">
+            <View className="gap-1 mb-6">
               {JOB_SORT_KEYS.map(k => {
                 const selected = sortBy === k;
+                const Icon = SORT_ICON[k];
                 return (
                   <Pressable
                     key={k}
                     onPress={() => setSortBy(k)}
-                    className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
-                      selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
+                      selected ? 'bg-primary/10' : 'active:bg-gray-50'
                     }`}
                   >
-                    {selected ? <Check size={13} color="#FFFFFF" /> : null}
-                    <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-gray-100'}`}>
+                      <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
+                    </View>
+                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-gray-900'}`}>
                       {t.sort.by[k]}
                     </Text>
+                    {selected ? <Check size={20} color="#4F46E5" /> : null}
                   </Pressable>
                 );
               })}
@@ -785,21 +928,25 @@ export function JobsListScreen({
             <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
               {t.sort.groupByTitle}
             </Text>
-            <View className="flex-row flex-wrap gap-2">
+            <View className="gap-1">
               {JOB_GROUP_KEYS.map(k => {
                 const selected = groupBy === k;
+                const Icon = GROUP_ICON[k];
                 return (
                   <Pressable
                     key={k}
                     onPress={() => setGroupBy(k)}
-                    className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
-                      selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
+                      selected ? 'bg-primary/10' : 'active:bg-gray-50'
                     }`}
                   >
-                    {selected ? <Check size={13} color="#FFFFFF" /> : null}
-                    <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-gray-100'}`}>
+                      <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
+                    </View>
+                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-gray-900'}`}>
                       {t.sort.group[k]}
                     </Text>
+                    {selected ? <Check size={20} color="#4F46E5" /> : null}
                   </Pressable>
                 );
               })}
@@ -865,7 +1012,34 @@ export function JobsListScreen({
 
     {/* New job/proposal — floating action, bottom-right thumb reach.
        Hidden for roles that can't create jobs (field crew / viewers). */}
-    {canCreate ? <Fab onPress={() => setNewMenuOpen(true)} /> : null}
+    {selectMode ? null : canCreate ? <Fab onPress={() => setNewMenuOpen(true)} /> : null}
+
+    {/* Batch-invoice FAB pill — sits above the dock (bottom-32, like Fab) so it
+       isn't hidden behind the floating tab bar. Only in select mode. */}
+    {selectMode ? (
+      <>
+        {!sameClient && selectedJobs.length > 0 ? (
+          <View className="absolute bottom-48 right-5 bg-amber-50 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
+            <Text className="text-xs font-medium text-amber-700">{t.batchInvoice.sameClientHint}</Text>
+          </View>
+        ) : null}
+        <Pressable
+          onPress={runCreateInvoice}
+          disabled={!canCreateInvoice}
+          className={`absolute bottom-32 right-5 flex-row items-center gap-2 px-5 h-14 rounded-full ${
+            canCreateInvoice ? 'bg-primary active:opacity-90' : 'bg-gray-300'
+          }`}
+          style={{ elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}
+        >
+          <FileText size={20} color="#FFFFFF" />
+          <Text className="text-white font-semibold">
+            {creatingInvoice
+              ? t.batchInvoice.creating
+              : `${t.batchInvoice.createButton}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
+          </Text>
+        </Pressable>
+      </>
+    ) : null}
     </View>
   );
 }

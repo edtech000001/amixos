@@ -13,6 +13,8 @@ import {
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
+import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
+import { useLang } from '@/i18n/LangProvider';
 
 interface RawJob {
   id: string;
@@ -52,6 +54,7 @@ type TabKey = typeof TAB_KEYS[number];
 export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
+  const { t: full } = useLang();
   const { business, businesses, currentRole } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +115,7 @@ export default function TrabajosPage() {
     jobCity: j.job_city,
     jobState: j.job_state,
     invoiceId: j.invoice_id,
+    clientId: j.client_id,
     clientName: j.clients ? `${j.clients.first_name} ${j.clients.last_name}` : null,
     clientCompany: j.clients?.company ?? null,
     workerNames: j.job_assignments
@@ -142,6 +146,30 @@ export default function TrabajosPage() {
       onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
       onUpdateStatus={updateStatus}
       onGenerateInvoice={(id) => router.push(`/dashboard/trabajos/${id}?action=invoice`)}
+      onCreateInvoice={async (jobIds) => {
+        if (!business) return;
+        const jt = full.dashboard.jobs.new;
+        const res = await createInvoiceFromJobs(supabase, {
+          businessId: business.id,
+          jobIds,
+          invoiceTemplate: business.invoice_template,
+          startNumber: business.invoice_start_number,
+          itemTypeLabels: {
+            labor: jt.itemTypeLabor,
+            material: jt.itemTypeMaterial,
+            equipment: jt.itemTypeEquipment,
+            other: jt.itemTypeOther,
+          },
+          notesLabel: full.dashboard.sidebar.trabajos,
+        });
+        if (res.ok) {
+          router.push(`/dashboard/facturas/${res.invoice.id}`);
+          return;
+        }
+        if ('error' in res && res.error === 'multiple_clients') {
+          window.alert(full.dashboard.jobs.batchInvoice.sameClientHint);
+        }
+      }}
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}

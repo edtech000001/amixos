@@ -596,6 +596,30 @@ export function invoiceNumberPrefix(lang: InvoiceLang): string {
   return lang === 'en' ? 'INV' : 'FAC';
 }
 
+/** Fallback starting invoice number when a business hasn't set one (and for
+ *  clients running before migration 079). Matches the DB column default. */
+export const DEFAULT_INVOICE_START_NUMBER = 1000;
+
+/**
+ * Next sequential invoice number string, e.g. "FAC-1000".
+ *
+ *  - `startNumber`: the business's configured first number (businesses
+ *    .invoice_start_number); falls back to DEFAULT_INVOICE_START_NUMBER.
+ *  - `existingCount`: how many invoices the business already has.
+ *
+ * seq = startNumber + existingCount, zero-padded to 4 digits. With the legacy
+ * default of 1 this reproduces the old `count + 1` numbering exactly.
+ */
+export function nextInvoiceNumber(
+  lang: InvoiceLang,
+  startNumber: number | null | undefined,
+  existingCount: number,
+): string {
+  const start = Math.max(1, Math.floor(startNumber ?? DEFAULT_INVOICE_START_NUMBER));
+  const seq = start + Math.max(0, existingCount);
+  return `${invoiceNumberPrefix(lang)}-${String(seq).padStart(4, '0')}`;
+}
+
 /** Pick the effective config: per-invoice frozen override → business default →
  *  app default. Always normalized. */
 export function resolveConfig(

@@ -570,7 +570,7 @@ export default function NuevoTrabajoRoute() {
     },
     !loadingEdit,
   );
-  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+  const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
 
   if (loadingEdit) {
     return (
@@ -1374,6 +1374,7 @@ export default function NuevoTrabajoRoute() {
           </View>
         </View>
       </RNModal>
+      {unsavedSheet}
     </SafeAreaView>
   );
 }

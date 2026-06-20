@@ -21,6 +21,7 @@ import {
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { DatePicker } from '@amixos/shared/ui';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import type { MapPinIcon } from '@amixos/shared/lib/mapPinPresets';
 import { resolvePinStyle } from '@amixos/shared/lib/mapPinResolve';
@@ -78,6 +79,15 @@ interface WeatherPin {
   sent_at: string | null;
   fetched_at: string | null;
   nws_url?: string | null;
+}
+// Local calendar day (yyyy-mm-dd) of an ISO timestamp. Uses local time, NOT
+// `.slice(0,10)` (which takes the UTC date) — otherwise an alert ending at
+// 8:15 PM EDT lands on the next UTC day and leaks past a date filter.
+function localDay(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 const WEATHER_LAYER_COLOR = '#DC2626'; // red-600 — visually loud + intent matches
 // Per-event tinting (most-common NOAA events). Falls back to red.
@@ -261,6 +271,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
+  const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
   // Module name comes from the same shared dict as everything else so
   // the header label stays in sync if the module is ever renamed.
   const moduleName = full.dashboard.modules.list.map.name;
@@ -312,6 +323,12 @@ export default function MapScreen() {
   // "Storm focus" mode — when on, hide every pin EXCEPT weather alerts
   // and non-weather pins within `proximity_radius_miles` of any alert.
   const [stormFocus, setStormFocus] = useState(false);
+  // Weather date-range filter — hide alerts whose active window doesn't
+  // overlap [from, to] (yyyy-mm-dd). null = open-ended on that side.
+  const [weatherDateFrom, setWeatherDateFrom] = useState<string | null>(null);
+  const [weatherDateTo, setWeatherDateTo] = useState<string | null>(null);
+  const [weatherDateOpen, setWeatherDateOpen] = useState(false);
+  const weatherDateActive = !!weatherDateFrom || !!weatherDateTo;
   // Outreach mode — when on, client pins contacted within
   // deviceSettings.outreachDays are dimmed + flagged with a green ✓ so the
   // user can see who's still left to call. The last-contact timestamp rides
@@ -443,13 +460,29 @@ export default function MapScreen() {
   // alert; siblings appear in the popup card's list.
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    const groups = groupWeatherAlertsBySameCode(weatherPins);
+    // Date-range filter: keep an alert whose active window
+    // [effective, ends/expires] overlaps [from, to]. Compare on the date
+    // portion (yyyy-mm-dd) so timezones/times don't skew the edges.
+    let pinsForGroup = weatherPins;
+    if (weatherDateFrom || weatherDateTo) {
+      pinsForGroup = weatherPins.filter(a => {
+        const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
+        const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
+        if (!s && !e) return false;
+        const start = s || e;
+        const end = e || s;
+        if (weatherDateFrom && end < weatherDateFrom) return false;
+        if (weatherDateTo && start > weatherDateTo) return false;
+        return true;
+      });
+    }
+    const groups = groupWeatherAlertsBySameCode(pinsForGroup);
     const q = search.trim().toLowerCase();
     if (!q) return groups;
     // Keep the group when ANY of its alerts matches the search, so
     // siblings are still discoverable via search.
     return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, weatherPins, search]);
+  }, [weatherEnabled, weatherLayerOn, weatherPins, search, weatherDateFrom, weatherDateTo]);
 
   // O(1) lookup from a weather pin's id → its sibling list. Used when the
   // user taps a weather marker to pass siblings to the card.
@@ -623,6 +656,16 @@ export default function MapScreen() {
             <Crosshair size={20} color={stormFocus ? '#DC2626' : '#374151'} />
           </Pressable>
         ) : null}
+        {weatherEnabled ? (
+          <Pressable
+            onPress={() => setWeatherDateOpen(v => !v)}
+            hitSlop={12}
+            accessibilityLabel={tdate.button}
+            className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${weatherDateActive ? 'bg-primary/10' : ''}`}
+          >
+            <Calendar size={20} color={weatherDateActive ? '#4F46E5' : '#374151'} />
+          </Pressable>
+        ) : null}
         {/* Outreach mode toggle — dims + ✓ clients contacted within the
            configured window. Available to every business (not weather-gated). */}
         <Pressable
@@ -717,6 +760,22 @@ export default function MapScreen() {
             </>
           ) : null}
         </View>
+        {/* Weather date-range filter — inline (not a nested modal) so the
+           DatePicker's own iOS picker opens at the top level. */}
+        {weatherEnabled && weatherDateOpen ? (
+          <View className="mt-2 p-3 rounded-2xl border border-gray-200 bg-white gap-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{tdate.title}</Text>
+              {weatherDateActive ? (
+                <Pressable onPress={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }} hitSlop={6}>
+                  <Text className="text-xs font-semibold text-red-600">{tdate.clear}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <DatePicker label={tdate.from} value={weatherDateFrom ?? ''} onChange={v => setWeatherDateFrom(v || null)} />
+            <DatePicker label={tdate.to} value={weatherDateTo ?? ''} onChange={v => setWeatherDateTo(v || null)} />
+          </View>
+        ) : null}
         {/* Storm-focus active banner — sits right under the search bar so
            the context of "what's being filtered" lives in the same visual
            group as the other filter inputs. */}

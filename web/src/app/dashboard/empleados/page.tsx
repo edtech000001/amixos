@@ -389,10 +389,11 @@ export default function EmpleadosPage() {
   };
 
   const saveTimesheet = async () => {
+    // Hours are always logged against a registered employee — no free-text name.
+    if (!tsForm.employee_id) { setError(t.timesheetModal.errorEmployeeRequired); return; }
     if (!tsForm.hours_worked) { setError(t.timesheetModal.errorHoursRequired); return; }
-    const name = tsForm.employee_id
-      ? employees.find(e => e.id === tsForm.employee_id)?.first_name + ' ' + employees.find(e => e.id === tsForm.employee_id)?.last_name
-      : tsForm.worker_name;
+    const emp = employees.find(e => e.id === tsForm.employee_id);
+    const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
     setSaving(true); setError('');
     await supabase.from('timesheets').insert({
       business_id: business!.id,
@@ -630,7 +631,7 @@ export default function EmpleadosPage() {
           <Input label={rLabel('city', t.modal.cityLabel)} placeholder={t.modal.cityPlaceholder} value={empForm.city} onChange={e => setEmpForm(f => ({ ...f, city: e.target.value }))} />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
-            <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+            <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{t.modal.stateNone}</option>
               {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
             </select>
@@ -643,7 +644,7 @@ export default function EmpleadosPage() {
             <Input label={rLabel('hire_date', t.modal.hireDateLabel)} type="date" value={empForm.hire_date} onChange={e => setEmpForm(f => ({ ...f, hire_date: e.target.value }))} />
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
-              <select value={empForm.pay_type} onChange={e => setEmpForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <select value={empForm.pay_type} onChange={e => setEmpForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 {Object.entries(PAY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
@@ -715,7 +716,7 @@ export default function EmpleadosPage() {
                         value={selAccess.role}
                         disabled={accessBusy}
                         onChange={e => changeAccessRole(selAccess.memberId, e.target.value as Role)}
-                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                       >
                         {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
                       </select>
@@ -764,7 +765,7 @@ export default function EmpleadosPage() {
                       value={accessRole}
                       disabled={accessBusy}
                       onChange={e => setAccessRole(e.target.value as Role)}
-                      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                     >
                       {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
                     </select>
@@ -821,14 +822,11 @@ export default function EmpleadosPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{t.timesheetModal.employeeLabel}</label>
-            <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-              <option value="">{t.timesheetModal.employeeManualOption}</option>
+            <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              <option value="">{t.timesheetModal.selectEmployee}</option>
               {employees.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
             </select>
           </div>
-          {!tsForm.employee_id && (
-            <Input label={t.timesheetModal.workerNameLabel} placeholder={t.timesheetModal.workerNamePlaceholder} value={tsForm.worker_name} onChange={e => setTsForm(f => ({ ...f, worker_name: e.target.value }))} />
-          )}
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.timesheetModal.dateLabel} type="date" value={tsForm.work_date} onChange={e => setTsForm(f => ({ ...f, work_date: e.target.value }))} />
             <Input label={t.timesheetModal.hoursLabel} type="number" min="0.5" step="0.5" placeholder={t.timesheetModal.hoursPlaceholder} value={tsForm.hours_worked || ''} onChange={e => setTsForm(f => ({ ...f, hours_worked: parseFloat(e.target.value) || 0 }))} />
@@ -903,7 +901,7 @@ function CustomFieldInput({
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}

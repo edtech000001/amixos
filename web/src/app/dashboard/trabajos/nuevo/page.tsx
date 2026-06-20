@@ -659,7 +659,7 @@ function NuevoTrabajoContent() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
                   <select value={status} onChange={e => setStatus(e.target.value as any)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="posible">{tStatuses.posible}</option>
                     <option value="scheduled">{tStatuses.scheduled}</option>
                     <option value="in_progress">{tStatuses.in_progress}</option>
@@ -668,7 +668,7 @@ function NuevoTrabajoContent() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
                   <select value={priority} onChange={e => setPriority(e.target.value as any)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="low">{tPriorities.low}</option>
                     <option value="normal">{tPriorities.normal}</option>
                     <option value="high">{tPriorities.high}</option>
@@ -747,7 +747,7 @@ function NuevoTrabajoContent() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.stateLabel}</label>
                   <select value={state} onChange={e => setState(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">{t.stateNone}</option>
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
@@ -994,7 +994,7 @@ function NuevoTrabajoContent() {
                   <div key={item.id} className="grid grid-cols-[100px_1fr_70px_90px_80px_32px] gap-2 items-center">
                     <select value={item.item_type}
                       onChange={e => updateItem(item.id, 'item_type', e.target.value)}
-                      className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                      className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                     <input type="text" placeholder={t.itemDescriptionPlaceholderJob} value={item.description}

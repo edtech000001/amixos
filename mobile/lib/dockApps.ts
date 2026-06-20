@@ -65,16 +65,22 @@ export function eligibleDockApps(role: Role | null): DockApp[] {
 }
 
 /** Resolve the dock middle selection for a role: stored keys (or the default),
- *  filtered to what's eligible + visible, clamped to [MIN, MAX], in catalog
- *  order. Always returns at least one app. */
+ *  filtered to what's eligible + visible, clamped to [MIN, MAX]. Preserves the
+ *  STORED ORDER — the user drags to reorder in Ajustes → Navegación and the dock
+ *  honors it. Falls back to default (catalog) order when nothing is stored.
+ *  Always returns at least one app. */
 export function effectiveDockKeys(stored: string[] | null, role: Role | null): string[] {
   const eligible = eligibleDockApps(role);
   const eligibleKeys = new Set(eligible.map(a => a.key));
-  const wanted = new Set((stored && stored.length ? stored : DEFAULT_DOCK_KEYS).filter(k => eligibleKeys.has(k)));
-  // Catalog order, capped at MAX.
-  let keys = eligible.filter(a => wanted.has(a.key)).map(a => a.key).slice(0, MAX_DOCK_MIDDLE);
+  const source = stored && stored.length ? stored : DEFAULT_DOCK_KEYS;
+  // Keep the source order; drop ineligible/duplicate keys; cap at MAX.
+  const keys: string[] = [];
+  for (const k of source) {
+    if (eligibleKeys.has(k) && !keys.includes(k)) keys.push(k);
+    if (keys.length >= MAX_DOCK_MIDDLE) break;
+  }
   if (keys.length < MIN_DOCK_MIDDLE && eligible.length) {
-    keys = eligible.slice(0, MIN_DOCK_MIDDLE).map(a => a.key);
+    return eligible.slice(0, MIN_DOCK_MIDDLE).map(a => a.key);
   }
   return keys;
 }

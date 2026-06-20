@@ -29,7 +29,7 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { InvoiceDesigner } from './InvoiceDesigner';
-import { normalizeBundle, activeBundleConfig, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -498,6 +498,9 @@ export function FacturasSection() {
   );
   const [notes, setNotes] = useState(business?.invoice_notes_default ?? '');
   const [dbNotes, setDbNotes] = useState(business?.invoice_notes_default ?? '');
+  const startNumInit = String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER);
+  const [startNumber, setStartNumber] = useState(startNumInit);
+  const [dbStartNumber, setDbStartNumber] = useState(startNumInit);
   const [required, setRequired] = useState<Record<string, boolean>>(
     business?.invoice_field_required ?? {},
   );
@@ -524,6 +527,8 @@ export function FacturasSection() {
     setDueDays(d); setDbDueDays(d);
     const n = business.invoice_notes_default ?? '';
     setNotes(n); setDbNotes(n);
+    const sn = String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER);
+    setStartNumber(sn); setDbStartNumber(sn);
     const r = business.invoice_field_required ?? {};
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
@@ -609,6 +614,13 @@ export function FacturasSection() {
       setMsg({ text: t.invoices.saveError, isError: true });
       return;
     }
+    // Starting invoice number: positive integer; empty falls back to the default.
+    const startTrim = startNumber.trim();
+    const startNum = startTrim === '' ? DEFAULT_INVOICE_START_NUMBER : Number(startTrim);
+    if (!Number.isInteger(startNum) || startNum < 1) {
+      setMsg({ text: t.invoices.saveError, isError: true });
+      return;
+    }
     setSaving(true);
     setMsg(null);
     try {
@@ -656,6 +668,7 @@ export function FacturasSection() {
 
       const { error: bizErr } = await supabase.from('businesses').update({
         invoice_due_days: days,
+        invoice_start_number: startNum,
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
@@ -669,6 +682,8 @@ export function FacturasSection() {
       setDbRequired(required);
       setDbDueDays(dueDays);
       setDbNotes(notes);
+      setStartNumber(String(startNum));
+      setDbStartNumber(String(startNum));
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } catch {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -680,10 +695,11 @@ export function FacturasSection() {
     () =>
       dueDays !== dbDueDays ||
       notes !== dbNotes ||
+      startNumber !== dbStartNumber ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, dbRequired, required, dbOrder, localOrder, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -748,6 +764,13 @@ export function FacturasSection() {
           keyboardType="number-pad"
         />
         <Text className="text-xs text-gray-400 -mt-2">{t.invoices.dueDaysHint}</Text>
+        <Input
+          label={t.invoices.startNumberLabel}
+          value={startNumber}
+          onChangeText={(v) => setStartNumber(v.replace(/[^0-9]/g, ''))}
+          keyboardType="number-pad"
+        />
+        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.startNumberHint}</Text>
         <View>
           <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.invoices.notesLabel}</Text>
           <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">

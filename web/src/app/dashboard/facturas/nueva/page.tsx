@@ -11,7 +11,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
-import { invoiceDefaultLanguage, invoiceNumberPrefix } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
@@ -33,10 +33,6 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-function genInvoiceNumber(lang: InvoiceLang) {
-  const now = new Date();
-  return `${invoiceNumberPrefix(lang)}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
-}
 
 // Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
 function addDaysISO(iso: string, days: number): string {
@@ -64,9 +60,13 @@ function NuevaFacturaContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
-  const [invoiceNumber, setInvoiceNumber] = useState(() => genInvoiceNumber('es'));
-  // Once the user types their own number, stop auto-deriving it from language.
+  // Auto-filled with the next sequential number once the invoice count loads.
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  // Once the user types their own number, stop auto-deriving it.
   const numberEditedRef = useRef(false);
+  // Existing-invoice count (null = not loaded). Drives the sequential
+  // auto-number: business.invoice_start_number + count.
+  const invoiceCountRef = useRef<number | null>(null);
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -103,12 +103,13 @@ function NuevaFacturaContent() {
     langDefaultedRef.current = true;
   }, [editId, business]);
 
-  // Keep the auto invoice-number prefix in sync with the language (INV-/FAC-)
-  // until the user types their own number.
+  // Keep the auto invoice number in sync with language (INV-/FAC-) and the
+  // business's starting number, until the user types their own. Waits for the
+  // invoice count so the sequence is correct.
   useEffect(() => {
-    if (editId || numberEditedRef.current) return;
-    setInvoiceNumber(genInvoiceNumber(language));
-  }, [language, editId]);
+    if (editId || numberEditedRef.current || invoiceCountRef.current === null) return;
+    setInvoiceNumber(nextInvoiceNumber(language, business?.invoice_start_number, invoiceCountRef.current));
+  }, [language, editId, business]);
 
   useEffect(() => {
     if (!business) return;
@@ -116,6 +117,17 @@ function NuevaFacturaContent() {
       .order('first_name').then(({ data }) => setClients(data ?? []));
     supabase.from('invoice_field_templates').select('*').eq('business_id', business.id)
       .order('sort_order').then(({ data }) => setCustomTemplates(data ?? []));
+    // New invoice: load the count so the auto-number = start + count.
+    if (!editId) {
+      supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id)
+        .then(({ count }) => {
+          invoiceCountRef.current = count ?? 0;
+          if (!numberEditedRef.current) {
+            setInvoiceNumber(nextInvoiceNumber(language, business.invoice_start_number, invoiceCountRef.current));
+          }
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business]);
 
   // Edit mode: hydrate form from the existing invoice.
@@ -485,7 +497,7 @@ function CustomFieldInput({
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}

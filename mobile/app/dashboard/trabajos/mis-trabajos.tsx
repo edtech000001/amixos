@@ -118,6 +118,7 @@ export default function MisTrabajosTab() {
     jobCity: j.job_city,
     jobState: j.job_state,
     invoiceId: j.invoice_id,
+    clientId: j.client_id,
     clientName: j.clients ? `${j.clients.first_name} ${j.clients.last_name}` : null,
     clientCompany: j.clients?.company ?? null,
     workerNames: j.job_assignments

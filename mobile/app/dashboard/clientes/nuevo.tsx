@@ -169,7 +169,7 @@ export default function NuevoClienteRoute() {
     },
     !loadingEdit,
   );
-  const confirmBack = useUnsavedGuard({ dirty, onLeave: goBack });
+  const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
 
   const save = async () => {
     if (!business) return;
@@ -495,6 +495,7 @@ export default function NuevoClienteRoute() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+      {unsavedSheet}
     </SafeAreaView>
   );
 }

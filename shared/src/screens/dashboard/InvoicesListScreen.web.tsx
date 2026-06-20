@@ -5,9 +5,10 @@
 // page wrapper is untouched and the bundler resolves this .web.tsx variant.
 
 import { useMemo, useState } from 'react';
-import { Plus, FileText, Search, X } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong } from '../../lib/format';
+import { usStateName } from '../../lib/usStates';
 
 export interface InvoiceListItem {
   id: string;
@@ -16,6 +17,11 @@ export interface InvoiceListItem {
   totalAmount: number;
   dueDate: string | null;
   clientNames: string | null;
+  /** Primary client's company + state (for the company/state filters). */
+  company: string | null;
+  state: string | null;
+  /** Invoice issue date (yyyy-mm-dd) — drives the date-range filter. */
+  issueDate: string | null;
 }
 
 export interface InvoicesListScreenProps {
@@ -26,8 +32,10 @@ export interface InvoicesListScreenProps {
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
 }
 
-const FILTERS = ['todas', 'draft', 'sent', 'paid', 'overdue'] as const;
-type Filter = (typeof FILTERS)[number];
+// Selectable status filters (multi-select). "All" is the icon reset, not a key.
+const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue'] as const;
+type StatusKey = (typeof STATUS_KEYS)[number];
+type GroupKey = 'none' | 'company' | 'state';
 
 const STATUS_PILL: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-500',
@@ -48,35 +56,83 @@ export function InvoicesListScreen({
   onNewInvoicePress,
   onUpdateStatus,
 }: InvoicesListScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.invoices;
+  const tg = t.group;
+  const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
   const tStatus = full.dashboard.invoiceStatus;
 
-  const [filter, setFilter] = useState<Filter>('todas');
+  const [statuses, setStatuses] = useState<StatusKey[]>([]);
+  const statusSet = useMemo(() => new Set<string>(statuses), [statuses]);
+  const toggleStatus = (k: StatusKey) =>
+    setStatuses(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [dateOpen, setDateOpen] = useState(false);
+  // Group the list into sections by a client attribute.
+  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
-  const filterLabels: Record<Filter, string> = {
-    todas: t.filters.all,
+  const statusLabels: Record<StatusKey, string> = {
     draft: t.filters.drafts,
     sent: t.filters.sent,
     paid: t.filters.paid,
     overdue: t.filters.overdue,
   };
+  const groupOptions: { key: GroupKey; label: string; Icon: typeof List }[] = [
+    { key: 'none', label: tg.none, Icon: List },
+    { key: 'company', label: tg.company, Icon: Building2 },
+    { key: 'state', label: tg.state, Icon: MapPin },
+  ];
+
+  const counts = useMemo(() => {
+    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 };
+    for (const inv of invoices) if (inv.status in c) c[inv.status as StatusKey]++;
+    return c;
+  }, [invoices]);
+
+  const dateActive = !!dateFrom || !!dateTo;
+  const clearDate = () => { setDateFrom(null); setDateTo(null); };
+
+  const inDateRange = (d: string | null) => {
+    if (!dateFrom && !dateTo) return true;
+    if (!d) return false;
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  };
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return invoices.filter((inv) => {
-      if (filter !== 'todas' && inv.status !== filter) return false;
+      if (statuses.length && !statusSet.has(inv.status)) return false;
+      if (!inDateRange(inv.issueDate)) return false;
       const cn = (inv.clientNames ?? '').toLowerCase();
       return `${inv.invoiceNumber} ${cn}`.toLowerCase().includes(q);
     });
-  }, [invoices, filter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, statuses, search, dateFrom, dateTo]);
+
+  const sections = useMemo(() => {
+    if (groupBy === 'none') return [{ title: '', data: filtered }];
+    const noVal = '—';
+    const map = new Map<string, InvoiceListItem[]>();
+    for (const inv of filtered) {
+      const raw = groupBy === 'company' ? inv.company : inv.state;
+      const key = raw && raw.trim() ? raw : noVal;
+      const arr = map.get(key);
+      if (arr) arr.push(inv); else map.set(key, [inv]);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => (a[0] === noVal ? 1 : b[0] === noVal ? -1 : a[0].localeCompare(b[0])))
+      .map(([key, data]) => ({
+        title: key === noVal ? noVal : groupBy === 'state' ? usStateName(key, locale) : key,
+        data,
+      }));
+  }, [filtered, groupBy, locale]);
 
   const total = filtered.reduce((s, i) => s + i.totalAmount, 0);
-  const summaryText = (filtered.length === 1 ? t.summarySingle : t.summaryPlural).replace(
-    '{{count}}',
-    String(filtered.length),
-  );
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl">
@@ -91,46 +147,150 @@ export function InvoicesListScreen({
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="inline-flex bg-gray-100 p-1 rounded-xl gap-1 mb-4 max-w-full overflow-x-auto">
-        {FILTERS.map((f) => (
+      {/* Search + filter controls */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
+        {dateActive ? (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 ${filter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={clearDate}
+            title={tdate.clear}
+            aria-label={tdate.clear}
+            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-50 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
           >
-            {filterLabels[f]}
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t.searchPlaceholder}
-          autoCapitalize="none"
-          autoCorrect="off"
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        {search ? (
-          <button
-            type="button"
-            onClick={() => setSearch('')}
-            aria-label="Limpiar búsqueda"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            <X size={16} />
+            <XCircle size={16} />
           </button>
         ) : null}
+        {/* Date range */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => { setGroupMenuOpen(false); setDateOpen(o => !o); }}
+            title={tdate.button}
+            aria-label={tdate.button}
+            className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
+              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Calendar size={16} />
+          </button>
+          {dateOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.from}</label>
+                <input
+                  type="date"
+                  value={dateFrom ?? ''}
+                  onChange={e => setDateFrom(e.target.value || null)}
+                  className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.to}</label>
+                <input
+                  type="date"
+                  value={dateTo ?? ''}
+                  onChange={e => setDateTo(e.target.value || null)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                {dateActive ? (
+                  <button
+                    onClick={clearDate}
+                    className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                  >
+                    {tdate.clear}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+        {/* Group by */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => { setDateOpen(false); setGroupMenuOpen(o => !o); }}
+            title={tg.button}
+            aria-label={tg.button}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Layers size={15} /> {tg.button}
+          </button>
+          {groupMenuOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-white rounded-2xl border border-gray-100 shadow-lg p-2">
+                {groupOptions.map(o => {
+                  const active = groupBy === o.key;
+                  return (
+                    <button
+                      key={o.key}
+                      onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${active ? 'bg-primary/10' : 'hover:bg-gray-50'}`}
+                    >
+                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                        <o.Icon size={16} />
+                      </span>
+                      <span className={`flex-1 text-sm ${active ? 'text-primary font-semibold' : 'text-gray-900'}`}>{o.label}</span>
+                      {active ? <Check size={16} className="text-primary" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Status tabs — multi-select; "all" is an icon reset. */}
+      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4">
+        <button
+          onClick={() => setStatuses([])}
+          aria-label={t.filters.all}
+          className={`flex items-center justify-center px-2.5 py-1.5 rounded-xl shrink-0 ${statuses.length === 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+        >
+          <List size={15} />
+        </button>
+        {STATUS_KEYS.map(k => {
+          const on = statusSet.has(k);
+          return (
+            <button
+              key={k}
+              onClick={() => toggleStatus(k)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 ${on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+            >
+              {statusLabels[k]}
+              {counts[k] > 0 ? (
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>{counts[k]}</span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
 
       {/* Summary */}
       {filtered.length > 0 ? (
         <p className="text-xs text-gray-500 mb-3">
-          {summaryText} · {t.summaryTotal}: <span className="text-gray-900 font-bold">{fmt(total)}</span>
+          {t.summaryTotal}: <span className="text-gray-900 font-bold">{fmt(total)}</span>
         </p>
       ) : null}
 
@@ -146,37 +306,44 @@ export function InvoicesListScreen({
           <button onClick={onNewInvoicePress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {filtered.map((inv) => {
-            const statusKey = inv.status as keyof typeof tStatus;
-            const statusLabel = tStatus[statusKey] ?? inv.status;
-            const pill = STATUS_PILL[inv.status] ?? 'bg-gray-100 text-gray-500';
-            const client = inv.clientNames ?? t.noClient;
-            const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
-            return (
-              <div key={inv.id} className="flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0">
-                <button onClick={() => onInvoicePress(inv.id)} className="flex-1 min-w-0 text-left hover:opacity-70">
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-gray-900">{inv.invoiceNumber}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
-                  </span>
-                  <span className="block text-xs text-gray-400 mt-0.5 truncate">
-                    {client}
-                    {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
-                  </span>
-                </button>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-sm font-bold text-gray-900">{fmt(inv.totalAmount)}</span>
-                  {inv.status === 'draft' ? (
-                    <button onClick={() => onUpdateStatus(inv.id, 'sent')} className="text-xs text-blue-600 font-medium hover:underline">{t.markSent}</button>
-                  ) : null}
-                  {inv.status === 'sent' ? (
-                    <button onClick={() => onUpdateStatus(inv.id, 'paid')} className="text-xs text-emerald-600 font-medium hover:underline">{t.markPaid}</button>
-                  ) : null}
-                </div>
+        <div className="flex flex-col gap-4">
+          {sections.map(section => (
+            <div key={section.title || '__all'}>
+              {section.title ? (
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+                  {section.title} · {section.data.length}
+                </p>
+              ) : null}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                {section.data.map((inv) => {
+                  const statusKey = inv.status as keyof typeof tStatus;
+                  const statusLabel = tStatus[statusKey] ?? inv.status;
+                  const pill = STATUS_PILL[inv.status] ?? 'bg-gray-100 text-gray-500';
+                  const client = inv.clientNames ?? t.noClient;
+                  const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
+                  return (
+                    <button
+                      key={inv.id}
+                      onClick={() => onInvoicePress(inv.id)}
+                      className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{inv.invoiceNumber}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
+                        </span>
+                        <span className="block text-xs text-gray-400 mt-0.5 truncate">
+                          {client}
+                          {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 shrink-0">{fmt(inv.totalAmount)}</span>
+                    </button>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>

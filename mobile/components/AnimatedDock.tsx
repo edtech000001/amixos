@@ -17,6 +17,16 @@ import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
 // pushed detail screens) are never selection-filtered.
 const APP_KEY_BY_ROUTE = new Map(DOCK_APPS.map(a => [a.routeName, a.key]));
 
+// Sort rank for dock tabs: Inicio pinned first, Más pinned last, middle apps
+// ordered by their position in the user's saved selection (orderedKeys).
+function dockRank(routeName: string, orderedKeys: string[]): number {
+  if (routeName === 'index') return -1;
+  if (routeName === 'mas/index') return Number.MAX_SAFE_INTEGER;
+  const key = APP_KEY_BY_ROUTE.get(routeName);
+  const i = key ? orderedKeys.indexOf(key) : -1;
+  return i >= 0 ? i : orderedKeys.length; // unknown → just before Más
+}
+
 // Visual constants. Tweak here to retune the dock's silhouette.
 const BAR_HEIGHT = 50;
 const BUBBLE_SIZE = 44;
@@ -45,29 +55,37 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // The user's dock-app selection — applied here (not via route href) so
   // toggling apps is a cheap dock re-render, not a tab-navigator reconfigure.
   const dockKeys = useDockStore(s => s.keys);
-  const selectedApps = new Set(effectiveDockKeys(dockKeys, currentRole));
+  // Ordered (not just a Set) so the dock renders apps in the user's chosen
+  // order. orderedKeys is the middle selection; Inicio stays first, Más last.
+  const orderedKeys = effectiveDockKeys(dockKeys, currentRole);
+  const selectedApps = new Set(orderedKeys);
 
   // expo-router puts hidden screens (href: null) into state.routes too. It
   // marks them by setting tabBarButton: () => null AND tabBarItemStyle:
   // { display: 'none' }. Filter both — the `href` option itself isn't
   // forwarded to the descriptor's options. Then drop dock-eligible apps the
   // user hasn't selected (they stay registered + reachable from Más).
-  const visibleRoutes = state.routes.filter(r => {
-    const opts = descriptors[r.key].options as {
-      tabBarButton?: unknown;
-      tabBarItemStyle?: { display?: string } | { display?: string }[];
-    };
-    if (opts.tabBarButton) return false;
-    const style = opts.tabBarItemStyle;
-    if (Array.isArray(style)) {
-      if (style.some(s => s?.display === 'none')) return false;
-    } else if (style?.display === 'none') {
-      return false;
-    }
-    const appKey = APP_KEY_BY_ROUTE.get(r.name);
-    if (appKey && !selectedApps.has(appKey)) return false;
-    return true;
-  });
+  const visibleRoutes = state.routes
+    .filter(r => {
+      const opts = descriptors[r.key].options as {
+        tabBarButton?: unknown;
+        tabBarItemStyle?: { display?: string } | { display?: string }[];
+      };
+      if (opts.tabBarButton) return false;
+      const style = opts.tabBarItemStyle;
+      if (Array.isArray(style)) {
+        if (style.some(s => s?.display === 'none')) return false;
+      } else if (style?.display === 'none') {
+        return false;
+      }
+      const appKey = APP_KEY_BY_ROUTE.get(r.name);
+      if (appKey && !selectedApps.has(appKey)) return false;
+      return true;
+    })
+    // Order: Inicio (index) first → middle apps in the user's saved order → Más
+    // (mas/index) last. state.routes is in catalog/registration order, so the
+    // middle needs re-sorting to honor the user's drag-reorder.
+    .sort((a, b) => dockRank(a.name, orderedKeys) - dockRank(b.name, orderedKeys));
 
   const activeRoute = state.routes[state.index];
   // Highlight the tab the active route belongs to. Several visible tabs can now
