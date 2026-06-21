@@ -22,6 +22,27 @@ async function applyOp(op: OutboxOp): Promise<void> {
     if (error) throw error;
     return;
   }
+  if (op.op === 'upload') {
+    // Upload the local file to Storage, then insert the metadata row. fetch()
+    // reads the durable file:// uri into a blob (same path as the online code).
+    const res = await fetch(op.localUri!);
+    const blob = await res.blob();
+    const arrayBuffer = await new Response(blob).arrayBuffer();
+    const { error: upErr } = await supabase.storage
+      .from(op.bucket!)
+      .upload(op.storagePath!, arrayBuffer, { upsert: false, contentType: op.contentType ?? 'image/jpeg' });
+    if (upErr) throw upErr;
+    const { error: insErr } = await supabase.from(op.table).insert(op.payload);
+    if (insErr) throw insErr;
+    // Best-effort cleanup of the durable copy now that it's uploaded.
+    try {
+      const FileSystem = require('expo-file-system');
+      await FileSystem.deleteAsync(op.localUri, { idempotent: true });
+    } catch {
+      /* expo-file-system missing or already gone — harmless */
+    }
+    return;
+  }
   // update
   let q = supabase.from(op.table).update(op.payload);
   for (const [k, v] of Object.entries(op.match ?? {})) {

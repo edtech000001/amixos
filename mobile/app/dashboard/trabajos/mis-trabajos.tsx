@@ -4,6 +4,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached } from '@/lib/offline/cache';
+import { queuedUpdate } from '@/lib/offline/mutate';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -67,16 +69,22 @@ export default function MisTrabajosTab() {
 
   const load = async () => {
     if (!business || !user) return;
-    const { data } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        clients(first_name, last_name, company),
-        job_assignments(worker_name, is_lead, employees(first_name, last_name, user_id))
-      `)
-      .eq('business_id', business.id)
-      .order('created_at', { ascending: false });
-    const rows = (data ?? []) as RawJob[];
+    // Cached so the lead's job list works offline (the fetcher throws on error
+    // so loadCached can fall back to the last good list).
+    const res = await loadCached(`mis_trabajos_${business.id}_${user.id}`, async () => {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select(`
+          *,
+          clients(first_name, last_name, company),
+          job_assignments(worker_name, is_lead, employees(first_name, last_name, user_id))
+        `)
+        .eq('business_id', business.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as RawJob[];
+    });
+    const rows = res.data ?? [];
     // Keep only jobs where the current user is the lead.
     const filtered = rows.filter((j) =>
       j.job_assignments.some(
@@ -96,7 +104,12 @@ export default function MisTrabajosTab() {
     if (status === 'sent') update.sent_at = new Date().toISOString();
     if (status === 'accepted') update.accepted_at = new Date().toISOString();
     if (status === 'declined') update.declined_at = new Date().toISOString();
-    await supabase.from('jobs').update(update).eq('id', id);
+    const title = rawJobs.find(j => j.id === id)?.title ?? '';
+    try {
+      await queuedUpdate({ table: 'jobs', match: { id }, payload: update, businessId: business?.id ?? null, label: `${status}: ${title}` });
+    } catch {
+      return;
+    }
     setRawJobs(prev => prev.map(j => (j.id === id ? { ...j, ...update } : j)));
   };
 

@@ -39,6 +39,8 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
+import { queuedUpdate } from '@/lib/offline/mutate';
+import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -219,21 +221,31 @@ export default function JobDetailRoute() {
   const load = async () => {
     if (!business || !id) return;
     setLoading(true);
-    const [{ data: j }, { data: it }] = await Promise.all([
-      supabase
-        .from('jobs')
-        .select(
-          '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, custom_fields)',
-        )
-        .eq('id', id)
-        .single(),
-      supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
+    // Cached so a crew can open the job offline (to mark status / log actuals).
+    // Each fetcher throws on error so loadCached can fall back to the cache.
+    const [jobRes, itemsRes] = await Promise.all([
+      loadCached(`job_${id}`, async () => {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select(
+            '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, custom_fields)',
+          )
+          .eq('id', id)
+          .single();
+        if (error) throw error;
+        return data;
+      }),
+      loadCached(`job_items_${id}`, async () => {
+        const { data, error } = await supabase.from('job_items').select('*').eq('job_id', id).order('created_at');
+        if (error) throw error;
+        return (data as JobItem[] | null) ?? [];
+      }),
     ]);
     // Set null (not "leave as-is") when the row is gone — otherwise a deleted
     // job id reuses this screen's previous job, showing the wrong record
-    // instead of the not-found state.
-    setJob(j ? (j as Job) : null);
-    setItems((it as JobItem[] | null) ?? []);
+    // instead of the not-found state. (Offline with no cache also lands here.)
+    setJob(jobRes.data ? (jobRes.data as Job) : null);
+    setItems((itemsRes.data as JobItem[] | null) ?? []);
     setLoading(false);
   };
 
@@ -359,16 +371,27 @@ export default function JobDetailRoute() {
     if (newStatus === 'in_progress') update.in_progress_at = now;
     if (newStatus === 'completed') update.completed_at = now;
     if (newStatus === 'invoiced') update.invoiced_at = now;
-    // Surface failures instead of silently reverting — e.g. a missing column
-    // (un-run migration) makes Postgres reject the whole UPDATE, which used to
-    // look like "status didn't save" once the screen refetched.
-    const { error } = await supabase.from('jobs').update(update).eq('id', job.id);
-    if (error) {
+    // queuedUpdate writes through when online; offline it parks the change in
+    // the outbox (drained on reconnect). A real DB rejection (e.g. un-run
+    // migration) still throws so we surface it instead of silently reverting.
+    const statusLabel = (t.statuses as Record<string, string>)[newStatus] ?? newStatus;
+    try {
+      await queuedUpdate({
+        table: 'jobs',
+        match: { id: job.id },
+        payload: update,
+        businessId: job.business_id,
+        label: `${statusLabel}: ${job.title}`,
+      });
+    } catch {
       setUpdatingStatus(false);
       Alert.alert('', td.statusUpdateError);
       return;
     }
     setJob((prev) => (prev ? ({ ...prev, ...update } as Job) : prev));
+    // Keep the cached copy consistent so reopening the job offline shows the
+    // new status (not the stale cached one) before it syncs.
+    void patchCached(`job_${job.id}`, update);
     void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
       from: prevStatus, to: newStatus, job_title: job.title,
     });
@@ -1408,20 +1431,27 @@ function ActualsSection({
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const [{ data: a }, { data: tpl }] = await Promise.all([
-        supabase
+      // Assignments cached so a lead can log actuals offline; templates are
+      // best-effort (offline → empty).
+      const aRes = await loadCached(`job_assignments_${jobId}`, async () => {
+        const { data, error } = await supabase
           .from('job_assignments')
           .select('id, employee_id, worker_name, is_lead, hours_worked, custom_fields, employees(user_id)')
-          .eq('job_id', jobId),
-        supabase
+          .eq('job_id', jobId);
+        if (error) throw error;
+        return ((data ?? []) as unknown) as AssignmentRow[];
+      });
+      let tpls: AssignmentFieldTemplate[] = [];
+      try {
+        const { data: tpl } = await supabase
           .from('job_assignment_field_templates')
           .select('*')
           .eq('business_id', businessId)
-          .order('sort_order'),
-      ]);
+          .order('sort_order');
+        tpls = (tpl ?? []) as AssignmentFieldTemplate[];
+      } catch { /* offline — no templates */ }
       if (cancelled) return;
-      const rows = ((a ?? []) as unknown) as AssignmentRow[];
-      const tpls = ((tpl ?? []) as AssignmentFieldTemplate[]);
+      const rows = aRes.data ?? [];
       setAssignments(rows);
       setTemplates(tpls);
       const leadHere = rows.some(
@@ -1463,22 +1493,36 @@ function ActualsSection({
     setSaving(true);
     setMsg(null);
     try {
-      // Sequential updates — small N (one per worker) and Supabase upsert
-      // can't easily mix per-row partial updates here.
+      // Sequential updates — small N (one per worker). queuedUpdate writes
+      // through online or parks the change offline (drained on reconnect).
       for (const row of assignments) {
         const d = draft[row.id];
         if (!d) continue;
         const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
-        await supabase
-          .from('job_assignments')
-          .update({
+        await queuedUpdate({
+          table: 'job_assignments',
+          match: { id: row.id },
+          payload: {
             hours_worked: Number.isFinite(hoursNum) ? hoursNum : null,
             custom_fields: d.custom,
             logged_at: new Date().toISOString(),
             logged_by: user?.id ?? null,
-          })
-          .eq('id', row.id);
+          },
+          businessId,
+          label: `${tA.saveSuccess} · ${row.worker_name ?? ''} ${d.hours || '0'}h`.trim(),
+        });
       }
+      // Keep the cached assignments in sync so reopening offline shows the
+      // logged values before they sync.
+      void writeCached(
+        `job_assignments_${jobId}`,
+        assignments.map((r) => {
+          const d = draft[r.id];
+          if (!d) return r;
+          const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
+          return { ...r, hours_worked: Number.isFinite(hoursNum) ? hoursNum : null, custom_fields: d.custom };
+        }),
+      );
       setMsg({ text: tA.saveSuccess, isError: false });
     } catch {
       setMsg({ text: tA.saveError, isError: true });

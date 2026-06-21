@@ -3,6 +3,7 @@ import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached } from '@/lib/offline/cache';
 import { useApp } from '@/lib/AppContext';
 import {
   ClientsListScreen,
@@ -63,31 +64,39 @@ export default function ClientesTab() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const [cl, contactRows, tplRes] = await Promise.all([
+    // Clients list is cached so it (and on-site adds) work offline. Contacts +
+    // templates are best-effort — offline they just come back empty.
+    const clRes = await loadCached(`clients_list_${businessId}`, () =>
       fetchAll<Client>((from, to) =>
         supabase
           .from('clients')
           .select('*')
           .eq('business_id', businessId)
           .order('created_at', { ascending: false })
-          .range(from, to)),
-      // Contact people across the whole business — searched + shown under the
-      // matched client. Paginated: a busy business can have >1000 contacts.
-      fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+          .range(from, to)));
+    const cl = clRes.data ?? [];
+
+    let contactRows: { client_id: string; name: string; role: string | null }[] = [];
+    let tplData: { field_key: string; field_label: string }[] = [];
+    try {
+      contactRows = await fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
         supabase
           .from('client_contacts')
           .select('client_id, name, role')
           .eq('business_id', businessId)
           .order('is_primary', { ascending: false })
-          .range(from, to)),
-      // Field templates are bounded config (one row per custom field).
-      supabase
+          .range(from, to));
+    } catch { /* offline — no contacts */ }
+    try {
+      const tplRes = await supabase
         .from('client_field_templates')
         .select('field_key, field_label')
         .eq('business_id', businessId)
-        .order('sort_order'),
-    ]);
-    setTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? []);
+        .order('sort_order');
+      tplData = (tplRes.data as { field_key: string; field_label: string }[] | null) ?? [];
+    } catch { /* offline — no templates */ }
+
+    setTemplates(tplData);
     const byClient = new Map<string, { name: string; role: string | null }[]>();
     for (const ct of contactRows) {
       const arr = byClient.get(ct.client_id);

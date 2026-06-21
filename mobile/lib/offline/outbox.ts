@@ -15,7 +15,9 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type OutboxStatus = 'pending' | 'syncing' | 'error';
-export type OutboxOpType = 'insert' | 'update';
+// 'upload' = a binary (photo) at `localUri` → Storage `bucket/storagePath`,
+// then `payload` inserted into `table` as the metadata row.
+export type OutboxOpType = 'insert' | 'update' | 'upload';
 
 export interface OutboxOp {
   /** Local op id — unique within the queue, not a DB id. */
@@ -27,6 +29,15 @@ export interface OutboxOp {
   payload: Record<string, unknown>;
   /** eq() filters for updates, e.g. { id: jobId }. Ignored for inserts. */
   match?: Record<string, unknown>;
+  // ── 'upload' ops only ──────────────────────────────────────────────────
+  /** Durable local file uri (documentDirectory copy) to upload. */
+  localUri?: string;
+  /** Storage bucket name. */
+  bucket?: string;
+  /** Destination object path within the bucket. */
+  storagePath?: string;
+  /** MIME type for the upload (default image/jpeg). */
+  contentType?: string;
   /** Spanish, human-readable summary shown in the sync banner detail list. */
   label: string;
   /** Client timestamp at enqueue — drives last-write-wins ordering. */
@@ -38,7 +49,7 @@ export interface OutboxOp {
 }
 
 export type NewOutboxOp = Pick<OutboxOp, 'businessId' | 'table' | 'op' | 'payload' | 'label'> &
-  Partial<Pick<OutboxOp, 'match' | 'createdAt'>>;
+  Partial<Pick<OutboxOp, 'match' | 'createdAt' | 'localUri' | 'bucket' | 'storagePath' | 'contentType'>>;
 
 interface OutboxState {
   ops: OutboxOp[];
@@ -74,6 +85,10 @@ export const useOutboxStore = create<OutboxState>()(
           payload: op.payload,
           match: op.match,
           label: op.label,
+          localUri: op.localUri,
+          bucket: op.bucket,
+          storagePath: op.storagePath,
+          contentType: op.contentType,
         };
         set((s) => ({ ops: [...s.ops, full] }));
         return full;

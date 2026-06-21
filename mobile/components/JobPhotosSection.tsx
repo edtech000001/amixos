@@ -27,6 +27,9 @@ import {
   type JobPhoto,
 } from '@amixos/shared/lib/jobPhotos';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
+import { queuedUpload } from '@/lib/offline/mutate';
+import { useOutboxStore } from '@/lib/offline/outbox';
+import { isOnlineNow } from '@/lib/offline/network';
 
 interface Props {
   jobId: string;
@@ -47,6 +50,11 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const insets = useSafeAreaInsets();
 
   const [photos, setPhotos] = useState<JobPhoto[]>([]);
+  // Photos captured offline live in the outbox until they upload — render them
+  // as pending tiles (from their durable local file) so they show immediately.
+  const pending = useOutboxStore(s =>
+    s.ops.filter(o => o.op === 'upload' && o.table === 'job_photos' && (o.payload as { job_id?: string }).job_id === jobId),
+  );
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -69,7 +77,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   const pickAndUpload = async (source: 'camera' | 'library') => {
     setPickerOpen(false);
-    if (photos.length >= MAX_PHOTOS_PER_JOB) {
+    if (photos.length + pending.length >= MAX_PHOTOS_PER_JOB) {
       setError(t.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_JOB)));
       return;
     }
@@ -98,23 +106,39 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
     setUploading(true);
     setError('');
     try {
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const arrayBuffer = await new Response(blob).arrayBuffer();
       const path = jobPhotoPath(businessId, jobId, jobPhotoFilename('jpg'));
-      const { error: upErr } = await supabase.storage
-        .from(JOB_PHOTOS_BUCKET)
-        .upload(path, arrayBuffer, { upsert: false, contentType: 'image/jpeg' });
-      if (upErr) throw upErr;
-      const { error: insErr } = await supabase.from('job_photos').insert({
-        business_id: businessId,
-        job_id: jobId,
-        storage_path: path,
-        sort_order: photos.length,
-        created_by: user?.id ?? null,
+      // Offline: copy the image into the document dir so the queued upload
+      // survives an app restart (the picker's temp uri can be cleared).
+      let uploadUri = asset.uri;
+      if (!isOnlineNow()) {
+        try {
+          const FileSystem = require('expo-file-system');
+          const durable = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
+          await FileSystem.copyAsync({ from: asset.uri, to: durable });
+          uploadUri = durable;
+        } catch {
+          /* expo-file-system not present yet — fall back to the temp uri */
+        }
+      }
+      const { queued } = await queuedUpload({
+        table: 'job_photos',
+        payload: {
+          business_id: businessId,
+          job_id: jobId,
+          storage_path: path,
+          sort_order: photos.length + pending.length,
+          created_by: user?.id ?? null,
+        },
+        businessId,
+        label: t.addBtn,
+        localUri: uploadUri,
+        bucket: JOB_PHOTOS_BUCKET,
+        storagePath: path,
+        contentType: 'image/jpeg',
       });
-      if (insErr) throw insErr;
-      await load();
+      // Online write lands immediately → refresh. Offline → the pending tile
+      // (from the outbox) shows it until it syncs.
+      if (!queued) await load();
     } catch {
       setError(t.uploadError);
     }
@@ -177,7 +201,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   // Section sits inside the detail ScrollView's px-5 (20px) padding.
   const tileSize = Math.floor((screenW - 40 - GAP * (COLS - 1)) / COLS);
-  const atLimit = photos.length >= MAX_PHOTOS_PER_JOB;
+  const atLimit = photos.length + pending.length >= MAX_PHOTOS_PER_JOB;
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
   // Photos live in a private bucket — resolve short-lived signed URLs.
@@ -221,7 +245,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
         </View>
       ) : null}
 
-      {photos.length === 0 && !canWrite ? (
+      {photos.length === 0 && pending.length === 0 && !canWrite ? (
         <View className="py-8 items-center">
           <ImagePlus size={28} color="#D1D5DB" />
           <Text className="text-sm text-gray-400 mt-2">{t.empty}</Text>
@@ -241,6 +265,21 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
                 resizeMode="cover"
               />
             </Pressable>
+          ))}
+
+          {/* Pending (queued offline) photos — shown from their local file with
+              a spinner overlay until they upload. */}
+          {pending.map(op => (
+            <View
+              key={op.id}
+              style={{ width: tileSize, height: tileSize }}
+              className="rounded-xl overflow-hidden bg-gray-100"
+            >
+              <Image source={{ uri: op.localUri }} style={{ width: tileSize, height: tileSize }} resizeMode="cover" />
+              <View className="absolute inset-0 items-center justify-center bg-black/30">
+                <ActivityIndicator color="#FFFFFF" />
+              </View>
+            </View>
           ))}
 
           {canWrite && !atLimit ? (

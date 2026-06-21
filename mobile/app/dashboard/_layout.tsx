@@ -15,6 +15,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { startNetworkMonitor } from '@/lib/offline/network';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
+import { useOutboxStore } from '@/lib/offline/outbox';
 import {
   GoogleSyncBanner,
   GoogleSyncBannerProvider,
@@ -110,8 +111,12 @@ function DashboardTabs() {
     return stop;
   }, []);
   const { status } = useGoogleSyncBanner();
+  // The offline-sync banner shows whenever there are queued ops — it also needs
+  // to push content down, not just the Google banner. Without this the offline
+  // banner overlays the screen header (it was cutting off the page title).
+  const offlineActive = useOutboxStore(s => s.ops.length > 0);
   const [bannerHeight, setBannerHeight] = useState(0);
-  const bannerVisible = status.kind !== 'idle';
+  const bannerVisible = status.kind !== 'idle' || offlineActive;
   // When the banner hides, drop the offset immediately. When it shows,
   // the next onLayout pass will update bannerHeight. Brief 0→correct
   // transition is fine — better than holding stale height after dismiss.

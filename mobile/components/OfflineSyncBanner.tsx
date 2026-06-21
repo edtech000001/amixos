@@ -138,8 +138,10 @@ function DetailSheet({
   ops: OutboxOp[];
   hasErrors: boolean;
 }) {
+  // fade (not slide) so the dim backdrop eases in smoothly instead of a gray
+  // bar sliding up from the bottom — matches the rest of the app.
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}

@@ -86,6 +86,47 @@ export async function queuedUpdate(args: UpdateArgs): Promise<MutateResult> {
   return { queued: true };
 }
 
+interface UploadArgs {
+  /** Metadata table to insert the row into after the file uploads. */
+  table: string;
+  payload: Record<string, unknown>;
+  businessId: string | null;
+  label: string;
+  /** Durable local file uri (a documentDirectory copy that survives restarts). */
+  localUri: string;
+  bucket: string;
+  storagePath: string;
+  contentType?: string;
+}
+
+/** Upload a binary (photo) + insert its metadata row. Online: upload to Storage
+ *  then insert; on a network failure, queue the whole thing (the sync runner
+ *  replays it). A real rejection (RLS, etc.) throws so the caller can surface it. */
+export async function queuedUpload(args: UploadArgs): Promise<MutateResult> {
+  const { table, payload, businessId, label, localUri, bucket, storagePath, contentType } = args;
+  if (useNetworkStore.getState().isOnline) {
+    try {
+      const supabase = createSupabaseClient();
+      const res = await fetch(localUri);
+      const blob = await res.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const { error: upErr } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, arrayBuffer, { upsert: false, contentType: contentType ?? 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { error: insErr } = await supabase.from(table).insert(payload);
+      if (insErr) throw insErr;
+      return { queued: false };
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      useNetworkStore.getState().setOnline(false);
+    }
+  }
+  enqueue({ table, op: 'upload', payload, businessId, label, localUri, bucket, storagePath, contentType });
+  void drainOutbox();
+  return { queued: true };
+}
+
 function enqueue(op: NewOutboxOp) {
   useOutboxStore.getState().enqueue(op);
 }

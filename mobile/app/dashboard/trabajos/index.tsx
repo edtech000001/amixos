@@ -3,6 +3,8 @@ import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached } from '@/lib/offline/cache';
+import { queuedUpdate } from '@/lib/offline/mutate';
 import { useApp } from '@/lib/AppContext';
 import {
   JobsListScreen,
@@ -62,18 +64,21 @@ export default function TrabajosTab() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawJob>((from, to) =>
-      supabase
-        .from('jobs')
-        .select(`
-          *,
-          clients(first_name, last_name, company),
-          job_assignments(worker_name, is_lead, employees(first_name, last_name))
-        `)
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .range(from, to));
-    setRawJobs(data);
+    // Cached so the list (and navigation into a job) works offline. fetchAll
+    // throws on error, so loadCached falls back to the last good list.
+    const res = await loadCached(`jobs_list_${businessId}`, () =>
+      fetchAll<RawJob>((from, to) =>
+        supabase
+          .from('jobs')
+          .select(`
+            *,
+            clients(first_name, last_name, company),
+            job_assignments(worker_name, is_lead, employees(first_name, last_name))
+          `)
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: false })
+          .range(from, to)));
+    setRawJobs(res.data ?? []);
     setLoading(false);
   };
 
@@ -88,7 +93,12 @@ export default function TrabajosTab() {
     if (status === 'sent') update.sent_at = new Date().toISOString();
     if (status === 'accepted') update.accepted_at = new Date().toISOString();
     if (status === 'declined') update.declined_at = new Date().toISOString();
-    await supabase.from('jobs').update(update).eq('id', id);
+    const title = rawJobs.find(j => j.id === id)?.title ?? '';
+    try {
+      await queuedUpdate({ table: 'jobs', match: { id }, payload: update, businessId: business?.id ?? null, label: `${status}: ${title}` });
+    } catch {
+      return; // real DB rejection — leave the row unchanged
+    }
     setRawJobs(prev => prev.map(j => (j.id === id ? { ...j, ...update } : j)));
   };
 

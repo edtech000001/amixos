@@ -19,6 +19,9 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { queuedInsert } from '@/lib/offline/mutate';
+import { prependCached } from '@/lib/offline/cache';
+import { newUuid } from '@/lib/offline/ids';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -240,24 +243,36 @@ export default function NuevoClienteRoute() {
       })();
       router.replace(`/dashboard/clientes/${editId}` as never);
     } else {
-      const { data: created, error: e } = await supabase
-        .from('clients')
-        .insert({ ...payload, business_id: business.id })
-        .select('id')
-        .single();
-      if (e || !created) {
+      // Client-generated id so creating works offline (and we can navigate /
+      // sync to it immediately). queuedInsert writes through online, or parks it
+      // in the outbox offline.
+      const newId = newUuid();
+      const row = { ...payload, id: newId, business_id: business.id };
+      const label = `${payload.first_name} ${payload.last_name}`.trim() || payload.company || 'Cliente';
+      let queued = false;
+      try {
+        const res = await queuedInsert({ table: 'clients', payload: row, businessId: business.id, label: `Cliente: ${label}` });
+        queued = res.queued;
+      } catch {
         setError(t.modal.saveError);
         setSaving(false);
         return;
       }
-      void (async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const jwt = await getJwt();
-        if (!apiBaseUrl || !jwt) return;
-        triggerGoogleSyncOrThrow('create', created.id, { apiBaseUrl, jwt })
-          .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
-      })();
-      router.replace(`/dashboard/clientes/${created.id}` as never);
+      if (queued) {
+        // Offline: show it in the cached list now; it syncs on reconnect. The
+        // detail screen isn't cached for this new id yet, so go to the list.
+        void prependCached(`clients_list_${business.id}`, row);
+        router.replace('/dashboard/clientes' as never);
+      } else {
+        void (async () => {
+          const apiBaseUrl = getApiBaseUrl();
+          const jwt = await getJwt();
+          if (!apiBaseUrl || !jwt) return;
+          triggerGoogleSyncOrThrow('create', newId, { apiBaseUrl, jwt })
+            .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
+        })();
+        router.replace(`/dashboard/clientes/${newId}` as never);
+      }
     }
   };
 
