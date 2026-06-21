@@ -1,4 +1,4 @@
--- 079_equipment_insurance_fields.sql
+-- 087_equipment_insurance_fields.sql (renumbered from 079 to resolve a duplicate number)
 -- Universal asset fields for the equipment module: insurance (carrier, policy
 -- number, agent + phone, expiration), serial number (non-vehicle assets that
 -- have no VIN), purchase + warranty dates, and current location. All nullable.
