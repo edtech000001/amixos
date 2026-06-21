@@ -46,6 +46,9 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
   const TABS = ALL_TABS.filter(tab => tab.show);
 
   const onActividad = pathname.startsWith('/dashboard/ajustes/actividad');
+  // The role editor lives at /ajustes/equipo (reached from inside the Equipo
+  // tab) — keep tabs un-highlighted while on it.
+  const onEquipo = pathname.startsWith('/dashboard/ajustes/equipo');
 
   const itemCls = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
@@ -69,7 +72,7 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
         {TABS.map(tabItem => {
           const Icon = tabItem.icon;
           // A tab is "active" only on the hub (no sub-page open) for the matching key.
-          const active = !onActividad && activeTab === tabItem.key;
+          const active = !onActividad && !onEquipo && activeTab === tabItem.key;
           if (onTabClick) {
             return (
               <button key={tabItem.key} type="button" onClick={() => onTabClick(tabItem.key)} className={itemCls(active)}>

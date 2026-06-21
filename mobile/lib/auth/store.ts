@@ -2,7 +2,13 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
-import type { Role } from '@amixos/shared/lib/permissions';
+import {
+  setActiveRolePermissions,
+  mergeRolePermissions,
+  permissionsForRole,
+  type Role,
+  type RolePermissions,
+} from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { createSupabaseClient } from '../supabase';
 
@@ -161,6 +167,11 @@ interface AuthStore {
   roles: Record<string, Role>;
   // Convenience: caller's role in the active business.
   currentRole: Role | null;
+  // Per-business customized role permissions (business_roles) for the active
+  // business, and the effective grid for the current user. Loaded alongside
+  // the business; registered with permissions.ts so can.* is override-aware.
+  roleOverrides: Partial<Record<Role, RolePermissions>>;
+  permissions: RolePermissions | null;
   businessLoaded: boolean;
   // True when the business fetch FAILED (e.g. a not-yet-run migration left a
   // column the query references missing). Distinct from "loaded 0 businesses"
@@ -177,6 +188,9 @@ interface AuthStore {
   // id to persistence so it survives reloads.
   setActiveBusiness: (businessId: string) => void;
 
+  // Load the active business's customized roles and register them so can.* is
+  // override-aware. Null businessId clears to defaults.
+  _loadRolePermissions: (businessId: string | null) => Promise<void>;
   _handleAuthEvent: (event: AuthChangeEvent, session: Session | null) => Promise<void>;
   _setHydrated: () => void;
 }
@@ -192,6 +206,8 @@ export const useAuthStore = create<AuthStore>()(
       business: null,
       roles: {},
       currentRole: null,
+      roleOverrides: {},
+      permissions: null,
       businessLoaded: false,
       businessLoadError: false,
       status: 'unknown',
@@ -232,7 +248,8 @@ export const useAuthStore = create<AuthStore>()(
       refetchBusiness: async () => {
         const u = get().user;
         if (!u) {
-          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, roles: {}, currentRole: null });
+          setActiveRolePermissions(null);
+          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, roles: {}, currentRole: null, roleOverrides: {}, permissions: null });
           return;
         }
         try {
@@ -282,6 +299,9 @@ export const useAuthStore = create<AuthStore>()(
             businessLoaded: true,
             businessLoadError: false,
           });
+          // Load this business's customized role permissions (override-aware
+          // can.*). Non-blocking for the rest of the dashboard.
+          void get()._loadRolePermissions(activeId);
         } catch {
           // Network/transport failure — same fail-safe: don't masquerade as
           // "no businesses". Show the retry screen, don't wipe state.
@@ -298,6 +318,30 @@ export const useAuthStore = create<AuthStore>()(
           activeBusinessId: businessId,
           business: next,
           currentRole: roleMap[businessId] ?? null,
+        });
+        void get()._loadRolePermissions(businessId);
+      },
+
+      _loadRolePermissions: async (businessId) => {
+        if (!businessId) {
+          setActiveRolePermissions(null);
+          const role = get().currentRole;
+          set({ roleOverrides: {}, permissions: role ? permissionsForRole(role) : null });
+          return;
+        }
+        const { data } = await supabase
+          .from('business_roles')
+          .select('key, permissions')
+          .eq('business_id', businessId);
+        const map: Partial<Record<Role, RolePermissions>> = {};
+        for (const row of (data ?? []) as Array<{ key: string; permissions: unknown }>) {
+          map[row.key as Role] = mergeRolePermissions(row.key as Role, row.permissions);
+        }
+        setActiveRolePermissions(Object.keys(map).length ? map : null);
+        const role = get().currentRole;
+        set({
+          roleOverrides: map,
+          permissions: role ? map[role] ?? permissionsForRole(role) : null,
         });
       },
 
@@ -329,7 +373,8 @@ export const useAuthStore = create<AuthStore>()(
             }
             break;
           case 'SIGNED_OUT':
-            set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null });
+            setActiveRolePermissions(null);
+            set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null, roleOverrides: {}, permissions: null, roles: {}, currentRole: null });
             break;
           case 'TOKEN_REFRESHED':
           case 'USER_UPDATED':
@@ -394,8 +439,11 @@ export function useApp() {
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
   const currentRole = useAuthStore((s) => s.currentRole);
+  const permissions = useAuthStore((s) => s.permissions);
+  const roleOverrides = useAuthStore((s) => s.roleOverrides);
   const status = useAuthStore((s) => s.status);
   const refetchBusiness = useAuthStore((s) => s.refetchBusiness);
+  const loadRolePermissions = useAuthStore((s) => s._loadRolePermissions);
   const logout = useAuthStore((s) => s.logout);
 
   const loading = status === 'unknown' || status === 'loading';
@@ -407,8 +455,11 @@ export function useApp() {
     activeBusinessId,
     setActiveBusiness,
     currentRole,
+    permissions,
+    roleOverrides,
     loading,
     refetchBusiness,
+    reloadPermissions: () => loadRolePermissions(useAuthStore.getState().activeBusinessId),
     signOut: logout,
   };
 }

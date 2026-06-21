@@ -67,6 +67,28 @@ export type DashboardDict = {
     saved: string;
     noResults: string;
   };
+  roles: {
+    title: string;
+    subtitle: string;
+    entry: string;
+    ownerLocked: string;
+    customized: string;
+    reset: string;
+    resetConfirm: string;
+    saved: string;
+    saveError: string;
+    sectionData: string;
+    sectionSystem: string;
+    colView: string;
+    colCreate: string;
+    colEdit: string;
+    colDelete: string;
+    scopeNone: string;
+    scopeAssigned: string;
+    scopeAll: string;
+    resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; reports: string };
+    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string };
+  };
   home: {
     welcome: string;
     newInvoice: string;
@@ -2067,6 +2089,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
       saved: 'Trabajo registrado',
       noResults: 'Sin resultados',
     },
+    roles: {
+      title: 'Roles y permisos',
+      subtitle: 'Personaliza lo que cada rol puede ver y hacer.',
+      entry: 'Roles y permisos',
+      ownerLocked: 'El propietario siempre tiene control total.',
+      customized: 'Personalizado',
+      reset: 'Restablecer',
+      resetConfirm: '¿Restablecer este rol a los permisos predeterminados?',
+      saved: 'Cambios guardados',
+      saveError: 'No se pudo guardar. Intenta de nuevo.',
+      sectionData: 'Acceso a datos',
+      sectionSystem: 'Administración',
+      colView: 'Ver',
+      colCreate: 'Crear',
+      colEdit: 'Editar',
+      colDelete: 'Eliminar',
+      scopeNone: 'No',
+      scopeAssigned: 'Asignados',
+      scopeAll: 'Todos',
+      resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', reports: 'Reportes' },
+      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas' },
+    },
     home: {
       welcome: 'Bienvenido 👋',
       newInvoice: 'Nueva factura',
@@ -4048,6 +4092,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
       saveError2: 'Could not log. Try again.',
       saved: 'Job logged',
       noResults: 'No results',
+    },
+    roles: {
+      title: 'Roles & permissions',
+      subtitle: 'Customize what each role can see and do.',
+      entry: 'Roles & permissions',
+      ownerLocked: 'The owner always has full control.',
+      customized: 'Customized',
+      reset: 'Reset to default',
+      resetConfirm: 'Reset this role to default permissions?',
+      saved: 'Changes saved',
+      saveError: 'Could not save. Try again.',
+      sectionData: 'Data access',
+      sectionSystem: 'Administration',
+      colView: 'View',
+      colCreate: 'Create',
+      colEdit: 'Edit',
+      colDelete: 'Delete',
+      scopeNone: 'No',
+      scopeAssigned: 'Assigned',
+      scopeAll: 'All',
+      resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', reports: 'Reports' },
+      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours' },
     },
     home: {
       welcome: 'Welcome 👋',

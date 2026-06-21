@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
@@ -2465,6 +2465,22 @@ export default function AjustesPage() {
           {/* ══ EMPLEADOS ═══════════════════════════════════════════════ */}
           {tab === 'empleados' && (
             <div className="flex flex-col gap-5">
+              {/* Roles editor lives inside Team settings. */}
+              {can.manageMembers(currentRole) && (
+                <Link
+                  href="/dashboard/ajustes/equipo"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-3 hover:border-primary transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <ShieldCheck size={18} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-semibold text-gray-900">{full.dashboard.roles.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{full.dashboard.roles.subtitle}</p>
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 shrink-0" />
+                </Link>
+              )}
               {/* Unified employee-fields list (standard + custom interleaved). */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">

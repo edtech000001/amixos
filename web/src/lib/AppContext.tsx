@@ -1,8 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
-import type { Role } from '@amixos/shared/lib/permissions';
+import {
+  setActiveRolePermissions,
+  mergeRolePermissions,
+  permissionsForRole,
+  type Role,
+  type RolePermissions,
+} from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 
 export interface Business {
@@ -115,8 +121,17 @@ interface AppContextValue {
   activeBusinessId: string | null;
   roles: Record<string, Role>;
   currentRole: Role | null;
+  // Effective permission grid for the current user in the active business
+  // (built-in default merged with any business_roles override). Null until a
+  // role is known. UI gates read can.* (override-aware); this is for the role
+  // editor + anything that wants the structured matrix directly.
+  permissions: RolePermissions | null;
+  // Per-role overrides for the active business (only customized roles present).
+  // The role editor reads this; falls back to DEFAULT_ROLE_PERMISSIONS.
+  roleOverrides: Partial<Record<Role, RolePermissions>>;
   loading: boolean;
   refetchBusiness: () => Promise<void>;
+  reloadPermissions: () => Promise<void>;
   setActiveBusiness: (businessId: string) => void;
 }
 
@@ -127,8 +142,11 @@ const AppContext = createContext<AppContextValue>({
   activeBusinessId: null,
   roles: {},
   currentRole: null,
+  permissions: null,
+  roleOverrides: {},
   loading: true,
   refetchBusiness: async () => {},
+  reloadPermissions: async () => {},
   setActiveBusiness: () => {},
 });
 
@@ -155,11 +173,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, Role>>({});
+  const [roleOverrides, setRoleOverrides] = useState<Partial<Record<Role, RolePermissions>>>({});
   const [loading, setLoading] = useState(true);
 
   // Derived state — recomputed on every render, fine here since the maps are small.
   const business = businesses.find((b) => b.id === activeBusinessId) ?? null;
   const currentRole = activeBusinessId ? roles[activeBusinessId] ?? null : null;
+  const permissions = currentRole ? roleOverrides[currentRole] ?? permissionsForRole(currentRole) : null;
+
+  // Load the active business's customized roles (business_roles) and register
+  // them so can.* resolves against overrides. Empty = pure defaults. Exposed
+  // as reloadPermissions so the role editor can refresh after a save.
+  const reloadPermissions = useCallback(async () => {
+    if (!activeBusinessId) {
+      setActiveRolePermissions(null);
+      setRoleOverrides({});
+      return;
+    }
+    const { data } = await supabase
+      .from('business_roles')
+      .select('key, permissions')
+      .eq('business_id', activeBusinessId);
+    const map: Partial<Record<Role, RolePermissions>> = {};
+    for (const row of (data ?? []) as Array<{ key: string; permissions: unknown }>) {
+      map[row.key as Role] = mergeRolePermissions(row.key as Role, row.permissions);
+    }
+    // Register before state-set so the re-render reads up-to-date overrides.
+    setActiveRolePermissions(Object.keys(map).length ? map : null);
+    setRoleOverrides(map);
+  }, [activeBusinessId]);
+
+  useEffect(() => { void reloadPermissions(); }, [reloadPermissions]);
 
   const fetchBusinesses = async (currentUserId: string) => {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
@@ -221,6 +265,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setUser(null);
           setBusinesses([]);
           setRoles({});
+          setRoleOverrides({});
+          setActiveRolePermissions(null);
           setActiveBusinessIdState(null);
           writeActiveCookie(null);
           window.location.href = '/auth/login';
@@ -239,8 +285,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeBusinessId,
         roles,
         currentRole,
+        permissions,
+        roleOverrides,
         loading,
         refetchBusiness,
+        reloadPermissions,
         setActiveBusiness,
       }}
     >

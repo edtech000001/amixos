@@ -66,8 +66,8 @@ export const RESOURCE_ACTIONS: Record<
   clients:   { create: true,  edit: true,  delete: true,  assignedView: true },
   invoices:  { create: true,  edit: true,  delete: true,  assignedView: false },
   employees: { create: true,  edit: true,  delete: true,  assignedView: false },
-  calendar:  { create: false, edit: true,  delete: false, assignedView: false },
-  inventory: { create: false, edit: true,  delete: false, assignedView: false },
+  calendar:  { create: true,  edit: true,  delete: true,  assignedView: false },
+  inventory: { create: true,  edit: true,  delete: true,  assignedView: false },
   reports:   { create: false, edit: false, delete: false, assignedView: false },
 };
 
@@ -143,8 +143,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       clients: R('all', true, true, false),
       invoices: R('all', true, true, false),
       employees: R('all', true, true, false),
-      calendar: R('all', false, true, false),
-      inventory: R('all', false, true, false),
+      calendar: R('all', true, true, true),
+      inventory: R('all', true, true, true),
       reports: R('all'),
     },
     caps: caps({
@@ -158,8 +158,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       clients: R('all', true, true, false),
       invoices: R('all', true, true, false),
       employees: R('none'),
-      calendar: R('all', false, true, false),
-      inventory: R('all', false, true, false),
+      calendar: R('all', true, true, true),
+      inventory: R('all', true, true, true),
       reports: R('none'),
     },
     caps: caps({
@@ -192,9 +192,65 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
   },
 };
 
-/** The permission set for a role (built-in defaults). */
+/** The permission set for a role (built-in defaults, ignoring overrides). */
 export function permissionsForRole(role: Role | null | undefined): RolePermissions | null {
   return role ? DEFAULT_ROLE_PERMISSIONS[role] : null;
+}
+
+// ─── Active per-business overrides ─────────────────────────────────────────
+// AppContext loads the active business's customized roles (business_roles
+// table) and registers them here. `can.*` then resolves against the override
+// for a role when present, else the built-in default — so every existing
+// can.X(role) call site becomes override-aware with no change. Module-level
+// because there is exactly one active business per client session; cleared on
+// logout / business switch. Null overrides = pure defaults (today's behavior).
+let activeOverrides: Partial<Record<Role, RolePermissions>> | null = null;
+
+/** Register the active business's customized role permissions (or null). */
+export function setActiveRolePermissions(map: Partial<Record<Role, RolePermissions>> | null): void {
+  activeOverrides = map;
+}
+
+/** The effective permissions for a role: the active override, else default. */
+export function effectivePermissions(role: Role | null | undefined): RolePermissions | null {
+  if (!role) return null;
+  return activeOverrides?.[role] ?? DEFAULT_ROLE_PERMISSIONS[role];
+}
+
+/**
+ * Merge a stored permissions snapshot (business_roles.permissions JSONB) over
+ * the role's built-in defaults. Tolerant of missing/partial keys so an older
+ * snapshot, or one written before a new resource/capability existed, still
+ * resolves to a complete RolePermissions.
+ */
+export function mergeRolePermissions(role: Role, raw: unknown): RolePermissions {
+  const base = DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS.viewer;
+  if (!raw || typeof raw !== 'object') return base;
+  const r = raw as { resources?: Record<string, Partial<ResourcePerm>>; caps?: Record<string, unknown> };
+
+  const resources = { ...base.resources };
+  if (r.resources && typeof r.resources === 'object') {
+    for (const k of RESOURCE_KEYS) {
+      const rp = r.resources[k];
+      if (rp && typeof rp === 'object') {
+        resources[k] = {
+          view: rp.view ?? base.resources[k].view,
+          create: typeof rp.create === 'boolean' ? rp.create : base.resources[k].create,
+          edit: typeof rp.edit === 'boolean' ? rp.edit : base.resources[k].edit,
+          delete: typeof rp.delete === 'boolean' ? rp.delete : base.resources[k].delete,
+        };
+      }
+    }
+  }
+
+  const mergedCaps = { ...base.caps };
+  if (r.caps && typeof r.caps === 'object') {
+    for (const key of Object.keys(base.caps) as CapabilityKey[]) {
+      const v = r.caps[key];
+      if (typeof v === 'boolean') mergedCaps[key] = v;
+    }
+  }
+  return { resources, caps: mergedCaps };
 }
 
 // ─── Top-level capability checks ──────────────────────────────────────────
@@ -202,9 +258,9 @@ export function permissionsForRole(role: Role | null | undefined): RolePermissio
 // don't need to change; later these can accept a loaded RolePermissions.
 
 const res = (role: Role | null, key: ResourceKey): ResourcePerm | null =>
-  role ? DEFAULT_ROLE_PERMISSIONS[role].resources[key] : null;
+  effectivePermissions(role)?.resources[key] ?? null;
 const cap = (role: Role | null, key: CapabilityKey): boolean =>
-  role ? DEFAULT_ROLE_PERMISSIONS[role].caps[key] : false;
+  effectivePermissions(role)?.caps[key] ?? false;
 
 export const can = {
   // Business settings, member management, billing, delete.

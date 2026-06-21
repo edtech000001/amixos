@@ -89,8 +89,8 @@ export default function AjustesIndex() {
         path: '/dashboard/mas/ajustes/facturas',
       },
     ] : []),
-    // Equipo (team) moved out of Ajustes — now lives as a top-level
-    // entry in Más under Empleados (see mas/index.tsx + mas/equipo.tsx).
+    // Roles y permisos lives INSIDE the Equipo (Team) screen, not as its own
+    // settings row — see mas/ajustes/empleados.tsx.
     {
       key: 'navegacion',
       label: t.tabs.navegacion,
