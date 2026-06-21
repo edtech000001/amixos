@@ -412,29 +412,32 @@ export default function MapModule() {
   // marker with a "+N" badge when multiple alerts share the location.
   // Group filter keeps the group when ANY of its alerts matches the
   // current search query.
+  // Weather alerts after the date-range filter — keep an alert whose active
+  // window [effective, ends/expires] overlaps [from, to]. Compare on the date
+  // portion (yyyy-mm-dd) so timezones/times don't skew the edges. This is the
+  // shared basis for BOTH the rendered alerts and the storm-focus radius, so a
+  // date-hidden alert can't anchor storm focus.
+  const dateFilteredWeatherPins = useMemo(() => {
+    if (!weatherDateFrom && !weatherDateTo) return weatherPins;
+    return weatherPins.filter(a => {
+      const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
+      const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
+      if (!s && !e) return false;
+      const start = s || e;
+      const end = e || s;
+      if (weatherDateFrom && end < weatherDateFrom) return false;
+      if (weatherDateTo && start > weatherDateTo) return false;
+      return true;
+    });
+  }, [weatherPins, weatherDateFrom, weatherDateTo]);
+
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    // Date-range filter: keep an alert whose active window
-    // [effective, ends/expires] overlaps [from, to]. Compare on the date
-    // portion (yyyy-mm-dd) so timezones/times don't skew the edges.
-    let pinsForGroup = weatherPins;
-    if (weatherDateFrom || weatherDateTo) {
-      pinsForGroup = weatherPins.filter(a => {
-        const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
-        const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
-        if (!s && !e) return false;
-        const start = s || e;
-        const end = e || s;
-        if (weatherDateFrom && end < weatherDateFrom) return false;
-        if (weatherDateTo && start > weatherDateTo) return false;
-        return true;
-      });
-    }
-    const groups = groupWeatherAlertsBySameCode(pinsForGroup);
+    const groups = groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
     const q = search.trim().toLowerCase();
     if (!q) return groups;
     return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, weatherPins, search, weatherDateFrom, weatherDateTo]);
+  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins, search]);
 
   const siblingsByWeatherId = useMemo(() => {
     const map = new Map<string, WeatherPin[]>();
@@ -458,9 +461,9 @@ export default function MapModule() {
     // Storm-focus mode: drop any non-weather pin that isn't within
     // `proximity_radius_miles` of an alert. Skipped when no alerts exist
     // so the user doesn't accidentally wipe the map.
-    if (stormFocus && weatherEnabled && weatherPins.length > 0) {
+    if (stormFocus && weatherEnabled && dateFilteredWeatherPins.length > 0) {
       const radius = normalizeWeatherConfig(business?.weather_config).proximity_radius_miles;
-      const anchors = weatherPins.map(w => ({ lat: w.lat, lng: w.lng }));
+      const anchors = dateFilteredWeatherPins.map(w => ({ lat: w.lat, lng: w.lng }));
       nonWeather = nonWeather.filter(p =>
         anchors.some(a => haversineMiles(a, { lat: p.lat, lng: p.lng }) <= radius),
       );
@@ -469,7 +472,7 @@ export default function MapModule() {
     const q = search.trim().toLowerCase();
     if (!q) return [...nonWeather, ...weatherPrimaries];
     return [...nonWeather.filter(p => pinMatchesQuery(p, q)), ...weatherPrimaries];
-  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, weatherPins, business?.weather_config]);
+  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
 
   // Auto-fit the map to search results so the user lands on them.
   useEffect(() => {
@@ -505,6 +508,14 @@ export default function MapModule() {
     });
     return () => google.maps.event.removeListener(listener);
   }, [mapReady, pins, search]);
+
+  // Keep the live map's type in sync with the saved setting. @react-google-maps
+  // doesn't reliably re-apply the `mapTypeId` prop after mount (esp. when an
+  // inline `options` object is also passed), so push it imperatively whenever
+  // the user changes it in the settings panel.
+  useEffect(() => {
+    if (mapReady && mapRef.current) mapRef.current.setMapTypeId(deviceSettings.mapType);
+  }, [mapReady, deviceSettings.mapType]);
 
   // Reset to the default view — re-frame every currently visible pin
   // (the corner button on the map). Falls back to the US overview when
@@ -868,7 +879,15 @@ export default function MapModule() {
             center={initialCenter}
             zoom={4}
             mapTypeId={deviceSettings.mapType}
-            onLoad={(m) => { mapRef.current = m; setMapReady(true); }}
+            onLoad={(m) => {
+              mapRef.current = m;
+              // Force the saved type onto the fresh instance — the `mapTypeId`
+              // prop isn't reliably honored at construction when `options` is
+              // also passed, so a re-created map (e.g. after a pins reload)
+              // would otherwise revert to the default roadmap.
+              m.setMapTypeId(deviceSettings.mapType);
+              setMapReady(true);
+            }}
             onUnmount={() => {
               if (clustererRef.current) clustererRef.current.clearMarkers();
               markersRef.current.forEach(mk => mk.setMap(null));

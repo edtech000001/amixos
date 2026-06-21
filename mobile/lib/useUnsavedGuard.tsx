@@ -17,10 +17,11 @@
 // The save path should call its navigation directly (NOT confirmLeave) so a
 // successful save never prompts.
 
-import { useCallback, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { BackHandler, Modal, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 
 export function useDirty(values: unknown, ready: boolean): boolean {
   const initial = useRef<string | null>(null);
@@ -41,30 +42,71 @@ export function useUnsavedGuard(opts: {
   const { t } = useLang();
   const s = t.common.unsavedChanges;
   const [visible, setVisible] = useState(false);
+  const pending = useRef<(() => void) | null>(null);
+  // What "Salir sin guardar" should run — the back-arrow's onLeave, or a custom
+  // action handed in by an external caller (e.g. the dock's navigation). Set
+  // whenever the sheet is opened.
+  const leaveAction = useRef<() => void>(onLeave);
 
   const confirmLeave = useCallback(() => {
     if (!dirty) {
       onLeave();
       return;
     }
+    leaveAction.current = onLeave;
     setVisible(true);
   }, [dirty, onLeave]);
 
+  // External leave request (dock re-tap, etc.): same prompt, but on discard it
+  // runs `proceed` (the caller's navigation) instead of the back-arrow onLeave.
+  // Clean form → proceed immediately, no prompt.
+  const requestLeave = useCallback((proceed: () => void) => {
+    if (!dirty) {
+      proceed();
+      return;
+    }
+    leaveAction.current = proceed;
+    setVisible(true);
+  }, [dirty]);
+
+  // Close the sheet first, then run the action. Navigating (which unmounts this
+  // screen AND the Modal) while the Modal is still committed as visible crashes
+  // on iOS — so we stash the action and run it only after `visible` flips false.
   const discard = useCallback(() => {
+    pending.current = leaveAction.current;
     setVisible(false);
-    onLeave();
-  }, [onLeave]);
+  }, []);
+
+  useEffect(() => {
+    if (!visible && pending.current) {
+      const fn = pending.current;
+      pending.current = null;
+      const h = requestAnimationFrame(() => fn());
+      return () => cancelAnimationFrame(h);
+    }
+  }, [visible]);
+
+  // Publish this form's guard so the dock can route its navigation through the
+  // prompt while this screen is focused; clear it on blur.
+  const setRequest = useLeaveGuardStore(s => s.setRequest);
+  useFocusEffect(
+    useCallback(() => {
+      setRequest(requestLeave);
+      return () => setRequest(null);
+    }, [requestLeave, setRequest]),
+  );
 
   // Android hardware back: prompt instead of leaving when dirty.
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
         if (!dirty) return false; // let the default back happen
+        leaveAction.current = onLeave;
         setVisible(true);
         return true; // we handled it
       });
       return () => sub.remove();
-    }, [dirty]),
+    }, [dirty, onLeave]),
   );
 
   const unsavedSheet = (

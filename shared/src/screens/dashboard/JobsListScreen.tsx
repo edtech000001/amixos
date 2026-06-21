@@ -23,7 +23,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
-import { DatePicker } from '../../ui/DatePicker';
+import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
@@ -552,41 +552,8 @@ export function JobsListScreen({
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {/* Date-range filter — inline (not a nested modal) so the DatePicker's
-            own iOS modal opens at the top level. */}
-        {dateMenuOpen ? (
-          <View className="rounded-2xl border border-gray-200 bg-white p-4 gap-3">
-            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              {t.dateFilter.title}
-            </Text>
-            <DatePicker
-              label={t.dateFilter.from}
-              value={dateFrom ?? ''}
-              onChange={v => setDateFrom(v || null)}
-            />
-            <DatePicker
-              label={t.dateFilter.to}
-              value={dateTo ?? ''}
-              onChange={v => setDateTo(v || null)}
-            />
-            <View className="flex-row gap-2 mt-1">
-              {dateActive ? (
-                <Pressable
-                  onPress={() => { setDateFrom(null); setDateTo(null); }}
-                  className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center active:bg-gray-200"
-                >
-                  <Text className="text-sm font-semibold text-gray-700">{t.dateFilter.clear}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                onPress={() => setDateMenuOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-primary items-center active:opacity-90"
-              >
-                <Text className="text-sm font-semibold text-white">{full.common.buttons.done}</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
+        {/* Date-range filter now lives in a bottom sheet (DateRangeSheet,
+            rendered at the screen root) for one-hand reach. */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1040,6 +1007,19 @@ export function JobsListScreen({
         </Pressable>
       </>
     ) : null}
+
+    <DateRangeSheet
+      open={dateMenuOpen}
+      onClose={() => setDateMenuOpen(false)}
+      from={dateFrom}
+      to={dateTo}
+      onChange={({ from, to }) => { setDateFrom(from); setDateTo(to); }}
+      title={t.dateFilter.title}
+      fromLabel={t.dateFilter.from}
+      toLabel={t.dateFilter.to}
+      clearLabel={t.dateFilter.clear}
+      applyLabel={t.dateFilter.apply}
+    />
     </View>
   );
 }

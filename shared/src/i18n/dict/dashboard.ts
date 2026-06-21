@@ -26,6 +26,7 @@ export type DashboardDict = {
       calendario: string;
       inventario: string;
       archivos: string;
+      reportes: string;
       tienda: string;
       ajustes: string;
       misTrabajos: string;
@@ -1928,6 +1929,7 @@ export type DashboardDict = {
       year: string;
       all: string;
     };
+    customRange: string;
     kpis: {
       revenueCollected: string;
       pendingToCollect: string;
@@ -2049,6 +2051,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         calendario: 'Citas, trabajos programados y horarios.',
         inventario: 'Productos, partes y materiales.',
         archivos: 'Manuales y documentos para tu equipo.',
+        reportes: 'Ingresos, trabajos, horas y más.',
         tienda: 'Activa o desactiva módulos para tu negocio.',
         ajustes: 'Configura tu negocio, equipo y conexiones.',
         misTrabajos: 'Trabajos donde eres líder.',
@@ -2563,7 +2566,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Filtrar por fecha',
         from: 'Desde',
         to: 'Hasta',
-        apply: 'Aplicar',
+        apply: 'Aplicar filtro',
         clear: 'Borrar fechas',
         summary: '{{from}} — {{to}}',
       },
@@ -3905,6 +3908,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         year: 'Este año',
         all: 'Todo el tiempo',
       },
+      customRange: 'Personalizado',
       kpis: {
         revenueCollected: 'Ingresos cobrados',
         pendingToCollect: 'Pendiente de cobro',
@@ -4053,6 +4057,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         calendario: 'Appointments, scheduled jobs, and hours.',
         inventario: 'Products, parts, and materials.',
         archivos: 'Manuals and documents for your team.',
+        reportes: 'Revenue, jobs, hours, and more.',
         tienda: 'Enable or disable modules for your business.',
         ajustes: 'Configure your business, team, and connections.',
         misTrabajos: "Jobs where you're the lead.",
@@ -4567,7 +4572,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Filter by date',
         from: 'From',
         to: 'To',
-        apply: 'Apply',
+        apply: 'Apply filter',
         clear: 'Clear dates',
         summary: '{{from}} — {{to}}',
       },
@@ -5909,6 +5914,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         year: 'This year',
         all: 'All time',
       },
+      customRange: 'Custom',
       kpis: {
         revenueCollected: 'Revenue collected',
         pendingToCollect: 'Pending to collect',

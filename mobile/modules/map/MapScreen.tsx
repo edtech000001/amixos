@@ -21,7 +21,7 @@ import {
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { DatePicker } from '@amixos/shared/ui';
+import { DateRangeSheet } from '@amixos/shared/ui';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import type { MapPinIcon } from '@amixos/shared/lib/mapPinPresets';
 import { resolvePinStyle } from '@amixos/shared/lib/mapPinResolve';
@@ -458,31 +458,34 @@ export default function MapScreen() {
   // exactly one marker (with a "+N" badge when there are sibling alerts
   // at the same location). The group's primary is the most-recently-sent
   // alert; siblings appear in the popup card's list.
+  // Weather alerts after the date-range filter — keep an alert whose active
+  // window [effective, ends/expires] overlaps [from, to]. Compare on the date
+  // portion (yyyy-mm-dd) so timezones/times don't skew the edges. Shared by
+  // BOTH the rendered alerts and storm focus, so a date-hidden alert can't
+  // anchor the storm radius.
+  const dateFilteredWeatherPins = useMemo(() => {
+    if (!weatherDateFrom && !weatherDateTo) return weatherPins;
+    return weatherPins.filter(a => {
+      const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
+      const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
+      if (!s && !e) return false;
+      const start = s || e;
+      const end = e || s;
+      if (weatherDateFrom && end < weatherDateFrom) return false;
+      if (weatherDateTo && start > weatherDateTo) return false;
+      return true;
+    });
+  }, [weatherPins, weatherDateFrom, weatherDateTo]);
+
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    // Date-range filter: keep an alert whose active window
-    // [effective, ends/expires] overlaps [from, to]. Compare on the date
-    // portion (yyyy-mm-dd) so timezones/times don't skew the edges.
-    let pinsForGroup = weatherPins;
-    if (weatherDateFrom || weatherDateTo) {
-      pinsForGroup = weatherPins.filter(a => {
-        const s = localDay(a.effective_at ?? a.ends_at ?? a.expires_at);
-        const e = localDay(a.ends_at ?? a.expires_at ?? a.effective_at);
-        if (!s && !e) return false;
-        const start = s || e;
-        const end = e || s;
-        if (weatherDateFrom && end < weatherDateFrom) return false;
-        if (weatherDateTo && start > weatherDateTo) return false;
-        return true;
-      });
-    }
-    const groups = groupWeatherAlertsBySameCode(pinsForGroup);
+    const groups = groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
     const q = search.trim().toLowerCase();
     if (!q) return groups;
     // Keep the group when ANY of its alerts matches the search, so
     // siblings are still discoverable via search.
     return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, weatherPins, search, weatherDateFrom, weatherDateTo]);
+  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins, search]);
 
   // O(1) lookup from a weather pin's id → its sibling list. Used when the
   // user taps a weather marker to pass siblings to the card.
@@ -511,12 +514,12 @@ export default function MapScreen() {
     // `proximity_radius_miles` of an alert (haversine distance). Skipped
     // when there are no weather pins at all — otherwise focus would
     // hide everything.
-    if (stormFocus && weatherEnabled && weatherPins.length > 0) {
+    if (stormFocus && weatherEnabled && dateFilteredWeatherPins.length > 0) {
       const radius = normalizeWeatherConfig(business?.weather_config).proximity_radius_miles;
-      // Use ALL weather pins for the radius check (not just primaries) so
-      // every alert location anchors a circle, even ones grouped behind a
-      // sibling badge.
-      const anchors = weatherPins.map(w => ({ lat: w.lat, lng: w.lng }));
+      // Use the date-filtered alerts for the radius check (not just primaries)
+      // so every shown alert anchors a circle, even ones grouped behind a
+      // sibling badge — but date-hidden alerts don't anchor anything.
+      const anchors = dateFilteredWeatherPins.map(w => ({ lat: w.lat, lng: w.lng }));
       nonWeather = nonWeather.filter(p =>
         anchors.some(a => haversineMiles(a, { lat: p.lat, lng: p.lng }) <= radius),
       );
@@ -528,7 +531,7 @@ export default function MapScreen() {
     // Non-weather still gets the per-pin filter; weather already filtered
     // at the group level above.
     return [...nonWeather.filter(p => pinMatchesQuery(p, q)), ...weatherPrimaries];
-  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, weatherPins, business?.weather_config]);
+  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
 
   // When a search narrows the result set, fit the map to those pins so
   // the user lands on them without panning. Skip when no search (so the
@@ -760,22 +763,8 @@ export default function MapScreen() {
             </>
           ) : null}
         </View>
-        {/* Weather date-range filter — inline (not a nested modal) so the
-           DatePicker's own iOS picker opens at the top level. */}
-        {weatherEnabled && weatherDateOpen ? (
-          <View className="mt-2 p-3 rounded-2xl border border-gray-200 bg-white gap-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{tdate.title}</Text>
-              {weatherDateActive ? (
-                <Pressable onPress={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }} hitSlop={6}>
-                  <Text className="text-xs font-semibold text-red-600">{tdate.clear}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <DatePicker label={tdate.from} value={weatherDateFrom ?? ''} onChange={v => setWeatherDateFrom(v || null)} />
-            <DatePicker label={tdate.to} value={weatherDateTo ?? ''} onChange={v => setWeatherDateTo(v || null)} />
-          </View>
-        ) : null}
+        {/* Weather date-range filter now lives in a bottom sheet (DateRangeSheet
+           at the screen root) for one-hand reach. */}
         {/* Storm-focus active banner — sits right under the search bar so
            the context of "what's being filtered" lives in the same visual
            group as the other filter inputs. */}
@@ -1035,6 +1024,19 @@ export default function MapScreen() {
           onChanged={() => void load()}
         />
       ) : null}
+
+      <DateRangeSheet
+        open={weatherEnabled && weatherDateOpen}
+        onClose={() => setWeatherDateOpen(false)}
+        from={weatherDateFrom}
+        to={weatherDateTo}
+        onChange={({ from, to }) => { setWeatherDateFrom(from); setWeatherDateTo(to); }}
+        title={tdate.title}
+        fromLabel={tdate.from}
+        toLabel={tdate.to}
+        clearLabel={tdate.clear}
+        applyLabel={tdate.apply}
+      />
     </SafeAreaView>
   );
 }

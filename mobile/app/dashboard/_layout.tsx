@@ -170,50 +170,16 @@ function DashboardTabs() {
             }}
           />
 
-          {/* Hidden routes (accessed via push, not via tab bar) */}
-          <Tabs.Screen name="facturas/[id]" options={{ href: null }} />
-          <Tabs.Screen
-            name="facturas/nueva"
-            options={{
-              href: null,
-              tabBarStyle: { display: 'none' },
-              unmountOnBlur: true,
-            }}
-          />
-          <Tabs.Screen name="clientes/[id]" options={{ href: null }} />
-          <Tabs.Screen
-            name="clientes/nuevo"
-            options={{
-              href: null,
-              tabBarStyle: { display: 'none' },
-              unmountOnBlur: true,
-            }}
-          />
-          <Tabs.Screen name="trabajos/[id]" options={{ href: null }} />
-          {/* Form screen — hide the dock so the sticky save footer isn't covered.
-             unmountOnBlur clears form state when the user navigates away so the
-             next "+ Nuevo trabajo" tap starts fresh (edit-mode reloads from DB). */}
-          <Tabs.Screen
-            name="trabajos/nuevo"
-            options={{
-              href: null,
-              tabBarStyle: { display: 'none' },
-              unmountOnBlur: true,
-            }}
-          />
-          {/* Project Leader's filtered job list — pushed from Más. */}
-          <Tabs.Screen
-            name="trabajos/mis-trabajos"
-            options={{
-              href: null,
-              tabBarStyle: { display: 'none' },
-              unmountOnBlur: true,
-            }}
-          />
-          {/* empleados/calendario are dock candidates (declared in the DOCK_APPS
-             map above); only their child/detail routes stay hidden. */}
-          <Tabs.Screen name="mas/empleados/[id]" options={{ href: null }} />
-          <Tabs.Screen name="mas/empleados/nuevo" options={{ href: null }} />
+          {/* Hidden routes (accessed via push, not via tab bar).
+
+             NOTE: each CRUD section (facturas, clientes, trabajos, mas/empleados)
+             now has its OWN Stack (_layout in the section folder), registered as
+             a single tab via the DOCK_APPS map above. Their list/detail/form
+             screens live INSIDE that stack — so they're NOT registered here.
+             This is what makes the dock remember where you left off: the Tabs
+             navigator keeps each section's stack mounted across dock switches.
+             It also drops the old `unmountOnBlur` that was wiping half-filled
+             forms when you tapped away. */}
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
           {/* Inventario is a MODULE (mas/inventario is a redirect to
              mas/modulos/inventory) — kept off the dock; reached via Más only

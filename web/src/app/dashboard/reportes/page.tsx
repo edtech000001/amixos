@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
-  FileText, Clock, Package, BarChart3,
+  FileText, Clock, Package, BarChart3, X,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -126,9 +126,13 @@ export default function ReportesPage() {
   const { t: full } = useLang();
   const t = full.dashboard.reports;
   const tc = full.common;
+  const tdate = full.dashboard.jobs.dateFilter; // reuse the date-filter labels
   const dateLocale = full.dashboard.dateLocale;
 
   const [range, setRange] = useState<Range>('year');
+  // Custom date range overrides the preset when set; picking a preset clears it.
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -187,9 +191,13 @@ export default function ReportesPage() {
     });
   }, [business, inventoryEnabled]);
 
-  // Filter by date range
-  const rangeStart = getRangeStart(range);
-  const rangeEnd = getRangeEnd(range);
+  // Filter by date range — a custom from/to overrides the preset when set.
+  const customActive = !!customFrom || !!customTo;
+  const parseLocal = (s: string) => { const [y, mo, d] = s.split('-').map(Number); return new Date(y, mo - 1, d); };
+  const rangeStart = customActive ? (customFrom ? parseLocal(customFrom) : null) : getRangeStart(range);
+  const rangeEnd = customActive
+    ? (customTo ? (() => { const d = parseLocal(customTo); d.setHours(23, 59, 59, 999); return d; })() : new Date())
+    : getRangeEnd(range);
 
   const inRange = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -198,10 +206,10 @@ export default function ReportesPage() {
     return true;
   };
 
-  const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.created_at)), [invoices, range]);
-  const filteredJobs     = useMemo(() => jobs.filter(j => inRange(j.created_at)), [jobs, range]);
-  const filteredClients  = useMemo(() => clients.filter(c => inRange(c.created_at)), [clients, range]);
-  const filteredSheets   = useMemo(() => timesheets.filter(ts => inRange(ts.work_date)), [timesheets, range]);
+  const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.created_at)), [invoices, range, customFrom, customTo]);
+  const filteredJobs     = useMemo(() => jobs.filter(j => inRange(j.created_at)), [jobs, range, customFrom, customTo]);
+  const filteredClients  = useMemo(() => clients.filter(c => inRange(c.created_at)), [clients, range, customFrom, customTo]);
+  const filteredSheets   = useMemo(() => timesheets.filter(ts => inRange(ts.work_date)), [timesheets, range, customFrom, customTo]);
 
   // ── Revenue KPIs ─────────────────────────────────────────────────────────
   const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
@@ -338,16 +346,48 @@ export default function ReportesPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
         </div>
-        {/* Range selector */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
-          {RANGE_KEYS.map(r => (
-            <button key={r} onClick={() => setRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                range === r ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {t.ranges[r]}
-            </button>
-          ))}
+        {/* Range selector + custom date range */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
+            {RANGE_KEYS.map(r => {
+              const on = range === r && !customActive;
+              return (
+                <button key={r} onClick={() => { setRange(r); setCustomFrom(''); setCustomTo(''); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                    on ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {t.ranges[r]}
+                </button>
+              );
+            })}
+          </div>
+          {/* Custom date range — overrides the preset when either side is set. */}
+          <div className={`flex items-center gap-1.5 rounded-xl border px-2 py-1 ${customActive ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => setCustomFrom(e.target.value)}
+              aria-label={tdate.from}
+              className="text-xs text-gray-700 bg-transparent focus:outline-none"
+            />
+            <span className="text-gray-300">–</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => setCustomTo(e.target.value)}
+              aria-label={tdate.to}
+              className="text-xs text-gray-700 bg-transparent focus:outline-none"
+            />
+            {customActive ? (
+              <button
+                onClick={() => { setCustomFrom(''); setCustomTo(''); }}
+                aria-label={tdate.clear}
+                className="ml-0.5 text-gray-400 hover:text-red-500"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 

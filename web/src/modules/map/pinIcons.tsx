@@ -234,7 +234,13 @@ export function buildPinMarkerIcon(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${xMin} ${yMin} ${vbW} ${vbH}">` +
       `<path d="M16 0 C7.16 0 0 7.16 0 16 C0 26 11 35 15.2 39.4 C15.65 39.85 16.35 39.85 16.8 39.4 C21 35 32 26 32 16 C32 7.16 24.84 0 16 0 Z" ` +
         `fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` +
-      `<g transform="translate(${iconX} ${iconY}) scale(${iconScale})">${iconInner}</g>` +
+      // Lucide glyph paths are stroke-only and inherit these from their parent
+      // <svg>. We stripped that <svg> in getIconInner, so the stroke/fill MUST
+      // be re-declared here or the paths render with the SVG defaults
+      // (fill black, stroke none) — i.e. an invisible glyph + a solid pin.
+      `<g transform="translate(${iconX} ${iconY}) scale(${iconScale})" ` +
+        `fill="none" stroke="${iconColor}" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">` +
+        `${iconInner}</g>` +
       badge +
     `</svg>`;
   const icon: PinMarkerIcon = {

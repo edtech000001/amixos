@@ -5,14 +5,14 @@
 // MIN_DOCK_MIDDLE. The choice is stored per user in profiles.dock_apps and
 // applied in app/dashboard/_layout.tsx by flipping each route's `href`.
 
-import { ClipboardList, Users, FileText, Calendar, UsersRound, type LucideIcon } from 'lucide-react-native';
+import { ClipboardList, Users, FileText, Calendar, UsersRound, BarChart3, type LucideIcon } from 'lucide-react-native';
 import { can } from '@amixos/shared/lib/permissions';
 import type { Role } from '@amixos/shared/lib/permissions';
 
 /** Keys of the labels we read from t.dashboard.sidebar for each app. Only
  *  CORE apps belong here — modules (Inventario, Mapa, Archivos, …) are gated by
  *  activation and live in the module system, never the static dock catalog. */
-export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados';
+export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados' | 'reportes';
 
 export interface DockApp {
   /** Stable key persisted in profiles.dock_apps. */
@@ -33,12 +33,16 @@ export interface DockApp {
 /** Dock order is the catalog order (Inicio … these … Más). Selection only — the
  *  user can't reorder, just pick which appear. Apps NOT pinned to the dock are
  *  surfaced in the Más screen (via `path`) so nothing is ever unreachable. */
+// routeName is the Tabs.Screen name. Sections with a nested Stack (their own
+// _layout) register the FOLDER as one tab — so the name is the folder, not the
+// `/index` leaf (e.g. 'facturas', not 'facturas/index').
 export const DOCK_APPS: DockApp[] = [
-  { key: 'clientes', routeName: 'clientes/index', path: '/dashboard/clientes', Icon: Users, labelKey: 'clientes', defaultOn: true, gate: can.seeAllClients },
-  { key: 'trabajos', routeName: 'trabajos/index', path: '/dashboard/trabajos', Icon: ClipboardList, labelKey: 'trabajos', defaultOn: true },
-  { key: 'facturas', routeName: 'facturas/index', path: '/dashboard/facturas', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
+  { key: 'clientes', routeName: 'clientes', path: '/dashboard/clientes', Icon: Users, labelKey: 'clientes', defaultOn: true, gate: can.seeAllClients },
+  { key: 'trabajos', routeName: 'trabajos', path: '/dashboard/trabajos', Icon: ClipboardList, labelKey: 'trabajos', defaultOn: true },
+  { key: 'facturas', routeName: 'facturas', path: '/dashboard/facturas', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
   { key: 'calendario', routeName: 'mas/calendario', path: '/dashboard/mas/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
-  { key: 'empleados', routeName: 'mas/empleados/index', path: '/dashboard/mas/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
+  { key: 'empleados', routeName: 'mas/empleados', path: '/dashboard/mas/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
+  { key: 'reportes', routeName: 'mas/reportes', path: '/dashboard/mas/reportes', Icon: BarChart3, labelKey: 'reportes', defaultOn: false, gate: can.seeReports },
 ];
 
 /** Selectable middle apps: default 3 (Inicio + 3 + Más = 5), max 4 (= 6 total). */

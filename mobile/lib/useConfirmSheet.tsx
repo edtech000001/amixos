@@ -15,7 +15,7 @@
 // "invoice is now empty — delete it?" follow-up). Backdrop tap / cancel button
 // run onCancel; the confirm button runs onConfirm (never onCancel).
 
-import { useCallback, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 
@@ -32,22 +32,31 @@ export interface ConfirmOptions {
 export function useConfirmSheet(): { confirm: (opts: ConfirmOptions) => void; confirmSheet: ReactElement } {
   const { t } = useLang();
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
+  const pending = useRef<(() => void) | null>(null);
 
   const confirm = useCallback((o: ConfirmOptions) => setOpts(o), []);
 
+  // Stash the chosen callback and close the sheet; run it only AFTER the Modal
+  // has been hidden. Running it inline (while the Modal is still committed as
+  // visible) and navigating crashes on iOS — the screen + Modal unmount mid-show.
   const cancel = useCallback(() => {
-    setOpts((cur) => {
-      cur?.onCancel?.();
-      return null;
-    });
-  }, []);
+    pending.current = opts?.onCancel ?? null;
+    setOpts(null);
+  }, [opts]);
 
   const accept = useCallback(() => {
-    setOpts((cur) => {
-      cur?.onConfirm();
-      return null;
-    });
-  }, []);
+    pending.current = opts?.onConfirm ?? null;
+    setOpts(null);
+  }, [opts]);
+
+  useEffect(() => {
+    if (!opts && pending.current) {
+      const fn = pending.current;
+      pending.current = null;
+      const h = requestAnimationFrame(() => fn());
+      return () => cancelAnimationFrame(h);
+    }
+  }, [opts]);
 
   const confirmSheet = (
     <Modal visible={!!opts} transparent animationType="fade" onRequestClose={cancel}>

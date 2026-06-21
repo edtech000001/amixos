@@ -9,6 +9,8 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { StackActions } from '@react-navigation/native';
+import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 import { useApp } from '@/lib/AppContext';
 import { useDockStore } from '@/lib/dockStore';
 import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
@@ -120,6 +122,30 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     }
   }
   const activeIndex = matched >= 0 ? matched : 0;
+
+  // Re-tapping the section you're already in takes you to its list (root) —
+  // e.g. from an invoice detail or a half-filled "Nueva factura" form straight
+  // to the invoice list. Pop the nested stack when it has history; otherwise
+  // (form opened directly, no list beneath) navigate to the section's index so
+  // we still land on the list. If a dirty form is focused it routes through the
+  // unsaved-changes prompt (leaveGuardStore) and only proceeds on "Salir sin
+  // guardar"; a clean screen navigates immediately.
+  const resetSection = (r: (typeof visibleRoutes)[number]) => {
+    const navigate = () => {
+      const nested = r.state as { key?: string; index?: number } | undefined;
+      if (nested?.key && (nested.index ?? 0) > 0) {
+        navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
+      } else {
+        (navigation.navigate as (name: string, params?: object) => void)(
+          r.name,
+          { screen: 'index' } as object,
+        );
+      }
+    };
+    const request = useLeaveGuardStore.getState().request;
+    if (request) request(navigate);
+    else navigate();
+  };
 
   const [barWidth, setBarWidth] = useState(0);
   const numTabs = Math.max(1, visibleRoutes.length);
@@ -248,24 +274,28 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       >
         {visibleRoutes.map((route, i) => {
           const Icon = descriptors[route.key].options.tabBarIcon;
+          const isActive = i === activeIndex;
           const onPress = () => {
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
             });
-            if (!event.defaultPrevented) {
-              // React Navigation's `navigate` is heavily overloaded on the route
-              // name; with mobile's `strict: false` the per-name typing falls
-              // through to a `never` parameter. Cast to a loose signature so
-              // the dynamic route.name + route.params flow compiles.
-              (navigation.navigate as (name: string, params?: object) => void)(
-                route.name,
-                route.params,
-              );
+            if (event.defaultPrevented) return;
+            // Already in this section → go to its list (see resetSection).
+            if (isActive) {
+              resetSection(route);
+              return;
             }
+            // React Navigation's `navigate` is heavily overloaded on the route
+            // name; with mobile's `strict: false` the per-name typing falls
+            // through to a `never` parameter. Cast to a loose signature so
+            // the dynamic route.name + route.params flow compiles.
+            (navigation.navigate as (name: string, params?: object) => void)(
+              route.name,
+              route.params,
+            );
           };
-          const isActive = i === activeIndex;
           return (
             <Pressable
               key={route.key}
@@ -293,9 +323,15 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
           },
           bubbleStyle,
         ]}
-        pointerEvents="none"
+        pointerEvents="box-none"
       >
-        <View
+        {/* The raised bubble is the ACTIVE section's icon. Tapping it takes you
+           to that section's list (same as re-tapping its tab slot below). */}
+        <Pressable
+          onPress={() => {
+            const r = visibleRoutes[activeIndex];
+            if (r) resetSection(r);
+          }}
           style={{
             width: BUBBLE_SIZE,
             height: BUBBLE_SIZE,
@@ -313,7 +349,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
           {activeIcon
             ? activeIcon({ color: ICON_ACTIVE, size: 24, focused: true })
             : null}
-        </View>
+        </Pressable>
       </Animated.View>
     </View>
   );

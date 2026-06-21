@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-nativ
 import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
-import { DatePicker } from '../../ui/DatePicker';
+import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -200,17 +200,8 @@ export function InvoicesListScreen({
         />
       </View>
 
-      {/* Date-range panel — inline so DatePicker's iOS modal opens top-level. */}
-      {dateOpen ? (
-        <View className="rounded-2xl border border-gray-200 bg-white p-4 gap-3 mb-4">
-          <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{tdate.title}</Text>
-          <DatePicker label={tdate.from} value={dateFrom ?? ''} onChange={v => setDateFrom(v || null)} />
-          <DatePicker label={tdate.to} value={dateTo ?? ''} onChange={v => setDateTo(v || null)} />
-          <Pressable onPress={() => setDateOpen(false)} className="py-2.5 rounded-xl bg-primary items-center active:opacity-90">
-            <Text className="text-sm font-semibold text-white">{full.common.buttons.done}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      {/* Date-range filter now lives in a bottom sheet (DateRangeSheet at the
+          screen root) for one-hand reach. */}
 
       {/* Status tabs — multi-select chips; "all" is an icon reset. */}
       <ScrollView
@@ -363,6 +354,19 @@ export function InvoicesListScreen({
 
     {/* New invoice — floating action, bottom-right thumb reach */}
     <Fab onPress={onNewInvoicePress} />
+
+    <DateRangeSheet
+      open={dateOpen}
+      onClose={() => setDateOpen(false)}
+      from={dateFrom}
+      to={dateTo}
+      onChange={({ from, to }) => { setDateFrom(from); setDateTo(to); }}
+      title={tdate.title}
+      fromLabel={tdate.from}
+      toLabel={tdate.to}
+      clearLabel={tdate.clear}
+      applyLabel={tdate.apply}
+    />
     </View>
   );
 }

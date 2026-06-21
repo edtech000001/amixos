@@ -9,4 +9,5 @@ export { Select } from './Select';
 export type { SelectOption } from './Select';
 export { Toggle } from './Toggle';
 export { DatePicker } from './DatePicker';
+export { DateRangeSheet } from './DateRangeSheet';
 export { Fab } from './Fab';
