@@ -4,6 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrendingUp, TrendingDown, ScanLine, Sparkles, X } from 'lucide-react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached, writeCached } from '@/lib/offline/cache';
+import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
+import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Button, Input, Modal, Select, AutocompleteInput } from '@amixos/shared/ui';
@@ -57,10 +60,11 @@ export default function InventoryModuleScreen() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawItem>((from, to) =>
-      supabase.from('inventory_items').select('*').eq('business_id', businessId)
-        .order('name').range(from, to));
-    setItems(data);
+    const res = await loadCached(`inventory_${businessId}`, () =>
+      fetchAll<RawItem>((from, to) =>
+        supabase.from('inventory_items').select('*').eq('business_id', businessId)
+          .order('name').range(from, to)));
+    setItems(res.data ?? []);
     setLoading(false);
   };
 
@@ -143,11 +147,23 @@ export default function InventoryModuleScreen() {
     setSaving(true);
     setError('');
     const payload = { ...form, name: form.name.trim(), sku: form.sku || null, category: form.category || null };
-    const { error: e } = modal === 'edit' && selected
-      ? await supabase.from('inventory_items').update(payload).eq('id', selected.id)
-      : await supabase.from('inventory_items').insert({ ...payload, business_id: business.id });
-    if (e) { setError(t.modal.errorSave); setSaving(false); return; }
-    await load();
+    const isEdit = modal === 'edit' && !!selected;
+    const id = isEdit ? selected!.id : newUuid();
+    try {
+      if (isEdit) {
+        await queuedUpdate({ table: 'inventory_items', match: { id }, payload, businessId: business.id, label: `Inventario: ${payload.name}` });
+      } else {
+        await queuedInsert({ table: 'inventory_items', payload: { ...payload, id, business_id: business.id }, businessId: business.id, label: `Inventario: ${payload.name}` });
+      }
+    } catch { setError(t.modal.errorSave); setSaving(false); return; }
+    // Optimistic local + cache so the change shows offline.
+    setItems(prev => {
+      const next = isEdit
+        ? prev.map(i => (i.id === id ? ({ ...i, ...payload } as RawItem) : i))
+        : [{ ...payload, id, business_id: business.id } as RawItem, ...prev];
+      void writeCached(`inventory_${business.id}`, next);
+      return next;
+    });
     setSaving(false);
     setModal(null);
   };
@@ -158,8 +174,14 @@ export default function InventoryModuleScreen() {
     const newQty = adjustType === 'add'
       ? selected.quantity + adjustQty
       : Math.max(0, selected.quantity - adjustQty);
-    await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', selected.id);
-    setItems(prev => prev.map(i => (i.id === selected.id ? { ...i, quantity: newQty } : i)));
+    try {
+      await queuedUpdate({ table: 'inventory_items', match: { id: selected.id }, payload: { quantity: newQty }, businessId: business?.id ?? null, label: `Inventario: ${selected.name}` });
+    } catch { setSaving(false); return; }
+    setItems(prev => {
+      const next = prev.map(i => (i.id === selected.id ? { ...i, quantity: newQty } : i));
+      if (business) void writeCached(`inventory_${business.id}`, next);
+      return next;
+    });
     setSaving(false);
     setModal(null);
   };
@@ -171,8 +193,14 @@ export default function InventoryModuleScreen() {
         text: tc.buttons.delete,
         style: 'destructive',
         onPress: async () => {
-          await supabase.from('inventory_items').delete().eq('id', id);
-          setItems(prev => prev.filter(i => i.id !== id));
+          try {
+            await queuedDelete({ table: 'inventory_items', match: { id }, businessId: business?.id ?? null, label: 'Eliminar inventario' });
+          } catch { return; }
+          setItems(prev => {
+            const next = prev.filter(i => i.id !== id);
+            if (business) void writeCached(`inventory_${business.id}`, next);
+            return next;
+          });
         },
       },
     ]);

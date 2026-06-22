@@ -177,32 +177,52 @@ export function JobsListScreen({
   // Restore the saved view (tab/search/sort/group) so navigating into a job
   // and back — or refreshing — keeps the filters. An explicit ?tab= deep link
   // (initialTab !== 'all') still wins for the tab.
-  const saved = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    return parseJobsFilters(window.localStorage.getItem(JOBS_FILTERS_KEY));
-  }, []);
-  const savedTabs = (saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k));
-  const [search, setSearch] = useState(saved?.search ?? '');
-  // Multi-select status filters. Empty = "all". A ?tab deep link seeds it.
-  const [tabs, setTabs] = useState<StatusTabKey[]>(initialTab !== 'all' ? [initialTab as StatusTabKey] : savedTabs);
+  // Filters start at defaults (a ?tab deep link still seeds the tab). Persisted
+  // filters are restored AFTER mount — reading localStorage during the initial
+  // render would diverge from the server HTML and throw a hydration error.
+  const [search, setSearch] = useState('');
+  const [tabs, setTabs] = useState<StatusTabKey[]>(initialTab !== 'all' ? [initialTab as StatusTabKey] : []);
   const tabSet = useMemo(() => new Set(tabs), [tabs]);
   const toggleTab = (k: StatusTabKey) =>
     setTabs(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<JobSortKey>(saved?.sortBy ?? 'recent');
-  const [groupBy, setGroupBy] = useState<JobGroupKey>(saved?.groupBy ?? 'none');
+  const [sortBy, setSortBy] = useState<JobSortKey>('recent');
+  const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
-  const [dateFrom, setDateFrom] = useState<string | null>(saved?.dateFrom ?? null);
-  const [dateTo, setDateTo] = useState<string | null>(saved?.dateTo ?? null);
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
+  // Gate persistence until after the restore pass, so we don't overwrite saved
+  // filters with defaults on the first render.
+  const [hydrated, setHydrated] = useState(false);
 
-  // Persist on any change.
+  // Restore persisted filters once, after mount.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    const saved = parseJobsFilters(
+      typeof window !== 'undefined' ? window.localStorage.getItem(JOBS_FILTERS_KEY) : null,
+    );
+    if (saved) {
+      setSearch(saved.search ?? '');
+      // A ?tab deep link wins over saved tabs.
+      if (initialTab === 'all') {
+        setTabs((saved.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
+      }
+      setSortBy(saved.sortBy ?? 'recent');
+      setGroupBy(saved.groupBy ?? 'none');
+      setDateFrom(saved.dateFrom ?? null);
+      setDateTo(saved.dateTo ?? null);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist on change — only after restore, so defaults don't clobber saved.
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
     const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo };
     window.localStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify(f));
-  }, [tabs, search, sortBy, groupBy, dateFrom, dateTo]);
+  }, [hydrated, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;

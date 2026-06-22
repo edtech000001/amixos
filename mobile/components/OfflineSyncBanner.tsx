@@ -61,6 +61,16 @@ export function OfflineSyncBanner() {
         text: `Sincronizando ${pending} ${plural(pending, 'cambio', 'cambios')}…`,
       };
     }
+    // Offline with nothing queued — let the user know they're viewing saved
+    // data (so a stale list / empty screen reads as "offline", not "broken").
+    if (!isOnline) {
+      return {
+        bg: '#FFFBEB',
+        fg: '#92400E',
+        icon: 'offline',
+        text: 'Sin conexión · mostrando datos guardados',
+      };
+    }
     return null;
   }, [errors, pending, isOnline]);
 

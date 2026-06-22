@@ -30,6 +30,9 @@ import {
   ImagePlus,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
+import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
+import { prependCached, writeCached } from '@/lib/offline/cache';
+import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -404,6 +407,9 @@ export default function NuevoTrabajoRoute() {
     setError('');
     try {
       let jobId: string;
+      // Offline support is for WORK jobs (proposals keep their online numbering).
+      let jobQueued = false;
+      let optimisticJobRow: Record<string, unknown> | null = null;
 
       // Shared location/notes fields — populated for both modes so coords and
       // worker notes work everywhere. Items/pricing are intentionally NOT
@@ -484,17 +490,21 @@ export default function NuevoTrabajoRoute() {
             if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
             else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
           }
-          const { error: upErr } = await supabase.from('jobs').update(jobUpdate).eq('id', editId);
-          if (upErr) throw new Error(upErr.message);
+          const upRes = await queuedUpdate({ table: 'jobs', match: { id: editId }, payload: jobUpdate, businessId: business.id, label: `Trabajo: ${title.trim()}` });
+          jobQueued = upRes.queued;
           jobId = editId;
         } else {
-          const { data: created, error: insErr } = await supabase
-            .from('jobs')
-            .insert({ business_id: business.id, status, created_by: user?.id ?? null, ...jobData })
-            .select()
-            .single();
-          if (insErr || !created) throw new Error(insErr?.message ?? t.errorSaveGeneric);
-          jobId = created.id;
+          // Client-generated id so creating a job offline works (and assignments
+          // can reference it before it syncs).
+          jobId = newUuid();
+          const insRes = await queuedInsert({
+            table: 'jobs',
+            payload: { id: jobId, business_id: business.id, status, created_by: user?.id ?? null, ...jobData },
+            businessId: business.id,
+            label: `Trabajo: ${title.trim()}`,
+          });
+          jobQueued = insRes.queued;
+          optimisticJobRow = { id: jobId, business_id: business.id, status, ...jobData, clients: null, job_assignments: [] };
         }
       }
 
@@ -506,7 +516,7 @@ export default function NuevoTrabajoRoute() {
       // Existing job_items are intentionally preserved; we no longer manage
       // line items from this form (moved to detail page).
       if (!isProposal) {
-        if (editId) await supabase.from('job_assignments').delete().eq('job_id', jobId);
+        if (editId) await queuedDelete({ table: 'job_assignments', match: { job_id: jobId }, businessId: business.id, label: 'Asignaciones' });
         // Only honor the lead pick if that employee is actually in the crew —
         // toggleEmployee already clears it, but belt-and-suspenders for save.
         const validLeadId =
@@ -532,12 +542,21 @@ export default function NuevoTrabajoRoute() {
           .map((w) => w.trim())
           .filter(Boolean)
           .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
-        if (assignments.length > 0) {
-          await supabase.from('job_assignments').insert(assignments);
+        // Per-assignment insert with client ids so an offline retry is idempotent.
+        for (const a of assignments) {
+          await queuedInsert({ table: 'job_assignments', payload: { id: newUuid(), ...a }, businessId: business.id, label: `Asignación: ${a.worker_name}` });
         }
       }
 
-      router.replace(`/dashboard/trabajos/${jobId}` as never);
+      if (jobQueued && optimisticJobRow) {
+        // Offline create: seed caches so the job shows in the list + opens, then
+        // go to the list (the detail's joined client data isn't available yet).
+        void prependCached(`jobs_list_${business.id}`, optimisticJobRow);
+        void writeCached(`job_${jobId}`, optimisticJobRow);
+        router.replace('/dashboard/trabajos' as never);
+      } else {
+        router.replace(`/dashboard/trabajos/${jobId}` as never);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errorSaveGeneric);
       setSaving(false);

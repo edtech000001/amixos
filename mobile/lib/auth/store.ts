@@ -274,6 +274,13 @@ export const useAuthStore = create<AuthStore>()(
           // the previous businesses; the gate shows a retry screen instead of
           // routing an existing user into onboarding.
           if (bizRes.error || memberRes.error) {
+            // Offline (or transient) with a cached business list → keep showing
+            // it instead of bouncing to the error screen. Only error out when we
+            // have nothing cached to fall back on.
+            if (get().businesses.length > 0) {
+              set({ businessLoaded: true, businessLoadError: false });
+              return;
+            }
             set({ businessLoaded: true, businessLoadError: true });
             return;
           }
@@ -303,9 +310,14 @@ export const useAuthStore = create<AuthStore>()(
           // can.*). Non-blocking for the rest of the dashboard.
           void get()._loadRolePermissions(activeId);
         } catch {
-          // Network/transport failure — same fail-safe: don't masquerade as
-          // "no businesses". Show the retry screen, don't wipe state.
-          set({ businessLoaded: true, businessLoadError: true });
+          // Network/transport failure (offline). Keep the cached businesses so
+          // the dashboard stays usable; only show the retry screen when there's
+          // nothing cached.
+          if (get().businesses.length > 0) {
+            set({ businessLoaded: true, businessLoadError: false });
+          } else {
+            set({ businessLoaded: true, businessLoadError: true });
+          }
         }
       },
 
@@ -399,15 +411,33 @@ export const useAuthStore = create<AuthStore>()(
       name: 'amixos-auth-storage',
       version: 1,
       storage: createJSONStorage(() => AsyncStorage),
-      // Persist the user profile only — never status or businessLoaded. Auth
-      // status must be derived from a live Supabase session check on every
-      // launch, not from cached state. Persisting status causes "logged in"
-      // flashes when the session is actually expired.
+      // Persist the user profile + the businesses/roles list so the dashboard
+      // can render OFFLINE on a cold start (a field crew force-quits the app and
+      // reopens it with no signal). We never persist `status`/`businessLoaded` —
+      // auth status must come from a live session check each launch (persisting
+      // it causes "logged in" flashes when the session is actually expired).
       partialize: (state) => ({
         user: state.user,
         activeBusinessId: state.activeBusinessId,
+        businesses: state.businesses,
+        roles: state.roles,
       }),
-      onRehydrateStorage: () => () => {
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Re-derive the active business + role from the persisted list so the
+          // dashboard is reachable offline before any network refetch runs.
+          const list = state.businesses ?? [];
+          const activeId =
+            state.activeBusinessId && list.some((b) => b.id === state.activeBusinessId)
+              ? state.activeBusinessId
+              : list[0]?.id ?? null;
+          state.activeBusinessId = activeId;
+          state.business = list.find((b) => b.id === activeId) ?? null;
+          state.currentRole = activeId ? state.roles?.[activeId] ?? null : null;
+          // Having a cached business means the gate can show the dashboard
+          // immediately; the background refetch still runs on INITIAL_SESSION.
+          if (state.business) state.businessLoaded = true;
+        }
         setTimeout(() => useAuthStore.getState()._setHydrated(), 0);
       },
     },

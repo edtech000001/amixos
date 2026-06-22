@@ -30,6 +30,7 @@ import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { queuedUpload } from '@/lib/offline/mutate';
 import { useOutboxStore } from '@/lib/offline/outbox';
 import { isOnlineNow } from '@/lib/offline/network';
+import { newUuid } from '@/lib/offline/ids';
 
 interface Props {
   jobId: string;
@@ -123,6 +124,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       const { queued } = await queuedUpload({
         table: 'job_photos',
         payload: {
+          // Client id → an offline retry collides instead of inserting a 2nd
+          // job_photos row for the same upload.
+          id: newUuid(),
           business_id: businessId,
           job_id: jobId,
           storage_path: path,

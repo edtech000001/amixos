@@ -17,7 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type OutboxStatus = 'pending' | 'syncing' | 'error';
 // 'upload' = a binary (photo) at `localUri` → Storage `bucket/storagePath`,
 // then `payload` inserted into `table` as the metadata row.
-export type OutboxOpType = 'insert' | 'update' | 'upload';
+// 'delete' = delete rows matching `match`.
+export type OutboxOpType = 'insert' | 'update' | 'upload' | 'delete';
 
 export interface OutboxOp {
   /** Local op id — unique within the queue, not a DB id. */

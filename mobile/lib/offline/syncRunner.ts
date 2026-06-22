@@ -13,27 +13,31 @@
 import { createSupabaseClient } from '@/lib/supabase';
 import { useOutboxStore, type OutboxOp } from './outbox';
 import { useNetworkStore, onReconnect } from './network';
-import { isNetworkError } from './util';
+import { isNetworkError, isDuplicateError, isAuthError } from './util';
 
 async function applyOp(op: OutboxOp): Promise<void> {
   const supabase = createSupabaseClient();
   if (op.op === 'insert') {
     const { error } = await supabase.from(op.table).insert(op.payload);
-    if (error) throw error;
+    // A duplicate means this insert already landed on a prior attempt (lost
+    // ack) — treat it as success so we don't get stuck or double-write.
+    if (error && !isDuplicateError(error)) throw error;
     return;
   }
   if (op.op === 'upload') {
     // Upload the local file to Storage, then insert the metadata row. fetch()
     // reads the durable file:// uri into a blob (same path as the online code).
+    // upsert:true so a retry after a partial success re-writes cleanly instead
+    // of failing with "already exists".
     const res = await fetch(op.localUri!);
     const blob = await res.blob();
     const arrayBuffer = await new Response(blob).arrayBuffer();
     const { error: upErr } = await supabase.storage
       .from(op.bucket!)
-      .upload(op.storagePath!, arrayBuffer, { upsert: false, contentType: op.contentType ?? 'image/jpeg' });
+      .upload(op.storagePath!, arrayBuffer, { upsert: true, contentType: op.contentType ?? 'image/jpeg' });
     if (upErr) throw upErr;
     const { error: insErr } = await supabase.from(op.table).insert(op.payload);
-    if (insErr) throw insErr;
+    if (insErr && !isDuplicateError(insErr)) throw insErr;
     // Best-effort cleanup of the durable copy now that it's uploaded.
     try {
       const FileSystem = require('expo-file-system');
@@ -41,6 +45,15 @@ async function applyOp(op: OutboxOp): Promise<void> {
     } catch {
       /* expo-file-system missing or already gone — harmless */
     }
+    return;
+  }
+  if (op.op === 'delete') {
+    let dq = supabase.from(op.table).delete();
+    for (const [k, v] of Object.entries(op.match ?? {})) {
+      dq = dq.eq(k, v as never);
+    }
+    const { error } = await dq;
+    if (error) throw error; // a delete matching nothing is still success
     return;
   }
   // update
@@ -71,6 +84,13 @@ export async function drainOutbox(): Promise<void> {
         await applyOp(next);
         useOutboxStore.getState().remove(next.id);
       } catch (err) {
+        if (isAuthError(err)) {
+          // Token lapsed while offline. Re-queue (don't show an error), refresh
+          // the session, then re-drain — self-heals without alarming the user.
+          useOutboxStore.getState().patch(next.id, { status: 'pending' });
+          void createSupabaseClient().auth.refreshSession().then(() => drainOutbox());
+          break;
+        }
         if (isNetworkError(err)) {
           // Lost the connection mid-drain — put it back and stop the pass.
           useOutboxStore.getState().patch(next.id, { status: 'pending' });

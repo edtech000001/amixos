@@ -55,6 +55,10 @@ import {
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached, writeCached } from '@/lib/offline/cache';
+import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
+import { newUuid } from '@/lib/offline/ids';
+import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import {
@@ -396,12 +400,13 @@ export default function EquipmentScreen() {
 
   const loadEquipment = useCallback(async () => {
     if (!business) return;
-    const data = await fetchAll<Equipment>((from, to) =>
-      supabase.from('equipment').select('*')
-        .eq('business_id', business.id)
-        .order('created_at', { ascending: false })
-        .range(from, to),
-    );
+    const res = await loadCached(`equipment_${business.id}`, () =>
+      fetchAll<Equipment>((from, to) =>
+        supabase.from('equipment').select('*')
+          .eq('business_id', business.id)
+          .order('created_at', { ascending: false })
+          .range(from, to)));
+    const data = res.data ?? [];
     setEquipment(data);
     if (data.length > 0) {
       const ids = data.map((e) => e.id);
@@ -566,28 +571,37 @@ export default function EquipmentScreen() {
       assigned_employee_id: form.assigned_employee_id || null,
       notes: form.notes.trim() || null,
     };
-    if (modal === 'add') {
-      const { data: created, error: err } = await supabase
-        .from('equipment').insert({ ...payload, created_by: user?.id ?? null })
-        .select().single();
-      if (err) { setError(t.saveError); setSaving(false); return; }
-      const newRow = created as Equipment;
-      // Flush any photos queued while adding, now that the row exists.
-      if (pendingPhotos.length > 0) {
-        try {
-          for (let i = 0; i < pendingPhotos.length; i++) {
-            await uploadPhotoFromUri(pendingPhotos[i], newRow.id, i);
-          }
-        } catch {
-          setError(t.photoUploadError);
-        }
-        setPendingPhotos([]);
+    // Client-generated id so an offline create works (and pending photos can
+    // reference it before it syncs).
+    const isAdd = modal === 'add';
+    const id = isAdd ? newUuid() : selected?.id;
+    if (!id) { setSaving(false); return; }
+    try {
+      if (isAdd) {
+        await queuedInsert({ table: 'equipment', payload: { ...payload, id, created_by: user?.id ?? null }, businessId: business.id, label: `Equipo: ${payload.name}` });
+      } else {
+        await queuedUpdate({ table: 'equipment', match: { id }, payload, businessId: business.id, label: `Equipo: ${payload.name}` });
       }
-    } else if (selected) {
-      const { error: err } = await supabase.from('equipment').update(payload).eq('id', selected.id);
-      if (err) { setError(t.saveError); setSaving(false); return; }
+    } catch { setError(t.saveError); setSaving(false); return; }
+    // Flush photos queued while adding (also offline-capable via queuedUpload).
+    if (isAdd && pendingPhotos.length > 0) {
+      try {
+        for (let i = 0; i < pendingPhotos.length; i++) {
+          await uploadPhotoFromUri(pendingPhotos[i], id, i);
+        }
+      } catch {
+        setError(t.photoUploadError);
+      }
+      setPendingPhotos([]);
     }
-    await loadEquipment();
+    // Optimistic local + cache so the change shows offline.
+    setEquipment(prev => {
+      const next = isAdd
+        ? [{ ...payload, id, created_by: user?.id ?? null } as Equipment, ...prev]
+        : prev.map(e => (e.id === id ? ({ ...e, ...payload } as Equipment) : e));
+      void writeCached(`equipment_${business.id}`, next);
+      return next;
+    });
     setSaving(false);
     setModal(null);
     setSelected(null);
@@ -602,7 +616,17 @@ export default function EquipmentScreen() {
   const doDelete = async () => {
     if (!selected) return;
     setDeleting(true);
-    await supabase.from('equipment').delete().eq('id', selected.id);
+    const delId = selected.id;
+    try {
+      await queuedDelete({ table: 'equipment', match: { id: delId }, businessId: business?.id ?? null, label: 'Eliminar equipo' });
+    } catch { setDeleting(false); return; }
+    if (business) {
+      setEquipment(prev => {
+        const next = prev.filter(e => e.id !== delId);
+        void writeCached(`equipment_${business.id}`, next);
+        return next;
+      });
+    }
     setDeleting(false);
     setConfirmingDelete(false);
     setModal(null); setSelected(null);
@@ -613,30 +637,37 @@ export default function EquipmentScreen() {
   // Upload one local image URI to the private bucket + record its row.
   const uploadPhotoFromUri = async (uri: string, equipmentId: string, sortOrder: number) => {
     if (!business) return;
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const arrayBuffer = await new Response(blob).arrayBuffer();
     const ext = (uri.split('.').pop() ?? 'jpg').toLowerCase();
-    // Random suffix — RN doesn't ship crypto.randomUUID universally on older
-    // runtimes, so fall back to a timestamp+random combo.
-    const uid =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const uid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const path = equipmentPhotoPath(business.id, equipmentId, `${uid}.${ext}`);
     const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-    const { error: upErr } = await supabase.storage
-      .from(EQUIPMENT_BUCKET)
-      .upload(path, arrayBuffer, { upsert: false, contentType });
-    if (upErr) throw upErr;
-    const { error: insErr } = await supabase.from('equipment_photos').insert({
-      business_id: business.id,
-      equipment_id: equipmentId,
-      storage_path: path,
-      sort_order: sortOrder,
-      created_by: user?.id ?? null,
+    // Offline: copy to the document dir so the queued upload survives a restart.
+    let uploadUri = uri;
+    if (!isOnlineNow()) {
+      try {
+        const FileSystem = require('expo-file-system');
+        const durable = `${FileSystem.documentDirectory}offline_equip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        await FileSystem.copyAsync({ from: uri, to: durable });
+        uploadUri = durable;
+      } catch { /* expo-file-system missing — fall back to temp uri */ }
+    }
+    await queuedUpload({
+      table: 'equipment_photos',
+      payload: {
+        id: newUuid(),
+        business_id: business.id,
+        equipment_id: equipmentId,
+        storage_path: path,
+        sort_order: sortOrder,
+        created_by: user?.id ?? null,
+      },
+      businessId: business.id,
+      label: 'Foto de equipo',
+      localUri: uploadUri,
+      bucket: EQUIPMENT_BUCKET,
+      storagePath: path,
+      contentType,
     });
-    if (insErr) throw insErr;
   };
 
   const pickPhoto = async (source: 'camera' | 'library') => {

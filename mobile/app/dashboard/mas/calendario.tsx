@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached } from '@/lib/offline/cache';
+import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
+import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import {
   CalendarScreen,
@@ -120,51 +123,54 @@ export default function CalendarioRoute() {
       const startYmd = ymd(start);
       const endYmd = ymd(end);
 
-      const events = await fetchAll<RawEvent>((from, to) =>
-        supabase
-          .from('calendar_events')
-          .select('id, title, description, start_time, end_time, location, event_type, all_day, client_id')
-          .eq('business_id', businessId)
-          .lte('start_time', endISO)
-          .or(`end_time.gte.${startISO},and(end_time.is.null,start_time.gte.${startISO})`)
-          .order('start_time')
-          .range(from, to),
-      );
-
-      const jobs = await fetchAll<JobRow>((from, to) =>
-        supabase
-          .from('jobs')
-          .select(
-            'id, title, status, scheduled_date, end_date, time_start, time_end, all_day, job_city, job_state, clients(first_name, last_name), job_assignments(employee_id, is_lead, worker_name, employees(first_name, last_name))',
-          )
-          .eq('business_id', businessId)
-          .not('status', 'in', '("cancelled","declined")')
-          .lte('scheduled_date', endYmd)
-          .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`)
-          .range(from, to),
-      );
-
-      const eventItems = events.map(eventToItem);
-      const jobItems = jobs
-        .map<RawJob>(j => ({
-          id: j.id,
-          title: j.title,
-          status: j.status,
-          scheduled_date: j.scheduled_date,
-          end_date: j.end_date,
-          time_start: j.time_start,
-          time_end: j.time_end,
-          all_day: j.all_day,
-          job_city: j.job_city,
-          job_state: j.job_state,
-          client_name: joinedClientName(j.clients),
-          lead_name: leadName(j.job_assignments),
-          assignees: jobAssignees(j.job_assignments),
-        }))
-        .map(jobToItem)
-        .filter((it): it is CalItem => it !== null);
-
-      return [...eventItems, ...jobItems];
+      // Cache the merged list so the calendar is viewable offline. fetchAll
+      // throws on error → loadCached falls back to the last good fetch (the
+      // cache key ignores range — offline just shows the last-loaded window).
+      const res = await loadCached(`calendar_${businessId}`, async () => {
+        const events = await fetchAll<RawEvent>((from, to) =>
+          supabase
+            .from('calendar_events')
+            .select('id, title, description, start_time, end_time, location, event_type, all_day, client_id')
+            .eq('business_id', businessId)
+            .lte('start_time', endISO)
+            .or(`end_time.gte.${startISO},and(end_time.is.null,start_time.gte.${startISO})`)
+            .order('start_time')
+            .range(from, to),
+        );
+        const jobs = await fetchAll<JobRow>((from, to) =>
+          supabase
+            .from('jobs')
+            .select(
+              'id, title, status, scheduled_date, end_date, time_start, time_end, all_day, job_city, job_state, clients(first_name, last_name), job_assignments(employee_id, is_lead, worker_name, employees(first_name, last_name))',
+            )
+            .eq('business_id', businessId)
+            .not('status', 'in', '("cancelled","declined")')
+            .lte('scheduled_date', endYmd)
+            .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`)
+            .range(from, to),
+        );
+        const eventItems = events.map(eventToItem);
+        const jobItems = jobs
+          .map<RawJob>(j => ({
+            id: j.id,
+            title: j.title,
+            status: j.status,
+            scheduled_date: j.scheduled_date,
+            end_date: j.end_date,
+            time_start: j.time_start,
+            time_end: j.time_end,
+            all_day: j.all_day,
+            job_city: j.job_city,
+            job_state: j.job_state,
+            client_name: joinedClientName(j.clients),
+            lead_name: leadName(j.job_assignments),
+            assignees: jobAssignees(j.job_assignments),
+          }))
+          .map(jobToItem)
+          .filter((it): it is CalItem => it !== null);
+        return [...eventItems, ...jobItems];
+      });
+      return res.data ?? [];
     },
     [business],
   );
@@ -211,18 +217,27 @@ export default function CalendarioRoute() {
       start_time: start,
       end_time: end,
     };
-    if (editingId) {
-      await supabase.from('calendar_events').update(row).eq('id', editingId);
-    } else {
-      await supabase
-        .from('calendar_events')
-        .insert({ ...row, business_id: business.id, created_by: user?.id ?? null });
+    const eventId = editingId ?? newUuid();
+    try {
+      if (editingId) {
+        await queuedUpdate({ table: 'calendar_events', match: { id: editingId }, payload: row, businessId: business.id, label: `Evento: ${row.title}` });
+      } else {
+        await queuedInsert({ table: 'calendar_events', payload: { ...row, id: eventId, business_id: business.id, created_by: user?.id ?? null }, businessId: business.id, label: `Evento: ${row.title}` });
+      }
+    } catch {
+      return; // real DB rejection
     }
-    reload();
+    // Optimistic: show it now. eventToItem maps the row to a calendar item.
+    const item = eventToItem({ id: eventId, ...row });
+    setItems(prev => (editingId ? prev.map(it => (it.id === eventId && it.kind === 'event' ? item : it)) : [...prev, item]));
   };
 
   const deleteEvent = async (id: string) => {
-    await supabase.from('calendar_events').delete().eq('id', id);
+    try {
+      await queuedDelete({ table: 'calendar_events', match: { id }, businessId: business?.id ?? null, label: 'Eliminar evento' });
+    } catch {
+      return;
+    }
     setItems(prev => prev.filter(it => it.id !== id || it.kind !== 'event'));
   };
 

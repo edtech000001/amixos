@@ -32,6 +32,10 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { buildClientCsv, buildClientHtml } from '@amixos/shared/lib/clientShare';
 import { createSupabaseClient } from '@/lib/supabase';
+import { loadCached, writeCached } from '@/lib/offline/cache';
+import { queuedInsert, queuedUpdate } from '@/lib/offline/mutate';
+import { newUuid } from '@/lib/offline/ids';
+import { isOnlineNow } from '@/lib/offline/network';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
@@ -194,28 +198,44 @@ export default function ClienteDetailRoute() {
   const load = async () => {
     if (!business || !id) return;
     setLoading(true);
-    const [{ data: c }, { data: inv }, { data: tpl }, { data: cts }] = await Promise.all([
-      supabase.from('clients').select('*').eq('id', id).single(),
-      supabase
-        .from('invoices')
-        .select('id, invoice_number, status, total_amount, due_date, created_at')
-        .eq('client_id', id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('client_field_templates')
-        .select('*')
-        .eq('business_id', business.id)
-        .order('sort_order'),
-      supabase
+    // Client + contacts cached so the record opens offline (incl. on-site adds).
+    // Invoices + templates are best-effort (offline → empty).
+    const clientRes = await loadCached(`client_${id}`, async () => {
+      const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
+      if (error) throw error;
+      return data as Client;
+    });
+    const contactsRes = await loadCached(`client_contacts_${id}`, async () => {
+      const { data, error } = await supabase
         .from('client_contacts')
         .select('*')
         .eq('client_id', id)
-        .order('is_primary', { ascending: false }),
-    ]);
-    setClient((c as Client | null) ?? null);
-    setInvoices((inv as Invoice[] | null) ?? []);
-    setTemplates((tpl as FieldTemplate[] | null) ?? []);
-    setContacts((cts as ClientContact[] | null) ?? []);
+        .order('is_primary', { ascending: false });
+      if (error) throw error;
+      return (data as ClientContact[] | null) ?? [];
+    });
+    let invData: Invoice[] = [];
+    let tplData: FieldTemplate[] = [];
+    try {
+      const { data } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, status, total_amount, due_date, created_at')
+        .eq('client_id', id)
+        .order('created_at', { ascending: false });
+      invData = (data as Invoice[] | null) ?? [];
+    } catch { /* offline */ }
+    try {
+      const { data } = await supabase
+        .from('client_field_templates')
+        .select('*')
+        .eq('business_id', business.id)
+        .order('sort_order');
+      tplData = (data as FieldTemplate[] | null) ?? [];
+    } catch { /* offline */ }
+    setClient(clientRes.data ?? null);
+    setInvoices(invData);
+    setTemplates(tplData);
+    setContacts(contactsRes.data ?? []);
     setLoading(false);
 
     // Background fetch of all roles across the business. Cheap query
@@ -415,37 +435,46 @@ export default function ClienteDetailRoute() {
       is_primary: contactForm.is_primary,
     };
 
-    if (contactForm.is_primary) {
-      await supabase.from('client_contacts').update({ is_primary: false }).eq('client_id', client.id);
-    }
-
     let syncContactId: string | null = null;
     let syncAction: 'create' | 'update' = 'update';
-    if (editingContact) {
-      await supabase.from('client_contacts').update(payload).eq('id', editingContact.id);
-      syncContactId = editingContact.id;
-      syncAction = 'update';
-    } else {
-      const { data: inserted } = await supabase
-        .from('client_contacts')
-        .insert({ ...payload, client_id: client.id, business_id: business.id })
-        .select('id')
-        .single();
-      syncContactId = (inserted as { id: string } | null)?.id ?? null;
-      syncAction = 'create';
+    try {
+      // A new primary unsets the others first.
+      if (contactForm.is_primary) {
+        await queuedUpdate({ table: 'client_contacts', match: { client_id: client.id }, payload: { is_primary: false }, businessId: business.id, label: `Contacto principal` });
+      }
+      if (editingContact) {
+        await queuedUpdate({ table: 'client_contacts', match: { id: editingContact.id }, payload, businessId: business.id, label: `Contacto: ${payload.name}` });
+        syncContactId = editingContact.id;
+        syncAction = 'update';
+      } else {
+        const newId = newUuid();
+        await queuedInsert({ table: 'client_contacts', payload: { ...payload, id: newId, client_id: client.id, business_id: business.id }, businessId: business.id, label: `Contacto: ${payload.name}` });
+        syncContactId = newId;
+        syncAction = 'create';
+      }
+    } catch {
+      setSavingContact(false);
+      return; // real DB rejection
     }
 
-    const { data } = await supabase
-      .from('client_contacts')
-      .select('*')
-      .eq('client_id', client.id)
-      .order('is_primary', { ascending: false });
-    setContacts((data as ClientContact[] | null) ?? []);
+    // Optimistic local update (works offline; next online focus reconciles).
+    // Mirror it to the contacts cache so reopening offline shows the change.
+    setContacts((prev) => {
+      let next = contactForm.is_primary ? prev.map((c) => ({ ...c, is_primary: false })) : [...prev];
+      if (editingContact) {
+        next = next.map((c) => (c.id === editingContact.id ? ({ ...c, ...payload } as ClientContact) : c));
+      } else {
+        next = [{ ...payload, id: syncContactId!, client_id: client.id, business_id: business.id, created_at: new Date().toISOString() } as ClientContact, ...next];
+      }
+      next = [...next].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+      void writeCached(`client_contacts_${client.id}`, next);
+      return next;
+    });
     setSavingContact(false);
     setContactModalOpen(false);
 
-    // Fire-and-forget sync — same pattern as client create/update.
-    if (syncContactId) {
+    // Fire-and-forget Google sync — online only (best-effort secondary mirror).
+    if (syncContactId && isOnlineNow()) {
       void (async () => {
         const apiBaseUrl = getApiBaseUrl();
         const jwt = await getJwt();

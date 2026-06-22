@@ -17,7 +17,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useNetworkStore } from './network';
 import { useOutboxStore, type NewOutboxOp } from './outbox';
 import { drainOutbox } from './syncRunner';
-import { isNetworkError } from './util';
+import { isNetworkError, isDuplicateError, isAuthError } from './util';
 
 export interface MutateResult<T = unknown> {
   /** True = parked in the outbox (not yet on the server). */
@@ -45,11 +45,14 @@ export async function queuedInsert<T = unknown>(args: InsertArgs): Promise<Mutat
       const { data, error } = returning
         ? await builder.select(returning).single()
         : await builder;
-      if (error) throw error;
+      // Duplicate = a prior queued attempt already inserted this row → success.
+      if (error && !isDuplicateError(error)) throw error;
       return { queued: false, data: (data as T) ?? undefined };
     } catch (err) {
-      if (!isNetworkError(err)) throw err; // real rejection — surface it
-      useNetworkStore.getState().setOnline(false);
+      // Real rejection (RLS/constraint) → surface it. Network OR expired-token
+      // → queue (the runner refreshes the session + retries).
+      if (!isNetworkError(err) && !isAuthError(err)) throw err;
+      if (isNetworkError(err)) useNetworkStore.getState().setOnline(false);
       // fall through to queue
     }
   }
@@ -77,11 +80,40 @@ export async function queuedUpdate(args: UpdateArgs): Promise<MutateResult> {
       if (error) throw error;
       return { queued: false };
     } catch (err) {
-      if (!isNetworkError(err)) throw err;
-      useNetworkStore.getState().setOnline(false);
+      if (!isNetworkError(err) && !isAuthError(err)) throw err;
+      if (isNetworkError(err)) useNetworkStore.getState().setOnline(false);
     }
   }
   enqueue({ table, op: 'update', payload, match, businessId, label });
+  void drainOutbox();
+  return { queued: true };
+}
+
+interface DeleteArgs {
+  table: string;
+  match: Record<string, unknown>;
+  businessId: string | null;
+  label: string;
+}
+
+/** Delete rows matching `match`. Online: delete now; offline/expired-token →
+ *  queue (replayed on reconnect). Deletes are idempotent. */
+export async function queuedDelete(args: DeleteArgs): Promise<MutateResult> {
+  const { table, match, businessId, label } = args;
+  if (useNetworkStore.getState().isOnline) {
+    try {
+      const supabase = createSupabaseClient();
+      let q = supabase.from(table).delete();
+      for (const [k, v] of Object.entries(match)) q = q.eq(k, v as never);
+      const { error } = await q;
+      if (error) throw error;
+      return { queued: false };
+    } catch (err) {
+      if (!isNetworkError(err) && !isAuthError(err)) throw err;
+      if (isNetworkError(err)) useNetworkStore.getState().setOnline(false);
+    }
+  }
+  enqueue({ table, op: 'delete', match, payload: {}, businessId, label });
   void drainOutbox();
   return { queued: true };
 }
@@ -112,14 +144,14 @@ export async function queuedUpload(args: UploadArgs): Promise<MutateResult> {
       const arrayBuffer = await new Response(blob).arrayBuffer();
       const { error: upErr } = await supabase.storage
         .from(bucket)
-        .upload(storagePath, arrayBuffer, { upsert: false, contentType: contentType ?? 'image/jpeg' });
+        .upload(storagePath, arrayBuffer, { upsert: true, contentType: contentType ?? 'image/jpeg' });
       if (upErr) throw upErr;
       const { error: insErr } = await supabase.from(table).insert(payload);
-      if (insErr) throw insErr;
+      if (insErr && !isDuplicateError(insErr)) throw insErr;
       return { queued: false };
     } catch (err) {
-      if (!isNetworkError(err)) throw err;
-      useNetworkStore.getState().setOnline(false);
+      if (!isNetworkError(err) && !isAuthError(err)) throw err;
+      if (isNetworkError(err)) useNetworkStore.getState().setOnline(false);
     }
   }
   enqueue({ table, op: 'upload', payload, businessId, label, localUri, bucket, storagePath, contentType });

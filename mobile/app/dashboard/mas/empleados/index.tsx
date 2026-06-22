@@ -14,6 +14,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
+import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -507,6 +508,9 @@ export default function EmpleadosRoute() {
         businessId: business.id,
         label: `Horas: ${name || 'trabajador'} · ${tsForm.hours_worked} h`,
         payload: {
+          // Client-generated id makes an offline retry idempotent (a re-send
+          // after a lost ack collides instead of creating a duplicate timesheet).
+          id: newUuid(),
           business_id: business.id,
           employee_id: tsForm.employee_id || null,
           worker_name: name,

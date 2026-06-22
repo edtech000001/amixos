@@ -20,7 +20,7 @@ import { Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
 import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { queuedInsert } from '@/lib/offline/mutate';
-import { prependCached } from '@/lib/offline/cache';
+import { prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -259,9 +259,10 @@ export default function NuevoClienteRoute() {
         return;
       }
       if (queued) {
-        // Offline: show it in the cached list now; it syncs on reconnect. The
-        // detail screen isn't cached for this new id yet, so go to the list.
+        // Offline: show it in the cached list AND seed its detail cache so it's
+        // openable offline; it syncs on reconnect.
         void prependCached(`clients_list_${business.id}`, row);
+        void writeCached(`client_${newId}`, row);
         router.replace('/dashboard/clientes' as never);
       } else {
         void (async () => {

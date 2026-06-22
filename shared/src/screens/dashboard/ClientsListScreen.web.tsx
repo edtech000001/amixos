@@ -71,13 +71,19 @@ export function ClientsListScreen({
   const t = full.dashboard.clients;
 
   // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
-  // choice persists across navigation + refresh via localStorage.
-  const [groupBy, setGroupBy] = useState<ClientGroupKey>(() =>
-    typeof window !== 'undefined' ? parseClientGroupKey(window.localStorage.getItem(CLIENTS_GROUP_KEY)) : 'name',
-  );
+  // choice persists across navigation + refresh via localStorage — but it's
+  // restored AFTER mount (reading it during the initial render would diverge
+  // from the server HTML and throw a hydration error).
+  const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
+  const [groupHydrated, setGroupHydrated] = useState(false);
   useEffect(() => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(CLIENTS_GROUP_KEY, groupBy);
-  }, [groupBy]);
+    if (typeof window !== 'undefined') setGroupBy(parseClientGroupKey(window.localStorage.getItem(CLIENTS_GROUP_KEY)));
+    setGroupHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!groupHydrated || typeof window === 'undefined') return;
+    window.localStorage.setItem(CLIENTS_GROUP_KEY, groupBy);
+  }, [groupHydrated, groupBy]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
     { key: 'name', label: t.group.name },
