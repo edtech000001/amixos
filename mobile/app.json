@@ -34,6 +34,12 @@
       "expo-secure-store",
       "expo-apple-authentication",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Amixos usa tu ubicación para registrar dónde se realizó un trabajo cuando lo agregas."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/icon.png",

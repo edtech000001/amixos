@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal as RNModal,
   View,
@@ -8,20 +8,37 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Check, X, Search } from 'lucide-react-native';
+import { Check, X, Search, MapPin } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
-import type { FieldClient } from '@amixos/shared/lib/fieldHome';
+import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
+
+// expo-location is loaded lazily + guarded. Importing it eagerly triggers a
+// native-module lookup (`requireNativeModule('ExpoLocation')`) at module load,
+// which THROWS on a dev client built before the dependency was added — taking
+// down the whole field home. Capturing the geostamp is best-effort, so a
+// missing/old native module just means "location unavailable".
+type LocationModule = typeof import('expo-location');
+function loadLocation(): LocationModule | null {
+  try {
+    return require('expo-location') as LocationModule;
+  } catch {
+    return null;
+  }
+}
 
 // Field-crew quick-log bottom sheet. Records a completed job (title + optional
 // client + notes); date is "today" and status is completed (set by the parent
-// via logFieldJob). One-handed: bottom sheet, not a centered dialog.
+// via logFieldJob). One-handed: bottom sheet, not a centered dialog. On open it
+// auto-captures the tech's current GPS as the job's location (geostamp).
 export interface LogJobSheetProps {
   visible: boolean;
   onClose: () => void;
   clients: FieldClient[];
   clientsLoading: boolean;
-  onSubmit: (input: { title: string; clientId: string | null; description: string | null }) => Promise<boolean>;
+  onSubmit: (input: { title: string; clientId: string | null; description: string | null; location: FieldJobLocation | null }) => Promise<boolean>;
 }
+
+type LocState = 'idle' | 'capturing' | 'done' | 'unavailable';
 
 export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmit }: LogJobSheetProps) {
   const { t: full } = useLang();
@@ -34,9 +51,45 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locState, setLocState] = useState<LocState>('idle');
+  const [location, setLocation] = useState<FieldJobLocation | null>(null);
+
+  // Auto-capture the current location each time the sheet opens. Prompts for
+  // permission the first time; silent on later opens. Failure is non-blocking —
+  // the job still logs without a geostamp.
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    (async () => {
+      setLocState('capturing');
+      const Location = loadLocation();
+      if (!Location) { if (!cancelled) setLocState('unavailable'); return; }
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') { if (!cancelled) setLocState('unavailable'); return; }
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled) return;
+        const loc: FieldJobLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        // Best-effort reverse geocode for a readable address.
+        try {
+          const [g] = await Location.reverseGeocodeAsync({ latitude: loc.lat, longitude: loc.lng });
+          if (g && !cancelled) {
+            loc.address = [g.streetNumber, g.street].filter(Boolean).join(' ') || g.name || null;
+            loc.city = g.city ?? g.subregion ?? null;
+            loc.state = g.region ?? null;
+          }
+        } catch { /* keep coords only */ }
+        if (!cancelled) { setLocation(loc); setLocState('done'); }
+      } catch {
+        if (!cancelled) setLocState('unavailable');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
 
   const reset = () => {
     setTitle(''); setClientId(null); setNotes(''); setSearch(''); setError(null); setBusy(false);
+    setLocState('idle'); setLocation(null);
   };
   const close = () => { reset(); onClose(); };
 
@@ -51,11 +104,16 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
     if (!title.trim()) { setError(f.titleRequired); return; }
     setBusy(true);
     setError(null);
-    const ok = await onSubmit({ title: title.trim(), clientId, description: notes.trim() || null });
+    const ok = await onSubmit({ title: title.trim(), clientId, description: notes.trim() || null, location });
     setBusy(false);
     if (ok) close();
     else setError(f.saveError2);
   };
+
+  const locText = location
+    ? ([location.address, location.city, location.state].filter(Boolean).join(', ')
+        || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`)
+    : '';
 
   return (
     <RNModal visible={visible} transparent animationType="slide" onRequestClose={close}>
@@ -81,6 +139,18 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
               placeholderTextColor="#9CA3AF"
               className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900 mb-4"
             />
+
+            {/* Location geostamp (auto-captured) */}
+            <View className="flex-row items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
+              <MapPin size={15} color={locState === 'done' ? '#059669' : '#9CA3AF'} />
+              {locState === 'capturing' ? (
+                <Text className="text-xs text-gray-500 flex-1">{f.locCapturing}</Text>
+              ) : locState === 'done' ? (
+                <Text className="text-xs text-gray-700 flex-1" numberOfLines={1}>{locText}</Text>
+              ) : (
+                <Text className="text-xs text-gray-400 flex-1">{f.locUnavailable}</Text>
+              )}
+            </View>
 
             {/* Client */}
             <Text className="text-sm font-medium text-gray-700 mb-1.5">{f.clientLabel}</Text>

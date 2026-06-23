@@ -1,13 +1,12 @@
 import { View } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { useApp } from '@/lib/AppContext';
 import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
 import {
   TrabajosSection,
   TrabajosFieldsSection,
   JobAlertsSection,
   CrewModeSection,
-  TrabajadorFieldsSection,
+  JobItemTypesSection,
 } from '@/components/SettingsSections';
 
 /**
@@ -15,13 +14,11 @@ import {
  *  1. Pipeline step config (which statuses are enabled)
  *  2. Field config — required toggles + unified standard/custom list
  *  3. Upcoming-job alert tiers (highlight cards as start date approaches)
- *  4. Crew mode toggle (hides everything below when off)
- *  5. Per-worker fields — what the Project Leader fills out for each worker
+ *  4. Item-type categories toggle (Labor/Material/Equipment/Other on/off)
+ *  5. Crew mode toggle (mark a lead + assign a crew)
  */
 export default function TrabajosPage() {
   const { t } = useLang();
-  const { business } = useApp();
-  const crewOn = business?.job_crew_mode !== false;
 
   return (
     <SettingsPageWrapper title={t.dashboard.settings.tabs.trabajos}>
@@ -32,13 +29,9 @@ export default function TrabajosPage() {
         <View className="h-px bg-gray-100 -mx-6" />
         <JobAlertsSection />
         <View className="h-px bg-gray-100 -mx-6" />
+        <JobItemTypesSection />
+        <View className="h-px bg-gray-100 -mx-6" />
         <CrewModeSection />
-        {crewOn ? (
-          <>
-            <View className="h-px bg-gray-100 -mx-6" />
-            <TrabajadorFieldsSection />
-          </>
-        ) : null}
       </View>
     </SettingsPageWrapper>
   );

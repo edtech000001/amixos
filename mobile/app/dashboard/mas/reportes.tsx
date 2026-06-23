@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -16,6 +17,7 @@ const EMPTY: ReportsData = { invoices: [], jobs: [], clients: [], timesheets: []
 
 export default function ReportesRoute() {
   const supabase = createSupabaseClient();
+  const router = useRouter();
   const { business } = useApp();
   const { t } = useLang();
   const dateLocale = t.dashboard.dateLocale;
@@ -58,6 +60,7 @@ export default function ReportesRoute() {
         customFrom={customFrom}
         customTo={customTo}
         onCustomChange={({ from, to }) => { setCustomFrom(from); setCustomTo(to); }}
+        onOpenPayroll={() => router.push('/dashboard/mas/nomina' as never)}
       />
     </SafeAreaView>
   );

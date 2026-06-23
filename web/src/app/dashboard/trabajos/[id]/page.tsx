@@ -51,15 +51,6 @@ interface Assignment {
   custom_fields: Record<string, unknown> | null;
   employees: { id: string; first_name: string; last_name: string; user_id: string | null } | null;
 }
-interface AssignmentFieldTemplate {
-  id: string;
-  field_key: string;
-  field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
-  field_options: string[] | null;
-  required: boolean;
-  sort_order: number;
-}
 interface JobItem {
   id: string; item_type: string; description: string; quantity: number; unit_price: number; total: number;
 }
@@ -72,6 +63,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const { id } = params;
   const supabase = createSupabaseClient();
   const { business, user, businesses, setActiveBusiness, currentRole } = useApp();
+  // Labor/Material/Equipment/Other categories on job line items — hidden when
+  // the business turns them off (billed flat / by qty × rate instead).
+  const showItemTypes = business?.job_item_types_enabled !== false;
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
@@ -272,7 +266,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       const desc = i.description.trim();
       return {
         // qty/rate is the canonical invoice line-item shape (document + PDF).
-        description: desc ? `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${desc}` : job.title,
+        description: desc
+          ? (business?.job_item_types_enabled === false ? desc : `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${desc}`)
+          : job.title,
         qty: i.quantity,
         rate: i.unit_price,
         job_id: id, // tag so the job can later be moved/removed from this invoice
@@ -625,74 +621,79 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             })}
           </div>
 
-          {/* Next action buttons */}
-          <div className="mt-4 pt-4 border-t border-gray-50 flex justify-center gap-3 flex-wrap">
-            {/* Lead → schedule */}
-            {job.status === 'posible' && (
-              <Button onClick={() => updateStatus('scheduled')} loading={updatingStatus} size="sm">
-                <Calendar size={14} className="mr-1.5"/> {td.scheduleWork}
-              </Button>
-            )}
-            {/* Proposal phase actions */}
-            {job.status === 'proposal' && (
-              <Button onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
-                <Send size={14} className="mr-1.5"/> {t.actions.markSent}
-              </Button>
-            )}
-            {job.status === 'sent' && !isExpired && (
-              <>
-                <Button variant="secondary" size="sm" onClick={() => updateStatus('declined')} loading={updatingStatus}>
-                  <XCircle size={14} className="mr-1.5"/> {t.actions.markDeclined}
+          {/* Next action buttons — back on the LEFT, forward (→) on the RIGHT
+             so the pipeline reads left→right (matches mobile). Cancel sits on
+             its own row below, away from the advance buttons. */}
+          <div className="mt-4 pt-4 border-t border-gray-50 flex flex-col items-center gap-3">
+            <div className="flex justify-center gap-3 flex-wrap">
+              {/* One-step back — left */}
+              {prevStep && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => updateStatus(prevStep.key)}
+                  loading={updatingStatus}
+                >
+                  ← {prevStep.label}
                 </Button>
-                <Button size="sm" onClick={() => updateStatus('accepted')} loading={updatingStatus}>
-                  <CheckCircle2 size={14} className="mr-1.5"/> {t.actions.markAccepted}
-                </Button>
-              </>
-            )}
-            {job.status === 'accepted' && (
-              <>
-                <Button size="sm" onClick={() => updateStatus('scheduled')} loading={updatingStatus}>
-                  <Calendar size={14} className="mr-1.5"/> {td.scheduleWork}
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
-                  <FileText size={14} className="mr-1.5"/> {td.invoiceDirectly}
-                </Button>
-              </>
-            )}
+              )}
 
-            {/* Work phase actions */}
-            {job.status === 'scheduled' && (
-              <Button onClick={() => updateStatus('in_progress')} loading={updatingStatus} size="sm">
-                {t.actions.startWork}
-              </Button>
-            )}
-            {job.status === 'in_progress' && (
-              <Button onClick={() => updateStatus('completed')} loading={updatingStatus} size="sm">
-                {t.actions.markCompleted}
-              </Button>
-            )}
-            {job.status === 'completed' && !job.invoice_id && (
-              <Button onClick={() => setInvoiceModal(true)} size="sm">
-                <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
-              </Button>
-            )}
+              {/* Lead → schedule */}
+              {job.status === 'posible' && (
+                <Button onClick={() => updateStatus('scheduled')} loading={updatingStatus} size="sm">
+                  {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
+                </Button>
+              )}
+              {/* Proposal phase actions */}
+              {job.status === 'proposal' && (
+                <Button onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
+                  <Send size={14} className="mr-1.5"/> {t.actions.markSent}
+                </Button>
+              )}
+              {job.status === 'sent' && !isExpired && (
+                <>
+                  <Button variant="secondary" size="sm" onClick={() => updateStatus('declined')} loading={updatingStatus}>
+                    <XCircle size={14} className="mr-1.5"/> {t.actions.markDeclined}
+                  </Button>
+                  <Button size="sm" onClick={() => updateStatus('accepted')} loading={updatingStatus}>
+                    <CheckCircle2 size={14} className="mr-1.5"/> {t.actions.markAccepted}
+                  </Button>
+                </>
+              )}
+              {job.status === 'accepted' && (
+                <>
+                  <Button size="sm" onClick={() => updateStatus('scheduled')} loading={updatingStatus}>
+                    {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
+                    <FileText size={14} className="mr-1.5"/> {td.invoiceDirectly}
+                  </Button>
+                </>
+              )}
 
-            {/* One-step back — undo an accidental status click */}
-            {prevStep && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => updateStatus(prevStep.key)}
-                loading={updatingStatus}
-              >
-                ← {prevStep.label}
-              </Button>
-            )}
+              {/* Work phase actions */}
+              {job.status === 'scheduled' && (
+                <Button onClick={() => updateStatus('in_progress')} loading={updatingStatus} size="sm">
+                  {t.actions.startWork} <ArrowRight size={14} className="ml-1.5"/>
+                </Button>
+              )}
+              {job.status === 'in_progress' && (
+                <Button onClick={() => updateStatus('completed')} loading={updatingStatus} size="sm">
+                  {t.actions.markCompleted} <ArrowRight size={14} className="ml-1.5"/>
+                </Button>
+              )}
+              {job.status === 'completed' && !job.invoice_id && (
+                <Button onClick={() => setInvoiceModal(true)} size="sm">
+                  <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
+                </Button>
+              )}
+            </div>
 
-            {/* Cancel (available in all non-terminal states) */}
+            {/* Cancel — separate row, confirmed (no longer a one-tap list action). */}
             {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
-              <Button variant="secondary" size="sm" onClick={() => updateStatus('cancelled')} loading={updatingStatus}>
-                <XCircle size={14} className="mr-1.5"/> {tc.buttons.cancel}
+              <Button variant="secondary" size="sm" loading={updatingStatus}
+                onClick={() => { if (window.confirm(td.cancelJobConfirm)) void updateStatus('cancelled'); }}>
+                <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
               </Button>
             )}
 
@@ -910,20 +911,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
           )}
-
-          {/* Project Leader actuals — visible only when the current user is
-             the lead on this job AND crew mode is on. Component handles its
-             own visibility check + DB loads. */}
-          <ActualsSection
-            jobId={job.id}
-            businessId={job.business_id}
-            jobStatus={job.status}
-            crewModeOn={business?.job_crew_mode !== false}
-            assignmentFieldOrder={business?.assignment_field_order ?? null}
-            userId={user?.id ?? null}
-            assignments={assignments}
-            onCompleted={() => updateStatus('completed')}
-          />
         </div>
 
         {/* Right — Line items */}
@@ -941,15 +928,17 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {canEditItems ? (
               /* Inline editor — rows are editable in place; Save appears only when dirty. */
               <div className="p-5 flex flex-col gap-2">
-                <div className="grid grid-cols-[96px_1fr_52px_84px_22px] gap-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-0.5">
-                  <span>{t.new.colType}</span><span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span/>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[96px_1fr_52px_84px_22px]' : 'grid-cols-[1fr_52px_84px_22px]'} gap-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-0.5`}>
+                  {showItemTypes ? <span>{t.new.colType}</span> : null}<span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span/>
                 </div>
                 {editRows.map(r => (
-                  <div key={r.id} className="grid grid-cols-[96px_1fr_52px_84px_22px] gap-2 items-center">
+                  <div key={r.id} className={`grid ${showItemTypes ? 'grid-cols-[96px_1fr_52px_84px_22px]' : 'grid-cols-[1fr_52px_84px_22px]'} gap-2 items-center`}>
+                    {showItemTypes ? (
                     <select value={r.item_type} onChange={e => updateRow(r.id, 'item_type', e.target.value)}
                       className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       {ITEM_TYPES.map(k => <option key={k} value={k}>{ITEM_TYPE_LABELS[k] ?? k}</option>)}
                     </select>
+                    ) : null}
                     <input value={r.description} onChange={e => updateRow(r.id, 'description', e.target.value)} placeholder={t.new.colDescription}
                       className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
                     <input value={r.quantity} inputMode="decimal" onChange={e => updateRow(r.id, 'quantity', e.target.value.replace(/[^0-9.]/g, ''))}
@@ -977,13 +966,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-[80px_1fr_60px_80px_80px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50">
-                  <span>{t.new.colType}</span><span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span className="text-right">{t.new.colTotal}</span>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50`}>
+                  {showItemTypes ? <span>{t.new.colType}</span> : null}<span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span className="text-right">{t.new.colTotal}</span>
                 </div>
                 <div className="divide-y divide-gray-50">
                   {items.map(item => (
-                    <div key={item.id} className="grid grid-cols-[80px_1fr_60px_80px_80px] items-center px-5 py-3 hover:bg-gray-50 transition-colors">
-                      <span className="text-xs text-gray-400">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span>
+                    <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} items-center px-5 py-3 hover:bg-gray-50 transition-colors`}>
+                      {showItemTypes ? <span className="text-xs text-gray-400">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span> : null}
                       <span className="text-sm text-gray-900 truncate pr-2">{item.description}</span>
                       <span className="text-sm text-center text-gray-600">{item.quantity}</span>
                       <span className="text-sm text-right text-gray-600">${item.unit_price.toFixed(2)}</span>
@@ -1181,218 +1170,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-// ─── Project Leader actuals section ──────────────────────────────────────
-// Visible only when crew mode is on AND the current user is the lead on this
-// job. RLS allows the lead (field role) to update assignments on their job
-// via the "lead update job_assignments" policy in migration 033.
-function ActualsSection({
-  jobId,
-  businessId,
-  jobStatus,
-  crewModeOn,
-  assignmentFieldOrder,
-  userId,
-  assignments,
-  onCompleted,
-}: {
-  jobId: string;
-  businessId: string;
-  jobStatus: string;
-  crewModeOn: boolean;
-  assignmentFieldOrder: string[] | null;
-  userId: string | null;
-  assignments: Assignment[];
-  onCompleted: () => void;
-}) {
-  const supabase = createSupabaseClient();
-  const { t: full } = useLang();
-  const tA = full.dashboard.jobs.actuals;
-  const tc = full.common;
-
-  const [templates, setTemplates] = useState<AssignmentFieldTemplate[]>([]);
-  const [draft, setDraft] = useState<Record<string, { hours: string; custom: Record<string, unknown> }>>({});
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  const isLead = !!userId && assignments.some(
-    (a) => a.is_lead === true && a.employees?.user_id === userId,
-  );
-
-  useEffect(() => {
-    if (!businessId) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('job_assignment_field_templates')
-        .select('*')
-        .eq('business_id', businessId)
-        .order('sort_order');
-      if (cancelled) return;
-      setTemplates((data as AssignmentFieldTemplate[] | null) ?? []);
-      const initial: typeof draft = {};
-      for (const r of assignments) {
-        initial[r.id] = {
-          hours: r.hours_worked != null ? String(r.hours_worked) : '',
-          custom: { ...(r.custom_fields ?? {}) },
-        };
-      }
-      setDraft(initial);
-      setLoaded(true);
-    })();
-    return () => { cancelled = true; };
-  }, [businessId, jobId, assignments.length]);
-
-  if (!crewModeOn || !loaded || !isLead) return null;
-
-  const orderedTemplates = (() => {
-    const byId = new Map(templates.map((t) => [t.id, t]));
-    if (!Array.isArray(assignmentFieldOrder) || assignmentFieldOrder.length === 0) return templates;
-    const out: AssignmentFieldTemplate[] = [];
-    const used = new Set<string>();
-    for (const ref of assignmentFieldOrder) {
-      if (typeof ref !== 'string' || !ref.startsWith('custom:')) continue;
-      const tpl = byId.get(ref.slice('custom:'.length));
-      if (tpl) { out.push(tpl); used.add(tpl.id); }
-    }
-    return [...out, ...templates.filter((t) => !used.has(t.id))];
-  })();
-
-  const setHours = (rowId: string, v: string) =>
-    setDraft(prev => ({ ...prev, [rowId]: { ...prev[rowId], hours: v } }));
-  const setCustom = (rowId: string, key: string, v: unknown) =>
-    setDraft(prev => ({
-      ...prev,
-      [rowId]: { ...prev[rowId], custom: { ...prev[rowId].custom, [key]: v } },
-    }));
-
-  const onSave = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      for (const row of assignments) {
-        const d = draft[row.id];
-        if (!d) continue;
-        const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
-        await supabase
-          .from('job_assignments')
-          .update({
-            hours_worked: Number.isFinite(hoursNum) ? hoursNum : null,
-            custom_fields: d.custom,
-            logged_at: new Date().toISOString(),
-            logged_by: userId,
-          })
-          .eq('id', row.id);
-      }
-      setMsg({ text: tA.saveSuccess, isError: false });
-    } catch {
-      setMsg({ text: tA.saveError, isError: true });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const markComplete = async () => {
-    await onSave();
-    onCompleted();
-    void logAudit(supabase, businessId, 'job.completion_logged', 'job', jobId, {
-      lead_user_id: userId,
-      worker_count: assignments.length,
-      total_hours: assignments.reduce((s, a) => s + (Number(draft[a.id]?.hours) || 0), 0),
-    });
-  };
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{tA.heading}</h2>
-      <p className="text-xs text-gray-500 mb-4">{tA.subtitle}</p>
-
-      <div className="flex flex-col divide-y divide-gray-50">
-        {assignments.map(row => {
-          const name = row.employees ? `${row.employees.first_name} ${row.employees.last_name}` : row.worker_name ?? '—';
-          const d = draft[row.id] ?? { hours: '', custom: {} };
-          return (
-            <div key={row.id} className="py-3 first:pt-0">
-              <p className="text-sm font-semibold text-gray-900 mb-2">{name}</p>
-
-              <div className="mb-2">
-                <label className="text-xs text-gray-500 block mb-1">{tA.hoursWorkedLabel}</label>
-                <input
-                  type="number" step="0.1" inputMode="decimal"
-                  value={d.hours}
-                  onChange={e => setHours(row.id, e.target.value)}
-                  placeholder={tA.hoursWorkedPlaceholder}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-                />
-              </div>
-
-              {orderedTemplates.map(tpl => {
-                const value = d.custom[tpl.field_key];
-                if (tpl.field_type === 'boolean') {
-                  // Three states — null/undefined, true, false. Clicking the
-                  // active button clears to null so the user can return to
-                  // "unanswered" if they clicked by mistake.
-                  const yesActive = value === true;
-                  const noActive = value === false;
-                  return (
-                    <div key={tpl.id} className="mb-2">
-                      <span className="text-xs text-gray-500 block mb-1.5">{tpl.field_label}</span>
-                      <div className="flex gap-2">
-                        <button type="button"
-                          onClick={() => setCustom(row.id, tpl.field_key, yesActive ? null : true)}
-                          className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                          {tc.states.yes}
-                        </button>
-                        <button type="button"
-                          onClick={() => setCustom(row.id, tpl.field_key, noActive ? null : false)}
-                          className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                          {tc.states.no}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={tpl.id} className="mb-2">
-                    <label className="text-xs text-gray-500 block mb-1">{tpl.field_label}</label>
-                    <input
-                      type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
-                      value={value == null ? '' : String(value)}
-                      onChange={e =>
-                        setCustom(
-                          row.id,
-                          tpl.field_key,
-                          tpl.field_type === 'number'
-                            ? e.target.value.trim() === '' ? null : Number(e.target.value)
-                            : e.target.value,
-                        )
-                      }
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-
-      {msg && (
-        <p className={`text-xs mt-2 ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</p>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2">
-        <Button onClick={onSave} loading={saving} fullWidth>{tA.saveBtn}</Button>
-        {jobStatus !== 'completed' && jobStatus !== 'invoiced' && (
-          <Button onClick={markComplete} loading={saving} variant="secondary" fullWidth>
-            <CheckCircle2 size={14} className="mr-1.5"/> {tA.markCompleteBtn}
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

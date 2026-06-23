@@ -304,10 +304,6 @@ export function JobsListScreen({
           <button onClick={() => onUpdateStatus(job.id, 'scheduled')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Calendar size={11} /> {t.actions.schedule}
           </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
-          </button>
         </div>
       );
     }
@@ -316,10 +312,6 @@ export function JobsListScreen({
         <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
           <button onClick={() => onUpdateStatus(job.id, 'sent')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Send size={11} /> {t.actions.markSent}
-          </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
           </button>
         </div>
       );
@@ -333,10 +325,6 @@ export function JobsListScreen({
           <button onClick={() => onUpdateStatus(job.id, 'declined')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-red-50 text-xs font-semibold text-red-500">
             <XCircle size={11} /> {t.actions.markDeclined}
           </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
-          </button>
         </div>
       );
     }
@@ -349,10 +337,6 @@ export function JobsListScreen({
           <button onClick={() => onGenerateInvoice(job.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-purple-50 text-xs font-semibold text-purple-600">
             <FileText size={11} /> {t.actions.generateInvoice}
           </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
-          </button>
         </div>
       );
     }
@@ -362,10 +346,6 @@ export function JobsListScreen({
           <button onClick={() => onUpdateStatus(job.id, 'in_progress')} className="px-3 py-1.5 rounded-lg hover:bg-amber-50 text-xs font-semibold text-amber-600">
             {t.actions.startWork}
           </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
-          </button>
         </div>
       );
     }
@@ -374,10 +354,6 @@ export function JobsListScreen({
         <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
           <button onClick={() => onUpdateStatus(job.id, 'completed')} className="px-3 py-1.5 rounded-lg hover:bg-emerald-50 text-xs font-semibold text-emerald-600">
             {t.actions.markCompleted}
-          </button>
-          <div className="flex-1" />
-          <button onClick={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-400">
-            {t.actions.cancel}
           </button>
         </div>
       );

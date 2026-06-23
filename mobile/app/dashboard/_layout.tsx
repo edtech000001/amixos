@@ -187,6 +187,8 @@ function DashboardTabs() {
              It also drops the old `unmountOnBlur` that was wiping half-filled
              forms when you tapped away. */}
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
+          {/* Payroll — reached from Reports, not the dock. */}
+          <Tabs.Screen name="mas/nomina" options={{ href: null }} />
           {/* Inventario is a MODULE (mas/inventario is a redirect to
              mas/modulos/inventory) — kept off the dock; reached via Más only
              when the module is enabled. */}

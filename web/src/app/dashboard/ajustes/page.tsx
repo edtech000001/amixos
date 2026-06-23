@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
@@ -1165,14 +1165,6 @@ export default function AjustesPage() {
     [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder],
   );
 
-  // ── Crew mode + per-worker assignment field config ─────────────────────
-  // Mirrors the job-template UI but targets job_assignment_field_templates
-  // and businesses.assignment_field_required / assignment_field_order.
-  const DEFAULT_ASSIGNMENT_FIELD_KEYS = ['hours_worked'] as const;
-  const ASGN_FIELD_LABELS: Record<string, string> = {
-    hours_worked: full.dashboard.jobs.actuals.hoursWorkedLabel,
-  };
-
   // Crew mode (draft pattern — single boolean, but unified with the rest).
   const [crewMode, setCrewMode] = useState<boolean>(business?.job_crew_mode ?? true);
   const [dbCrewMode, setDbCrewMode] = useState<boolean>(business?.job_crew_mode ?? true);
@@ -1180,54 +1172,27 @@ export default function AjustesPage() {
   const [crewModeMsg, setCrewModeMsg] = useState('');
   const [crewModeMsgIsError, setCrewModeMsgIsError] = useState(false);
 
-  // Assignment-field draft state (mirrors job-field shape).
-  const [asgnRequired, setAsgnRequired] = useState<Record<string, boolean>>(
-    business?.assignment_field_required ?? {}
-  );
-  const [dbAsgnRequired, setDbAsgnRequired] = useState<Record<string, boolean>>(
-    business?.assignment_field_required ?? {}
-  );
-  const [localAsgnOrder, setLocalAsgnOrder] = useState<string[]>(
-    Array.isArray(business?.assignment_field_order) ? (business!.assignment_field_order as string[]) : []
-  );
-  const [dbAsgnOrder, setDbAsgnOrder] = useState<string[]>(
-    Array.isArray(business?.assignment_field_order) ? (business!.assignment_field_order as string[]) : []
-  );
-  const [savingAsgnRequired, setSavingAsgnRequired] = useState(false);
-  const [asgnReqMsg, setAsgnReqMsg] = useState('');
-  const [asgnReqMsgIsError, setAsgnReqMsgIsError] = useState(false);
-  const [asgnTemplates, setAsgnTemplates] = useState<FieldTemplate[]>([]);
-  const [dbAsgnTemplates, setDbAsgnTemplates] = useState<FieldTemplate[]>([]);
-  const [addAsgnFieldModal, setAddAsgnFieldModal] = useState(false);
-  const [editAsgnFieldModal, setEditAsgnFieldModal] = useState(false);
-  const [editingAsgnTpl, setEditingAsgnTpl] = useState<FieldTemplate | null>(null);
-  const [asgnTplForm, setAsgnTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
-  const [savingAsgnTpl, setSavingAsgnTpl] = useState(false);
-  const [asgnTplError, setAsgnTplError] = useState('');
+  // Item-type categories (Labor/Material/Equipment/Other) toggle. Saves on flip.
+  const [itemTypesOn, setItemTypesOn] = useState<boolean>(business?.job_item_types_enabled !== false);
+  const [savingItemTypes, setSavingItemTypes] = useState(false);
 
   useEffect(() => {
     if (business) {
       const cm = business.job_crew_mode ?? true;
       setCrewMode(cm);
       setDbCrewMode(cm);
-      const ar = business.assignment_field_required ?? {};
-      setAsgnRequired(ar);
-      setDbAsgnRequired(ar);
-      const ao = Array.isArray(business.assignment_field_order) ? (business.assignment_field_order as string[]) : [];
-      setLocalAsgnOrder(ao);
-      setDbAsgnOrder(ao);
+      setItemTypesOn(business.job_item_types_enabled !== false);
     }
   }, [business]);
 
-  const loadAsgnTemplates = useCallback(async () => {
+  const saveItemTypes = async (value: boolean) => {
     if (!business) return;
-    const { data } = await supabase.from('job_assignment_field_templates').select('*')
-      .eq('business_id', business.id).order('sort_order');
-    const fetched = (data ?? []) as FieldTemplate[];
-    setAsgnTemplates(fetched);
-    setDbAsgnTemplates(fetched);
-  }, [business, supabase]);
-  useEffect(() => { loadAsgnTemplates(); }, [loadAsgnTemplates]);
+    setItemTypesOn(value); setSavingItemTypes(true);
+    const { error } = await supabase.from('businesses')
+      .update({ job_item_types_enabled: value }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setItemTypesOn(!value);
+    setSavingItemTypes(false);
+  };
 
   const saveCrewMode = async () => {
     if (!business) return;
@@ -1241,176 +1206,7 @@ export default function AjustesPage() {
     setSavingCrewMode(false);
   };
 
-  const toggleAsgnRequired = (key: string) => {
-    setAsgnRequired(prev => ({ ...prev, [key]: !prev[key] }));
-    setAsgnReqMsg('');
-  };
-
-  // Diff-and-save for assignments (templates + required + order).
-  const saveAsgnRequired = async () => {
-    if (!business) return;
-    setSavingAsgnRequired(true); setAsgnReqMsg('');
-    try {
-      const ops = diffById(dbAsgnTemplates, asgnTemplates);
-      const tempToReal: Record<string, string> = {};
-
-      if (ops.inserts.length > 0) {
-        const rows = ops.inserts.map((tpl, i) => ({
-          business_id: business.id,
-          field_key: tpl.field_key,
-          field_label: tpl.field_label,
-          field_type: tpl.field_type,
-          field_options: tpl.field_options,
-          required: tpl.required,
-          sort_order: dbAsgnTemplates.length + i,
-        }));
-        const { data: created, error } = await supabase
-          .from('job_assignment_field_templates').insert(rows).select();
-        if (error) throw error;
-        ops.inserts.forEach((tmp, i) => {
-          const realId = (created as { id: string }[] | null)?.[i]?.id;
-          if (realId) tempToReal[tmp.id] = realId;
-        });
-      }
-      for (const u of ops.updates) {
-        const { id, ...rest } = u;
-        const { error } = await supabase.from('job_assignment_field_templates').update(rest).eq('id', id);
-        if (error) throw error;
-      }
-      if (ops.deletes.length > 0) {
-        const { error } = await supabase.from('job_assignment_field_templates').delete().in('id', ops.deletes);
-        if (error) throw error;
-      }
-
-      const resolvedOrder = localAsgnOrder
-        .map(key => {
-          if (key.startsWith('custom:') && isTempId(key.slice('custom:'.length))) {
-            const tempId = key.slice('custom:'.length);
-            const realId = tempToReal[tempId];
-            return realId ? `custom:${realId}` : null;
-          }
-          return key;
-        })
-        .filter((k): k is string => k !== null);
-
-      const { error: bizErr } = await supabase.from('businesses').update({
-        assignment_field_required: asgnRequired,
-        assignment_field_order: resolvedOrder,
-      }).eq('id', business.id);
-      if (bizErr) throw bizErr;
-
-      await refetchBusiness();
-      await loadAsgnTemplates();
-      setLocalAsgnOrder(resolvedOrder);
-      setDbAsgnOrder(resolvedOrder);
-      setDbAsgnRequired(asgnRequired);
-
-      setAsgnReqMsgIsError(false);
-      setAsgnReqMsg(t.requiredFields.saveSuccess);
-    } catch {
-      setAsgnReqMsgIsError(true);
-      setAsgnReqMsg(t.requiredFields.saveError);
-    }
-    setSavingAsgnRequired(false);
-  };
-
-  // Assignment-template CRUD — local-only mutations.
-  const addAsgnTemplate = () => {
-    if (!asgnTplForm.field_label.trim()) { setAsgnTplError(t.customFields.errorNameRequired); return; }
-    const key = toKey(asgnTplForm.field_label);
-    if (asgnTemplates.some(tpl => tpl.field_key === key)) { setAsgnTplError(t.customFields.errorDuplicate); return; }
-    const options = asgnTplForm.field_type === 'select'
-      ? asgnTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    const newTpl: FieldTemplate = {
-      id: newTempId(),
-      field_key: key,
-      field_label: asgnTplForm.field_label.trim(),
-      field_type: asgnTplForm.field_type,
-      field_options: options,
-      required: asgnTplForm.required,
-      sort_order: asgnTemplates.length,
-    };
-    setAsgnTemplates(prev => [...prev, newTpl]);
-    setLocalAsgnOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setAsgnTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-    setAsgnTplError(''); setAddAsgnFieldModal(false);
-  };
-
-  const removeAsgnTemplate = (id: string) => {
-    if (!confirm(t.customFields.confirmDelete)) return;
-    setAsgnTemplates(prev => prev.filter(tpl => tpl.id !== id));
-    setLocalAsgnOrder(prev => prev.filter(k => k !== `custom:${id}`));
-  };
-
-  const openEditAsgnTemplate = (tpl: FieldTemplate) => {
-    setEditingAsgnTpl(tpl);
-    setAsgnTplForm({
-      field_label: tpl.field_label, field_type: tpl.field_type,
-      required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
-    });
-    setAsgnTplError('');
-    setEditAsgnFieldModal(true);
-  };
-
-  const updateAsgnTemplate = () => {
-    if (!editingAsgnTpl || !asgnTplForm.field_label.trim()) { setAsgnTplError(t.customFields.errorNameRequired); return; }
-    const options = asgnTplForm.field_type === 'select'
-      ? asgnTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
-    setAsgnTemplates(prev => prev.map(tpl => tpl.id === editingAsgnTpl.id ? {
-      ...tpl,
-      field_label: asgnTplForm.field_label.trim(),
-      field_type: asgnTplForm.field_type,
-      field_options: options,
-      required: asgnTplForm.required,
-    } : tpl));
-    setEditAsgnFieldModal(false); setEditingAsgnTpl(null);
-  };
-
-  const asgnItems: UnifiedItem[] = useMemo(() => {
-    const standardItems: UnifiedItem[] = DEFAULT_ASSIGNMENT_FIELD_KEYS.map((k) => ({
-      kind: 'standard', key: k, label: ASGN_FIELD_LABELS[k] ?? k,
-    }));
-    const customItems: UnifiedItem[] = asgnTemplates.map(tpl => ({
-      kind: 'custom', key: `custom:${tpl.id}`, label: tpl.field_label, tpl,
-    }));
-    const all = [...standardItems, ...customItems];
-    const byKey = new Map(all.map(it => [it.key, it]));
-
-    if (localAsgnOrder.length === 0) return all;
-
-    const ordered: UnifiedItem[] = [];
-    for (const k of localAsgnOrder) {
-      const item = byKey.get(k);
-      if (item) ordered.push(item);
-    }
-    const used = new Set(ordered.map(i => i.key));
-    return [...ordered, ...all.filter(i => !used.has(i.key))];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asgnTemplates, localAsgnOrder, full]);
-
-  const moveAsgnItem = (key: string, direction: 'up' | 'down') => {
-    const idx = asgnItems.findIndex(i => i.key === key);
-    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || otherIdx < 0 || otherIdx >= asgnItems.length) return;
-    const next = [...asgnItems];
-    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    setLocalAsgnOrder(next.map(i => i.key));
-    setAsgnReqMsg('');
-  };
-
-  const onAsgnDragReorder = (next: { id: string }[]) => {
-    setLocalAsgnOrder(next.map(i => i.id));
-    setAsgnReqMsg('');
-  };
-
   const crewModeDirty = crewMode !== dbCrewMode;
-  const asgnFieldsDirty = useMemo(
-    () =>
-      isDirty(dbAsgnTemplates, asgnTemplates) ||
-      JSON.stringify(dbAsgnRequired) !== JSON.stringify(asgnRequired) ||
-      JSON.stringify(dbAsgnOrder) !== JSON.stringify(localAsgnOrder),
-    [dbAsgnTemplates, asgnTemplates, dbAsgnRequired, asgnRequired, dbAsgnOrder, localAsgnOrder],
-  );
 
   const moveClientItem = (key: string, direction: 'up' | 'down') => {
     const idx = clientItems.findIndex(i => i.key === key);
@@ -1780,7 +1576,7 @@ export default function AjustesPage() {
   // crew mode / assignment fields); each saves on its own button but a
   // switch away from the tab with any pending edits triggers the unified
   // discard.
-  const trabajosDirty = pipelineDirty || jobFieldsDirty || jobAlertsDirty || crewModeDirty || asgnFieldsDirty;
+  const trabajosDirty = pipelineDirty || jobFieldsDirty || jobAlertsDirty || crewModeDirty;
 
   const discardTrabajos = useCallback(() => {
     setPipelineDisabled(dbPipelineDisabled);
@@ -1789,11 +1585,8 @@ export default function AjustesPage() {
     setLocalJobOrder(dbJobOrder);
     setJobAlerts(dbJobAlerts);
     setCrewMode(dbCrewMode);
-    setAsgnTemplates(dbAsgnTemplates);
-    setAsgnRequired(dbAsgnRequired);
-    setLocalAsgnOrder(dbAsgnOrder);
-    setPipelineMsg(''); setJobReqMsg(''); setJobAlertsMsg(''); setCrewModeMsg(''); setAsgnReqMsg('');
-  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobAlerts, dbCrewMode, dbAsgnTemplates, dbAsgnRequired, dbAsgnOrder]);
+    setPipelineMsg(''); setJobReqMsg(''); setJobAlertsMsg(''); setCrewModeMsg('');
+  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobAlerts, dbCrewMode]);
 
   const anyDirty = clientsDirty || employeesDirty || invoicesDirty || invoiceThemeDirty || trabajosDirty;
 
@@ -1984,6 +1777,22 @@ export default function AjustesPage() {
           {/* ══ TRABAJOS ══════════════════════════════════════════════ */}
           {tab === 'trabajos' && (
             <div className="flex flex-col gap-5">
+              {/* Import jobs (CSV) — migration action. Opens the import wizard
+                 on the Trabajos list via ?import=1. */}
+              <Link
+                href="/dashboard/trabajos?import=1"
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Upload size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">Importar trabajos</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Sube un CSV de tus proyectos (AppSheet). Descarga la plantilla dentro.</p>
+                </div>
+                <span className="text-xl text-gray-400">›</span>
+              </Link>
+
               {/* Pipeline step config */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.pipeline.heading}</h2>
@@ -2194,6 +2003,20 @@ export default function AjustesPage() {
                 )}
               </div>
 
+              {/* Item-type categories toggle — grouped with the other toggles
+                 near the bottom (matches the mobile section order). */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-gray-900">Categorías de materiales y mano de obra</h2>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Muestra las etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si solo cobras por cantidad × precio (p. ej. pies × tarifa).
+                    </p>
+                  </div>
+                  <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
+                </div>
+              </div>
+
               {/* Crew mode toggle — hides the per-worker fields card + the
                  lead picker on the new-job form when off. */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -2214,103 +2037,6 @@ export default function AjustesPage() {
                 )}
               </div>
 
-              {/* Per-worker custom fields — what the lead fills out for each
-                 worker after the job. Hidden when crew mode is off. */}
-              {crewMode && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-base font-semibold text-gray-900">{t.assignmentFieldsSection.title}</h2>
-                    <Button size="sm" variant="secondary" onClick={() => {
-                      setAsgnTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
-                      setAsgnTplError(''); setAddAsgnFieldModal(true);
-                    }}>
-                      <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-400 mb-5">{t.assignmentFieldsSection.subtitle}</p>
-
-                  <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                    <SortableList<UnifiedItem & { id: string }>
-                      items={asgnItems.map(it => ({ ...it, id: it.key }))}
-                      onReorder={onAsgnDragReorder}
-                      renderItem={(item, i, { attributes, listeners }) => {
-                        const isLast = i === asgnItems.length - 1;
-                        return (
-                          <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                            <button
-                              type="button"
-                              {...attributes}
-                              {...listeners}
-                              className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
-                              aria-label="Drag to reorder"
-                            >
-                              <GripVertical size={14} />
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                {item.kind === 'custom' && (
-                                  <Sparkles size={12} className="text-primary shrink-0"/>
-                                )}
-                                <span className="text-sm text-gray-900">{item.label}</span>
-                                {item.kind === 'custom' && item.tpl.required && (
-                                  <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
-                                )}
-                              </div>
-                              {item.kind === 'custom' && (
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {FIELD_TYPES[item.tpl.field_type]}
-                                  {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex flex-col shrink-0">
-                              <button
-                                onClick={() => moveAsgnItem(item.key, 'up')}
-                                disabled={i === 0}
-                                className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                aria-label="Move up"
-                              >
-                                <ChevronUp size={14} className="text-gray-500"/>
-                              </button>
-                              <button
-                                onClick={() => moveAsgnItem(item.key, 'down')}
-                                disabled={isLast}
-                                className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                aria-label="Move down"
-                              >
-                                <ChevronDown size={14} className="text-gray-500"/>
-                              </button>
-                            </div>
-
-                            {item.kind === 'standard' ? (
-                              <Toggle checked={!!asgnRequired[item.key]} onChange={() => toggleAsgnRequired(item.key)} />
-                            ) : (
-                              <>
-                                <button onClick={() => openEditAsgnTemplate(item.tpl)}
-                                  className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                                  aria-label={tc.buttons.edit}>
-                                  <Pencil size={13} className="text-blue-400"/>
-                                </button>
-                                <button onClick={() => removeAsgnTemplate(item.tpl.id)}
-                                  className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                                  aria-label={tc.buttons.delete}>
-                                  <Trash2 size={13} className="text-red-400"/>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        );
-                      }}
-                    />
-                  </div>
-
-                  {asgnReqMsg && <p className={`text-xs mb-3 ${asgnReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{asgnReqMsg}</p>}
-                  <Button onClick={saveAsgnRequired} loading={savingAsgnRequired} disabled={!asgnFieldsDirty}>
-                    <Save size={14} className="mr-1.5"/> {t.requiredFields.saveBtn}
-                  </Button>
-                </div>
-              )}
             </div>
           )}
 
@@ -2770,6 +2496,23 @@ export default function AjustesPage() {
 
           {tab === 'facturas' && (
             <div className="flex flex-col gap-5">
+              {/* Import invoices (CSV) — migration action. Opens the import
+                 wizard on the Facturas list via ?import=1. Run AFTER jobs so
+                 each line can link to its job by Project ID. */}
+              <Link
+                href="/dashboard/facturas?import=1"
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Upload size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">Importar facturas</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Sube un CSV de facturas (FileMaker). Importa los trabajos primero para enlazarlas.</p>
+                </div>
+                <span className="text-xl text-gray-400">›</span>
+              </Link>
+
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
@@ -3153,85 +2896,6 @@ export default function AjustesPage() {
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setAddJobFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
             <Button onClick={addJobTemplate} loading={savingJobTpl} fullWidth>{t.customFields.addFieldBtn}</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add ASSIGNMENT (per-worker) field modal ────────────── */}
-      <Modal open={addAsgnFieldModal} onClose={() => setAddAsgnFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
-        <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={asgnTplForm.field_label}
-            onChange={e => setAsgnTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {asgnTplForm.field_label && (
-            <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(asgnTplForm.field_label)}</code>
-            </p>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
-            <select value={asgnTplForm.field_type}
-              onChange={e => setAsgnTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          {asgnTplForm.field_type === 'select' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
-              </label>
-              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
-                value={asgnTplForm.options_raw}
-                onChange={e => setAsgnTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
-            </div>
-          )}
-          <div className="flex items-center gap-3">
-            <Toggle checked={asgnTplForm.required} onChange={(v) => setAsgnTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
-          </div>
-          {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setAddAsgnFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={addAsgnTemplate} loading={savingAsgnTpl} fullWidth>{t.customFields.addFieldBtn}</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Edit ASSIGNMENT field modal ────────────────────────── */}
-      <Modal open={editAsgnFieldModal} onClose={() => setEditAsgnFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
-        <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={asgnTplForm.field_label}
-            onChange={e => setAsgnTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
-            <select value={asgnTplForm.field_type}
-              onChange={e => setAsgnTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          {asgnTplForm.field_type === 'select' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
-              </label>
-              <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
-                value={asgnTplForm.options_raw}
-                onChange={e => setAsgnTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
-            </div>
-          )}
-          <div className="flex items-center gap-3">
-            <Toggle checked={asgnTplForm.required} onChange={(v) => setAsgnTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
-          </div>
-          {asgnTplError && <p className="text-xs text-red-500">{asgnTplError}</p>}
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => setEditAsgnFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={updateAsgnTemplate} loading={savingAsgnTpl} fullWidth>{tc.buttons.saveChanges}</Button>
           </div>
         </div>
       </Modal>

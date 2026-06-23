@@ -30,12 +30,14 @@ import {
   Building2,
   Navigation,
   MessageSquare,
+  XCircle,
   Share2,
   X,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -171,9 +173,13 @@ export default function JobDetailRoute() {
   };
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  // Labor/Material/Equipment/Other categories on job line items — hidden when
+  // the business turns them off (billed flat / by qty × rate instead).
+  const showItemTypes = business?.job_item_types_enabled !== false;
   const { t: full } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
+  const { confirm: confirmAction, confirmSheet } = useConfirmSheet();
   const tc = full.common;
   const dateLoc = full.dashboard.dateLocale;
 
@@ -429,7 +435,7 @@ export default function JobDetailRoute() {
     const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 
     const lineItems = items.map((i) => ({
-      description: `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}`,
+      description: showItemTypes ? `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}` : i.description,
       quantity: i.quantity,
       unit_price: i.unit_price,
       total: i.total,
@@ -623,6 +629,18 @@ export default function JobDetailRoute() {
     if (job.status === 'in_progress') return { label: t.statuses.completed, onPress: () => updateStatus('completed') };
     return null;
   })();
+
+  // Cancel — moved off the jobs list (accidental taps) to here, behind a
+  // confirm. Only for active, pre-completion statuses.
+  const canCancel = !isCancelled && ['posible', 'proposal', 'sent', 'accepted', 'scheduled', 'in_progress'].includes(job.status);
+  const confirmCancelJob = () => {
+    confirmAction({
+      title: td.cancelJobConfirm,
+      confirmText: td.cancelJobBtn,
+      destructive: true,
+      onConfirm: () => void updateStatus('cancelled'),
+    });
+  };
 
   // One-step back. Walks the visible pipeline so "Programado → En progreso"
   // can be undone by tapping ←. Hidden at the first step, during cancellation,
@@ -896,6 +914,17 @@ export default function JobDetailRoute() {
               <Text className="text-sm font-semibold text-gray-700">{td.sendToCrew}</Text>
             </Pressable>
           ) : null}
+
+          {canCancel ? (
+            <Pressable
+              onPress={confirmCancelJob}
+              disabled={updatingStatus}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-red-50"
+            >
+              <XCircle size={16} color="#EF4444" />
+              <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Details card */}
@@ -971,18 +1000,6 @@ export default function JobDetailRoute() {
           ) : null}
         </View>
 
-        {/* Project Leader's actuals — only renders when crew mode is on AND
-           the current user is the lead on this job. Component handles its
-           own visibility check + DB loads. */}
-        <ActualsSection
-          jobId={job.id}
-          businessId={job.business_id}
-          crewModeOn={business?.job_crew_mode !== false}
-          assignmentFieldOrder={business?.assignment_field_order ?? null}
-          jobStatus={job.status}
-          onCompleted={() => updateStatus('completed')}
-        />
-
         {/* Items list */}
         <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
           <View className="flex-row items-center justify-between mb-3">
@@ -1015,9 +1032,11 @@ export default function JobDetailRoute() {
                   }`}
                 >
                   <View className="flex-1">
-                    <Text className="text-xs text-gray-400 mb-0.5">
-                      {ITEM_TYPE_LABELS[it.item_type] ?? it.item_type}
-                    </Text>
+                    {showItemTypes ? (
+                      <Text className="text-xs text-gray-400 mb-0.5">
+                        {ITEM_TYPE_LABELS[it.item_type] ?? it.item_type}
+                      </Text>
+                    ) : null}
                     <Text className="text-sm text-gray-900">{it.description}</Text>
                     <Text className="text-xs text-gray-500 mt-0.5">
                       {it.quantity} × {fmt(it.unit_price)}
@@ -1090,22 +1109,24 @@ export default function JobDetailRoute() {
               {editRows.map(r => (
                 <View key={r.id} className="bg-gray-50 rounded-2xl p-3 gap-2">
                   <View className="flex-row items-start justify-between gap-2">
-                    <View className="flex-1 flex-row flex-wrap gap-1.5">
-                      {ITEM_TYPES.map(tk => {
-                        const on = r.item_type === tk;
-                        return (
-                          <Pressable
-                            key={tk}
-                            onPress={() => updateRow(r.id, 'item_type', tk)}
-                            className={`px-3 py-1.5 rounded-full border ${on ? 'bg-primary border-primary' : 'bg-white border-gray-200'}`}
-                          >
-                            <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-600'}`}>
-                              {ITEM_TYPE_LABELS[tk] ?? tk}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                    {showItemTypes ? (
+                      <View className="flex-1 flex-row flex-wrap gap-1.5">
+                        {ITEM_TYPES.map(tk => {
+                          const on = r.item_type === tk;
+                          return (
+                            <Pressable
+                              key={tk}
+                              onPress={() => updateRow(r.id, 'item_type', tk)}
+                              className={`px-3 py-1.5 rounded-full border ${on ? 'bg-primary border-primary' : 'bg-white border-gray-200'}`}
+                            >
+                              <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-600'}`}>
+                                {ITEM_TYPE_LABELS[tk] ?? tk}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : <View className="flex-1" />}
                     <Pressable onPress={() => setEditRows(prev => prev.filter(x => x.id !== r.id))} hitSlop={8} className="pt-1">
                       <Trash2 size={16} color="#EF4444" />
                     </Pressable>
@@ -1280,6 +1301,8 @@ export default function JobDetailRoute() {
           </Pressable>
         </Pressable>
       </RNModal>
+
+      {confirmSheet}
     </SafeAreaView>
   );
 }
@@ -1371,291 +1394,3 @@ function PipelineStrip({
     </View>
   );
 }
-
-// ─── Project Leader actuals section ──────────────────────────────────────
-// Loads job_assignments + per-worker field templates and renders an editor
-// only when the current user is the lead on this job. RLS allows the lead
-// (field role) to update assignments via the "lead update job_assignments"
-// policy in migration 033.
-interface AssignmentRow {
-  id: string;
-  employee_id: string | null;
-  worker_name: string | null;
-  is_lead: boolean | null;
-  hours_worked: number | null;
-  custom_fields: Record<string, unknown> | null;
-  employees: { user_id: string | null } | null;
-}
-
-interface AssignmentFieldTemplate {
-  id: string;
-  field_key: string;
-  field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
-  field_options: string[] | null;
-  required: boolean;
-  sort_order: number;
-}
-
-function ActualsSection({
-  jobId,
-  businessId,
-  crewModeOn,
-  assignmentFieldOrder,
-  jobStatus,
-  onCompleted,
-}: {
-  jobId: string;
-  businessId: string;
-  crewModeOn: boolean;
-  assignmentFieldOrder: string[] | null;
-  jobStatus: string;
-  onCompleted: () => void;
-}) {
-  const supabase = createSupabaseClient();
-  const user = useAuthStore((s) => s.user);
-  const { t: full } = useLang();
-  const tA = full.dashboard.jobs.actuals;
-  const tc = full.common;
-
-  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-  const [templates, setTemplates] = useState<AssignmentFieldTemplate[]>([]);
-  const [isLead, setIsLead] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
-  // Working copy — edits are buffered in state until "Guardar" is tapped.
-  const [draft, setDraft] = useState<Record<string, { hours: string; custom: Record<string, unknown> }>>({});
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      // Assignments cached so a lead can log actuals offline; templates are
-      // best-effort (offline → empty).
-      const aRes = await loadCached(`job_assignments_${jobId}`, async () => {
-        const { data, error } = await supabase
-          .from('job_assignments')
-          .select('id, employee_id, worker_name, is_lead, hours_worked, custom_fields, employees(user_id)')
-          .eq('job_id', jobId);
-        if (error) throw error;
-        return ((data ?? []) as unknown) as AssignmentRow[];
-      });
-      let tpls: AssignmentFieldTemplate[] = [];
-      try {
-        const { data: tpl } = await supabase
-          .from('job_assignment_field_templates')
-          .select('*')
-          .eq('business_id', businessId)
-          .order('sort_order');
-        tpls = (tpl ?? []) as AssignmentFieldTemplate[];
-      } catch { /* offline — no templates */ }
-      if (cancelled) return;
-      const rows = aRes.data ?? [];
-      setAssignments(rows);
-      setTemplates(tpls);
-      const leadHere = rows.some(
-        (r) => r.is_lead === true && r.employees?.user_id === user.id,
-      );
-      setIsLead(leadHere);
-      // Seed draft from saved values.
-      const initial: typeof draft = {};
-      for (const r of rows) {
-        initial[r.id] = {
-          hours: r.hours_worked != null ? String(r.hours_worked) : '',
-          custom: { ...(r.custom_fields ?? {}) },
-        };
-      }
-      setDraft(initial);
-      setLoaded(true);
-    })();
-    return () => { cancelled = true; };
-  }, [jobId, businessId, user?.id]);
-
-  if (!crewModeOn || !loaded || !isLead) return null;
-
-  // Order templates by saved order then sort_order. Saved order entries
-  // look like "custom:<uuid>" — we extract the uuid to match templates.
-  const orderedTemplates = (() => {
-    const byId = new Map(templates.map((t) => [t.id, t]));
-    if (!Array.isArray(assignmentFieldOrder) || assignmentFieldOrder.length === 0) return templates;
-    const out: AssignmentFieldTemplate[] = [];
-    const used = new Set<string>();
-    for (const ref of assignmentFieldOrder) {
-      if (typeof ref !== 'string' || !ref.startsWith('custom:')) continue;
-      const tpl = byId.get(ref.slice('custom:'.length));
-      if (tpl) { out.push(tpl); used.add(tpl.id); }
-    }
-    return [...out, ...templates.filter((t) => !used.has(t.id))];
-  })();
-
-  const onSave = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      // Sequential updates — small N (one per worker). queuedUpdate writes
-      // through online or parks the change offline (drained on reconnect).
-      for (const row of assignments) {
-        const d = draft[row.id];
-        if (!d) continue;
-        const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
-        await queuedUpdate({
-          table: 'job_assignments',
-          match: { id: row.id },
-          payload: {
-            hours_worked: Number.isFinite(hoursNum) ? hoursNum : null,
-            custom_fields: d.custom,
-            logged_at: new Date().toISOString(),
-            logged_by: user?.id ?? null,
-          },
-          businessId,
-          label: `${tA.saveSuccess} · ${row.worker_name ?? ''} ${d.hours || '0'}h`.trim(),
-        });
-      }
-      // Keep the cached assignments in sync so reopening offline shows the
-      // logged values before they sync.
-      void writeCached(
-        `job_assignments_${jobId}`,
-        assignments.map((r) => {
-          const d = draft[r.id];
-          if (!d) return r;
-          const hoursNum = d.hours.trim() === '' ? null : Number(d.hours);
-          return { ...r, hours_worked: Number.isFinite(hoursNum) ? hoursNum : null, custom_fields: d.custom };
-        }),
-      );
-      setMsg({ text: tA.saveSuccess, isError: false });
-    } catch {
-      setMsg({ text: tA.saveError, isError: true });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const markComplete = async () => {
-    await onSave();
-    onCompleted();
-    void logAudit(supabase, businessId, 'job.completion_logged', 'job', jobId, {
-      lead_user_id: user?.id,
-      worker_count: assignments.length,
-      total_hours: assignments.reduce((s, a) => s + (Number(draft[a.id]?.hours) || 0), 0),
-    });
-  };
-
-  const setHours = (rowId: string, v: string) =>
-    setDraft((prev) => ({ ...prev, [rowId]: { ...prev[rowId], hours: v } }));
-  const setCustom = (rowId: string, key: string, v: unknown) =>
-    setDraft((prev) => ({
-      ...prev,
-      [rowId]: { ...prev[rowId], custom: { ...prev[rowId].custom, [key]: v } },
-    }));
-
-  return (
-    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
-      <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{tA.heading}</Text>
-      <Text className="text-xs text-gray-500 mb-3">{tA.subtitle}</Text>
-
-      {assignments.map((row, i) => {
-        const d = draft[row.id] ?? { hours: '', custom: {} };
-        return (
-          <View
-            key={row.id}
-            className={`py-3 ${i < assignments.length - 1 ? 'border-b border-gray-50' : ''}`}
-          >
-            <Text className="text-sm font-semibold text-gray-900 mb-2">
-              {row.worker_name ?? '—'}
-            </Text>
-
-            {/* Hours worked — the universal core field. */}
-            <View className="mb-2">
-              <Text className="text-xs text-gray-500 mb-1">{tA.hoursWorkedLabel}</Text>
-              <TextInput
-                value={d.hours}
-                onChangeText={(v) => setHours(row.id, v)}
-                placeholder={tA.hoursWorkedPlaceholder}
-                placeholderTextColor="#9CA3AF"
-                keyboardType="decimal-pad"
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
-              />
-            </View>
-
-            {/* Custom per-worker fields. */}
-            {orderedTemplates.map((tpl) => {
-              const value = d.custom[tpl.field_key];
-              if (tpl.field_type === 'boolean') {
-                // Three states — null/undefined, true, false. Tapping the
-                // active button clears to null so workers can return to
-                // "unanswered" if they tapped by mistake.
-                const yesActive = value === true;
-                const noActive = value === false;
-                return (
-                  <View key={tpl.id} className="mb-2">
-                    <Text className="text-xs text-gray-500 mb-1.5">{tpl.field_label}</Text>
-                    <View className="flex-row gap-2">
-                      <Pressable
-                        onPress={() => setCustom(row.id, tpl.field_key, yesActive ? null : true)}
-                        className={`flex-1 rounded-xl border px-3 py-2 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                      >
-                        <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
-                          {tc.states.yes}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setCustom(row.id, tpl.field_key, noActive ? null : false)}
-                        className={`flex-1 rounded-xl border px-3 py-2 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                      >
-                        <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
-                          {tc.states.no}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              }
-              return (
-                <View key={tpl.id} className="mb-2">
-                  <Text className="text-xs text-gray-500 mb-1">{tpl.field_label}</Text>
-                  <TextInput
-                    value={value == null ? '' : String(value)}
-                    onChangeText={(v) =>
-                      setCustom(
-                        row.id,
-                        tpl.field_key,
-                        tpl.field_type === 'number'
-                          ? v.trim() === '' ? null : Number(v)
-                          : v,
-                      )
-                    }
-                    keyboardType={tpl.field_type === 'number' ? 'decimal-pad' : 'default'}
-                    placeholderTextColor="#9CA3AF"
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
-                  />
-                </View>
-              );
-            })}
-          </View>
-        );
-      })}
-
-      {msg ? (
-        <Text className={`text-xs mt-2 ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>
-          {msg.text}
-        </Text>
-      ) : null}
-
-      <View className="mt-3 gap-2">
-        <Button onPress={onSave} loading={saving}>{tA.saveBtn}</Button>
-        {jobStatus !== 'completed' && jobStatus !== 'invoiced' ? (
-          <Pressable
-            onPress={markComplete}
-            disabled={saving}
-            className="flex-row items-center justify-center gap-2 bg-emerald-600 py-3 rounded-2xl active:opacity-80"
-          >
-            <CheckCircle2 size={16} color="#FFFFFF" />
-            <Text className="text-white font-semibold text-sm">{tA.markCompleteBtn}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-

@@ -12,6 +12,7 @@ import {
 } from '@amixos/shared/screens/dashboard/InvoicesListScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { logAudit } from '@amixos/shared/lib/audit';
+import ImportModal from '@/components/dashboard/ImportModal';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
@@ -37,6 +38,18 @@ export default function FacturasPage() {
   const { business } = useApp();
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('import') === '1') {
+      setImportOpen(true);
+      params.delete('import');
+      const qs = params.toString();
+      window.history.replaceState(null, '', `/dashboard/facturas${qs ? `?${qs}` : ''}`);
+    }
+  }, []);
 
   const mapClientNames = (raw: RawInvoice): string | null => {
     const list = raw.invoice_clients?.length
@@ -89,6 +102,18 @@ export default function FacturasPage() {
   };
 
   return (
+    <>
+    {business && (
+      <ImportModal
+        open={importOpen}
+        mode="invoices"
+        businessId={business.id}
+        supabase={supabase}
+        invoiceTemplate={business.invoice_template}
+        onClose={() => setImportOpen(false)}
+        onDone={load}
+      />
+    )}
     <InvoicesListScreen
       loading={loading}
       invoices={invoices}
@@ -96,5 +121,6 @@ export default function FacturasPage() {
       onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
       onUpdateStatus={updateStatus}
     />
+    </>
   );
 }

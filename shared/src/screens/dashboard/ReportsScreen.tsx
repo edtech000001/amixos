@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange } from 'lucide-react-native';
+import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import {
@@ -21,6 +21,8 @@ export interface ReportsScreenProps {
   customFrom: string | null;
   customTo: string | null;
   onCustomChange: (next: { from: string | null; to: string | null }) => void;
+  /** Open the dedicated Payroll page. Hidden when not provided. */
+  onOpenPayroll?: () => void;
 }
 
 function fmt(n: number) {
@@ -34,7 +36,7 @@ const KPI_COLOR: Record<string, string> = {
   emerald: '#059669', amber: '#D97706', indigo: '#4F46E5', purple: '#7C3AED',
 };
 
-export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange }: ReportsScreenProps) {
+export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll }: ReportsScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports;
   const jobsTabs = full.dashboard.jobs.tabs;
@@ -131,6 +133,22 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         <Kpi color="purple" icon={<Clock size={16} color={KPI_COLOR.purple} />} label={t.kpis.hoursLogged} value={m.totalHours.toFixed(1)}
           sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(m.totalPayroll))} />
       </View>
+
+      {/* Payroll page entry */}
+      {onOpenPayroll ? (
+        <Pressable
+          onPress={onOpenPayroll}
+          className="flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 mt-4 active:bg-gray-50"
+        >
+          <View className="flex-row items-center gap-3">
+            <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+              <DollarSign size={16} color="#4F46E5" />
+            </View>
+            <Text className="text-sm font-semibold text-gray-900">{t.payroll.entry}</Text>
+          </View>
+          <ChevronRight size={18} color="#9CA3AF" />
+        </Pressable>
+      ) : null}
 
       <View className="mt-4" />
 

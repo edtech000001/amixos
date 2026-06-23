@@ -47,6 +47,10 @@ export function lineItemsForJob(
   jobTitle: string,
   jobItems: JobItemRow[],
   itemTypeLabels: Record<string, string>,
+  /** When the business has item-type categories turned off
+   *  (businesses.job_item_types_enabled = false), drop the "Tipo:" prefix so
+   *  lines read as plain "descripción" instead of "Mano de obra: descripción". */
+  opts?: { hideTypes?: boolean },
 ): InvoiceLineItem[] {
   const own = jobItems.filter(i => i.job_id === jobId);
   // A job with no logged items still gets ONE placeholder line — its title at
@@ -58,9 +62,12 @@ export function lineItemsForJob(
   }
   return own.map(i => {
     const desc = (i.description ?? '').trim();
-    // With a description → "Tipo: descripción"; without one → just the job
-    // title (so a bare amount + cost reads as the job name on the invoice).
-    const name = desc ? `${itemTypeLabels[i.item_type] ?? i.item_type}: ${desc}` : jobTitle;
+    // With a description → "Tipo: descripción" (or just "descripción" when types
+    // are off); without one → just the job title (so a bare amount + cost reads
+    // as the job name on the invoice).
+    const name = opts?.hideTypes
+      ? (desc || jobTitle)
+      : (desc ? `${itemTypeLabels[i.item_type] ?? i.item_type}: ${desc}` : jobTitle);
     return {
       description: name,
       qty: i.quantity,
@@ -103,6 +110,8 @@ export async function createInvoiceFromJobs(
     notesLabel: string;
     /** Business's configured starting invoice number (businesses.invoice_start_number). */
     startNumber?: number;
+    /** Drop the item-type prefix on lines (businesses.job_item_types_enabled = false). */
+    hideItemTypes?: boolean;
   },
 ): Promise<CreateInvoiceResult> {
   if (!opts.jobIds.length) return { ok: false, error: 'no_jobs' };
@@ -127,7 +136,7 @@ export async function createInvoiceFromJobs(
   const orderedJobs: any[] = opts.jobIds.map(id => byId.get(id)).filter(Boolean);
   const lineItems: InvoiceLineItem[] = [];
   for (const j of orderedJobs) {
-    lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels));
+    lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
   }
 
   const taxRate = 0;
@@ -181,7 +190,7 @@ export async function createInvoiceFromJobs(
  *  actually changed. */
 export async function rebuildInvoiceLineItems(
   supabase: Supa,
-  opts: { invoiceId: string; itemTypeLabels: Record<string, string> },
+  opts: { invoiceId: string; itemTypeLabels: Record<string, string>; hideItemTypes?: boolean },
 ): Promise<{ changed: boolean }> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -208,7 +217,7 @@ export async function rebuildInvoiceLineItems(
   const existing = (inv.line_items ?? []) as InvoiceLineItem[];
   const jobLines: InvoiceLineItem[] = [];
   for (const j of (jobs ?? []) as any[]) {
-    jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels));
+    jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
   }
   const lineKey = (l: InvoiceLineItem) => `${l.description}|${l.qty}|${l.rate}`;
   const jobLineKeys = new Set(jobLines.map(lineKey));
@@ -379,6 +388,7 @@ export async function addJobsToInvoice(
     invoice: { id: string; client_id: string | null; line_items: InvoiceLineItem[] | null; tax_rate?: number; discount?: number };
     jobIds: string[];
     itemTypeLabels: Record<string, string>;
+    hideItemTypes?: boolean;
   },
 ): Promise<{ ok: boolean }> {
   if (!opts.jobIds.length) return { ok: true };
@@ -393,7 +403,7 @@ export async function addJobsToInvoice(
   const { data: jobItems } = await supabase.from('job_items').select('*').in('job_id', opts.jobIds);
   const added: InvoiceLineItem[] = [];
   for (const jid of opts.jobIds) {
-    added.push(...lineItemsForJob(jid, titleById.get(jid) ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels));
+    added.push(...lineItemsForJob(jid, titleById.get(jid) ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
   }
   const next = [...((opts.invoice.line_items ?? []) as InvoiceLineItem[]), ...added];
   const { subtotal, tax, total } = computeTotals(next, opts.invoice.tax_rate ?? 0, opts.invoice.discount ?? 0);

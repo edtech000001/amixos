@@ -324,10 +324,6 @@ export function JobsListScreen({
             <Calendar size={11} color="#2563EB" />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.schedule}</Text>
           </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
-          </Pressable>
         </View>
       );
     }
@@ -337,10 +333,6 @@ export function JobsListScreen({
           <Pressable onPress={() => onUpdateStatus(job.id, 'sent')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-50">
             <Send size={11} color="#2563EB" />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.markSent}</Text>
-          </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
           </Pressable>
         </View>
       );
@@ -356,10 +348,6 @@ export function JobsListScreen({
             <XCircle size={11} color="#EF4444" />
             <Text className="text-xs font-semibold text-red-500">{t.actions.markDeclined}</Text>
           </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
-          </Pressable>
         </View>
       );
     }
@@ -374,10 +362,6 @@ export function JobsListScreen({
             <FileText size={11} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.generateInvoice}</Text>
           </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
-          </Pressable>
         </View>
       );
     }
@@ -387,10 +371,6 @@ export function JobsListScreen({
           <Pressable onPress={() => onUpdateStatus(job.id, 'in_progress')} className="px-3 py-1.5 rounded-lg active:bg-amber-50">
             <Text className="text-xs font-semibold text-amber-600">{t.actions.startWork}</Text>
           </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
-          </Pressable>
         </View>
       );
     }
@@ -399,10 +379,6 @@ export function JobsListScreen({
         <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
           <Pressable onPress={() => onUpdateStatus(job.id, 'completed')} className="px-3 py-1.5 rounded-lg active:bg-emerald-50">
             <Text className="text-xs font-semibold text-emerald-600">{t.actions.markCompleted}</Text>
-          </Pressable>
-          <View className="flex-1" />
-          <Pressable onPress={() => onUpdateStatus(job.id, 'cancelled')} className="px-3 py-1.5 rounded-lg active:bg-gray-50">
-            <Text className="text-xs text-gray-400">{t.actions.cancel}</Text>
           </Pressable>
         </View>
       );

@@ -15,6 +15,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/i18n/LangProvider';
+import ImportModal from '@/components/dashboard/ImportModal';
 
 interface RawJob {
   id: string;
@@ -59,13 +60,33 @@ export default function TrabajosPage() {
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialTab, setInitialTab] = useState<TabKey>('all');
+  const [importOpen, setImportOpen] = useState(false);
+  const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get('tab');
       if (urlTab && TAB_KEYS.includes(urlTab as TabKey)) setInitialTab(urlTab as TabKey);
+      // Opened from Ajustes → Trabajos "Importar trabajos". Strip the param so
+      // a reload / back-nav doesn't re-open the wizard.
+      if (params.get('import') === '1') {
+        setImportOpen(true);
+        params.delete('import');
+        const qs = params.toString();
+        window.history.replaceState(null, '', `/dashboard/trabajos${qs ? `?${qs}` : ''}`);
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!business) return;
+    supabase.from('job_field_templates')
+      .select('field_key, field_label, field_type, field_options')
+      .eq('business_id', business.id)
+      .order('sort_order')
+      .then(({ data }: { data: { field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[] | null }) => setJobTemplates(data ?? []));
+  }, [business]);
 
   const load = async () => {
     if (!business) return;
@@ -139,6 +160,18 @@ export default function TrabajosPage() {
   );
 
   return (
+    <>
+    {business && (
+      <ImportModal
+        open={importOpen}
+        mode="jobs"
+        businessId={business.id}
+        supabase={supabase}
+        jobTemplates={jobTemplates}
+        onClose={() => setImportOpen(false)}
+        onDone={load}
+      />
+    )}
     <JobsListScreen
       loading={loading}
       jobs={jobs}
@@ -154,6 +187,7 @@ export default function TrabajosPage() {
           jobIds,
           invoiceTemplate: business.invoice_template,
           startNumber: business.invoice_start_number,
+          hideItemTypes: business.job_item_types_enabled === false,
           itemTypeLabels: {
             labor: jt.itemTypeLabor,
             material: jt.itemTypeMaterial,
@@ -176,5 +210,6 @@ export default function TrabajosPage() {
       canCreate={can.createJob(currentRole)}
       alertThresholds={alertThresholds}
     />
+    </>
   );
 }

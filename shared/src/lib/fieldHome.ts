@@ -257,6 +257,15 @@ export async function fetchFieldClients(
   }));
 }
 
+export interface FieldJobLocation {
+  lat: number;
+  lng: number;
+  /** Reverse-geocoded address parts (best-effort; may be null). */
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+}
+
 export interface LogFieldJobInput {
   businessId: string;
   /** The logger's employees row id (migration 069). Null = can't self-assign. */
@@ -266,6 +275,8 @@ export interface LogFieldJobInput {
   /** YYYY-MM-DD. */
   completedDate: string;
   description?: string | null;
+  /** Field tech's current location, captured at log time. */
+  location?: FieldJobLocation | null;
 }
 
 /**
@@ -278,6 +289,7 @@ export async function logFieldJob(
   supabase: SupabaseLike,
   input: LogFieldJobInput,
 ): Promise<boolean> {
+  const loc = input.location;
   const { data, error } = await supabase
     .from('jobs')
     .insert({
@@ -287,6 +299,12 @@ export async function logFieldJob(
       completed_date: input.completedDate,
       client_id: input.clientId,
       description: input.description ?? null,
+      // Geostamp where the tech logged the job (jobs.job_lat/lng, migration 023).
+      job_lat: loc?.lat ?? null,
+      job_lng: loc?.lng ?? null,
+      job_address: loc?.address ?? null,
+      job_city: loc?.city ?? null,
+      job_state: loc?.state ?? null,
     })
     .select('id')
     .single();

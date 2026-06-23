@@ -246,7 +246,7 @@ export default function NuevoEmpleadoRoute() {
           keyboardShouldPersistTaps="handled"
         >
           <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</Text>
-          <Input label={`${t.modal.firstNameLabel} *`} placeholder={t.modal.firstNamePlaceholder}
+          <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder}
             value={form.first_name} onChangeText={(v) => setForm((f) => ({ ...f, first_name: v }))} />
           <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder}
             value={form.last_name} onChangeText={(v) => setForm((f) => ({ ...f, last_name: v }))} />

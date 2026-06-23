@@ -7,9 +7,10 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
-  FileText, Clock, Package, BarChart3, X,
+  FileText, Clock, Package, BarChart3, X, ChevronRight,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -390,6 +391,20 @@ export default function ReportesPage() {
           </div>
         </div>
       </div>
+
+      {/* Payroll page entry */}
+      <Link
+        href="/dashboard/reportes/nomina"
+        className="inline-flex items-center justify-between gap-6 bg-white rounded-2xl border border-gray-100 shadow-sm pl-4 pr-3 py-3 mb-6 hover:bg-gray-50 transition-colors"
+      >
+        <span className="flex items-center gap-3">
+          <span className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <DollarSign size={16} className="text-primary" />
+          </span>
+          <span className="text-sm font-semibold text-gray-900">{t.payroll.entry}</span>
+        </span>
+        <ChevronRight size={18} className="text-gray-400" />
+      </Link>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

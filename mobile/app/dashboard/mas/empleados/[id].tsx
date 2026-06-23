@@ -3,7 +3,7 @@
 // links work). Mirrors the data + UX the previous in-list modal exposed:
 // view ↔ edit, access section, history timeline.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ScrollView,
   Alert,
   Share,
+  Linking,
   Modal as RNModal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,12 +25,24 @@ import {
   X,
   DollarSign,
   Trash2,
+  Phone,
+  Mail,
+  Calendar,
+  Briefcase,
+  MapPin,
+  Gift,
+  HeartPulse,
+  ChevronRight,
+  Hash,
+  MessageSquare,
+  KeyRound,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -388,13 +401,11 @@ export default function EmpleadoDetailRoute() {
               <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
                 <Pencil size={18} color="#9CA3AF" />
               </Pressable>
-              <Pressable onPress={toggleActive} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
-                {employee.active ? (
-                  <UserX size={18} color="#9CA3AF" />
-                ) : (
-                  <UserCheck size={18} color="#10B981" />
-                )}
-              </Pressable>
+              {canDeleteEmployee ? (
+                <Pressable onPress={deleteEmployee} disabled={accessBusy} hitSlop={8} className="p-2 rounded-lg active:bg-red-50 disabled:opacity-50">
+                  <Trash2 size={18} color="#EF4444" />
+                </Pressable>
+              ) : null}
             </>
           ) : (
             <Pressable onPress={() => { setMode('view'); setError(''); void load(); }} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
@@ -405,16 +416,39 @@ export default function EmpleadoDetailRoute() {
       </View>
 
       <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-5" keyboardShouldPersistTaps="handled">
-        {/* Avatar */}
-        <View className="items-center gap-2 py-2">
-          <View className={`w-20 h-20 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-            <Text className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
+        {/* Avatar hero */}
+        <View className="items-center gap-2 py-1">
+          <View className={`w-24 h-24 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
+            <Text className={`text-3xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
               {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
             </Text>
           </View>
-          {!employee.active ? (
-            <View className="bg-gray-100 px-2 py-0.5 rounded-full">
-              <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
+          <Text className="text-xl font-bold text-gray-900 mt-1 text-center">
+            {employee.first_name} {employee.last_name}
+          </Text>
+          <View className="flex-row items-center gap-2">
+            {selAccess?.kind === 'active' ? (
+              <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
+                <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</Text>
+              </View>
+            ) : null}
+            {!employee.active ? (
+              <View className="bg-gray-100 px-2.5 py-0.5 rounded-full">
+                <Text className="text-xs font-semibold text-gray-400">{t.inactiveBadge}</Text>
+              </View>
+            ) : null}
+          </View>
+          {(employee.phone || employee.email) ? (
+            <View className="flex-row items-center gap-3 mt-2">
+              {employee.phone ? (
+                <QuickAction Icon={Phone} onPress={() => Linking.openURL(`tel:${employee.phone}`)} />
+              ) : null}
+              {employee.phone ? (
+                <QuickAction Icon={MessageSquare} onPress={() => Linking.openURL(`sms:${employee.phone}`)} />
+              ) : null}
+              {employee.email ? (
+                <QuickAction Icon={Mail} onPress={() => Linking.openURL(`mailto:${employee.email}`)} />
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -422,55 +456,52 @@ export default function EmpleadoDetailRoute() {
         {isView ? (
           <View className="gap-4">
             {(employee.phone || employee.email) ? (
-              <>
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</Text>
-                <ViewRow label={t.modal.phoneLabel} value={employee.phone} />
-                <ViewRow label={t.modal.emailLabel} value={employee.email} />
-              </>
+              <InfoCard title={t.modal.basicInfoHeading}>
+                <InfoRow Icon={Phone} label={t.modal.phoneLabel} value={employee.phone}
+                  onPress={employee.phone ? () => Linking.openURL(`tel:${employee.phone}`) : undefined} />
+                <InfoRow Icon={Mail} label={t.modal.emailLabel} value={employee.email}
+                  onPress={employee.email ? () => Linking.openURL(`mailto:${employee.email}`) : undefined} />
+              </InfoCard>
             ) : null}
 
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</Text>
-            <ViewRow label={t.modal.hireDateLabel} value={employee.hire_date} />
-            <ViewRow
-              label={t.modal.payTypeLabel}
-              value={PAY_TYPE_OPTIONS.find((o) => o.value === employee.pay_type)?.label ?? employee.pay_type}
-            />
-            {employee.pay_rate ? (
-              <ViewRow
-                label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
-                value={`$${employee.pay_rate.toFixed(2)} / ${PAY_UNIT[employee.pay_type] ?? PAY_UNIT.hourly}`}
-              />
-            ) : null}
+            <InfoCard title={t.modal.employmentHeading}>
+              <InfoRow Icon={Calendar} label={t.modal.hireDateLabel}
+                value={employee.hire_date ? formatDateLong(employee.hire_date, locale) : null} />
+              <InfoRow Icon={Briefcase} label={t.modal.payTypeLabel}
+                value={PAY_TYPE_OPTIONS.find((o) => o.value === employee.pay_type)?.label ?? employee.pay_type} />
+              {employee.pay_rate ? (
+                <InfoRow Icon={DollarSign} label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
+                  value={`$${employee.pay_rate.toFixed(2)} / ${PAY_UNIT[employee.pay_type] ?? PAY_UNIT.hourly}`} />
+              ) : null}
+            </InfoCard>
 
             {(employee.birthday || employee.address || employee.city || employee.state || employee.zip_code) ? (
-              <>
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</Text>
-                <ViewRow label={t.modal.birthdayLabel} value={employee.birthday} />
-                <ViewRow label={t.modal.addressLabel} value={employee.address} />
-                {(employee.city || employee.state || employee.zip_code) ? (
-                  <ViewRow
-                    label={`${t.modal.cityLabel} / ${t.modal.stateLabel} / ${t.modal.zipLabel}`}
-                    value={[employee.city, employee.state, employee.zip_code].filter(Boolean).join(' · ')}
-                  />
-                ) : null}
-              </>
+              <InfoCard title={t.modal.personalHeading}>
+                <InfoRow Icon={Gift} label={t.modal.birthdayLabel}
+                  value={employee.birthday ? formatDateLong(employee.birthday, locale) : null} />
+                <InfoRow Icon={MapPin} label={t.modal.addressLabel}
+                  value={[
+                    employee.address,
+                    [employee.city, employee.state ? usStateName(employee.state, locale) : ''].filter(Boolean).join(', '),
+                    employee.zip_code,
+                  ].filter(Boolean).join(' · ') || null} />
+              </InfoCard>
             ) : null}
 
             {(employee.emergency_contact_name || employee.emergency_contact_phone) ? (
-              <>
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</Text>
-                <ViewRow label={t.modal.emergencyNameLabel} value={employee.emergency_contact_name} />
-                <ViewRow label={t.modal.emergencyPhoneLabel} value={employee.emergency_contact_phone} />
-              </>
+              <InfoCard title={t.modal.emergencyContactHeading}>
+                <InfoRow Icon={HeartPulse} label={t.modal.emergencyNameLabel} value={employee.emergency_contact_name} />
+                <InfoRow Icon={Phone} label={t.modal.emergencyPhoneLabel} value={employee.emergency_contact_phone}
+                  onPress={employee.emergency_contact_phone ? () => Linking.openURL(`tel:${employee.emergency_contact_phone}`) : undefined} />
+              </InfoCard>
             ) : null}
 
             {templates.length > 0 && employee.custom_fields && Object.keys(employee.custom_fields).length > 0 ? (
-              <>
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</Text>
+              <InfoCard title={t.modal.customFieldsHeading}>
                 {templates.map((tpl) => (
-                  <ViewRow key={tpl.id} label={tpl.field_label} value={employee.custom_fields?.[tpl.field_key]} />
+                  <InfoRow key={tpl.id} Icon={Hash} label={tpl.field_label} value={employee.custom_fields?.[tpl.field_key]} />
                 ))}
-              </>
+              </InfoCard>
             ) : null}
           </View>
         ) : (
@@ -556,8 +587,13 @@ export default function EmpleadoDetailRoute() {
 
         {/* Access section (both view and edit modes) */}
         {selAccess ? (
-          <View className="gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</Text>
+          <View className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4 gap-3">
+            <View className="flex-row items-center gap-2.5">
+              <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+                <KeyRound size={16} color="#4F46E5" />
+              </View>
+              <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex-1">{t.modal.appAccessHeading}</Text>
+            </View>
             {selAccess.kind === 'active' ? (
               <View className="gap-2">
                 <View className="flex-row items-center gap-2">
@@ -644,17 +680,27 @@ export default function EmpleadoDetailRoute() {
           </Pressable>
         ) : null}
 
-        {/* Delete — view mode, owner/admin only (not self / owner). */}
-        {isView && canDeleteEmployee ? (
+        {/* Active / inactive toggle — view mode. Deactivating keeps the record
+           (and history); reactivating brings them back. */}
+        {isView ? (
           <Pressable
-            onPress={deleteEmployee}
-            disabled={accessBusy}
-            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 active:bg-red-100 disabled:opacity-50"
+            onPress={toggleActive}
+            className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
+              employee.active ? 'bg-gray-50 active:bg-gray-100' : 'bg-emerald-50 active:bg-emerald-100'
+            }`}
           >
-            <Trash2 size={16} color="#DC2626" />
-            <Text className="text-sm font-semibold text-red-600">{t.deleteBtn}</Text>
+            {employee.active ? (
+              <UserX size={16} color="#6B7280" />
+            ) : (
+              <UserCheck size={16} color="#10B981" />
+            )}
+            <Text className={`text-sm font-semibold ${employee.active ? 'text-gray-600' : 'text-emerald-700'}`}>
+              {employee.active ? t.deactivateBtn : t.reactivateBtn}
+            </Text>
           </Pressable>
         ) : null}
+
+        {/* Delete moved to the header (top-right Trash icon). */}
 
         {/* Save row — edit mode only */}
         {!isView ? (
@@ -705,13 +751,61 @@ function Header({ onBack }: { onBack: () => void }) {
   );
 }
 
-function ViewRow({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
+// Round icon button for the hero quick actions (call / text / email).
+function QuickAction({ Icon, onPress }: { Icon: LucideIcon; onPress: () => void }) {
   return (
-    <View className="gap-0.5">
-      <Text className="text-xs text-gray-400">{label}</Text>
-      <Text className="text-sm text-gray-900">{value}</Text>
+    <Pressable
+      onPress={onPress}
+      className="w-11 h-11 rounded-full bg-primary/10 items-center justify-center active:bg-primary/20"
+    >
+      <Icon size={18} color="#4F46E5" />
+    </Pressable>
+  );
+}
+
+// White card grouping a labelled section of detail rows.
+function InfoCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4 gap-3.5">
+      <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{title}</Text>
+      {children}
     </View>
+  );
+}
+
+// One detail row: leading icon tile + label/value. Tappable (chevron) when an
+// onPress is given (phone → dialer, email → mail client). Renders nothing for
+// an empty value so cards stay clean.
+function InfoRow({
+  Icon,
+  label,
+  value,
+  onPress,
+}: {
+  Icon?: LucideIcon;
+  label: string;
+  value: string | null | undefined;
+  onPress?: () => void;
+}) {
+  if (!value) return null;
+  const body = (
+    <View className="flex-row items-center gap-3">
+      {Icon ? (
+        <View className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center">
+          <Icon size={16} color="#6B7280" />
+        </View>
+      ) : null}
+      <View className="flex-1 min-w-0">
+        <Text className="text-[11px] text-gray-400">{label}</Text>
+        <Text className="text-[15px] font-medium text-gray-900">{value}</Text>
+      </View>
+      {onPress ? <ChevronRight size={16} color="#D1D5DB" /> : null}
+    </View>
+  );
+  return onPress ? (
+    <Pressable onPress={onPress} className="active:opacity-60">{body}</Pressable>
+  ) : (
+    body
   );
 }
 

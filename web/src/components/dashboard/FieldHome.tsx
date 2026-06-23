@@ -23,6 +23,7 @@ import {
   type FieldHomeJob,
   type FieldHomeStats,
   type FieldClient,
+  type FieldJobLocation,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
 import { firstName } from '@amixos/shared/lib/userName';
@@ -96,7 +97,7 @@ export function FieldHome() {
     }
   };
 
-  const handleLog = async (input: { title: string; clientId: string | null; description: string | null }) => {
+  const handleLog = async (input: { title: string; clientId: string | null; description: string | null; location: FieldJobLocation | null }) => {
     if (!business) return false;
     const ok = await logFieldJob(supabase, {
       businessId: business.id,
@@ -105,6 +106,7 @@ export function FieldHome() {
       clientId: input.clientId,
       completedDate: new Date().toISOString().split('T')[0],
       description: input.description,
+      location: input.location,
     });
     if (ok) void load();
     return ok;

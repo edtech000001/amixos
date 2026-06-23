@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal } from 'react-native';
-import { ChevronDown, Check, Building2 } from 'lucide-react-native';
+import { ChevronDown, Check, Building2, CloudOff } from 'lucide-react-native';
 import { useAuthStore } from '@/lib/auth/store';
+import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
 
 /**
@@ -17,6 +18,11 @@ export function BusinessSwitcher() {
   const businesses = useAuthStore((s) => s.businesses);
   const activeId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
+  // Switching is blocked offline: each business can customize its role
+  // permissions (business_roles), and those overrides can't be fetched without
+  // a connection — so switching offline would silently apply the looser
+  // built-in defaults, granting access the owner may have restricted.
+  const isOnline = useNetworkStore((s) => s.isOnline);
   const { t: full } = useLang();
   const tw = full.dashboard.workspaces;
 
@@ -86,19 +92,31 @@ export function BusinessSwitcher() {
             <Text className="text-xs font-semibold text-gray-400 uppercase px-3 mb-2">
               {tw.switcherLabel}
             </Text>
+            {!isOnline ? (
+              <View className="flex-row items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-100">
+                <CloudOff size={14} color="#92400E" />
+                <Text className="flex-1 text-xs font-medium text-amber-700">
+                  Sin conexión · conéctate para cambiar de negocio
+                </Text>
+              </View>
+            ) : null}
             <View className="bg-gray-50 rounded-2xl overflow-hidden">
               {businesses.map((b, i) => {
                 const isActive = b.id === activeId;
+                // Offline: only the current business stays selectable (no switch).
+                const locked = !isOnline && !isActive;
                 return (
                   <Pressable
                     key={b.id}
+                    disabled={locked}
                     onPress={() => {
+                      if (locked) return;
                       setActiveBusiness(b.id);
                       setOpen(false);
                     }}
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
                       i < businesses.length - 1 ? 'border-b border-gray-100' : ''
-                    } active:bg-gray-100`}
+                    } ${locked ? 'opacity-40' : 'active:bg-gray-100'}`}
                   >
                     <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
                       <Building2 size={16} color="#4F46E5" />

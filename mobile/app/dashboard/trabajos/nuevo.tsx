@@ -91,6 +91,21 @@ function parseCoords(input: string): { lat: number; lng: number } | null {
   return { lat, lng };
 }
 
+// Hours between two "HH:MM" times (rounded to 2 decimals). Wraps past midnight
+// so an overnight shift (e.g. 22:00 → 06:00) reads as 8h, not -16h.
+function hoursFromTimes(start: string, end: string): number | null {
+  const toMin = (s: string) => {
+    const [h, m] = s.split(':').map(Number);
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  };
+  const a = toMin(start);
+  const b = toMin(end);
+  if (a == null || b == null) return null;
+  let diff = b - a;
+  if (diff < 0) diff += 24 * 60;
+  return Math.round((diff / 60) * 100) / 100;
+}
+
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -145,12 +160,21 @@ export default function NuevoTrabajoRoute() {
   const [allDay, setAllDay] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
+  // Manual total hours — used when start/end times are left blank. When both
+  // times are set, the field auto-computes from them and this is ignored.
+  const [totalHours, setTotalHours] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
   const [workerNotes, setWorkerNotes] = useState('');
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
   const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
+  // Optional drivers — any employees paid extra driverHours (each) on top of
+  // the job's total hours. Multi-select, like crew.
+  const [driverEmployeeIds, setDriverEmployeeIds] = useState<string[]>([]);
+  const [driverHours, setDriverHours] = useState('');
+  const [driverPickerOpen, setDriverPickerOpen] = useState(false);
+  const [driverSearch, setDriverSearch] = useState('');
 
   // Form — proposal only
   const [clientNotes, setClientNotes] = useState('');
@@ -228,6 +252,9 @@ export default function NuevoTrabajoRoute() {
           setAllDay(!!job.all_day);
           setTimeStart(job.time_start ?? '');
           setTimeEnd(job.time_end ?? '');
+          setTotalHours(job.total_hours != null ? String(job.total_hours) : '');
+          setDriverEmployeeIds(job.driver_employee_ids ?? []);
+          setDriverHours(job.driver_hours != null ? String(job.driver_hours) : '');
           setDescription(job.description ?? '');
           setInternalNotes(job.internal_notes ?? '');
           setWorkerNotes(job.worker_notes ?? '');
@@ -365,6 +392,23 @@ export default function NuevoTrabajoRoute() {
   );
   const leadEmployee = employees.find((e) => e.id === leadEmployeeId) ?? null;
 
+  // Driver pool — ANY employee, not just the crew. A driver-only person (drove
+  // but didn't work the job) is credited ONLY their driver hours in Reports,
+  // never the job's total hours (which go to the assigned crew).
+  const filteredDriverPool = useMemo(
+    () => filterEmployees(employees, driverSearch),
+    [employees, driverSearch],
+  );
+  const toggleDriver = (id: string) =>
+    setDriverEmployeeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Drop any drivers whose employee no longer exists.
+  useEffect(() => {
+    setDriverEmployeeIds((prev) => {
+      const next = prev.filter((id) => employees.some((e) => e.id === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [employees]);
+
   const pickClient = (id: string) => {
     setClientId(id);
     setClientPickerOpen(false);
@@ -478,6 +522,9 @@ export default function NuevoTrabajoRoute() {
           all_day: allDay,
           time_start: allDay ? null : (timeStart || null),
           time_end: allDay ? null : (timeEnd || null),
+          total_hours: effectiveTotalHours,
+          driver_employee_ids: driverEmployeeIds,
+          driver_hours: driverEmployeeIds.length && driverHours.trim() ? parseFloat(driverHours) : null,
         };
 
         if (editId) {
@@ -582,10 +629,10 @@ export default function NuevoTrabajoRoute() {
   const dirty = useDirty(
     {
       title, clientId, publishedToCrew, status, priority, address, city, state,
-      scheduledDate, endDate, allDay, timeStart, timeEnd, description,
+      scheduledDate, endDate, allDay, timeStart, timeEnd, totalHours, description,
       internalNotes, workerNotes, assignedEmployees,
       manualWorkers: manualWorkers.filter((w) => w.trim()),
-      leadEmployeeId, clientNotes, issueDate, expiryDate, jobLat, jobLng,
+      leadEmployeeId, driverEmployeeIds, driverHours, clientNotes, issueDate, expiryDate, jobLat, jobLng,
     },
     !loadingEdit,
   );
@@ -617,6 +664,15 @@ export default function NuevoTrabajoRoute() {
     },
     durationLabels,
   );
+
+  // Total hours: auto-computed from start+end times when both are set (the
+  // field is then read-only), otherwise the manually-typed value. The result
+  // is what gets saved and later credited to each assigned worker in Reports.
+  const bothTimesSet = !allDay && !!timeStart && !!timeEnd;
+  const computedHours = bothTimesSet ? hoursFromTimes(timeStart, timeEnd) : null;
+  const effectiveTotalHours = bothTimesSet
+    ? computedHours
+    : (totalHours.trim() ? parseFloat(totalHours) : null);
   const ohStatus = evaluateOperatingHours(
     normalizeOperatingHours(business?.operating_hours),
     scheduledDate,
@@ -915,6 +971,28 @@ export default function NuevoTrabajoRoute() {
                 </View>
               ) : null}
 
+              {/* Total hours — auto from start/end (read-only) when both times
+                  are set, else manual entry. Credited to each worker in Reports. */}
+              <View className="mt-3">
+                <Text className="text-sm font-medium text-gray-700 mb-2">{t.totalHoursLabel}</Text>
+                {bothTimesSet ? (
+                  <View className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 flex-row items-center justify-between">
+                    <Text className="text-base text-gray-500">
+                      {computedHours != null ? `${computedHours} h` : '—'}
+                    </Text>
+                    <Text className="text-xs text-gray-400">{t.totalHoursAutoHint}</Text>
+                  </View>
+                ) : (
+                  <Input
+                    value={totalHours}
+                    onChangeText={(v) => setTotalHours(v.replace(/[^0-9.]/g, ''))}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                  />
+                )}
+                <Text className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</Text>
+              </View>
+
               {ohStatus && ohStatus.status !== 'ok' ? (
                 <View className="mt-3 flex-row items-start gap-1.5">
                   <Text className="text-xs text-amber-600">⚠</Text>
@@ -999,39 +1077,56 @@ export default function NuevoTrabajoRoute() {
                 </>
               ) : null}
 
-              <View className="mt-4">
-                <Text className="text-xs text-gray-400 mb-2">{t.additionalWorkersLabel}</Text>
-                {manualWorkers.map((w, i) => (
-                  <View key={i} className="flex-row items-center gap-2 mb-2">
-                    <TextInput
-                      value={w}
-                      onChangeText={(v) =>
-                        setManualWorkers((prev) => prev.map((x, j) => (j === i ? v : x)))
-                      }
-                      placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))}
-                      placeholderTextColor="#9CA3AF"
-                      className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-base text-gray-900"
-                    />
-                    {manualWorkers.length > 1 ? (
-                      <Pressable
-                        onPress={() =>
-                          setManualWorkers((prev) => prev.filter((_, j) => j !== i))
-                        }
-                        hitSlop={8}
-                        className="p-2 rounded-xl active:bg-red-50"
-                      >
-                        <Trash2 size={16} color="#EF4444" />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ))}
-                <Pressable
-                  onPress={() => setManualWorkers((prev) => [...prev, ''])}
-                  hitSlop={8}
-                >
-                  <Text className="text-sm font-semibold text-primary">{t.addWorker}</Text>
-                </Pressable>
-              </View>
+              {/* Drivers — optional multi-select (like crew). Each driver is
+                  credited driverHours on top of the job's total hours. Pool is
+                  ALL employees, so a driver who didn't work the job can be added
+                  without picking up the work hours. */}
+              {employees.length > 0 ? (
+                <View className="mt-4">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverLabel}</Text>
+                  <Pressable
+                    onPress={() => { setDriverSearch(''); setDriverPickerOpen(true); }}
+                    className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                  >
+                    <Text className={`text-base flex-1 ${driverEmployeeIds.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                      {driverEmployeeIds.length > 0
+                        ? t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))
+                        : t.driverNone}
+                    </Text>
+                    <ChevronDown size={16} color="#9CA3AF" />
+                  </Pressable>
+                  {driverEmployeeIds.length > 0 ? (
+                    <View className="flex-row flex-wrap gap-2 mt-2">
+                      {employees
+                        .filter((emp) => driverEmployeeIds.includes(emp.id))
+                        .map((emp) => (
+                          <Pressable
+                            key={emp.id}
+                            onPress={() => toggleDriver(emp.id)}
+                            className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
+                          >
+                            <Text className="text-xs font-medium text-primary">
+                              {emp.first_name} {emp.last_name}
+                            </Text>
+                            <X size={12} color="#4F46E5" />
+                          </Pressable>
+                        ))}
+                    </View>
+                  ) : null}
+                  {driverEmployeeIds.length > 0 ? (
+                    <View className="mt-3">
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverHoursLabel}</Text>
+                      <Input
+                        value={driverHours}
+                        onChangeText={(v) => setDriverHours(v.replace(/[^0-9.]/g, ''))}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                      />
+                      <Text className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </Section>
           )}
 
@@ -1385,6 +1480,91 @@ export default function NuevoTrabajoRoute() {
             <View className="px-5 pt-3 border-t border-gray-100">
               <Pressable
                 onPress={() => setCrewPickerOpen(false)}
+                className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
+              >
+                <Text className="text-sm font-semibold text-white">{t.crewDoneBtn}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Driver picker modal — multi-select over ALL employees. */}
+      <RNModal
+        visible={driverPickerOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setDriverPickerOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => setDriverPickerOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="px-5 mb-3 flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-gray-900">{t.driverLabel}</Text>
+              <Text className="text-xs text-gray-400">
+                {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
+              </Text>
+            </View>
+            <View className="px-5 mb-3">
+              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
+                <Search size={16} color="#9CA3AF" />
+                <TextInput
+                  value={driverSearch}
+                  onChangeText={setDriverSearch}
+                  placeholder={t.workerSearchPlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  autoFocus
+                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              {filteredDriverPool.map((emp) => {
+                const isSel = driverEmployeeIds.includes(emp.id);
+                return (
+                  <Pressable
+                    key={emp.id}
+                    onPress={() => toggleDriver(emp.id)}
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                      isSel ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      numberOfLines={1}
+                    >
+                      {emp.first_name} {emp.last_name}
+                    </Text>
+                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                  </Pressable>
+                );
+              })}
+              {filteredDriverPool.length === 0 ? (
+                <View className="px-5 py-8 items-center">
+                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+            <View className="px-5 pt-3 border-t border-gray-100">
+              <Pressable
+                onPress={() => setDriverPickerOpen(false)}
                 className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
               >
                 <Text className="text-sm font-semibold text-white">{t.crewDoneBtn}</Text>

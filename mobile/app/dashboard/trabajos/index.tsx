@@ -159,6 +159,7 @@ export default function TrabajosTab() {
             jobIds,
             invoiceTemplate: business.invoice_template,
             startNumber: business.invoice_start_number,
+            hideItemTypes: business.job_item_types_enabled === false,
             itemTypeLabels: {
               labor: jt.itemTypeLabor,
               material: jt.itemTypeMaterial,

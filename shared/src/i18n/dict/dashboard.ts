@@ -67,6 +67,8 @@ export type DashboardDict = {
     saveError2: string;
     saved: string;
     noResults: string;
+    locCapturing: string;
+    locUnavailable: string;
   };
   roles: {
     title: string;
@@ -680,6 +682,8 @@ export type DashboardDict = {
       // Delete confirmation modal
       deleteJobTitle: string;
       deleteJobConfirm: string;
+      cancelJobBtn: string;
+      cancelJobConfirm: string;
       deleteInvoiceWarning: string;
       deleting: string;
       deleteBtn: string;
@@ -754,6 +758,9 @@ export type DashboardDict = {
       timeStartLabel: string;
       timeEndLabel: string;
       totalTimeLabel: string;
+      totalHoursLabel: string;
+      totalHoursAutoHint: string;
+      totalHoursHint: string;
       outOfHoursNote: string;
       outOfHoursClosedNote: string;
       workersHeading: string;
@@ -765,6 +772,10 @@ export type DashboardDict = {
       leadLabel: string;
       leadNone: string;
       crewLabel: string;
+      driverLabel: string;
+      driverNone: string;
+      driverHoursLabel: string;
+      driverHoursHint: string;
       workerSearchPlaceholder: string;
       workerNoResults: string;
       crewPlaceholder: string;
@@ -827,6 +838,8 @@ export type DashboardDict = {
     addBtn: string;
     deleteBtn: string;
     deleteConfirm: string;
+    deactivateBtn: string;
+    reactivateBtn: string;
     tabs: {
       empleados: string;
       horas: string;
@@ -1919,6 +1932,32 @@ export type DashboardDict = {
     };
   };
   reports: {
+    payroll: {
+      title: string;
+      subtitle: string;
+      entry: string;
+      freqLabel: string;
+      freqWeekly: string;
+      freqBiweekly: string;
+      freqMonthly: string;
+      colWorker: string;
+      colHours: string;
+      colPay: string;
+      totalHours: string;
+      totalPay: string;
+      paidSummary: string;
+      markPaid: string;
+      paidBadge: string;
+      undo: string;
+      methodHeading: string;
+      methodCash: string;
+      methodCheck: string;
+      checkNumberLabel: string;
+      checkNumberPlaceholder: string;
+      confirmBtn: string;
+      checkPrefix: string;
+      empty: string;
+    };
     title: string;
     subtitle: string;
     ranges: {
@@ -2091,6 +2130,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       saveError2: 'No se pudo registrar. Intenta de nuevo.',
       saved: 'Trabajo registrado',
       noResults: 'Sin resultados',
+      locCapturing: 'Capturando ubicación…',
+      locUnavailable: 'Ubicación no disponible',
     },
     roles: {
       title: 'Roles y permisos',
@@ -2687,6 +2728,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         createInvoiceBtn: 'Crear factura →',
         deleteJobTitle: 'Eliminar trabajo',
         deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
+        cancelJobBtn: 'Cancelar trabajo',
+        cancelJobConfirm: '¿Cancelar este trabajo?',
         deleteInvoiceWarning: 'Este trabajo tiene una factura vinculada — permanecerá en Facturas.',
         deleting: 'Eliminando...',
         deleteBtn: 'Eliminar',
@@ -2756,6 +2799,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         timeStartLabel: 'Hora inicio',
         timeEndLabel: 'Hora fin',
         totalTimeLabel: 'Tiempo total',
+        totalHoursLabel: 'Horas totales',
+        totalHoursAutoHint: 'Calculado de las horas',
+        totalHoursHint: 'Cuenta para las horas del trabajador',
         outOfHoursNote: 'Fuera del horario de atención',
         outOfHoursClosedNote: 'Este día está marcado como cerrado',
         workersHeading: 'Trabajadores asignados',
@@ -2767,6 +2813,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadLabel: 'Líder del trabajo',
         leadNone: 'Sin líder',
         crewLabel: 'Trabajadores',
+        driverLabel: 'Conductor',
+        driverNone: 'Sin conductor',
+        driverHoursLabel: 'Horas de conductor',
+        driverHoursHint: 'Horas extra pagadas solo al conductor',
         workerSearchPlaceholder: 'Buscar trabajador...',
         workerNoResults: 'Sin resultados',
         crewPlaceholder: 'Selecciona los trabajadores',
@@ -2829,6 +2879,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       addBtn: 'Agregar',
       deleteBtn: 'Eliminar empleado',
       deleteConfirm: '¿Eliminar a {{name}}? Esta acción no se puede deshacer y borra su historial.',
+      deactivateBtn: 'Desactivar empleado',
+      reactivateBtn: 'Reactivar empleado',
       tabs: {
         empleados: 'Equipo',
         horas: 'Horas',
@@ -3137,7 +3189,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       crewMode: {
         heading: 'Modo cuadrilla',
-        subtitle: 'Activa para registrar líder y horas por trabajador.',
+        subtitle: 'Permite a los líderes asignar la cuadrilla y registrar sus horas.',
         saveBtn: 'Guardar modo cuadrilla',
         saveSuccess: 'Modo cuadrilla guardado.',
         saveError: 'No se pudo guardar.',
@@ -3898,6 +3950,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
     },
     reports: {
+      payroll: {
+        title: 'Nómina',
+        subtitle: 'Horas y pago por trabajador',
+        entry: 'Nómina',
+        freqLabel: 'Frecuencia',
+        freqWeekly: 'Semanal',
+        freqBiweekly: 'Quincenal',
+        freqMonthly: 'Mensual',
+        colWorker: 'Trabajador',
+        colHours: 'Horas',
+        colPay: 'Pago',
+        totalHours: 'Horas totales',
+        totalPay: 'Pago total',
+        paidSummary: '{{paid}} de {{total}} pagados',
+        markPaid: 'Marcar pagado',
+        paidBadge: 'Pagado',
+        undo: 'Deshacer',
+        methodHeading: 'Método de pago',
+        methodCash: 'Efectivo',
+        methodCheck: 'Cheque',
+        checkNumberLabel: 'Número de cheque',
+        checkNumberPlaceholder: 'Opcional',
+        confirmBtn: 'Confirmar',
+        checkPrefix: 'Cheque #',
+        empty: 'No hay trabajadores con horas.',
+      },
       title: 'Reportes',
       subtitle: 'Analiza el rendimiento de tu negocio',
       ranges: {
@@ -4097,6 +4175,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       saveError2: 'Could not log. Try again.',
       saved: 'Job logged',
       noResults: 'No results',
+      locCapturing: 'Capturing location…',
+      locUnavailable: 'Location unavailable',
     },
     roles: {
       title: 'Roles & permissions',
@@ -4693,6 +4773,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         createInvoiceBtn: 'Create invoice →',
         deleteJobTitle: 'Delete job',
         deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
+        cancelJobBtn: 'Cancel job',
+        cancelJobConfirm: 'Cancel this job?',
         deleteInvoiceWarning: 'This job has a linked invoice — it will stay in Facturas.',
         deleting: 'Deleting...',
         deleteBtn: 'Delete',
@@ -4762,6 +4844,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         timeStartLabel: 'Start time',
         timeEndLabel: 'End time',
         totalTimeLabel: 'Total time',
+        totalHoursLabel: 'Total hours',
+        totalHoursAutoHint: 'From start/end',
+        totalHoursHint: 'Counts toward worker hours',
         outOfHoursNote: 'Outside business hours',
         outOfHoursClosedNote: 'This day is marked as closed',
         workersHeading: 'Assigned workers',
@@ -4773,6 +4858,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadLabel: 'Job lead',
         leadNone: 'No lead',
         crewLabel: 'Crew',
+        driverLabel: 'Driver',
+        driverNone: 'No driver',
+        driverHoursLabel: 'Driver hours',
+        driverHoursHint: 'Extra hours paid only to the driver',
         workerSearchPlaceholder: 'Search worker...',
         workerNoResults: 'No results',
         crewPlaceholder: 'Select crew',
@@ -4835,6 +4924,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       addBtn: 'Add',
       deleteBtn: 'Delete employee',
       deleteConfirm: 'Delete {{name}}? This cannot be undone and removes their history.',
+      deactivateBtn: 'Deactivate employee',
+      reactivateBtn: 'Reactivate employee',
       tabs: {
         empleados: 'Team',
         horas: 'Hours',
@@ -5143,7 +5234,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       crewMode: {
         heading: 'Crew mode',
-        subtitle: 'Enable to mark a lead and log per-worker hours.',
+        subtitle: 'Lets leads assign a crew and record their hours.',
         saveBtn: 'Save crew mode',
         saveSuccess: 'Crew mode saved.',
         saveError: 'Could not save.',
@@ -5904,6 +5995,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
     },
     reports: {
+      payroll: {
+        title: 'Payroll',
+        subtitle: 'Hours and pay per worker',
+        entry: 'Payroll',
+        freqLabel: 'Frequency',
+        freqWeekly: 'Weekly',
+        freqBiweekly: 'Biweekly',
+        freqMonthly: 'Monthly',
+        colWorker: 'Worker',
+        colHours: 'Hours',
+        colPay: 'Pay',
+        totalHours: 'Total hours',
+        totalPay: 'Total pay',
+        paidSummary: '{{paid}} of {{total}} paid',
+        markPaid: 'Mark paid',
+        paidBadge: 'Paid',
+        undo: 'Undo',
+        methodHeading: 'Payment method',
+        methodCash: 'Cash',
+        methodCheck: 'Check',
+        checkNumberLabel: 'Check number',
+        checkNumberPlaceholder: 'Optional',
+        confirmBtn: 'Confirm',
+        checkPrefix: 'Check #',
+        empty: 'No workers with hours.',
+      },
       title: 'Reports',
       subtitle: 'Analyze your business performance',
       ranges: {

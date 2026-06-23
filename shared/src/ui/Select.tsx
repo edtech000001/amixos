@@ -122,19 +122,23 @@ export function Select({
           >
             <Pressable
               onPress={() => setOpen(false)}
-              className="flex-1 bg-black/40 items-center justify-center px-6"
+              className="flex-1 bg-black/40 justify-end"
             >
               <Pressable
                 onPress={(e: any) => e.stopPropagation?.()}
                 className={clsx(
-                  'bg-white rounded-2xl w-full max-w-md overflow-hidden',
-                  // Fixed height when searchable so the modal doesn't shrink /
+                  'bg-white rounded-t-3xl w-full overflow-hidden pb-6',
+                  // Fixed height when searchable so the sheet doesn't shrink /
                   // jump as results are filtered; otherwise size to content.
-                  searchable ? 'h-[70%]' : 'max-h-[70%]',
+                  searchable ? 'h-[75%]' : 'max-h-[75%]',
                 )}
               >
+                {/* Grab handle — one-hand bottom-sheet affordance. */}
+                <View className="items-center pt-3 pb-1">
+                  <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                </View>
                 {label ? (
-                  <View className="px-5 py-4 border-b border-gray-100">
+                  <View className="px-5 py-3 border-b border-gray-100">
                     <Text className="text-base font-semibold text-gray-900">{label}</Text>
                   </View>
                 ) : null}

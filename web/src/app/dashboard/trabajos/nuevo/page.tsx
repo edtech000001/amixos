@@ -49,6 +49,21 @@ const newLaborItem = (): LineItem => ({
   description: '', quantity: 1, unit_price: 0,
 });
 
+// Hours between two "HH:MM" times (rounded to 2 decimals). Wraps past midnight
+// so an overnight shift (e.g. 22:00 → 06:00) reads as 8h, not -16h.
+function hoursFromTimes(start: string, end: string): number | null {
+  const toMin = (s: string) => {
+    const [h, m] = s.split(':').map(Number);
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  };
+  const a = toMin(start);
+  const b = toMin(end);
+  if (a == null || b == null) return null;
+  let diff = b - a;
+  if (diff < 0) diff += 24 * 60;
+  return Math.round((diff / 60) * 100) / 100;
+}
+
 export default function NuevoTrabajoPage() {
   return (
     <Suspense fallback={<NuevoTrabajoFallback />}>
@@ -78,6 +93,9 @@ function NuevoTrabajoContent() {
 
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
+  // Labor/Material/Equipment/Other categories on job line items — hidden when
+  // the business turns them off (billed flat / by qty × rate instead).
+  const showItemTypes = business?.job_item_types_enabled !== false;
   const router = useRouter();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
   // insert and they have no clients to pick). Entry points are hidden, but
@@ -119,12 +137,22 @@ function NuevoTrabajoContent() {
   const [allDay, setAllDay] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
+  // Manual total hours — used when start/end times are blank; when both are set
+  // the field auto-computes from them and this is ignored.
+  const [totalHours, setTotalHours] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
   const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
+  // Optional drivers — any employees paid extra driverHours (each) on top of
+  // the job's total hours. Multi-select, like crew.
+  const [driverEmployeeIds, setDriverEmployeeIds] = useState<string[]>([]);
+  const [driverHours, setDriverHours] = useState('');
+  const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
+  const [driverSearch, setDriverSearch] = useState('');
+  const driverDropdownRef = useRef<HTMLDivElement>(null);
 
   // Client search
   const [clientSearch, setClientSearch] = useState('');
@@ -204,6 +232,9 @@ function NuevoTrabajoContent() {
           setAllDay(!!job.all_day);
           setTimeStart(job.time_start || '');
           setTimeEnd(job.time_end || '');
+          setTotalHours(job.total_hours != null ? String(job.total_hours) : '');
+          setDriverEmployeeIds(job.driver_employee_ids ?? []);
+          setDriverHours(job.driver_hours != null ? String(job.driver_hours) : '');
           setDescription(job.description || '');
           setInternalNotes(job.internal_notes || '');
           const isEst = !!job.estimate_number;
@@ -273,6 +304,10 @@ function NuevoTrabajoContent() {
       if (crewDropdownRef.current && !crewDropdownRef.current.contains(e.target as Node)) {
         setCrewDropdownOpen(false);
       }
+      if (driverDropdownRef.current && !driverDropdownRef.current.contains(e.target as Node)) {
+        setDriverDropdownOpen(false);
+        setDriverSearch('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -311,6 +346,20 @@ function NuevoTrabajoContent() {
   );
   const filteredCrewEmployees = filterEmployeesByName(crewEmployees, crewSearch);
   const leadEmployee = employees.find(e => e.id === leadEmployeeId) ?? null;
+
+  // Driver pool — ANY employee, not just the crew. A driver-only person (drove
+  // but didn't work the job) is credited ONLY their driver hours in Reports,
+  // never the job's total hours (which go to the assigned crew).
+  const filteredDriverPool = filterEmployeesByName(employees, driverSearch);
+  const toggleDriver = (id: string) =>
+    setDriverEmployeeIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  // Drop any drivers whose employee no longer exists.
+  useEffect(() => {
+    setDriverEmployeeIds(prev => {
+      const next = prev.filter(id => employees.some(e => e.id === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [employees]);
 
   const parseMapLink = (link: string) => {
     setMapLink(link);
@@ -371,6 +420,15 @@ function NuevoTrabajoContent() {
     },
     full.common.duration,
   );
+
+  // Total hours: auto-computed from start+end times when both are set (the field
+  // is then read-only), otherwise the manually-typed value. Saved on the job and
+  // later credited to each assigned worker in Reports.
+  const bothTimesSet = !allDay && !!timeStart && !!timeEnd;
+  const computedHours = bothTimesSet ? hoursFromTimes(timeStart, timeEnd) : null;
+  const effectiveTotalHours = bothTimesSet
+    ? computedHours
+    : (totalHours.trim() ? parseFloat(totalHours) : null);
   const ohStatus = evaluateOperatingHours(
     normalizeOperatingHours(business?.operating_hours),
     scheduledDate,
@@ -455,6 +513,9 @@ function NuevoTrabajoContent() {
           all_day: allDay,
           time_start: allDay ? null : (timeStart || null),
           time_end: allDay ? null : (timeEnd || null),
+          total_hours: effectiveTotalHours,
+          driver_employee_ids: driverEmployeeIds,
+          driver_hours: driverEmployeeIds.length && driverHours.trim() ? parseFloat(driverHours) : null,
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
           published_to_crew: publishedToCrew,
@@ -535,10 +596,10 @@ function NuevoTrabajoContent() {
   const dirty = useDirty(
     {
       title, clientId, publishedToCrew, status, priority, address, city, state,
-      scheduledDate, endDate, allDay, timeStart, timeEnd, description,
+      scheduledDate, endDate, allDay, timeStart, timeEnd, totalHours, description,
       internalNotes, assignedEmployees,
       manualWorkers: manualWorkers.filter(w => w.trim()),
-      leadEmployeeId, mapLink, clientNotes, issueDate, expiryDate, taxRate, discount,
+      leadEmployeeId, driverEmployeeIds, driverHours, mapLink, clientNotes, issueDate, expiryDate, taxRate, discount,
       items: items.filter(i => i.description.trim()),
     },
     !loadingEdit,
@@ -785,6 +846,27 @@ function NuevoTrabajoContent() {
               </div>
             )}
 
+            {/* Total hours — auto from start/end (read-only) when both times are
+                set, else manual entry. Credited to each worker in Reports. */}
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t.totalHoursLabel}</label>
+              {bothTimesSet ? (
+                <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
+                  <span>{computedHours != null ? `${computedHours} h` : '—'}</span>
+                  <span className="text-xs text-gray-400">{t.totalHoursAutoHint}</span>
+                </div>
+              ) : (
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={totalHours}
+                  onChange={e => setTotalHours(e.target.value.replace(/[^0-9.]/g, ''))}
+                  placeholder="0"
+                />
+              )}
+              <p className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</p>
+            </div>
+
             {ohStatus && ohStatus.status !== 'ok' && (
               <p className="text-xs text-amber-600 mt-3">
                 ⚠ {ohStatus.status === 'closed'
@@ -924,26 +1006,85 @@ function NuevoTrabajoContent() {
                 </div>
               </>
             )}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-gray-400">{t.additionalWorkersLabel}</p>
-              {manualWorkers.map((w, i) => (
-                <div key={i} className="flex gap-2">
-                  <input type="text" placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))} value={w}
-                    onChange={e => setManualWorkers(prev => prev.map((v, j) => j === i ? e.target.value : v))}
-                    className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
-                  {manualWorkers.length > 1 && (
-                    <button onClick={() => setManualWorkers(prev => prev.filter((_, j) => j !== i))}
-                      className="p-2 rounded-xl hover:bg-red-50 transition-colors">
-                      <Trash2 size={14} className="text-red-400"/>
-                    </button>
+            {/* Drivers — optional multi-select (like crew). Each driver is
+                credited driverHours on top of the job's total hours. Pool is
+                ALL employees, so a driver who didn't work the job can be added
+                without picking up the work hours. */}
+            {employees.length > 0 && (
+              <div className="flex flex-col gap-1.5 max-w-xs">
+                <label className="text-sm font-medium text-gray-700">{t.driverLabel}</label>
+                <div className="relative" ref={driverDropdownRef}>
+                  <button type="button" onClick={() => setDriverDropdownOpen(o => !o)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                    {driverEmployeeIds.length > 0 ? (
+                      <span className="text-gray-900 truncate">
+                        {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">{t.driverNone}</span>
+                    )}
+                    <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                  </button>
+                  {driverDropdownOpen && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                      <div className="p-2 border-b border-gray-100">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                          <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
+                            value={driverSearch} onChange={e => setDriverSearch(e.target.value)}
+                            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                        </div>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        {filteredDriverPool.map(emp => {
+                          const on = driverEmployeeIds.includes(emp.id);
+                          return (
+                            <button type="button" key={emp.id} onClick={() => toggleDriver(emp.id)}
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                              <span className="truncate">{emp.first_name} {emp.last_name}</span>
+                              {on && <span className="text-xs text-primary ml-2">✓</span>}
+                            </button>
+                          );
+                        })}
+                        {filteredDriverPool.length === 0 && (
+                          <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                        )}
+                      </div>
+                      <div className="p-2 border-t border-gray-100">
+                        <button type="button" onClick={() => { setDriverDropdownOpen(false); setDriverSearch(''); }}
+                          className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+                          {t.crewDoneBtn}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
-              ))}
-              <button onClick={() => setManualWorkers(prev => [...prev, ''])}
-                className="text-xs text-primary font-medium hover:underline text-left">
-                {t.addWorker}
-              </button>
-            </div>
+                {driverEmployeeIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {employees.filter(emp => driverEmployeeIds.includes(emp.id)).map(emp => (
+                      <button key={emp.id} type="button" onClick={() => toggleDriver(emp.id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary hover:bg-primary/15 transition-colors">
+                        {emp.first_name} {emp.last_name}
+                        <X size={11}/>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {driverEmployeeIds.length > 0 && (
+                  <div className="mt-1">
+                    <Input
+                      label={t.driverHoursLabel}
+                      type="text"
+                      inputMode="decimal"
+                      value={driverHours}
+                      onChange={e => setDriverHours(e.target.value.replace(/[^0-9.]/g, ''))}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -985,18 +1126,20 @@ function NuevoTrabajoContent() {
                 ))}
               </>
             ) : (
-              /* Job: full grid with item_type */
+              /* Job: full grid with item_type (type column hidden when off) */
               <>
-                <div className="grid grid-cols-[100px_1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1">
-                  <span>{t.colType}</span><span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1`}>
+                  {showItemTypes ? <span>{t.colType}</span> : null}<span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
-                  <div key={item.id} className="grid grid-cols-[100px_1fr_70px_90px_80px_32px] gap-2 items-center">
+                  <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 items-center`}>
+                    {showItemTypes ? (
                     <select value={item.item_type}
                       onChange={e => updateItem(item.id, 'item_type', e.target.value)}
                       className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
+                    ) : null}
                     <input type="text" placeholder={t.itemDescriptionPlaceholderJob} value={item.description}
                       onChange={e => updateItem(item.id, 'description', e.target.value)}
                       className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>

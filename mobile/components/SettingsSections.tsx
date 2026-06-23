@@ -1430,6 +1430,62 @@ export function CrewModeSection() {
   );
 }
 
+// ─── Job item-type categories toggle ─────────────────────────────────────
+// Labor/Material/Equipment/Other on job line items. Off for industries that
+// bill flat / by qty × rate (mirrors the web Ajustes → Trabajos toggle).
+export function JobItemTypesSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+
+  const initial = business?.job_item_types_enabled !== false;
+  const [value, setValue] = useState<boolean>(initial);
+  const [saved, setSaved] = useState<boolean>(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = business.job_item_types_enabled !== false;
+      setValue(fresh);
+      setSaved(fresh);
+    }
+  }, [business]);
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ job_item_types_enabled: value })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({ text: error ? 'No se pudo guardar' : 'Guardado', isError: !!error });
+    if (!error) {
+      setSaved(value);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = value !== saved;
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Sliders size={18} color="#4F46E5" />}
+        title="Categorías de materiales y mano de obra"
+        subtitle="Etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si cobras por cantidad × precio (p. ej. pies × tarifa)."
+      />
+      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+        <Text className="flex-1 text-sm text-gray-900">Mostrar categorías</Text>
+        <Toggle value={value} onValueChange={setValue} />
+      </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
 // ─── Job alerts (upcoming-job tier highlight) ─────────────────────────────
 // Owner-configured tiers (e.g. "1 day before = red, 3 days before = orange")
 // that surface as a colored left border + chip on each job card. Schema:
@@ -1602,348 +1658,6 @@ export function JobAlertsSection() {
       </View>
 
       <StatusMsg msg={msg} />
-    </View>
-  );
-}
-
-// ─── Per-worker custom fields (assignment_field_templates) ─────────────────
-// Mirror of TrabajosFieldsSection but targets job_assignment_field_templates +
-// businesses.assignment_field_required / assignment_field_order. Standard
-// keys: 'hours_worked' (the universal core field every industry tracks).
-const DEFAULT_ASSIGNMENT_FIELD_KEYS = ['hours_worked'] as const;
-
-export function TrabajadorFieldsSection() {
-  const supabase = createSupabaseClient();
-  const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
-  const t = full.dashboard.settings;
-  const tActuals = full.dashboard.jobs.actuals;
-
-  const FIELD_LABELS: Record<string, string> = {
-    hours_worked: tActuals.hoursWorkedLabel,
-  };
-
-  // Draft pattern (mirrors Clientes/Facturas/TrabajosFields).
-  const [required, setRequired] = useState<Record<string, boolean>>(business?.assignment_field_required ?? {});
-  const [dbRequired, setDbRequired] = useState<Record<string, boolean>>(business?.assignment_field_required ?? {});
-  const [localOrder, setLocalOrder] = useState<string[]>(
-    Array.isArray(business?.assignment_field_order) ? (business!.assignment_field_order as string[]) : [],
-  );
-  const [dbOrder, setDbOrder] = useState<string[]>(
-    Array.isArray(business?.assignment_field_order) ? (business!.assignment_field_order as string[]) : [],
-  );
-  const [savingReq, setSavingReq] = useState(false);
-  const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
-
-  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
-  const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<FieldTemplate | null>(null);
-
-  useEffect(() => {
-    if (business) {
-      const r = business.assignment_field_required ?? {};
-      setRequired(r); setDbRequired(r);
-      const o = Array.isArray(business.assignment_field_order) ? (business.assignment_field_order as string[]) : [];
-      setLocalOrder(o); setDbOrder(o);
-    }
-  }, [business]);
-
-  const loadTemplates = useCallback(async () => {
-    if (!business) return;
-    const { data } = await supabase
-      .from('job_assignment_field_templates')
-      .select('*')
-      .eq('business_id', business.id)
-      .order('sort_order');
-    const fetched = (data as FieldTemplate[] | null) ?? [];
-    setTemplates(fetched);
-    setDbTemplates(fetched);
-  }, [business, supabase]);
-
-  useEffect(() => {
-    if (!business) return;
-    void loadTemplates();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id]);
-
-  const toggleRequired = (key: string) => {
-    setRequired((prev) => ({ ...prev, [key]: !prev[key] }));
-    setReqMsg(null);
-  };
-
-  const saveRequired = async () => {
-    if (!business) return;
-    setSavingReq(true);
-    setReqMsg(null);
-    try {
-      const ops = diffById(dbTemplates, templates);
-      const tempToReal: Record<string, string> = {};
-
-      if (ops.inserts.length > 0) {
-        const rows = ops.inserts.map((tpl, i) => ({
-          business_id: business.id,
-          field_key: tpl.field_key,
-          field_label: tpl.field_label,
-          field_type: tpl.field_type,
-          field_options: tpl.field_options,
-          required: tpl.required,
-          sort_order: dbTemplates.length + i,
-        }));
-        const { data: created, error } = await supabase
-          .from('job_assignment_field_templates').insert(rows).select();
-        if (error) throw error;
-        ops.inserts.forEach((tmp, i) => {
-          const realId = (created as { id: string }[] | null)?.[i]?.id;
-          if (realId) tempToReal[tmp.id] = realId;
-        });
-      }
-      for (const u of ops.updates) {
-        const { id, ...rest } = u;
-        const { error } = await supabase.from('job_assignment_field_templates').update(rest).eq('id', id);
-        if (error) throw error;
-      }
-      if (ops.deletes.length > 0) {
-        const { error } = await supabase.from('job_assignment_field_templates').delete().in('id', ops.deletes);
-        if (error) throw error;
-      }
-
-      const resolvedOrder = localOrder
-        .map((key) => {
-          if (key.startsWith('custom:') && isTempId(key.slice('custom:'.length))) {
-            const tempId = key.slice('custom:'.length);
-            const realId = tempToReal[tempId];
-            return realId ? `custom:${realId}` : null;
-          }
-          return key;
-        })
-        .filter((k): k is string => k !== null);
-
-      const { error: bizErr } = await supabase.from('businesses').update({
-        assignment_field_required: required,
-        assignment_field_order: resolvedOrder,
-      }).eq('id', business.id);
-      if (bizErr) throw bizErr;
-
-      await refetchBusiness();
-      await loadTemplates();
-      setLocalOrder(resolvedOrder); setDbOrder(resolvedOrder); setDbRequired(required);
-      setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
-    } catch {
-      setReqMsg({ text: t.requiredFields.saveError, isError: true });
-    }
-    setSavingReq(false);
-  };
-
-  const dirty = useMemo(
-    () =>
-      isDirty(dbTemplates, templates) ||
-      JSON.stringify(dbRequired) !== JSON.stringify(required) ||
-      JSON.stringify(dbOrder) !== JSON.stringify(localOrder),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder],
-  );
-  useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
-
-  type UnifiedItem =
-    | { kind: 'standard'; key: string; label: string }
-    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
-
-  const items: UnifiedItem[] = useMemo(() => {
-    const standardItems: UnifiedItem[] = DEFAULT_ASSIGNMENT_FIELD_KEYS.map((k) => ({
-      kind: 'standard' as const, key: k, label: FIELD_LABELS[k] ?? k,
-    }));
-    const customItems: UnifiedItem[] = templates.map((tpl) => ({
-      kind: 'custom' as const, key: `custom:${tpl.id}`, label: tpl.field_label, tpl,
-    }));
-    const all = [...standardItems, ...customItems];
-    const byKey = new Map(all.map((it) => [it.key, it]));
-    if (localOrder.length === 0) return all;
-    const ordered: UnifiedItem[] = [];
-    for (const k of localOrder) {
-      const item = byKey.get(k);
-      if (item) ordered.push(item);
-    }
-    const used = new Set(ordered.map((i) => i.key));
-    return [...ordered, ...all.filter((i) => !used.has(i.key))];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, localOrder, full]);
-
-  const moveItem = (key: string, direction: 'up' | 'down') => {
-    const idx = items.findIndex((it) => it.key === key);
-    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
-    const next = [...items];
-    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    setLocalOrder(next.map((i) => i.key));
-    setReqMsg(null);
-  };
-
-  const onDragReorder = (next: { id: string }[]) => {
-    setLocalOrder(next.map((i) => i.id));
-    setReqMsg(null);
-  };
-
-  const removeTemplate = (id: string) => {
-    Alert.alert('', t.customFields.confirmDelete, [
-      { text: full.common.buttons.cancel, style: 'cancel' },
-      {
-        text: full.common.buttons.delete,
-        style: 'destructive',
-        onPress: () => {
-          setTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
-          setLocalOrder((prev) => prev.filter((k) => k !== `custom:${id}`));
-        },
-      },
-    ]);
-  };
-
-  const onTemplateSubmit = (data: {
-    field_label: string;
-    field_type: FieldType;
-    field_options: string[] | null;
-    required: boolean;
-    field_key: string;
-  }) => {
-    if (editing) {
-      setTemplates((prev) =>
-        prev.map((tpl) =>
-          tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required }
-            : tpl,
-        ),
-      );
-    } else {
-      const newTpl: FieldTemplate = {
-        id: newTempId(),
-        field_key: data.field_key,
-        field_label: data.field_label,
-        field_type: data.field_type,
-        field_options: data.field_options,
-        required: data.required,
-        sort_order: templates.length,
-      };
-      setTemplates((prev) => [...prev, newTpl]);
-      setLocalOrder((prev) => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    }
-    setModalOpen(false);
-  };
-
-  return (
-    <View className="gap-4">
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1 pr-3">
-          <SectionHeader
-            icon={<Sliders size={18} color="#4F46E5" />}
-            title={t.assignmentFieldsSection.title}
-            subtitle={t.assignmentFieldsSection.subtitle}
-          />
-        </View>
-        <Pressable
-          onPress={() => {
-            setEditing(null);
-            setModalOpen(true);
-          }}
-          className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl bg-primary active:opacity-80"
-        >
-          <Plus size={14} color="#FFFFFF" />
-          <Text className="text-white text-xs font-semibold">{t.customFields.addBtn}</Text>
-        </Pressable>
-      </View>
-
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <SortableList<UnifiedItem & { id: string }>
-          items={items.map((it) => ({ ...it, id: it.key }))}
-          onReorder={onDragReorder}
-          renderItem={(item, i, { drag, isActive }) => {
-            const isLast = i === items.length - 1;
-            return (
-              <View
-                className={`flex-row items-center gap-2 px-4 py-3 ${
-                  isActive ? 'bg-primary/5' : ''
-                } ${isLast ? '' : 'border-b border-gray-50'}`}
-              >
-                <Pressable onLongPress={drag} delayLongPress={120} hitSlop={6} className="p-1 -ml-1 active:opacity-60">
-                  <GripVertical size={14} color="#9CA3AF" />
-                </Pressable>
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-1.5 flex-wrap">
-                    {item.kind === 'custom' ? (
-                      <Sparkles size={12} color="#4F46E5" />
-                    ) : null}
-                    <Text className="text-sm text-gray-900">{item.label}</Text>
-                    {item.kind === 'custom' && item.tpl.required ? (
-                      <View className="bg-orange-50 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] text-orange-600 font-semibold">
-                          {t.customFields.requiredBadge}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  {item.kind === 'custom' ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">
-                      {t.fieldTypes[item.tpl.field_type]}
-                      {item.tpl.field_type === 'select' && item.tpl.field_options?.length
-                        ? ` · ${item.tpl.field_options.join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View className="flex-col">
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'up')}
-                    disabled={i === 0}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'down')}
-                    disabled={isLast}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </View>
-
-                {item.kind === 'standard' ? (
-                  <Toggle
-                    value={!!required[item.key]}
-                    onValueChange={() => toggleRequired(item.key)}
-                  />
-                ) : (
-                  <>
-                    <Pressable
-                      onPress={() => {
-                        setEditing(item.tpl);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg active:bg-blue-50"
-                    >
-                      <Pencil size={14} color="#3B82F6" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeTemplate(item.tpl.id)}
-                      className="p-2 rounded-lg active:bg-red-50"
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            );
-          }}
-        />
-      </View>
-      <StatusMsg msg={reqMsg} />
-
-      <FieldTemplateModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        editing={editing}
-        templates={templates}
-        onSubmit={onTemplateSubmit}
-      />
     </View>
   );
 }

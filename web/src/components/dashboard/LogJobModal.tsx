@@ -4,18 +4,20 @@
 // client + notes); date is today and status is completed (set by the parent
 // via logFieldJob). Parity with mobile/components/LogJobSheet.tsx.
 
-import { useMemo, useState } from 'react';
-import { X, Search, Check } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, Search, Check, MapPin } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
-import type { FieldClient } from '@amixos/shared/lib/fieldHome';
+import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
 
 export interface LogJobModalProps {
   open: boolean;
   onClose: () => void;
   clients: FieldClient[];
   clientsLoading: boolean;
-  onSubmit: (input: { title: string; clientId: string | null; description: string | null }) => Promise<boolean>;
+  onSubmit: (input: { title: string; clientId: string | null; description: string | null; location: FieldJobLocation | null }) => Promise<boolean>;
 }
+
+type LocState = 'idle' | 'capturing' | 'done' | 'unavailable';
 
 export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }: LogJobModalProps) {
   const { t: full } = useLang();
@@ -28,8 +30,25 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locState, setLocState] = useState<LocState>('idle');
+  const [location, setLocation] = useState<FieldJobLocation | null>(null);
 
-  const reset = () => { setTitle(''); setClientId(null); setNotes(''); setSearch(''); setError(null); setBusy(false); };
+  // Auto-capture current location when the modal opens (browser permission
+  // prompt). Non-blocking — the job still logs without it.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setLocState('unavailable'); return; }
+    setLocState('capturing');
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      pos => { if (!cancelled) { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocState('done'); } },
+      () => { if (!cancelled) setLocState('unavailable'); },
+      { enableHighAccuracy: false, timeout: 10000 },
+    );
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const reset = () => { setTitle(''); setClientId(null); setNotes(''); setSearch(''); setError(null); setBusy(false); setLocState('idle'); setLocation(null); };
   const close = () => { reset(); onClose(); };
 
   const filtered = useMemo(() => {
@@ -41,10 +60,12 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
     if (busy) return;
     if (!title.trim()) { setError(f.titleRequired); return; }
     setBusy(true); setError(null);
-    const ok = await onSubmit({ title: title.trim(), clientId, description: notes.trim() || null });
+    const ok = await onSubmit({ title: title.trim(), clientId, description: notes.trim() || null, location });
     setBusy(false);
     if (ok) close(); else setError(f.saveError2);
   };
+
+  const locText = location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : '';
 
   if (!open) return null;
 
@@ -66,6 +87,14 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
             placeholder={f.jobTitlePlaceholder}
             className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 mb-4 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
+
+          {/* Location geostamp (auto-captured) */}
+          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
+            <MapPin size={15} className={locState === 'done' ? 'text-emerald-600' : 'text-gray-400'} />
+            <span className={`text-xs ${locState === 'done' ? 'text-gray-700' : 'text-gray-400'}`}>
+              {locState === 'capturing' ? f.locCapturing : locState === 'done' ? locText : f.locUnavailable}
+            </span>
+          </div>
 
           {/* Client */}
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.clientLabel}</label>

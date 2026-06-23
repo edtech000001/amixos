@@ -261,6 +261,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           invoice: { id: inv.id, client_id: inv.client_id, line_items: inv.line_items as never, tax_rate: inv.tax_rate, discount: inv.discount },
           jobIds: Array.from(addPicked),
           itemTypeLabels,
+          hideItemTypes: business?.job_item_types_enabled === false,
         });
       }
     }
@@ -323,7 +324,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     void (async () => {
       // Sync a draft invoice's line items with its jobs' current items first,
       // so amounts reflect items added after the invoice was created.
-      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels });
+      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase.from('invoices')
           .select('*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))')
