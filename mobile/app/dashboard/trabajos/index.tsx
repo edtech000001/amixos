@@ -181,6 +181,7 @@ export default function TrabajosTab() {
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
         canCreate={can.createJob(currentRole)}
         alertThresholds={alertThresholds}
+        businessId={business?.id}
       />
     </View>
   );

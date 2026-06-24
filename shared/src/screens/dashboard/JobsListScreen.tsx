@@ -114,6 +114,9 @@ export interface JobsListScreenProps {
   // Upcoming-job alert tiers from businesses.job_alert_thresholds. When
   // omitted or disabled, cards render without the indicator.
   alertThresholds?: JobAlertThresholds;
+  /** Active business id — scopes persisted filters per business so they don't
+   *  carry over when switching companies. */
+  businessId?: string;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -180,6 +183,7 @@ export function JobsListScreen({
   onNewProposal,
   canCreate = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
+  businessId,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
@@ -204,35 +208,39 @@ export function JobsListScreen({
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
 
-  // Load saved filters once. An explicit ?tab deep link (initialTab !== 'all')
-  // still wins for the tab.
+  // Persisted filters are scoped per business so switching companies doesn't
+  // carry one company's filters into another.
+  const filtersKey = businessId ? `${JOBS_FILTERS_KEY}.${businessId}` : JOBS_FILTERS_KEY;
+
+  // Load on mount AND whenever the business changes. Always apply (saved OR
+  // reset to defaults) so a business with no saved filters doesn't inherit the
+  // previous one's. An explicit ?tab deep link still wins for the tab.
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(JOBS_FILTERS_KEY)
+    hydrated.current = false; // gate persist until this business's filters load
+    AsyncStorage.getItem(filtersKey)
       .then(raw => {
         if (cancelled) return;
         const s = parseJobsFilters(raw);
-        if (s) {
-          if (initialTab === 'all' && Array.isArray(s.tabs)) {
-            setTabs(s.tabs.filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
-          }
-          if (typeof s.search === 'string') setSearch(s.search);
-          if (s.sortBy) setSortBy(s.sortBy);
-          if (s.groupBy) setGroupBy(s.groupBy);
-          if (s.dateFrom) setDateFrom(s.dateFrom);
-          if (s.dateTo) setDateTo(s.dateTo);
+        if (initialTab === 'all') {
+          setTabs(Array.isArray(s?.tabs) ? s.tabs.filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)) : []);
         }
+        setSearch(typeof s?.search === 'string' ? s.search : '');
+        setSortBy(s?.sortBy ?? 'recent');
+        setGroupBy(s?.groupBy ?? 'none');
+        setDateFrom(s?.dateFrom ?? null);
+        setDateTo(s?.dateTo ?? null);
         hydrated.current = true;
       })
       .catch(() => { hydrated.current = true; });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filtersKey]);
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo })).catch(() => {});
-  }, [tabs, search, sortBy, groupBy, dateFrom, dateTo]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo })).catch(() => {});
+  }, [filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;

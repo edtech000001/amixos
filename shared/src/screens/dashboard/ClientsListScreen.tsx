@@ -65,6 +65,8 @@ export interface ClientsListScreenProps {
   customFieldTemplates?: { field_key: string; field_label: string }[];
   /** Optional slot rendered at the bottom (e.g. modals on web). */
   bottomSlot?: ReactNode;
+  /** Active business id — scopes the group-by choice per business. */
+  businessId?: string;
 }
 
 type Section = ClientSection<ClientListItem>;
@@ -97,6 +99,7 @@ export function ClientsListScreen({
   bulkDeleting,
   customFieldTemplates = [],
   bottomSlot,
+  businessId,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -106,17 +109,20 @@ export function ClientsListScreen({
   const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupHydrated = useRef(false);
+  // Scope the group-by per business so it doesn't carry across companies.
+  const groupKey = businessId ? `${CLIENTS_GROUP_KEY}.${businessId}` : CLIENTS_GROUP_KEY;
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(CLIENTS_GROUP_KEY)
+    groupHydrated.current = false;
+    AsyncStorage.getItem(groupKey)
       .then(raw => { if (!cancelled) setGroupBy(parseClientGroupKey(raw)); })
       .finally(() => { groupHydrated.current = true; });
     return () => { cancelled = true; };
-  }, []);
+  }, [groupKey]);
   useEffect(() => {
     if (!groupHydrated.current) return;
-    void AsyncStorage.setItem(CLIENTS_GROUP_KEY, groupBy).catch(() => {});
-  }, [groupBy]);
+    void AsyncStorage.setItem(groupKey, groupBy).catch(() => {});
+  }, [groupKey, groupBy]);
   const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
     { key: 'name', label: t.group.name },
     { key: 'company', label: t.group.company },

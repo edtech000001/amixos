@@ -270,6 +270,7 @@ export default function ClientesTab() {
         onBulkDeletePress={bulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
+        businessId={business?.id}
       />
     </View>
   );

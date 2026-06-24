@@ -51,6 +51,7 @@ interface RawEmployee {
   zip_code: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  intended_access_role: string | null;
   custom_fields: Record<string, string> | null;
 }
 
@@ -116,6 +117,7 @@ export default function EmpleadosPage() {
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [accessRoles, setAccessRoles] = useState<{ key: string; name: string | null }[]>([]);
   const [members, setMembers] = useState<AccessMember[]>([]);
   const [invites, setInvites] = useState<AccessInvite[]>([]);
   // Modal modes:
@@ -231,6 +233,13 @@ export default function EmpleadosPage() {
 
   useEffect(() => { loadPeople(); loadTimesheets(); loadTemplates(); }, [business]);
 
+  // Per-business role renames so the team CSV can use custom role labels.
+  useEffect(() => {
+    if (!business) return;
+    supabase.from('business_roles').select('key, name').eq('business_id', business.id)
+      .then(({ data }: { data: { key: string; name: string | null }[] | null }) => setAccessRoles(data ?? []));
+  }, [business]);
+
   // Opened from Ajustes → Empleados "Importar equipo" via ?import=1.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -300,7 +309,9 @@ export default function EmpleadosPage() {
       emergency_contact_phone: e.emergency_contact_phone ?? '',
       custom_fields: e.custom_fields ?? {},
     });
-    setError(''); setAccessError(''); setAccessRole('office');
+    setError(''); setAccessError('');
+    // Pre-select the Invite dialog with the planned access role from import.
+    setAccessRole(e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role) ? e.intended_access_role as Role : 'office');
     // Row clicks open the read-only detail; pencil in the header flips to edit.
     setEmpModal('view');
   };
@@ -534,6 +545,7 @@ export default function EmpleadosPage() {
           businessId={business.id}
           supabase={supabase}
           templates={templates.map(t => ({ field_key: t.field_key, field_label: t.field_label, field_type: t.field_type, field_options: t.field_options }))}
+          accessRoles={accessRoles}
           onClose={() => setImportOpen(false)}
           onDone={loadPeople}
         />

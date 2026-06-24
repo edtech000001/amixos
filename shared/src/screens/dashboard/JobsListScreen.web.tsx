@@ -114,6 +114,9 @@ export interface JobsListScreenProps {
   // Upcoming-job alert tiers (Ajustes → Trabajos, migration 046). Keep in
   // sync with JobsListScreen.tsx — the native variant declares the same prop.
   alertThresholds?: JobAlertThresholds;
+  /** Active business id — scopes persisted filters per business so they don't
+   *  carry over when switching companies. */
+  businessId?: string;
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -168,6 +171,7 @@ export function JobsListScreen({
   onNewProposal,
   canCreate = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
+  businessId,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
@@ -197,32 +201,36 @@ export function JobsListScreen({
   // filters with defaults on the first render.
   const [hydrated, setHydrated] = useState(false);
 
-  // Restore persisted filters once, after mount.
+  // Persisted filters are scoped per business so switching companies doesn't
+  // carry one company's filters into another.
+  const filtersKey = businessId ? `${JOBS_FILTERS_KEY}.${businessId}` : JOBS_FILTERS_KEY;
+
+  // Restore on mount AND whenever the business changes. Always apply (saved OR
+  // reset to defaults) so a business with no saved filters doesn't inherit the
+  // previous one's.
   useEffect(() => {
     const saved = parseJobsFilters(
-      typeof window !== 'undefined' ? window.localStorage.getItem(JOBS_FILTERS_KEY) : null,
+      typeof window !== 'undefined' ? window.localStorage.getItem(filtersKey) : null,
     );
-    if (saved) {
-      setSearch(saved.search ?? '');
-      // A ?tab deep link wins over saved tabs.
-      if (initialTab === 'all') {
-        setTabs((saved.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
-      }
-      setSortBy(saved.sortBy ?? 'recent');
-      setGroupBy(saved.groupBy ?? 'none');
-      setDateFrom(saved.dateFrom ?? null);
-      setDateTo(saved.dateTo ?? null);
+    setSearch(saved?.search ?? '');
+    // A ?tab deep link wins over saved tabs.
+    if (initialTab === 'all') {
+      setTabs((saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
     }
+    setSortBy(saved?.sortBy ?? 'recent');
+    setGroupBy(saved?.groupBy ?? 'none');
+    setDateFrom(saved?.dateFrom ?? null);
+    setDateTo(saved?.dateTo ?? null);
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filtersKey]);
 
   // Persist on change — only after restore, so defaults don't clobber saved.
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
     const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo };
-    window.localStorage.setItem(JOBS_FILTERS_KEY, JSON.stringify(f));
-  }, [hydrated, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
+    window.localStorage.setItem(filtersKey, JSON.stringify(f));
+  }, [hydrated, filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;

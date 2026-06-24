@@ -96,6 +96,25 @@ function NuevoTrabajoContent() {
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
+  // Per-business required job fields (Ajustes → Trabajos). `jrl` marks a label
+  // with " *" when required; JOB_REQUIRABLE is the subset that exists on this
+  // form (validated on save).
+  const jobReq = (business?.job_field_required ?? {}) as Record<string, boolean>;
+  const jrl = (key: string, base: string) => (jobReq[key] ? `${base} *` : base);
+  const JOB_REQUIRABLE: { key: string; label: string }[] = [
+    { key: 'client_id', label: t.clientLabel },
+    { key: 'description', label: t.descriptionLabel },
+    { key: 'job_address', label: t.addressLabel },
+    { key: 'job_city', label: t.cityLabel },
+    { key: 'job_state', label: t.stateLabel },
+    { key: 'coordinates', label: t.coordinatesLabel },
+    { key: 'scheduled_date', label: t.dateLabel },
+    { key: 'time_start', label: t.timeStartLabel },
+    { key: 'time_end', label: t.timeEndLabel },
+    { key: 'total_hours', label: t.totalHoursLabel },
+    { key: 'assigned_workers', label: t.workersHeading },
+    { key: 'internal_notes', label: t.internalNoteLabelJob },
+  ];
   const router = useRouter();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
   // insert and they have no clients to pick). Entry points are hidden, but
@@ -440,6 +459,30 @@ function NuevoTrabajoContent() {
     if (!title.trim()) { setError(isEditProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob); return; }
     const validItems = items.filter(i => i.description.trim());
     if (isEditProposal && validItems.length === 0) { setError(t.errorAtLeastOneItem); return; }
+    // Enforce the per-business required job fields (Ajustes → Trabajos). Only on
+    // job mode, and only for fields that actually exist on this form. Runs on
+    // save for both new + edit, so a past job is only checked if you re-save it.
+    if (!isEditProposal) {
+      const fieldVal: Record<string, string> = {
+        client_id: clientId,
+        description: description,
+        job_address: address,
+        job_city: city,
+        job_state: state,
+        coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
+        scheduled_date: scheduledDate,
+        time_start: timeStart,
+        time_end: timeEnd,
+        total_hours: effectiveTotalHours != null ? 'x' : '',
+        assigned_workers: assignedEmployees.length ? 'x' : '',
+        internal_notes: internalNotes,
+      };
+      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      if (missing.length) {
+        setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
+        return;
+      }
+    }
     setSaving(true); setError('');
 
     try {
@@ -646,7 +689,7 @@ function NuevoTrabajoContent() {
               placeholder={t.titlePlaceholder}
               value={title} onChange={e => setTitle(e.target.value)}/>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.clientLabel}</label>
+              <label className="text-sm font-medium text-gray-700">{jrl('client_id', t.clientLabel)}</label>
               <div className="relative" ref={clientDropdownRef}>
                 <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
@@ -740,7 +783,7 @@ function NuevoTrabajoContent() {
             )}
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.descriptionLabel}</label>
+              <label className="text-sm font-medium text-gray-700">{jrl('description', t.descriptionLabel)}</label>
               <textarea rows={5} placeholder={t.descriptionPlaceholder}
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
@@ -787,7 +830,7 @@ function NuevoTrabajoContent() {
               {/* Map link paste */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                  <Link2 size={13} className="text-gray-400"/> {t.mapLinkLabel}
+                  <Link2 size={13} className="text-gray-400"/> {jrl('coordinates', t.mapLinkLabel)}
                 </label>
                 <input type="url" placeholder={t.mapLinkPlaceholder}
                   value={mapLink} onChange={e => parseMapLink(e.target.value)}
@@ -800,13 +843,13 @@ function NuevoTrabajoContent() {
                 )}
               </div>
               <div className="border-t border-gray-100 pt-3"/>
-              <Input label={t.addressLabel} placeholder={t.addressPlaceholder} value={address}
+              <Input label={jrl('job_address', t.addressLabel)} placeholder={t.addressPlaceholder} value={address}
                 onChange={e => setAddress(e.target.value)}/>
               <div className="grid grid-cols-[1fr_120px] gap-3">
-                <Input label={t.cityLabel} placeholder={t.cityPlaceholder} value={city}
+                <Input label={jrl('job_city', t.cityLabel)} placeholder={t.cityPlaceholder} value={city}
                   onChange={e => setCity(e.target.value)}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.stateLabel}</label>
+                  <label className="text-sm font-medium text-gray-700">{jrl('job_state', t.stateLabel)}</label>
                   <select value={state} onChange={e => setState(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">{t.stateNone}</option>
@@ -826,7 +869,7 @@ function NuevoTrabajoContent() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Input label={t.dateLabel} type="date" value={scheduledDate}
+              <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}/>
               <Input label={t.endDateLabel} type="date" value={endDate}
                 onChange={e => setEndDate(e.target.value)}/>
@@ -839,9 +882,9 @@ function NuevoTrabajoContent() {
 
             {!allDay && (
               <div className="grid grid-cols-2 gap-3 mt-3">
-                <Input label={t.timeStartLabel} type="time" value={timeStart}
+                <Input label={jrl('time_start', t.timeStartLabel)} type="time" value={timeStart}
                   onChange={e => setTimeStart(e.target.value)}/>
-                <Input label={t.timeEndLabel} type="time" value={timeEnd}
+                <Input label={jrl('time_end', t.timeEndLabel)} type="time" value={timeEnd}
                   onChange={e => setTimeEnd(e.target.value)}/>
               </div>
             )}
@@ -849,7 +892,7 @@ function NuevoTrabajoContent() {
             {/* Total hours — auto from start/end (read-only) when both times are
                 set, else manual entry. Credited to each worker in Reports. */}
             <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t.totalHoursLabel}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
               {bothTimesSet ? (
                 <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
                   <span>{computedHours != null ? `${computedHours} h` : '—'}</span>
@@ -1229,7 +1272,7 @@ function NuevoTrabajoContent() {
             )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                {isEditProposal ? t.internalNoteLabelProposal : t.internalNoteLabelJob}
+                {isEditProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
               </label>
               <textarea rows={4} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
                 value={internalNotes} onChange={e => setInternalNotes(e.target.value)}

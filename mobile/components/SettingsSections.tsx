@@ -92,7 +92,7 @@ const DEFAULT_EMPLOYEE_FIELD_KEYS = [
 const DEFAULT_JOB_FIELD_KEYS = [
   'client_id', 'priority', 'description',
   'job_address', 'job_city', 'job_state', 'coordinates',
-  'scheduled_date', 'time_start', 'time_end',
+  'scheduled_date', 'time_start', 'time_end', 'total_hours',
   'assigned_workers', 'worker_notes', 'internal_notes',
 ] as const;
 
@@ -1038,6 +1038,7 @@ export function TrabajosFieldsSection() {
     scheduled_date: tJobNew.dateLabel,
     time_start: tJobNew.timeStartLabel,
     time_end: tJobNew.timeEndLabel,
+    total_hours: tJobNew.totalHoursLabel,
     assigned_workers: tJobNew.workersHeading,
     worker_notes: tJobNew.workerNoteLabel,
     internal_notes: tJobNew.internalNoteLabelJob,

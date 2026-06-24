@@ -763,6 +763,7 @@ export default function ClientesPage() {
       onClearSelection={() => setSelectedIds(new Set())}
       bulkDeleting={deleting}
       bottomSlot={modals}
+      businessId={business?.id}
     />
   );
 }

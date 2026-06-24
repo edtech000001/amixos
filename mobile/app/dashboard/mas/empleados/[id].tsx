@@ -79,6 +79,7 @@ interface RawEmployee {
   zip_code: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  intended_access_role: string | null;
   custom_fields: Record<string, string> | null;
 }
 
@@ -160,6 +161,10 @@ export default function EmpleadoDetailRoute() {
     }
     const e = empRes.data as RawEmployee;
     setEmployee(e);
+    // Pre-select the Invite dialog with the planned access role from import.
+    if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
+      setAccessRole(e.intended_access_role as Role);
+    }
     setTemplates((tplRes.data ?? []) as FieldTemplate[]);
     setMembers(((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map((m) => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,

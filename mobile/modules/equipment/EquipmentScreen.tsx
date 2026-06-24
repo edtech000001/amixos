@@ -291,21 +291,24 @@ export default function EquipmentScreen() {
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
 
-  // Group-by — persists across navigation + refresh via AsyncStorage.
+  // Group-by — persists across navigation + refresh, scoped per business so it
+  // doesn't carry across companies.
   const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupHydrated = useRef(false);
+  const groupKey = business?.id ? `${EQUIPMENT_GROUP_KEY}.${business.id}` : EQUIPMENT_GROUP_KEY;
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(EQUIPMENT_GROUP_KEY)
+    groupHydrated.current = false;
+    AsyncStorage.getItem(groupKey)
       .then((raw) => { if (!cancelled) setGroupBy(parseEquipmentGroupKey(raw)); })
       .finally(() => { groupHydrated.current = true; });
     return () => { cancelled = true; };
-  }, []);
+  }, [groupKey]);
   useEffect(() => {
     if (!groupHydrated.current) return;
-    void AsyncStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy).catch(() => {});
-  }, [groupBy]);
+    void AsyncStorage.setItem(groupKey, groupBy).catch(() => {});
+  }, [groupKey, groupBy]);
   const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
     { key: 'none', label: t.groups.none, Icon: List },
     { key: 'lead', label: t.groups.lead, Icon: UserIcon },

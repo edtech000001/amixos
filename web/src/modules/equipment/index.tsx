@@ -266,15 +266,19 @@ export default function EquipmentModule() {
     );
   }, [equipment, search]);
 
-  // Group-by — persists across navigation + refresh via localStorage.
-  const [groupBy, setGroupBy] = useState<EquipmentGroupKey>(() =>
-    typeof window !== 'undefined'
-      ? parseEquipmentGroupKey(window.localStorage.getItem(EQUIPMENT_GROUP_KEY))
-      : 'none',
-  );
+  // Group-by — persists across navigation + refresh, scoped per business so it
+  // doesn't carry across companies.
+  const groupKey = business?.id ? `${EQUIPMENT_GROUP_KEY}.${business.id}` : EQUIPMENT_GROUP_KEY;
+  const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
+  const [groupHydrated, setGroupHydrated] = useState(false);
   useEffect(() => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(EQUIPMENT_GROUP_KEY, groupBy);
-  }, [groupBy]);
+    if (typeof window !== 'undefined') setGroupBy(parseEquipmentGroupKey(window.localStorage.getItem(groupKey)));
+    setGroupHydrated(true);
+  }, [groupKey]);
+  useEffect(() => {
+    if (!groupHydrated || typeof window === 'undefined') return;
+    window.localStorage.setItem(groupKey, groupBy);
+  }, [groupHydrated, groupKey, groupBy]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
     { key: 'none', label: t.groups.none, Icon: List },

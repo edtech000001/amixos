@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
+import { INVITABLE_ROLES, ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { computeTotals, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
 import {
   normalizeName,
@@ -80,7 +81,7 @@ const EMPLOYEE_FIELDS: FieldDef[] = [
   { key: 'check_name',  es: 'Nombre para el cheque', en: 'Check name' },
   { key: 'phone',       es: 'Teléfono', en: 'Phone' },
   { key: 'email',       es: 'Email', en: 'Email' },
-  { key: 'role',        es: 'Rol', en: 'Role' },
+  { key: 'access_role', es: 'Rol de acceso a la app (admin/manager/oficina/campo)', en: 'App access role (admin/manager/office/field)' },
   { key: 'pay_type',    es: 'Tipo de pago (por hora/salario/diario)', en: 'Pay type (hourly/salary/daily)' },
   { key: 'pay_rate',    es: 'Tarifa de pago', en: 'Pay rate' },
   { key: 'hire_date',   es: 'Fecha de contratación', en: 'Hire date' },
@@ -109,6 +110,8 @@ interface Props {
   supabase: any;
   /** Custom-field templates (jobs/employees mode) so extra columns map into custom_fields. */
   templates?: TemplateField[];
+  /** Per-business role renames (employees mode) so the CSV can use custom role labels. */
+  accessRoles?: { key: string; name: string | null }[];
   /** businesses.invoice_template — picks invoice language (es/en) for new invoices. */
   invoiceTemplate?: unknown;
   onClose: () => void;
@@ -119,7 +122,7 @@ const sanitize = (s: string) =>
   s.replace(/[�﻿]/g, '').replace(/[^\x20-\x7E\xA0-\xFFĀ-￿]/g, '').trim();
 
 export default function ImportModal({
-  open, mode, businessId, supabase, templates = [], invoiceTemplate, onClose, onDone,
+  open, mode, businessId, supabase, templates = [], accessRoles = [], invoiceTemplate, onClose, onDone,
 }: Props) {
   const { locale } = useLang();
   const en = locale === 'en';
@@ -264,6 +267,35 @@ export default function ImportModal({
       return 'hourly';
     };
 
+    // Planned app-access role (pre-selects the Invite dialog) — NOT access
+    // itself (that needs an accepted invite). Accepts the role key, its built-in
+    // label (es/en), OR a per-business rename. Unknown non-blank values are left
+    // unstaged and reported. Only the 6 built-in roles exist today; fully custom
+    // role names aren't a feature yet.
+    const roleByLabel = new Map<string, string>();
+    INVITABLE_ROLES.forEach(r => {
+      roleByLabel.set(normalizeName(r), r);
+      roleByLabel.set(normalizeName(ROLE_LABELS[r].es), r);
+      roleByLabel.set(normalizeName(ROLE_LABELS[r].en), r);
+    });
+    accessRoles.forEach(br => {
+      if (br.name && (INVITABLE_ROLES as readonly string[]).includes(br.key)) roleByLabel.set(normalizeName(br.name), br.key);
+    });
+    const unknownRoles = new Set<string>();
+    const accessRole = (raw: string): string | null => {
+      const s = normalizeName(raw);
+      if (!s) return null;
+      if (roleByLabel.has(s)) return roleByLabel.get(s)!;
+      // Loose fallbacks for common phrasings.
+      if (s.includes('admin')) return 'admin';
+      if (s.includes('manager') || s.includes('gerente') || s.includes('encargad')) return 'manager';
+      if (s.includes('office') || s.includes('oficina')) return 'office';
+      if (s.includes('field') || s.includes('campo')) return 'field';
+      if (s.includes('viewer') || s.includes('lector')) return 'viewer';
+      unknownRoles.add(raw.trim());
+      return null;
+    };
+
     for (let idx = 0; idx < rows.length; idx++) {
       const row = rows[idx];
       const csvLine = idx + 2;
@@ -286,7 +318,8 @@ export default function ImportModal({
         check_name: get(row, 'check_name') || null,
         phone: get(row, 'phone') || null,
         email: get(row, 'email') || null,
-        role: get(row, 'role') || 'worker',
+        // employees.role stays the DB default ('worker') — cosmetic, not access.
+        intended_access_role: accessRole(get(row, 'access_role')),
         pay_type: rawPayType ? payType(rawPayType) : 'hourly',
         pay_rate: parseNum(get(row, 'pay_rate')) ?? 0,
         hire_date: parseDate(get(row, 'hire_date')),
@@ -305,7 +338,15 @@ export default function ImportModal({
       existingNames.add(fullKey);
       success++;
     }
-    return { success, skipped, failedRows, notes: [] };
+    const notes: string[] = [];
+    if (unknownRoles.size) {
+      const shown = Array.from(unknownRoles).slice(0, 10).join(', ');
+      notes.push(tr(
+        `Rol de acceso no reconocido (se importó la persona, pero sin rol): ${shown}. Válidos: admin, manager, oficina, campo, lector.`,
+        `Unrecognized access role (the person was imported, just without a role): ${shown}. Valid: admin, manager, office, field, viewer.`,
+      ));
+    }
+    return { success, skipped, failedRows, notes };
   };
 
   // ── INVOICES import ─────────────────────────────────────────────────────
@@ -481,7 +522,7 @@ export default function ImportModal({
       ? ['Proyecto-001', en ? 'Job name' : 'Nombre del trabajo', en ? 'Lead name' : 'Nombre del líder', '6/10/2026', '10', en ? 'Worker One,Worker Two' : 'Trabajador Uno,Trabajador Dos', en ? 'Driver name' : 'Nombre del manejador', '5', en ? 'Notes' : 'Notas', '', '1297',
          ...templates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''))]
       : mode === 'employees'
-      ? [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'worker', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678',
+      ? [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'office', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678',
          ...templates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''))]
       : ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'sent' : 'enviada'];
     // Quote any cell with a comma/quote/newline so multi-name values stay in ONE

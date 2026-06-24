@@ -46,6 +46,8 @@ export interface ClientsListScreenProps {
   /** Custom-field definitions, for the "group by custom field" menu options. */
   customFieldTemplates?: { field_key: string; field_label: string }[];
   bottomSlot?: ReactNode;
+  /** Active business id — scopes the group-by choice per business. */
+  businessId?: string;
 }
 
 export function ClientsListScreen({
@@ -66,6 +68,7 @@ export function ClientsListScreen({
   bulkDeleting,
   customFieldTemplates = [],
   bottomSlot,
+  businessId,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -76,14 +79,16 @@ export function ClientsListScreen({
   // from the server HTML and throw a hydration error).
   const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
   const [groupHydrated, setGroupHydrated] = useState(false);
+  // Scope the group-by per business so it doesn't carry across companies.
+  const groupKey = businessId ? `${CLIENTS_GROUP_KEY}.${businessId}` : CLIENTS_GROUP_KEY;
   useEffect(() => {
-    if (typeof window !== 'undefined') setGroupBy(parseClientGroupKey(window.localStorage.getItem(CLIENTS_GROUP_KEY)));
+    if (typeof window !== 'undefined') setGroupBy(parseClientGroupKey(window.localStorage.getItem(groupKey)));
     setGroupHydrated(true);
-  }, []);
+  }, [groupKey]);
   useEffect(() => {
     if (!groupHydrated || typeof window === 'undefined') return;
-    window.localStorage.setItem(CLIENTS_GROUP_KEY, groupBy);
-  }, [groupHydrated, groupBy]);
+    window.localStorage.setItem(groupKey, groupBy);
+  }, [groupHydrated, groupKey, groupBy]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
     { key: 'name', label: t.group.name },

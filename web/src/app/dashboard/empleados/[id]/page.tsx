@@ -8,7 +8,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -50,6 +50,7 @@ interface RawEmployee {
   zip_code: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  intended_access_role: string | null;
   custom_fields: Record<string, string> | null;
 }
 
@@ -142,6 +143,10 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     }
     const e = empRes.data as RawEmployee;
     setEmployee(e);
+    // Pre-select the Invite dialog with the planned access role from import.
+    if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
+      setAccessRole(e.intended_access_role as Role);
+    }
     setTemplates((tplRes.data ?? []) as FieldTemplate[]);
     setMembers(((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map(m => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
@@ -389,8 +394,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-5">
-        {/* Avatar + name */}
+      <div className="flex flex-col gap-5">
+        {/* Avatar + name — floats above the section cards (matches mobile) */}
         <div className="flex flex-col items-center gap-2 py-2">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
             <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
@@ -406,12 +411,14 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
         </div>
 
         {isView ? (
-          <ViewBody emp={employee} templates={templates} t={t} payTypes={PAY_TYPES} payUnit={PAY_UNIT} />
+          <ViewBody emp={employee} templates={templates} t={t} payTypes={PAY_TYPES} payUnit={PAY_UNIT} lang={lang} />
         ) : (
-          <EditForm
-            form={form} setForm={setForm} templates={templates} t={t} tc={tc}
-            rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES} lang={lang}
-          />
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <EditForm
+              form={form} setForm={setForm} templates={templates} t={t} tc={tc}
+              rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES} lang={lang}
+            />
+          </div>
         )}
 
         {error && <p className="text-xs text-red-500">{error}</p>}
@@ -474,36 +481,36 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
 }
 
 // ─── Read-only view body ────────────────────────────────────────────────
-function ViewBody({ emp, templates, t, payTypes, payUnit }: {
+function ViewBody({ emp, templates, t, payTypes, payUnit, lang }: {
   emp: RawEmployee;
   templates: FieldTemplate[];
   t: ReturnType<typeof useLang>['t']['dashboard']['employees'];
   payTypes: Record<string, string>;
   payUnit: Record<string, string>;
+  lang: 'es' | 'en';
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {(emp.check_name || emp.phone || emp.email) ? (
-        <>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
+        <Section title={t.modal.basicInfoHeading}>
           <ViewRow label={t.modal.checkNameLabel} value={emp.check_name} />
           <ViewRow label={t.modal.phoneLabel} value={emp.phone} />
           <ViewRow label={t.modal.emailLabel} value={emp.email} />
-        </>
+        </Section>
       ) : null}
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</p>
-      <ViewRow label={t.modal.hireDateLabel} value={emp.hire_date} />
-      <ViewRow label={t.modal.payTypeLabel} value={payTypes[emp.pay_type] ?? emp.pay_type} />
-      {emp.pay_rate ? (
-        <ViewRow
-          label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
-          value={`$${emp.pay_rate.toFixed(2)} / ${payUnit[emp.pay_type] ?? payUnit.hourly}`}
-        />
-      ) : null}
+      <Section title={t.modal.employmentHeading}>
+        <ViewRow label={t.modal.hireDateLabel} value={emp.hire_date ? formatDateLong(emp.hire_date, lang) : null} />
+        <ViewRow label={t.modal.payTypeLabel} value={payTypes[emp.pay_type] ?? emp.pay_type} />
+        {emp.pay_rate ? (
+          <ViewRow
+            label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
+            value={`$${emp.pay_rate.toFixed(2)} / ${payUnit[emp.pay_type] ?? payUnit.hourly}`}
+          />
+        ) : null}
+      </Section>
       {(emp.birthday || emp.address || emp.city || emp.state || emp.zip_code) ? (
-        <>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
-          <ViewRow label={t.modal.birthdayLabel} value={emp.birthday} />
+        <Section title={t.modal.personalHeading}>
+          <ViewRow label={t.modal.birthdayLabel} value={emp.birthday ? formatDateLong(emp.birthday, lang) : null} />
           <ViewRow label={t.modal.addressLabel} value={emp.address} />
           {(emp.city || emp.state || emp.zip_code) ? (
             <ViewRow
@@ -511,23 +518,32 @@ function ViewBody({ emp, templates, t, payTypes, payUnit }: {
               value={[emp.city, emp.state, emp.zip_code].filter(Boolean).join(' · ')}
             />
           ) : null}
-        </>
+        </Section>
       ) : null}
       {(emp.emergency_contact_name || emp.emergency_contact_phone) ? (
-        <>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
+        <Section title={t.modal.emergencyContactHeading}>
           <ViewRow label={t.modal.emergencyNameLabel} value={emp.emergency_contact_name} />
           <ViewRow label={t.modal.emergencyPhoneLabel} value={emp.emergency_contact_phone} />
-        </>
+        </Section>
       ) : null}
       {templates.length > 0 && emp.custom_fields && Object.keys(emp.custom_fields).length > 0 ? (
-        <>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</p>
+        <Section title={t.modal.customFieldsHeading}>
           {templates.map(tpl => (
             <ViewRow key={tpl.id} label={tpl.field_label} value={emp.custom_fields?.[tpl.field_key]} />
           ))}
-        </>
+        </Section>
       ) : null}
+    </div>
+  );
+}
+
+// One titled section card in the read-only employee view (mirrors the mobile
+// InfoCard so the layout matches across platforms).
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-3">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</p>
+      {children}
     </div>
   );
 }

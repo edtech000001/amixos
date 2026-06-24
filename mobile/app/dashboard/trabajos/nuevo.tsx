@@ -121,6 +121,25 @@ export default function NuevoTrabajoRoute() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs.new;
   const tc = full.common;
+  // Per-business required job fields (Ajustes → Trabajos). `jrl` marks a label
+  // with " *" when required; JOB_REQUIRABLE is the subset that exists on this
+  // form (validated on save).
+  const jobReq = (business?.job_field_required ?? {}) as Record<string, boolean>;
+  const jrl = (key: string, base: string) => (jobReq[key] ? `${base} *` : base);
+  const JOB_REQUIRABLE: { key: string; label: string }[] = [
+    { key: 'client_id', label: t.clientLabel },
+    { key: 'description', label: t.descriptionLabel },
+    { key: 'job_address', label: t.addressLabel },
+    { key: 'job_city', label: t.cityLabel },
+    { key: 'job_state', label: t.stateLabel },
+    { key: 'coordinates', label: t.coordinatesLabel },
+    { key: 'scheduled_date', label: t.dateLabel },
+    { key: 'time_start', label: t.timeStartLabel },
+    { key: 'time_end', label: t.timeEndLabel },
+    { key: 'total_hours', label: t.totalHoursLabel },
+    { key: 'assigned_workers', label: t.workersHeading },
+    { key: 'internal_notes', label: t.internalNoteLabelJob },
+  ];
   const tStatuses = full.dashboard.jobs.statuses;
   const tPriorities = full.dashboard.jobs.priorities;
 
@@ -443,6 +462,30 @@ export default function NuevoTrabajoRoute() {
       setError(isProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob);
       return;
     }
+    // Enforce the per-business required job fields. Job mode only, only fields
+    // on this form. Runs on save for both new + edit (a past job is only checked
+    // if you re-save it).
+    if (!isProposal) {
+      const fieldVal: Record<string, string> = {
+        client_id: clientId,
+        description,
+        job_address: address,
+        job_city: city,
+        job_state: state,
+        coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
+        scheduled_date: scheduledDate,
+        time_start: timeStart,
+        time_end: timeEnd,
+        total_hours: effectiveTotalHours != null ? 'x' : '',
+        assigned_workers: assignedEmployees.length ? 'x' : '',
+        internal_notes: internalNotes,
+      };
+      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      if (missing.length) {
+        setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
+        return;
+      }
+    }
     if (coordsText.trim() && coordsInvalid) {
       setError(t.coordinatesInvalid);
       return;
@@ -717,7 +760,7 @@ export default function NuevoTrabajoRoute() {
 
             {/* Client picker */}
             <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{t.clientLabel}</Text>
+              <Text className="text-sm font-semibold text-gray-700">{jrl('client_id', t.clientLabel)}</Text>
               <Pressable
                 onPress={() => setClientPickerOpen(true)}
                 className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
@@ -799,7 +842,7 @@ export default function NuevoTrabajoRoute() {
             )}
 
             <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{t.descriptionLabel}</Text>
+              <Text className="text-sm font-semibold text-gray-700">{jrl('description', t.descriptionLabel)}</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
@@ -858,7 +901,7 @@ export default function NuevoTrabajoRoute() {
               <View className="flex flex-col gap-2">
                 <View className="flex-row items-center gap-1.5">
                   <Link2 size={13} color="#9CA3AF" />
-                  <Text className="text-sm font-semibold text-gray-700">{t.mapLinkLabel}</Text>
+                  <Text className="text-sm font-semibold text-gray-700">{jrl('coordinates', t.mapLinkLabel)}</Text>
                 </View>
                 <TextInput
                   value={mapLink}
@@ -901,7 +944,7 @@ export default function NuevoTrabajoRoute() {
 
               <View className="h-3" />
               <Input
-                label={t.addressLabel}
+                label={jrl('job_address', t.addressLabel)}
                 placeholder={t.addressPlaceholder}
                 value={address}
                 onChangeText={setAddress}
@@ -909,7 +952,7 @@ export default function NuevoTrabajoRoute() {
               <View className="flex-row gap-3 mt-3">
                 <View className="flex-1">
                   <Input
-                    label={t.cityLabel}
+                    label={jrl('job_city', t.cityLabel)}
                     placeholder={t.cityPlaceholder}
                     value={city}
                     onChangeText={setCity}
@@ -917,7 +960,7 @@ export default function NuevoTrabajoRoute() {
                 </View>
                 <View style={{ width: 110 }}>
                   <Select
-                    label={t.stateLabel}
+                    label={jrl('job_state', t.stateLabel)}
                     value={state}
                     onValueChange={setState}
                     placeholder={t.stateNone}
@@ -938,7 +981,7 @@ export default function NuevoTrabajoRoute() {
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
               <View className="flex-row gap-3">
                 <View className="flex-1">
-                  <DatePicker label={t.dateLabel} value={scheduledDate} onChange={setScheduledDate} />
+                  <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
                 </View>
                 <View className="flex-1">
                   <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
@@ -954,7 +997,7 @@ export default function NuevoTrabajoRoute() {
                 <View className="flex-row gap-3 mt-3">
                   <View className="flex-1">
                     <DatePicker
-                      label={t.timeStartLabel}
+                      label={jrl('time_start', t.timeStartLabel)}
                       mode="time"
                       value={timeStart}
                       onChange={setTimeStart}
@@ -962,7 +1005,7 @@ export default function NuevoTrabajoRoute() {
                   </View>
                   <View className="flex-1">
                     <DatePicker
-                      label={t.timeEndLabel}
+                      label={jrl('time_end', t.timeEndLabel)}
                       mode="time"
                       value={timeEnd}
                       onChange={setTimeEnd}
@@ -974,7 +1017,7 @@ export default function NuevoTrabajoRoute() {
               {/* Total hours — auto from start/end (read-only) when both times
                   are set, else manual entry. Credited to each worker in Reports. */}
               <View className="mt-3">
-                <Text className="text-sm font-medium text-gray-700 mb-2">{t.totalHoursLabel}</Text>
+                <Text className="text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
                 {bothTimesSet ? (
                   <View className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 flex-row items-center justify-between">
                     <Text className="text-base text-gray-500">
@@ -1153,7 +1196,7 @@ export default function NuevoTrabajoRoute() {
               </View>
             ) : null}
             <Text className="text-sm font-semibold text-gray-700 mb-2">
-              {isProposal ? t.internalNoteLabelProposal : t.internalNoteLabelJob}
+              {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
             </Text>
             <TextInput
               value={internalNotes}
