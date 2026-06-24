@@ -4,6 +4,8 @@ import { clsx } from 'clsx';
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  // Small grey helper note under the field (e.g. "leave blank if…").
+  hint?: string;
   leftIcon?: React.ReactNode;
   // Interactive slot on the right (e.g. a password-reveal eye toggle).
   // Unlike leftIcon this stays clickable, so callers can drop a button in.
@@ -11,7 +13,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, leftIcon, rightIcon, className, ...props }, ref) => {
+  ({ label, error, hint, leftIcon, rightIcon, className, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -43,6 +45,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
+        {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
       </div>
     );
   }

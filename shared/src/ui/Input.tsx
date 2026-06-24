@@ -6,6 +6,8 @@ import { forwardRef, useState, type ReactNode } from 'react';
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
+  // Small grey helper note under the field (e.g. "leave blank if…").
+  hint?: string;
   leftIcon?: ReactNode;
   // Interactive slot on the right (e.g. a password-reveal eye toggle).
   rightIcon?: ReactNode;
@@ -16,7 +18,7 @@ interface InputProps extends TextInputProps {
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, leftIcon, rightIcon, onClear, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
+  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
   ref,
 ) {
   const showClear = !!onClear && typeof rest.value === 'string' && rest.value.length > 0;
@@ -76,6 +78,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         ) : null}
       </View>
       {error && <Text className="text-xs font-medium text-red-500">{error}</Text>}
+      {hint && !error ? <Text className="text-xs text-gray-400">{hint}</Text> : null}
     </View>
   );
 });

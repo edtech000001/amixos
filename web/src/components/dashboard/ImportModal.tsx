@@ -1,23 +1,23 @@
 'use client';
 
-// Legacy data import wizard (web-only) — bulk-load old AppSheet projects and
-// FileMaker invoices from CSV. Two modes:
-//   - 'jobs'     → one row per project. Creates jobs (with external_ref =
-//                  old Project ID), crew assignments, and driver links.
-//   - 'invoices' → one row per LINE ITEM. Groups rows by invoice number, matches
-//                  / auto-creates the client, and links each line to the job it
-//                  came from via Project ID (jobs.external_ref). Matched jobs are
-//                  marked invoiced.
+// Legacy data import wizard (web-only) — bulk-load from CSV. Three modes:
+//   - 'jobs'      → one row per project. Creates jobs (external_ref = old
+//                   Project ID), crew assignments, and driver links.
+//   - 'invoices'  → one row per LINE ITEM. Groups rows by invoice number,
+//                   matches / auto-creates the client, and links each line to
+//                   the job it came from via Project ID (jobs.external_ref).
+//   - 'employees' → one row per person. Creates employees (deduped by name).
 //
-// Reuses the Clientes import UX: drag-drop upload → column map (auto-guessed) →
-// preview → per-row success/failure report. Strings are inline Spanish (this is
-// a Spanish-first admin tool); no i18n dict entries needed.
+// Labels + UI text follow the app language (es/en) via useLang(). The exact
+// header names in the user's file don't matter — the column-mapping step lets
+// them map any header to a field, so a Spanish app + English CSV works fine.
 
 import { useRef, useState } from 'react';
 import Papa from 'papaparse';
 import { Upload, Download, CheckCircle2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { useLang } from '@/i18n/LangProvider';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { invoiceDefaultLanguage } from '@amixos/shared/lib/invoiceTemplate';
 import { computeTotals, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
@@ -31,62 +31,84 @@ import {
   type EmployeeLite,
 } from '@amixos/shared/lib/dataImport';
 
-type Mode = 'jobs' | 'invoices';
+type Mode = 'jobs' | 'invoices' | 'employees';
 
 interface FieldDef {
   key: string;
-  label: string;
+  es: string;
+  en: string;
   required?: boolean;
   isCustom?: boolean;
 }
 
 const JOB_FIELDS: FieldDef[] = [
-  { key: 'external_ref',  label: 'Project ID (ID de AppSheet)' },
-  { key: 'title',         label: 'Nombre del proyecto', required: true },
-  { key: 'lead_name',     label: 'Líder' },
-  { key: 'scheduled_date',label: 'Fecha' },
-  { key: 'total_hours',   label: 'Total horas' },
-  { key: 'crew',          label: 'Trabajadores' },
-  { key: 'driver',        label: 'Manejador(es)' },
-  { key: 'driver_hours',  label: 'Horas manejadas' },
-  { key: 'worker_notes',  label: 'Notas' },
-  { key: 'internal_notes',label: 'Admin Notes' },
-  { key: 'total_amount',  label: 'Total (monto $)' },
+  { key: 'external_ref',  es: 'Project ID (ID de AppSheet)', en: 'Project ID (from AppSheet)' },
+  { key: 'title',         es: 'Nombre del proyecto', en: 'Project name', required: true },
+  { key: 'lead_name',     es: 'Líder', en: 'Lead' },
+  { key: 'scheduled_date',es: 'Fecha', en: 'Date' },
+  { key: 'total_hours',   es: 'Total horas', en: 'Total hours' },
+  { key: 'crew',          es: 'Trabajadores', en: 'Workers' },
+  { key: 'driver',        es: 'Manejador(es)', en: 'Driver(s)' },
+  { key: 'driver_hours',  es: 'Horas manejadas', en: 'Driver hours' },
+  { key: 'worker_notes',  es: 'Notas', en: 'Notes' },
+  { key: 'internal_notes',es: 'Notas de admin', en: 'Admin notes' },
+  { key: 'total_amount',  es: 'Total (monto $)', en: 'Total (amount $)' },
 ];
 
 const INVOICE_FIELDS: FieldDef[] = [
-  { key: 'invoice_number',   label: 'Número de factura', required: true },
-  { key: 'project_id',       label: 'Project ID (enlace al trabajo)' },
-  { key: 'line_description', label: 'Descripción' },
-  { key: 'line_qty',         label: 'Total pies o libras (cantidad)' },
-  { key: 'line_rate',        label: 'Precio unitario' },
-  { key: 'customer_name',    label: 'Cliente (nombre)' },
-  { key: 'customer_company', label: 'Cliente (empresa)' },
-  { key: 'customer_address', label: 'Dirección' },
-  { key: 'customer_city',    label: 'Ciudad' },
-  { key: 'customer_state',   label: 'Estado' },
-  { key: 'customer_zip',     label: 'Código postal' },
-  { key: 'customer_phone',   label: 'Teléfono' },
-  { key: 'customer_email',   label: 'Email' },
-  { key: 'issue_date',       label: 'Fecha de creación' },
-  { key: 'due_date',         label: 'Fecha de vencimiento' },
-  { key: 'status',           label: 'Estado (borrador/enviada/pagada)' },
+  { key: 'invoice_number',   es: 'Número de factura', en: 'Invoice number', required: true },
+  { key: 'project_id',       es: 'Project ID (enlace al trabajo)', en: 'Project ID (links to job)' },
+  { key: 'line_description', es: 'Descripción', en: 'Description' },
+  { key: 'line_qty',         es: 'Total pies o libras (cantidad)', en: 'Total feet or pounds (qty)' },
+  { key: 'line_rate',        es: 'Precio unitario', en: 'Unit price' },
+  { key: 'customer_name',    es: 'Cliente (nombre)', en: 'Customer (name)' },
+  { key: 'customer_company', es: 'Cliente (empresa)', en: 'Customer (company)' },
+  { key: 'customer_address', es: 'Dirección', en: 'Address' },
+  { key: 'customer_city',    es: 'Ciudad', en: 'City' },
+  { key: 'customer_state',   es: 'Estado', en: 'State' },
+  { key: 'customer_zip',     es: 'Código postal', en: 'ZIP code' },
+  { key: 'customer_phone',   es: 'Teléfono', en: 'Phone' },
+  { key: 'customer_email',   es: 'Email', en: 'Email' },
+  { key: 'issue_date',       es: 'Fecha de creación', en: 'Date created' },
+  { key: 'due_date',         es: 'Fecha de vencimiento', en: 'Due date' },
+  { key: 'status',           es: 'Estado (borrador/enviada/pagada)', en: 'Status (draft/sent/paid)' },
+];
+
+const EMPLOYEE_FIELDS: FieldDef[] = [
+  { key: 'first_name',  es: 'Nombre', en: 'First name', required: true },
+  { key: 'last_name',   es: 'Apellido', en: 'Last name' },
+  { key: 'check_name',  es: 'Nombre para el cheque', en: 'Check name' },
+  { key: 'phone',       es: 'Teléfono', en: 'Phone' },
+  { key: 'email',       es: 'Email', en: 'Email' },
+  { key: 'role',        es: 'Rol', en: 'Role' },
+  { key: 'pay_type',    es: 'Tipo de pago (por hora/salario/diario)', en: 'Pay type (hourly/salary/daily)' },
+  { key: 'pay_rate',    es: 'Tarifa de pago', en: 'Pay rate' },
+  { key: 'hire_date',   es: 'Fecha de contratación', en: 'Hire date' },
+  { key: 'birthday',    es: 'Cumpleaños', en: 'Birthday' },
+  { key: 'address',     es: 'Dirección', en: 'Address' },
+  { key: 'city',        es: 'Ciudad', en: 'City' },
+  { key: 'state',       es: 'Estado', en: 'State' },
+  { key: 'zip_code',    es: 'Código postal', en: 'ZIP code' },
+  { key: 'emergency_contact_name',  es: 'Contacto de emergencia (nombre)', en: 'Emergency contact (name)' },
+  { key: 'emergency_contact_phone', es: 'Contacto de emergencia (teléfono)', en: 'Emergency contact (phone)' },
 ];
 
 interface ImportResult {
-  success: number;                                   // jobs or invoices created
-  skipped: number;                                   // already imported (external_ref match)
+  success: number;
+  skipped: number;
   failedRows: { label: string; reason: string }[];
-  notes: string[];                                   // info lines (auto-created clients, unlinked lines)
+  notes: string[];
 }
+
+interface TemplateField { field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }
 
 interface Props {
   open: boolean;
   mode: Mode;
   businessId: string;
   supabase: any;
-  /** Job custom-field templates (jobs mode) so extra columns map into custom_fields. */
-  jobTemplates?: { field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[];
+  /** Custom-field templates (jobs/employees mode) so extra columns map into custom_fields. */
+  templates?: TemplateField[];
   /** businesses.invoice_template — picks invoice language (es/en) for new invoices. */
   invoiceTemplate?: unknown;
   onClose: () => void;
@@ -97,8 +119,12 @@ const sanitize = (s: string) =>
   s.replace(/[�﻿]/g, '').replace(/[^\x20-\x7E\xA0-\xFFĀ-￿]/g, '').trim();
 
 export default function ImportModal({
-  open, mode, businessId, supabase, jobTemplates = [], invoiceTemplate, onClose, onDone,
+  open, mode, businessId, supabase, templates = [], invoiceTemplate, onClose, onDone,
 }: Props) {
+  const { locale } = useLang();
+  const en = locale === 'en';
+  const tr = (esText: string, enText: string) => (en ? enText : esText);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<'upload' | 'map' | 'preview' | 'done'>('upload');
   const [headers, setHeaders] = useState<string[]>([]);
@@ -109,9 +135,14 @@ export default function ImportModal({
   const [result, setResult] = useState<ImportResult>({ success: 0, skipped: 0, failedRows: [], notes: [] });
   const [showErrors, setShowErrors] = useState(false);
 
-  const fields: FieldDef[] = mode === 'jobs'
-    ? [...JOB_FIELDS, ...jobTemplates.map(t => ({ key: `custom:${t.field_key}`, label: t.field_label, isCustom: true }))]
-    : INVOICE_FIELDS;
+  const baseFields = mode === 'jobs' ? JOB_FIELDS : mode === 'employees' ? EMPLOYEE_FIELDS : INVOICE_FIELDS;
+  const useTemplates = mode === 'jobs' || mode === 'employees';
+  const fields: (FieldDef & { label: string })[] = [
+    ...baseFields.map(f => ({ ...f, label: en ? f.en : f.es })),
+    ...(useTemplates ? templates.map(t => ({ key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true })) : []),
+  ];
+
+  const noun = mode === 'jobs' ? tr('trabajos', 'jobs') : mode === 'employees' ? tr('empleados', 'employees') : tr('facturas', 'invoices');
 
   const reset = () => {
     setStep('upload'); setHeaders([]); setRows([]); setColMap({});
@@ -128,15 +159,15 @@ export default function ImportModal({
         const hdrs = res.meta.fields ?? [];
         setHeaders(hdrs);
         setRows(res.data);
-        // Auto-map by normalized name (matches "Project ID" → external_ref, etc.).
+        // Auto-map by normalized name — matches the field KEY (English-ish) and
+        // BOTH language labels, so an English CSV maps even in a Spanish app.
         const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
         const auto: Record<string, string> = {};
         fields.forEach(f => {
-          const fNorm = norm(f.label);
-          const fKey = norm(f.key.replace('custom:', ''));
+          const candidates = [norm(f.es), norm(f.en), norm(f.key.replace('custom:', ''))];
           const match = hdrs.find(h => {
-            const hNorm = norm(h);
-            return hNorm === fKey || hNorm === fNorm || hNorm.includes(fKey) || fKey.includes(hNorm);
+            const hN = norm(h);
+            return candidates.some(c => hN === c || hN.includes(c) || c.includes(hN));
           });
           if (match) auto[f.key] = match;
         });
@@ -146,17 +177,16 @@ export default function ImportModal({
     });
   };
 
+  const get = (row: Record<string, string>, key: string) => {
+    const col = colMap[key];
+    return col && row[col] != null ? row[col].trim() : '';
+  };
+
   // ── JOBS import ─────────────────────────────────────────────────────────
   const runJobsImport = async (): Promise<ImportResult> => {
     const failedRows: { label: string; reason: string }[] = [];
     let success = 0, skipped = 0;
 
-    const get = (row: Record<string, string>, key: string) => {
-      const col = colMap[key];
-      return col && row[col] != null ? row[col].trim() : '';
-    };
-
-    // Existing external_refs (idempotency) + employees (crew matching).
     const existingJobs = await fetchAll<{ external_ref: string | null }>((from, to) =>
       supabase.from('jobs').select('external_ref').eq('business_id', businessId).range(from, to));
     const existingRefs = new Set(existingJobs.map(j => j.external_ref).filter(Boolean) as string[]);
@@ -168,9 +198,9 @@ export default function ImportModal({
       const csvLine = idx + 2;
       const title = get(row, 'title');
       const ref = get(row, 'external_ref');
-      const label = `Fila ${csvLine} · ${title || ref || '(sin nombre)'}`;
+      const label = `${tr('Fila', 'Row')} ${csvLine} · ${title || ref || tr('(sin nombre)', '(no name)')}`;
 
-      if (!title) { failedRows.push({ label, reason: 'Falta el nombre del proyecto' }); continue; }
+      if (!title) { failedRows.push({ label, reason: tr('Falta el nombre del proyecto', 'Missing project name') }); continue; }
       if (ref && existingRefs.has(ref)) { skipped++; continue; }
 
       const leadName = get(row, 'lead_name');
@@ -179,10 +209,7 @@ export default function ImportModal({
       const allCrew = [...(leadName ? [leadName] : []), ...crewNames];
 
       const customFields: Record<string, string> = {};
-      jobTemplates.forEach(t => {
-        const v = get(row, `custom:${t.field_key}`);
-        if (v) customFields[t.field_key] = v;
-      });
+      templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
 
       const entry: any = {
         business_id: businessId,
@@ -204,28 +231,80 @@ export default function ImportModal({
       };
 
       const { data: job, error } = await supabase.from('jobs').insert(entry).select('id').single();
-      if (error || !job) { failedRows.push({ label, reason: error?.message ?? 'No se pudo crear' }); continue; }
+      if (error || !job) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear', 'Could not create') }); continue; }
       if (ref) existingRefs.add(ref);
 
-      // Crew assignments: worker_name ALWAYS set so the name survives an
-      // employee deletion (employee_id is on-delete-set-null). One lead max.
       const assigns: any[] = [];
       const seen = new Set<string>();
       allCrew.forEach((name, i) => {
-        const norm = normalizeName(name);
-        if (seen.has(norm)) return;
-        seen.add(norm);
-        assigns.push({
-          job_id: job.id,
-          employee_id: matchEmployeeId(name, employees),
-          worker_name: name,
-          is_lead: i === 0 && !!leadName, // first entry is the lead when a Líder was given
-        });
+        const n = normalizeName(name);
+        if (seen.has(n)) return;
+        seen.add(n);
+        assigns.push({ job_id: job.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadName });
       });
       if (assigns.length) await supabase.from('job_assignments').insert(assigns);
       success++;
     }
+    return { success, skipped, failedRows, notes: [] };
+  };
 
+  // ── EMPLOYEES import ────────────────────────────────────────────────────
+  const runEmployeesImport = async (): Promise<ImportResult> => {
+    const failedRows: { label: string; reason: string }[] = [];
+    let success = 0, skipped = 0;
+
+    const existing = await fetchAll<EmployeeLite>((from, to) =>
+      supabase.from('employees').select('id, first_name, last_name').eq('business_id', businessId).range(from, to));
+    const existingNames = new Set(existing.map(e => normalizeName(`${e.first_name} ${e.last_name ?? ''}`)));
+
+    const payType = (raw: string): string => {
+      const s = normalizeName(raw);
+      if (s.includes('salar')) return 'salary';
+      if (s.includes('diar') || s.includes('dai') || s.includes('day')) return 'daily';
+      return 'hourly';
+    };
+
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
+      const csvLine = idx + 2;
+      const first = get(row, 'first_name');
+      const last = get(row, 'last_name');
+      const label = `${tr('Fila', 'Row')} ${csvLine} · ${[first, last].filter(Boolean).join(' ') || tr('(sin nombre)', '(no name)')}`;
+
+      if (!first) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing first name') }); continue; }
+      const fullKey = normalizeName(`${first} ${last}`);
+      if (existingNames.has(fullKey)) { skipped++; continue; }
+
+      const customFields: Record<string, string> = {};
+      templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
+
+      const rawPayType = get(row, 'pay_type');
+      const entry: any = {
+        business_id: businessId,
+        first_name: first,
+        last_name: last,
+        check_name: get(row, 'check_name') || null,
+        phone: get(row, 'phone') || null,
+        email: get(row, 'email') || null,
+        role: get(row, 'role') || 'worker',
+        pay_type: rawPayType ? payType(rawPayType) : 'hourly',
+        pay_rate: parseNum(get(row, 'pay_rate')) ?? 0,
+        hire_date: parseDate(get(row, 'hire_date')),
+        birthday: parseDate(get(row, 'birthday')),
+        address: get(row, 'address') || null,
+        city: get(row, 'city') || null,
+        state: get(row, 'state') || null,
+        zip_code: get(row, 'zip_code') || null,
+        emergency_contact_name: get(row, 'emergency_contact_name') || null,
+        emergency_contact_phone: get(row, 'emergency_contact_phone') || null,
+        custom_fields: customFields,
+      };
+
+      const { error } = await supabase.from('employees').insert(entry);
+      if (error) { failedRows.push({ label, reason: error.message }); continue; }
+      existingNames.add(fullKey);
+      success++;
+    }
     return { success, skipped, failedRows, notes: [] };
   };
 
@@ -235,25 +314,17 @@ export default function ImportModal({
     const notes: string[] = [];
     let success = 0, skipped = 0;
 
-    const get = (row: Record<string, string>, key: string) => {
-      const col = colMap[key];
-      return col && row[col] != null ? row[col].trim() : '';
-    };
-
     const lang = invoiceDefaultLanguage(invoiceTemplate);
 
-    // Existing invoice refs (idempotency).
     const existingInv = await fetchAll<{ external_ref: string | null }>((from, to) =>
       supabase.from('invoices').select('external_ref').eq('business_id', businessId).range(from, to));
     const existingRefs = new Set(existingInv.map(i => i.external_ref).filter(Boolean) as string[]);
 
-    // Jobs by external_ref → for line linking + client backfill.
     const jobs = await fetchAll<{ id: string; external_ref: string | null; client_id: string | null }>((from, to) =>
       supabase.from('jobs').select('id, external_ref, client_id').eq('business_id', businessId).range(from, to));
     const jobByRef = new Map<string, { id: string; client_id: string | null }>();
     jobs.forEach(j => { if (j.external_ref) jobByRef.set(j.external_ref, { id: j.id, client_id: j.client_id }); });
 
-    // Clients for matching (by normalized name / company).
     const clients = await fetchAll<{ id: string; first_name: string; last_name: string | null; company: string | null }>((from, to) =>
       supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', businessId).range(from, to));
     const clientIndex = new Map<string, string>();
@@ -271,8 +342,6 @@ export default function ImportModal({
       const byCompany = company && clientIndex.get(normalizeName(company));
       if (byCompany) return byCompany;
       if (!name && !company) return null;
-
-      // Auto-create. Split the name on the first space → first / last.
       const parts = name.split(/\s+/);
       const first = parts[0] || company || '';
       const last = parts.slice(1).join(' ');
@@ -300,16 +369,13 @@ export default function ImportModal({
       const s = normalizeName(raw);
       const now = new Date().toISOString();
       if (s.includes('pag') || s.includes('paid')) return { status: 'paid', sent_at: now, paid_at: now };
-      // Explicit "draft/borrador" is the ONLY way to land in draft. Everything
-      // else — including blanks — becomes 'sent': these are real, already-issued
-      // FileMaker invoices, AND it keeps them rebuild-safe. rebuildInvoiceLineItems
-      // only touches DRAFT invoices; a draft import (whose jobs have no job_items)
-      // would get its imported amounts wiped to $0 placeholders on first open.
+      // Explicit draft is the only path to draft; everything else (incl. blank)
+      // becomes 'sent' — these were issued invoices, and it keeps them
+      // rebuild-safe (rebuild only touches drafts, whose jobs have no items).
       if (s === 'draft' || s.includes('borrador')) return { status: 'draft', sent_at: null, paid_at: null };
       return { status: 'sent', sent_at: now, paid_at: null };
     };
 
-    // Group line rows into invoices by invoice number, preserving order.
     const groups = groupBy(rows.map((row, idx) => ({ row, idx })), ({ row }) => get(row, 'invoice_number'));
     let unlinkedLines = 0;
 
@@ -317,9 +383,9 @@ export default function ImportModal({
       const first = grp.rows[0];
       const csvLine = first.idx + 2;
       const num = grp.key;
-      const label = `Factura ${num || '(sin número)'} · fila ${csvLine}`;
+      const label = `${tr('Factura', 'Invoice')} ${num || tr('(sin número)', '(no number)')} · ${tr('fila', 'row')} ${csvLine}`;
 
-      if (!num) { failedRows.push({ label, reason: 'Falta el número de factura' }); continue; }
+      if (!num) { failedRows.push({ label, reason: tr('Falta el número de factura', 'Missing invoice number') }); continue; }
       if (existingRefs.has(num)) { skipped++; continue; }
 
       const clientId = await resolveClient(first.row);
@@ -332,7 +398,7 @@ export default function ImportModal({
         if (projId && !job) unlinkedLines++;
         if (job) linkedJobIds.add(job.id);
         lineItems.push({
-          description: get(row, 'line_description') || `Factura ${num}`,
+          description: get(row, 'line_description') || `${tr('Factura', 'Invoice')} ${num}`,
           qty: parseNum(get(row, 'line_qty')) ?? 1,
           rate: parseNum(get(row, 'line_rate')) ?? 0,
           job_id: job?.id ?? null,
@@ -341,8 +407,6 @@ export default function ImportModal({
 
       const { subtotal, tax, total } = computeTotals(lineItems, 0, 0);
       const st = statusOf(get(first.row, 'status'));
-      const issue = parseDate(get(first.row, 'issue_date'));
-      const due = parseDate(get(first.row, 'due_date'));
 
       const { data: invoice, error } = await supabase.from('invoices').insert({
         business_id: businessId,
@@ -352,8 +416,8 @@ export default function ImportModal({
         type: 'invoice',
         status: st.status,
         language: lang,
-        issue_date: issue,
-        due_date: due,
+        issue_date: parseDate(get(first.row, 'issue_date')),
+        due_date: parseDate(get(first.row, 'due_date')),
         sent_at: st.sent_at,
         paid_at: st.paid_at,
         line_items: lineItems,
@@ -365,11 +429,10 @@ export default function ImportModal({
         notes: null,
       }).select('id').single();
 
-      if (error || !invoice) { failedRows.push({ label, reason: error?.message ?? 'No se pudo crear la factura' }); continue; }
+      if (error || !invoice) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear la factura', 'Could not create invoice') }); continue; }
       existingRefs.add(num);
       success++;
 
-      // Link the invoice's client to its jobs + mark them invoiced.
       if (clientId) await supabase.from('invoice_clients').insert({ invoice_id: invoice.id, client_id: clientId });
       const jobIds = Array.from(linkedJobIds);
       if (jobIds.length) {
@@ -382,9 +445,15 @@ export default function ImportModal({
 
     if (autoCreated.length) {
       const shown = autoCreated.slice(0, 15).join(', ');
-      notes.push(`${autoCreated.length} cliente(s) creado(s) automáticamente: ${shown}${autoCreated.length > 15 ? '…' : ''}`);
+      notes.push(tr(
+        `${autoCreated.length} cliente(s) creado(s) automáticamente: ${shown}${autoCreated.length > 15 ? '…' : ''}`,
+        `${autoCreated.length} client(s) auto-created: ${shown}${autoCreated.length > 15 ? '…' : ''}`,
+      ));
     }
-    if (unlinkedLines) notes.push(`${unlinkedLines} línea(s) sin Project ID coincidente — se guardaron en la factura pero sin trabajo vinculado.`);
+    if (unlinkedLines) notes.push(tr(
+      `${unlinkedLines} línea(s) sin Project ID coincidente — se guardaron en la factura pero sin trabajo vinculado.`,
+      `${unlinkedLines} line(s) with no matching Project ID — kept on the invoice but not linked to a job.`,
+    ));
 
     return { success, skipped, failedRows, notes };
   };
@@ -392,7 +461,9 @@ export default function ImportModal({
   const runImport = async () => {
     setImporting(true);
     try {
-      const res = mode === 'jobs' ? await runJobsImport() : await runInvoicesImport();
+      const res = mode === 'jobs' ? await runJobsImport()
+        : mode === 'employees' ? await runEmployeesImport()
+        : await runInvoicesImport();
       setResult(res);
       setStep('done');
       onDone?.();
@@ -407,27 +478,35 @@ export default function ImportModal({
   const downloadTemplate = () => {
     const cols = fields.map(f => f.label);
     const example = mode === 'jobs'
-      ? ['Proyecto-8384902e', '5 Tower Moved - Chris Shook', 'Noel', '6/10/2026', '10', 'Alex Cardona,Allan Guerra', 'Noel Ramirez', '5', 'Mover pivot viejo', '', '1297',
-         // Custom fields: for a dropdown, show its first option as a sample value.
-         ...jobTemplates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''))]
-      : ['257556', 'Proyecto-2f72fa1b', '6 Tower Move & 2 Tower Disassembled', '1', '2159.50', 'Russell Hendrich', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'pennyhendrich@gmail.com', '6/8/2026', '6/22/2026', 'enviada'];
-    // Quote any cell containing a comma/quote/newline so values like
-    // "Alex Cardona,Allan Guerra" stay in ONE column instead of splitting and
-    // shifting the whole row. Lead ﻿ (BOM) so Excel reads UTF-8 — without
-    // it accented headers like "Líder" get mangled.
+      ? ['Proyecto-001', en ? 'Job name' : 'Nombre del trabajo', en ? 'Lead name' : 'Nombre del líder', '6/10/2026', '10', en ? 'Worker One,Worker Two' : 'Trabajador Uno,Trabajador Dos', en ? 'Driver name' : 'Nombre del manejador', '5', en ? 'Notes' : 'Notas', '', '1297',
+         ...templates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''))]
+      : mode === 'employees'
+      ? [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'worker', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678',
+         ...templates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''))]
+      : ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'sent' : 'enviada'];
+    // Quote any cell with a comma/quote/newline so multi-name values stay in ONE
+    // column. Lead BOM (﻿) so Excel reads UTF-8 and accents render correctly.
     const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const csv = '﻿' + [cols.map(csvCell).join(','), example.map(csvCell).join(',')].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = mode === 'jobs' ? 'plantilla-trabajos.csv' : 'plantilla-facturas.csv'; a.click();
+    a.href = url;
+    a.download = mode === 'jobs' ? 'plantilla-trabajos.csv' : mode === 'employees' ? 'plantilla-equipo.csv' : 'plantilla-facturas.csv';
+    a.click();
     URL.revokeObjectURL(url);
   };
 
   const title =
-    step === 'done' ? 'Importación completada'
-    : mode === 'jobs' ? 'Importar trabajos'
-    : 'Importar facturas';
+    step === 'done' ? tr('Importación completada', 'Import complete')
+    : mode === 'jobs' ? tr('Importar trabajos', 'Import jobs')
+    : mode === 'employees' ? tr('Importar equipo', 'Import team')
+    : tr('Importar facturas', 'Import invoices');
+
+  const uploadHint =
+    mode === 'jobs' ? tr('Sube un CSV con un renglón por proyecto. Incluye la columna Project ID para poder enlazar las facturas después.', 'Upload a CSV with one row per project. Include the Project ID column so invoices can link to them later.')
+    : mode === 'employees' ? tr('Sube un CSV con un renglón por persona. Las personas se vinculan por nombre — usa los mismos nombres en tus trabajos y facturas.', 'Upload a CSV with one row per person. People are matched by name — use the same names across your jobs and invoices.')
+    : tr('Sube un CSV con un renglón por línea de factura. Importa los trabajos PRIMERO — cada línea se enlaza al trabajo por su Project ID.', 'Upload a CSV with one row per invoice line. Import jobs FIRST — each line links to its job by Project ID.');
 
   return (
     <>
@@ -438,11 +517,7 @@ export default function ImportModal({
         <div className="flex flex-col gap-4">
           {step === 'upload' && (
             <>
-              <p className="text-xs text-gray-500">
-                {mode === 'jobs'
-                  ? 'Sube un CSV con un renglón por proyecto. Incluye la columna Project ID para poder enlazar las facturas después.'
-                  : 'Sube un CSV con un renglón por línea de factura. Importa los trabajos PRIMERO — cada línea se enlaza al trabajo por su Project ID.'}
-              </p>
+              <p className="text-xs text-gray-500">{uploadHint}</p>
               <div
                 onClick={() => fileRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -451,16 +526,16 @@ export default function ImportModal({
                 className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
                   dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary hover:bg-primary/5'}`}>
                 <Upload size={32} className={`mx-auto mb-3 ${dragOver ? 'text-primary' : 'text-gray-300'}`} />
-                <p className="text-sm font-semibold text-gray-700">Arrastra tu archivo CSV aquí</p>
-                <p className="text-xs text-gray-400 mt-1">o haz clic para seleccionarlo</p>
+                <p className="text-sm font-semibold text-gray-700">{tr('Arrastra tu archivo CSV aquí', 'Drag your CSV file here')}</p>
+                <p className="text-xs text-gray-400 mt-1">{tr('o haz clic para seleccionarlo', 'or click to choose it')}</p>
               </div>
               <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-700">¿No sabes qué columnas usar?</p>
-                  <p className="text-xs text-gray-400">Descarga la plantilla de ejemplo y llénala.</p>
+                  <p className="text-xs font-semibold text-gray-700">{tr('¿No sabes qué columnas usar?', 'Not sure which columns to use?')}</p>
+                  <p className="text-xs text-gray-400">{tr('Descarga la plantilla de ejemplo y llénala.', 'Download the example template and fill it in.')}</p>
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
-                  <Download size={14} /> Descargar plantilla
+                  <Download size={14} /> {tr('Descargar plantilla', 'Download template')}
                 </button>
               </div>
             </>
@@ -469,7 +544,7 @@ export default function ImportModal({
           {step === 'map' && (
             <>
               <p className="text-xs text-gray-500">
-                <span className="font-medium text-gray-900">{rows.length} renglones detectados</span>. Empareja cada campo con la columna de tu archivo.
+                <span className="font-medium text-gray-900">{rows.length} {tr('renglones detectados', 'rows detected')}</span>. {tr('Empareja cada campo con la columna de tu archivo.', 'Match each field to a column in your file.')}
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                 {fields.map(f => {
@@ -479,14 +554,14 @@ export default function ImportModal({
                       <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
                         {f.label}
                         {f.required && <span className="text-red-400">*</span>}
-                        {f.isCustom && <span className="text-blue-400 text-[10px]">personalizado</span>}
+                        {f.isCustom && <span className="text-blue-400 text-[10px]">{tr('personalizado', 'custom')}</span>}
                       </label>
                       <select
                         value={colMap[f.key] ?? ''}
                         onChange={e => setColMap(m => ({ ...m, [f.key]: e.target.value }))}
                         className={`w-full rounded-xl border px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
                           unmapped ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-                        <option value="">— No importar —</option>
+                        <option value="">{tr('— No importar —', '— Don\'t import —')}</option>
                         {headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
@@ -494,15 +569,15 @@ export default function ImportModal({
                 })}
               </div>
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setStep('upload')} fullWidth>Cancelar</Button>
-                <Button onClick={() => setStep('preview')} fullWidth>Ver datos</Button>
+                <Button variant="secondary" onClick={() => setStep('upload')} fullWidth>{tr('Cancelar', 'Cancel')}</Button>
+                <Button onClick={() => setStep('preview')} fullWidth>{tr('Ver datos', 'View data')}</Button>
               </div>
             </>
           )}
 
           {step === 'preview' && (
             <>
-              <p className="text-xs text-gray-500">Mostrando {Math.min(5, rows.length)} de {rows.length} renglones.</p>
+              <p className="text-xs text-gray-500">{tr('Mostrando', 'Showing')} {Math.min(5, rows.length)} {tr('de', 'of')} {rows.length} {tr('renglones', 'rows')}.</p>
               <div className="overflow-x-auto rounded-xl border border-gray-100">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50">
@@ -526,8 +601,8 @@ export default function ImportModal({
                 </table>
               </div>
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setStep('map')} fullWidth>Atrás</Button>
-                <Button onClick={runImport} loading={importing} fullWidth>Importar {rows.length} renglones</Button>
+                <Button variant="secondary" onClick={() => setStep('map')} fullWidth>{tr('Atrás', 'Back')}</Button>
+                <Button onClick={runImport} loading={importing} fullWidth>{tr('Importar', 'Import')} {rows.length} {tr('renglones', 'rows')}</Button>
               </div>
             </>
           )}
@@ -538,11 +613,11 @@ export default function ImportModal({
                 <CheckCircle2 size={32} className="text-emerald-500" />
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900">¡Listo!</p>
+                <p className="text-lg font-bold text-gray-900">{tr('¡Listo!', 'Done!')}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  <span className="text-emerald-600 font-semibold">{result.success} {mode === 'jobs' ? 'trabajos' : 'facturas'} importadas</span>
-                  {result.skipped > 0 && <span className="text-gray-500 font-semibold ml-2">· {result.skipped} ya existían</span>}
-                  {result.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {result.failedRows.length} con error</span>}
+                  <span className="text-emerald-600 font-semibold">{result.success} {noun} {tr('importadas', 'imported')}</span>
+                  {result.skipped > 0 && <span className="text-gray-500 font-semibold ml-2">· {result.skipped} {tr('ya existían', 'already existed')}</span>}
+                  {result.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {result.failedRows.length} {tr('con error', 'with errors')}</span>}
                 </p>
               </div>
 
@@ -556,7 +631,7 @@ export default function ImportModal({
                 <div className="w-full">
                   <button type="button" onClick={() => setShowErrors(v => !v)}
                     className="w-full text-sm font-medium text-primary py-1 hover:underline">
-                    {showErrors ? 'Ocultar detalles ▴' : 'Ver detalles de los errores ▾'}
+                    {showErrors ? tr('Ocultar detalles ▴', 'Hide details ▴') : tr('Ver detalles de los errores ▾', 'See error details ▾')}
                   </button>
                   {showErrors && (
                     <div className="mt-2 max-h-64 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
@@ -567,13 +642,13 @@ export default function ImportModal({
                         </div>
                       ))}
                       {result.failedRows.length > 50 && (
-                        <div className="px-4 py-2 text-xs text-gray-600 text-center bg-red-100/40">+ {result.failedRows.length - 50} más</div>
+                        <div className="px-4 py-2 text-xs text-gray-600 text-center bg-red-100/40">+ {result.failedRows.length - 50} {tr('más', 'more')}</div>
                       )}
                     </div>
                   )}
                 </div>
               )}
-              <Button onClick={close} fullWidth>Cerrar</Button>
+              <Button onClick={close} fullWidth>{tr('Cerrar', 'Close')}</Button>
             </div>
           )}
         </div>

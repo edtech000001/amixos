@@ -29,11 +29,13 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
 import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import ImportModal from '@/components/dashboard/ImportModal';
 
 interface RawEmployee {
   id: string;
   first_name: string;
   last_name: string;
+  check_name: string | null;
   phone: string | null;
   role: string;
   pay_type: string;
@@ -80,6 +82,7 @@ interface RawTimesheet {
 const EMPTY_EMP = {
   first_name: '',
   last_name: '',
+  check_name: '',
   phone: '',
   // Role hidden from the form — app-user RBAC lives in Ajustes → Equipo.
   // Default stays 'worker' so existing DB checks/queries still pass.
@@ -120,6 +123,7 @@ export default function EmpleadosPage() {
   //   'edit' — pencil in 'view' mode flips here (full form)
   //   'add'  — Agregar button (full form, no pre-existing row)
   const [empModal, setEmpModal] = useState<'add' | 'edit' | 'view' | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [tsModal, setTsModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selEmp, setSelEmp] = useState<RawEmployee | null>(null);
@@ -140,6 +144,7 @@ export default function EmpleadosPage() {
   // required" error. first_name is omitted — it has its own dedicated error.
   const REQUIRED_FIELD_LABELS: Record<string, string> = {
     last_name: t.modal.lastNameLabel,
+    check_name: t.modal.checkNameLabel,
     phone: t.modal.phoneLabel,
     email: t.modal.emailLabel,
     birthday: t.modal.birthdayLabel,
@@ -226,6 +231,18 @@ export default function EmpleadosPage() {
 
   useEffect(() => { loadPeople(); loadTimesheets(); loadTemplates(); }, [business]);
 
+  // Opened from Ajustes → Empleados "Importar equipo" via ?import=1.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('import') === '1') {
+      setImportOpen(true);
+      params.delete('import');
+      const qs = params.toString();
+      window.history.replaceState(null, '', `/dashboard/empleados${qs ? `?${qs}` : ''}`);
+    }
+  }, []);
+
   const empList: EmployeeListItem[] = useMemo(() => employees.map(e => ({
     id: e.id,
     firstName: e.first_name,
@@ -267,6 +284,7 @@ export default function EmpleadosPage() {
     setEmpForm({
       first_name: e.first_name,
       last_name: e.last_name,
+      check_name: e.check_name ?? '',
       phone: e.phone ?? '',
       role: e.role,
       pay_type: e.pay_type,
@@ -294,6 +312,7 @@ export default function EmpleadosPage() {
     // DB NOT NULL constraint; everything else is opt-in.
     const fieldValues: Record<string, string> = {
       last_name: empForm.last_name,
+      check_name: empForm.check_name,
       phone: empForm.phone,
       email: empForm.email,
       birthday: empForm.birthday,
@@ -331,6 +350,7 @@ export default function EmpleadosPage() {
     const payload = {
       ...empForm,
       pay_rate: payRateNum,
+      check_name: empForm.check_name.trim() || null,
       birthday: empForm.birthday || null,
       hire_date: empForm.hire_date || null,
       email: empForm.email.trim() || null,
@@ -507,6 +527,17 @@ export default function EmpleadosPage() {
 
   const modals = (
     <>
+      {business && (
+        <ImportModal
+          open={importOpen}
+          mode="employees"
+          businessId={business.id}
+          supabase={supabase}
+          templates={templates.map(t => ({ field_key: t.field_key, field_label: t.field_label, field_type: t.field_type, field_options: t.field_options }))}
+          onClose={() => setImportOpen(false)}
+          onDone={loadPeople}
+        />
+      )}
       <Modal
         open={empModal === 'add'}
         onClose={() => confirmEmpClose(() => setEmpModal(null))}
@@ -619,6 +650,7 @@ export default function EmpleadosPage() {
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
           <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder} value={empForm.first_name} onChange={e => setEmpForm(f => ({ ...f, first_name: e.target.value }))} />
           <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder} value={empForm.last_name} onChange={e => setEmpForm(f => ({ ...f, last_name: e.target.value }))} />
+          <Input label={rLabel('check_name', t.modal.checkNameLabel)} placeholder={t.modal.checkNamePlaceholder} hint={t.modal.checkNameHint} value={empForm.check_name} onChange={e => setEmpForm(f => ({ ...f, check_name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
             <Input label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder} value={formatPhoneInput(empForm.phone)} onChange={e => setEmpForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
             <Input label={rLabel('email', t.modal.emailLabel)} type="email" placeholder={t.modal.emailPlaceholder} value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} />

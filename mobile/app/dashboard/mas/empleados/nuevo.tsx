@@ -38,6 +38,7 @@ interface FieldTemplate {
 interface EmpForm {
   first_name: string;
   last_name: string;
+  check_name: string;
   phone: string;
   role: string;
   pay_type: string;
@@ -57,6 +58,7 @@ interface EmpForm {
 const EMPTY_EMP: EmpForm = {
   first_name: '',
   last_name: '',
+  check_name: '',
   phone: '',
   // Hidden from the form — app-user RBAC lives in Ajustes → Equipo. Default
   // stays 'worker' so existing DB checks/queries still pass.
@@ -103,6 +105,7 @@ export default function NuevoEmpleadoRoute() {
   // required" error. first_name is omitted — it has its own dedicated error.
   const REQUIRED_FIELD_LABELS: Record<string, string> = {
     last_name: t.modal.lastNameLabel,
+    check_name: t.modal.checkNameLabel,
     phone: t.modal.phoneLabel,
     email: t.modal.emailLabel,
     birthday: t.modal.birthdayLabel,
@@ -157,6 +160,7 @@ export default function NuevoEmpleadoRoute() {
     // DB NOT NULL constraint; everything else is opt-in.
     const fieldValues: Record<string, string> = {
       last_name: form.last_name,
+      check_name: form.check_name,
       phone: form.phone,
       email: form.email,
       birthday: form.birthday,
@@ -197,6 +201,7 @@ export default function NuevoEmpleadoRoute() {
         ...form,
         business_id: business.id,
         pay_rate: payRateNum,
+        check_name: form.check_name.trim() || null,
         birthday: form.birthday || null,
         hire_date: form.hire_date || null,
         email: form.email.trim() || null,
@@ -250,6 +255,9 @@ export default function NuevoEmpleadoRoute() {
             value={form.first_name} onChangeText={(v) => setForm((f) => ({ ...f, first_name: v }))} />
           <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder}
             value={form.last_name} onChangeText={(v) => setForm((f) => ({ ...f, last_name: v }))} />
+          <Input label={rLabel('check_name', t.modal.checkNameLabel)} placeholder={t.modal.checkNamePlaceholder}
+            hint={t.modal.checkNameHint}
+            value={form.check_name} onChangeText={(v) => setForm((f) => ({ ...f, check_name: v }))} />
           <Input label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder}
             value={formatPhoneInput(form.phone)}
             onChangeText={(v) => setForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
@@ -336,16 +344,29 @@ export default function NuevoEmpleadoRoute() {
 function CustomFieldInput({
   template, value, onChange,
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
+  const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
   if (template.field_type === 'date') {
     return <DatePicker label={label} value={value} onChange={onChange} />;
   }
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Two buttons (Yes / No), three states '' | 'true' | 'false' — nothing is
+    // pre-selected so a required field forces a pick. Tapping active clears it.
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-        <Text className="text-base text-gray-900 flex-1">{label}</Text>
-        <Toggle value={on} onValueChange={(v) => onChange(v ? 'true' : 'false')} />
+      <View>
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <View className="flex-row gap-2">
+          <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+          </Pressable>
+          <Pressable onPress={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

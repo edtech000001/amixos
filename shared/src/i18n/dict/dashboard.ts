@@ -892,6 +892,9 @@ export type DashboardDict = {
       firstNamePlaceholder: string;
       lastNameLabel: string;
       lastNamePlaceholder: string;
+      checkNameLabel: string;
+      checkNamePlaceholder: string;
+      checkNameHint: string;
       phoneLabel: string;
       phonePlaceholder: string;
       roleLabel: string;
@@ -1377,6 +1380,7 @@ export type DashboardDict = {
       optionsPlaceholder: string;
       requiredToggleLabel: string;
       addFieldBtn: string;
+      updateFieldBtn: string;
       errorNameRequired: string;
       errorDuplicate: string;
       errorSave: string;
@@ -2933,6 +2937,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         firstNamePlaceholder: 'Juan',
         lastNameLabel: 'Apellido',
         lastNamePlaceholder: 'Pérez',
+        checkNameLabel: 'Nombre para el cheque',
+        checkNamePlaceholder: 'Nombre legal completo',
+        checkNameHint: 'Déjalo en blanco si es igual al nombre y apellido.',
         phoneLabel: 'Teléfono',
         phonePlaceholder: '+1 (555) 000-0000',
         roleLabel: 'Puesto',
@@ -3422,6 +3429,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         optionsPlaceholder: 'Opción 1\nOpción 2\nOpción 3',
         requiredToggleLabel: 'Campo requerido',
         addFieldBtn: 'Agregar campo',
+        updateFieldBtn: 'Actualizar campo',
         errorNameRequired: 'El nombre del campo es requerido',
         errorDuplicate: 'Ya existe un campo con ese nombre',
         errorSave: 'Error al guardar.',
@@ -4978,6 +4986,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         firstNamePlaceholder: 'John',
         lastNameLabel: 'Last name',
         lastNamePlaceholder: 'Doe',
+        checkNameLabel: 'Check name',
+        checkNamePlaceholder: 'Full legal name',
+        checkNameHint: 'Leave blank if it\'s the same as the first and last name.',
         phoneLabel: 'Phone',
         phonePlaceholder: '+1 (555) 000-0000',
         roleLabel: 'Role',
@@ -5467,6 +5478,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         optionsPlaceholder: 'Option 1\nOption 2\nOption 3',
         requiredToggleLabel: 'Required field',
         addFieldBtn: 'Add field',
+        updateFieldBtn: 'Update field',
         errorNameRequired: 'Field name is required',
         errorDuplicate: 'A field with that name already exists',
         errorSave: 'Save error.',

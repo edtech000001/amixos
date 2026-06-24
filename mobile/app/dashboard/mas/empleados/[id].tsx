@@ -63,6 +63,7 @@ interface RawEmployee {
   id: string;
   first_name: string;
   last_name: string;
+  check_name: string | null;
   phone: string | null;
   role: string;
   pay_type: string;
@@ -128,7 +129,7 @@ export default function EmpleadoDetailRoute() {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState({
-    first_name: '', last_name: '', phone: '', role: 'worker',
+    first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
     pay_type: 'hourly', pay_rate: 0, email: '',
     birthday: '', hire_date: '',
     address: '', city: '', state: '', zip_code: '',
@@ -167,7 +168,7 @@ export default function EmpleadoDetailRoute() {
       id: i.id, email: i.email, role: i.role as Role, acceptUrl: i.acceptUrl,
     })));
     setForm({
-      first_name: e.first_name, last_name: e.last_name, phone: e.phone ?? '', role: e.role,
+      first_name: e.first_name, last_name: e.last_name, check_name: e.check_name ?? '', phone: e.phone ?? '', role: e.role,
       pay_type: e.pay_type, pay_rate: e.pay_rate,
       email: e.email ?? '', birthday: e.birthday ?? '', hire_date: e.hire_date ?? '',
       address: e.address ?? '', city: e.city ?? '', state: e.state ?? '', zip_code: e.zip_code ?? '',
@@ -187,6 +188,7 @@ export default function EmpleadoDetailRoute() {
     setSaving(true); setError('');
     const payload = {
       ...form,
+      check_name: form.check_name.trim() || null,
       birthday: form.birthday || null,
       hire_date: form.hire_date || null,
       email: form.email.trim() || null,
@@ -455,8 +457,9 @@ export default function EmpleadoDetailRoute() {
 
         {isView ? (
           <View className="gap-4">
-            {(employee.phone || employee.email) ? (
+            {(employee.check_name || employee.phone || employee.email) ? (
               <InfoCard title={t.modal.basicInfoHeading}>
+                <InfoRow Icon={Hash} label={t.modal.checkNameLabel} value={employee.check_name} />
                 <InfoRow Icon={Phone} label={t.modal.phoneLabel} value={employee.phone}
                   onPress={employee.phone ? () => Linking.openURL(`tel:${employee.phone}`) : undefined} />
                 <InfoRow Icon={Mail} label={t.modal.emailLabel} value={employee.email}
@@ -512,6 +515,9 @@ export default function EmpleadoDetailRoute() {
               value={form.first_name} onChangeText={(v) => setForm((f) => ({ ...f, first_name: v }))} />
             <Input label={t.modal.lastNameLabel} placeholder={t.modal.lastNamePlaceholder}
               value={form.last_name} onChangeText={(v) => setForm((f) => ({ ...f, last_name: v }))} />
+            <Input label={t.modal.checkNameLabel} placeholder={t.modal.checkNamePlaceholder}
+              hint={t.modal.checkNameHint}
+              value={form.check_name} onChangeText={(v) => setForm((f) => ({ ...f, check_name: v }))} />
             <Input label={t.modal.phoneLabel} placeholder={t.modal.phonePlaceholder}
               value={formatPhoneInput(form.phone)}
               onChangeText={(v) => setForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
@@ -812,16 +818,29 @@ function InfoRow({
 function CustomFieldInput({
   template, value, onChange,
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
+  const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
   if (template.field_type === 'date') {
     return <DatePicker label={label} value={value} onChange={onChange} />;
   }
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Two buttons (Yes / No), three states '' | 'true' | 'false' — nothing is
+    // pre-selected so a required field forces a pick. Tapping active clears it.
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-        <Text className="text-base text-gray-900 flex-1">{label}</Text>
-        <Toggle value={on} onValueChange={(v) => onChange(v ? 'true' : 'false')} />
+      <View>
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <View className="flex-row gap-2">
+          <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+          </Pressable>
+          <Pressable onPress={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

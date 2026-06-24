@@ -60,7 +60,7 @@ const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'fac
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
 const DEFAULT_EMPLOYEE_FIELD_KEYS = [
-  'first_name', 'last_name', 'phone', 'email',
+  'first_name', 'last_name', 'check_name', 'phone', 'email',
   'hire_date', 'birthday',
   'pay_type', 'pay_rate',
   'address', 'city', 'state', 'zip_code',
@@ -760,6 +760,7 @@ export default function AjustesPage() {
   const EMP_FIELD_LABELS: Record<string, string> = {
     first_name: tEmpModal.firstNameLabel.replace(' *', ''),
     last_name: tEmpModal.lastNameLabel,
+    check_name: tEmpModal.checkNameLabel,
     phone: tEmpModal.phoneLabel,
     email: tEmpModal.emailLabel,
     birthday: tEmpModal.birthdayLabel,
@@ -1787,8 +1788,8 @@ export default function AjustesPage() {
                   <Upload size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">Importar trabajos</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Sube un CSV de tus proyectos (AppSheet). Descarga la plantilla dentro.</p>
+                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import jobs' : 'Importar trabajos'}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Upload a CSV of your projects (AppSheet). Download the template inside.' : 'Sube un CSV de tus proyectos (AppSheet). Descarga la plantilla dentro.'}</p>
                 </div>
                 <span className="text-xl text-gray-400">›</span>
               </Link>
@@ -2008,9 +2009,11 @@ export default function AjustesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">Categorías de materiales y mano de obra</h2>
+                    <h2 className="text-base font-semibold text-gray-900">{locale === 'en' ? 'Material & labor categories' : 'Categorías de materiales y mano de obra'}</h2>
                     <p className="text-xs text-gray-400 mt-1">
-                      Muestra las etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si solo cobras por cantidad × precio (p. ej. pies × tarifa).
+                      {locale === 'en'
+                        ? 'Shows Labor / Material / Equipment / Other tags on job line items. Turn off if you only bill by quantity × price (e.g. feet × rate).'
+                        : 'Muestra las etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si solo cobras por cantidad × precio (p. ej. pies × tarifa).'}
                     </p>
                   </div>
                   <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
@@ -2191,6 +2194,22 @@ export default function AjustesPage() {
           {/* ══ EMPLEADOS ═══════════════════════════════════════════════ */}
           {tab === 'empleados' && (
             <div className="flex flex-col gap-5">
+              {/* Import team (CSV) — migration action. Opens the import wizard
+                 on the Empleados list via ?import=1. */}
+              <Link
+                href="/dashboard/empleados?import=1"
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Upload size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import team' : 'Importar equipo'}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Bulk-add all your people from a CSV. Download the template inside.' : 'Agrega a todo tu equipo desde un CSV. Descarga la plantilla dentro.'}</p>
+                </div>
+                <span className="text-xl text-gray-400">›</span>
+              </Link>
+
               {/* Roles editor lives inside Team settings. */}
               {can.manageMembers(currentRole) && (
                 <Link
@@ -2507,8 +2526,8 @@ export default function AjustesPage() {
                   <Upload size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">Importar facturas</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Sube un CSV de facturas (FileMaker). Importa los trabajos primero para enlazarlas.</p>
+                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import invoices' : 'Importar facturas'}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Upload a CSV of invoices (FileMaker). Import jobs first so they link.' : 'Sube un CSV de facturas (FileMaker). Importa los trabajos primero para enlazarlas.'}</p>
                 </div>
                 <span className="text-xl text-gray-400">›</span>
               </Link>
@@ -2774,7 +2793,7 @@ export default function AjustesPage() {
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setEditFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={updateTemplate} loading={savingTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+            <Button onClick={updateTemplate} loading={savingTpl} fullWidth>{t.customFields.updateFieldBtn}</Button>
           </div>
         </div>
       </Modal>
@@ -2853,7 +2872,7 @@ export default function AjustesPage() {
           {empTplError && <p className="text-xs text-red-500">{empTplError}</p>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setEditEmpFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={updateEmpTemplate} loading={savingEmpTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+            <Button onClick={updateEmpTemplate} loading={savingEmpTpl} fullWidth>{t.customFields.updateFieldBtn}</Button>
           </div>
         </div>
       </Modal>
@@ -2932,7 +2951,7 @@ export default function AjustesPage() {
           {jobTplError && <p className="text-xs text-red-500">{jobTplError}</p>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setEditJobFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={updateJobTemplate} loading={savingJobTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+            <Button onClick={updateJobTemplate} loading={savingJobTpl} fullWidth>{t.customFields.updateFieldBtn}</Button>
           </div>
         </div>
       </Modal>
@@ -3011,7 +3030,7 @@ export default function AjustesPage() {
           {invoiceTplError && <p className="text-xs text-red-500">{invoiceTplError}</p>}
           <div className="flex gap-3 pt-1">
             <Button variant="secondary" onClick={() => setEditInvoiceFieldModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={updateInvoiceTemplate} loading={savingInvoiceTpl} fullWidth>{tc.buttons.saveChanges}</Button>
+            <Button onClick={updateInvoiceTemplate} loading={savingInvoiceTpl} fullWidth>{t.customFields.updateFieldBtn}</Button>
           </div>
         </div>
       </Modal>

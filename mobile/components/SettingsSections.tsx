@@ -80,7 +80,7 @@ const DEFAULT_CLIENT_FIELD_KEYS = [
 ] as const;
 
 const DEFAULT_EMPLOYEE_FIELD_KEYS = [
-  'first_name', 'last_name', 'phone', 'email',
+  'first_name', 'last_name', 'check_name', 'phone', 'email',
   'hire_date', 'birthday',
   'pay_type', 'pay_rate',
   'address', 'city', 'state', 'zip_code',
@@ -2179,6 +2179,7 @@ export function EmpleadosSection() {
   const FIELD_LABELS: Record<string, string> = {
     first_name: tEmpModal.firstNameLabel.replace(' *', ''),
     last_name: tEmpModal.lastNameLabel,
+    check_name: tEmpModal.checkNameLabel,
     phone: tEmpModal.phoneLabel,
     email: tEmpModal.emailLabel,
     birthday: tEmpModal.birthdayLabel,
@@ -2646,7 +2647,7 @@ function FieldTemplateModal({
         ) : null}
 
         <Button onPress={onSave} fullWidth>
-          <Text className="text-white font-semibold">{t.customFields.addFieldBtn}</Text>
+          <Text className="text-white font-semibold">{editing ? t.customFields.updateFieldBtn : t.customFields.addFieldBtn}</Text>
         </Button>
       </View>
     </Modal>

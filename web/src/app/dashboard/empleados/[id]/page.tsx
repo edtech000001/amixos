@@ -34,6 +34,7 @@ interface RawEmployee {
   id: string;
   first_name: string;
   last_name: string;
+  check_name: string | null;
   phone: string | null;
   role: string;
   pay_type: string;
@@ -91,7 +92,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   // 'view' = read-only; 'edit' = form. Pencil flips view→edit, Save flips back.
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [form, setForm] = useState({
-    first_name: '', last_name: '', phone: '', role: 'worker',
+    first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
     pay_type: 'hourly', pay_rate: '', email: '', birthday: '', hire_date: '',
     address: '', city: '', state: '', zip_code: '',
     emergency_contact_name: '', emergency_contact_phone: '',
@@ -108,6 +109,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const rLabel = (key: string, base: string) => (reqFlags[key] ? `${base} *` : base);
   const REQUIRED_FIELD_LABELS: Record<string, string> = {
     last_name: t.modal.lastNameLabel,
+    check_name: t.modal.checkNameLabel,
     phone: t.modal.phoneLabel,
     email: t.modal.emailLabel,
     birthday: t.modal.birthdayLabel,
@@ -148,7 +150,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
       id: i.id, email: i.email, role: i.role as Role, acceptUrl: i.acceptUrl,
     })));
     setForm({
-      first_name: e.first_name, last_name: e.last_name, phone: e.phone ?? '', role: e.role,
+      first_name: e.first_name, last_name: e.last_name, check_name: e.check_name ?? '', phone: e.phone ?? '', role: e.role,
       pay_type: e.pay_type, pay_rate: e.pay_rate ? String(e.pay_rate) : '',
       email: e.email ?? '', birthday: e.birthday ?? '', hire_date: e.hire_date ?? '',
       address: e.address ?? '', city: e.city ?? '', state: e.state ?? '', zip_code: e.zip_code ?? '',
@@ -190,6 +192,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     const payRateNum = parseFloat(form.pay_rate) || 0;
     const payload = {
       ...form, pay_rate: payRateNum,
+      check_name: form.check_name.trim() || null,
       birthday: form.birthday || null, hire_date: form.hire_date || null,
       email: form.email.trim() || null, address: form.address.trim() || null,
       city: form.city.trim() || null, state: form.state || null,
@@ -480,9 +483,10 @@ function ViewBody({ emp, templates, t, payTypes, payUnit }: {
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {(emp.phone || emp.email) ? (
+      {(emp.check_name || emp.phone || emp.email) ? (
         <>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
+          <ViewRow label={t.modal.checkNameLabel} value={emp.check_name} />
           <ViewRow label={t.modal.phoneLabel} value={emp.phone} />
           <ViewRow label={t.modal.emailLabel} value={emp.email} />
         </>
@@ -530,7 +534,7 @@ function ViewBody({ emp, templates, t, payTypes, payUnit }: {
 
 // ─── Editable form body ─────────────────────────────────────────────────
 type FormState = {
-  first_name: string; last_name: string; phone: string; role: string;
+  first_name: string; last_name: string; check_name: string; phone: string; role: string;
   pay_type: string; pay_rate: string; email: string;
   birthday: string; hire_date: string; address: string; city: string;
   state: string; zip_code: string;
@@ -557,6 +561,7 @@ function EditForm({
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
       <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder} value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} />
       <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder} value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
+      <Input label={rLabel('check_name', t.modal.checkNameLabel)} placeholder={t.modal.checkNamePlaceholder} hint={t.modal.checkNameHint} value={form.check_name} onChange={e => setForm(f => ({ ...f, check_name: e.target.value }))} />
       <div className="grid grid-cols-2 gap-3">
         <Input label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder} value={formatPhoneInput(form.phone)} onChange={e => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
         <Input label={rLabel('email', t.modal.emailLabel)} type="email" placeholder={t.modal.emailPlaceholder} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
@@ -713,14 +718,28 @@ function CustomFieldInput({ template, value, onChange }: {
   value: string;
   onChange: (v: string) => void;
 }) {
+  const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
   if (template.field_type === 'boolean') {
-    const on = value === 'true';
+    // Two buttons (Yes / No) with three states — '', 'true', 'false'. Nothing
+    // is pre-selected, so a required field forces an explicit choice. Clicking
+    // the active button clears it back to "unanswered".
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
     return (
-      <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-        <span className="text-sm text-gray-900">{label}</span>
-        <Toggle checked={on} onChange={v => onChange(v ? 'true' : 'false')} />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.yes}
+          </button>
+          <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.no}
+          </button>
+        </div>
+      </div>
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {

@@ -167,7 +167,7 @@ export default function TrabajosPage() {
         mode="jobs"
         businessId={business.id}
         supabase={supabase}
-        jobTemplates={jobTemplates}
+        templates={jobTemplates}
         onClose={() => setImportOpen(false)}
         onDone={load}
       />
