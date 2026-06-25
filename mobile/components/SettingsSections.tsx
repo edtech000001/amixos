@@ -2929,6 +2929,7 @@ function FieldTemplateModal({
 // ─── Account section ──────────────────────────────────────────────────────
 export function AccountSection() {
   const supabase = createSupabaseClient();
+  const router = useRouter();
   const { user, currentRole } = useApp();
   const logout = useAuthStore((s) => s.logout);
   const businesses = useAuthStore((s) => s.businesses);
@@ -3099,6 +3100,19 @@ export function AccountSection() {
             })}
           </View>
         )}
+
+        {/* Create another business — reuses the existing onboarding flow. */}
+        <Pressable
+          onPress={() => router.push('/onboarding')}
+          className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
+        >
+          <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+            <Plus size={16} color="#4F46E5" />
+          </View>
+          <Text className="flex-1 text-sm font-semibold text-primary">
+            {full.dashboard.workspaces.createBusiness}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Password card */}

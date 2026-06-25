@@ -28,6 +28,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -86,6 +87,13 @@ export interface OnboardingScreenProps {
    * route wrapper does the actual DB writes + post-finish navigation.
    */
   onFinish: (data: OnboardingData) => Promise<{ ok: true } | { ok: false; error?: string }>;
+  /**
+   * Sign out and return to login. Onboarding is otherwise a dead-end — a user
+   * who signed in with the "wrong" provider (e.g. Apple when they already have
+   * a Google account) needs an escape hatch. When provided, a "Cerrar sesión"
+   * link shows at the top.
+   */
+  onLogout?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +135,7 @@ const US_STATES = [
 // react-native-web) and mobile (via Expo) render the same component.
 // Platform-specific concerns (Supabase, image pickers, post-finish nav)
 // are supplied by the route-level wrapper on each platform.
-export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, onLogout }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
 
@@ -177,6 +185,21 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
       contentContainerClassName="flex-grow items-center justify-center px-4 py-10"
       keyboardShouldPersistTaps="handled"
     >
+      {/* Escape hatch — sign out / use a different account. Onboarding has no
+          other way back to login for a wrong-provider sign-in. */}
+      {onLogout && (
+        <View className="w-full max-w-lg flex-row justify-end mb-4">
+          <Pressable
+            onPress={onLogout}
+            hitSlop={8}
+            className="flex-row items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-2 active:opacity-70"
+          >
+            <LogOut size={14} color="#4B5563" />
+            <Text className="text-xs font-semibold text-gray-600">{full.common.loadError.signOut}</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Progress bar */}
       <View className="w-full max-w-lg mb-8">
         <View className="flex-row justify-between mb-2">

@@ -22,10 +22,6 @@ export async function signInWithGoogle(): Promise<OAuthResult> {
   return signInWithBrowserOAuth('google');
 }
 
-export async function signInWithFacebook(): Promise<OAuthResult> {
-  return signInWithBrowserOAuth('facebook');
-}
-
 // Browser-based OAuth via Supabase. Works on iOS + Android. Requires the
 // provider to be enabled in Supabase → Authentication → Providers and the
 // redirect URI added to its allowed list.

@@ -129,6 +129,10 @@ export default function OnboardingRoute() {
       // SIGNED_IN-time fetch and bounces us back to /onboarding.
       await useAuthStore.getState().refetchBusiness();
 
+      // Make the just-created business the active workspace. Harmless for the
+      // first business; for additional ones it switches the app's data context.
+      useAuthStore.getState().setActiveBusiness(business.id);
+
       router.replace('/(tabs)');
       return { ok: true as const };
     } catch (err: any) {
@@ -137,5 +141,11 @@ export default function OnboardingRoute() {
     }
   };
 
-  return <OnboardingScreen onPickLogo={handlePickLogo} onFinish={handleFinish} />;
+  return (
+    <OnboardingScreen
+      onPickLogo={handlePickLogo}
+      onFinish={handleFinish}
+      onLogout={() => { void useAuthStore.getState().logout(); }}
+    />
+  );
 }

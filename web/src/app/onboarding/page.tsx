@@ -137,6 +137,10 @@ export default function OnboardingPage() {
         if (modulesError) console.warn('Modules insert warning:', modulesError.message);
       }
 
+      // Make the newly created business the active workspace on landing.
+      // (Matches ACTIVE_BIZ_COOKIE in web/src/lib/AppContext.tsx.)
+      document.cookie = 'amixos-active-business=' + encodeURIComponent(business.id) + '; path=/; max-age=31536000; samesite=lax';
+
       // Hard redirect so SSR session cookies are read fresh on the next page.
       window.location.href = '/dashboard';
       return { ok: true as const };
@@ -148,7 +152,11 @@ export default function OnboardingPage() {
 
   return (
     <>
-      <OnboardingScreen onPickLogo={handlePickLogo} onFinish={handleFinish} />
+      <OnboardingScreen
+        onPickLogo={handlePickLogo}
+        onFinish={handleFinish}
+        onLogout={async () => { await supabase.auth.signOut(); window.location.href = '/auth/login'; }}
+      />
       <input
         ref={inputRef}
         type="file"

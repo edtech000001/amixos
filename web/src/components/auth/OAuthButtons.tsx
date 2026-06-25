@@ -14,7 +14,7 @@ export function OAuthButtons({ mode = 'login' }: OAuthButtonsProps) {
   const supabase = createSupabaseClient();
   const [loading, setLoading] = useState<string | null>(null);
 
-  const signInWith = async (provider: 'google' | 'apple' | 'facebook') => {
+  const signInWith = async (provider: 'google' | 'apple') => {
     setLoading(provider);
     await supabase.auth.signInWithOAuth({
       provider,
@@ -52,18 +52,6 @@ export function OAuthButtons({ mode = 'login' }: OAuthButtonsProps) {
         <AppleIcon />
         {label} Apple
       </Button>
-
-      {/* Facebook */}
-      <Button
-        variant="secondary"
-        fullWidth
-        loading={loading === 'facebook'}
-        onClick={() => signInWith('facebook')}
-        className="flex items-center gap-3"
-      >
-        <FacebookIcon />
-        {label} Facebook
-      </Button>
     </div>
   );
 }
@@ -82,11 +70,5 @@ const GoogleIcon = () => (
 const AppleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 814 1000">
     <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.5 134.4-317.3 266.5-317.3 99.4 0 173.3 65.8 233.5 65.8 56.4 0 144.1-69.9 216.9-69.9 33.9 0 108.2 12.8 162.1 64.4zM617.3 174.3c-30.8 34.9-86.9 61.7-135.1 61.7-7.7 0-15.4-.6-22.4-1.9 1.3-47.6 22.4-96.8 56.3-130.5 34.6-34.9 90.7-61 135.1-61 6.4 0 12.8.6 19.2 1.3-1.3 50.2-20.7 99.4-53.1 130.4z"/>
-  </svg>
-);
-
-const FacebookIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
-    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
   </svg>
 );

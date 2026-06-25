@@ -50,7 +50,11 @@ export function useProtectedRoute() {
         return;
       }
 
-      if (!business && !inOnboarding && !inAuthGroup) {
+      // No business yet → onboarding. This must also fire from the auth group:
+      // an OAuth sign-in (Apple/Google) for a brand-new account lands the user
+      // here while still on /auth/login, and unlike email register there's no
+      // manual nav to onboarding. Only `inOnboarding` guards against a loop.
+      if (!business && !inOnboarding) {
         router.replace('/onboarding');
         return;
       }

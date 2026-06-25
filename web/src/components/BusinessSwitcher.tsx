@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check, Building2 } from 'lucide-react';
+import { ChevronDown, Check, Building2, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 
@@ -21,6 +22,7 @@ export function BusinessSwitcher() {
   const { businesses, business, activeBusinessId, setActiveBusiness } = useApp();
   const { t: full } = useLang();
   const tw = full.dashboard.workspaces;
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -51,19 +53,6 @@ export function BusinessSwitcher() {
   }, [open]);
 
   if (!business) return null;
-
-  if (businesses.length <= 1) {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Building2 size={16} className="text-primary" />
-        </div>
-        <span className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
-          {business.name}
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="relative">
@@ -121,6 +110,18 @@ export function BusinessSwitcher() {
               </button>
             );
           })}
+          <button
+            onClick={() => {
+              setOpen(false);
+              router.push('/onboarding');
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 border-t border-gray-100 hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Plus size={16} className="text-primary" />
+            </div>
+            <span className="text-sm font-semibold text-primary">{tw.createBusiness}</span>
+          </button>
         </div>,
             document.body,
           )

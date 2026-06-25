@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -148,6 +148,7 @@ export default function AjustesPage() {
   const tc = full.common;
   const tFields = full.dashboard.clients.fields;
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'negocio');
   const [logoutOpen, setLogoutOpen] = useState(false);
 
@@ -2837,7 +2838,17 @@ export default function AjustesPage() {
               {/* Businesses you belong to — read-only list; switching active
                   business still happens via the header BusinessSwitcher. */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.businessesHeading}</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.businessesHeading}</h2>
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push('/onboarding')}
+                    className="shrink-0 flex items-center gap-1.5"
+                  >
+                    <Plus size={16} />
+                    {full.dashboard.workspaces.createBusiness}
+                  </Button>
+                </div>
                 <p className="text-xs text-gray-400 mb-4">{t.account.businessesSubtitle}</p>
                 {businesses.length === 0 ? (
                   <p className="text-sm text-gray-500">{t.account.businessesEmpty}</p>

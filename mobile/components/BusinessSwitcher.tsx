@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal } from 'react-native';
-import { ChevronDown, Check, Building2, CloudOff } from 'lucide-react-native';
+import { ChevronDown, Check, Building2, CloudOff, Plus } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/lib/auth/store';
 import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -25,25 +26,12 @@ export function BusinessSwitcher() {
   const isOnline = useNetworkStore((s) => s.isOnline);
   const { t: full } = useLang();
   const tw = full.dashboard.workspaces;
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const active = businesses.find((b) => b.id === activeId);
 
   if (!active) return null;
-
-  // Single-business users don't need a switcher — just show the name.
-  if (businesses.length <= 1) {
-    return (
-      <View className="flex-row items-start gap-2">
-        <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
-          <Building2 size={16} color="#4F46E5" />
-        </View>
-        <Text className="flex-1 text-base font-semibold text-gray-900 pt-1" numberOfLines={3}>
-          {active.name}
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <>
@@ -137,6 +125,24 @@ export function BusinessSwitcher() {
                 );
               })}
             </View>
+
+            {/* Create another business — reuses the existing onboarding flow.
+                Single-business owners reach it here too (the switcher now
+                always renders). */}
+            <Pressable
+              onPress={() => {
+                setOpen(false);
+                router.push('/onboarding');
+              }}
+              className="flex-row items-center gap-3 mt-2 pt-3 px-4 pb-1 border-t border-gray-100 active:opacity-70"
+            >
+              <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+                <Plus size={16} color="#4F46E5" />
+              </View>
+              <Text className="flex-1 text-sm font-semibold text-primary">
+                {tw.createBusiness}
+              </Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </RNModal>
