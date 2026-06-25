@@ -54,10 +54,19 @@ import {
   type JobAlertColor,
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
-import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/jobSections';
+import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+
+// Settings-only labels for the layout section headers (the form draws its own).
+const JOB_SECTION_LABELS: Record<JobLayoutSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  location: { es: 'Ubicación', en: 'Location' },
+  schedule: { es: 'Horario', en: 'Schedule' },
+  workers: { es: 'Trabajadores', en: 'Workers' },
+  notes: { es: 'Notas', en: 'Notes' },
+};
 import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
-import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical } from 'lucide-react-native';
+import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput } from 'lucide-react-native';
 
 type FieldType = 'text' | 'number' | 'date' | 'boolean' | 'select';
 
@@ -1024,9 +1033,10 @@ export function TrabajosSection() {
 export function TrabajosFieldsSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const tJobNew = full.dashboard.jobs.new;
+  const secLabel = (s: JobLayoutSection) => (locale === 'en' ? JOB_SECTION_LABELS[s].en : JOB_SECTION_LABELS[s].es);
 
   const FIELD_LABELS: Record<string, string> = {
     client_id: tJobNew.clientLabel,
@@ -1054,6 +1064,12 @@ export function TrabajosFieldsSection() {
   const [dbOrder, setDbOrder] = useState<string[]>(
     Array.isArray(business?.job_field_order) ? (business!.job_field_order as string[]) : [],
   );
+  const [localJobLayout, setLocalJobLayout] = useState<JobFieldEntry[]>(
+    Array.isArray(business?.job_field_layout) ? (business!.job_field_layout as JobFieldEntry[]) : [],
+  );
+  const [dbJobLayout, setDbJobLayout] = useState<JobFieldEntry[]>(
+    Array.isArray(business?.job_field_layout) ? (business!.job_field_layout as JobFieldEntry[]) : [],
+  );
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
   // Per-field show/hide (eye toggle). Saves on flip, separate from the draft.
@@ -1071,6 +1087,8 @@ export function TrabajosFieldsSection() {
       setRequired(r); setDbRequired(r);
       const o = Array.isArray(business.job_field_order) ? (business.job_field_order as string[]) : [];
       setLocalOrder(o); setDbOrder(o);
+      const lay = Array.isArray(business.job_field_layout) ? (business.job_field_layout as JobFieldEntry[]) : [];
+      setLocalJobLayout(lay); setDbJobLayout(lay);
       setHidden(parseHiddenFields(business.job_field_hidden));
     }
   }, [business]);
@@ -1155,15 +1173,27 @@ export function TrabajosFieldsSection() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedLayout: JobFieldEntry[] = displayLayout
+        .map((e) => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is JobFieldEntry => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         job_field_required: required,
         job_field_order: resolvedOrder,
+        job_field_layout: resolvedLayout,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
       await refetchBusiness();
       await loadTemplates();
       setLocalOrder(resolvedOrder); setDbOrder(resolvedOrder); setDbRequired(required);
+      setLocalJobLayout(resolvedLayout); setDbJobLayout(resolvedLayout);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
       setReqMsg({ text: t.requiredFields.saveError, isError: true });
@@ -1175,8 +1205,9 @@ export function TrabajosFieldsSection() {
     () =>
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
-      JSON.stringify(dbOrder) !== JSON.stringify(localOrder),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder],
+      JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
+      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbJobLayout, localJobLayout],
   );
 
   useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
@@ -1265,6 +1296,56 @@ export function TrabajosFieldsSection() {
     setModalOpen(false);
   };
 
+  // ── Field layout (section + within-section order) ──
+  const allJobKeys = useMemo(
+    () => [...DEFAULT_JOB_FIELD_KEYS, ...templates.map((tpl) => `custom:${tpl.id}`)],
+    [templates],
+  );
+  const displayLayout = useMemo(
+    () => parseJobLayout(localJobLayout, allJobKeys),
+    [localJobLayout, allJobKeys],
+  );
+
+  const moveFieldInSection = (key: string, dir: 'up' | 'down') => {
+    const layout = [...displayLayout];
+    const idx = layout.findIndex((e) => e.key === key);
+    if (idx < 0) return;
+    const section = layout[idx].section;
+    let swap = -1;
+    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
+    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
+    if (swap < 0) return;
+    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
+    setLocalJobLayout(layout); setReqMsg(null);
+  };
+
+  const moveFieldToSection = (key: string, section: JobLayoutSection) => {
+    const layout = displayLayout.filter((e) => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = JOB_LAYOUT_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex((e) => JOB_LAYOUT_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
+    }
+    layout.splice(insertAt, 0, { key, section });
+    setLocalJobLayout(layout); setReqMsg(null);
+  };
+
+  const promptMoveSection = (key: string, current: JobLayoutSection) => {
+    Alert.alert(
+      locale === 'en' ? 'Move to section' : 'Mover a sección',
+      undefined,
+      [
+        ...JOB_LAYOUT_SECTIONS.filter((s) => s !== current).map((s) => ({
+          text: secLabel(s),
+          onPress: () => moveFieldToSection(key, s),
+        })),
+        { text: full.common.buttons.cancel, style: 'cancel' as const },
+      ],
+    );
+  };
+
   return (
     <View className="gap-4">
       <View className="flex-row items-start justify-between">
@@ -1287,97 +1368,76 @@ export function TrabajosFieldsSection() {
         </Pressable>
       </View>
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <SortableList<UnifiedItem & { id: string }>
-          items={items.map((it) => ({ ...it, id: it.key }))}
-          onReorder={onDragReorder}
-          renderItem={(item, i, { drag, isActive }) => {
-            const isLast = i === items.length - 1;
-            return (
-              <View
-                className={`flex-row items-center gap-2 px-4 py-3 ${
-                  isActive ? 'bg-primary/5' : ''
-                } ${isLast ? '' : 'border-b border-gray-50'}`}
-              >
-                <Pressable onLongPress={drag} delayLongPress={120} hitSlop={6} className="p-1 -ml-1 active:opacity-60">
-                  <GripVertical size={14} color="#9CA3AF" />
-                </Pressable>
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-1.5 flex-wrap">
-                    {item.kind === 'custom' ? (
-                      <Sparkles size={12} color="#4F46E5" />
-                    ) : null}
-                    <Text className="text-sm text-gray-900">{item.label}</Text>
-                    {item.kind === 'custom' && item.tpl.required ? (
-                      <View className="bg-orange-50 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] text-orange-600 font-semibold">
-                          {t.customFields.requiredBadge}
-                        </Text>
+      <View className="gap-4">
+        {JOB_LAYOUT_SECTIONS.map((section) => {
+          const keys = fieldsInSection(displayLayout, section);
+          if (keys.length === 0) return null;
+          return (
+            <View key={section}>
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                {keys.map((key, i) => {
+                  const isCustom = key.startsWith('custom:');
+                  const tpl = isCustom ? templates.find((jt) => `custom:${jt.id}` === key) : null;
+                  const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
+                  const firstInSec = i === 0;
+                  const lastInSec = i === keys.length - 1;
+                  return (
+                    <View key={key} className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                      <View className="flex-col">
+                        <Pressable onPress={() => moveFieldInSection(key, 'up')} disabled={firstInSec} className="px-1 active:opacity-60">
+                          <ChevronUp size={14} color={firstInSec ? '#D1D5DB' : '#6B7280'} />
+                        </Pressable>
+                        <Pressable onPress={() => moveFieldInSection(key, 'down')} disabled={lastInSec} className="px-1 active:opacity-60">
+                          <ChevronDown size={14} color={lastInSec ? '#D1D5DB' : '#6B7280'} />
+                        </Pressable>
                       </View>
-                    ) : null}
-                  </View>
-                  {item.kind === 'custom' ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">
-                      {t.fieldTypes[item.tpl.field_type]}
-                      {item.tpl.field_type === 'select' && item.tpl.field_options?.length
-                        ? ` · ${item.tpl.field_options.join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View className="flex-col">
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'up')}
-                    disabled={i === 0}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'down')}
-                    disabled={isLast}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </View>
-
-                {item.kind === 'standard' ? (
-                  <View className="flex-row items-center gap-1">
-                    {!JOB_FIELDS_ALWAYS_SHOWN.includes(item.key) && (
-                      <Pressable onPress={() => toggleHidden(item.key)} className="p-2 rounded-lg active:bg-gray-100">
-                        {hidden[item.key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                      <View className="flex-1">
+                        <View className="flex-row items-center gap-1.5 flex-wrap">
+                          {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
+                          <Text className="text-sm text-gray-900">{label}</Text>
+                          {isCustom && tpl?.required ? (
+                            <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                              <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        {isCustom && tpl ? (
+                          <Text className="text-xs text-gray-400 mt-0.5">
+                            {t.fieldTypes[tpl.field_type]}
+                            {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
+                        <FolderInput size={15} color="#6B7280" />
                       </Pressable>
-                    )}
-                    <Toggle
-                      value={!!required[item.key]}
-                      onValueChange={() => toggleRequired(item.key)}
-                    />
-                  </View>
-                ) : (
-                  <>
-                    <Pressable
-                      onPress={() => {
-                        setEditing(item.tpl);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg active:bg-blue-50"
-                    >
-                      <Pencil size={14} color="#3B82F6" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeTemplate(item.tpl.id)}
-                      className="p-2 rounded-lg active:bg-red-50"
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </Pressable>
-                  </>
-                )}
+                      {!isCustom ? (
+                        <View className="flex-row items-center gap-1">
+                          {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                            <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
+                              {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                            </Pressable>
+                          )}
+                          <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
+                        </View>
+                      ) : (
+                        <>
+                          <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
+                            <Pencil size={14} color="#3B82F6" />
+                          </Pressable>
+                          <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
+                            <Trash2 size={14} color="#EF4444" />
+                          </Pressable>
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
-            );
-          }}
-        />
+            </View>
+          );
+        })}
       </View>
       <StatusMsg msg={reqMsg} />
 

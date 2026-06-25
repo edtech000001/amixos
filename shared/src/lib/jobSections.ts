@@ -33,6 +33,66 @@ export function isJobFieldHidden(hidden: Record<string, boolean>, key: string): 
   return !!hidden[key];
 }
 
+// ── Field layout (section + order) ──────────────────────────────────────────
+// Sections a field can belong to, in display order. 'general' holds the top
+// fields (client/priority/description) and has no heading on the form.
+export type JobLayoutSection = 'general' | 'location' | 'schedule' | 'workers' | 'notes';
+export const JOB_LAYOUT_SECTIONS: readonly JobLayoutSection[] = ['general', 'location', 'schedule', 'workers', 'notes'] as const;
+
+export interface JobFieldEntry { key: string; section: JobLayoutSection; }
+
+// Default home section + order for every standard field.
+export const DEFAULT_JOB_LAYOUT: JobFieldEntry[] = [
+  { key: 'client_id', section: 'general' },
+  { key: 'priority', section: 'general' },
+  { key: 'description', section: 'general' },
+  { key: 'coordinates', section: 'location' },
+  { key: 'job_address', section: 'location' },
+  { key: 'job_city', section: 'location' },
+  { key: 'job_state', section: 'location' },
+  { key: 'scheduled_date', section: 'schedule' },
+  { key: 'time_start', section: 'schedule' },
+  { key: 'time_end', section: 'schedule' },
+  { key: 'total_hours', section: 'schedule' },
+  { key: 'assigned_workers', section: 'workers' },
+  { key: 'worker_notes', section: 'notes' },
+  { key: 'internal_notes', section: 'notes' },
+];
+
+const DEFAULT_SECTION_FOR = (key: string): JobLayoutSection =>
+  DEFAULT_JOB_LAYOUT.find(e => e.key === key)?.section ?? 'general';
+
+/** Merge the stored layout with the full set of valid field keys (standard +
+ *  custom). Keeps stored order/section for known keys, drops stale ones, and
+ *  appends any missing keys in their default section (custom fields default to
+ *  'notes'). Tolerates null/garbage. */
+export function parseJobLayout(raw: unknown, allKeys: string[]): JobFieldEntry[] {
+  const valid = new Set(allKeys);
+  const stored = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const out: JobFieldEntry[] = [];
+  for (const item of stored) {
+    const key = (item && typeof item === 'object' ? (item as { key?: unknown }).key : null);
+    const section = (item && typeof item === 'object' ? (item as { section?: unknown }).section : null);
+    if (typeof key === 'string' && valid.has(key) && !seen.has(key)) {
+      const sec = (typeof section === 'string' && (JOB_LAYOUT_SECTIONS as readonly string[]).includes(section))
+        ? (section as JobLayoutSection)
+        : (key.startsWith('custom:') ? 'notes' : DEFAULT_SECTION_FOR(key));
+      seen.add(key);
+      out.push({ key, section: sec });
+    }
+  }
+  for (const key of allKeys) {
+    if (!seen.has(key)) out.push({ key, section: key.startsWith('custom:') ? 'notes' : DEFAULT_SECTION_FOR(key) });
+  }
+  return out;
+}
+
+/** Field keys assigned to a section, in their layout order. */
+export function fieldsInSection(layout: JobFieldEntry[], section: JobLayoutSection): string[] {
+  return layout.filter(e => e.section === section).map(e => e.key);
+}
+
 /** True if at least one field in the section is still shown (so we render the
  *  section heading). */
 export function jobSectionHasVisibleField(hidden: Record<string, boolean>, section: JobSectionKey): boolean {

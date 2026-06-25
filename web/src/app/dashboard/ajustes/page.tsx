@@ -11,7 +11,17 @@ import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/stor
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
-import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/jobSections';
+import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+
+// Settings-only labels for the layout section headers (the form draws its own
+// headings). Bilingual inline — no dict keys needed.
+const JOB_SECTION_LABELS: Record<JobLayoutSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  location: { es: 'Ubicación', en: 'Location' },
+  schedule: { es: 'Horario', en: 'Schedule' },
+  workers: { es: 'Trabajadores', en: 'Workers' },
+  notes: { es: 'Notas', en: 'Notes' },
+};
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -964,6 +974,14 @@ export default function AjustesPage() {
   const [dbJobOrder, setDbJobOrder] = useState<string[]>(
     Array.isArray(business?.job_field_order) ? (business!.job_field_order as string[]) : []
   );
+  // Field layout (section + within-section order). Source of truth for the
+  // grouped list + the data-driven job form. Saved with the job-fields card.
+  const [localJobLayout, setLocalJobLayout] = useState<JobFieldEntry[]>(
+    Array.isArray(business?.job_field_layout) ? (business!.job_field_layout as JobFieldEntry[]) : []
+  );
+  const [dbJobLayout, setDbJobLayout] = useState<JobFieldEntry[]>(
+    Array.isArray(business?.job_field_layout) ? (business!.job_field_layout as JobFieldEntry[]) : []
+  );
   const [savingJobRequired, setSavingJobRequired] = useState(false);
   const [jobReqMsg, setJobReqMsg] = useState('');
   const [jobReqMsgIsError, setJobReqMsgIsError] = useState(false);
@@ -984,6 +1002,9 @@ export default function AjustesPage() {
       const o = Array.isArray(business.job_field_order) ? (business.job_field_order as string[]) : [];
       setLocalJobOrder(o);
       setDbJobOrder(o);
+      const lay = Array.isArray(business.job_field_layout) ? (business.job_field_layout as JobFieldEntry[]) : [];
+      setLocalJobLayout(lay);
+      setDbJobLayout(lay);
     }
   }, [business]);
 
@@ -996,6 +1017,47 @@ export default function AjustesPage() {
     setDbJobTemplates(fetched);
   }, [business, supabase]);
   useEffect(() => { loadJobTemplates(); }, [loadJobTemplates]);
+
+  // Every selectable field key (standard + current custom templates).
+  const allJobKeys = useMemo(
+    () => [...DEFAULT_JOB_FIELD_KEYS, ...jobTemplates.map(tpl => `custom:${tpl.id}`)],
+    [jobTemplates],
+  );
+  // The layout to render/save: stored edits cleaned + every key present (custom
+  // fields auto-appear in their default group until explicitly moved).
+  const displayLayout = useMemo(
+    () => parseJobLayout(localJobLayout, allJobKeys),
+    [localJobLayout, allJobKeys],
+  );
+
+  // Swap a field with its nearest neighbour in the SAME section.
+  const moveFieldInSection = (key: string, dir: 'up' | 'down') => {
+    const layout = [...displayLayout];
+    const idx = layout.findIndex(e => e.key === key);
+    if (idx < 0) return;
+    const section = layout[idx].section;
+    let swap = -1;
+    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
+    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
+    if (swap < 0) return;
+    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
+    setLocalJobLayout(layout);
+  };
+
+  // Reassign a field to another section, appended to the end of that group.
+  const moveFieldToSection = (key: string, section: JobLayoutSection) => {
+    const layout = displayLayout.filter(e => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      // Empty target section — slot it in at the right section boundary.
+      const tIdx = JOB_LAYOUT_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex(e => JOB_LAYOUT_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
+    }
+    layout.splice(insertAt, 0, { key, section });
+    setLocalJobLayout(layout);
+  };
 
   const toggleJobRequired = (key: string) => {
     setJobRequired(prev => ({ ...prev, [key]: !prev[key] }));
@@ -1049,9 +1111,21 @@ export default function AjustesPage() {
         })
         .filter((k): k is string => k !== null);
 
+      // Resolve any temp custom-field ids in the layout to their real ids.
+      const resolvedLayout: JobFieldEntry[] = displayLayout
+        .map(e => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is JobFieldEntry => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         job_field_required: jobRequired,
         job_field_order: resolvedOrder,
+        job_field_layout: resolvedLayout,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -1059,6 +1133,8 @@ export default function AjustesPage() {
       await loadJobTemplates();
       setLocalJobOrder(resolvedOrder);
       setDbJobOrder(resolvedOrder);
+      setLocalJobLayout(resolvedLayout);
+      setDbJobLayout(resolvedLayout);
       setDbJobRequired(jobRequired);
 
       setJobReqMsgIsError(false);
@@ -1164,8 +1240,9 @@ export default function AjustesPage() {
     () =>
       isDirty(dbJobTemplates, jobTemplates) ||
       JSON.stringify(dbJobRequired) !== JSON.stringify(jobRequired) ||
-      JSON.stringify(dbJobOrder) !== JSON.stringify(localJobOrder),
-    [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder],
+      JSON.stringify(dbJobOrder) !== JSON.stringify(localJobOrder) ||
+      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout),
+    [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder, dbJobLayout, localJobLayout],
   );
 
   // Crew mode (draft pattern — single boolean, but unified with the rest).
@@ -1601,10 +1678,11 @@ export default function AjustesPage() {
     setJobTemplates(dbJobTemplates);
     setJobRequired(dbJobRequired);
     setLocalJobOrder(dbJobOrder);
+    setLocalJobLayout(dbJobLayout);
     setJobAlerts(dbJobAlerts);
     setCrewMode(dbCrewMode);
     setPipelineMsg(''); setJobReqMsg(''); setJobAlertsMsg(''); setCrewModeMsg('');
-  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobAlerts, dbCrewMode]);
+  }, [dbPipelineDisabled, dbJobTemplates, dbJobRequired, dbJobOrder, dbJobLayout, dbJobAlerts, dbCrewMode]);
 
   const anyDirty = clientsDirty || employeesDirty || invoicesDirty || invoiceThemeDirty || trabajosDirty;
 
@@ -1850,89 +1928,88 @@ export default function AjustesPage() {
                 </div>
                 <p className="text-xs text-gray-400 mb-5">{t.jobsSection.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  <SortableList<UnifiedItem & { id: string }>
-                    items={jobItems.map(it => ({ ...it, id: it.key }))}
-                    onReorder={onJobDragReorder}
-                    renderItem={(item, i, { attributes, listeners }) => {
-                      const isLast = i === jobItems.length - 1;
-                      return (
-                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                          <button
-                            type="button"
-                            {...attributes}
-                            {...listeners}
-                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
-                            aria-label="Drag to reorder"
-                          >
-                            <GripVertical size={14} />
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {item.kind === 'custom' && (
-                                <Sparkles size={12} className="text-primary shrink-0"/>
-                              )}
-                              <span className="text-sm text-gray-900">{item.label}</span>
-                              {item.kind === 'custom' && item.tpl.required && (
-                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
-                              )}
-                            </div>
-                            {item.kind === 'custom' && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {FIELD_TYPES[item.tpl.field_type]}
-                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col shrink-0">
-                            <button
-                              onClick={() => moveJobItem(item.key, 'up')}
-                              disabled={i === 0}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move up"
-                            >
-                              <ChevronUp size={14} className="text-gray-500"/>
-                            </button>
-                            <button
-                              onClick={() => moveJobItem(item.key, 'down')}
-                              disabled={isLast}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move down"
-                            >
-                              <ChevronDown size={14} className="text-gray-500"/>
-                            </button>
-                          </div>
-
-                          {item.kind === 'standard' ? (
-                            <>
-                              {!JOB_FIELDS_ALWAYS_SHOWN.includes(item.key) && (
-                                <button onClick={() => toggleJobFieldHidden(item.key)} disabled={savingJobHidden}
-                                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
-                                  aria-label={jobHidden[item.key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
-                                  {jobHidden[item.key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
-                                </button>
-                              )}
-                              <Toggle checked={!!jobRequired[item.key]} onChange={() => toggleJobRequired(item.key)} />
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => openEditJobTemplate(item.tpl)}
-                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.edit}>
-                                <Pencil size={13} className="text-blue-400"/>
-                              </button>
-                              <button onClick={() => removeJobTemplate(item.tpl.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.delete}>
-                                <Trash2 size={13} className="text-red-400"/>
-                              </button>
-                            </>
-                          )}
+                <div className="space-y-4 mb-5">
+                  {JOB_LAYOUT_SECTIONS.map((section) => {
+                    const keys = fieldsInSection(displayLayout, section);
+                    if (keys.length === 0) return null;
+                    const secLabel = locale === 'en' ? JOB_SECTION_LABELS[section].en : JOB_SECTION_LABELS[section].es;
+                    return (
+                      <div key={section}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                          {keys.map((key, i) => {
+                            const isCustom = key.startsWith('custom:');
+                            const tpl = isCustom ? jobTemplates.find(jt => `custom:${jt.id}` === key) : null;
+                            const label = isCustom ? (tpl?.field_label ?? key) : (JOB_FIELD_LABELS[key] ?? key);
+                            const firstInSec = i === 0;
+                            const lastInSec = i === keys.length - 1;
+                            return (
+                              <div key={key} className="flex items-center gap-2 px-4 py-3 bg-white">
+                                <div className="flex flex-col shrink-0">
+                                  <button onClick={() => moveFieldInSection(key, 'up')} disabled={firstInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-gray-500"/>
+                                  </button>
+                                  <button onClick={() => moveFieldInSection(key, 'down')} disabled={lastInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-gray-500"/>
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
+                                    <span className="text-sm text-gray-900">{label}</span>
+                                    {isCustom && tpl?.required && (
+                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                    )}
+                                  </div>
+                                  {isCustom && tpl && (
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {FIELD_TYPES[tpl.field_type]}
+                                      {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                <select
+                                  value={section}
+                                  onChange={(e) => moveFieldToSection(key, e.target.value as JobLayoutSection)}
+                                  className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                  aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
+                                >
+                                  {JOB_LAYOUT_SECTIONS.map(s => (
+                                    <option key={s} value={s}>{locale === 'en' ? JOB_SECTION_LABELS[s].en : JOB_SECTION_LABELS[s].es}</option>
+                                  ))}
+                                </select>
+                                {!isCustom ? (
+                                  <>
+                                    {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                                      <button onClick={() => toggleJobFieldHidden(key)} disabled={savingJobHidden}
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        aria-label={jobHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                        {jobHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                      </button>
+                                    )}
+                                    <Toggle checked={!!jobRequired[key]} onChange={() => toggleJobRequired(key)} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <button onClick={() => tpl && openEditJobTemplate(tpl)}
+                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      <Pencil size={13} className="text-blue-400"/>
+                                    </button>
+                                    <button onClick={() => tpl && removeJobTemplate(tpl.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      <Trash2 size={13} className="text-red-400"/>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    }}
-                  />
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {jobReqMsg && <p className={`text-xs mb-3 ${jobReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{jobReqMsg}</p>}
