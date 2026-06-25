@@ -25,6 +25,10 @@ import {
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
+import {
+  storageLimitBytes, wouldExceedStorage, storagePercent, formatBytes,
+} from '@amixos/shared/lib/storageLimits';
+import type { SubscriptionInfo } from '@amixos/shared/lib/subscription';
 
 // A breadcrumb crumb identifies a location: categoryId null = home (list of
 // top-level folders); folderId null = at a top-level folder's root.
@@ -33,10 +37,26 @@ interface Crumb { categoryId: string | null; folderId: string | null; label: str
 export default function FilesModule() {
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.files;
   const tc = full.common;
+  const es = locale === 'es';
   const canManage = can.manageFiles(currentRole);
+
+  const subInfo: SubscriptionInfo | null = business ? {
+    plan: business.plan,
+    subscription_status: business.subscription_status,
+    trial_ends_at: business.trial_ends_at,
+    current_period_end: business.current_period_end,
+  } : null;
+  const limitBytes = subInfo ? storageLimitBytes(subInfo) : null;
+  const [usedBytes, setUsedBytes] = useState<number | null>(null);
+
+  const loadUsage = async () => {
+    if (!business) return;
+    const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
+    setUsedBytes(Number(data ?? 0));
+  };
 
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [folders, setFolders] = useState<FileFolder[]>([]);
@@ -59,6 +79,7 @@ export default function FilesModule() {
     setFolders(tree.folders);
     setEntries(tree.entries);
     setLoading(false);
+    void loadUsage();
   };
   useEffect(() => { void load(); }, [business?.id]);
 
@@ -176,6 +197,38 @@ export default function FilesModule() {
 
   return (
     <div className="p-6">
+      {/* Storage usage meter */}
+      {business && (
+        limitBytes === null ? (
+          <p className="text-xs text-gray-400 mb-4">{es ? 'Almacenamiento ilimitado' : 'Unlimited storage'}</p>
+        ) : (
+          (() => {
+            const used = usedBytes ?? 0;
+            const pct = storagePercent(used, limitBytes);
+            const full100 = used >= limitBytes;
+            const barColor = full100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-primary';
+            return (
+              <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-medium text-gray-700">{es ? 'Almacenamiento' : 'Storage'}</span>
+                  <span className="text-xs text-gray-500">
+                    {formatBytes(used)} {es ? 'de' : 'of'} {formatBytes(limitBytes)}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
+                {full100 && (
+                  <p className="text-xs text-red-500 mt-1.5">
+                    {es ? 'Almacenamiento lleno · mejora tu plan' : 'Storage full · upgrade your plan'}
+                  </p>
+                )}
+              </div>
+            );
+          })()
+        )
+      )}
+
       {/* Header + breadcrumb */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -321,6 +374,9 @@ export default function FilesModule() {
           folderId={here.folderId}
           businessId={business!.id}
           userId={user?.id ?? null}
+          limitBytes={limitBytes}
+          subInfo={subInfo!}
+          es={es}
           onClose={() => setFileModal(null)}
           onSaved={() => { setFileModal(null); void load(); }}
         />
@@ -483,9 +539,11 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
   );
 }
 
-function FileModal({ editing, categoryId, folderId, businessId, userId, onClose, onSaved }: {
+function FileModal({ editing, categoryId, folderId, businessId, userId, limitBytes, subInfo, es, onClose, onSaved }: {
   editing: FileEntry | null; categoryId: string; folderId: string | null;
-  businessId: string; userId: string | null; onClose: () => void; onSaved: () => void;
+  businessId: string; userId: string | null;
+  limitBytes: number | null; subInfo: SubscriptionInfo; es: boolean;
+  onClose: () => void; onSaved: () => void;
 }) {
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
@@ -528,6 +586,15 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, onClose,
       if (kind === 'file' && !file) { setError(t.chooseFile); setSaving(false); return; }
       if (kind === 'link' && !url.trim()) { setError(t.linkUrlLabel); setSaving(false); return; }
       if (kind === 'file' && file) {
+        if (limitBytes != null) {
+          const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: businessId });
+          const used = Number(data ?? 0);
+          if (wouldExceedStorage(subInfo, used, file.size)) {
+            setError(es ? 'No hay suficiente almacenamiento. Mejora tu plan para subir más.' : 'Not enough storage. Upgrade your plan to upload more.');
+            setSaving(false);
+            return;
+          }
+        }
         const path = fileStoragePath(businessId, fileUid(), file.name);
         const { error: upErr } = await supabase.storage.from(FILES_BUCKET).upload(path, file, { contentType: file.type || undefined, upsert: false });
         if (upErr) throw new Error(upErr.message);

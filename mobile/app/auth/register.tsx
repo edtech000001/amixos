@@ -52,8 +52,8 @@ export default function RegisterRoute() {
     <RegisterScreen
       onRegister={handleRegister}
       onLoginPress={() => router.push('/auth/login')}
-      onTermsPress={() => openExternal('https://amixos.app/terms')}
-      onPrivacyPress={() => openExternal('https://amixos.app/privacy')}
+      onTermsPress={() => openExternal('https://amixos.com/terms')}
+      onPrivacyPress={() => openExternal('https://amixos.com/privacy')}
       oauthSlot={<OAuthButtons onSuccess={handleOAuthSuccess} />}
     />
   );

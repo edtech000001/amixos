@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from 'react';
 import { AppProvider, useApp } from '@/lib/AppContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
+import { TrialBanner } from '@/components/TrialBanner';
+import { BillingGate } from '@/components/BillingGate';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
   GoogleSyncBannerProvider,
@@ -76,7 +78,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="sticky top-0 z-30">
             <GoogleSyncBanner />
           </div>
+          <TrialBanner />
           {children}
+          <BillingGate />
         </main>
       </div>
     </GoogleSyncBannerProvider>

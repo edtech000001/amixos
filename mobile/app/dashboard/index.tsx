@@ -15,6 +15,7 @@ import { type DashboardLayout } from '@amixos/shared/lib/dashboardWidgets';
 import { isFieldOnly } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { FieldHomeContainer } from '@/components/FieldHomeContainer';
+import { TrialBanner } from '@/components/TrialBanner';
 
 // Field crew get a purpose-built home (assigned jobs + clock in/out) instead
 // of the owner's widget grid. Branch once the role is known.
@@ -169,6 +170,7 @@ function OwnerDashboardHome() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+      <TrialBanner />
       <DashboardHomeScreen
         loading={appLoading || loading}
         role={currentRole}

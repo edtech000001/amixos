@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal, Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Building2,
@@ -44,6 +44,15 @@ import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
+import { PricingModal } from '@/components/PricingModal';
+import {
+  isInTrial,
+  isTrialExpired,
+  trialDaysLeft,
+  activePlanKey,
+  type SubscriptionInfo,
+} from '@amixos/shared/lib/subscription';
+import { PLANS } from '@amixos/shared/lib/plans';
 import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
 import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
@@ -121,7 +130,7 @@ const EMPLOYEE_STANDARD_KEYS = EMPLOYEE_FIELD_SECTIONS.flatMap((s) => EMPLOYEE_S
 const INVOICE_STANDARD_KEYS = INVOICE_FIELD_SECTIONS.flatMap((s) => INVOICE_SECTION_FIELDS[s]);
 import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
-import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput } from 'lucide-react-native';
+import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink } from 'lucide-react-native';
 
 type FieldType = 'text' | 'number' | 'date' | 'boolean' | 'select';
 
@@ -2933,6 +2942,7 @@ export function AccountSection() {
   const { user, currentRole } = useApp();
   const logout = useAuthStore((s) => s.logout);
   const businesses = useAuthStore((s) => s.businesses);
+  const business = useAuthStore((s) => s.business);
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const roles = useAuthStore((s) => s.roles);
   const { t: full, locale } = useLang();
@@ -3020,6 +3030,82 @@ export function AccountSection() {
   // One-handed: a bottom sheet instead of a centered iOS alert.
   const [logoutOpen, setLogoutOpen] = useState(false);
   const confirmLogout = () => setLogoutOpen(true);
+
+  // Plans & pricing bottom sheet. Subscriptions are bought/managed on the WEB
+  // (iOS/Android can't sell digital subs in-app); this sheet shows the catalog
+  // and the web CTA.
+  const [pricingOpen, setPricingOpen] = useState(false);
+
+  // ── Subscription status — derived from the active business via shared
+  // helpers. Manage/buy actions hand off to the web billing page.
+  const openWebBilling = () =>
+    Linking.openURL(
+      `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+    ).catch(() => {});
+
+  const sub: SubscriptionInfo | null = business
+    ? {
+        plan: business.plan,
+        subscription_status: business.subscription_status,
+        trial_ends_at: business.trial_ends_at,
+        current_period_end: business.current_period_end,
+      }
+    : null;
+
+  const subState = (() => {
+    if (!sub) return null;
+    const status = sub.subscription_status;
+    if (status === 'trialing' && isInTrial(sub)) {
+      const days = trialDaysLeft(sub) ?? 0;
+      return {
+        title: locale === 'en' ? 'Free trial' : 'Prueba gratis',
+        detail:
+          locale === 'en'
+            ? `${days} ${days === 1 ? 'day' : 'days'} left`
+            : `te quedan ${days} ${days === 1 ? 'día' : 'días'}`,
+        action: 'plans' as const,
+      };
+    }
+    if (status === 'active') {
+      const planKey = activePlanKey(sub);
+      const plan = PLANS.find((p) => p.key === planKey);
+      const planName = plan ? plan.copy[locale].name : null;
+      // Only show a period when we actually have one (a real paid sub). A
+      // grandfathered/free 'active' business has no plan + no period — don't
+      // invent "· Mensual".
+      const period =
+        business?.billing_period === 'annual'
+          ? locale === 'en' ? 'Annual' : 'Anual'
+          : business?.billing_period === 'monthly'
+            ? locale === 'en' ? 'Monthly' : 'Mensual'
+            : null;
+      const detail = planName
+        ? (period ? `${planName} · ${period}` : planName)
+        : (locale === 'en' ? 'Active' : 'Activa');
+      return {
+        title: locale === 'en' ? 'Plan' : 'Plan',
+        detail,
+        action: 'web' as const,
+      };
+    }
+    if (status === 'past_due') {
+      return {
+        title: locale === 'en' ? 'Payment pending' : 'Pago pendiente',
+        detail: '',
+        action: 'web' as const,
+      };
+    }
+    // canceled / none / expired trial.
+    return {
+      title: locale === 'en' ? 'No active plan' : 'Sin plan activo',
+      detail: isTrialExpired(sub)
+        ? locale === 'en'
+          ? 'Your trial ended'
+          : 'Tu prueba terminó'
+        : '',
+      action: 'plans' as const,
+    };
+  })();
 
   return (
     <View className="gap-4">
@@ -3114,6 +3200,68 @@ export function AccountSection() {
           </Text>
         </Pressable>
       </View>
+
+      {/* Subscription — reflects the active business' plan/trial. Buying and
+          managing happen on the web (no in-app digital-subscription sale). */}
+      {subState ? (
+        <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-3">
+          <SectionHeader
+            icon={<CreditCard size={18} color="#4F46E5" />}
+            title={locale === 'en' ? 'Subscription' : 'Suscripción'}
+            subtitle={locale === 'en' ? 'Your plan and billing' : 'Tu plan y facturación'}
+          />
+          <View className="bg-gray-50 rounded-xl px-4 py-3">
+            <Text className="text-sm font-semibold text-gray-900">{subState.title}</Text>
+            {subState.detail ? (
+              <Text className="text-xs text-gray-500 mt-0.5">{subState.detail}</Text>
+            ) : null}
+          </View>
+
+          {subState.action === 'plans' ? (
+            <Pressable
+              onPress={() => setPricingOpen(true)}
+              className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
+            >
+              <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+                <Sparkles size={16} color="#4F46E5" />
+              </View>
+              <Text className="flex-1 text-sm font-semibold text-primary">
+                {locale === 'en' ? 'See plans' : 'Ver planes'}
+              </Text>
+              <ChevronRight size={18} color="#9CA3AF" />
+            </Pressable>
+          ) : Platform.OS === 'ios' ? (
+            // App Store guideline 3.1.1: no in-app link to an external (non-IAP)
+            // purchase/management flow for digital subs. iOS shows a neutral,
+            // non-tappable note instead of the "Manage on the web" link.
+            <View className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50">
+              <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+                <CreditCard size={16} color="#4F46E5" />
+              </View>
+              <Text className="flex-1 text-sm text-gray-600">
+                {locale === 'en'
+                  ? 'Manage your plan at amixos.com'
+                  : 'Administra tu plan en amixos.com'}
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={openWebBilling}
+              className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 active:opacity-70"
+            >
+              <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+                <ExternalLink size={16} color="#4F46E5" />
+              </View>
+              <Text className="flex-1 text-sm font-semibold text-gray-900">
+                {locale === 'en' ? 'Manage on the web' : 'Administrar en la web'}
+              </Text>
+              <ChevronRight size={18} color="#9CA3AF" />
+            </Pressable>
+          )}
+        </View>
+      ) : null}
+
+      <PricingModal visible={pricingOpen} onClose={() => setPricingOpen(false)} />
 
       {/* Password card */}
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">

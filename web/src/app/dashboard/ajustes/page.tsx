@@ -93,6 +93,14 @@ import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
+import { PricingModal } from '@/components/PricingModal';
+import { PLANS } from '@amixos/shared/lib/plans';
+import {
+  activePlanKey,
+  isTrialExpired,
+  trialDaysLeft,
+  type SubscriptionInfo,
+} from '@amixos/shared/lib/subscription';
 
 interface FieldTemplate {
   id: string;
@@ -151,6 +159,39 @@ export default function AjustesPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'negocio');
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
+  async function openBillingPortal() {
+    if (!business) return;
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.url) {
+        throw new Error(
+          data?.error ||
+            (locale === 'es' ? 'No se pudo abrir el portal.' : 'Could not open the portal.'),
+        );
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setPortalError(
+        err instanceof Error
+          ? err.message
+          : locale === 'es'
+            ? 'Ocurrió un error.'
+            : 'Something went wrong.',
+      );
+      setPortalLoading(false);
+    }
+  }
 
   // Non-admins can only see their own account + support (SettingsNav hides the
   // config tabs). If one lands on a config tab — via a stale URL or the
@@ -2882,6 +2923,92 @@ export default function AjustesPage() {
                   </div>
                 )}
               </div>
+
+              {/* Subscription — reflects the active business billing state */}
+              {(() => {
+                const es = locale === 'es';
+                const sub: SubscriptionInfo = {
+                  plan: business?.plan ?? null,
+                  subscription_status: business?.subscription_status ?? null,
+                  trial_ends_at: business?.trial_ends_at ?? null,
+                  current_period_end: business?.current_period_end ?? null,
+                };
+                const status = sub.subscription_status;
+                const daysLeft = trialDaysLeft(sub);
+                const expired = isTrialExpired(sub);
+                const trialing = !expired && daysLeft !== null;
+
+                let heading: string;
+                let subtitle: string | null = null;
+                let action: 'plans' | 'manage' = 'plans';
+
+                if (trialing) {
+                  heading = es
+                    ? `Prueba gratis — te quedan ${daysLeft} día${daysLeft === 1 ? '' : 's'}`
+                    : `Free trial — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
+                  action = 'plans';
+                } else if (status === 'active') {
+                  const planKey = activePlanKey(sub);
+                  const plan = PLANS.find((p) => p.key === planKey);
+                  const planName = plan ? plan.copy[locale].name : null;
+                  // Only show a period for a real paid sub. A grandfathered/free
+                  // 'active' business has no plan + no period — don't invent one.
+                  const periodLabel =
+                    business?.billing_period === 'annual'
+                      ? es ? 'Anual' : 'Annual'
+                      : business?.billing_period === 'monthly'
+                        ? es ? 'Mensual' : 'Monthly'
+                        : null;
+                  heading = planName
+                    ? `Plan ${planName}${periodLabel ? ` · ${periodLabel}` : ''}`
+                    : es ? 'Cuenta activa' : 'Active account';
+                  action = 'manage';
+                } else if (status === 'past_due') {
+                  heading = es
+                    ? 'Pago pendiente — actualiza tu método de pago'
+                    : 'Payment due — update your payment method';
+                  action = 'manage';
+                } else {
+                  heading = es ? 'Sin plan activo' : 'No active plan';
+                  action = 'plans';
+                }
+
+                return (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-900 mb-1">
+                        {es ? 'Suscripción' : 'Subscription'}
+                      </h2>
+                      <p className="text-sm text-gray-600">{heading}</p>
+                      {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+                      {portalError && (
+                        <p className="text-xs text-red-500 mt-2">{portalError}</p>
+                      )}
+                    </div>
+                    {action === 'manage' ? (
+                      <Button
+                        variant="secondary"
+                        onClick={openBillingPortal}
+                        loading={portalLoading}
+                        className="shrink-0 flex items-center gap-1.5"
+                      >
+                        {es ? 'Administrar suscripción' : 'Manage subscription'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={() => setPricingOpen(true)}
+                        className="shrink-0 flex items-center gap-1.5"
+                      >
+                        <Sparkles size={16} />
+                        {es ? 'Ver planes' : 'View plans'}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <PricingModal open={pricingOpen} onClose={() => setPricingOpen(false)} />
 
               {/* Language */}
               <LanguageCard />

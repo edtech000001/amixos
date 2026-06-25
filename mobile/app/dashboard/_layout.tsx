@@ -13,6 +13,7 @@ import { DOCK_APPS } from '@/lib/dockApps';
 import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
+import { BillingGate } from '@/components/BillingGate';
 import { startNetworkMonitor } from '@/lib/offline/network';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
 import { useOutboxStore } from '@/lib/offline/outbox';
@@ -201,6 +202,10 @@ function DashboardTabs() {
           <Tabs.Screen name="mas/modulos/[moduleId]" options={{ href: null }} />
         </Tabs>
       </View>
+      {/* Full-screen overlay when the active business has no access (expired
+         trial / canceled / 'none'). Self-hides otherwise. Sits ABOVE the tab
+         bar via its own high zIndex/elevation. */}
+      <BillingGate />
     </>
   );
 }
