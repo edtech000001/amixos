@@ -77,7 +77,7 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
         : 'Plans & pricing';
 
   return (
-    <Modal open={open} onClose={onClose} title={title} size="xl">
+    <Modal open={open} onClose={onClose} title={title} size="2xl">
       {view === 'contact' ? (
         <ContactForm
           es={es}

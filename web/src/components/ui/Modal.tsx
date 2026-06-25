@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   // Optional icon button(s) rendered to the left of the close X — used by
   // the empleados modal for the deactivate/activate action that moved out
   // of the list rows.
@@ -24,7 +24,7 @@ export function Modal({ open, onClose, title, children, size = 'md', headerActio
 
   if (!open) return null;
 
-  const widths = { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-2xl', xl: 'max-w-3xl' };
+  const widths = { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-2xl', xl: 'max-w-3xl', '2xl': 'max-w-6xl' };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">

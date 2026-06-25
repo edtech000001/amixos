@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Sparkles, X, ChevronLeft } from 'lucide-react-native';
+import { Check, Sparkles, X, ChevronLeft, Globe, ExternalLink } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input } from '@amixos/shared/ui';
 import { useAuthStore } from '@/lib/auth/store';
@@ -194,6 +194,27 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 </Text>
               </View>
 
+              {/* iOS: external-purchase link, permitted for US users under the
+                 2025 Epic v. Apple injunction (no entitlement / no commission).
+                 Opens the web billing page. */}
+              {Platform.OS === 'ios' ? (
+                <Pressable
+                  onPress={() => {
+                    Linking.openURL(
+                      `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+                    ).catch(() => {});
+                    onClose();
+                  }}
+                  className="flex-row items-center gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 mt-3 active:opacity-80"
+                >
+                  <Globe size={18} color={PRIMARY} />
+                  <Text className="flex-1 text-sm font-semibold text-primary">
+                    {en ? 'Subscribe at amixos.com' : 'Suscríbete en amixos.com'}
+                  </Text>
+                  <ExternalLink size={16} color={PRIMARY} />
+                </Pressable>
+              ) : null}
+
               <ScrollView showsVerticalScrollIndicator={false} className="mt-3">
                 <View className="gap-3">
                   {PLANS.map((plan) => {
@@ -309,16 +330,6 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                     ? '14-day free trial · no credit card'
                     : '14 días gratis · sin tarjeta de crédito'}
                 </Text>
-                {/* iOS-only neutral notice. Plain text, NOT tappable, no URL —
-                   App Store guideline 3.1.1 bars in-app links to external
-                   purchase flows for digital subscriptions. */}
-                {Platform.OS === 'ios' ? (
-                  <Text className="text-xs text-gray-400 text-center mt-1">
-                    {en
-                      ? 'Subscriptions are managed on the website.'
-                      : 'Las suscripciones se administran en el sitio web.'}
-                  </Text>
-                ) : null}
               </ScrollView>
             </>
           ) : (
