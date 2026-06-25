@@ -11,6 +11,7 @@ import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/stor
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
+import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/jobSections';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -1178,14 +1179,29 @@ export default function AjustesPage() {
   const [itemTypesOn, setItemTypesOn] = useState<boolean>(business?.job_item_types_enabled !== false);
   const [savingItemTypes, setSavingItemTypes] = useState(false);
 
+  // Per-field show/hide on the job form (eye toggle in the field list).
+  const [jobHidden, setJobHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
+  const [savingJobHidden, setSavingJobHidden] = useState(false);
+
   useEffect(() => {
     if (business) {
       const cm = business.job_crew_mode ?? true;
       setCrewMode(cm);
       setDbCrewMode(cm);
       setItemTypesOn(business.job_item_types_enabled !== false);
+      setJobHidden(parseHiddenFields(business.job_field_hidden));
     }
   }, [business]);
+
+  const toggleJobFieldHidden = async (key: string) => {
+    if (!business) return;
+    const next = { ...jobHidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setJobHidden(next); setSavingJobHidden(true);
+    const { error } = await supabase.from('businesses').update({ job_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setJobHidden(jobHidden);
+    setSavingJobHidden(false);
+  };
 
   const saveItemTypes = async (value: boolean) => {
     if (!business) return;
@@ -1889,7 +1905,16 @@ export default function AjustesPage() {
                           </div>
 
                           {item.kind === 'standard' ? (
-                            <Toggle checked={!!jobRequired[item.key]} onChange={() => toggleJobRequired(item.key)} />
+                            <>
+                              {!JOB_FIELDS_ALWAYS_SHOWN.includes(item.key) && (
+                                <button onClick={() => toggleJobFieldHidden(item.key)} disabled={savingJobHidden}
+                                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                  aria-label={jobHidden[item.key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                  {jobHidden[item.key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                </button>
+                              )}
+                              <Toggle checked={!!jobRequired[item.key]} onChange={() => toggleJobRequired(item.key)} />
+                            </>
                           ) : (
                             <>
                               <button onClick={() => openEditJobTemplate(item.tpl)}

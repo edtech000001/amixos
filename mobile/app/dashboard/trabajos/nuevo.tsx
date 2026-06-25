@@ -41,6 +41,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, type JobSectionKey } from '@amixos/shared/lib/jobSections';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import {
   evaluateOperatingHours,
@@ -140,6 +141,11 @@ export default function NuevoTrabajoRoute() {
     { key: 'assigned_workers', label: t.workersHeading },
     { key: 'internal_notes', label: t.internalNoteLabelJob },
   ];
+  // Per-business field show/hide (Ajustes → Trabajos eye toggles). `fHidden`
+  // hides a field; a section heading hides when all its fields are hidden.
+  const jobHidden = parseHiddenFields(business?.job_field_hidden);
+  const fHidden = (key: string) => !JOB_FIELDS_ALWAYS_SHOWN.includes(key) && isJobFieldHidden(jobHidden, key);
+  const secVisible = (key: JobSectionKey) => jobSectionHasVisibleField(jobHidden, key);
   const tStatuses = full.dashboard.jobs.statuses;
   const tPriorities = full.dashboard.jobs.priorities;
 
@@ -480,7 +486,7 @@ export default function NuevoTrabajoRoute() {
         assigned_workers: assignedEmployees.length ? 'x' : '',
         internal_notes: internalNotes,
       };
-      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
       if (missing.length) {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
         return;
@@ -841,6 +847,7 @@ export default function NuevoTrabajoRoute() {
               </View>
             )}
 
+            {!fHidden('description') && (
             <View className="flex flex-col gap-2 mt-3">
               <Text className="text-sm font-semibold text-gray-700">{jrl('description', t.descriptionLabel)}</Text>
               <TextInput
@@ -854,6 +861,7 @@ export default function NuevoTrabajoRoute() {
                 style={{ textAlignVertical: 'top' }}
               />
             </View>
+            )}
 
             {/* Crew visibility — when off, the job lives only on the
                owner's scheduler. iOS-style segmented control: the active
@@ -894,9 +902,12 @@ export default function NuevoTrabajoRoute() {
             </View>
           </Section>
 
-          {/* Location (job mode only) */}
-          {!isProposal && (
+          {/* Location — shown for jobs AND estimates (the work has a place even
+             at quote time). Save already persists it for both modes. */}
+          {secVisible('location') && (
             <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
+              {!fHidden('coordinates') && (
+              <>
               {/* Map link paste — auto-fills address/city/state */}
               <View className="flex flex-col gap-2">
                 <View className="flex-row items-center gap-1.5">
@@ -941,7 +952,11 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
                 ) : null}
               </View>
+              </>
+              )}
 
+              {!fHidden('job_address') && (
+              <>
               <View className="h-3" />
               <Input
                 label={jrl('job_address', t.addressLabel)}
@@ -949,7 +964,11 @@ export default function NuevoTrabajoRoute() {
                 value={address}
                 onChangeText={setAddress}
               />
+              </>
+              )}
+              {(!fHidden('job_city') || !fHidden('job_state')) && (
               <View className="flex-row gap-3 mt-3">
+                {!fHidden('job_city') && (
                 <View className="flex-1">
                   <Input
                     label={jrl('job_city', t.cityLabel)}
@@ -958,7 +977,9 @@ export default function NuevoTrabajoRoute() {
                     onChangeText={setCity}
                   />
                 </View>
-                <View style={{ width: 110 }}>
+                )}
+                {!fHidden('job_state') && (
+                <View style={fHidden('job_city') ? { flex: 1 } : { width: 110 }}>
                   <Select
                     label={jrl('job_state', t.stateLabel)}
                     value={state}
@@ -972,17 +993,21 @@ export default function NuevoTrabajoRoute() {
                     ]}
                   />
                 </View>
+                )}
               </View>
+              )}
             </Section>
           )}
 
           {/* Schedule (job mode only) */}
-          {!isProposal && (
+          {!isProposal && secVisible('schedule') && (
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
               <View className="flex-row gap-3">
+                {!fHidden('scheduled_date') && (
                 <View className="flex-1">
                   <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
                 </View>
+                )}
                 <View className="flex-1">
                   <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
                 </View>
@@ -993,8 +1018,9 @@ export default function NuevoTrabajoRoute() {
                 <Toggle value={allDay} onValueChange={setAllDay} />
               </View>
 
-              {!allDay ? (
+              {!allDay && (!fHidden('time_start') || !fHidden('time_end')) ? (
                 <View className="flex-row gap-3 mt-3">
+                  {!fHidden('time_start') && (
                   <View className="flex-1">
                     <DatePicker
                       label={jrl('time_start', t.timeStartLabel)}
@@ -1003,6 +1029,8 @@ export default function NuevoTrabajoRoute() {
                       onChange={setTimeStart}
                     />
                   </View>
+                  )}
+                  {!fHidden('time_end') && (
                   <View className="flex-1">
                     <DatePicker
                       label={jrl('time_end', t.timeEndLabel)}
@@ -1011,11 +1039,13 @@ export default function NuevoTrabajoRoute() {
                       onChange={setTimeEnd}
                     />
                   </View>
+                  )}
                 </View>
               ) : null}
 
               {/* Total hours — auto from start/end (read-only) when both times
                   are set, else manual entry. Credited to each worker in Reports. */}
+              {!fHidden('total_hours') && (
               <View className="mt-3">
                 <Text className="text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
                 {bothTimesSet ? (
@@ -1035,6 +1065,7 @@ export default function NuevoTrabajoRoute() {
                 )}
                 <Text className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</Text>
               </View>
+              )}
 
               {ohStatus && ohStatus.status !== 'ok' ? (
                 <View className="mt-3 flex-row items-start gap-1.5">
@@ -1057,7 +1088,7 @@ export default function NuevoTrabajoRoute() {
           )}
 
           {/* Workers (job mode only) */}
-          {!isProposal && (
+          {!isProposal && secVisible('workers') && (
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
               {employees.length > 0 ? (
                 <>
@@ -1176,7 +1207,8 @@ export default function NuevoTrabajoRoute() {
           {/* Items section removed — pricing/line items are managed on the
              detail page now so this form stays focused on scheduling. */}
 
-          {/* Notes */}
+          {/* Notes (section hideable in job mode) */}
+          {(isProposal || secVisible('notes')) && (
           <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
             {isProposal ? (
               <View className="mb-3">
@@ -1195,6 +1227,8 @@ export default function NuevoTrabajoRoute() {
                 />
               </View>
             ) : null}
+            {(isProposal || !fHidden('internal_notes')) && (
+            <>
             <Text className="text-sm font-semibold text-gray-700 mb-2">
               {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
             </Text>
@@ -1208,7 +1242,10 @@ export default function NuevoTrabajoRoute() {
               className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[100px]"
               style={{ textAlignVertical: 'top' }}
             />
+            </>
+            )}
 
+            {!isProposal && !fHidden('worker_notes') && (
             <View className="mt-4">
               <Text className="text-sm font-semibold text-gray-700 mb-2">
                 {t.workerNoteLabel}
@@ -1224,7 +1261,9 @@ export default function NuevoTrabajoRoute() {
                 style={{ textAlignVertical: 'top' }}
               />
             </View>
+            )}
           </Section>
+          )}
 
           {/* Photos — uploads need a saved job_id, so the gallery only
              appears when editing an existing job. New jobs get a hint and

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toggle } from '@/components/ui/Toggle';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
+import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, type JobSectionKey } from '@amixos/shared/lib/jobSections';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -101,6 +102,12 @@ function NuevoTrabajoContent() {
   // form (validated on save).
   const jobReq = (business?.job_field_required ?? {}) as Record<string, boolean>;
   const jrl = (key: string, base: string) => (jobReq[key] ? `${base} *` : base);
+  // Per-business field show/hide (Ajustes → Trabajos eye toggles). `fHidden`
+  // hides an individual field; a section heading hides when all its fields are.
+  // Hidden fields are skipped in required-validation.
+  const jobHidden = parseHiddenFields(business?.job_field_hidden);
+  const fHidden = (key: string) => !JOB_FIELDS_ALWAYS_SHOWN.includes(key) && isJobFieldHidden(jobHidden, key);
+  const secVisible = (key: JobSectionKey) => jobSectionHasVisibleField(jobHidden, key);
   const JOB_REQUIRABLE: { key: string; label: string }[] = [
     { key: 'client_id', label: t.clientLabel },
     { key: 'description', label: t.descriptionLabel },
@@ -477,7 +484,7 @@ function NuevoTrabajoContent() {
         assigned_workers: assignedEmployees.length ? 'x' : '',
         internal_notes: internalNotes,
       };
-      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
       if (missing.length) {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
         return;
@@ -493,6 +500,13 @@ function NuevoTrabajoContent() {
           description: description.trim() || null,
           notes: clientNotes.trim() || null,
           internal_notes: internalNotes.trim() || null,
+          // Location is shown on estimates too — persist it (mirrors the job path).
+          job_address: address.trim() || null,
+          job_city: city.trim() || null,
+          job_state: state || null,
+          job_map_link: mapLink.trim() || null,
+          job_lat: jobLat,
+          job_lng: jobLng,
           issue_date: issueDate,
           expiry_date: expiryDate || null,
           subtotal_amount: +subtotal.toFixed(2),
@@ -782,12 +796,14 @@ function NuevoTrabajoContent() {
               </div>
             )}
 
+            {!fHidden('description') && (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">{jrl('description', t.descriptionLabel)}</label>
               <textarea rows={5} placeholder={t.descriptionPlaceholder}
                 value={description} onChange={e => setDescription(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
             </div>
+            )}
 
             {/* Crew visibility — when off, the job lives only on the
                owner's scheduler. iOS-style segmented control: active choice
@@ -819,14 +835,17 @@ function NuevoTrabajoContent() {
           </div>
         </div>
 
-        {/* ── Ubicación (job mode only) */}
-        {!isEditProposal && (
+        {/* ── Ubicación — shown for jobs AND estimates (the work has a place
+            even at quote time). proposalData persists it for estimates. */}
+        {secVisible('location') && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.locationHeading}</p>
             </div>
             <div className="flex flex-col gap-3">
+              {!fHidden('coordinates') && (
+              <>
               {/* Map link paste */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
@@ -843,11 +862,19 @@ function NuevoTrabajoContent() {
                 )}
               </div>
               <div className="border-t border-gray-100 pt-3"/>
+              </>
+              )}
+              {!fHidden('job_address') && (
               <Input label={jrl('job_address', t.addressLabel)} placeholder={t.addressPlaceholder} value={address}
                 onChange={e => setAddress(e.target.value)}/>
-              <div className="grid grid-cols-[1fr_120px] gap-3">
+              )}
+              {(!fHidden('job_city') || !fHidden('job_state')) && (
+              <div className={`grid ${!fHidden('job_city') && !fHidden('job_state') ? 'grid-cols-[1fr_120px]' : 'grid-cols-1'} gap-3`}>
+                {!fHidden('job_city') && (
                 <Input label={jrl('job_city', t.cityLabel)} placeholder={t.cityPlaceholder} value={city}
                   onChange={e => setCity(e.target.value)}/>
+                )}
+                {!fHidden('job_state') && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{jrl('job_state', t.stateLabel)}</label>
                   <select value={state} onChange={e => setState(e.target.value)}
@@ -856,21 +883,25 @@ function NuevoTrabajoContent() {
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
                 </div>
+                )}
               </div>
+              )}
             </div>
           </div>
         )}
 
         {/* ── Horario (job mode only) */}
-        {!isEditProposal && (
+        {!isEditProposal && secVisible('schedule') && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid ${!fHidden('scheduled_date') ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+              {!fHidden('scheduled_date') && (
               <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}/>
+              )}
               <Input label={t.endDateLabel} type="date" value={endDate}
                 onChange={e => setEndDate(e.target.value)}/>
             </div>
@@ -880,17 +911,22 @@ function NuevoTrabajoContent() {
               <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
             </div>
 
-            {!allDay && (
-              <div className="grid grid-cols-2 gap-3 mt-3">
+            {!allDay && (!fHidden('time_start') || !fHidden('time_end')) && (
+              <div className={`grid ${!fHidden('time_start') && !fHidden('time_end') ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mt-3`}>
+                {!fHidden('time_start') && (
                 <Input label={jrl('time_start', t.timeStartLabel)} type="time" value={timeStart}
                   onChange={e => setTimeStart(e.target.value)}/>
+                )}
+                {!fHidden('time_end') && (
                 <Input label={jrl('time_end', t.timeEndLabel)} type="time" value={timeEnd}
                   onChange={e => setTimeEnd(e.target.value)}/>
+                )}
               </div>
             )}
 
             {/* Total hours — auto from start/end (read-only) when both times are
                 set, else manual entry. Credited to each worker in Reports. */}
+            {!fHidden('total_hours') && (
             <div className="mt-3">
               <label className="block text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
               {bothTimesSet ? (
@@ -909,6 +945,7 @@ function NuevoTrabajoContent() {
               )}
               <p className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</p>
             </div>
+            )}
 
             {ohStatus && ohStatus.status !== 'ok' && (
               <p className="text-xs text-amber-600 mt-3">
@@ -927,7 +964,7 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Empleados (job mode only) */}
-        {!isEditProposal && (
+        {!isEditProposal && secVisible('workers') && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Users size={15} className="text-primary"/>
@@ -1255,7 +1292,8 @@ function NuevoTrabajoContent() {
           </div>
         )}
 
-        {/* ── Notas */}
+        {/* ── Notas (section hideable in job mode) */}
+        {(isEditProposal || !fHidden('internal_notes')) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={15} className="text-primary"/>
@@ -1280,6 +1318,7 @@ function NuevoTrabajoContent() {
             </div>
           </div>
         </div>
+        )}
 
         {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
 

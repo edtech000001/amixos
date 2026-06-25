@@ -61,6 +61,7 @@ export interface Business {
   job_pipeline_disabled: Record<string, boolean>;
   job_crew_mode: boolean;
   job_item_types_enabled: boolean;
+  job_field_hidden: Record<string, boolean> | null;
   payroll_frequency: string | null;
   // Upcoming-job alert config (migration 046). Owner-configured tiers
   // surface a colored left border + chip on each job card. Shape:
@@ -261,7 +262,7 @@ export const useAuthStore = create<AuthStore>()(
           const [bizRes, memberRes] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_template, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, payroll_frequency, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
+              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_template, client_field_required, client_field_order, employee_field_required, employee_field_order, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, job_field_hidden, payroll_frequency, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout')
               // Deterministic order: the fallback "first business" must be
               // the same on web and mobile, or per-business state (e.g. the
               // Google connection) looks inconsistent across devices.

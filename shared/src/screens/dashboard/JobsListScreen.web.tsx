@@ -27,6 +27,9 @@ import {
   AlertTriangle,
   Clock,
   List,
+  ListChecks,
+  Lightbulb,
+  Receipt,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -93,6 +96,34 @@ type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
 // Selectable status filters (everything except the "all" reset). Multi-select.
 const STATUS_TAB_KEYS = TAB_KEYS.filter((k): k is StatusTabKey => k !== 'all');
+
+// Icon per status filter — mirrors the status semantics mobile uses on cards
+// (calendar = scheduled, check = completed, etc.) so the tabs read at a glance.
+const TAB_ICON: Record<StatusTabKey, typeof List> = {
+  propuestas: FileText,
+  posible: Lightbulb,
+  scheduled: Calendar,
+  in_progress: Clock,
+  completed: CheckCircle2,
+  invoiced: Receipt,
+  cancelled: XCircle,
+  delegated: Send,
+};
+
+// Icons for the sort/group menu chips — mirror the mobile sort sheet so both
+// platforms read the same (clock = newest, calendar = start date, etc.).
+const SORT_ICON: Record<JobSortKey, typeof List> = {
+  recent: Clock,
+  status: ListChecks,
+  startDate: Calendar,
+  lead: Users,
+};
+const GROUP_ICON: Record<JobGroupKey, typeof List> = {
+  none: List,
+  lead: Users,
+  company: Building2,
+  state: MapPin,
+};
 
 export interface JobsListScreenProps {
   loading: boolean;
@@ -596,6 +627,7 @@ export function JobsListScreen({
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {JOB_SORT_KEYS.map(k => {
                     const selected = sortBy === k;
+                    const Icon = SORT_ICON[k];
                     return (
                       <button
                         key={k}
@@ -604,7 +636,7 @@ export function JobsListScreen({
                           selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                       >
-                        {selected ? <Check size={12} /> : null}
+                        {selected ? <Check size={12} /> : <Icon size={12} />}
                         {t.sort.by[k]}
                       </button>
                     );
@@ -616,6 +648,7 @@ export function JobsListScreen({
                 <div className="flex flex-wrap gap-1.5">
                   {JOB_GROUP_KEYS.map(k => {
                     const selected = groupBy === k;
+                    const Icon = GROUP_ICON[k];
                     return (
                       <button
                         key={k}
@@ -624,7 +657,7 @@ export function JobsListScreen({
                           selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                       >
-                        {selected ? <Check size={12} /> : null}
+                        {selected ? <Check size={12} /> : <Icon size={12} />}
                         {t.sort.group[k]}
                       </button>
                     );
@@ -651,6 +684,7 @@ export function JobsListScreen({
         </button>
         {STATUS_TAB_KEYS.map((k) => {
           const isActive = tabSet.has(k);
+          const Icon = TAB_ICON[k];
           return (
             <button
               key={k}
@@ -659,6 +693,7 @@ export function JobsListScreen({
                 isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
+              <Icon size={13} />
               {tabLabels[k]}
               {counts[k] > 0 ? (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>

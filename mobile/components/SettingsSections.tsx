@@ -54,6 +54,7 @@ import {
   type JobAlertColor,
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
+import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/jobSections';
 import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
 import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical } from 'lucide-react-native';
@@ -1055,6 +1056,9 @@ export function TrabajosFieldsSection() {
   );
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  // Per-field show/hide (eye toggle). Saves on flip, separate from the draft.
+  const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
+  const [savingHidden, setSavingHidden] = useState(false);
 
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
@@ -1067,8 +1071,19 @@ export function TrabajosFieldsSection() {
       setRequired(r); setDbRequired(r);
       const o = Array.isArray(business.job_field_order) ? (business.job_field_order as string[]) : [];
       setLocalOrder(o); setDbOrder(o);
+      setHidden(parseHiddenFields(business.job_field_hidden));
     }
   }, [business]);
+
+  const toggleHidden = async (key: string) => {
+    if (!business || savingHidden) return;
+    const next = { ...hidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setHidden(next); setSavingHidden(true);
+    const { error } = await supabase.from('businesses').update({ job_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setHidden(hidden);
+    setSavingHidden(false);
+  };
 
   const loadTemplates = useCallback(async () => {
     if (!business) return;
@@ -1329,10 +1344,17 @@ export function TrabajosFieldsSection() {
                 </View>
 
                 {item.kind === 'standard' ? (
-                  <Toggle
-                    value={!!required[item.key]}
-                    onValueChange={() => toggleRequired(item.key)}
-                  />
+                  <View className="flex-row items-center gap-1">
+                    {!JOB_FIELDS_ALWAYS_SHOWN.includes(item.key) && (
+                      <Pressable onPress={() => toggleHidden(item.key)} className="p-2 rounded-lg active:bg-gray-100">
+                        {hidden[item.key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                      </Pressable>
+                    )}
+                    <Toggle
+                      value={!!required[item.key]}
+                      onValueChange={() => toggleRequired(item.key)}
+                    />
+                  </View>
                 ) : (
                   <>
                     <Pressable

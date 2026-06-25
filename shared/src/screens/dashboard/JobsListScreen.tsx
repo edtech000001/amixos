@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   Clock,
   List,
+  Lightbulb,
+  Receipt,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -91,6 +93,19 @@ type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
 // Selectable status filters (everything except the "all" reset). Multi-select.
 const STATUS_TAB_KEYS = TAB_KEYS.filter((k): k is StatusTabKey => k !== 'all');
+
+// Icon per status filter — matches the web tabs (calendar = scheduled,
+// check = completed, etc.) so both platforms read the same at a glance.
+const TAB_ICON: Record<StatusTabKey, typeof List> = {
+  propuestas: FileText,
+  posible: Lightbulb,
+  scheduled: Calendar,
+  in_progress: Clock,
+  completed: CheckCircle2,
+  invoiced: Receipt,
+  cancelled: XCircle,
+  delegated: Send,
+};
 
 export interface JobsListScreenProps {
   loading: boolean;
@@ -556,6 +571,7 @@ export function JobsListScreen({
           </Pressable>
           {STATUS_TAB_KEYS.map(k => {
             const isActive = tabSet.has(k);
+            const Icon = TAB_ICON[k];
             return (
               <Pressable
                 key={k}
@@ -564,6 +580,7 @@ export function JobsListScreen({
                   isActive ? 'bg-primary' : 'bg-gray-100'
                 }`}
               >
+                <Icon size={13} color={isActive ? '#FFFFFF' : '#6B7280'} />
                 <Text
                   className={`text-xs font-semibold ${
                     isActive ? 'text-white' : 'text-gray-500'
