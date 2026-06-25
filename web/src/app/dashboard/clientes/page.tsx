@@ -13,6 +13,8 @@ import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { Button } from '@/components/ui/Button';
@@ -160,9 +162,12 @@ export default function ClientesPage() {
     setSaving(true); setError('');
 
     const req = business?.client_field_required ?? {};
+    const hidden = parseHiddenFields(business?.client_field_hidden);
+    const fHidden = (key: string) =>
+      !CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
     const missing: string[] = [];
     for (const key of FIELD_LABEL_KEYS) {
-      if (!req[key]) continue;
+      if (!req[key] || fHidden(key)) continue;
       const val = form[key] as string;
       if (!val || !val.trim()) missing.push(FIELD_LABELS[key] ?? key);
     }
@@ -572,6 +577,8 @@ export default function ClientesPage() {
         initial={initialForEdit}
         templates={templates}
         requiredFlags={business?.client_field_required ?? {}}
+        hiddenFlags={business?.client_field_hidden ?? null}
+        fieldLayout={business?.client_field_layout ?? null}
         saving={saving}
         error={error}
         onClose={() => setFormMode(null)}

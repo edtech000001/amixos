@@ -28,6 +28,15 @@ import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import {
+  INVOICE_FIELD_SECTIONS,
+  INVOICE_FIELDS_ALWAYS_SHOWN,
+  INVOICE_SECTION_FIELDS,
+  parseInvoiceLayout,
+  invoiceFieldsInSection,
+  type InvoiceFieldSection,
+} from '@amixos/shared/lib/invoiceFieldSections';
 
 interface Client {
   id: string;
@@ -73,7 +82,7 @@ export default function NuevaFacturaRoute() {
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
   const { business } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.new;
   const tc = full.common;
 
@@ -218,6 +227,162 @@ export default function NuevaFacturaRoute() {
       : clients;
   }, [clients, clientSearch]);
 
+  // Per-field show/hide (Ajustes → Facturas eye toggles). invoice_number +
+  // client can never be hidden.
+  const hidden = parseHiddenFields(business?.invoice_field_hidden);
+  const fHidden = (key: string) =>
+    !INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
+
+  // Custom fields grouped by section, in the saved layout order.
+  const invoiceLayout = useMemo(() => {
+    const standardKeys = INVOICE_FIELD_SECTIONS.flatMap(s => INVOICE_SECTION_FIELDS[s]);
+    const allKeys = [...standardKeys, ...templates.map(tpl => `custom:${tpl.id}`)];
+    return parseInvoiceLayout(business?.invoice_field_layout, allKeys);
+  }, [business?.invoice_field_layout, templates]);
+  const customFieldsFor = (section: InvoiceFieldSection): FieldTemplate[] =>
+    invoiceFieldsInSection(invoiceLayout, section)
+      .filter(k => k.startsWith('custom:'))
+      .map(k => templates.find(tpl => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is FieldTemplate => !!tpl);
+
+  const renderCustomField = (tpl: FieldTemplate) => {
+    const value = customFields[tpl.field_key] ?? '';
+    const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+    const setVal = (v: string) =>
+      setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
+
+    if (tpl.field_type === 'select' && tpl.field_options) {
+      return (
+        <Select
+          key={tpl.field_key}
+          label={labelText}
+          value={value}
+          onValueChange={setVal}
+          options={[
+            { value: '', label: '—' },
+            ...tpl.field_options.map(o => ({ value: o, label: o })),
+          ]}
+        />
+      );
+    }
+    if (tpl.field_type === 'boolean') {
+      const yesActive = value === 'true';
+      const noActive = value === 'false';
+      return (
+        <View key={tpl.field_key}>
+          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <View className="flex-row gap-2">
+            <Pressable
+              onPress={() => setVal(yesActive ? '' : 'true')}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            >
+              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                {tc.states.yes}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setVal(noActive ? '' : 'false')}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            >
+              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                {tc.states.no}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+    if (tpl.field_type === 'date') {
+      return <DatePicker key={tpl.field_key} label={labelText} value={value} onChange={setVal} />;
+    }
+    return (
+      <Input
+        key={tpl.field_key}
+        label={labelText}
+        value={value}
+        onChangeText={setVal}
+        keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+      />
+    );
+  };
+
+  // Bilingual section headers (data-driven layout).
+  const sectionLabel: Record<InvoiceFieldSection, string> = {
+    general: 'General',
+    notes: locale === 'es' ? 'Notas' : 'Notes',
+    additional: locale === 'es' ? 'Detalles adicionales' : 'Additional details',
+  };
+
+  // Full-width JSX for one built-in field key. `client` renders the chip list +
+  // picker trigger (modal lives outside the scroll). Pairs are stacked.
+  const renderField = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'invoice_number':
+        return (
+          <Input
+            key={key}
+            label={t.invoiceNumberLabel}
+            value={invoiceNumber}
+            onChangeText={(v) => { setInvoiceNumber(v); numberEditedRef.current = true; }}
+          />
+        );
+      case 'client':
+        return (
+          <View key={key} className="flex flex-col gap-2">
+            <Text className="text-sm font-semibold text-gray-700">{t.clientsLabel}</Text>
+            {clientIds.length > 0 ? (
+              <View className="flex-row flex-wrap gap-2">
+                {clientIds.map((cid) => {
+                  const c = clients.find((cl) => cl.id === cid);
+                  if (!c) return null;
+                  return (
+                    <View
+                      key={cid}
+                      className="flex-row items-center gap-1.5 bg-gray-100 rounded-lg px-2.5 py-1.5"
+                    >
+                      <Text className="text-xs font-medium text-gray-700">
+                        {c.first_name} {c.last_name}
+                      </Text>
+                      <Pressable
+                        onPress={() => setClientIds((prev) => prev.filter((id) => id !== cid))}
+                        hitSlop={6}
+                      >
+                        <X size={12} color="#6B7280" />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => setClientPickerOpen(true)}
+              className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+            >
+              <Text className="text-base text-gray-400 flex-1">
+                {clientIds.length === 0 ? t.selectClient : t.addAnotherClient}
+              </Text>
+              <ChevronDown size={16} color="#9CA3AF" />
+            </Pressable>
+          </View>
+        );
+      case 'issue_date':
+        return (
+          <DatePicker key={key} label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
+        );
+      case 'due_date':
+        return (
+          <DatePicker key={key} label={t.dueDateLabel} value={dueDate} onChange={setDueDate} />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Built-in general keys (gated by fHidden) + general customs, in layout order.
+  // The structural language selector renders after these, inside the same card.
+  const generalKeys = invoiceFieldsInSection(invoiceLayout, 'general')
+    .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
+
   const subtotal = lines.reduce((s, l) => s + l.qty * l.rate, 0);
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount;
@@ -266,7 +431,7 @@ export default function NuevaFacturaRoute() {
       { key: 'notes', label: t.notesLabel, filled: !!notes.trim() },
     ];
     for (const c of standardChecks) {
-      if (req[c.key] && !c.filled) {
+      if (req[c.key] && !fHidden(c.key) && !c.filled) {
         setError(t.errorRequiredField.replace('{{field}}', c.label));
         return;
       }
@@ -366,61 +531,20 @@ export default function NuevaFacturaRoute() {
           contentContainerClassName="px-5 pt-5 pb-32"
           keyboardShouldPersistTaps="handled"
         >
-          {/* General info */}
-          <Section title={t.generalInfo}>
-            <Input
-              label={t.invoiceNumberLabel}
-              value={invoiceNumber}
-              onChangeText={(v) => { setInvoiceNumber(v); numberEditedRef.current = true; }}
-            />
+          {/* General info — built-in keys (invoice_number, client, issue_date,
+             due_date) + general customs in saved layout order, then the
+             structural language selector. */}
+          <Section title={sectionLabel.general}>
+            <View className="gap-3">
+              {generalKeys.map(k => {
+                if (k.startsWith('custom:')) {
+                  const tpl = templates.find(tp => `custom:${tp.id}` === k);
+                  return tpl ? renderCustomField(tpl) : null;
+                }
+                return renderField(k);
+              })}
 
-            <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{t.clientsLabel}</Text>
-              {clientIds.length > 0 ? (
-                <View className="flex-row flex-wrap gap-2">
-                  {clientIds.map((cid) => {
-                    const c = clients.find((cl) => cl.id === cid);
-                    if (!c) return null;
-                    return (
-                      <View
-                        key={cid}
-                        className="flex-row items-center gap-1.5 bg-gray-100 rounded-lg px-2.5 py-1.5"
-                      >
-                        <Text className="text-xs font-medium text-gray-700">
-                          {c.first_name} {c.last_name}
-                        </Text>
-                        <Pressable
-                          onPress={() => setClientIds((prev) => prev.filter((id) => id !== cid))}
-                          hitSlop={6}
-                        >
-                          <X size={12} color="#6B7280" />
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-              <Pressable
-                onPress={() => setClientPickerOpen(true)}
-                className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
-              >
-                <Text className="text-base text-gray-400 flex-1">
-                  {clientIds.length === 0 ? t.selectClient : t.addAnotherClient}
-                </Text>
-                <ChevronDown size={16} color="#9CA3AF" />
-              </Pressable>
-            </View>
-
-            <View className="flex-row gap-3 mt-3">
-              <View className="flex-1">
-                <DatePicker label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
-              </View>
-              <View className="flex-1">
-                <DatePicker label={t.dueDateLabel} value={dueDate} onChange={setDueDate} />
-              </View>
-            </View>
-
-            <View className="mt-3">
+              {/* Language selector is structural (drives invoice template) — never gated. */}
               <Select
                 label={t.languageLabel}
                 value={language}
@@ -523,95 +647,37 @@ export default function NuevaFacturaRoute() {
             </View>
           </Section>
 
-          {/* Custom fields */}
-          {templates.length > 0 ? (
-            <Section title={t.customFieldsHeading}>
-              <View className="gap-3">
-                {templates.map(tpl => {
-                  const value = customFields[tpl.field_key] ?? '';
-                  const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
-                  const setVal = (v: string) =>
-                    setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
+          {/* Notes section — built-in notes (gated) + notes-assigned customs. */}
+          {(!fHidden('notes') || customFieldsFor('notes').length > 0) && (
+          <Section title={sectionLabel.notes} icon={<FileText size={14} color="#4F46E5" />}>
+            {!fHidden('notes') && (
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder={t.notesPlaceholder}
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                style={{ textAlignVertical: 'top' }}
+              />
+            )}
+            {customFieldsFor('notes').length > 0 ? (
+              <View className="gap-3 mt-3">
+                {customFieldsFor('notes').map(renderCustomField)}
+              </View>
+            ) : null}
+          </Section>
+          )}
 
-                  if (tpl.field_type === 'select' && tpl.field_options) {
-                    return (
-                      <Select
-                        key={tpl.field_key}
-                        label={labelText}
-                        value={value}
-                        onValueChange={setVal}
-                        options={[
-                          { value: '', label: '—' },
-                          ...tpl.field_options.map(o => ({ value: o, label: o })),
-                        ]}
-                      />
-                    );
-                  }
-                  if (tpl.field_type === 'boolean') {
-                    // Three states — '', 'true', 'false'. Tapping active clears.
-                    const yesActive = value === 'true';
-                    const noActive = value === 'false';
-                    return (
-                      <View key={tpl.field_key}>
-                        <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
-                        <View className="flex-row gap-2">
-                          <Pressable
-                            onPress={() => setVal(yesActive ? '' : 'true')}
-                            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                          >
-                            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
-                              {tc.states.yes}
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => setVal(noActive ? '' : 'false')}
-                            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                          >
-                            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
-                              {tc.states.no}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    );
-                  }
-                  if (tpl.field_type === 'date') {
-                    return (
-                      <DatePicker
-                        key={tpl.field_key}
-                        label={labelText}
-                        value={value}
-                        onChange={setVal}
-                      />
-                    );
-                  }
-                  return (
-                    <Input
-                      key={tpl.field_key}
-                      label={labelText}
-                      value={value}
-                      onChangeText={setVal}
-                      keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
-                    />
-                  );
-                })}
+          {/* Additional — custom fields assigned to the 'additional' section. */}
+          {customFieldsFor('additional').length > 0 ? (
+            <Section title={sectionLabel.additional}>
+              <View className="gap-3">
+                {customFieldsFor('additional').map(renderCustomField)}
               </View>
             </Section>
           ) : null}
-
-          {/* Notes */}
-          <Section title={t.notesLabel} icon={<FileText size={14} color="#4F46E5" />}>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder={t.notesPlaceholder}
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={3}
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
-              style={{ textAlignVertical: 'top' }}
-            />
-          </Section>
 
           {error ? (
             <View className="mt-4 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">

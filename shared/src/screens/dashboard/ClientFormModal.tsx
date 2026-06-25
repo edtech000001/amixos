@@ -11,6 +11,9 @@ import { Select, type SelectOption } from '../../ui/Select';
 import { DatePicker } from '../../ui/DatePicker';
 
 export interface ClientFieldTemplate {
+  // Optional on the RN variant (web uses it to map saved field layout →
+  // `custom:<id>`); kept optional so existing mobile callers stay valid.
+  id?: string;
   field_key: string;
   field_label: string;
   field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
@@ -64,6 +67,10 @@ export interface ClientFormModalProps {
   templates: ClientFieldTemplate[];
   /** Field-keyed map of `required` flags pulled from business config. */
   requiredFlags: Record<string, boolean>;
+  /** Field-keyed map of hidden flags (web variant only). */
+  hiddenFlags?: Record<string, boolean> | null;
+  /** Saved per-field layout (web variant only). */
+  fieldLayout?: { key: string; section: string }[] | null;
   saving: boolean;
   error: string;
   onClose: () => void;

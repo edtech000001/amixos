@@ -55,6 +55,31 @@ import {
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+import {
+  CLIENT_FIELD_SECTIONS,
+  CLIENT_FIELDS_ALWAYS_SHOWN,
+  CLIENT_SECTION_FIELDS,
+  parseClientLayout,
+  clientFieldsInSection,
+  type ClientFieldSection,
+} from '@amixos/shared/lib/clientFieldSections';
+import {
+  EMPLOYEE_FIELD_SECTIONS,
+  EMPLOYEE_FIELDS_ALWAYS_SHOWN,
+  EMPLOYEE_SECTION_FIELDS,
+  parseEmployeeLayout,
+  employeeFieldsInSection,
+  type EmployeeFieldSection,
+} from '@amixos/shared/lib/employeeFieldSections';
+import {
+  INVOICE_FIELD_SECTIONS,
+  INVOICE_FIELDS_ALWAYS_SHOWN,
+  INVOICE_SECTION_FIELDS,
+  parseInvoiceLayout,
+  invoiceFieldsInSection,
+  type InvoiceFieldSection,
+} from '@amixos/shared/lib/invoiceFieldSections';
+import type { FieldEntry } from '@amixos/shared/lib/fieldLayout';
 
 // Settings-only labels for the layout section headers (the form draws its own).
 const JOB_SECTION_LABELS: Record<JobLayoutSection, { es: string; en: string }> = {
@@ -63,7 +88,37 @@ const JOB_SECTION_LABELS: Record<JobLayoutSection, { es: string; en: string }> =
   schedule: { es: 'Horario', en: 'Schedule' },
   workers: { es: 'Trabajadores', en: 'Workers' },
   notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
 };
+
+const CLIENT_SECTION_LABELS: Record<ClientFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  contact: { es: 'Contacto', en: 'Contact' },
+  location: { es: 'Ubicación', en: 'Location' },
+  notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+const EMPLOYEE_SECTION_LABELS: Record<EmployeeFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  contact: { es: 'Contacto', en: 'Contact' },
+  employment: { es: 'Empleo', en: 'Employment' },
+  location: { es: 'Ubicación', en: 'Location' },
+  emergency: { es: 'Emergencia', en: 'Emergency' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+const INVOICE_SECTION_LABELS: Record<InvoiceFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+// Standard field keys for each entity, flattened in section order. These drive
+// the grouped layout (which built-ins exist + their default home section).
+const CLIENT_STANDARD_KEYS = CLIENT_FIELD_SECTIONS.flatMap((s) => CLIENT_SECTION_FIELDS[s]);
+const EMPLOYEE_STANDARD_KEYS = EMPLOYEE_FIELD_SECTIONS.flatMap((s) => EMPLOYEE_SECTION_FIELDS[s]);
+const INVOICE_STANDARD_KEYS = INVOICE_FIELD_SECTIONS.flatMap((s) => INVOICE_SECTION_FIELDS[s]);
 import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
 import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput } from 'lucide-react-native';
@@ -484,20 +539,21 @@ export function FacturasSection() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
   const tNew = full.dashboard.invoices.new;
+  const secLabel = (s: InvoiceFieldSection) => (locale === 'en' ? INVOICE_SECTION_LABELS[s].en : INVOICE_SECTION_LABELS[s].es);
 
-  // Standard invoice fields the user can mark required. Order here is the
-  // display order; the new/edit invoice form enforces the flags on save.
-  const STANDARD_FIELDS: { key: string; label: string }[] = [
-    { key: 'invoice_number', label: tNew.invoiceNumberLabel },
-    { key: 'client', label: tNew.clientsLabel },
-    { key: 'issue_date', label: tNew.issueDateLabel },
-    { key: 'due_date', label: tNew.dueDateLabel },
-    { key: 'notes', label: tNew.notesLabel },
-  ];
+  // Standard invoice field labels (keyed) — section/order now come from the
+  // grouped layout. The new/edit invoice form enforces the required flags.
+  const FIELD_LABELS: Record<string, string> = {
+    invoice_number: tNew.invoiceNumberLabel,
+    client: tNew.clientsLabel,
+    issue_date: tNew.issueDateLabel,
+    due_date: tNew.dueDateLabel,
+    notes: tNew.notesLabel,
+  };
 
   // Draft-until-save: working copy + db snapshot for every batched field.
   const [dueDays, setDueDays] = useState(
@@ -523,6 +579,16 @@ export function FacturasSection() {
   const [dbOrder, setDbOrder] = useState<string[]>(
     Array.isArray(business?.invoice_field_order) ? (business!.invoice_field_order as string[]) : [],
   );
+  // Grouped section layout (section + within-section order).
+  const [localLayout, setLocalLayout] = useState<FieldEntry<InvoiceFieldSection>[]>(
+    Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as FieldEntry<InvoiceFieldSection>[]) : [],
+  );
+  const [dbLayout, setDbLayout] = useState<FieldEntry<InvoiceFieldSection>[]>(
+    Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as FieldEntry<InvoiceFieldSection>[]) : [],
+  );
+  // Per-field show/hide (eye toggle). Saved on flip, separate from the draft.
+  const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
+  const [savingHidden, setSavingHidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -543,7 +609,20 @@ export function FacturasSection() {
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
     setLocalOrder(o); setDbOrder(o);
+    const lay = Array.isArray(business.invoice_field_layout) ? (business.invoice_field_layout as FieldEntry<InvoiceFieldSection>[]) : [];
+    setLocalLayout(lay); setDbLayout(lay);
+    setHidden(parseHiddenFields(business.invoice_field_hidden));
   }, [business]);
+
+  const toggleHidden = async (key: string) => {
+    if (!business || savingHidden) return;
+    const next = { ...hidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setHidden(next); setSavingHidden(true);
+    const { error } = await supabase.from('businesses').update({ invoice_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setHidden(hidden);
+    setSavingHidden(false);
+  };
 
   const loadTemplates = useCallback(async () => {
     if (!business) return;
@@ -676,12 +755,23 @@ export function FacturasSection() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedLayout: FieldEntry<InvoiceFieldSection>[] = displayLayout
+        .map((e) => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is FieldEntry<InvoiceFieldSection> => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         invoice_due_days: days,
         invoice_start_number: startNum,
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
+        invoice_field_layout: resolvedLayout,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -689,6 +779,8 @@ export function FacturasSection() {
       await loadTemplates();
       setLocalOrder(resolvedOrder);
       setDbOrder(resolvedOrder);
+      setLocalLayout(resolvedLayout);
+      setDbLayout(resolvedLayout);
       setDbRequired(required);
       setDbDueDays(dueDays);
       setDbNotes(notes);
@@ -708,55 +800,55 @@ export function FacturasSection() {
       startNumber !== dbStartNumber ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
+      JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
-  type UnifiedItem =
-    | { kind: 'standard'; key: string; label: string }
-    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
+  // ── Field layout (section + within-section order) ──
+  const allInvoiceKeys = useMemo(
+    () => [...INVOICE_STANDARD_KEYS, ...templates.map((tpl) => `custom:${tpl.id}`)],
+    [templates],
+  );
+  const displayLayout = useMemo(
+    () => parseInvoiceLayout(localLayout, allInvoiceKeys),
+    [localLayout, allInvoiceKeys],
+  );
 
-  const items: UnifiedItem[] = useMemo(() => {
-    const standardItems: UnifiedItem[] = STANDARD_FIELDS.map((f) => ({
-      kind: 'standard' as const,
-      key: f.key,
-      label: f.label,
-    }));
-    const customItems: UnifiedItem[] = templates.map((tpl) => ({
-      kind: 'custom' as const,
-      key: `custom:${tpl.id}`,
-      label: tpl.field_label,
-      tpl,
-    }));
-    const all = [...standardItems, ...customItems];
-    const byKey = new Map(all.map((it) => [it.key, it]));
-
-    if (localOrder.length === 0) return all;
-
-    const ordered: UnifiedItem[] = [];
-    for (const k of localOrder) {
-      const item = byKey.get(k);
-      if (item) ordered.push(item);
+  const moveFieldToSection = (key: string, section: InvoiceFieldSection) => {
+    const layout = displayLayout.filter((e) => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = INVOICE_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex((e) => INVOICE_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
     }
-    const used = new Set(ordered.map((i) => i.key));
-    return [...ordered, ...all.filter((i) => !used.has(i.key))];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, localOrder, full]);
-
-  const moveItem = (key: string, direction: 'up' | 'down') => {
-    const idx = items.findIndex((it) => it.key === key);
-    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
-    const next = [...items];
-    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    setLocalOrder(next.map((i) => i.key));
-    setMsg(null);
+    layout.splice(insertAt, 0, { key, section });
+    setLocalLayout(layout); setMsg(null);
   };
 
-  const onDragReorder = (next: { id: string }[]) => {
-    setLocalOrder(next.map((i) => i.id));
-    setMsg(null);
+  const reorderSection = (section: InvoiceFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = displayLayout.map((e) =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalLayout(layout); setMsg(null);
+  };
+
+  const promptMoveSection = (key: string, current: InvoiceFieldSection) => {
+    Alert.alert(
+      locale === 'en' ? 'Move to section' : 'Mover a sección',
+      undefined,
+      [
+        ...INVOICE_FIELD_SECTIONS.filter((s) => s !== current).map((s) => ({
+          text: secLabel(s),
+          onPress: () => moveFieldToSection(key, s),
+        })),
+        { text: full.common.buttons.cancel, style: 'cancel' as const },
+      ],
+    );
   };
 
   return (
@@ -819,88 +911,95 @@ export function FacturasSection() {
         </Pressable>
       </View>
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <SortableList<UnifiedItem & { id: string }>
-          items={items.map((it) => ({ ...it, id: it.key }))}
-          onReorder={onDragReorder}
-          renderItem={(item, i, { drag, isActive }) => {
-            const isLast = i === items.length - 1;
-            return (
-              <View
-                className={`flex-row items-center gap-2 px-4 py-3 ${
-                  isActive ? 'bg-primary/5' : ''
-                } ${isLast ? '' : 'border-b border-gray-50'}`}
-              >
-                <Pressable onLongPress={drag} delayLongPress={120} hitSlop={6} className="p-1 -ml-1 active:opacity-60">
-                  <GripVertical size={14} color="#9CA3AF" />
-                </Pressable>
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-1.5 flex-wrap">
-                    {item.kind === 'custom' ? <Sparkles size={12} color="#4F46E5" /> : null}
-                    <Text className="text-sm text-gray-900">{item.label}</Text>
-                    {item.kind === 'custom' && item.tpl.required ? (
-                      <View className="bg-orange-50 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] text-orange-600 font-semibold">
-                          {t.customFields.requiredBadge}
-                        </Text>
+      {/* Legend: what the grip + switch on each row mean. */}
+      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
+        <View className="flex-row items-center gap-1.5">
+          <GripVertical size={13} color="#9CA3AF" />
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-1.5">
+          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
+            <View className="w-3 h-3 rounded-full bg-white" />
+          </View>
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+          </Text>
+        </View>
+      </View>
+
+      <View className="gap-4">
+        {INVOICE_FIELD_SECTIONS.map((section) => {
+          const keys = invoiceFieldsInSection(displayLayout, section);
+          if (keys.length === 0) return null;
+          return (
+            <View key={section}>
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <SortableList<{ id: string }>
+                  items={keys.map((k) => ({ id: k }))}
+                  onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
+                  renderItem={(item, i) => {
+                    const key = item.id;
+                    const isCustom = key.startsWith('custom:');
+                    const tpl = isCustom ? templates.find((it) => `custom:${it.id}` === key) : null;
+                    const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
+                    const lastInSec = i === keys.length - 1;
+                    return (
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                        <View className="p-1 -ml-1">
+                          <GripVertical size={16} color="#9CA3AF" />
+                        </View>
+                        <View className="flex-1">
+                          <View className="flex-row items-center gap-1.5 flex-wrap">
+                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
+                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom && tpl?.required ? (
+                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                                <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          {isCustom && tpl ? (
+                            <Text className="text-xs text-gray-400 mt-0.5">
+                              {t.fieldTypes[tpl.field_type]}
+                              {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {isCustom ? (
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
+                            <FolderInput size={15} color="#6B7280" />
+                          </Pressable>
+                        ) : null}
+                        {!isCustom ? (
+                          <View className="flex-row items-center gap-1">
+                            {!INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
+                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              </Pressable>
+                            )}
+                            <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
+                          </View>
+                        ) : (
+                          <>
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
+                              <Pencil size={14} color="#3B82F6" />
+                            </Pressable>
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
+                              <Trash2 size={14} color="#EF4444" />
+                            </Pressable>
+                          </>
+                        )}
                       </View>
-                    ) : null}
-                  </View>
-                  {item.kind === 'custom' ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">
-                      {t.fieldTypes[item.tpl.field_type]}
-                      {item.tpl.field_type === 'select' && item.tpl.field_options?.length
-                        ? ` · ${item.tpl.field_options.join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View className="flex-col">
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'up')}
-                    disabled={i === 0}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'down')}
-                    disabled={isLast}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </View>
-
-                {item.kind === 'standard' ? (
-                  <Toggle
-                    value={!!required[item.key]}
-                    onValueChange={() => toggleRequired(item.key)}
-                  />
-                ) : (
-                  <>
-                    <Pressable
-                      onPress={() => {
-                        setEditing(item.tpl);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg active:bg-blue-50"
-                    >
-                      <Pencil size={14} color="#3B82F6" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeTemplate(item.tpl.id)}
-                      className="p-2 rounded-lg active:bg-red-50"
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </Pressable>
-                  </>
-                )}
+                    );
+                  }}
+                />
               </View>
-            );
-          }}
-        />
+            </View>
+          );
+        })}
       </View>
 
       <StatusMsg msg={msg} />
@@ -1306,19 +1405,6 @@ export function TrabajosFieldsSection() {
     [localJobLayout, allJobKeys],
   );
 
-  const moveFieldInSection = (key: string, dir: 'up' | 'down') => {
-    const layout = [...displayLayout];
-    const idx = layout.findIndex((e) => e.key === key);
-    if (idx < 0) return;
-    const section = layout[idx].section;
-    let swap = -1;
-    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
-    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
-    if (swap < 0) return;
-    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
-    setLocalJobLayout(layout); setReqMsg(null);
-  };
-
   const moveFieldToSection = (key: string, section: JobLayoutSection) => {
     const layout = displayLayout.filter((e) => e.key !== key);
     let insertAt = -1;
@@ -1329,6 +1415,16 @@ export function TrabajosFieldsSection() {
       if (insertAt < 0) insertAt = layout.length;
     }
     layout.splice(insertAt, 0, { key, section });
+    setLocalJobLayout(layout); setReqMsg(null);
+  };
+
+  // Drag-reorder within a section: refill that section's slots in place so the
+  // other sections stay put. Cross-section moves stay on the 📁 button.
+  const reorderJobSection = (section: JobLayoutSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = displayLayout.map((e) =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
     setLocalJobLayout(layout); setReqMsg(null);
   };
 
@@ -1368,6 +1464,24 @@ export function TrabajosFieldsSection() {
         </Pressable>
       </View>
 
+      {/* Legend: what the grip + switch on each row mean. */}
+      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
+        <View className="flex-row items-center gap-1.5">
+          <GripVertical size={13} color="#9CA3AF" />
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-1.5">
+          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
+            <View className="w-3 h-3 rounded-full bg-white" />
+          </View>
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+          </Text>
+        </View>
+      </View>
+
       <View className="gap-4">
         {JOB_LAYOUT_SECTIONS.map((section) => {
           const keys = fieldsInSection(displayLayout, section);
@@ -1376,21 +1490,21 @@ export function TrabajosFieldsSection() {
             <View key={section}>
               <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
               <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                {keys.map((key, i) => {
+                <SortableList<{ id: string }>
+                  items={keys.map((k) => ({ id: k }))}
+                  onReorder={(next) => reorderJobSection(section, next.map((n) => n.id))}
+                  renderItem={(item, i) => {
+                  const key = item.id;
                   const isCustom = key.startsWith('custom:');
                   const tpl = isCustom ? templates.find((jt) => `custom:${jt.id}` === key) : null;
                   const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
-                  const firstInSec = i === 0;
                   const lastInSec = i === keys.length - 1;
                   return (
-                    <View key={key} className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
-                      <View className="flex-col">
-                        <Pressable onPress={() => moveFieldInSection(key, 'up')} disabled={firstInSec} className="px-1 active:opacity-60">
-                          <ChevronUp size={14} color={firstInSec ? '#D1D5DB' : '#6B7280'} />
-                        </Pressable>
-                        <Pressable onPress={() => moveFieldInSection(key, 'down')} disabled={lastInSec} className="px-1 active:opacity-60">
-                          <ChevronDown size={14} color={lastInSec ? '#D1D5DB' : '#6B7280'} />
-                        </Pressable>
+                    <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                      {/* Drag affordance — the whole row is the long-press
+                         target; this grip just signals "hold to reorder". */}
+                      <View className="p-1 -ml-1">
+                        <GripVertical size={16} color="#9CA3AF" />
                       </View>
                       <View className="flex-1">
                         <View className="flex-row items-center gap-1.5 flex-wrap">
@@ -1409,9 +1523,11 @@ export function TrabajosFieldsSection() {
                           </Text>
                         ) : null}
                       </View>
-                      <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
-                        <FolderInput size={15} color="#6B7280" />
-                      </Pressable>
+                      {isCustom ? (
+                        <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
+                          <FolderInput size={15} color="#6B7280" />
+                        </Pressable>
+                      ) : null}
                       {!isCustom ? (
                         <View className="flex-row items-center gap-1">
                           {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
@@ -1433,7 +1549,8 @@ export function TrabajosFieldsSection() {
                       )}
                     </View>
                   );
-                })}
+                  }}
+                />
               </View>
             </View>
           );
@@ -1748,9 +1865,10 @@ export function JobAlertsSection() {
 export function ClientesSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const tFields = full.dashboard.clients.fields;
+  const secLabel = (s: ClientFieldSection) => (locale === 'en' ? CLIENT_SECTION_LABELS[s].en : CLIENT_SECTION_LABELS[s].es);
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: tFields.firstName,
@@ -1764,6 +1882,7 @@ export function ClientesSection() {
     city: tFields.city,
     state: tFields.state,
     zip_code: tFields.zipCode,
+    notes: tFields.notes,
   };
 
   // Draft-until-save: each user-mutated value (templates, required-flags,
@@ -1782,6 +1901,14 @@ export function ClientesSection() {
   const [dbOrder, setDbOrder] = useState<string[]>(
     Array.isArray(business?.client_field_order) ? (business!.client_field_order as string[]) : [],
   );
+  const [localLayout, setLocalLayout] = useState<FieldEntry<ClientFieldSection>[]>(
+    Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as FieldEntry<ClientFieldSection>[]) : [],
+  );
+  const [dbLayout, setDbLayout] = useState<FieldEntry<ClientFieldSection>[]>(
+    Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as FieldEntry<ClientFieldSection>[]) : [],
+  );
+  const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
+  const [savingHidden, setSavingHidden] = useState(false);
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -1809,8 +1936,21 @@ export function ClientesSection() {
       const o = Array.isArray(business.client_field_order) ? (business.client_field_order as string[]) : [];
       setLocalOrder(o);
       setDbOrder(o);
+      const lay = Array.isArray(business.client_field_layout) ? (business.client_field_layout as FieldEntry<ClientFieldSection>[]) : [];
+      setLocalLayout(lay); setDbLayout(lay);
+      setHidden(parseHiddenFields(business.client_field_hidden));
     }
   }, [business]);
+
+  const toggleHidden = async (key: string) => {
+    if (!business || savingHidden) return;
+    const next = { ...hidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setHidden(next); setSavingHidden(true);
+    const { error } = await supabase.from('businesses').update({ client_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setHidden(hidden);
+    setSavingHidden(false);
+  };
 
   const loadTemplates = useCallback(async () => {
     if (!business) return;
@@ -1902,9 +2042,20 @@ export function ClientesSection() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedLayout: FieldEntry<ClientFieldSection>[] = displayLayout
+        .map((e) => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is FieldEntry<ClientFieldSection> => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         client_field_required: required,
         client_field_order: resolvedOrder,
+        client_field_layout: resolvedLayout,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -1912,6 +2063,8 @@ export function ClientesSection() {
       await loadTemplates();
       setLocalOrder(resolvedOrder);
       setDbOrder(resolvedOrder);
+      setLocalLayout(resolvedLayout);
+      setDbLayout(resolvedLayout);
       setDbRequired(required);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
@@ -1920,69 +2073,63 @@ export function ClientesSection() {
     setSavingReq(false);
   };
 
-  // Dirty when any of templates / required / order differs from its db snapshot.
+  // Dirty when any of templates / required / order / layout differs from its db snapshot.
   const dirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
-      JSON.stringify(dbOrder) !== JSON.stringify(localOrder),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder],
+      JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
+      JSON.stringify(dbLayout) !== JSON.stringify(localLayout),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout],
   );
 
   // Surface the save action to the wrapper's header. The pill auto-appears
   // when dirty=true and disappears once saveRequired clears the snapshot.
   useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
 
-  // ── Unified field list (standard + custom in one ordered display) ─────
-  // `client_field_order` is a single JSONB array where each entry is either
-  // a standard field key ("phone_cell") or a custom-template reference
-  // ("custom:<uuid>"). Lets the user interleave custom + default fields.
-  type UnifiedItem =
-    | { kind: 'standard'; key: string; label: string }
-    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
+  // ── Field layout (section + within-section order) ──
+  const allClientKeys = useMemo(
+    () => [...CLIENT_STANDARD_KEYS, ...templates.map((tpl) => `custom:${tpl.id}`)],
+    [templates],
+  );
+  const displayLayout = useMemo(
+    () => parseClientLayout(localLayout, allClientKeys),
+    [localLayout, allClientKeys],
+  );
 
-  const items: UnifiedItem[] = useMemo(() => {
-    const standardItems: UnifiedItem[] = DEFAULT_CLIENT_FIELD_KEYS.map((k) => ({
-      kind: 'standard' as const,
-      key: k,
-      label: FIELD_LABELS[k],
-    }));
-    const customItems: UnifiedItem[] = templates.map((tpl) => ({
-      kind: 'custom' as const,
-      key: `custom:${tpl.id}`,
-      label: tpl.field_label,
-      tpl,
-    }));
-    const all = [...standardItems, ...customItems];
-    const byKey = new Map(all.map((it) => [it.key, it]));
-
-    if (localOrder.length === 0) return all;
-
-    const ordered: UnifiedItem[] = [];
-    for (const k of localOrder) {
-      const item = byKey.get(k);
-      if (item) ordered.push(item);
+  const moveFieldToSection = (key: string, section: ClientFieldSection) => {
+    const layout = displayLayout.filter((e) => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = CLIENT_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex((e) => CLIENT_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
     }
-    // New templates / new standard fields not yet in the saved order get
-    // appended so they stay visible.
-    const used = new Set(ordered.map((i) => i.key));
-    return [...ordered, ...all.filter((i) => !used.has(i.key))];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, localOrder, full]);
-
-  const moveItem = (key: string, direction: 'up' | 'down') => {
-    const idx = items.findIndex((it) => it.key === key);
-    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
-    const next = [...items];
-    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    setLocalOrder(next.map((i) => i.key));
-    setReqMsg(null);
+    layout.splice(insertAt, 0, { key, section });
+    setLocalLayout(layout); setReqMsg(null);
   };
 
-  const onDragReorder = (next: { id: string }[]) => {
-    setLocalOrder(next.map((i) => i.id));
-    setReqMsg(null);
+  const reorderSection = (section: ClientFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = displayLayout.map((e) =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalLayout(layout); setReqMsg(null);
+  };
+
+  const promptMoveSection = (key: string, current: ClientFieldSection) => {
+    Alert.alert(
+      locale === 'en' ? 'Move to section' : 'Mover a sección',
+      undefined,
+      [
+        ...CLIENT_FIELD_SECTIONS.filter((s) => s !== current).map((s) => ({
+          text: secLabel(s),
+          onPress: () => moveFieldToSection(key, s),
+        })),
+        { text: full.common.buttons.cancel, style: 'cancel' as const },
+      ],
+    );
   };
 
   // Local-only — actual DB delete happens at Save time via the diff.
@@ -2139,99 +2286,95 @@ export function ClientesSection() {
         </Pressable>
       </View>
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <SortableList<UnifiedItem & { id: string }>
-          items={items.map((it) => ({ ...it, id: it.key }))}
-          onReorder={onDragReorder}
-          renderItem={(item, i, { drag, isActive }) => {
-            const isLast = i === items.length - 1;
-            return (
-              <View
-                className={`flex-row items-center gap-2 px-4 py-3 ${
-                  isActive ? 'bg-primary/5' : ''
-                } ${isLast ? '' : 'border-b border-gray-50'}`}
-              >
-                {/* Drag handle — long-press to start drag. */}
-                <Pressable
-                  onLongPress={drag}
-                  delayLongPress={120}
-                  hitSlop={6}
-                  className="p-1 -ml-1 active:opacity-60"
-                >
-                  <GripVertical size={14} color="#9CA3AF" />
-                </Pressable>
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-1.5 flex-wrap">
-                    {item.kind === 'custom' ? (
-                      <Sparkles size={12} color="#4F46E5" />
-                    ) : null}
-                    <Text className="text-sm text-gray-900">{item.label}</Text>
-                    {item.kind === 'custom' && item.tpl.required ? (
-                      <View className="bg-orange-50 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] text-orange-600 font-semibold">
-                          {t.customFields.requiredBadge}
-                        </Text>
+      {/* Legend: what the grip + switch on each row mean. */}
+      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
+        <View className="flex-row items-center gap-1.5">
+          <GripVertical size={13} color="#9CA3AF" />
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-1.5">
+          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
+            <View className="w-3 h-3 rounded-full bg-white" />
+          </View>
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+          </Text>
+        </View>
+      </View>
+
+      <View className="gap-4">
+        {CLIENT_FIELD_SECTIONS.map((section) => {
+          const keys = clientFieldsInSection(displayLayout, section);
+          if (keys.length === 0) return null;
+          return (
+            <View key={section}>
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <SortableList<{ id: string }>
+                  items={keys.map((k) => ({ id: k }))}
+                  onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
+                  renderItem={(item, i) => {
+                    const key = item.id;
+                    const isCustom = key.startsWith('custom:');
+                    const tpl = isCustom ? templates.find((it) => `custom:${it.id}` === key) : null;
+                    const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
+                    const lastInSec = i === keys.length - 1;
+                    return (
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                        <View className="p-1 -ml-1">
+                          <GripVertical size={16} color="#9CA3AF" />
+                        </View>
+                        <View className="flex-1">
+                          <View className="flex-row items-center gap-1.5 flex-wrap">
+                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
+                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom && tpl?.required ? (
+                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                                <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          {isCustom && tpl ? (
+                            <Text className="text-xs text-gray-400 mt-0.5">
+                              {t.fieldTypes[tpl.field_type]}
+                              {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {isCustom ? (
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
+                            <FolderInput size={15} color="#6B7280" />
+                          </Pressable>
+                        ) : null}
+                        {!isCustom ? (
+                          <View className="flex-row items-center gap-1">
+                            {!CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
+                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              </Pressable>
+                            )}
+                            <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
+                          </View>
+                        ) : (
+                          <>
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
+                              <Pencil size={14} color="#3B82F6" />
+                            </Pressable>
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
+                              <Trash2 size={14} color="#EF4444" />
+                            </Pressable>
+                          </>
+                        )}
                       </View>
-                    ) : null}
-                  </View>
-                  {item.kind === 'custom' ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">
-                      {t.fieldTypes[item.tpl.field_type]}
-                      {item.tpl.field_type === 'select' && item.tpl.field_options?.length
-                        ? ` · ${item.tpl.field_options.join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Reorder arrows — accessibility fallback alongside DnD. */}
-                <View className="flex-col">
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'up')}
-                    disabled={i === 0}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'down')}
-                    disabled={isLast}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </View>
-
-                {/* Right-side controls: standard → required toggle; custom →
-                   edit + delete (required lives on the template itself). */}
-                {item.kind === 'standard' ? (
-                  <Toggle
-                    value={!!required[item.key]}
-                    onValueChange={() => toggleRequired(item.key)}
-                  />
-                ) : (
-                  <>
-                    <Pressable
-                      onPress={() => {
-                        setEditing(item.tpl);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg active:bg-blue-50"
-                    >
-                      <Pencil size={14} color="#3B82F6" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeTemplate(item.tpl.id)}
-                      className="p-2 rounded-lg active:bg-red-50"
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </Pressable>
-                  </>
-                )}
+                    );
+                  }}
+                />
               </View>
-            );
-          }}
-        />
+            </View>
+          );
+        })}
       </View>
       <StatusMsg msg={reqMsg} />
 
@@ -2255,9 +2398,10 @@ export function ClientesSection() {
 export function EmpleadosSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const tEmpModal = full.dashboard.employees.modal;
+  const secLabel = (s: EmployeeFieldSection) => (locale === 'en' ? EMPLOYEE_SECTION_LABELS[s].en : EMPLOYEE_SECTION_LABELS[s].es);
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: tEmpModal.firstNameLabel.replace(' *', ''),
@@ -2286,6 +2430,14 @@ export function EmpleadosSection() {
   const [dbOrder, setDbOrder] = useState<string[]>(
     Array.isArray(business?.employee_field_order) ? (business!.employee_field_order as string[]) : [],
   );
+  const [localLayout, setLocalLayout] = useState<FieldEntry<EmployeeFieldSection>[]>(
+    Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as FieldEntry<EmployeeFieldSection>[]) : [],
+  );
+  const [dbLayout, setDbLayout] = useState<FieldEntry<EmployeeFieldSection>[]>(
+    Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as FieldEntry<EmployeeFieldSection>[]) : [],
+  );
+  const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
+  const [savingHidden, setSavingHidden] = useState(false);
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -2300,8 +2452,21 @@ export function EmpleadosSection() {
       setRequired(r); setDbRequired(r);
       const o = Array.isArray(business.employee_field_order) ? (business.employee_field_order as string[]) : [];
       setLocalOrder(o); setDbOrder(o);
+      const lay = Array.isArray(business.employee_field_layout) ? (business.employee_field_layout as FieldEntry<EmployeeFieldSection>[]) : [];
+      setLocalLayout(lay); setDbLayout(lay);
+      setHidden(parseHiddenFields(business.employee_field_hidden));
     }
   }, [business]);
+
+  const toggleHidden = async (key: string) => {
+    if (!business || savingHidden) return;
+    const next = { ...hidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setHidden(next); setSavingHidden(true);
+    const { error } = await supabase.from('businesses').update({ employee_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setHidden(hidden);
+    setSavingHidden(false);
+  };
 
   const loadTemplates = useCallback(async () => {
     if (!business) return;
@@ -2373,15 +2538,27 @@ export function EmpleadosSection() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedLayout: FieldEntry<EmployeeFieldSection>[] = displayLayout
+        .map((e) => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is FieldEntry<EmployeeFieldSection> => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         employee_field_required: required,
         employee_field_order: resolvedOrder,
+        employee_field_layout: resolvedLayout,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
       await refetchBusiness();
       await loadTemplates();
       setLocalOrder(resolvedOrder); setDbOrder(resolvedOrder); setDbRequired(required);
+      setLocalLayout(resolvedLayout); setDbLayout(resolvedLayout);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
       setReqMsg({ text: t.requiredFields.saveError, isError: true });
@@ -2393,49 +2570,56 @@ export function EmpleadosSection() {
     () =>
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
-      JSON.stringify(dbOrder) !== JSON.stringify(localOrder),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder],
+      JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
+      JSON.stringify(dbLayout) !== JSON.stringify(localLayout),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout],
   );
 
   useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
 
-  type UnifiedItem =
-    | { kind: 'standard'; key: string; label: string }
-    | { kind: 'custom'; key: string; label: string; tpl: FieldTemplate };
+  // ── Field layout (section + within-section order) ──
+  const allEmployeeKeys = useMemo(
+    () => [...EMPLOYEE_STANDARD_KEYS, ...templates.map((tpl) => `custom:${tpl.id}`)],
+    [templates],
+  );
+  const displayLayout = useMemo(
+    () => parseEmployeeLayout(localLayout, allEmployeeKeys),
+    [localLayout, allEmployeeKeys],
+  );
 
-  const items: UnifiedItem[] = useMemo(() => {
-    const standardItems: UnifiedItem[] = DEFAULT_EMPLOYEE_FIELD_KEYS.map((k) => ({
-      kind: 'standard' as const, key: k, label: FIELD_LABELS[k] ?? k,
-    }));
-    const customItems: UnifiedItem[] = templates.map((tpl) => ({
-      kind: 'custom' as const, key: `custom:${tpl.id}`, label: tpl.field_label, tpl,
-    }));
-    const all = [...standardItems, ...customItems];
-    const byKey = new Map(all.map((it) => [it.key, it]));
-    if (localOrder.length === 0) return all;
-    const ordered: UnifiedItem[] = [];
-    for (const k of localOrder) {
-      const item = byKey.get(k);
-      if (item) ordered.push(item);
+  const moveFieldToSection = (key: string, section: EmployeeFieldSection) => {
+    const layout = displayLayout.filter((e) => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = EMPLOYEE_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex((e) => EMPLOYEE_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
     }
-    const used = new Set(ordered.map((i) => i.key));
-    return [...ordered, ...all.filter((i) => !used.has(i.key))];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, localOrder, full]);
-
-  const moveItem = (key: string, direction: 'up' | 'down') => {
-    const idx = items.findIndex((it) => it.key === key);
-    const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx < 0 || otherIdx < 0 || otherIdx >= items.length) return;
-    const next = [...items];
-    [next[idx], next[otherIdx]] = [next[otherIdx], next[idx]];
-    setLocalOrder(next.map((i) => i.key));
-    setReqMsg(null);
+    layout.splice(insertAt, 0, { key, section });
+    setLocalLayout(layout); setReqMsg(null);
   };
 
-  const onDragReorder = (next: { id: string }[]) => {
-    setLocalOrder(next.map((i) => i.id));
-    setReqMsg(null);
+  const reorderSection = (section: EmployeeFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = displayLayout.map((e) =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalLayout(layout); setReqMsg(null);
+  };
+
+  const promptMoveSection = (key: string, current: EmployeeFieldSection) => {
+    Alert.alert(
+      locale === 'en' ? 'Move to section' : 'Mover a sección',
+      undefined,
+      [
+        ...EMPLOYEE_FIELD_SECTIONS.filter((s) => s !== current).map((s) => ({
+          text: secLabel(s),
+          onPress: () => moveFieldToSection(key, s),
+        })),
+        { text: full.common.buttons.cancel, style: 'cancel' as const },
+      ],
+    );
   };
 
   const removeTemplate = (id: string) => {
@@ -2505,90 +2689,95 @@ export function EmpleadosSection() {
         </Pressable>
       </View>
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <SortableList<UnifiedItem & { id: string }>
-          items={items.map((it) => ({ ...it, id: it.key }))}
-          onReorder={onDragReorder}
-          renderItem={(item, i, { drag, isActive }) => {
-            const isLast = i === items.length - 1;
-            return (
-              <View
-                className={`flex-row items-center gap-2 px-4 py-3 ${
-                  isActive ? 'bg-primary/5' : ''
-                } ${isLast ? '' : 'border-b border-gray-50'}`}
-              >
-                <Pressable onLongPress={drag} delayLongPress={120} hitSlop={6} className="p-1 -ml-1 active:opacity-60">
-                  <GripVertical size={14} color="#9CA3AF" />
-                </Pressable>
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-1.5 flex-wrap">
-                    {item.kind === 'custom' ? (
-                      <Sparkles size={12} color="#4F46E5" />
-                    ) : null}
-                    <Text className="text-sm text-gray-900">{item.label}</Text>
-                    {item.kind === 'custom' && item.tpl.required ? (
-                      <View className="bg-orange-50 px-2 py-0.5 rounded-full">
-                        <Text className="text-[10px] text-orange-600 font-semibold">
-                          {t.customFields.requiredBadge}
-                        </Text>
+      {/* Legend: what the grip + switch on each row mean. */}
+      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
+        <View className="flex-row items-center gap-1.5">
+          <GripVertical size={13} color="#9CA3AF" />
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-1.5">
+          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
+            <View className="w-3 h-3 rounded-full bg-white" />
+          </View>
+          <Text className="text-[11px] text-gray-400">
+            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+          </Text>
+        </View>
+      </View>
+
+      <View className="gap-4">
+        {EMPLOYEE_FIELD_SECTIONS.map((section) => {
+          const keys = employeeFieldsInSection(displayLayout, section);
+          if (keys.length === 0) return null;
+          return (
+            <View key={section}>
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <SortableList<{ id: string }>
+                  items={keys.map((k) => ({ id: k }))}
+                  onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
+                  renderItem={(item, i) => {
+                    const key = item.id;
+                    const isCustom = key.startsWith('custom:');
+                    const tpl = isCustom ? templates.find((it) => `custom:${it.id}` === key) : null;
+                    const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
+                    const lastInSec = i === keys.length - 1;
+                    return (
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                        <View className="p-1 -ml-1">
+                          <GripVertical size={16} color="#9CA3AF" />
+                        </View>
+                        <View className="flex-1">
+                          <View className="flex-row items-center gap-1.5 flex-wrap">
+                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
+                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom && tpl?.required ? (
+                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                                <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          {isCustom && tpl ? (
+                            <Text className="text-xs text-gray-400 mt-0.5">
+                              {t.fieldTypes[tpl.field_type]}
+                              {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {isCustom ? (
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
+                            <FolderInput size={15} color="#6B7280" />
+                          </Pressable>
+                        ) : null}
+                        {!isCustom ? (
+                          <View className="flex-row items-center gap-1">
+                            {!EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
+                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              </Pressable>
+                            )}
+                            <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
+                          </View>
+                        ) : (
+                          <>
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
+                              <Pencil size={14} color="#3B82F6" />
+                            </Pressable>
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
+                              <Trash2 size={14} color="#EF4444" />
+                            </Pressable>
+                          </>
+                        )}
                       </View>
-                    ) : null}
-                  </View>
-                  {item.kind === 'custom' ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">
-                      {t.fieldTypes[item.tpl.field_type]}
-                      {item.tpl.field_type === 'select' && item.tpl.field_options?.length
-                        ? ` · ${item.tpl.field_options.join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View className="flex-col">
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'up')}
-                    disabled={i === 0}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronUp size={14} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => moveItem(item.key, 'down')}
-                    disabled={isLast}
-                    className="px-1 active:opacity-60"
-                  >
-                    <ChevronDown size={14} color={isLast ? '#D1D5DB' : '#6B7280'} />
-                  </Pressable>
-                </View>
-
-                {item.kind === 'standard' ? (
-                  <Toggle
-                    value={!!required[item.key]}
-                    onValueChange={() => toggleRequired(item.key)}
-                  />
-                ) : (
-                  <>
-                    <Pressable
-                      onPress={() => {
-                        setEditing(item.tpl);
-                        setModalOpen(true);
-                      }}
-                      className="p-2 rounded-lg active:bg-blue-50"
-                    >
-                      <Pencil size={14} color="#3B82F6" />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeTemplate(item.tpl.id)}
-                      className="p-2 rounded-lg active:bg-red-50"
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </Pressable>
-                  </>
-                )}
+                    );
+                  }}
+                />
               </View>
-            );
-          }}
-        />
+            </View>
+          );
+        })}
       </View>
       <StatusMsg msg={reqMsg} />
 

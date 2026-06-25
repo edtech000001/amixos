@@ -14,6 +14,15 @@ import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
+import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import {
+  INVOICE_FIELD_SECTIONS,
+  INVOICE_FIELDS_ALWAYS_SHOWN,
+  INVOICE_SECTION_FIELDS,
+  parseInvoiceLayout,
+  invoiceFieldsInSection,
+  type InvoiceFieldSection,
+} from '@amixos/shared/lib/invoiceFieldSections';
 
 interface LineItem { description: string; qty: number; rate: number; }
 interface Client { id: string; first_name: string; last_name: string; }
@@ -51,7 +60,7 @@ export default function NuevaFacturaPage() {
 }
 
 function NuevaFacturaContent() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
   const { business } = useApp();
@@ -175,6 +184,96 @@ function NuevaFacturaContent() {
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount;
 
+  // Per-field show/hide (always-shown fields can never be hidden).
+  const invHidden = parseHiddenFields(business?.invoice_field_hidden);
+  const fHidden = (key: string) =>
+    !INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(invHidden, key);
+
+  // Custom fields grouped by section, in saved layout order.
+  const invAllKeys = [
+    ...INVOICE_FIELD_SECTIONS.flatMap(s => INVOICE_SECTION_FIELDS[s]),
+    ...customTemplates.map(tpl => `custom:${tpl.id}`),
+  ];
+  const invLayout = parseInvoiceLayout(business?.invoice_field_layout ?? null, invAllKeys);
+  const customsInSection = (section: InvoiceFieldSection): FieldTemplate[] =>
+    invoiceFieldsInSection(invLayout, section)
+      .filter(k => k.startsWith('custom:'))
+      .map(k => customTemplates.find(tpl => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is FieldTemplate => !!tpl);
+  const additionalLabel = locale === 'es' ? 'Detalles adicionales' : 'Additional details';
+  const sectionLabel = (section: InvoiceFieldSection): string => {
+    const es = locale === 'es';
+    switch (section) {
+      case 'general': return 'General';
+      case 'notes': return es ? 'Notas' : 'Notes';
+      case 'additional': return es ? 'Detalles adicionales' : 'Additional details';
+    }
+  };
+
+  const renderInvCustom = (tpl: FieldTemplate) => (
+    <CustomFieldInput
+      key={tpl.id}
+      template={tpl}
+      value={customFields[tpl.field_key] ?? ''}
+      onChange={v => setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }))}
+    />
+  );
+
+  // The multi-select client picker — structural-ish but lives in the General
+  // section (always shown). Spans the full grid width.
+  const clientPicker = (
+    <div key="client" className="flex flex-col gap-1.5 md:col-span-2">
+      <label className="text-sm font-medium text-gray-700">{t.clientsLabel}</label>
+      {clientIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {clientIds.map(cid => {
+            const c = clients.find(cl => cl.id === cid);
+            if (!c) return null;
+            return (
+              <span key={cid} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
+                {c.first_name} {c.last_name}
+                <button type="button" onClick={() => setClientIds(prev => prev.filter(id => id !== cid))} className="hover:text-red-500 transition-colors">
+                  <X size={12} />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <select
+        value=""
+        onChange={e => {
+          const val = e.target.value;
+          if (val && !clientIds.includes(val)) setClientIds(prev => [...prev, val]);
+        }}
+        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
+      >
+        <option value="">{clientIds.length === 0 ? t.selectClient : t.addAnotherClient}</option>
+        {clients.filter(c => !clientIds.includes(c.id)).map(c => (
+          <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  // Full-width grid-cell JSX for each built-in General field key. Only
+  // invoice_number/client/issue_date/due_date go through the data-driven loop;
+  // language + line items + tax/totals are structural and rendered separately.
+  const renderInvField = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'invoice_number':
+        return <Input key={key} label={t.invoiceNumberLabel} value={invoiceNumber} onChange={e => { setInvoiceNumber(e.target.value); numberEditedRef.current = true; }} />;
+      case 'client':
+        return clientPicker;
+      case 'issue_date':
+        return <Input key={key} label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />;
+      case 'due_date':
+        return <Input key={key} label={t.dueDateLabel} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />;
+      default:
+        return null;
+    }
+  };
+
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
     if (lines.every(l => !l.description.trim())) { setError(t.errorAtLeastOne); return; }
@@ -188,7 +287,7 @@ function NuevaFacturaContent() {
       { key: 'notes', label: t.notesLabel, filled: !!notes.trim() },
     ];
     for (const c of standardChecks) {
-      if (req[c.key] && !c.filled) {
+      if (req[c.key] && !fHidden(c.key) && !c.filled) {
         setError(t.errorRequiredField.replace('{{field}}', c.label));
         return;
       }
@@ -287,45 +386,21 @@ function NuevaFacturaContent() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {/* Client + dates */}
+        {/* General section — invoice_number, client, issue_date, due_date +
+            general customs rendered in saved layout order. Language selector
+            is structural and stays after them in the grid. */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-gray-700">{t.generalInfo}</h2>
+          <h2 className="text-sm font-semibold text-gray-700">{sectionLabel('general')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5 md:col-span-2">
-              <label className="text-sm font-medium text-gray-700">{t.clientsLabel}</label>
-              {clientIds.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {clientIds.map(cid => {
-                    const c = clients.find(cl => cl.id === cid);
-                    if (!c) return null;
-                    return (
-                      <span key={cid} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
-                        {c.first_name} {c.last_name}
-                        <button type="button" onClick={() => setClientIds(prev => prev.filter(id => id !== cid))} className="hover:text-red-500 transition-colors">
-                          <X size={12} />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              <select
-                value=""
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val && !clientIds.includes(val)) setClientIds(prev => [...prev, val]);
-                }}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
-              >
-                <option value="">{clientIds.length === 0 ? t.selectClient : t.addAnotherClient}</option>
-                {clients.filter(c => !clientIds.includes(c.id)).map(c => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
-                ))}
-              </select>
-            </div>
-            <Input label={t.invoiceNumberLabel} value={invoiceNumber} onChange={e => { setInvoiceNumber(e.target.value); numberEditedRef.current = true; }} />
-            <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
-            <Input label={t.dueDateLabel} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            {invoiceFieldsInSection(invLayout, 'general')
+              .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)))
+              .map(k => {
+                if (k.startsWith('custom:')) {
+                  const tpl = customTemplates.find(tp => `custom:${tp.id}` === k);
+                  return tpl ? renderInvCustom(tpl) : null;
+                }
+                return renderInvField(k);
+              })}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">{t.languageLabel}</label>
               <select
@@ -403,12 +478,43 @@ function NuevaFacturaContent() {
           </div>
         </div>
 
-        {/* Custom fields */}
-        {customTemplates.length > 0 && (
+        {/* Notes section — notes field + notes customs in saved layout order. */}
+        {(() => {
+          const visibleKeys = invoiceFieldsInSection(invLayout, 'notes')
+            .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
+          if (visibleKeys.length === 0) return null;
+          return (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-gray-700">{sectionLabel('notes')}</h2>
+              {visibleKeys.map(k => {
+                if (k.startsWith('custom:')) {
+                  const tpl = customTemplates.find(tp => `custom:${tp.id}` === k);
+                  return tpl ? renderInvCustom(tpl) : null;
+                }
+                if (k === 'notes') {
+                  return (
+                    <textarea
+                      key="notes"
+                      rows={3}
+                      placeholder={t.notesPlaceholder}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+                    />
+                  );
+                }
+                return null;
+              })}
+            </div>
+          );
+        })()}
+
+        {/* Additional custom fields */}
+        {customsInSection('additional').length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">{t.customFieldsHeading}</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">{additionalLabel}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {customTemplates.map(tpl => (
+              {customsInSection('additional').map(tpl => (
                 <CustomFieldInput
                   key={tpl.id}
                   template={tpl}
@@ -419,18 +525,6 @@ function NuevaFacturaContent() {
             </div>
           </div>
         )}
-
-        {/* Notes */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <label className="text-sm font-semibold text-gray-700 block mb-2">{t.notesLabel}</label>
-          <textarea
-            rows={3}
-            placeholder={t.notesPlaceholder}
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
-          />
-        </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 

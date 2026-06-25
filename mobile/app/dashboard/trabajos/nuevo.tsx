@@ -41,7 +41,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, type JobSectionKey } from '@amixos/shared/lib/jobSections';
+import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatTime12h } from '@amixos/shared/lib/format';
 import {
   evaluateOperatingHours,
@@ -64,6 +64,16 @@ interface Employee {
   first_name: string;
   last_name: string;
   role: string;
+}
+
+interface FieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
 }
 
 const US_STATES = [
@@ -216,6 +226,8 @@ export default function NuevoTrabajoRoute() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [templates, setTemplates] = useState<FieldTemplate[]>([]);
+  const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
@@ -231,7 +243,7 @@ export default function NuevoTrabajoRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const [cl, emp] = await Promise.all([
+      const [cl, emp, { data: tpl }] = await Promise.all([
         fetchAll<Client>((from, to) =>
           supabase
             .from('clients')
@@ -247,10 +259,16 @@ export default function NuevoTrabajoRoute() {
             .eq('active', true)
             .order('first_name')
             .range(from, to)),
+        supabase
+          .from('job_field_templates')
+          .select('*')
+          .eq('business_id', business.id)
+          .order('sort_order'),
       ]);
       if (cancelled) return;
       setClients(cl);
       setEmployees(emp);
+      setTemplates((tpl ?? []) as FieldTemplate[]);
 
       if (sourceId) {
         const [{ data: job }, { data: assigns }] = await Promise.all([
@@ -283,6 +301,13 @@ export default function NuevoTrabajoRoute() {
           setDescription(job.description ?? '');
           setInternalNotes(job.internal_notes ?? '');
           setWorkerNotes(job.worker_notes ?? '');
+          if (job.custom_fields && typeof job.custom_fields === 'object') {
+            const cf: Record<string, string> = {};
+            for (const [k, v] of Object.entries(job.custom_fields as Record<string, unknown>)) {
+              cf[k] = String(v ?? '');
+            }
+            setCustomFields(cf);
+          }
           setMapLink(job.job_map_link ?? '');
           if (job.job_lat != null && job.job_lng != null) {
             setJobLat(job.job_lat);
@@ -388,6 +413,36 @@ export default function NuevoTrabajoRoute() {
 
   const selectedClient = clients.find((c) => c.id === clientId) ?? null;
 
+  // Custom job fields (job_field_templates) rendered in their assigned section
+  // per business.job_field_layout. Custom field keys are `custom:<templateId>`.
+  const allJobKeys = useMemo(
+    () => [
+      'client_id', 'priority', 'description', 'job_address', 'job_city', 'job_state',
+      'coordinates', 'scheduled_date', 'time_start', 'time_end', 'total_hours',
+      'assigned_workers', 'worker_notes', 'internal_notes',
+      ...templates.map((tpl) => `custom:${tpl.id}`),
+    ],
+    [templates],
+  );
+  const jobLayout = useMemo(
+    () => parseJobLayout(business?.job_field_layout, allJobKeys),
+    [business?.job_field_layout, allJobKeys],
+  );
+  const customFieldsFor = (section: JobLayoutSection): FieldTemplate[] =>
+    fieldsInSection(jobLayout, section)
+      .filter((k) => k.startsWith('custom:'))
+      .map((k) => templates.find((tpl) => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is FieldTemplate => !!tpl);
+  const renderCustomFields = (section: JobLayoutSection) =>
+    customFieldsFor(section).map((tpl) => (
+      <CustomFieldInput
+        key={tpl.id}
+        template={tpl}
+        value={customFields[tpl.field_key] ?? ''}
+        onChange={(v) => setCustomFields((f) => ({ ...f, [tpl.field_key]: v }))}
+      />
+    ));
+
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
     const q = clientSearch.toLowerCase();
@@ -492,6 +547,24 @@ export default function NuevoTrabajoRoute() {
         return;
       }
     }
+    // Required custom fields — only enforced for sections that actually render.
+    // schedule/workers render in job mode only; general/location/notes/additional
+    // render in both modes.
+    const sectionRendered = (section: JobLayoutSection): boolean =>
+      section === 'schedule' || section === 'workers' ? !isProposal : true;
+    const missingCustom: string[] = [];
+    for (const section of ['general', 'location', 'schedule', 'workers', 'notes', 'additional'] as JobLayoutSection[]) {
+      if (!sectionRendered(section)) continue;
+      for (const tpl of customFieldsFor(section)) {
+        if (tpl.required && String(customFields[tpl.field_key] ?? '').trim() === '') {
+          missingCustom.push(tpl.field_label);
+        }
+      }
+    }
+    if (missingCustom.length) {
+      setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missingCustom.join(', ')}`);
+      return;
+    }
     if (coordsText.trim() && coordsInvalid) {
       setError(t.coordinatesInvalid);
       return;
@@ -517,6 +590,7 @@ export default function NuevoTrabajoRoute() {
         internal_notes: internalNotes.trim() || null,
         worker_notes: workerNotes.trim() || null,
         published_to_crew: publishedToCrew,
+        custom_fields: customFields,
       };
 
       if (isProposal) {
@@ -900,11 +974,13 @@ export default function NuevoTrabajoRoute() {
                 </Pressable>
               </View>
             </View>
+
+            {renderCustomFields('general')}
           </Section>
 
           {/* Location — shown for jobs AND estimates (the work has a place even
              at quote time). Save already persists it for both modes. */}
-          {secVisible('location') && (
+          {(secVisible('location') || customFieldsFor('location').length > 0) && (
             <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
               {!fHidden('coordinates') && (
               <>
@@ -996,11 +1072,13 @@ export default function NuevoTrabajoRoute() {
                 )}
               </View>
               )}
+
+              {renderCustomFields('location')}
             </Section>
           )}
 
           {/* Schedule (job mode only) */}
-          {!isProposal && secVisible('schedule') && (
+          {!isProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
               <View className="flex-row gap-3">
                 {!fHidden('scheduled_date') && (
@@ -1084,11 +1162,13 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
                 </View>
               ) : null}
+
+              {renderCustomFields('schedule')}
             </Section>
           )}
 
           {/* Workers (job mode only) */}
-          {!isProposal && secVisible('workers') && (
+          {!isProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
               {employees.length > 0 ? (
                 <>
@@ -1201,6 +1281,8 @@ export default function NuevoTrabajoRoute() {
                   ) : null}
                 </View>
               ) : null}
+
+              {renderCustomFields('workers')}
             </Section>
           )}
 
@@ -1208,7 +1290,7 @@ export default function NuevoTrabajoRoute() {
              detail page now so this form stays focused on scheduling. */}
 
           {/* Notes (section hideable in job mode) */}
-          {(isProposal || secVisible('notes')) && (
+          {(isProposal || secVisible('notes') || customFieldsFor('notes').length > 0) && (
           <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
             {isProposal ? (
               <View className="mb-3">
@@ -1262,7 +1344,17 @@ export default function NuevoTrabajoRoute() {
               />
             </View>
             )}
+
+            {renderCustomFields('notes')}
           </Section>
+          )}
+
+          {/* Additional details — custom fields assigned to the 'additional'
+             section. Only rendered when there are any. */}
+          {customFieldsFor('additional').length > 0 && (
+            <Section title={locale === 'es' ? 'Detalles adicionales' : 'Additional details'}>
+              {renderCustomFields('additional')}
+            </Section>
           )}
 
           {/* Photos — uploads need a saved job_id, so the gallery only
@@ -1680,6 +1772,64 @@ function Section({
       <View className="bg-white rounded-2xl border border-gray-100 p-4">
         {children}
       </View>
+    </View>
+  );
+}
+
+function CustomFieldInput({
+  template, value, onChange,
+}: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
+  const tc = useLang().t.common;
+  const label = template.required ? `${template.field_label} *` : template.field_label;
+  if (template.field_type === 'date') {
+    return (
+      <View className="mt-3">
+        <DatePicker label={label} value={value} onChange={onChange} />
+      </View>
+    );
+  }
+  if (template.field_type === 'boolean') {
+    // Two buttons (Yes / No), three states '' | 'true' | 'false' — nothing is
+    // pre-selected so a required field forces a pick. Tapping active clears it.
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
+    return (
+      <View className="mt-3">
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <View className="flex-row gap-2">
+          <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+          </Pressable>
+          <Pressable onPress={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  if (template.field_type === 'select' && template.field_options?.length) {
+    return (
+      <View className="mt-3">
+        <Select
+          label={label}
+          value={value}
+          onValueChange={onChange}
+          placeholder="—"
+          options={[{ value: '', label: '—' }, ...template.field_options.map((o) => ({ value: o, label: o }))]}
+        />
+      </View>
+    );
+  }
+  return (
+    <View className="mt-3">
+      <Input
+        label={label}
+        value={value}
+        onChangeText={onChange}
+        keyboardType={template.field_type === 'number' ? 'decimal-pad' : 'default'}
+      />
     </View>
   );
 }

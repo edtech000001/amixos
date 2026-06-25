@@ -25,6 +25,15 @@ import { newUuid } from '@/lib/offline/ids';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import {
+  CLIENT_FIELD_SECTIONS,
+  CLIENT_FIELDS_ALWAYS_SHOWN,
+  CLIENT_SECTION_FIELDS,
+  parseClientLayout,
+  clientFieldsInSection,
+  type ClientFieldSection,
+} from '@amixos/shared/lib/clientFieldSections';
 
 interface FieldTemplate {
   id: string;
@@ -52,8 +61,8 @@ const fmtPhoneInput = (raw: string): string => {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View className="mb-5">
-      <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">{title}</Text>
-      <View className="gap-3">{children}</View>
+      <Text className="text-xs font-semibold text-gray-400 uppercase mb-3 px-1">{title}</Text>
+      <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-3">{children}</View>
     </View>
   );
 }
@@ -152,10 +161,273 @@ export default function NuevoClienteRoute() {
   const isReq = (key: string) => !!requiredFlags[key];
   const rLabel = (key: string, base: string) => (isReq(key) ? `${base} *` : base);
 
+  // Per-field show/hide (Ajustes → Clientes eye toggles). Always-shown fields
+  // (first/last name) can never be hidden.
+  const hidden = parseHiddenFields(business?.client_field_hidden);
+  const fHidden = (key: string) =>
+    !CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
+
+  // Custom fields grouped by section, in the saved layout order.
+  const clientLayout = useMemo(() => {
+    const standardKeys = CLIENT_FIELD_SECTIONS.flatMap(s => CLIENT_SECTION_FIELDS[s]);
+    const allKeys = [...standardKeys, ...templates.map(t => `custom:${t.id}`)];
+    return parseClientLayout(business?.client_field_layout, allKeys);
+  }, [business?.client_field_layout, templates]);
+  const customFieldsFor = (section: ClientFieldSection): FieldTemplate[] =>
+    clientFieldsInSection(clientLayout, section)
+      .filter(k => k.startsWith('custom:'))
+      .map(k => templates.find(t => `custom:${t.id}` === k))
+      .filter((t): t is FieldTemplate => !!t);
+
+  // Render one custom field input (mirrors the previous flat-map renderer).
+  const renderCustomField = (tpl: FieldTemplate) => {
+    const value = customFields[tpl.field_key] ?? '';
+    const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+    const setVal = (v: string) =>
+      setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
+
+    if (tpl.field_type === 'select' && tpl.field_options) {
+      return (
+        <Select
+          key={tpl.field_key}
+          label={labelText}
+          value={value}
+          onValueChange={setVal}
+          options={[
+            { value: '', label: '—' },
+            ...tpl.field_options.map(o => ({ value: o, label: o })),
+          ]}
+        />
+      );
+    }
+    if (tpl.field_type === 'boolean') {
+      const yesActive = value === 'true';
+      const noActive = value === 'false';
+      return (
+        <View key={tpl.field_key}>
+          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <View className="flex-row gap-2">
+            <Pressable
+              onPress={() => setVal(yesActive ? '' : 'true')}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            >
+              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                {tc.states.yes}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setVal(noActive ? '' : 'false')}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            >
+              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                {tc.states.no}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+    if (tpl.field_type === 'date') {
+      return <DatePicker key={tpl.field_key} label={labelText} value={value} onChange={setVal} />;
+    }
+    return (
+      <Input
+        key={tpl.field_key}
+        label={labelText}
+        value={value}
+        onChangeText={setVal}
+        keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+      />
+    );
+  };
+
   const stateOptions: SelectOption[] = [
     { value: '', label: '—' },
     ...US_STATES.map(s => ({ value: s, label: usStateName(s, locale) })),
   ];
+
+  // Bilingual section headers (data-driven layout). General stays "General".
+  const sectionLabel: Record<ClientFieldSection, string> = {
+    general: 'General',
+    contact: locale === 'es' ? 'Contacto' : 'Contact',
+    location: locale === 'es' ? 'Ubicación' : 'Location',
+    notes: locale === 'es' ? 'Notas' : 'Notes',
+    additional: locale === 'es' ? 'Detalles adicionales' : 'Additional details',
+  };
+
+  // Full-width JSX for one built-in field key. address renders with its
+  // address_line2 companion row directly beneath it.
+  const renderField = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'first_name':
+        return (
+          <Input
+            key={key}
+            label={rLabel('first_name', t.fields.firstName)}
+            placeholder={t.fields.placeholders.firstName}
+            value={firstName}
+            onChangeText={setFirstName}
+          />
+        );
+      case 'last_name':
+        return (
+          <Input
+            key={key}
+            label={rLabel('last_name', t.fields.lastName)}
+            placeholder={t.fields.placeholders.lastName}
+            value={lastName}
+            onChangeText={setLastName}
+          />
+        );
+      case 'company':
+        return (
+          <Input
+            key={key}
+            label={rLabel('company', t.fields.company)}
+            placeholder={t.fields.placeholders.company}
+            value={company}
+            onChangeText={setCompany}
+            leftIcon={<Building2 size={15} color="#9CA3AF" />}
+          />
+        );
+      case 'phone_cell':
+        return (
+          <Input
+            key={key}
+            label={rLabel('phone_cell', t.fields.phoneCell)}
+            placeholder={t.fields.placeholders.phone}
+            value={fmtPhoneInput(phoneCell)}
+            onChangeText={v => setPhoneCell(fmtPhoneInput(v))}
+            keyboardType="phone-pad"
+            leftIcon={<Phone size={15} color="#9CA3AF" />}
+          />
+        );
+      case 'phone_office':
+        return (
+          <Input
+            key={key}
+            label={rLabel('phone_office', t.fields.phoneOffice)}
+            placeholder={t.fields.placeholders.phone}
+            value={fmtPhoneInput(phoneOffice)}
+            onChangeText={v => setPhoneOffice(fmtPhoneInput(v))}
+            keyboardType="phone-pad"
+            leftIcon={<Phone size={15} color="#9CA3AF" />}
+          />
+        );
+      case 'email_office':
+        return (
+          <Input
+            key={key}
+            label={rLabel('email_office', t.fields.emailOffice)}
+            placeholder={t.fields.placeholders.emailOffice}
+            value={emailOffice}
+            onChangeText={setEmailOffice}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            leftIcon={<Mail size={15} color="#9CA3AF" />}
+          />
+        );
+      case 'email_home':
+        return (
+          <Input
+            key={key}
+            label={rLabel('email_home', t.fields.emailHome)}
+            placeholder={t.fields.placeholders.emailHome}
+            value={emailHome}
+            onChangeText={setEmailHome}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            leftIcon={<Mail size={15} color="#9CA3AF" />}
+          />
+        );
+      case 'address':
+        return (
+          <View key={key} className="gap-3">
+            <Input
+              label={rLabel('address', t.fields.addressLine1)}
+              placeholder={t.fields.placeholders.address}
+              value={address}
+              onChangeText={setAddress}
+              leftIcon={<MapPin size={15} color="#9CA3AF" />}
+            />
+            <Input
+              label={t.fields.addressLine2}
+              placeholder={t.fields.placeholders.addressLine2}
+              value={addressLine2}
+              onChangeText={setAddressLine2}
+            />
+          </View>
+        );
+      case 'city':
+        return (
+          <Input
+            key={key}
+            label={rLabel('city', t.fields.city)}
+            placeholder={t.fields.placeholders.city}
+            value={city}
+            onChangeText={setCity}
+          />
+        );
+      case 'state':
+        return (
+          <Select
+            key={key}
+            label={rLabel('state', t.fields.state)}
+            value={state}
+            onValueChange={setState}
+            options={stateOptions}
+            searchable
+          />
+        );
+      case 'zip_code':
+        return (
+          <Input
+            key={key}
+            label={rLabel('zip_code', t.fields.zipCode)}
+            placeholder={t.fields.placeholders.zipCode}
+            value={zipCode}
+            onChangeText={v => setZipCode(v.replace(/[^0-9]/g, '').slice(0, 5))}
+            keyboardType="number-pad"
+          />
+        );
+      case 'notes':
+        return (
+          <View key={key} className="rounded-xl border border-gray-200 bg-white px-4 py-1">
+            <TextInput
+              multiline
+              numberOfLines={3}
+              placeholder={t.fields.placeholders.notes}
+              placeholderTextColor="#9CA3AF"
+              value={notes}
+              onChangeText={setNotes}
+              className="text-sm text-gray-900 py-2"
+              style={{ textAlignVertical: 'top', minHeight: 60 }}
+            />
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Data-driven render of every section: built-in (gated by fHidden) + custom
+  // fields in saved layout order. Sections with no visible field are skipped.
+  const renderSection = (section: ClientFieldSection): React.ReactNode => {
+    const keys = clientFieldsInSection(clientLayout, section);
+    const visibleKeys = keys.filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
+    if (visibleKeys.length === 0) return null;
+    return (
+      <Section key={section} title={sectionLabel[section]}>
+        {visibleKeys.map(k => {
+          if (k.startsWith('custom:')) {
+            const tpl = templates.find(tp => `custom:${tp.id}` === k);
+            return tpl ? renderCustomField(tpl) : null;
+          }
+          return renderField(k);
+        })}
+      </Section>
+    );
+  };
 
   const goBack = () => {
     if (editId) router.replace(`/dashboard/clientes/${editId}` as never);
@@ -195,7 +467,7 @@ export default function NuevoClienteRoute() {
     };
     const missing: string[] = [];
     for (const key of Object.keys(fieldLabels)) {
-      if (!isReq(key)) continue;
+      if (!isReq(key) || fHidden(key)) continue;
       const v = values[key];
       if (!v || !v.trim()) missing.push(fieldLabels[key]);
     }
@@ -307,192 +579,7 @@ export default function NuevoClienteRoute() {
           contentContainerClassName="px-5 pt-5 pb-32"
           keyboardShouldPersistTaps="handled"
         >
-          <Section title={t.sections.basicInfo}>
-            <Input
-              label={rLabel('first_name', t.fields.firstName)}
-              placeholder={t.fields.placeholders.firstName}
-              value={firstName}
-              onChangeText={setFirstName}
-            />
-            <Input
-              label={rLabel('last_name', t.fields.lastName)}
-              placeholder={t.fields.placeholders.lastName}
-              value={lastName}
-              onChangeText={setLastName}
-            />
-            <Input
-              label={rLabel('company', t.fields.company)}
-              placeholder={t.fields.placeholders.company}
-              value={company}
-              onChangeText={setCompany}
-              leftIcon={<Building2 size={15} color="#9CA3AF" />}
-            />
-          </Section>
-
-          <Section title={t.sections.phones}>
-            <Input
-              label={rLabel('phone_cell', t.fields.phoneCell)}
-              placeholder={t.fields.placeholders.phone}
-              value={fmtPhoneInput(phoneCell)}
-              onChangeText={v => setPhoneCell(fmtPhoneInput(v))}
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={15} color="#9CA3AF" />}
-            />
-            <Input
-              label={rLabel('phone_office', t.fields.phoneOffice)}
-              placeholder={t.fields.placeholders.phone}
-              value={fmtPhoneInput(phoneOffice)}
-              onChangeText={v => setPhoneOffice(fmtPhoneInput(v))}
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={15} color="#9CA3AF" />}
-            />
-          </Section>
-
-          <Section title={t.sections.emails}>
-            <Input
-              label={rLabel('email_office', t.fields.emailOffice)}
-              placeholder={t.fields.placeholders.emailOffice}
-              value={emailOffice}
-              onChangeText={setEmailOffice}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Mail size={15} color="#9CA3AF" />}
-            />
-            <Input
-              label={rLabel('email_home', t.fields.emailHome)}
-              placeholder={t.fields.placeholders.emailHome}
-              value={emailHome}
-              onChangeText={setEmailHome}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Mail size={15} color="#9CA3AF" />}
-            />
-          </Section>
-
-          <Section title={t.sections.address}>
-            <Input
-              label={rLabel('address', t.fields.addressLine1)}
-              placeholder={t.fields.placeholders.address}
-              value={address}
-              onChangeText={setAddress}
-              leftIcon={<MapPin size={15} color="#9CA3AF" />}
-            />
-            <Input
-              label={t.fields.addressLine2}
-              placeholder={t.fields.placeholders.addressLine2}
-              value={addressLine2}
-              onChangeText={setAddressLine2}
-            />
-            <Input
-              label={rLabel('city', t.fields.city)}
-              placeholder={t.fields.placeholders.city}
-              value={city}
-              onChangeText={setCity}
-            />
-            <Select
-              label={rLabel('state', t.fields.state)}
-              value={state}
-              onValueChange={setState}
-              options={stateOptions}
-              searchable
-            />
-            <Input
-              label={rLabel('zip_code', t.fields.zipCode)}
-              placeholder={t.fields.placeholders.zipCode}
-              value={zipCode}
-              onChangeText={v => setZipCode(v.replace(/[^0-9]/g, '').slice(0, 5))}
-              keyboardType="number-pad"
-            />
-          </Section>
-
-          {templates.length > 0 ? (
-            <Section title={t.sections.customFields}>
-              {templates.map(tpl => {
-                const value = customFields[tpl.field_key] ?? '';
-                const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
-                const setVal = (v: string) =>
-                  setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
-
-                if (tpl.field_type === 'select' && tpl.field_options) {
-                  return (
-                    <Select
-                      key={tpl.field_key}
-                      label={labelText}
-                      value={value}
-                      onValueChange={setVal}
-                      options={[
-                        { value: '', label: '—' },
-                        ...tpl.field_options.map(o => ({ value: o, label: o })),
-                      ]}
-                    />
-                  );
-                }
-                if (tpl.field_type === 'boolean') {
-                  // Three states — '', 'true', 'false'. Tapping active button
-                  // clears so user can return to "unanswered".
-                  const yesActive = value === 'true';
-                  const noActive = value === 'false';
-                  return (
-                    <View key={tpl.field_key}>
-                      <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
-                      <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={() => setVal(yesActive ? '' : 'true')}
-                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                        >
-                          <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
-                            {tc.states.yes}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setVal(noActive ? '' : 'false')}
-                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
-                        >
-                          <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
-                            {tc.states.no}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                }
-                if (tpl.field_type === 'date') {
-                  return (
-                    <DatePicker
-                      key={tpl.field_key}
-                      label={labelText}
-                      value={value}
-                      onChange={setVal}
-                    />
-                  );
-                }
-                return (
-                  <Input
-                    key={tpl.field_key}
-                    label={labelText}
-                    value={value}
-                    onChangeText={setVal}
-                    keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
-                  />
-                );
-              })}
-            </Section>
-          ) : null}
-
-          <Section title={t.sections.notes}>
-            <View className="rounded-xl border border-gray-200 bg-white px-4 py-1">
-              <TextInput
-                multiline
-                numberOfLines={3}
-                placeholder={t.fields.placeholders.notes}
-                placeholderTextColor="#9CA3AF"
-                value={notes}
-                onChangeText={setNotes}
-                className="text-sm text-gray-900 py-2"
-                style={{ textAlignVertical: 'top', minHeight: 60 }}
-              />
-            </View>
-          </Section>
+          {CLIENT_FIELD_SECTIONS.map(renderSection)}
 
           {error ? <Text className="text-xs text-red-500 mb-2">{error}</Text> : null}
 

@@ -3,7 +3,7 @@
 // screen) instead of the old in-list modal. Saved via the full-width button
 // at the end of the form, per the one-hand bottom-placement convention.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,15 @@ import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
+import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import {
+  EMPLOYEE_FIELD_SECTIONS,
+  EMPLOYEE_FIELDS_ALWAYS_SHOWN,
+  EMPLOYEE_SECTION_FIELDS,
+  parseEmployeeLayout,
+  employeeFieldsInSection,
+  type EmployeeFieldSection,
+} from '@amixos/shared/lib/employeeFieldSections';
 
 interface FieldTemplate {
   id: string;
@@ -122,10 +131,175 @@ export default function NuevoEmpleadoRoute() {
   const reqFlags: Record<string, boolean> = business?.employee_field_required ?? {};
   const rLabel = (key: string, base: string) => (reqFlags[key] ? `${base} *` : base);
 
+  // Per-field show/hide (Ajustes → Empleados eye toggles). first/last name
+  // can never be hidden.
+  const hidden = parseHiddenFields(business?.employee_field_hidden);
+  const fHidden = (key: string) =>
+    !EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
+
   const [form, setForm] = useState<EmpForm>(EMPTY_EMP);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Custom fields grouped by section, in the saved layout order.
+  const empLayout = useMemo(() => {
+    const standardKeys = EMPLOYEE_FIELD_SECTIONS.flatMap(s => EMPLOYEE_SECTION_FIELDS[s]);
+    const allKeys = [...standardKeys, ...templates.map(t => `custom:${t.id}`)];
+    return parseEmployeeLayout(business?.employee_field_layout, allKeys);
+  }, [business?.employee_field_layout, templates]);
+  const customFieldsFor = (section: EmployeeFieldSection): FieldTemplate[] =>
+    employeeFieldsInSection(empLayout, section)
+      .filter(k => k.startsWith('custom:'))
+      .map(k => templates.find(t => `custom:${t.id}` === k))
+      .filter((t): t is FieldTemplate => !!t);
+
+  // Bilingual section headers (data-driven layout).
+  const sectionLabel: Record<EmployeeFieldSection, string> = {
+    general: 'General',
+    contact: locale === 'es' ? 'Contacto' : 'Contact',
+    employment: locale === 'es' ? 'Empleo' : 'Employment',
+    location: locale === 'es' ? 'Ubicación' : 'Location',
+    emergency: locale === 'es' ? 'Emergencia' : 'Emergency',
+    additional: locale === 'es' ? 'Detalles adicionales' : 'Additional details',
+  };
+
+  // Full-width JSX for one built-in field key.
+  const renderField = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'first_name':
+        return (
+          <Input key={key} label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder}
+            value={form.first_name} onChangeText={(v) => setForm((f) => ({ ...f, first_name: v }))} />
+        );
+      case 'last_name':
+        return (
+          <Input key={key} label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder}
+            value={form.last_name} onChangeText={(v) => setForm((f) => ({ ...f, last_name: v }))} />
+        );
+      case 'check_name':
+        return (
+          <Input key={key} label={rLabel('check_name', t.modal.checkNameLabel)} placeholder={t.modal.checkNamePlaceholder}
+            hint={t.modal.checkNameHint}
+            value={form.check_name} onChangeText={(v) => setForm((f) => ({ ...f, check_name: v }))} />
+        );
+      case 'phone':
+        return (
+          <Input key={key} label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder}
+            value={formatPhoneInput(form.phone)}
+            onChangeText={(v) => setForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
+            keyboardType="phone-pad" />
+        );
+      case 'email':
+        return (
+          <Input key={key} label={rLabel('email', t.modal.emailLabel)} placeholder={t.modal.emailPlaceholder}
+            value={form.email} onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
+            keyboardType="email-address" autoCapitalize="none" />
+        );
+      case 'hire_date':
+        return (
+          <DatePicker key={key} label={rLabel('hire_date', t.modal.hireDateLabel)} value={form.hire_date}
+            onChange={(v) => setForm((f) => ({ ...f, hire_date: v }))} />
+        );
+      case 'pay_type':
+        return (
+          <Select key={key} label={rLabel('pay_type', t.modal.payTypeLabel)} value={form.pay_type}
+            onValueChange={(v) => setForm((f) => ({ ...f, pay_type: v }))}
+            options={PAY_TYPE_OPTIONS} />
+        );
+      case 'pay_rate':
+        return (
+          <View key={key}>
+            <Text className="text-sm font-semibold text-gray-700 mb-2">
+              {rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[form.pay_type] ?? PAY_UNIT.hourly))}
+            </Text>
+            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
+              <DollarSign size={16} color="#9CA3AF" />
+              <Input
+                containerClassName="flex-1 ml-2"
+                placeholder="0.00"
+                value={form.pay_rate}
+                onChangeText={(v) => setForm((f) => ({ ...f, pay_rate: v }))}
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+        );
+      case 'birthday':
+        return (
+          <DatePicker key={key} label={rLabel('birthday', t.modal.birthdayLabel)} value={form.birthday}
+            onChange={(v) => setForm((f) => ({ ...f, birthday: v }))} />
+        );
+      case 'address':
+        return (
+          <Input key={key} label={rLabel('address', t.modal.addressLabel)} placeholder={t.modal.addressPlaceholder}
+            value={form.address} onChangeText={(v) => setForm((f) => ({ ...f, address: v }))} />
+        );
+      case 'city':
+        return (
+          <Input key={key} label={rLabel('city', t.modal.cityLabel)} placeholder={t.modal.cityPlaceholder}
+            value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} />
+        );
+      case 'state':
+        return (
+          <Select key={key} label={rLabel('state', t.modal.stateLabel)} value={form.state}
+            onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
+            placeholder={t.modal.stateNone}
+            searchable
+            options={[{ value: '', label: t.modal.stateNone }, ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) }))]} />
+        );
+      case 'zip_code':
+        return (
+          <Input key={key} label={rLabel('zip_code', t.modal.zipLabel)} placeholder={t.modal.zipPlaceholder}
+            value={form.zip_code} onChangeText={(v) => setForm((f) => ({ ...f, zip_code: v.replace(/[^0-9]/g, '').slice(0, 5) }))}
+            keyboardType="number-pad" />
+        );
+      case 'emergency_contact_name':
+        return (
+          <Input key={key} label={rLabel('emergency_contact_name', t.modal.emergencyNameLabel)} placeholder={t.modal.emergencyNamePlaceholder}
+            value={form.emergency_contact_name}
+            onChangeText={(v) => setForm((f) => ({ ...f, emergency_contact_name: v }))} />
+        );
+      case 'emergency_contact_phone':
+        return (
+          <Input key={key} label={rLabel('emergency_contact_phone', t.modal.emergencyPhoneLabel)} placeholder={t.modal.emergencyPhonePlaceholder}
+            value={formatPhoneInput(form.emergency_contact_phone)}
+            onChangeText={(v) => setForm((f) => ({ ...f, emergency_contact_phone: formatPhoneInput(v) }))}
+            keyboardType="phone-pad" />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Data-driven render of every section: built-in (gated by fHidden) + custom
+  // fields in saved layout order. Sections with no visible field are skipped.
+  const renderSection = (section: EmployeeFieldSection): React.ReactNode => {
+    const keys = employeeFieldsInSection(empLayout, section);
+    const visibleKeys = keys.filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
+    if (visibleKeys.length === 0) return null;
+    return (
+      <View key={section}>
+        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{sectionLabel[section]}</Text>
+        <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-4">
+          {visibleKeys.map(k => {
+            if (k.startsWith('custom:')) {
+              const tpl = templates.find(tp => `custom:${tp.id}` === k);
+              return tpl ? (
+                <CustomFieldInput
+                  key={tpl.id}
+                  template={tpl}
+                  value={form.custom_fields[tpl.field_key] ?? ''}
+                  onChange={(v) => setForm((f) => ({ ...f, custom_fields: { ...f.custom_fields, [tpl.field_key]: v } }))}
+                />
+              ) : null;
+            }
+            return renderField(k);
+          })}
+        </View>
+      </View>
+    );
+  };
 
   useEffect(() => {
     if (!business) return;
@@ -176,7 +350,7 @@ export default function NuevoEmpleadoRoute() {
     };
     const missing: string[] = [];
     for (const [key, label] of Object.entries(REQUIRED_FIELD_LABELS)) {
-      if (!reqFlags[key]) continue;
+      if (!reqFlags[key] || fHidden(key)) continue;
       const v = fieldValues[key];
       if (!v || !v.trim()) missing.push(label);
     }
@@ -250,82 +424,7 @@ export default function NuevoEmpleadoRoute() {
           contentContainerClassName="px-5 pt-5 pb-32 gap-4"
           keyboardShouldPersistTaps="handled"
         >
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</Text>
-          <Input label={t.modal.firstNameLabel} placeholder={t.modal.firstNamePlaceholder}
-            value={form.first_name} onChangeText={(v) => setForm((f) => ({ ...f, first_name: v }))} />
-          <Input label={rLabel('last_name', t.modal.lastNameLabel)} placeholder={t.modal.lastNamePlaceholder}
-            value={form.last_name} onChangeText={(v) => setForm((f) => ({ ...f, last_name: v }))} />
-          <Input label={rLabel('check_name', t.modal.checkNameLabel)} placeholder={t.modal.checkNamePlaceholder}
-            hint={t.modal.checkNameHint}
-            value={form.check_name} onChangeText={(v) => setForm((f) => ({ ...f, check_name: v }))} />
-          <Input label={rLabel('phone', t.modal.phoneLabel)} placeholder={t.modal.phonePlaceholder}
-            value={formatPhoneInput(form.phone)}
-            onChangeText={(v) => setForm((f) => ({ ...f, phone: formatPhoneInput(v) }))}
-            keyboardType="phone-pad" />
-          <Input label={rLabel('email', t.modal.emailLabel)} placeholder={t.modal.emailPlaceholder}
-            value={form.email} onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
-            keyboardType="email-address" autoCapitalize="none" />
-
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">{t.modal.employmentHeading}</Text>
-          <DatePicker label={rLabel('hire_date', t.modal.hireDateLabel)} value={form.hire_date}
-            onChange={(v) => setForm((f) => ({ ...f, hire_date: v }))} />
-          <Select label={rLabel('pay_type', t.modal.payTypeLabel)} value={form.pay_type}
-            onValueChange={(v) => setForm((f) => ({ ...f, pay_type: v }))}
-            options={PAY_TYPE_OPTIONS} />
-          <View>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
-              {rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[form.pay_type] ?? PAY_UNIT.hourly))}
-            </Text>
-            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
-              <DollarSign size={16} color="#9CA3AF" />
-              <Input
-                containerClassName="flex-1 ml-2"
-                placeholder="0.00"
-                value={form.pay_rate}
-                onChangeText={(v) => setForm((f) => ({ ...f, pay_rate: v }))}
-                keyboardType="decimal-pad"
-              />
-            </View>
-          </View>
-
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">{t.modal.personalHeading}</Text>
-          <DatePicker label={rLabel('birthday', t.modal.birthdayLabel)} value={form.birthday}
-            onChange={(v) => setForm((f) => ({ ...f, birthday: v }))} />
-          <Input label={rLabel('address', t.modal.addressLabel)} placeholder={t.modal.addressPlaceholder}
-            value={form.address} onChangeText={(v) => setForm((f) => ({ ...f, address: v }))} />
-          <Input label={rLabel('city', t.modal.cityLabel)} placeholder={t.modal.cityPlaceholder}
-            value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} />
-          <Select label={rLabel('state', t.modal.stateLabel)} value={form.state}
-            onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
-            placeholder={t.modal.stateNone}
-            searchable
-            options={[{ value: '', label: t.modal.stateNone }, ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) }))]} />
-          <Input label={rLabel('zip_code', t.modal.zipLabel)} placeholder={t.modal.zipPlaceholder}
-            value={form.zip_code} onChangeText={(v) => setForm((f) => ({ ...f, zip_code: v.replace(/[^0-9]/g, '').slice(0, 5) }))}
-            keyboardType="number-pad" />
-
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">{t.modal.emergencyContactHeading}</Text>
-          <Input label={rLabel('emergency_contact_name', t.modal.emergencyNameLabel)} placeholder={t.modal.emergencyNamePlaceholder}
-            value={form.emergency_contact_name}
-            onChangeText={(v) => setForm((f) => ({ ...f, emergency_contact_name: v }))} />
-          <Input label={rLabel('emergency_contact_phone', t.modal.emergencyPhoneLabel)} placeholder={t.modal.emergencyPhonePlaceholder}
-            value={formatPhoneInput(form.emergency_contact_phone)}
-            onChangeText={(v) => setForm((f) => ({ ...f, emergency_contact_phone: formatPhoneInput(v) }))}
-            keyboardType="phone-pad" />
-
-          {templates.length > 0 ? (
-            <>
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">{t.modal.customFieldsHeading}</Text>
-              {templates.map((tpl) => (
-                <CustomFieldInput
-                  key={tpl.id}
-                  template={tpl}
-                  value={form.custom_fields[tpl.field_key] ?? ''}
-                  onChange={(v) => setForm((f) => ({ ...f, custom_fields: { ...f.custom_fields, [tpl.field_key]: v } }))}
-                />
-              ))}
-            </>
-          ) : null}
+          {EMPLOYEE_FIELD_SECTIONS.map(renderSection)}
 
           {error ? <Text className="text-xs text-red-500 mt-1">{error}</Text> : null}
 

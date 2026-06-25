@@ -12,6 +12,18 @@ import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+import {
+  CLIENT_FIELD_SECTIONS, CLIENT_FIELDS_ALWAYS_SHOWN, parseClientLayout, clientFieldsInSection,
+  CLIENT_SECTION_FIELDS, type ClientFieldSection, type ClientFieldEntry,
+} from '@amixos/shared/lib/clientFieldSections';
+import {
+  EMPLOYEE_FIELD_SECTIONS, EMPLOYEE_FIELDS_ALWAYS_SHOWN, parseEmployeeLayout, employeeFieldsInSection,
+  EMPLOYEE_SECTION_FIELDS, type EmployeeFieldSection, type EmployeeFieldEntry,
+} from '@amixos/shared/lib/employeeFieldSections';
+import {
+  INVOICE_FIELD_SECTIONS, INVOICE_FIELDS_ALWAYS_SHOWN, parseInvoiceLayout, invoiceFieldsInSection,
+  INVOICE_SECTION_FIELDS, type InvoiceFieldSection, type InvoiceFieldEntry,
+} from '@amixos/shared/lib/invoiceFieldSections';
 
 // Settings-only labels for the layout section headers (the form draws its own
 // headings). Bilingual inline — no dict keys needed.
@@ -21,7 +33,37 @@ const JOB_SECTION_LABELS: Record<JobLayoutSection, { es: string; en: string }> =
   schedule: { es: 'Horario', en: 'Schedule' },
   workers: { es: 'Trabajadores', en: 'Workers' },
   notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
 };
+
+const CLIENT_SECTION_LABELS: Record<ClientFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  contact: { es: 'Contacto', en: 'Contact' },
+  location: { es: 'Ubicación', en: 'Location' },
+  notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+const EMPLOYEE_SECTION_LABELS: Record<EmployeeFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  contact: { es: 'Contacto', en: 'Contact' },
+  employment: { es: 'Empleo', en: 'Employment' },
+  location: { es: 'Ubicación', en: 'Location' },
+  emergency: { es: 'Emergencia', en: 'Emergency' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+const INVOICE_SECTION_LABELS: Record<InvoiceFieldSection, { es: string; en: string }> = {
+  general: { es: 'General', en: 'General' },
+  notes: { es: 'Notas', en: 'Notes' },
+  additional: { es: 'Detalles adicionales', en: 'Additional details' },
+};
+
+// Standard field keys per entity, in section order — drives `allKeys` and the
+// section render (flattened from each entity's *_SECTION_FIELDS).
+const CLIENT_STANDARD_KEYS: string[] = CLIENT_FIELD_SECTIONS.flatMap(s => CLIENT_SECTION_FIELDS[s] ?? []);
+const EMPLOYEE_STANDARD_KEYS: string[] = EMPLOYEE_FIELD_SECTIONS.flatMap(s => EMPLOYEE_SECTION_FIELDS[s] ?? []);
+const INVOICE_STANDARD_KEYS: string[] = INVOICE_FIELD_SECTIONS.flatMap(s => INVOICE_SECTION_FIELDS[s] ?? []);
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -133,6 +175,23 @@ export default function AjustesPage() {
     { key: 'zip_code', label: tFields.zipCode },
   ];
 
+  // Labels for every standard client field key (incl. notes, which the legacy
+  // DEFAULT_CLIENT_FIELDS list omitted). Drives the grouped settings render.
+  const CLIENT_FIELD_LABELS: Record<string, string> = {
+    first_name: tFields.firstName,
+    last_name: tFields.lastName,
+    company: tFields.company,
+    phone_cell: tFields.phoneCell,
+    phone_office: tFields.phoneOffice,
+    email_office: tFields.emailOffice,
+    email_home: tFields.emailHome,
+    address: tFields.addressLine1,
+    city: tFields.city,
+    state: tFields.state,
+    zip_code: tFields.zipCode,
+    notes: tFields.notes,
+  };
+
   const FIELD_TYPES: Record<string, string> = {
     text: t.fieldTypes.text,
     number: t.fieldTypes.number,
@@ -151,6 +210,8 @@ export default function AjustesPage() {
     { key: 'due_date', label: tInvNew.dueDateLabel },
     { key: 'notes', label: tInvNew.notesLabel },
   ];
+  const INVOICE_FIELD_LABELS: Record<string, string> =
+    Object.fromEntries(DEFAULT_INVOICE_FIELDS.map(f => [f.key, f.label]));
 
   const ALL_PIPELINE_STEPS = PIPELINE_STEP_KEYS.map(key => ({
     key,
@@ -201,6 +262,13 @@ export default function AjustesPage() {
   const [savingInvoiceReq, setSavingInvoiceReq] = useState(false);
   const [invoiceReqMsg, setInvoiceReqMsg] = useState('');
   const [invoiceReqMsgIsError, setInvoiceReqMsgIsError] = useState(false);
+  const [localInvoiceLayout, setLocalInvoiceLayout] = useState<InvoiceFieldEntry[]>(
+    Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as InvoiceFieldEntry[]) : []
+  );
+  const [dbInvoiceLayout, setDbInvoiceLayout] = useState<InvoiceFieldEntry[]>(
+    Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as InvoiceFieldEntry[]) : []
+  );
+  const [invoiceHidden, setInvoiceHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
 
   // ── Custom field templates (invoices) — same shape, separate table.
   const [invoiceTemplates, setInvoiceTemplates] = useState<FieldTemplate[]>([]);
@@ -281,6 +349,14 @@ export default function AjustesPage() {
   const [savingFields, setSavingFields] = useState(false);
   const [fieldsMsg, setFieldsMsg] = useState('');
   const [fieldsMsgIsError, setFieldsMsgIsError] = useState(false);
+  // Grouped layout (section + within-section order) + per-field show/hide.
+  const [localClientLayout, setLocalClientLayout] = useState<ClientFieldEntry[]>(
+    Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as ClientFieldEntry[]) : []
+  );
+  const [dbClientLayout, setDbClientLayout] = useState<ClientFieldEntry[]>(
+    Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as ClientFieldEntry[]) : []
+  );
+  const [clientHidden, setClientHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
 
   // ── Contacts summary — clients + client_contacts (what syncs to Google).
   // Employees do NOT mirror to Google, so they're excluded from the count.
@@ -354,6 +430,10 @@ export default function AjustesPage() {
       const iord = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
       setLocalInvoiceOrder(iord);
       setDbInvoiceOrder(iord);
+      const iLay = Array.isArray(business.invoice_field_layout) ? (business.invoice_field_layout as InvoiceFieldEntry[]) : [];
+      setLocalInvoiceLayout(iLay);
+      setDbInvoiceLayout(iLay);
+      setInvoiceHidden(parseHiddenFields(business.invoice_field_hidden));
       setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
       const cReq = business.client_field_required ?? {};
       setFieldRequired(cReq);
@@ -361,6 +441,10 @@ export default function AjustesPage() {
       const cOrder = Array.isArray(business.client_field_order) ? (business.client_field_order as string[]) : [];
       setLocalClientOrder(cOrder);
       setDbClientOrder(cOrder);
+      const cLay = Array.isArray(business.client_field_layout) ? (business.client_field_layout as ClientFieldEntry[]) : [];
+      setLocalClientLayout(cLay);
+      setDbClientLayout(cLay);
+      setClientHidden(parseHiddenFields(business.client_field_hidden));
       const pd = business.job_pipeline_disabled ?? {};
       setPipelineDisabled(pd);
       setDbPipelineDisabled(pd);
@@ -526,6 +610,55 @@ export default function AjustesPage() {
     setInvoiceReqMsg('');
   };
 
+  // ── Grouped invoice layout (mirrors jobs/clients/employees) ──
+  const allInvoiceKeys = useMemo(
+    () => [...INVOICE_STANDARD_KEYS, ...invoiceTemplates.map(tpl => `custom:${tpl.id}`)],
+    [invoiceTemplates],
+  );
+  const invoiceDisplayLayout = useMemo(
+    () => parseInvoiceLayout(localInvoiceLayout, allInvoiceKeys),
+    [localInvoiceLayout, allInvoiceKeys],
+  );
+  const moveInvoiceFieldInSection = (key: string, dir: 'up' | 'down') => {
+    const layout = [...invoiceDisplayLayout];
+    const idx = layout.findIndex(e => e.key === key);
+    if (idx < 0) return;
+    const section = layout[idx].section;
+    let swap = -1;
+    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
+    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
+    if (swap < 0) return;
+    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
+    setLocalInvoiceLayout(layout); setInvoiceReqMsg('');
+  };
+  const moveInvoiceFieldToSection = (key: string, section: InvoiceFieldSection) => {
+    const layout = invoiceDisplayLayout.filter(e => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = INVOICE_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex(e => INVOICE_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
+    }
+    layout.splice(insertAt, 0, { key, section });
+    setLocalInvoiceLayout(layout); setInvoiceReqMsg('');
+  };
+  const reorderInvoiceSection = (section: InvoiceFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = invoiceDisplayLayout.map(e =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalInvoiceLayout(layout); setInvoiceReqMsg('');
+  };
+  const toggleInvoiceFieldHidden = async (key: string) => {
+    if (!business) return;
+    const next = { ...invoiceHidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setInvoiceHidden(next);
+    const { error } = await supabase.from('businesses').update({ invoice_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setInvoiceHidden(invoiceHidden);
+  };
+
   // Draft save: diff templates, then write required + order on the business
   // row. Mirrors saveFieldPreferences (clients) / saveEmpRequired (employees).
   const saveInvoiceRequired = async () => {
@@ -576,9 +709,21 @@ export default function AjustesPage() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedInvoiceLayout: InvoiceFieldEntry[] = invoiceDisplayLayout
+        .map(e => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is InvoiceFieldEntry => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         invoice_field_required: invoiceFieldRequired,
         invoice_field_order: resolvedOrder,
+        invoice_field_layout: resolvedInvoiceLayout,
+        invoice_field_hidden: invoiceHidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -586,6 +731,8 @@ export default function AjustesPage() {
       await loadInvoiceTemplates();
       setLocalInvoiceOrder(resolvedOrder);
       setDbInvoiceOrder(resolvedOrder);
+      setLocalInvoiceLayout(resolvedInvoiceLayout);
+      setDbInvoiceLayout(resolvedInvoiceLayout);
       setDbInvoiceFieldRequired(invoiceFieldRequired);
 
       setInvoiceReqMsgIsError(false);
@@ -635,6 +782,55 @@ export default function AjustesPage() {
   const toggleFieldRequired = (key: string) => {
     setFieldRequired(prev => ({ ...prev, [key]: !prev[key] }));
     setFieldsMsg('');
+  };
+
+  // ── Grouped client layout (mirrors the jobs model) ──
+  const allClientKeys = useMemo(
+    () => [...CLIENT_STANDARD_KEYS, ...templates.map(tpl => `custom:${tpl.id}`)],
+    [templates],
+  );
+  const clientDisplayLayout = useMemo(
+    () => parseClientLayout(localClientLayout, allClientKeys),
+    [localClientLayout, allClientKeys],
+  );
+  const moveClientFieldInSection = (key: string, dir: 'up' | 'down') => {
+    const layout = [...clientDisplayLayout];
+    const idx = layout.findIndex(e => e.key === key);
+    if (idx < 0) return;
+    const section = layout[idx].section;
+    let swap = -1;
+    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
+    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
+    if (swap < 0) return;
+    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
+    setLocalClientLayout(layout); setFieldsMsg('');
+  };
+  const moveClientFieldToSection = (key: string, section: ClientFieldSection) => {
+    const layout = clientDisplayLayout.filter(e => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = CLIENT_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex(e => CLIENT_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
+    }
+    layout.splice(insertAt, 0, { key, section });
+    setLocalClientLayout(layout); setFieldsMsg('');
+  };
+  const reorderClientSection = (section: ClientFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = clientDisplayLayout.map(e =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalClientLayout(layout); setFieldsMsg('');
+  };
+  const toggleClientFieldHidden = async (key: string) => {
+    if (!business) return;
+    const next = { ...clientHidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setClientHidden(next);
+    const { error } = await supabase.from('businesses').update({ client_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setClientHidden(clientHidden);
   };
 
   const saveFieldPreferences = async () => {
@@ -694,10 +890,23 @@ export default function AjustesPage() {
         })
         .filter((k): k is string => k !== null);
 
-      // ── 3. Persist required-flags + order on the business row ──
+      // Resolve any temp custom-field ids in the layout to their real ids.
+      const resolvedClientLayout: ClientFieldEntry[] = clientDisplayLayout
+        .map(e => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is ClientFieldEntry => e !== null);
+
+      // ── 3. Persist required-flags + order + layout + hidden on the business row ──
       const { error: bizErr } = await supabase.from('businesses').update({
         client_field_required: fieldRequired,
         client_field_order: resolvedOrder,
+        client_field_layout: resolvedClientLayout,
+        client_field_hidden: clientHidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -705,6 +914,8 @@ export default function AjustesPage() {
       await loadTemplates();
       setLocalClientOrder(resolvedOrder);
       setDbClientOrder(resolvedOrder);
+      setLocalClientLayout(resolvedClientLayout);
+      setDbClientLayout(resolvedClientLayout);
       setDbFieldRequired(fieldRequired);
 
       setFieldsMsgIsError(false);
@@ -751,8 +962,9 @@ export default function AjustesPage() {
     () =>
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbFieldRequired) !== JSON.stringify(fieldRequired) ||
-      JSON.stringify(dbClientOrder) !== JSON.stringify(localClientOrder),
-    [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder],
+      JSON.stringify(dbClientOrder) !== JSON.stringify(localClientOrder) ||
+      JSON.stringify(dbClientLayout) !== JSON.stringify(localClientLayout),
+    [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder, dbClientLayout, localClientLayout],
   );
 
   // Reset every Clientes-tab working copy back to the last DB snapshot.
@@ -760,8 +972,9 @@ export default function AjustesPage() {
     setTemplates(dbTemplates);
     setFieldRequired(dbFieldRequired);
     setLocalClientOrder(dbClientOrder);
+    setLocalClientLayout(dbClientLayout);
     setFieldsMsg('');
-  }, [dbTemplates, dbFieldRequired, dbClientOrder]);
+  }, [dbTemplates, dbFieldRequired, dbClientOrder, dbClientLayout]);
 
   // tryChangeTab, anyDirty, and the beforeunload guard live near the bottom
   // of the component so they can reference every tab's dirty flag.
@@ -801,6 +1014,13 @@ export default function AjustesPage() {
   const [savingEmpRequired, setSavingEmpRequired] = useState(false);
   const [empReqMsg, setEmpReqMsg] = useState('');
   const [empReqMsgIsError, setEmpReqMsgIsError] = useState(false);
+  const [localEmpLayout, setLocalEmpLayout] = useState<EmployeeFieldEntry[]>(
+    Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as EmployeeFieldEntry[]) : []
+  );
+  const [dbEmpLayout, setDbEmpLayout] = useState<EmployeeFieldEntry[]>(
+    Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as EmployeeFieldEntry[]) : []
+  );
+  const [empHidden, setEmpHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
 
   useEffect(() => {
     if (business) {
@@ -810,12 +1030,65 @@ export default function AjustesPage() {
       const o = Array.isArray(business.employee_field_order) ? (business.employee_field_order as string[]) : [];
       setLocalEmpOrder(o);
       setDbEmpOrder(o);
+      const lay = Array.isArray(business.employee_field_layout) ? (business.employee_field_layout as EmployeeFieldEntry[]) : [];
+      setLocalEmpLayout(lay);
+      setDbEmpLayout(lay);
+      setEmpHidden(parseHiddenFields(business.employee_field_hidden));
     }
   }, [business]);
 
   const toggleEmpRequired = (key: string) => {
     setEmpRequired(prev => ({ ...prev, [key]: !prev[key] }));
     setEmpReqMsg('');
+  };
+
+  // ── Grouped employee layout (mirrors jobs/clients) ──
+  const allEmpKeys = useMemo(
+    () => [...EMPLOYEE_STANDARD_KEYS, ...empTemplates.map(tpl => `custom:${tpl.id}`)],
+    [empTemplates],
+  );
+  const empDisplayLayout = useMemo(
+    () => parseEmployeeLayout(localEmpLayout, allEmpKeys),
+    [localEmpLayout, allEmpKeys],
+  );
+  const moveEmpFieldInSection = (key: string, dir: 'up' | 'down') => {
+    const layout = [...empDisplayLayout];
+    const idx = layout.findIndex(e => e.key === key);
+    if (idx < 0) return;
+    const section = layout[idx].section;
+    let swap = -1;
+    if (dir === 'up') { for (let i = idx - 1; i >= 0; i--) if (layout[i].section === section) { swap = i; break; } }
+    else { for (let i = idx + 1; i < layout.length; i++) if (layout[i].section === section) { swap = i; break; } }
+    if (swap < 0) return;
+    [layout[idx], layout[swap]] = [layout[swap], layout[idx]];
+    setLocalEmpLayout(layout); setEmpReqMsg('');
+  };
+  const moveEmpFieldToSection = (key: string, section: EmployeeFieldSection) => {
+    const layout = empDisplayLayout.filter(e => e.key !== key);
+    let insertAt = -1;
+    for (let i = layout.length - 1; i >= 0; i--) if (layout[i].section === section) { insertAt = i + 1; break; }
+    if (insertAt < 0) {
+      const tIdx = EMPLOYEE_FIELD_SECTIONS.indexOf(section);
+      insertAt = layout.findIndex(e => EMPLOYEE_FIELD_SECTIONS.indexOf(e.section) > tIdx);
+      if (insertAt < 0) insertAt = layout.length;
+    }
+    layout.splice(insertAt, 0, { key, section });
+    setLocalEmpLayout(layout); setEmpReqMsg('');
+  };
+  const reorderEmpSection = (section: EmployeeFieldSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = empDisplayLayout.map(e =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
+    setLocalEmpLayout(layout); setEmpReqMsg('');
+  };
+  const toggleEmpFieldHidden = async (key: string) => {
+    if (!business) return;
+    const next = { ...empHidden };
+    if (next[key]) delete next[key]; else next[key] = true;
+    setEmpHidden(next);
+    const { error } = await supabase.from('businesses').update({ employee_field_hidden: next }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setEmpHidden(empHidden);
   };
 
   // Save flow (draft): diff templates + persist required-flags + order on
@@ -868,9 +1141,21 @@ export default function AjustesPage() {
         })
         .filter((k): k is string => k !== null);
 
+      const resolvedEmpLayout: EmployeeFieldEntry[] = empDisplayLayout
+        .map(e => {
+          if (e.key.startsWith('custom:') && isTempId(e.key.slice('custom:'.length))) {
+            const realId = tempToReal[e.key.slice('custom:'.length)];
+            return realId ? { key: `custom:${realId}`, section: e.section } : null;
+          }
+          return e;
+        })
+        .filter((e): e is EmployeeFieldEntry => e !== null);
+
       const { error: bizErr } = await supabase.from('businesses').update({
         employee_field_required: empRequired,
         employee_field_order: resolvedOrder,
+        employee_field_layout: resolvedEmpLayout,
+        employee_field_hidden: empHidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -878,6 +1163,8 @@ export default function AjustesPage() {
       await loadEmpTemplates();
       setLocalEmpOrder(resolvedOrder);
       setDbEmpOrder(resolvedOrder);
+      setLocalEmpLayout(resolvedEmpLayout);
+      setDbEmpLayout(resolvedEmpLayout);
       setDbEmpRequired(empRequired);
 
       setEmpReqMsgIsError(false);
@@ -931,16 +1218,18 @@ export default function AjustesPage() {
     () =>
       isDirty(dbEmpTemplates, empTemplates) ||
       JSON.stringify(dbEmpRequired) !== JSON.stringify(empRequired) ||
-      JSON.stringify(dbEmpOrder) !== JSON.stringify(localEmpOrder),
-    [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder],
+      JSON.stringify(dbEmpOrder) !== JSON.stringify(localEmpOrder) ||
+      JSON.stringify(dbEmpLayout) !== JSON.stringify(localEmpLayout),
+    [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder, dbEmpLayout, localEmpLayout],
   );
 
   const discardEmployees = useCallback(() => {
     setEmpTemplates(dbEmpTemplates);
     setEmpRequired(dbEmpRequired);
     setLocalEmpOrder(dbEmpOrder);
+    setLocalEmpLayout(dbEmpLayout);
     setEmpReqMsg('');
-  }, [dbEmpTemplates, dbEmpRequired, dbEmpOrder]);
+  }, [dbEmpTemplates, dbEmpRequired, dbEmpOrder, dbEmpLayout]);
 
   // ── Job field config (same shape as clients/employees) ────────────────
   const tJobNew = full.dashboard.jobs.new;
@@ -1056,6 +1345,17 @@ export default function AjustesPage() {
       if (insertAt < 0) insertAt = layout.length;
     }
     layout.splice(insertAt, 0, { key, section });
+    setLocalJobLayout(layout);
+  };
+
+  // Drag-reorder a section: nextKeys is that section's keys in their new order.
+  // We refill the section's slots in place so other sections stay put — drag is
+  // confined within a section (cross-section moves stay on the dropdown).
+  const reorderJobSection = (section: JobLayoutSection, nextKeys: string[]) => {
+    let p = 0;
+    const layout = displayLayout.map(e =>
+      e.section === section ? { key: nextKeys[p++], section } : e,
+    );
     setLocalJobLayout(layout);
   };
 
@@ -1572,10 +1872,11 @@ export default function AjustesPage() {
       isDirty(dbInvoiceTemplates, invoiceTemplates) ||
       JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
+      JSON.stringify(dbInvoiceLayout) !== JSON.stringify(localInvoiceLayout) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
       String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -1587,12 +1888,13 @@ export default function AjustesPage() {
     setInvoiceTemplates(dbInvoiceTemplates);
     setInvoiceFieldRequired(dbInvoiceFieldRequired);
     setLocalInvoiceOrder(dbInvoiceOrder);
+    setLocalInvoiceLayout(dbInvoiceLayout);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setInvoiceStartNumber(String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
     setInvoiceReqMsg('');
     setInvoiceMsg('');
-  }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, business]);
+  }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, dbInvoiceLayout, business]);
 
   const discardInvoiceTheme = useCallback(() => {
     setInvoiceTheme(normalizeBundle(business?.invoice_template));
@@ -1926,7 +2228,21 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-5">{t.jobsSection.subtitle}</p>
+                <p className="text-xs text-gray-400 mb-2">{t.jobsSection.subtitle}</p>
+
+                {/* Legend: what the grip + switch on each row mean. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <GripVertical size={13} className="text-gray-400"/>
+                    {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
+                      <span className="w-3 h-3 rounded-full bg-white"/>
+                    </span>
+                    {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+                  </span>
+                </div>
 
                 <div className="space-y-4 mb-5">
                   {JOB_LAYOUT_SECTIONS.map((section) => {
@@ -1937,14 +2253,23 @@ export default function AjustesPage() {
                       <div key={section}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
                         <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                          {keys.map((key, i) => {
+                          <SortableList<{ id: string }>
+                            items={keys.map(k => ({ id: k }))}
+                            onReorder={(next) => reorderJobSection(section, next.map(n => n.id))}
+                            renderItem={(item, i, { attributes, listeners }) => {
+                            const key = item.id;
                             const isCustom = key.startsWith('custom:');
                             const tpl = isCustom ? jobTemplates.find(jt => `custom:${jt.id}` === key) : null;
                             const label = isCustom ? (tpl?.field_label ?? key) : (JOB_FIELD_LABELS[key] ?? key);
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
-                              <div key={key} className="flex items-center gap-2 px-4 py-3 bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                                <button type="button" {...attributes} {...listeners}
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  aria-label="Drag to reorder">
+                                  <GripVertical size={14} />
+                                </button>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveFieldInSection(key, 'up')} disabled={firstInSec}
                                     className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
@@ -1970,16 +2295,6 @@ export default function AjustesPage() {
                                     </p>
                                   )}
                                 </div>
-                                <select
-                                  value={section}
-                                  onChange={(e) => moveFieldToSection(key, e.target.value as JobLayoutSection)}
-                                  className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
-                                  aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
-                                >
-                                  {JOB_LAYOUT_SECTIONS.map(s => (
-                                    <option key={s} value={s}>{locale === 'en' ? JOB_SECTION_LABELS[s].en : JOB_SECTION_LABELS[s].es}</option>
-                                  ))}
-                                </select>
                                 {!isCustom ? (
                                   <>
                                     {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
@@ -1993,6 +2308,16 @@ export default function AjustesPage() {
                                   </>
                                 ) : (
                                   <>
+                                    <select
+                                      value={section}
+                                      onChange={(e) => moveFieldToSection(key, e.target.value as JobLayoutSection)}
+                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
+                                    >
+                                      {JOB_LAYOUT_SECTIONS.map(s => (
+                                        <option key={s} value={s}>{locale === 'en' ? JOB_SECTION_LABELS[s].en : JOB_SECTION_LABELS[s].es}</option>
+                                      ))}
+                                    </select>
                                     <button onClick={() => tpl && openEditJobTemplate(tpl)}
                                       className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
                                       <Pencil size={13} className="text-blue-400"/>
@@ -2005,7 +2330,8 @@ export default function AjustesPage() {
                                 )}
                               </div>
                             );
-                          })}
+                            }}
+                          />
                         </div>
                       </div>
                     );
@@ -2203,87 +2529,114 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-5">{t.requiredFields.subtitle}</p>
+                <p className="text-xs text-gray-400 mb-2">{t.requiredFields.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  <SortableList<UnifiedItem & { id: string }>
-                    items={clientItems.map(it => ({ ...it, id: it.key }))}
-                    onReorder={onClientDragReorder}
-                    renderItem={(item, i, { attributes, listeners }) => {
-                      const isLast = i === clientItems.length - 1;
-                      return (
-                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                          {/* Drag handle — grip cursor, listeners attached here
-                             so action buttons stay clickable. */}
-                          <button
-                            type="button"
-                            {...attributes}
-                            {...listeners}
-                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
-                            aria-label="Drag to reorder"
-                          >
-                            <GripVertical size={14} />
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {item.kind === 'custom' && (
-                                <Sparkles size={12} className="text-primary shrink-0"/>
-                              )}
-                              <span className="text-sm text-gray-900">{item.label}</span>
-                              {item.kind === 'custom' && item.tpl.required && (
-                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
-                              )}
-                            </div>
-                            {item.kind === 'custom' && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {FIELD_TYPES[item.tpl.field_type]}
-                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                              </p>
-                            )}
-                          </div>
+                {/* Legend: what the grip + switch on each row mean. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <GripVertical size={13} className="text-gray-400"/>
+                    {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
+                      <span className="w-3 h-3 rounded-full bg-white"/>
+                    </span>
+                    {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+                  </span>
+                </div>
 
-                          {/* Reorder arrows — kept for keyboard / accessibility
-                             fallback alongside DnD. */}
-                          <div className="flex flex-col shrink-0">
-                            <button
-                              onClick={() => moveClientItem(item.key, 'up')}
-                              disabled={i === 0}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move up"
-                            >
-                              <ChevronUp size={14} className="text-gray-500"/>
-                            </button>
-                            <button
-                              onClick={() => moveClientItem(item.key, 'down')}
-                              disabled={isLast}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move down"
-                            >
-                              <ChevronDown size={14} className="text-gray-500"/>
-                            </button>
-                          </div>
-
-                          {/* Right-side controls differ by kind. */}
-                          {item.kind === 'standard' ? (
-                            <Toggle checked={!!fieldRequired[item.key]} onChange={() => toggleFieldRequired(item.key)} />
-                          ) : (
-                            <>
-                              <button onClick={() => openEditTemplate(item.tpl)}
-                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.edit}>
-                                <Pencil size={13} className="text-blue-400"/>
-                              </button>
-                              <button onClick={() => removeTemplate(item.tpl.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.delete}>
-                                <Trash2 size={13} className="text-red-400"/>
-                              </button>
-                            </>
-                          )}
+                <div className="space-y-4 mb-5">
+                  {CLIENT_FIELD_SECTIONS.map((section) => {
+                    const keys = clientFieldsInSection(clientDisplayLayout, section);
+                    if (keys.length === 0) return null;
+                    const secLabel = locale === 'en' ? CLIENT_SECTION_LABELS[section].en : CLIENT_SECTION_LABELS[section].es;
+                    return (
+                      <div key={section}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                          <SortableList<{ id: string }>
+                            items={keys.map(k => ({ id: k }))}
+                            onReorder={(next) => reorderClientSection(section, next.map(n => n.id))}
+                            renderItem={(item, i, { attributes, listeners }) => {
+                            const key = item.id;
+                            const isCustom = key.startsWith('custom:');
+                            const tpl = isCustom ? templates.find(ct => `custom:${ct.id}` === key) : null;
+                            const label = isCustom ? (tpl?.field_label ?? key) : (CLIENT_FIELD_LABELS[key] ?? key);
+                            const firstInSec = i === 0;
+                            const lastInSec = i === keys.length - 1;
+                            return (
+                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                                <button type="button" {...attributes} {...listeners}
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  aria-label="Drag to reorder">
+                                  <GripVertical size={14} />
+                                </button>
+                                <div className="flex flex-col shrink-0">
+                                  <button onClick={() => moveClientFieldInSection(key, 'up')} disabled={firstInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-gray-500"/>
+                                  </button>
+                                  <button onClick={() => moveClientFieldInSection(key, 'down')} disabled={lastInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-gray-500"/>
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
+                                    <span className="text-sm text-gray-900">{label}</span>
+                                    {isCustom && tpl?.required && (
+                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                    )}
+                                  </div>
+                                  {isCustom && tpl && (
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {FIELD_TYPES[tpl.field_type]}
+                                      {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                {!isCustom ? (
+                                  <>
+                                    {!CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                                      <button onClick={() => toggleClientFieldHidden(key)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        aria-label={clientHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                        {clientHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                      </button>
+                                    )}
+                                    <Toggle checked={!!fieldRequired[key]} onChange={() => toggleFieldRequired(key)} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <select
+                                      value={section}
+                                      onChange={(e) => moveClientFieldToSection(key, e.target.value as ClientFieldSection)}
+                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
+                                    >
+                                      {CLIENT_FIELD_SECTIONS.map(s => (
+                                        <option key={s} value={s}>{locale === 'en' ? CLIENT_SECTION_LABELS[s].en : CLIENT_SECTION_LABELS[s].es}</option>
+                                      ))}
+                                    </select>
+                                    <button onClick={() => tpl && openEditTemplate(tpl)}
+                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      <Pencil size={13} className="text-blue-400"/>
+                                    </button>
+                                    <button onClick={() => tpl && removeTemplate(tpl.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      <Trash2 size={13} className="text-red-400"/>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                            }}
+                          />
                         </div>
-                      );
-                    }}
-                  />
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {fieldsMsg && <p className={`text-xs mb-3 ${fieldsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{fieldsMsg}</p>}
@@ -2340,82 +2693,114 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-5">{t.employeesSection.subtitle}</p>
+                <p className="text-xs text-gray-400 mb-2">{t.employeesSection.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  <SortableList<UnifiedItem & { id: string }>
-                    items={empItems.map(it => ({ ...it, id: it.key }))}
-                    onReorder={onEmpDragReorder}
-                    renderItem={(item, i, { attributes, listeners }) => {
-                      const isLast = i === empItems.length - 1;
-                      return (
-                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                          <button
-                            type="button"
-                            {...attributes}
-                            {...listeners}
-                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
-                            aria-label="Drag to reorder"
-                          >
-                            <GripVertical size={14} />
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {item.kind === 'custom' && (
-                                <Sparkles size={12} className="text-primary shrink-0"/>
-                              )}
-                              <span className="text-sm text-gray-900">{item.label}</span>
-                              {item.kind === 'custom' && item.tpl.required && (
-                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
-                              )}
-                            </div>
-                            {item.kind === 'custom' && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {FIELD_TYPES[item.tpl.field_type]}
-                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                              </p>
-                            )}
-                          </div>
+                {/* Legend: what the grip + switch on each row mean. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <GripVertical size={13} className="text-gray-400"/>
+                    {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
+                      <span className="w-3 h-3 rounded-full bg-white"/>
+                    </span>
+                    {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+                  </span>
+                </div>
 
-                          <div className="flex flex-col shrink-0">
-                            <button
-                              onClick={() => moveEmpItem(item.key, 'up')}
-                              disabled={i === 0}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move up"
-                            >
-                              <ChevronUp size={14} className="text-gray-500"/>
-                            </button>
-                            <button
-                              onClick={() => moveEmpItem(item.key, 'down')}
-                              disabled={isLast}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move down"
-                            >
-                              <ChevronDown size={14} className="text-gray-500"/>
-                            </button>
-                          </div>
-
-                          {item.kind === 'standard' ? (
-                            <Toggle checked={!!empRequired[item.key]} onChange={() => toggleEmpRequired(item.key)} />
-                          ) : (
-                            <>
-                              <button onClick={() => openEditEmpTemplate(item.tpl)}
-                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.edit}>
-                                <Pencil size={13} className="text-blue-400"/>
-                              </button>
-                              <button onClick={() => removeEmpTemplate(item.tpl.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.delete}>
-                                <Trash2 size={13} className="text-red-400"/>
-                              </button>
-                            </>
-                          )}
+                <div className="space-y-4 mb-5">
+                  {EMPLOYEE_FIELD_SECTIONS.map((section) => {
+                    const keys = employeeFieldsInSection(empDisplayLayout, section);
+                    if (keys.length === 0) return null;
+                    const secLabel = locale === 'en' ? EMPLOYEE_SECTION_LABELS[section].en : EMPLOYEE_SECTION_LABELS[section].es;
+                    return (
+                      <div key={section}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                          <SortableList<{ id: string }>
+                            items={keys.map(k => ({ id: k }))}
+                            onReorder={(next) => reorderEmpSection(section, next.map(n => n.id))}
+                            renderItem={(item, i, { attributes, listeners }) => {
+                            const key = item.id;
+                            const isCustom = key.startsWith('custom:');
+                            const tpl = isCustom ? empTemplates.find(et => `custom:${et.id}` === key) : null;
+                            const label = isCustom ? (tpl?.field_label ?? key) : (EMP_FIELD_LABELS[key] ?? key);
+                            const firstInSec = i === 0;
+                            const lastInSec = i === keys.length - 1;
+                            return (
+                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                                <button type="button" {...attributes} {...listeners}
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  aria-label="Drag to reorder">
+                                  <GripVertical size={14} />
+                                </button>
+                                <div className="flex flex-col shrink-0">
+                                  <button onClick={() => moveEmpFieldInSection(key, 'up')} disabled={firstInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-gray-500"/>
+                                  </button>
+                                  <button onClick={() => moveEmpFieldInSection(key, 'down')} disabled={lastInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-gray-500"/>
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
+                                    <span className="text-sm text-gray-900">{label}</span>
+                                    {isCustom && tpl?.required && (
+                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                    )}
+                                  </div>
+                                  {isCustom && tpl && (
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {FIELD_TYPES[tpl.field_type]}
+                                      {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                {!isCustom ? (
+                                  <>
+                                    {!EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                                      <button onClick={() => toggleEmpFieldHidden(key)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        aria-label={empHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                        {empHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                      </button>
+                                    )}
+                                    <Toggle checked={!!empRequired[key]} onChange={() => toggleEmpRequired(key)} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <select
+                                      value={section}
+                                      onChange={(e) => moveEmpFieldToSection(key, e.target.value as EmployeeFieldSection)}
+                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
+                                    >
+                                      {EMPLOYEE_FIELD_SECTIONS.map(s => (
+                                        <option key={s} value={s}>{locale === 'en' ? EMPLOYEE_SECTION_LABELS[s].en : EMPLOYEE_SECTION_LABELS[s].es}</option>
+                                      ))}
+                                    </select>
+                                    <button onClick={() => tpl && openEditEmpTemplate(tpl)}
+                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      <Pencil size={13} className="text-blue-400"/>
+                                    </button>
+                                    <button onClick={() => tpl && removeEmpTemplate(tpl.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      <Trash2 size={13} className="text-red-400"/>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                            }}
+                          />
                         </div>
-                      );
-                    }}
-                  />
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {empReqMsg && <p className={`text-xs mb-3 ${empReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{empReqMsg}</p>}
@@ -2690,82 +3075,114 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-5">{t.invoicesSection.subtitle}</p>
+                <p className="text-xs text-gray-400 mb-2">{t.invoicesSection.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
-                  <SortableList<UnifiedItem & { id: string }>
-                    items={invoiceItems.map(it => ({ ...it, id: it.key }))}
-                    onReorder={onInvoiceDragReorder}
-                    renderItem={(item, i, { attributes, listeners }) => {
-                      const isLast = i === invoiceItems.length - 1;
-                      return (
-                        <div className="flex items-center gap-2 px-4 py-3 bg-white hover:bg-gray-50/50 transition-colors">
-                          <button
-                            type="button"
-                            {...attributes}
-                            {...listeners}
-                            className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
-                            aria-label="Drag to reorder"
-                          >
-                            <GripVertical size={14} />
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {item.kind === 'custom' && (
-                                <Sparkles size={12} className="text-primary shrink-0"/>
-                              )}
-                              <span className="text-sm text-gray-900">{item.label}</span>
-                              {item.kind === 'custom' && item.tpl.required && (
-                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
-                              )}
-                            </div>
-                            {item.kind === 'custom' && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {FIELD_TYPES[item.tpl.field_type]}
-                                {item.tpl.field_type === 'select' && item.tpl.field_options?.length ? ` · ${item.tpl.field_options.join(', ')}` : ''}
-                              </p>
-                            )}
-                          </div>
+                {/* Legend: what the grip + switch on each row mean. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <GripVertical size={13} className="text-gray-400"/>
+                    {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
+                      <span className="w-3 h-3 rounded-full bg-white"/>
+                    </span>
+                    {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
+                  </span>
+                </div>
 
-                          <div className="flex flex-col shrink-0">
-                            <button
-                              onClick={() => moveInvoiceItem(item.key, 'up')}
-                              disabled={i === 0}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move up"
-                            >
-                              <ChevronUp size={14} className="text-gray-500"/>
-                            </button>
-                            <button
-                              onClick={() => moveInvoiceItem(item.key, 'down')}
-                              disabled={isLast}
-                              className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              aria-label="Move down"
-                            >
-                              <ChevronDown size={14} className="text-gray-500"/>
-                            </button>
-                          </div>
-
-                          {item.kind === 'standard' ? (
-                            <Toggle checked={!!invoiceFieldRequired[item.key]} onChange={() => toggleInvoiceFieldRequired(item.key)} />
-                          ) : (
-                            <>
-                              <button onClick={() => openEditInvoiceTemplate(item.tpl)}
-                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.edit}>
-                                <Pencil size={13} className="text-blue-400"/>
-                              </button>
-                              <button onClick={() => removeInvoiceTemplate(item.tpl.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
-                                aria-label={tc.buttons.delete}>
-                                <Trash2 size={13} className="text-red-400"/>
-                              </button>
-                            </>
-                          )}
+                <div className="space-y-4 mb-5">
+                  {INVOICE_FIELD_SECTIONS.map((section) => {
+                    const keys = invoiceFieldsInSection(invoiceDisplayLayout, section);
+                    if (keys.length === 0) return null;
+                    const secLabel = locale === 'en' ? INVOICE_SECTION_LABELS[section].en : INVOICE_SECTION_LABELS[section].es;
+                    return (
+                      <div key={section}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                          <SortableList<{ id: string }>
+                            items={keys.map(k => ({ id: k }))}
+                            onReorder={(next) => reorderInvoiceSection(section, next.map(n => n.id))}
+                            renderItem={(item, i, { attributes, listeners }) => {
+                            const key = item.id;
+                            const isCustom = key.startsWith('custom:');
+                            const tpl = isCustom ? invoiceTemplates.find(it => `custom:${it.id}` === key) : null;
+                            const label = isCustom ? (tpl?.field_label ?? key) : (INVOICE_FIELD_LABELS[key] ?? key);
+                            const firstInSec = i === 0;
+                            const lastInSec = i === keys.length - 1;
+                            return (
+                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                                <button type="button" {...attributes} {...listeners}
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  aria-label="Drag to reorder">
+                                  <GripVertical size={14} />
+                                </button>
+                                <div className="flex flex-col shrink-0">
+                                  <button onClick={() => moveInvoiceFieldInSection(key, 'up')} disabled={firstInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-gray-500"/>
+                                  </button>
+                                  <button onClick={() => moveInvoiceFieldInSection(key, 'down')} disabled={lastInSec}
+                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-gray-500"/>
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
+                                    <span className="text-sm text-gray-900">{label}</span>
+                                    {isCustom && tpl?.required && (
+                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                    )}
+                                  </div>
+                                  {isCustom && tpl && (
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {FIELD_TYPES[tpl.field_type]}
+                                      {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                {!isCustom ? (
+                                  <>
+                                    {!INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && (
+                                      <button onClick={() => toggleInvoiceFieldHidden(key)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        aria-label={invoiceHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                        {invoiceHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                      </button>
+                                    )}
+                                    <Toggle checked={!!invoiceFieldRequired[key]} onChange={() => toggleInvoiceFieldRequired(key)} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <select
+                                      value={section}
+                                      onChange={(e) => moveInvoiceFieldToSection(key, e.target.value as InvoiceFieldSection)}
+                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
+                                    >
+                                      {INVOICE_FIELD_SECTIONS.map(s => (
+                                        <option key={s} value={s}>{locale === 'en' ? INVOICE_SECTION_LABELS[s].en : INVOICE_SECTION_LABELS[s].es}</option>
+                                      ))}
+                                    </select>
+                                    <button onClick={() => tpl && openEditInvoiceTemplate(tpl)}
+                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      <Pencil size={13} className="text-blue-400"/>
+                                    </button>
+                                    <button onClick={() => tpl && removeInvoiceTemplate(tpl.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      <Trash2 size={13} className="text-red-400"/>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                            }}
+                          />
                         </div>
-                      );
-                    }}
-                  />
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {invoiceReqMsg && <p className={`text-xs mb-3 ${invoiceReqMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{invoiceReqMsg}</p>}

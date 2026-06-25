@@ -9,8 +9,18 @@ import { Building2, Phone, Mail, MapPin, X } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
 import { usStateName } from '../../lib/usStates';
+import { parseHiddenFields, isFieldHidden } from '../../lib/fieldLayout';
+import {
+  CLIENT_FIELD_SECTIONS,
+  CLIENT_FIELDS_ALWAYS_SHOWN,
+  CLIENT_SECTION_FIELDS,
+  parseClientLayout,
+  clientFieldsInSection,
+  type ClientFieldSection,
+} from '../../lib/clientFieldSections';
 
 export interface ClientFieldTemplate {
+  id: string;
   field_key: string;
   field_label: string;
   field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
@@ -64,6 +74,10 @@ export interface ClientFormModalProps {
   templates: ClientFieldTemplate[];
   /** Field-keyed map of `required` flags pulled from business config. */
   requiredFlags: Record<string, boolean>;
+  /** Field-keyed map of hidden flags (businesses.client_field_hidden). */
+  hiddenFlags?: Record<string, boolean> | null;
+  /** Saved per-field layout (businesses.client_field_layout). */
+  fieldLayout?: { key: string; section: string }[] | null;
   saving: boolean;
   error: string;
   onClose: () => void;
@@ -81,6 +95,8 @@ export function ClientFormModal({
   initial,
   templates,
   requiredFlags,
+  hiddenFlags,
+  fieldLayout,
   saving,
   error,
   onClose,
@@ -143,6 +159,207 @@ export function ClientFormModal({
   const setCustom = (key: string, val: string) =>
     setForm(f => ({ ...f, custom_fields: { ...f.custom_fields, [key]: val } }));
 
+  // Per-field show/hide (always-shown fields can never be hidden).
+  const hidden = parseHiddenFields(hiddenFlags);
+  const fHidden = (key: string) =>
+    !CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
+
+  // Custom fields grouped by section, in saved layout order.
+  const allKeys = [
+    ...CLIENT_FIELD_SECTIONS.flatMap(s => CLIENT_SECTION_FIELDS[s]),
+    ...templates.map(tpl => `custom:${tpl.id}`),
+  ];
+  const layout = parseClientLayout(fieldLayout, allKeys);
+  const sectionLabel = (section: ClientFieldSection): string => {
+    const es = locale === 'es';
+    switch (section) {
+      case 'general': return 'General';
+      case 'contact': return es ? 'Contacto' : 'Contact';
+      case 'location': return es ? 'Ubicación' : 'Location';
+      case 'notes': return es ? 'Notas' : 'Notes';
+      case 'additional': return es ? 'Detalles adicionales' : 'Additional details';
+    }
+  };
+
+  const renderCustom = (tpl: ClientFieldTemplate) => {
+    const value = form.custom_fields[tpl.field_key] ?? '';
+    const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+
+    if (tpl.field_type === 'select' && tpl.field_options) {
+      return (
+        <Field key={tpl.field_key} label={labelText}>
+          <select
+            className={`${INPUT_CLS} appearance-none`}
+            value={value}
+            onChange={e => setCustom(tpl.field_key, e.target.value)}
+          >
+            <option value="">—</option>
+            {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </Field>
+      );
+    }
+    if (tpl.field_type === 'boolean') {
+      const yesActive = value === 'true';
+      const noActive = value === 'false';
+      return (
+        <Field key={tpl.field_key} label={labelText}>
+          <div className="flex gap-2">
+            <button type="button"
+              onClick={() => setCustom(tpl.field_key, yesActive ? '' : 'true')}
+              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              {tc.states.yes}
+            </button>
+            <button type="button"
+              onClick={() => setCustom(tpl.field_key, noActive ? '' : 'false')}
+              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              {tc.states.no}
+            </button>
+          </div>
+        </Field>
+      );
+    }
+    return (
+      <Field key={tpl.field_key} label={labelText}>
+        <input
+          className={INPUT_CLS}
+          type={tpl.field_type === 'date' ? 'date' : tpl.field_type === 'number' ? 'number' : 'text'}
+          value={value}
+          onChange={e => setCustom(tpl.field_key, e.target.value)}
+        />
+      </Field>
+    );
+  };
+
+  // Full-width / stacked JSX for each built-in field key. The data-driven
+  // section loop calls this in saved layout order (callers already gate on
+  // fHidden, so this never receives a hidden key).
+  const renderField = (key: string): React.ReactNode => {
+    switch (key) {
+      case 'first_name':
+        return (
+          <Field key={key} label={rLabel('first_name', t.fields.firstName)}>
+            <input className={INPUT_CLS} placeholder={t.fields.placeholders.firstName}
+              value={form.first_name} onChange={e => set('first_name', e.target.value)} />
+          </Field>
+        );
+      case 'last_name':
+        return (
+          <Field key={key} label={rLabel('last_name', t.fields.lastName)}>
+            <input className={INPUT_CLS} placeholder={t.fields.placeholders.lastName}
+              value={form.last_name} onChange={e => set('last_name', e.target.value)} />
+          </Field>
+        );
+      case 'company':
+        return (
+          <Field key={key} label={rLabel('company', t.fields.company)}>
+            <div className="relative">
+              <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.company}
+                value={form.company} onChange={e => set('company', e.target.value)} />
+            </div>
+          </Field>
+        );
+      case 'phone_cell':
+        return (
+          <Field key={key} label={rLabel('phone_cell', t.fields.phoneCell)}>
+            <div className="relative">
+              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.phone}
+                value={fmtPhoneInput(form.phone_cell)}
+                onChange={e => set('phone_cell', fmtPhoneInput(e.target.value))} inputMode="tel" />
+            </div>
+          </Field>
+        );
+      case 'phone_office':
+        return (
+          <Field key={key} label={rLabel('phone_office', t.fields.phoneOffice)}>
+            <div className="relative">
+              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.phone}
+                value={fmtPhoneInput(form.phone_office)}
+                onChange={e => set('phone_office', fmtPhoneInput(e.target.value))} inputMode="tel" />
+            </div>
+          </Field>
+        );
+      case 'email_office':
+        return (
+          <Field key={key} label={rLabel('email_office', t.fields.emailOffice)}>
+            <div className="relative">
+              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={INPUT_WITH_ICON_CLS} type="email" autoCapitalize="none"
+                placeholder={t.fields.placeholders.emailOffice}
+                value={form.email_office} onChange={e => set('email_office', e.target.value)} />
+            </div>
+          </Field>
+        );
+      case 'email_home':
+        return (
+          <Field key={key} label={rLabel('email_home', t.fields.emailHome)}>
+            <div className="relative">
+              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={INPUT_WITH_ICON_CLS} type="email" autoCapitalize="none"
+                placeholder={t.fields.placeholders.emailHome}
+                value={form.email_home} onChange={e => set('email_home', e.target.value)} />
+            </div>
+          </Field>
+        );
+      case 'address':
+        // address_line2 has no configurable key — it rides along with address.
+        return (
+          <div key={key} className="flex flex-col gap-3">
+            <Field label={rLabel('address', t.fields.addressLine1)}>
+              <div className="relative">
+                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.address}
+                  value={form.address} onChange={e => set('address', e.target.value)} />
+              </div>
+            </Field>
+            <Field label={t.fields.addressLine2}>
+              <input className={INPUT_CLS} placeholder={t.fields.placeholders.addressLine2}
+                value={form.address_line2} onChange={e => set('address_line2', e.target.value)} />
+            </Field>
+          </div>
+        );
+      case 'city':
+        return (
+          <Field key={key} label={rLabel('city', t.fields.city)}>
+            <input className={INPUT_CLS} placeholder={t.fields.placeholders.city}
+              value={form.city} onChange={e => set('city', e.target.value)} />
+          </Field>
+        );
+      case 'state':
+        return (
+          <Field key={key} label={rLabel('state', t.fields.state)}>
+            <select className={`${INPUT_CLS} appearance-none`} value={form.state}
+              onChange={e => set('state', e.target.value)}>
+              <option value="">—</option>
+              {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
+            </select>
+          </Field>
+        );
+      case 'zip_code':
+        return (
+          <Field key={key} label={rLabel('zip_code', t.fields.zipCode)}>
+            <input className={INPUT_CLS} placeholder={t.fields.placeholders.zipCode}
+              value={form.zip_code}
+              onChange={e => set('zip_code', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))}
+              inputMode="numeric" />
+          </Field>
+        );
+      case 'notes':
+        return (
+          <div key={key} className="flex flex-col gap-1.5">
+            <textarea rows={3} placeholder={t.fields.placeholders.notes}
+              value={form.notes} onChange={e => set('notes', e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={guardedClose} />
@@ -161,230 +378,28 @@ export function ClientFormModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* Body — fully data-driven: each section renders its visible fields
+            (built-in + custom) in saved layout order. */}
         <div className="overflow-y-auto py-6 px-7 flex flex-col gap-5">
-          {/* Basic info */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.basicInfo}</p>
-            <div className="flex flex-col gap-3">
-              <Field label={rLabel('first_name', t.fields.firstName)}>
-                <input
-                  className={INPUT_CLS}
-                  placeholder={t.fields.placeholders.firstName}
-                  value={form.first_name}
-                  onChange={e => set('first_name', e.target.value)}
-                />
-              </Field>
-              <Field label={rLabel('last_name', t.fields.lastName)}>
-                <input
-                  className={INPUT_CLS}
-                  placeholder={t.fields.placeholders.lastName}
-                  value={form.last_name}
-                  onChange={e => set('last_name', e.target.value)}
-                />
-              </Field>
-              <Field label={rLabel('company', t.fields.company)}>
-                <div className="relative">
-                  <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    placeholder={t.fields.placeholders.company}
-                    value={form.company}
-                    onChange={e => set('company', e.target.value)}
-                  />
+          {CLIENT_FIELD_SECTIONS.map(section => {
+            const visibleKeys = clientFieldsInSection(layout, section)
+              .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
+            if (visibleKeys.length === 0) return null;
+            return (
+              <section key={section} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{sectionLabel(section)}</p>
+                <div className="flex flex-col gap-3">
+                  {visibleKeys.map(k => {
+                    if (k.startsWith('custom:')) {
+                      const tpl = templates.find(tp => `custom:${tp.id}` === k);
+                      return tpl ? renderCustom(tpl) : null;
+                    }
+                    return renderField(k);
+                  })}
                 </div>
-              </Field>
-            </div>
-          </section>
-
-          {/* Phones */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.phones}</p>
-            <div className="flex flex-col gap-3">
-              <Field label={rLabel('phone_cell', t.fields.phoneCell)}>
-                <div className="relative">
-                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    placeholder={t.fields.placeholders.phone}
-                    value={fmtPhoneInput(form.phone_cell)}
-                    onChange={e => set('phone_cell', fmtPhoneInput(e.target.value))}
-                    inputMode="tel"
-                  />
-                </div>
-              </Field>
-              <Field label={rLabel('phone_office', t.fields.phoneOffice)}>
-                <div className="relative">
-                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    placeholder={t.fields.placeholders.phone}
-                    value={fmtPhoneInput(form.phone_office)}
-                    onChange={e => set('phone_office', fmtPhoneInput(e.target.value))}
-                    inputMode="tel"
-                  />
-                </div>
-              </Field>
-            </div>
-          </section>
-
-          {/* Emails */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.emails}</p>
-            <div className="flex flex-col gap-3">
-              <Field label={rLabel('email_office', t.fields.emailOffice)}>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    type="email"
-                    autoCapitalize="none"
-                    placeholder={t.fields.placeholders.emailOffice}
-                    value={form.email_office}
-                    onChange={e => set('email_office', e.target.value)}
-                  />
-                </div>
-              </Field>
-              <Field label={rLabel('email_home', t.fields.emailHome)}>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    type="email"
-                    autoCapitalize="none"
-                    placeholder={t.fields.placeholders.emailHome}
-                    value={form.email_home}
-                    onChange={e => set('email_home', e.target.value)}
-                  />
-                </div>
-              </Field>
-            </div>
-          </section>
-
-          {/* Address */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.address}</p>
-            <div className="flex flex-col gap-3">
-              <Field label={rLabel('address', t.fields.addressLine1)}>
-                <div className="relative">
-                  <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={INPUT_WITH_ICON_CLS}
-                    placeholder={t.fields.placeholders.address}
-                    value={form.address}
-                    onChange={e => set('address', e.target.value)}
-                  />
-                </div>
-              </Field>
-              <Field label={t.fields.addressLine2}>
-                <input
-                  className={INPUT_CLS}
-                  placeholder={t.fields.placeholders.addressLine2}
-                  value={form.address_line2}
-                  onChange={e => set('address_line2', e.target.value)}
-                />
-              </Field>
-              <Field label={rLabel('city', t.fields.city)}>
-                <input
-                  className={INPUT_CLS}
-                  placeholder={t.fields.placeholders.city}
-                  value={form.city}
-                  onChange={e => set('city', e.target.value)}
-                />
-              </Field>
-              <Field label={rLabel('state', t.fields.state)}>
-                <select
-                  className={`${INPUT_CLS} appearance-none`}
-                  value={form.state}
-                  onChange={e => set('state', e.target.value)}
-                >
-                  <option value="">—</option>
-                  {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
-                </select>
-              </Field>
-              <Field label={rLabel('zip_code', t.fields.zipCode)}>
-                <input
-                  className={INPUT_CLS}
-                  placeholder={t.fields.placeholders.zipCode}
-                  value={form.zip_code}
-                  onChange={e => set('zip_code', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))}
-                  inputMode="numeric"
-                />
-              </Field>
-            </div>
-          </section>
-
-          {/* Custom fields */}
-          {templates.length > 0 ? (
-            <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.customFields}</p>
-              <div className="flex flex-col gap-3">
-                {templates.map(tpl => {
-                  const value = form.custom_fields[tpl.field_key] ?? '';
-                  const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
-
-                  if (tpl.field_type === 'select' && tpl.field_options) {
-                    return (
-                      <Field key={tpl.field_key} label={labelText}>
-                        <select
-                          className={`${INPUT_CLS} appearance-none`}
-                          value={value}
-                          onChange={e => setCustom(tpl.field_key, e.target.value)}
-                        >
-                          <option value="">—</option>
-                          {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      </Field>
-                    );
-                  }
-                  if (tpl.field_type === 'boolean') {
-                    // Three states — '', 'true', 'false'. Clicking the active
-                    // button clears so the user can return to "unanswered".
-                    const yesActive = value === 'true';
-                    const noActive = value === 'false';
-                    return (
-                      <Field key={tpl.field_key} label={labelText}>
-                        <div className="flex gap-2">
-                          <button type="button"
-                            onClick={() => setCustom(tpl.field_key, yesActive ? '' : 'true')}
-                            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                            {tc.states.yes}
-                          </button>
-                          <button type="button"
-                            onClick={() => setCustom(tpl.field_key, noActive ? '' : 'false')}
-                            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                            {tc.states.no}
-                          </button>
-                        </div>
-                      </Field>
-                    );
-                  }
-                  return (
-                    <Field key={tpl.field_key} label={labelText}>
-                      <input
-                        className={INPUT_CLS}
-                        type={tpl.field_type === 'date' ? 'date' : tpl.field_type === 'number' ? 'number' : 'text'}
-                        value={value}
-                        onChange={e => setCustom(tpl.field_key, e.target.value)}
-                      />
-                    </Field>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
-          {/* Notes */}
-          <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{t.sections.notes}</p>
-            <textarea
-              rows={3}
-              placeholder={t.fields.placeholders.notes}
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-            />
-          </section>
+              </section>
+            );
+          })}
 
           {(emailError || error) ? <p className="text-xs text-red-500">{emailError || error}</p> : null}
 

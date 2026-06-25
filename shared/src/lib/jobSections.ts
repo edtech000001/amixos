@@ -36,8 +36,10 @@ export function isJobFieldHidden(hidden: Record<string, boolean>, key: string): 
 // ── Field layout (section + order) ──────────────────────────────────────────
 // Sections a field can belong to, in display order. 'general' holds the top
 // fields (client/priority/description) and has no heading on the form.
-export type JobLayoutSection = 'general' | 'location' | 'schedule' | 'workers' | 'notes';
-export const JOB_LAYOUT_SECTIONS: readonly JobLayoutSection[] = ['general', 'location', 'schedule', 'workers', 'notes'] as const;
+// 'additional' is the home for custom fields — it only ever holds custom
+// fields and disappears from the form/settings when it has none.
+export type JobLayoutSection = 'general' | 'location' | 'schedule' | 'workers' | 'notes' | 'additional';
+export const JOB_LAYOUT_SECTIONS: readonly JobLayoutSection[] = ['general', 'location', 'schedule', 'workers', 'notes', 'additional'] as const;
 
 export interface JobFieldEntry { key: string; section: JobLayoutSection; }
 
@@ -65,7 +67,7 @@ const DEFAULT_SECTION_FOR = (key: string): JobLayoutSection =>
 /** Merge the stored layout with the full set of valid field keys (standard +
  *  custom). Keeps stored order/section for known keys, drops stale ones, and
  *  appends any missing keys in their default section (custom fields default to
- *  'notes'). Tolerates null/garbage. */
+ *  'additional'). Tolerates null/garbage. */
 export function parseJobLayout(raw: unknown, allKeys: string[]): JobFieldEntry[] {
   const valid = new Set(allKeys);
   const stored = Array.isArray(raw) ? raw : [];
@@ -77,13 +79,13 @@ export function parseJobLayout(raw: unknown, allKeys: string[]): JobFieldEntry[]
     if (typeof key === 'string' && valid.has(key) && !seen.has(key)) {
       const sec = (typeof section === 'string' && (JOB_LAYOUT_SECTIONS as readonly string[]).includes(section))
         ? (section as JobLayoutSection)
-        : (key.startsWith('custom:') ? 'notes' : DEFAULT_SECTION_FOR(key));
+        : (key.startsWith('custom:') ? 'additional' : DEFAULT_SECTION_FOR(key));
       seen.add(key);
       out.push({ key, section: sec });
     }
   }
   for (const key of allKeys) {
-    if (!seen.has(key)) out.push({ key, section: key.startsWith('custom:') ? 'notes' : DEFAULT_SECTION_FOR(key) });
+    if (!seen.has(key)) out.push({ key, section: key.startsWith('custom:') ? 'additional' : DEFAULT_SECTION_FOR(key) });
   }
   return out;
 }

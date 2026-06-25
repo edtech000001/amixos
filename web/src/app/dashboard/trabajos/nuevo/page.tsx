@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus } from 'lucide-react';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toggle } from '@/components/ui/Toggle';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
-import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, type JobSectionKey } from '@amixos/shared/lib/jobSections';
+import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -25,6 +25,16 @@ import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
+
+interface FieldTemplate {
+  id: string;
+  field_key: string;
+  field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_options: string[] | null;
+  required: boolean;
+  sort_order: number;
+}
 
 interface LineItem {
   id: string;
@@ -139,6 +149,11 @@ function NuevoTrabajoContent() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // Custom job fields (job_field_templates) + their current values, keyed by
+  // field_key. Rendered in their assigned layout section; persisted to
+  // jobs.custom_fields (JSONB).
+  const [jobTemplates, setJobTemplates] = useState<FieldTemplate[]>([]);
+  const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(!!sourceId);
@@ -207,6 +222,54 @@ function NuevoTrabajoContent() {
 
   const isEditProposal = sourceId ? editIsProposal : isProposal;
 
+  // ── Custom-field layout ──
+  // Standard field keys (mirrors the settings-side default) + each custom
+  // field as `custom:<id>`. The stored layout maps every key to a section.
+  const STANDARD_JOB_FIELD_KEYS = [
+    'client_id', 'priority', 'description', 'job_address', 'job_city', 'job_state',
+    'coordinates', 'scheduled_date', 'time_start', 'time_end', 'total_hours',
+    'assigned_workers', 'worker_notes', 'internal_notes',
+  ];
+  const allJobKeys = useMemo(
+    () => [...STANDARD_JOB_FIELD_KEYS, ...jobTemplates.map(tpl => `custom:${tpl.id}`)],
+    [jobTemplates],
+  );
+  const jobLayout = useMemo(
+    () => parseJobLayout(business?.job_field_layout, allJobKeys),
+    [business?.job_field_layout, allJobKeys],
+  );
+  // Custom-field templates assigned to a given layout section, in layout order.
+  const customFieldsFor = (section: JobLayoutSection): FieldTemplate[] =>
+    fieldsInSection(jobLayout, section)
+      .filter(k => k.startsWith('custom:'))
+      .map(k => jobTemplates.find(tpl => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is FieldTemplate => !!tpl);
+  // Renders the custom fields for a section (used at the end of each card).
+  const renderCustomFields = (section: JobLayoutSection) =>
+    customFieldsFor(section).map(tpl => (
+      <CustomFieldInput
+        key={tpl.id}
+        template={tpl}
+        value={customFields[tpl.field_key] ?? ''}
+        onChange={v => setCustomFields(f => ({ ...f, [tpl.field_key]: v }))}
+      />
+    ));
+  // Required custom fields whose section is actually rendered on this form.
+  // general/location/notes/additional always render; schedule/workers only in
+  // job mode (those cards don't exist for proposals).
+  const customSectionRendered = (section: JobLayoutSection): boolean =>
+    (section === 'schedule' || section === 'workers') ? !isEditProposal : true;
+  const missingRequiredCustomFields = (): string[] => {
+    const out: string[] = [];
+    for (const tpl of jobTemplates) {
+      if (!tpl.required) continue;
+      const section = jobLayout.find(e => e.key === `custom:${tpl.id}`)?.section ?? 'additional';
+      if (!customSectionRendered(section)) continue;
+      if (String(customFields[tpl.field_key] ?? '').trim() === '') out.push(tpl.field_label);
+    }
+    return out;
+  };
+
   // Initialize default item for new jobs (not edit/duplicate mode)
   useEffect(() => {
     if (!sourceId && items.length === 0) {
@@ -231,6 +294,11 @@ function NuevoTrabajoContent() {
       ]);
       setClients(cl);
       setEmployees(emp);
+
+      // Custom job fields config (bounded per-business table — no pagination).
+      const { data: tmpls } = await supabase.from('job_field_templates')
+        .select('*').eq('business_id', businessId).order('sort_order');
+      setJobTemplates((tmpls ?? []) as FieldTemplate[]);
 
       if (sourceId) {
         const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
@@ -263,6 +331,14 @@ function NuevoTrabajoContent() {
           setDriverHours(job.driver_hours != null ? String(job.driver_hours) : '');
           setDescription(job.description || '');
           setInternalNotes(job.internal_notes || '');
+          // Prefill custom field values (coerce each to a string for the inputs).
+          if (job.custom_fields && typeof job.custom_fields === 'object') {
+            const cf: Record<string, string> = {};
+            for (const [k, v] of Object.entries(job.custom_fields as Record<string, unknown>)) {
+              cf[k] = String(v ?? '');
+            }
+            setCustomFields(cf);
+          }
           const isEst = !!job.estimate_number;
           setEditIsProposal(isEst);
           if (isEst) {
@@ -485,6 +561,15 @@ function NuevoTrabajoContent() {
         internal_notes: internalNotes,
       };
       const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      missing.push(...missingRequiredCustomFields());
+      if (missing.length) {
+        setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
+        return;
+      }
+    } else {
+      // Proposal mode: still enforce required custom fields whose section is
+      // rendered here (general/location/notes/additional).
+      const missing = missingRequiredCustomFields();
       if (missing.length) {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
         return;
@@ -517,6 +602,7 @@ function NuevoTrabajoContent() {
           scheduled_date: scheduledDate || null,
           end_date: endDate || null,
           published_to_crew: publishedToCrew,
+          custom_fields: customFields,
         };
 
         let finalJobId: string;
@@ -576,6 +662,7 @@ function NuevoTrabajoContent() {
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
           published_to_crew: publishedToCrew,
+          custom_fields: customFields,
         };
 
         let finalJobId: string;
@@ -832,12 +919,13 @@ function NuevoTrabajoContent() {
                 </button>
               </div>
             </div>
+            {renderCustomFields('general')}
           </div>
         </div>
 
         {/* ── Ubicación — shown for jobs AND estimates (the work has a place
             even at quote time). proposalData persists it for estimates. */}
-        {secVisible('location') && (
+        {(secVisible('location') || customFieldsFor('location').length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={15} className="text-primary"/>
@@ -886,12 +974,13 @@ function NuevoTrabajoContent() {
                 )}
               </div>
               )}
+              {renderCustomFields('location')}
             </div>
           </div>
         )}
 
         {/* ── Horario (job mode only) */}
-        {!isEditProposal && secVisible('schedule') && (
+        {!isEditProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={15} className="text-primary"/>
@@ -960,11 +1049,14 @@ function NuevoTrabajoContent() {
                 {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
               </p>
             )}
+            {customFieldsFor('schedule').length > 0 && (
+              <div className="flex flex-col gap-3 mt-3">{renderCustomFields('schedule')}</div>
+            )}
           </div>
         )}
 
         {/* ── Empleados (job mode only) */}
-        {!isEditProposal && secVisible('workers') && (
+        {!isEditProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Users size={15} className="text-primary"/>
@@ -1165,6 +1257,9 @@ function NuevoTrabajoContent() {
                 )}
               </div>
             )}
+            {customFieldsFor('workers').length > 0 && (
+              <div className="flex flex-col gap-3 mt-4">{renderCustomFields('workers')}</div>
+            )}
           </div>
         )}
 
@@ -1293,7 +1388,7 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Notas (section hideable in job mode) */}
-        {(isEditProposal || !fHidden('internal_notes')) && (
+        {(isEditProposal || !fHidden('internal_notes') || customFieldsFor('notes').length > 0) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={15} className="text-primary"/>
@@ -1316,8 +1411,22 @@ function NuevoTrabajoContent() {
                 value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
             </div>
+            {renderCustomFields('notes')}
           </div>
         </div>
+        )}
+
+        {/* ── Detalles adicionales — home for custom fields assigned to the
+            'additional' section. Only rendered when at least one exists. */}
+        {customFieldsFor('additional').length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
+              {locale === 'es' ? 'Detalles adicionales' : 'Additional details'}
+            </p>
+            <div className="flex flex-col gap-3">
+              {renderCustomFields('additional')}
+            </div>
+          </div>
         )}
 
         {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
@@ -1337,5 +1446,69 @@ function NuevoTrabajoContent() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Renders the right input for a custom job field by type. Values are always
+ * stored/passed as strings (boolean → "true"/"false", date → ISO). Mirrors the
+ * employee form's CustomFieldInput.
+ */
+function CustomFieldInput({
+  template,
+  value,
+  onChange,
+}: {
+  template: FieldTemplate;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { t: full } = useLang();
+  const tc = full.common;
+  const label = template.required ? `${template.field_label} *` : template.field_label;
+
+  if (template.field_type === 'boolean') {
+    // Three states — '', 'true', 'false'. Clicking the active button clears it
+    // so the user can return to "unanswered".
+    const yesActive = value === 'true';
+    const noActive = value === 'false';
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.yes}
+          </button>
+          <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            {tc.states.no}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (template.field_type === 'select' && template.field_options?.length) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+        >
+          <option value="">—</option>
+          {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  }
+  return (
+    <Input
+      label={label}
+      type={template.field_type === 'date' ? 'date' : template.field_type === 'number' ? 'number' : 'text'}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+    />
   );
 }
