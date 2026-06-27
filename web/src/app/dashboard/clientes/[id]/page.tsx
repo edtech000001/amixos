@@ -17,6 +17,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { useRouter } from 'next/navigation';
 import { buildClientCsv } from '@amixos/shared/lib/clientShare';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
@@ -119,6 +120,22 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   const t = full.dashboard.clients;
   const td = t.detail;
   const tc = full.common;
+  const router = useRouter();
+
+  // Delete the whole client. Mirrors mobile: sync the delete to Google BEFORE
+  // dropping the local row (the API needs the row's google_resource_name), then
+  // navigate back to the list.
+  const deleteClient = async () => {
+    if (!client) return;
+    if (!confirm(t.confirmDeleteSingle)) return;
+    const apiBaseUrl = getApiBaseUrl();
+    const jwt = await getJwt();
+    if (apiBaseUrl && jwt) {
+      try { await triggerGoogleSync('delete', id, { apiBaseUrl, jwt }); } catch { /* best-effort */ }
+    }
+    await supabase.from('clients').delete().eq('id', id);
+    router.push('/dashboard/clientes');
+  };
   const tStatus = full.dashboard.invoiceStatus;
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
@@ -427,6 +444,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={deleteClient}
+            className="text-red-600 hover:bg-red-50 hover:text-red-700">
+            <Trash2 size={14} className="mr-1.5"/> {tc.buttons.delete}
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setShareDialog(true)}>
             <Printer size={14} className="mr-1.5"/> {td.sharePdfBtn}
           </Button>

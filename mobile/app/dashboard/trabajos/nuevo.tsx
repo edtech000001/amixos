@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -42,7 +43,8 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
-import { formatTime12h } from '@amixos/shared/lib/format';
+import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
+import { UserPlus } from 'lucide-react-native';
 import {
   evaluateOperatingHours,
   normalizeOperatingHours,
@@ -230,6 +232,14 @@ export default function NuevoTrabajoRoute() {
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  // Quick-add: create a client inline without leaving the job draft.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [qaFirstName, setQaFirstName] = useState('');
+  const [qaLastName, setQaLastName] = useState('');
+  const [qaCompany, setQaCompany] = useState('');
+  const [qaPhone, setQaPhone] = useState('');
+  const [qaSaving, setQaSaving] = useState(false);
+  const [qaError, setQaError] = useState('');
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [crewPickerOpen, setCrewPickerOpen] = useState(false);
@@ -495,6 +505,60 @@ export default function NuevoTrabajoRoute() {
     setClientSearch('');
     // Don't auto-fill city/state from the client record — the job's location
     // is the worksite, which often differs from the client's mailing address.
+  };
+
+  // Open the quick-add sheet, pre-filling the first name with whatever the user
+  // already typed into the picker search box.
+  const openQuickAdd = () => {
+    setQaFirstName(clientSearch.trim());
+    setQaLastName('');
+    setQaCompany('');
+    setQaPhone('');
+    setQaError('');
+    setQuickAddOpen(true);
+  };
+
+  const saveQuickClient = async () => {
+    if (!business) return;
+    if (!qaFirstName.trim()) {
+      setQaError(locale === 'es' ? 'El nombre es obligatorio' : 'First name is required');
+      return;
+    }
+    setQaSaving(true);
+    setQaError('');
+    try {
+      const { data, error: insErr } = await supabase
+        .from('clients')
+        .insert({
+          business_id: business.id,
+          first_name: qaFirstName.trim(),
+          last_name: qaLastName.trim() || null,
+          company: qaCompany.trim() || null,
+          phone_cell: qaPhone.trim() || null,
+        })
+        .select('id, first_name, last_name, company, address, city, state')
+        .single();
+      if (insErr || !data) throw new Error(insErr?.message ?? (locale === 'es' ? 'No se pudo crear el cliente' : 'Could not create client'));
+      const newClient: Client = {
+        id: data.id,
+        first_name: data.first_name,
+        last_name: data.last_name ?? '',
+        company: data.company ?? null,
+        city: data.city ?? null,
+        state: data.state ?? null,
+      };
+      setClients((prev) => [...prev, newClient]);
+      setClientId(newClient.id);
+      setClientSearch('');
+      setQuickAddOpen(false);
+      setClientPickerOpen(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : (locale === 'es' ? 'No se pudo crear el cliente' : 'Could not create client');
+      setQaError(msg);
+      Alert.alert(locale === 'es' ? 'Error' : 'Error', msg);
+    } finally {
+      setQaSaving(false);
+    }
   };
 
   const toggleEmployee = (id: string) => {
@@ -1489,9 +1553,104 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-sm text-gray-400">{t.clientNoResults}</Text>
                 </View>
               ) : null}
+              {/* Inline create — always available, prominent in the empty state.
+                 Pre-fills the first name with the current search text. */}
+              <Pressable
+                onPress={openQuickAdd}
+                className="flex-row items-center gap-2 px-5 py-3.5 active:bg-gray-50 border-t border-gray-100"
+              >
+                <UserPlus size={16} color="#4F46E5" />
+                <Text className="text-sm font-semibold text-primary">
+                  {locale === 'es' ? 'Crear cliente nuevo' : 'Create new client'}
+                </Text>
+              </Pressable>
             </ScrollView>
           </View>
         </View>
+      </RNModal>
+
+      {/* Quick-add client sheet — create a client without leaving the job
+         draft. Mirrors the picker's bottom-sheet pattern. */}
+      <RNModal
+        visible={quickAddOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setQuickAddOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => setQuickAddOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="px-5 mb-3 flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-gray-900">
+                {locale === 'es' ? 'Nuevo cliente' : 'New client'}
+              </Text>
+              <Pressable onPress={() => setQuickAddOpen(false)} hitSlop={8} className="p-1 rounded-lg">
+                <X size={18} color="#9CA3AF" />
+              </Pressable>
+            </View>
+            <ScrollView className="px-5" keyboardShouldPersistTaps="handled">
+              <View className="gap-3">
+                <Input
+                  label={locale === 'es' ? 'Nombre *' : 'First name *'}
+                  value={qaFirstName}
+                  onChangeText={setQaFirstName}
+                  autoFocus
+                />
+                <Input
+                  label={locale === 'es' ? 'Apellido' : 'Last name'}
+                  value={qaLastName}
+                  onChangeText={setQaLastName}
+                />
+                <Input
+                  label={locale === 'es' ? 'Empresa' : 'Company'}
+                  value={qaCompany}
+                  onChangeText={setQaCompany}
+                />
+                <Input
+                  label={locale === 'es' ? 'Celular' : 'Cell'}
+                  value={qaPhone}
+                  onChangeText={(v) => setQaPhone(formatPhoneInput(v))}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              {qaError ? (
+                <View className="mt-3 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">
+                  <Text className="text-sm text-red-600">{qaError}</Text>
+                </View>
+              ) : null}
+              <Pressable
+                onPress={saveQuickClient}
+                disabled={qaSaving}
+                className={`mt-4 items-center py-3.5 rounded-2xl ${
+                  qaSaving ? 'bg-primary/50' : 'bg-primary active:opacity-80'
+                }`}
+              >
+                <Text className="text-base font-semibold text-white">
+                  {qaSaving ? '…' : tc.buttons.save}
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Lead picker modal — single-select, mirrors the client picker. */}

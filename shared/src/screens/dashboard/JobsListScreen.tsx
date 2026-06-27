@@ -290,7 +290,8 @@ export function JobsListScreen({
   const filtered = useMemo(() => {
     return jobs.filter(j => {
       const matchSearch = searchMatches(
-        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState]
+        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState,
+         j.leadName, ...j.workerNames]
           .filter(Boolean)
           .join(' '),
         search,

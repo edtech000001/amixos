@@ -20,7 +20,8 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
-import { formatTime12h } from '@amixos/shared/lib/format';
+import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
+import { Modal } from '@/components/ui/Modal';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; }
@@ -199,6 +200,14 @@ function NuevoTrabajoContent() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
+  // Quick-add new client
+  const [quickClientOpen, setQuickClientOpen] = useState(false);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState('');
+  const [quickFirstName, setQuickFirstName] = useState('');
+  const [quickLastName, setQuickLastName] = useState('');
+  const [quickCompany, setQuickCompany] = useState('');
+  const [quickPhone, setQuickPhone] = useState('');
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const leadDropdownRef = useRef<HTMLDivElement>(null);
@@ -424,6 +433,52 @@ function NuevoTrabajoContent() {
       if (client.city) setCity(client.city);
       if (client.state) setState(client.state);
     }
+  };
+
+  const openQuickClient = () => {
+    setQuickError('');
+    setQuickFirstName(clientSearch.trim());
+    setQuickLastName('');
+    setQuickCompany('');
+    setQuickPhone('');
+    setClientDropdownOpen(false);
+    setQuickClientOpen(true);
+  };
+
+  const saveQuickClient = async () => {
+    if (!business) return;
+    const firstName = quickFirstName.trim();
+    if (!firstName) {
+      setQuickError(locale === 'es' ? 'El nombre es obligatorio' : 'First name is required');
+      return;
+    }
+    setQuickSaving(true);
+    setQuickError('');
+    const { data, error } = await supabase
+      .from('clients')
+      .insert({
+        business_id: business.id,
+        first_name: firstName,
+        last_name: quickLastName.trim() || null,
+        company: quickCompany.trim() || null,
+        phone_cell: quickPhone.trim() || null,
+      })
+      .select('id, first_name, last_name, company, address, city, state')
+      .single();
+    setQuickSaving(false);
+    if (error || !data) {
+      setQuickError(error?.message || (locale === 'es' ? 'No se pudo crear el cliente' : 'Could not create client'));
+      return;
+    }
+    const newRow = data as Client;
+    setClients(prev => [...prev, newRow]);
+    handleClientChange(newRow.id);
+    setClientSearch('');
+    setQuickClientOpen(false);
+    setQuickFirstName('');
+    setQuickLastName('');
+    setQuickCompany('');
+    setQuickPhone('');
   };
 
   const filteredClients = clientSearch
@@ -830,6 +885,10 @@ function NuevoTrabajoContent() {
                         <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.clientNoResults}</p>
                       )}
                     </div>
+                    <button type="button" onClick={openQuickClient}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-gray-100">
+                      {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
+                    </button>
                   </div>
                 )}
                 {clientId && (
@@ -1445,6 +1504,45 @@ function NuevoTrabajoContent() {
           </Button>
         </div>
       </div>
+
+      <Modal
+        open={quickClientOpen}
+        onClose={() => setQuickClientOpen(false)}
+        title={locale === 'es' ? 'Nuevo cliente' : 'New client'}
+        size="md"
+      >
+        <div className="flex flex-col gap-3">
+          <Input
+            label={locale === 'es' ? 'Nombre' : 'First name'}
+            value={quickFirstName}
+            onChange={e => setQuickFirstName(e.target.value)}
+          />
+          <Input
+            label={locale === 'es' ? 'Apellido' : 'Last name'}
+            value={quickLastName}
+            onChange={e => setQuickLastName(e.target.value)}
+          />
+          <Input
+            label={locale === 'es' ? 'Empresa' : 'Company'}
+            value={quickCompany}
+            onChange={e => setQuickCompany(e.target.value)}
+          />
+          <Input
+            label={locale === 'es' ? 'Celular' : 'Cell'}
+            value={quickPhone}
+            onChange={e => setQuickPhone(formatPhoneInput(e.target.value))}
+          />
+          {quickError && <p className="text-sm text-red-600">{quickError}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <Button variant="secondary" onClick={() => setQuickClientOpen(false)}>
+              {tc.buttons.cancel}
+            </Button>
+            <Button onClick={saveQuickClient} loading={quickSaving}>
+              {locale === 'es' ? 'Guardar' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
