@@ -10,7 +10,18 @@ import {
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
+import {
+  subscribeImpersonation,
+  getImpersonation,
+  startImpersonation as startImp,
+  stopImpersonation as stopImp,
+  requestImpersonation,
+  notifyStopImpersonation,
+  type ImpersonationTarget,
+} from '@amixos/shared/lib/impersonation';
 import { createSupabaseClient } from '../supabase';
+import { getApiBaseUrl, getJwt } from '../apiClient';
+import { useSyncExternalStore } from 'react';
 
 // The auth state machine. Booleans hide intermediate states (logging in,
 // hydrating from storage, awaiting INITIAL_SESSION) and cause flicker /
@@ -70,6 +81,7 @@ export interface Business {
   job_field_hidden: Record<string, boolean> | null;
   job_field_layout: { key: string; section: string }[] | null;
   payroll_frequency: string | null;
+  payroll_anchor_date: string | null;
   // Upcoming-job alert config (migration 046). Owner-configured tiers
   // surface a colored left border + chip on each job card. Shape:
   // see shared/src/lib/jobAlerts.ts.
@@ -277,7 +289,7 @@ export const useAuthStore = create<AuthStore>()(
           const [bizRes, memberRes] = await Promise.all([
             supabase
               .from('businesses')
-              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, job_field_hidden, job_field_layout, payroll_frequency, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
+              .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, job_field_hidden, job_field_layout, payroll_frequency, payroll_anchor_date, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
               // Deterministic order: the fallback "first business" must be
               // the same on web and mobile, or per-business state (e.g. the
               // Google connection) looks inconsistent across devices.
@@ -403,6 +415,7 @@ export const useAuthStore = create<AuthStore>()(
             }
             break;
           case 'SIGNED_OUT':
+            stopImp();
             setActiveRolePermissions(null);
             set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null, roleOverrides: {}, permissions: null, roles: {}, currentRole: null });
             break;
@@ -480,19 +493,70 @@ setTimeout(() => {
 
 // Backwards-compat hook for existing dashboard consumers reading `useApp()`.
 // Uses individual selectors to avoid the object-selector rerender storm.
+// ─── "Ver como" actions (login-as-member) ──────────────────────────────────
+// Module-level so they can be called from useApp() without recreating each
+// render. Mirror the web AppContext implementation exactly.
+async function startImpersonationAction(targetUserId: string): Promise<void> {
+  const businessId = useAuthStore.getState().activeBusinessId;
+  if (!businessId) throw new Error('no_business');
+  const jwt = await getJwt();
+  const grant = await requestImpersonation({
+    apiBaseUrl: getApiBaseUrl(),
+    jwt,
+    businessId,
+    targetUserId,
+  });
+  startImp({ token: grant.token, businessId, target: grant.target, expiresAt: grant.expiresAt });
+}
+
+async function stopImpersonationAction(): Promise<void> {
+  const cur = getImpersonation();
+  stopImp();
+  if (cur) {
+    try {
+      const jwt = await getJwt();
+      await notifyStopImpersonation({
+        apiBaseUrl: getApiBaseUrl(),
+        jwt,
+        businessId: cur.businessId,
+        targetUserId: cur.target.userId,
+      });
+    } catch {
+      /* audit-only */
+    }
+  }
+}
+
 export function useApp() {
-  const user = useAuthStore((s) => s.user);
+  const realUser = useAuthStore((s) => s.user);
   const business = useAuthStore((s) => s.business);
   const businesses = useAuthStore((s) => s.businesses);
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
-  const currentRole = useAuthStore((s) => s.currentRole);
-  const permissions = useAuthStore((s) => s.permissions);
+  const baseRole = useAuthStore((s) => s.currentRole);
+  const basePermissions = useAuthStore((s) => s.permissions);
   const roleOverrides = useAuthStore((s) => s.roleOverrides);
   const status = useAuthStore((s) => s.status);
   const refetchBusiness = useAuthStore((s) => s.refetchBusiness);
   const loadRolePermissions = useAuthStore((s) => s._loadRolePermissions);
   const logout = useAuthStore((s) => s.logout);
+
+  // Active "Ver como" session. When set, identity-derived values reflect the
+  // target member so the whole app renders as them; data RLS is handled by the
+  // fetch wrapper in lib/supabase. See web AppContext for the rationale.
+  const impersonation = useSyncExternalStore(subscribeImpersonation, getImpersonation, () => null);
+
+  const currentRole = impersonation ? impersonation.target.role : baseRole;
+  const user = impersonation
+    ? {
+        id: impersonation.target.userId,
+        email: impersonation.target.email ?? '',
+        name: impersonation.target.name ?? impersonation.target.email ?? '',
+      }
+    : realUser;
+  const permissions = impersonation
+    ? roleOverrides[impersonation.target.role] ?? permissionsForRole(impersonation.target.role)
+    : basePermissions;
 
   const loading = status === 'unknown' || status === 'loading';
 
@@ -506,6 +570,10 @@ export function useApp() {
     permissions,
     roleOverrides,
     loading,
+    impersonating: (impersonation?.target ?? null) as ImpersonationTarget | null,
+    readOnly: !!impersonation,
+    startImpersonation: startImpersonationAction,
+    stopImpersonation: stopImpersonationAction,
     refetchBusiness,
     reloadPermissions: () => loadRolePermissions(useAuthStore.getState().activeBusinessId),
     signOut: logout,

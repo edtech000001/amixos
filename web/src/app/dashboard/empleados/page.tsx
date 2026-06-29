@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, DollarSign, UserX, UserCheck, Pencil } from 'lucide-react';
+import { Clock, DollarSign, UserX, UserCheck, Pencil, Eye } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -122,7 +122,7 @@ export default function EmpleadosPage() {
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, startImpersonation } = useApp();
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -646,6 +646,29 @@ export default function EmpleadosPage() {
     await loadPeople(); setAccessBusy(false);
   };
 
+  // "Ver como" — enter this member's view (read-only). Mirrors the server
+  // guardrails so we don't show a button that would 403: owner/admin only,
+  // never the owner, and an admin can't view another admin.
+  const verComoMember = async (memberId: string) => {
+    const m = members.find(x => x.id === memberId);
+    if (!m) return;
+    setAccessBusy(true); setAccessError('');
+    try {
+      await startImpersonation(m.userId);
+      router.push('/dashboard');
+    } catch (e: any) {
+      const code = e?.message as string | undefined;
+      setAccessError(
+        code === 'role_not_allowed' ? teamT.verComoNotAllowed
+          : code === 'not_a_member' ? teamT.verComoNotMember
+          : teamT.verComoFailed,
+      );
+      setAccessBusy(false);
+    }
+  };
+  const canVerComo = (role: Role) =>
+    can.manageMembers(currentRole) && role !== 'owner' && !(currentRole === 'admin' && role === 'admin');
+
   const selAccess = selEmp
     ? resolveAccess({ userId: selEmp.user_id ?? null, email: selEmp.email }, members, invites)
     : null;
@@ -829,6 +852,16 @@ export default function EmpleadosPage() {
                         {teamT.removeBtn}
                       </button>
                     </div>
+                  ) : null}
+                  {!selAccess.isYou && canVerComo(selAccess.role) ? (
+                    <button
+                      type="button"
+                      disabled={accessBusy}
+                      onClick={() => verComoMember(selAccess.memberId)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      <Eye size={14} /> {teamT.verComoBtn}
+                    </button>
                   ) : null}
                 </div>
               ) : selAccess?.kind === 'invited' ? (

@@ -38,7 +38,7 @@ const JOB_STATUS_PILL: Record<string, string> = {
 export function FieldHome() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, loading: appLoading } = useApp();
+  const { business, user, loading: appLoading, readOnly } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard;
   const f = t.fieldHome;
@@ -168,13 +168,14 @@ export function FieldHome() {
             </div>
           </div>
         </button>
-        {/* Field worker can advance the status of a job they're on. */}
-        {(job.status === 'scheduled' || job.status === 'accepted') && (
+        {/* Field worker can advance the status of a job they're on. Hidden in
+            read-only "Ver como" preview. */}
+        {!readOnly && (job.status === 'scheduled' || job.status === 'accepted') && (
           <button onClick={() => advance(job, 'in_progress')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-semibold hover:bg-orange-100 transition-colors">
             <Play size={15} /> {f.start}
           </button>
         )}
-        {job.status === 'in_progress' && (
+        {!readOnly && job.status === 'in_progress' && (
           <button onClick={() => advance(job, 'completed')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-semibold hover:bg-emerald-100 transition-colors">
             <CheckCircle2 size={15} /> {f.complete}
           </button>
@@ -184,19 +185,21 @@ export function FieldHome() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl">
+    <div className="p-6 lg:p-8 max-w-6xl">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{f.greeting}{firstName(user?.name) ? ',' : ''}</h1>
           {/* Crew don't get the business logo/name header — greet them by name. */}
           {firstName(user?.name) && <p className="text-lg font-semibold text-gray-800 mt-1">{firstName(user?.name)}</p>}
         </div>
-        <button
-          onClick={openLog}
-          className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 shrink-0"
-        >
-          <Plus size={16} /> {f.logJob}
-        </button>
+        {!readOnly && (
+          <button
+            onClick={openLog}
+            className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 shrink-0"
+          >
+            <Plus size={16} /> {f.logJob}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -216,7 +219,7 @@ export function FieldHome() {
           </div>
           <button
             onClick={toggleClock}
-            disabled={busy}
+            disabled={busy || readOnly}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-50 shrink-0 ${open ? 'bg-white text-emerald-700' : 'bg-primary text-white hover:opacity-90'}`}
           >
             {open ? f.clockOut : f.clockIn}
@@ -252,7 +255,7 @@ export function FieldHome() {
           <p className="text-gray-400 text-sm mt-3">{f.empty}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
           {todayJobs.map(job => <JobCard key={job.id} job={job} />)}
         </div>
       )}
@@ -261,7 +264,7 @@ export function FieldHome() {
       {upcomingJobs.length > 0 && (
         <>
           <h2 className="text-sm font-semibold text-gray-900 mb-3">{f.upcomingTitle}</h2>
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {upcomingJobs.map(job => <JobCard key={job.id} job={job} />)}
           </div>
         </>

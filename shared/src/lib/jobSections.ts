@@ -14,7 +14,10 @@ export const JOB_FIELDS_ALWAYS_SHOWN: readonly string[] = ['client_id', 'priorit
 // section hidden?" check and the per-field gating on the form.
 export const JOB_SECTION_FIELDS: Record<JobSectionKey, string[]> = {
   location: ['coordinates', 'job_address', 'job_city', 'job_state'],
-  schedule: ['scheduled_date', 'time_start', 'time_end', 'total_hours'],
+  // 'scheduled_date' represents Date (start + end); 'time_start' represents
+  // Time (start + end + the all-day switch). 'time_end' is no longer a
+  // separately toggleable field — it follows 'time_start' on the form.
+  schedule: ['scheduled_date', 'time_start', 'total_hours'],
   workers: ['assigned_workers'],
   notes: ['internal_notes', 'worker_notes'],
 };
@@ -54,7 +57,6 @@ export const DEFAULT_JOB_LAYOUT: JobFieldEntry[] = [
   { key: 'job_state', section: 'location' },
   { key: 'scheduled_date', section: 'schedule' },
   { key: 'time_start', section: 'schedule' },
-  { key: 'time_end', section: 'schedule' },
   { key: 'total_hours', section: 'schedule' },
   { key: 'assigned_workers', section: 'workers' },
   { key: 'worker_notes', section: 'notes' },

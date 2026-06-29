@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, X } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { DatePicker } from '../../ui';
 import type { PayrollFrequency } from '../../lib/payroll';
 
 export interface PayrollScreenRow {
@@ -19,6 +20,9 @@ export interface PayrollScreenProps {
   loading: boolean;
   frequency: PayrollFrequency;
   onFrequencyChange: (f: PayrollFrequency) => void;
+  /** Pay-period start date (YYYY-MM-DD) anchoring every period, or null for legacy defaults. */
+  anchorDate: string | null;
+  onAnchorChange: (date: string) => void;
   periodLabel: string;
   onPrevPeriod: () => void;
   onNextPeriod: () => void;
@@ -40,6 +44,8 @@ export function PayrollScreen({
   loading,
   frequency,
   onFrequencyChange,
+  anchorDate,
+  onAnchorChange,
   periodLabel,
   onPrevPeriod,
   onNextPeriod,
@@ -110,6 +116,11 @@ export function PayrollScreen({
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-3 max-w-md">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.anchorLabel}</p>
+              <DatePicker value={anchorDate ?? ''} onChange={onAnchorChange} />
+              <p className="text-[11px] text-gray-400 mt-1.5">{t.anchorHint}</p>
             </div>
           </div>
         )}

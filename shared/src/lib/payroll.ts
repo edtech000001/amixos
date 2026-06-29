@@ -33,39 +33,83 @@ function ymd(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 }
+// Whole-day distance b−a, both read as local calendar dates. Computed via UTC
+// so a DST shift between the two days can't drift the count by ±1.
+function daysBetween(a: Date, b: Date): number {
+  const au = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const bu = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((bu - au) / 86_400_000);
+}
+// A date on `day` of the given year/month, clamped to that month's real length
+// so day 31 lands on Feb 28 (or 29 in a leap year), Apr 30, etc. `month` may be
+// out of 0–11; the Date engine normalizes it (and handles leap years).
+function clampMonthDay(year: number, month: number, day: number): Date {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, daysInMonth));
+}
 
-// Fixed Sunday reference so biweekly periods are stable across the app/devices.
-// (Jan 7 2024 is a Sunday.)
+// Fixed Sunday reference so biweekly periods are stable across the app/devices
+// when no per-business anchor is set. (Jan 7 2024 is a Sunday.)
 const BIWEEKLY_ANCHOR = new Date(2024, 0, 7);
+
+/** Parse a YYYY-MM-DD pay-anchor string to a local-midnight Date (null if absent/invalid). */
+export function parsePayrollAnchor(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
 
 /**
  * The pay period of the given frequency containing `ref`, shifted by `offset`
- * periods (negative = earlier). Weeks run Sunday→Saturday; monthly is the
- * calendar month; biweekly is anchored to a fixed Sunday so the 14-day windows
- * line up everywhere.
+ * periods (negative = earlier).
+ *
+ * When `anchor` (the business's pay-period start date) is set, every period is
+ * a fixed-length window stepping from that date — weekly = 7-day, biweekly =
+ * 14-day windows aligned to the anchor's weekday; monthly = the anchor's
+ * day-of-month each month (clamped for short months / leap years).
+ *
+ * Without an anchor it falls back to the legacy defaults: weeks run
+ * Sunday→Saturday, monthly is the calendar month, biweekly aligns to a fixed
+ * Sunday so 14-day windows line up everywhere.
  */
 export function getPayrollPeriod(
   frequency: PayrollFrequency,
   ref: Date,
   offset = 0,
+  anchor?: Date | null,
 ): PayrollPeriod {
+  const base = startOfDay(ref);
+
   if (frequency === 'monthly') {
+    if (anchor) {
+      const day = anchor.getDate();
+      const year = base.getFullYear();
+      let month = base.getMonth();
+      // Before this month's payday → the current period started last month.
+      if (base.getTime() < clampMonthDay(year, month, day).getTime()) month -= 1;
+      const start = clampMonthDay(year, month + offset, day);
+      const next = clampMonthDay(start.getFullYear(), start.getMonth() + 1, day);
+      const end = addDays(next, -1);
+      return { start, end, startStr: ymd(start), endStr: ymd(end) };
+    }
     const start = new Date(ref.getFullYear(), ref.getMonth() + offset, 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 0); // last day
     return { start, end, startStr: ymd(start), endStr: ymd(end) };
   }
+
   if (frequency === 'weekly') {
-    const base = startOfDay(ref);
-    const sunday = addDays(base, -base.getDay());
-    const start = addDays(sunday, offset * 7);
+    const a = anchor ? startOfDay(anchor) : addDays(base, -base.getDay()); // anchor or this Sunday
+    const idx = Math.floor(daysBetween(a, base) / 7) + offset;
+    const start = addDays(a, idx * 7);
     const end = addDays(start, 6);
     return { start, end, startStr: ymd(start), endStr: ymd(end) };
   }
+
   // biweekly
-  const base = startOfDay(ref);
-  const diffDays = Math.floor((base.getTime() - BIWEEKLY_ANCHOR.getTime()) / 86_400_000);
-  const periodIndex = Math.floor(diffDays / 14) + offset;
-  const start = addDays(BIWEEKLY_ANCHOR, periodIndex * 14);
+  const a = anchor ? startOfDay(anchor) : BIWEEKLY_ANCHOR;
+  const idx = Math.floor(daysBetween(a, base) / 14) + offset;
+  const start = addDays(a, idx * 14);
   const end = addDays(start, 13);
   return { start, end, startStr: ymd(start), endStr: ymd(end) };
 }

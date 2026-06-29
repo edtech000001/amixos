@@ -122,23 +122,11 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         </View>
       </ScrollView>
 
-      {/* KPIs */}
-      <View className="flex-row flex-wrap justify-between gap-y-3 mb-2">
-        <Kpi color="emerald" icon={<DollarSign size={16} color={KPI_COLOR.emerald} />} label={t.kpis.revenueCollected} value={fmt(m.totalRevenue)}
-          sub={m.paidInvoicesCount === 0 ? t.kpis.noPaidInvoices : (m.paidInvoicesCount === 1 ? t.kpis.paidInvoicesCountSingle : t.kpis.paidInvoicesCountPlural).replace('{{count}}', String(m.paidInvoicesCount))} />
-        <Kpi color="amber" icon={<FileText size={16} color={KPI_COLOR.amber} />} label={t.kpis.pendingToCollect} value={fmt(m.pendingRevenue + m.overdueRevenue)}
-          sub={m.overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(m.overdueRevenue)) : undefined} />
-        <Kpi color="indigo" icon={<ClipboardList size={16} color={KPI_COLOR.indigo} />} label={t.kpis.avgJobValue} value={m.avgJobValue > 0 ? fmt(m.avgJobValue) : '—'}
-          sub={t.kpis.completedJobsCount.replace('{{count}}', String(m.completedJobsCount))} />
-        <Kpi color="purple" icon={<Clock size={16} color={KPI_COLOR.purple} />} label={t.kpis.hoursLogged} value={m.totalHours.toFixed(1)}
-          sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(m.totalPayroll))} />
-      </View>
-
       {/* Payroll page entry */}
       {onOpenPayroll ? (
         <Pressable
           onPress={onOpenPayroll}
-          className="flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 mt-4 active:bg-gray-50"
+          className="flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 mb-4 active:bg-gray-50"
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
@@ -150,7 +138,17 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         </Pressable>
       ) : null}
 
-      <View className="mt-4" />
+      {/* KPIs */}
+      <View className="flex-row flex-wrap justify-between gap-y-3 mb-4">
+        <Kpi color="emerald" icon={<DollarSign size={16} color={KPI_COLOR.emerald} />} label={t.kpis.revenueCollected} value={fmt(m.totalRevenue)}
+          sub={m.paidInvoicesCount === 0 ? t.kpis.noPaidInvoices : (m.paidInvoicesCount === 1 ? t.kpis.paidInvoicesCountSingle : t.kpis.paidInvoicesCountPlural).replace('{{count}}', String(m.paidInvoicesCount))} />
+        <Kpi color="amber" icon={<FileText size={16} color={KPI_COLOR.amber} />} label={t.kpis.pendingToCollect} value={fmt(m.pendingRevenue + m.overdueRevenue)}
+          sub={m.overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(m.overdueRevenue)) : undefined} />
+        <Kpi color="indigo" icon={<ClipboardList size={16} color={KPI_COLOR.indigo} />} label={t.kpis.avgJobValue} value={m.avgJobValue > 0 ? fmt(m.avgJobValue) : '—'}
+          sub={t.kpis.completedJobsCount.replace('{{count}}', String(m.completedJobsCount))} />
+        <Kpi color="purple" icon={<Clock size={16} color={KPI_COLOR.purple} />} label={t.kpis.hoursLogged} value={m.totalHours.toFixed(1)}
+          sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(m.totalPayroll))} />
+      </View>
 
       {/* Revenue by month */}
       <Section title={t.sections.revenueByMonth}>

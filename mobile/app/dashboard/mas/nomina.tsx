@@ -12,6 +12,7 @@ import {
   getPayrollPeriod,
   computePayrollRows,
   normalizeFrequency,
+  parsePayrollAnchor,
   type PayrollFrequency,
   type PayrollJob,
 } from '@amixos/shared/lib/payroll';
@@ -31,6 +32,7 @@ export default function NominaRoute() {
   const canManage = currentRole === 'owner' || currentRole === 'admin';
 
   const [frequency, setFrequency] = useState<PayrollFrequency>(normalizeFrequency(business?.payroll_frequency));
+  const [anchorDate, setAnchorDate] = useState<string | null>(business?.payroll_anchor_date ?? null);
   const [offset, setOffset] = useState(0);
   const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[]>([]);
   const [timesheets, setTimesheets] = useState<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }[]>([]);
@@ -40,16 +42,21 @@ export default function NominaRoute() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { setFrequency(normalizeFrequency(business?.payroll_frequency)); }, [business?.payroll_frequency]);
+  useEffect(() => { setAnchorDate(business?.payroll_anchor_date ?? null); }, [business?.payroll_anchor_date]);
 
-  const period = useMemo(() => getPayrollPeriod(frequency, new Date(), offset), [frequency, offset]);
+  const period = useMemo(
+    () => getPayrollPeriod(frequency, new Date(), offset, parsePayrollAnchor(anchorDate)),
+    [frequency, offset, anchorDate],
+  );
 
   const periodLabel = useMemo(() => {
-    if (frequency === 'monthly') {
+    // Calendar-month label only when monthly with no anchor; otherwise show the range.
+    if (frequency === 'monthly' && !anchorDate) {
       return period.start.toLocaleDateString(dateLocale, { month: 'long', year: 'numeric' });
     }
     const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     return `${period.start.toLocaleDateString(dateLocale, opts)} – ${period.end.toLocaleDateString(dateLocale, { ...opts, year: 'numeric' })}`;
-  }, [frequency, period, dateLocale]);
+  }, [frequency, anchorDate, period, dateLocale]);
 
   const load = useCallback(async () => {
     if (!business) return;
@@ -97,6 +104,13 @@ export default function NominaRoute() {
     if (business) await supabase.from('businesses').update({ payroll_frequency: f }).eq('id', business.id);
   };
 
+  const onAnchorChange = async (date: string) => {
+    const next = date || null;
+    setAnchorDate(next);
+    setOffset(0);
+    if (business) await supabase.from('businesses').update({ payroll_anchor_date: next }).eq('id', business.id);
+  };
+
   const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string) => {
     if (!business) return;
     const row = rows.find(r => r.employeeId === employeeId);
@@ -131,6 +145,8 @@ export default function NominaRoute() {
         loading={loading}
         frequency={frequency}
         onFrequencyChange={onFrequencyChange}
+        anchorDate={anchorDate}
+        onAnchorChange={onAnchorChange}
         periodLabel={periodLabel}
         onPrevPeriod={() => setOffset(o => o - 1)}
         onNextPeriod={() => setOffset(o => o + 1)}

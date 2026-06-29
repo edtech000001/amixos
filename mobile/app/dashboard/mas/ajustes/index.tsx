@@ -14,10 +14,22 @@ import {
   LayoutGrid,
   type LucideIcon,
 } from 'lucide-react-native';
+import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
+
+// Build identifier for the footer — app version (app.json) + native build
+// number. Helps support pin down which build a user is on (mobile installs lag
+// behind releases). Falls back to just the version if no build number.
+const APP_VERSION = (() => {
+  const v = Constants.expoConfig?.version;
+  if (!v) return '';
+  const build = Application.nativeBuildVersion;
+  return build ? `v${v} (build ${build})` : `v${v}`;
+})();
 
 interface SettingsItem {
   key: string;
@@ -160,6 +172,9 @@ export default function AjustesIndex() {
             );
           })}
         </View>
+        {APP_VERSION ? (
+          <Text className="text-center text-[11px] text-gray-300 mt-6">{APP_VERSION}</Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

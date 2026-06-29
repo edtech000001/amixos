@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2,
+  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2, Eye,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -87,7 +87,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, startImpersonation } = useApp();
 
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
@@ -333,11 +333,35 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     await load(); setAccessBusy(false);
   };
 
+  // "Ver como" — enter this member's view (read-only). Mirrors the server
+  // guardrails so we don't offer a button that would 403.
+  const verComoMember = async (memberId: string) => {
+    const m = members.find(x => x.id === memberId);
+    if (!m) return;
+    setAccessBusy(true); setAccessError('');
+    try {
+      await startImpersonation(m.userId);
+      router.push('/dashboard');
+    } catch (e: any) {
+      const code = e?.message as string | undefined;
+      setAccessError(
+        code === 'role_not_allowed' ? teamT.verComoNotAllowed
+          : code === 'not_a_member' ? teamT.verComoNotMember
+          : teamT.verComoFailed,
+      );
+      setAccessBusy(false);
+    }
+  };
+
   const selAccess = useMemo(
     () => employee ? resolveAccess({ userId: employee.user_id ?? null, email: employee.email }, members, invites) : null,
     [employee, members, invites],
   );
   const canManageAccess = can.manageMembers(currentRole);
+  const canVerComoSel =
+    !!selAccess && selAccess.kind === 'active' && !selAccess.isYou &&
+    canManageAccess && selAccess.role !== 'owner' &&
+    !(currentRole === 'admin' && selAccess.role === 'admin');
 
   // Hard-delete this employee (+ revoke app access if any). Owner/admin only,
   // never the owner or yourself. FKs are set null / cascade, so it's safe.
@@ -458,6 +482,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             busy={accessBusy} error={accessError}
             onInvite={inviteToApp} onRevoke={revokeInvite}
             onChangeRole={changeAccessRole} onRemove={removeAccess}
+            onVerComo={verComoMember} canVerComo={canVerComoSel}
             teamT={teamT} t={t}
           />
         ) : null}
@@ -702,7 +727,7 @@ function EditForm({
 // ─── Access section (invite / change role / revoke / remove) ────────────
 function AccessSection({
   selAccess, email, canManage, lang, role, setRole, busy, error,
-  onInvite, onRevoke, onChangeRole, onRemove, teamT, t,
+  onInvite, onRevoke, onChangeRole, onRemove, onVerComo, canVerComo, teamT, t,
 }: {
   selAccess: ReturnType<typeof resolveAccess>;
   email: string;
@@ -716,6 +741,8 @@ function AccessSection({
   onRevoke: (id: string) => void;
   onChangeRole: (memberId: string, role: Role) => void;
   onRemove: (memberId: string) => void;
+  onVerComo: (memberId: string) => void;
+  canVerComo: boolean;
   teamT: ReturnType<typeof useLang>['t']['dashboard']['settings']['team'];
   t: ReturnType<typeof useLang>['t']['dashboard']['employees'];
 }) {
@@ -730,7 +757,7 @@ function AccessSection({
     }
   };
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+    <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white shadow-sm p-6">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</p>
       {selAccess?.kind === 'active' ? (
         <div className="flex flex-col gap-2">
@@ -748,6 +775,11 @@ function AccessSection({
                 {teamT.removeBtn}
               </button>
             </div>
+          ) : null}
+          {canVerComo && selAccess.kind === 'active' ? (
+            <button type="button" disabled={busy} onClick={() => onVerComo(selAccess.memberId)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <Eye size={14} /> {teamT.verComoBtn}
+            </button>
           ) : null}
         </div>
       ) : selAccess?.kind === 'invited' ? (

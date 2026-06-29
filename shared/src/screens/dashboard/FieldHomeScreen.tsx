@@ -18,6 +18,10 @@ export interface FieldHomeScreenProps {
   stats: FieldHomeStats | null;
   clockBusy: boolean;
   error: boolean;
+  // True while an admin is viewing this member via "Ver como" — write actions
+  // (clock, status advance) are hidden/disabled. Writes are also blocked at the
+  // transport layer; this is the matching UX.
+  readOnly?: boolean;
   onToggleClock: () => void;
   onJobPress: (id: string) => void;
   onAdvanceStatus: (jobId: string, next: string) => void;
@@ -43,6 +47,7 @@ export function FieldHomeScreen({
   stats,
   clockBusy,
   error,
+  readOnly = false,
   onToggleClock,
   onJobPress,
   onAdvanceStatus,
@@ -114,7 +119,7 @@ export function FieldHomeScreen({
             </View>
           </View>
         </Pressable>
-        {job.status === 'scheduled' || job.status === 'accepted' ? (
+        {!readOnly && (job.status === 'scheduled' || job.status === 'accepted') ? (
           <Pressable
             onPress={() => onAdvanceStatus(job.id, 'in_progress')}
             className="mt-3 flex-row items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-50 active:opacity-80"
@@ -123,7 +128,7 @@ export function FieldHomeScreen({
             <Text className="text-sm font-semibold text-orange-600">{f.start}</Text>
           </Pressable>
         ) : null}
-        {job.status === 'in_progress' ? (
+        {!readOnly && job.status === 'in_progress' ? (
           <Pressable
             onPress={() => onAdvanceStatus(job.id, 'completed')}
             className="mt-3 flex-row items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 active:opacity-80"
@@ -166,8 +171,8 @@ export function FieldHomeScreen({
           </View>
           <Pressable
             onPress={onToggleClock}
-            disabled={clockBusy}
-            className={`px-4 py-2.5 rounded-xl active:opacity-80 ${clockBusy ? 'opacity-50' : ''} ${openTimesheet ? 'bg-white' : 'bg-primary'}`}
+            disabled={clockBusy || readOnly}
+            className={`px-4 py-2.5 rounded-xl active:opacity-80 ${clockBusy || readOnly ? 'opacity-50' : ''} ${openTimesheet ? 'bg-white' : 'bg-primary'}`}
           >
             {clockBusy ? (
               <ActivityIndicator size="small" color={openTimesheet ? '#047857' : '#FFFFFF'} />

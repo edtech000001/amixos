@@ -13,6 +13,7 @@ import { DOCK_APPS } from '@/lib/dockApps';
 import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { startNetworkMonitor } from '@/lib/offline/network';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
@@ -92,7 +93,7 @@ export default function DashboardLayout() {
 function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
-  const { currentRole, user } = useApp();
+  const { currentRole, user, impersonating } = useApp();
   const insets = useSafeAreaInsets();
   // Load the user's dock-app selection (synced via profiles.dock_apps) once.
   // Every role-eligible app stays REGISTERED as a tab below (href fixed by role
@@ -118,7 +119,7 @@ function DashboardTabs() {
   // just the Google banner. Without this it overlays the screen header.
   const offlineActive = useOutboxStore(s => s.ops.length > 0) || !useNetworkStore(s => s.isOnline);
   const [bannerHeight, setBannerHeight] = useState(0);
-  const bannerVisible = status.kind !== 'idle' || offlineActive;
+  const bannerVisible = status.kind !== 'idle' || offlineActive || !!impersonating;
   // When the banner hides, drop the offset immediately. When it shows,
   // the next onLayout pass will update bannerHeight. Brief 0→correct
   // transition is fine — better than holding stale height after dismiss.
@@ -131,6 +132,7 @@ function DashboardTabs() {
         onLayout={e => setBannerHeight(e.nativeEvent.layout.height)}
         style={{ position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 1000 }}
       >
+        <ImpersonationBanner />
         <OfflineSyncBanner />
         <GoogleSyncBanner />
       </View>

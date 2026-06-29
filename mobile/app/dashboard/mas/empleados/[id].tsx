@@ -36,6 +36,7 @@ import {
   Hash,
   MessageSquare,
   KeyRound,
+  Eye,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
@@ -112,7 +113,7 @@ export default function EmpleadoDetailRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, startImpersonation } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
@@ -496,6 +497,28 @@ export default function EmpleadoDetailRoute() {
     await load(); setAccessBusy(false);
   };
 
+  // "Ver como" — enter this member's view (read-only). Mirrors the server
+  // guardrails so we don't offer a button that would 403.
+  const verComoMember = async (memberId: string) => {
+    const m = members.find((x) => x.id === memberId);
+    if (!m) return;
+    setAccessBusy(true); setAccessError('');
+    try {
+      await startImpersonation(m.userId);
+      router.replace('/dashboard');
+    } catch (e: any) {
+      const code = e?.message as string | undefined;
+      setAccessError(
+        code === 'role_not_allowed' ? teamT.verComoNotAllowed
+          : code === 'not_a_member' ? teamT.verComoNotMember
+          : teamT.verComoFailed,
+      );
+      setAccessBusy(false);
+    }
+  };
+  const canVerComo = (role: Role) =>
+    can.manageMembers(currentRole) && role !== 'owner' && !(currentRole === 'admin' && role === 'admin');
+
   const selAccess = useMemo(
     () => employee ? resolveAccess({ userId: employee.user_id ?? null, email: employee.email }, members, invites) : null,
     [employee, members, invites],
@@ -725,6 +748,13 @@ export default function EmpleadoDetailRoute() {
                       <Text className="text-sm font-semibold text-red-600">{teamT.removeBtn}</Text>
                     </Pressable>
                   </>
+                ) : null}
+                {!selAccess.isYou && canVerComo(selAccess.role) ? (
+                  <Pressable onPress={() => verComoMember(selAccess.memberId)} disabled={accessBusy}
+                    className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-gray-200 bg-white active:bg-gray-50">
+                    <Eye size={15} color="#374151" />
+                    <Text className="text-sm font-semibold text-gray-700">{teamT.verComoBtn}</Text>
+                  </Pressable>
                 ) : null}
               </View>
             ) : selAccess.kind === 'invited' ? (

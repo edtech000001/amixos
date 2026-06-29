@@ -30,7 +30,7 @@ export function FieldHomeContainer() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, loading: appLoading } = useApp();
+  const { business, user, loading: appLoading, readOnly } = useApp();
 
   const [jobs, setJobs] = useState<FieldHomeJob[]>([]);
   const [open, setOpen] = useState<OpenTimesheet | null>(null);
@@ -115,12 +115,14 @@ export function FieldHomeContainer() {
         stats={stats}
         clockBusy={busy}
         error={error}
+        readOnly={readOnly}
         onToggleClock={onToggleClock}
         onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
         onAdvanceStatus={onAdvanceStatus}
       />
-      {/* Quick-log a completed job — one-handed FAB + bottom sheet. */}
-      {!loading ? <Fab onPress={openSheet} /> : null}
+      {/* Quick-log a completed job — one-handed FAB + bottom sheet. Hidden in
+          read-only "Ver como" preview. */}
+      {!loading && !readOnly ? <Fab onPress={openSheet} /> : null}
       <LogJobSheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}

@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { AppProvider, useApp } from '@/lib/AppContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
+import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner';
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -76,6 +77,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           {/* Sticky banner — survives navigation; provider above keeps
               the loop alive while the user moves between pages. */}
           <div className="sticky top-0 z-30">
+            <ImpersonationBanner />
             <GoogleSyncBanner />
           </div>
           <TrialBanner />

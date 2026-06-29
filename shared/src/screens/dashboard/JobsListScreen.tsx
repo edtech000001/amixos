@@ -474,7 +474,9 @@ export function JobsListScreen({
         <View className="flex-1">
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">
-            {t.countTotal.replace('{{count}}', String(jobs.length))}
+            {search.trim()
+              ? t.countFound.replace('{{count}}', String(filtered.length))
+              : t.countTotal.replace('{{count}}', String(jobs.length))}
             {pendingValue > 0 ? (
               <Text className="text-blue-600 font-medium">
                 {' · '}{t.pendingValue.replace('{{amount}}', fmt(pendingValue))}

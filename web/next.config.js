@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // App version (from package.json) exposed to the client so the sidebar footer
+  // can show a build identifier. The commit SHA comes from Vercel's
+  // auto-injected NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA at deploy time.
+  env: {
+    NEXT_PUBLIC_APP_VERSION: require('./package.json').version,
+  },
   // Workspace + the RN ecosystem all need transpilation through next-swc-loader
   // because the source ships untranspiled Flow / RN-specific JSX.
   transpilePackages: [

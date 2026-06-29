@@ -296,7 +296,8 @@ export function JobsListScreen({
   const filtered = useMemo(() => {
     return jobs.filter((j) => {
       const matchSearch = searchMatches(
-        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState]
+        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState,
+         j.leadName, ...j.workerNames]
           .filter(Boolean)
           .join(' '),
         search,
@@ -460,7 +461,9 @@ export function JobsListScreen({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {t.countTotal.replace('{{count}}', String(jobs.length))}
+            {search.trim()
+              ? t.countFound.replace('{{count}}', String(filtered.length))
+              : t.countTotal.replace('{{count}}', String(jobs.length))}
             {pendingValue > 0 ? (
               <span className="text-blue-600 font-medium">
                 {' · '}

@@ -1,0 +1,191 @@
+// Client-side core for the "Ver como" (login-as-member) feature. Shared by web
+// and mobile so the two platforms behave identically.
+//
+// HOW IT WORKS — the key idea is that we never touch the admin's real session.
+// Instead, the Supabase client is created with a `global.fetch` wrapper
+// (`impersonatingFetch`) that, while an impersonation token is active, rewrites
+// the Authorization header on data requests to that token. PostgREST then
+// evaluates RLS as the impersonated member, so every existing query returns the
+// member's real, filtered view — with zero per-query changes. The admin's
+// cookies / AsyncStorage session stays intact, so exiting is instant and safe.
+//
+// Auth endpoints (/auth/v1/*) are deliberately NOT rewritten: the admin's own
+// token refresh must keep working in the background during impersonation.
+
+import type { Role } from './permissions';
+
+export interface ImpersonationTarget {
+  userId: string;
+  role: Role;
+  email: string | null;
+  name: string | null;
+}
+
+export interface ImpersonationState {
+  token: string;
+  businessId: string;
+  target: ImpersonationTarget;
+  expiresAt: number; // unix seconds
+}
+
+let state: ImpersonationState | null = null;
+const listeners = new Set<() => void>();
+
+function notify(): void {
+  listeners.forEach(l => l());
+}
+
+/** Subscribe to start/stop/expiry changes (useSyncExternalStore-compatible). */
+export function subscribeImpersonation(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Current snapshot (stable reference until it changes — safe for useSyncExternalStore). */
+export function getImpersonation(): ImpersonationState | null {
+  return state;
+}
+
+export function isImpersonating(): boolean {
+  return state !== null;
+}
+
+/**
+ * The active token, or null. Auto-clears (and notifies) once expired so a stale
+ * token can never be used and the UI drops back to the admin automatically.
+ */
+export function getImpersonationToken(): string | null {
+  if (!state) return null;
+  if (Math.floor(Date.now() / 1000) >= state.expiresAt) {
+    state = null;
+    notify();
+    return null;
+  }
+  return state.token;
+}
+
+/** Begin impersonating. Caller supplies the minted token + target context. */
+export function startImpersonation(next: ImpersonationState): void {
+  state = next;
+  notify();
+}
+
+/** Stop impersonating and fall back to the admin's real session. */
+export function stopImpersonation(): void {
+  if (!state) return;
+  state = null;
+  notify();
+}
+
+/**
+ * fetch wrapper installed into the Supabase client's `global.fetch`. Transparent
+ * passthrough when not impersonating; otherwise overrides Authorization on data
+ * requests so RLS runs as the member. Leaves /auth/v1/* untouched.
+ */
+export function impersonatingFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const token = getImpersonationToken();
+  if (!token) return fetch(input, init);
+
+  const isRequest = typeof input !== 'string' && !(input instanceof URL);
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : (input as Request).url;
+
+  // Never hijack auth flows — the admin's own refresh must keep working.
+  if (url.includes('/auth/v1/')) return fetch(input, init);
+
+  // Read-only enforcement. "Ver como" is a preview, not a way to act as the
+  // member, so block unambiguous database mutations at the transport layer —
+  // this covers BOTH platforms with no per-button wiring. Reads (GET/HEAD) and
+  // RPC calls (POST /rest/v1/rpc/* — often read-only aggregations) pass through.
+  const method = (init?.method ?? (isRequest ? (input as Request).method : 'GET')).toUpperCase();
+  const isRpc = url.includes('/rest/v1/rpc/');
+  const isDbWrite =
+    url.includes('/rest/v1/') &&
+    !isRpc &&
+    (method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE');
+  if (isDbWrite) {
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          code: 'impersonation_read_only',
+          message: 'Acción no permitida en modo “Ver como” (solo lectura).',
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+  }
+
+  const headers = new Headers(
+    init?.headers ?? (isRequest ? (input as Request).headers : undefined),
+  );
+  headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
+// ─── API helpers ───────────────────────────────────────────────────────────
+// Thin clients over the /admin/impersonate endpoints. Both platforms pass the
+// API base URL + the admin's real JWT (never the impersonation token).
+
+export interface RequestImpersonationArgs {
+  apiBaseUrl: string;
+  jwt: string;
+  businessId: string;
+  targetUserId: string;
+}
+
+export interface ImpersonationGrant {
+  token: string;
+  expiresAt: number;
+  target: ImpersonationTarget;
+}
+
+/** Ask the API to mint a token for a member. Throws with the server code on failure. */
+export async function requestImpersonation(
+  args: RequestImpersonationArgs,
+): Promise<ImpersonationGrant> {
+  const res = await fetch(`${args.apiBaseUrl.replace(/\/$/, '')}/api/v1/admin/impersonate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${args.jwt}` },
+    body: JSON.stringify({ business_id: args.businessId, target_user_id: args.targetUserId }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.code || json?.message || `impersonate_failed_${res.status}`);
+  }
+  const d = json.data;
+  return {
+    token: d.token,
+    expiresAt: d.expiresAt,
+    target: {
+      userId: d.target.userId,
+      role: d.target.role as Role,
+      email: d.target.email ?? null,
+      name: d.target.name ?? null,
+    },
+  };
+}
+
+/** Best-effort audit marker on exit. Failures are swallowed — the token self-expires. */
+export async function notifyStopImpersonation(args: {
+  apiBaseUrl: string;
+  jwt: string;
+  businessId: string;
+  targetUserId: string;
+}): Promise<void> {
+  try {
+    await fetch(`${args.apiBaseUrl.replace(/\/$/, '')}/api/v1/admin/impersonate/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${args.jwt}` },
+      body: JSON.stringify({ business_id: args.businessId, target_user_id: args.targetUserId }),
+    });
+  } catch {
+    /* swallow — audit-only */
+  }
+}

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
@@ -74,6 +74,19 @@ function hoursFromTimes(start: string, end: string): number | null {
   let diff = b - a;
   if (diff < 0) diff += 24 * 60;
   return Math.round((diff / 60) * 100) / 100;
+}
+
+// Parse a manually typed "lat, lng" pair (comma or whitespace separated).
+function parseCoords(input: string): { lat: number; lng: number } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const m = trimmed.match(/^(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
 }
 
 export default function NuevoTrabajoPage() {
@@ -166,7 +179,7 @@ function NuevoTrabajoContent() {
   // Crew visibility (migration 044). New jobs default to "Privado" — the
   // owner-side scheduler — and flip on when they're ready for the crew.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
-  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
   // The job's status when the edit form loaded — used to detect a real status
   // change on save (so we stamp the pipeline timestamp only when it actually moves).
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
@@ -219,6 +232,9 @@ function NuevoTrabajoContent() {
   const [mapLink, setMapLink] = useState('');
   const [jobLat, setJobLat] = useState<number | null>(null);
   const [jobLng, setJobLng] = useState<number | null>(null);
+  const [coordsText, setCoordsText] = useState('');
+  const [coordsInvalid, setCoordsInvalid] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   // Proposal-only fields
   const [clientNotes, setClientNotes] = useState('');
@@ -236,7 +252,7 @@ function NuevoTrabajoContent() {
   // field as `custom:<id>`. The stored layout maps every key to a section.
   const STANDARD_JOB_FIELD_KEYS = [
     'client_id', 'priority', 'description', 'job_address', 'job_city', 'job_state',
-    'coordinates', 'scheduled_date', 'time_start', 'time_end', 'total_hours',
+    'coordinates', 'scheduled_date', 'time_start', 'total_hours',
     'assigned_workers', 'worker_notes', 'internal_notes',
   ];
   const allJobKeys = useMemo(
@@ -320,7 +336,10 @@ function NuevoTrabajoContent() {
           setClientId(job.client_id || '');
           setPublishedToCrew(!!job.published_to_crew);
           setStatus(
-            job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
+            job.status === 'in_progress' ? 'in_progress'
+              : job.status === 'posible' ? 'posible'
+              : job.status === 'completed' ? 'completed'
+              : 'scheduled',
           );
           setLoadedStatus(job.status);
           setPriority(job.priority || 'normal');
@@ -330,6 +349,7 @@ function NuevoTrabajoContent() {
           setMapLink(job.job_map_link || '');
           setJobLat(job.job_lat ?? null);
           setJobLng(job.job_lng ?? null);
+          setCoordsText(job.job_lat != null && job.job_lng != null ? `${job.job_lat}, ${job.job_lng}` : '');
           setScheduledDate(job.scheduled_date || '');
           setEndDate(job.end_date || '');
           setAllDay(!!job.all_day);
@@ -538,6 +558,50 @@ function NuevoTrabajoContent() {
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
     setJobLat(lat);
     setJobLng(lng);
+    setCoordsText(`${lat}, ${lng}`);
+    setCoordsInvalid(false);
+  };
+
+  // Manual "lat, lng" entry — validates and stores the numeric pair.
+  const onCoordsChange = (text: string) => {
+    setCoordsText(text);
+    if (!text.trim()) { setCoordsInvalid(false); setJobLat(null); setJobLng(null); return; }
+    const parsed = parseCoords(text);
+    if (parsed) {
+      setJobLat(parsed.lat);
+      setJobLng(parsed.lng);
+      setCoordsInvalid(false);
+    } else {
+      setJobLat(null);
+      setJobLng(null);
+      setCoordsInvalid(true);
+    }
+  };
+
+  // Grab the browser's current position and fill the coordinates.
+  const useMyLocation = () => {
+    if (gettingLocation) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      alert(t.locationError);
+      return;
+    }
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Math.round(pos.coords.latitude * 1e6) / 1e6;
+        const lng = Math.round(pos.coords.longitude * 1e6) / 1e6;
+        setJobLat(lat);
+        setJobLng(lng);
+        setCoordsText(`${lat}, ${lng}`);
+        setCoordsInvalid(false);
+        setGettingLocation(false);
+      },
+      (err) => {
+        alert(err.code === err.PERMISSION_DENIED ? t.locationDenied : t.locationError);
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   };
 
   const toggleEmployee = (id: string) => {
@@ -730,6 +794,7 @@ function NuevoTrabajoContent() {
             const nowIso = new Date().toISOString();
             if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
             else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
+            else if (status === 'completed') jobUpdate.completed_at = nowIso;
           }
           const { error: jobErr } = await supabase.from('jobs').update(jobUpdate).eq('id', editId);
           if (jobErr) throw new Error(jobErr.message);
@@ -927,6 +992,7 @@ function NuevoTrabajoContent() {
                     <option value="posible">{tStatuses.posible}</option>
                     <option value="scheduled">{tStatuses.scheduled}</option>
                     <option value="in_progress">{tStatuses.in_progress}</option>
+                    <option value="completed">{tStatuses.completed}</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1004,9 +1070,27 @@ function NuevoTrabajoContent() {
                 {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
                   <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
                 )}
-                {jobLat != null && jobLng != null && (
-                  <p className="text-xs text-emerald-600 font-mono">{full.dashboard.jobs.detail.coordinates}: {jobLat}, {jobLng}</p>
+              </div>
+
+              {/* Coordinates — lat, lng (editable; also auto-filled by the map
+                  link paste and "Use my location"). */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                  <Navigation size={13} className="text-gray-400"/> {t.coordinatesLabel}
+                </label>
+                <input type="text" inputMode="decimal" placeholder={t.coordinatesPlaceholder}
+                  value={coordsText} onChange={e => onCoordsChange(e.target.value)}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary ${coordsInvalid ? 'border-red-300' : 'border-gray-200'}`}/>
+                {coordsInvalid && (
+                  <p className="text-xs text-red-500">{t.coordinatesInvalid}</p>
                 )}
+                <button type="button" onClick={useMyLocation} disabled={gettingLocation}
+                  className="mt-1 flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60">
+                  {gettingLocation
+                    ? <Loader2 size={15} className="animate-spin"/>
+                    : <Navigation size={15}/>}
+                  {gettingLocation ? t.gettingLocation : t.useMyLocation}
+                </button>
               </div>
               <div className="border-t border-gray-100 pt-3"/>
               </>
@@ -1045,31 +1129,35 @@ function NuevoTrabajoContent() {
               <Calendar size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
-            <div className={`grid ${!fHidden('scheduled_date') ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-              {!fHidden('scheduled_date') && (
+            {/* "Date" is a single toggle that shows/hides both start AND end
+                date. */}
+            {!fHidden('scheduled_date') && (
+            <div className="grid grid-cols-2 gap-3">
               <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}/>
-              )}
               <Input label={t.endDateLabel} type="date" value={endDate}
                 onChange={e => setEndDate(e.target.value)}/>
             </div>
+            )}
 
+            {/* "Time" is a single toggle gating start time, end time AND the
+                all-day switch (which only makes sense when times are shown). */}
+            {!fHidden('time_start') && (
+            <>
             <div className="flex items-center justify-between mt-4">
               <label className="text-sm font-medium text-gray-700">{t.allDayLabel}</label>
               <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
             </div>
 
-            {!allDay && (!fHidden('time_start') || !fHidden('time_end')) && (
-              <div className={`grid ${!fHidden('time_start') && !fHidden('time_end') ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mt-3`}>
-                {!fHidden('time_start') && (
+            {!allDay && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
                 <Input label={jrl('time_start', t.timeStartLabel)} type="time" value={timeStart}
                   onChange={e => setTimeStart(e.target.value)}/>
-                )}
-                {!fHidden('time_end') && (
                 <Input label={jrl('time_end', t.timeEndLabel)} type="time" value={timeEnd}
                   onChange={e => setTimeEnd(e.target.value)}/>
-                )}
               </div>
+            )}
+            </>
             )}
 
             {/* Total hours — auto from start/end (read-only) when both times are

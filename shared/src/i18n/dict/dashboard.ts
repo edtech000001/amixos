@@ -504,6 +504,7 @@ export type DashboardDict = {
   jobs: {
     title: string;
     countTotal: string;
+    countFound: string;
     pendingValue: string;
     inProgressValue: string;
     completedValue: string;
@@ -743,6 +744,10 @@ export type DashboardDict = {
       coordinatesLabel: string;
       coordinatesPlaceholder: string;
       coordinatesInvalid: string;
+      useMyLocation: string;
+      gettingLocation: string;
+      locationDenied: string;
+      locationError: string;
       addressLabel: string;
       addressPlaceholder: string;
       cityLabel: string;
@@ -753,6 +758,8 @@ export type DashboardDict = {
       allDayLabel: string;
       dateLabel: string;
       endDateLabel: string;
+      dateFieldLabel: string;
+      timeFieldLabel: string;
       estimatedHoursLabel: string;
       estimatedHoursPlaceholder: string;
       timeStartLabel: string;
@@ -1501,6 +1508,10 @@ export type DashboardDict = {
       acceptedBadge: string;
       revokeBtn: string;
       removeBtn: string;
+      verComoBtn: string;
+      verComoNotAllowed: string;
+      verComoNotMember: string;
+      verComoFailed: string;
       changeRoleBtn: string;
       youSuffix: string;
       ownerSuffix: string;
@@ -1945,6 +1956,8 @@ export type DashboardDict = {
       freqWeekly: string;
       freqBiweekly: string;
       freqMonthly: string;
+      anchorLabel: string;
+      anchorHint: string;
       colWorker: string;
       colHours: string;
       colPay: string;
@@ -2564,6 +2577,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     jobs: {
       title: 'Trabajos',
       countTotal: '{{count}} en total',
+      countFound: '{{count}} encontrados',
       pendingValue: '{{amount}} pendiente',
       inProgressValue: '{{amount}} en progreso',
       completedValue: '{{amount}} completado',
@@ -2789,6 +2803,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         coordinatesLabel: 'Coordenadas (lat, lng)',
         coordinatesPlaceholder: 'ej. 40.7128, -74.0060',
         coordinatesInvalid: 'Formato inválido. Usa "lat, lng" — ej. 40.7128, -74.0060',
+        useMyLocation: 'Usar mi ubicación',
+        gettingLocation: 'Obteniendo ubicación…',
+        locationDenied: 'Permiso de ubicación denegado. Actívalo en Ajustes.',
+        locationError: 'No se pudo obtener tu ubicación. Inténtalo de nuevo.',
         addressLabel: 'Dirección',
         addressPlaceholder: '123 County Road',
         cityLabel: 'Ciudad',
@@ -2799,6 +2817,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allDayLabel: 'Todo el día',
         dateLabel: 'Fecha de inicio',
         endDateLabel: 'Fecha de fin',
+        dateFieldLabel: 'Fecha',
+        timeFieldLabel: 'Hora',
         estimatedHoursLabel: 'Horas estimadas',
         estimatedHoursPlaceholder: 'ej. 52',
         timeStartLabel: 'Hora inicio',
@@ -3546,6 +3566,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         acceptedBadge: 'Aceptada',
         revokeBtn: 'Revocar',
         removeBtn: 'Quitar',
+        verComoBtn: 'Ver como',
+        verComoNotAllowed: 'No puedes ver la cuenta de este usuario.',
+        verComoNotMember: 'Este usuario ya no es miembro.',
+        verComoFailed: 'No se pudo iniciar “Ver como”. Inténtalo de nuevo.',
         changeRoleBtn: 'Cambiar rol',
         youSuffix: '(tú)',
         ownerSuffix: '(propietario)',
@@ -3968,6 +3992,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         freqWeekly: 'Semanal',
         freqBiweekly: 'Quincenal',
         freqMonthly: 'Mensual',
+        anchorLabel: 'Inicio de pago',
+        anchorHint: 'Los períodos se calculan a partir de esta fecha.',
         colWorker: 'Trabajador',
         colHours: 'Horas',
         colPay: 'Pago',
@@ -4614,6 +4640,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     jobs: {
       title: 'Jobs',
       countTotal: '{{count}} total',
+      countFound: '{{count}} found',
       pendingValue: '{{amount}} pending',
       inProgressValue: '{{amount}} in progress',
       completedValue: '{{amount}} completed',
@@ -4839,6 +4866,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         coordinatesLabel: 'Coordinates (lat, lng)',
         coordinatesPlaceholder: 'e.g. 40.7128, -74.0060',
         coordinatesInvalid: 'Invalid format. Use "lat, lng" — e.g. 40.7128, -74.0060',
+        useMyLocation: 'Use my location',
+        gettingLocation: 'Getting location…',
+        locationDenied: 'Location permission denied. Enable it in Settings.',
+        locationError: 'Could not get your location. Please try again.',
         addressLabel: 'Address',
         addressPlaceholder: '123 County Road',
         cityLabel: 'City',
@@ -4849,6 +4880,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allDayLabel: 'All day',
         dateLabel: 'Start date',
         endDateLabel: 'Finish date',
+        dateFieldLabel: 'Date',
+        timeFieldLabel: 'Time',
         estimatedHoursLabel: 'Estimated hours',
         estimatedHoursPlaceholder: 'e.g. 52',
         timeStartLabel: 'Start time',
@@ -5596,6 +5629,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         acceptedBadge: 'Accepted',
         revokeBtn: 'Revoke',
         removeBtn: 'Remove',
+        verComoBtn: 'View as',
+        verComoNotAllowed: "You can't view this user's account.",
+        verComoNotMember: 'This user is no longer a member.',
+        verComoFailed: 'Could not start “View as”. Please try again.',
         changeRoleBtn: 'Change role',
         youSuffix: '(you)',
         ownerSuffix: '(owner)',
@@ -6018,6 +6055,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         freqWeekly: 'Weekly',
         freqBiweekly: 'Biweekly',
         freqMonthly: 'Monthly',
+        anchorLabel: 'Pay start date',
+        anchorHint: 'Pay periods are calculated from this date.',
         colWorker: 'Worker',
         colHours: 'Hours',
         colPay: 'Pay',

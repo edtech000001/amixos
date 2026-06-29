@@ -133,7 +133,7 @@ const DEFAULT_EMPLOYEE_FIELD_KEYS = [
 const DEFAULT_JOB_FIELD_KEYS = [
   'client_id', 'priority', 'description',
   'job_address', 'job_city', 'job_state', 'coordinates',
-  'scheduled_date', 'time_start', 'time_end', 'total_hours',
+  'scheduled_date', 'time_start', 'total_hours',
   'assigned_workers', 'worker_notes', 'internal_notes',
 ] as const;
 
@@ -311,6 +311,7 @@ export default function AjustesPage() {
     Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as InvoiceFieldEntry[]) : []
   );
   const [invoiceHidden, setInvoiceHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
+  const [dbInvoiceHidden, setDbInvoiceHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
 
   // ── Custom field templates (invoices) — same shape, separate table.
   const [invoiceTemplates, setInvoiceTemplates] = useState<FieldTemplate[]>([]);
@@ -398,7 +399,10 @@ export default function AjustesPage() {
   const [dbClientLayout, setDbClientLayout] = useState<ClientFieldEntry[]>(
     Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as ClientFieldEntry[]) : []
   );
+  // Per-field show/hide (eye toggle). Part of the clients draft — flipping it
+  // only edits local state; persisted by the "Save preferences" button.
   const [clientHidden, setClientHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
+  const [dbClientHidden, setDbClientHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
 
   // ── Contacts summary — clients + client_contacts (what syncs to Google).
   // Employees do NOT mirror to Google, so they're excluded from the count.
@@ -475,7 +479,11 @@ export default function AjustesPage() {
       const iLay = Array.isArray(business.invoice_field_layout) ? (business.invoice_field_layout as InvoiceFieldEntry[]) : [];
       setLocalInvoiceLayout(iLay);
       setDbInvoiceLayout(iLay);
-      setInvoiceHidden(parseHiddenFields(business.invoice_field_hidden));
+      {
+        const iHidden = parseHiddenFields(business.invoice_field_hidden);
+        setInvoiceHidden(iHidden);
+        setDbInvoiceHidden(iHidden);
+      }
       setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
       const cReq = business.client_field_required ?? {};
       setFieldRequired(cReq);
@@ -486,7 +494,9 @@ export default function AjustesPage() {
       const cLay = Array.isArray(business.client_field_layout) ? (business.client_field_layout as ClientFieldEntry[]) : [];
       setLocalClientLayout(cLay);
       setDbClientLayout(cLay);
-      setClientHidden(parseHiddenFields(business.client_field_hidden));
+      const cHidden = parseHiddenFields(business.client_field_hidden);
+      setClientHidden(cHidden);
+      setDbClientHidden(cHidden);
       const pd = business.job_pipeline_disabled ?? {};
       setPipelineDisabled(pd);
       setDbPipelineDisabled(pd);
@@ -692,13 +702,13 @@ export default function AjustesPage() {
     );
     setLocalInvoiceLayout(layout); setInvoiceReqMsg('');
   };
-  const toggleInvoiceFieldHidden = async (key: string) => {
-    if (!business) return;
-    const next = { ...invoiceHidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setInvoiceHidden(next);
-    const { error } = await supabase.from('businesses').update({ invoice_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setInvoiceHidden(invoiceHidden);
+  const toggleInvoiceFieldHidden = (key: string) => {
+    setInvoiceHidden(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setInvoiceReqMsg('');
   };
 
   // Draft save: diff templates, then write required + order on the business
@@ -776,6 +786,7 @@ export default function AjustesPage() {
       setLocalInvoiceLayout(resolvedInvoiceLayout);
       setDbInvoiceLayout(resolvedInvoiceLayout);
       setDbInvoiceFieldRequired(invoiceFieldRequired);
+      setDbInvoiceHidden(invoiceHidden);
 
       setInvoiceReqMsgIsError(false);
       setInvoiceReqMsg(t.requiredFields.saveSuccess);
@@ -866,13 +877,13 @@ export default function AjustesPage() {
     );
     setLocalClientLayout(layout); setFieldsMsg('');
   };
-  const toggleClientFieldHidden = async (key: string) => {
-    if (!business) return;
-    const next = { ...clientHidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setClientHidden(next);
-    const { error } = await supabase.from('businesses').update({ client_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setClientHidden(clientHidden);
+  const toggleClientFieldHidden = (key: string) => {
+    setClientHidden(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setFieldsMsg('');
   };
 
   const saveFieldPreferences = async () => {
@@ -959,6 +970,7 @@ export default function AjustesPage() {
       setLocalClientLayout(resolvedClientLayout);
       setDbClientLayout(resolvedClientLayout);
       setDbFieldRequired(fieldRequired);
+      setDbClientHidden(clientHidden);
 
       setFieldsMsgIsError(false);
       setFieldsMsg(t.requiredFields.saveSuccess);
@@ -1005,8 +1017,9 @@ export default function AjustesPage() {
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbFieldRequired) !== JSON.stringify(fieldRequired) ||
       JSON.stringify(dbClientOrder) !== JSON.stringify(localClientOrder) ||
-      JSON.stringify(dbClientLayout) !== JSON.stringify(localClientLayout),
-    [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder, dbClientLayout, localClientLayout],
+      JSON.stringify(dbClientLayout) !== JSON.stringify(localClientLayout) ||
+      JSON.stringify(dbClientHidden) !== JSON.stringify(clientHidden),
+    [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder, dbClientLayout, localClientLayout, dbClientHidden, clientHidden],
   );
 
   // Reset every Clientes-tab working copy back to the last DB snapshot.
@@ -1015,8 +1028,9 @@ export default function AjustesPage() {
     setFieldRequired(dbFieldRequired);
     setLocalClientOrder(dbClientOrder);
     setLocalClientLayout(dbClientLayout);
+    setClientHidden(dbClientHidden);
     setFieldsMsg('');
-  }, [dbTemplates, dbFieldRequired, dbClientOrder, dbClientLayout]);
+  }, [dbTemplates, dbFieldRequired, dbClientOrder, dbClientLayout, dbClientHidden]);
 
   // tryChangeTab, anyDirty, and the beforeunload guard live near the bottom
   // of the component so they can reference every tab's dirty flag.
@@ -1063,6 +1077,7 @@ export default function AjustesPage() {
     Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as EmployeeFieldEntry[]) : []
   );
   const [empHidden, setEmpHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
+  const [dbEmpHidden, setDbEmpHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
 
   useEffect(() => {
     if (business) {
@@ -1075,7 +1090,11 @@ export default function AjustesPage() {
       const lay = Array.isArray(business.employee_field_layout) ? (business.employee_field_layout as EmployeeFieldEntry[]) : [];
       setLocalEmpLayout(lay);
       setDbEmpLayout(lay);
-      setEmpHidden(parseHiddenFields(business.employee_field_hidden));
+      {
+        const eHidden = parseHiddenFields(business.employee_field_hidden);
+        setEmpHidden(eHidden);
+        setDbEmpHidden(eHidden);
+      }
     }
   }, [business]);
 
@@ -1124,13 +1143,13 @@ export default function AjustesPage() {
     );
     setLocalEmpLayout(layout); setEmpReqMsg('');
   };
-  const toggleEmpFieldHidden = async (key: string) => {
-    if (!business) return;
-    const next = { ...empHidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setEmpHidden(next);
-    const { error } = await supabase.from('businesses').update({ employee_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setEmpHidden(empHidden);
+  const toggleEmpFieldHidden = (key: string) => {
+    setEmpHidden(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setEmpReqMsg('');
   };
 
   // Save flow (draft): diff templates + persist required-flags + order on
@@ -1208,6 +1227,7 @@ export default function AjustesPage() {
       setLocalEmpLayout(resolvedEmpLayout);
       setDbEmpLayout(resolvedEmpLayout);
       setDbEmpRequired(empRequired);
+      setDbEmpHidden(empHidden);
 
       setEmpReqMsgIsError(false);
       setEmpReqMsg(t.requiredFields.saveSuccess);
@@ -1261,8 +1281,9 @@ export default function AjustesPage() {
       isDirty(dbEmpTemplates, empTemplates) ||
       JSON.stringify(dbEmpRequired) !== JSON.stringify(empRequired) ||
       JSON.stringify(dbEmpOrder) !== JSON.stringify(localEmpOrder) ||
-      JSON.stringify(dbEmpLayout) !== JSON.stringify(localEmpLayout),
-    [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder, dbEmpLayout, localEmpLayout],
+      JSON.stringify(dbEmpLayout) !== JSON.stringify(localEmpLayout) ||
+      JSON.stringify(dbEmpHidden) !== JSON.stringify(empHidden),
+    [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder, dbEmpLayout, localEmpLayout, dbEmpHidden, empHidden],
   );
 
   const discardEmployees = useCallback(() => {
@@ -1270,8 +1291,9 @@ export default function AjustesPage() {
     setEmpRequired(dbEmpRequired);
     setLocalEmpOrder(dbEmpOrder);
     setLocalEmpLayout(dbEmpLayout);
+    setEmpHidden(dbEmpHidden);
     setEmpReqMsg('');
-  }, [dbEmpTemplates, dbEmpRequired, dbEmpOrder, dbEmpLayout]);
+  }, [dbEmpTemplates, dbEmpRequired, dbEmpOrder, dbEmpLayout, dbEmpHidden]);
 
   // ── Job field config (same shape as clients/employees) ────────────────
   const tJobNew = full.dashboard.jobs.new;
@@ -1283,9 +1305,8 @@ export default function AjustesPage() {
     job_city: tJobNew.cityLabel,
     job_state: tJobNew.stateLabel,
     coordinates: tJobNew.coordinatesLabel,
-    scheduled_date: tJobNew.dateLabel,
-    time_start: tJobNew.timeStartLabel,
-    time_end: tJobNew.timeEndLabel,
+    scheduled_date: tJobNew.dateFieldLabel,
+    time_start: tJobNew.timeFieldLabel,
     total_hours: tJobNew.totalHoursLabel,
     assigned_workers: tJobNew.workersHeading,
     worker_notes: tJobNew.workerNoteLabel,
@@ -1468,6 +1489,7 @@ export default function AjustesPage() {
         job_field_required: jobRequired,
         job_field_order: resolvedOrder,
         job_field_layout: resolvedLayout,
+        job_field_hidden: jobHidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -1478,6 +1500,7 @@ export default function AjustesPage() {
       setLocalJobLayout(resolvedLayout);
       setDbJobLayout(resolvedLayout);
       setDbJobRequired(jobRequired);
+      setDbJobHidden(jobHidden);
 
       setJobReqMsgIsError(false);
       setJobReqMsg(t.requiredFields.saveSuccess);
@@ -1577,14 +1600,21 @@ export default function AjustesPage() {
     setJobReqMsg('');
   };
 
-  // Dirty flag for the job-fields sub-card (templates + required + order).
+  // Per-field show/hide on the job form (eye toggle in the field list). Part of
+  // the job-fields draft — flipping it only edits local state; the change is
+  // persisted by the shared "Save preferences" button (saveJobRequired).
+  const [jobHidden, setJobHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
+  const [dbJobHidden, setDbJobHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
+
+  // Dirty flag for the job-fields sub-card (templates + required + order + hidden).
   const jobFieldsDirty = useMemo(
     () =>
       isDirty(dbJobTemplates, jobTemplates) ||
       JSON.stringify(dbJobRequired) !== JSON.stringify(jobRequired) ||
       JSON.stringify(dbJobOrder) !== JSON.stringify(localJobOrder) ||
-      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout),
-    [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder, dbJobLayout, localJobLayout],
+      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout) ||
+      JSON.stringify(dbJobHidden) !== JSON.stringify(jobHidden),
+    [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder, dbJobLayout, localJobLayout, dbJobHidden, jobHidden],
   );
 
   // Crew mode (draft pattern — single boolean, but unified with the rest).
@@ -1598,28 +1628,25 @@ export default function AjustesPage() {
   const [itemTypesOn, setItemTypesOn] = useState<boolean>(business?.job_item_types_enabled !== false);
   const [savingItemTypes, setSavingItemTypes] = useState(false);
 
-  // Per-field show/hide on the job form (eye toggle in the field list).
-  const [jobHidden, setJobHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
-  const [savingJobHidden, setSavingJobHidden] = useState(false);
-
   useEffect(() => {
     if (business) {
       const cm = business.job_crew_mode ?? true;
       setCrewMode(cm);
       setDbCrewMode(cm);
       setItemTypesOn(business.job_item_types_enabled !== false);
-      setJobHidden(parseHiddenFields(business.job_field_hidden));
+      const h = parseHiddenFields(business.job_field_hidden);
+      setJobHidden(h);
+      setDbJobHidden(h);
     }
   }, [business]);
 
-  const toggleJobFieldHidden = async (key: string) => {
-    if (!business) return;
-    const next = { ...jobHidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setJobHidden(next); setSavingJobHidden(true);
-    const { error } = await supabase.from('businesses').update({ job_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setJobHidden(jobHidden);
-    setSavingJobHidden(false);
+  const toggleJobFieldHidden = (key: string) => {
+    setJobHidden(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setJobReqMsg('');
   };
 
   const saveItemTypes = async (value: boolean) => {
@@ -1915,10 +1942,11 @@ export default function AjustesPage() {
       JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
       JSON.stringify(dbInvoiceLayout) !== JSON.stringify(localInvoiceLayout) ||
+      JSON.stringify(dbInvoiceHidden) !== JSON.stringify(invoiceHidden) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
       String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -1931,12 +1959,13 @@ export default function AjustesPage() {
     setInvoiceFieldRequired(dbInvoiceFieldRequired);
     setLocalInvoiceOrder(dbInvoiceOrder);
     setLocalInvoiceLayout(dbInvoiceLayout);
+    setInvoiceHidden(dbInvoiceHidden);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setInvoiceStartNumber(String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
     setInvoiceReqMsg('');
     setInvoiceMsg('');
-  }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, dbInvoiceLayout, business]);
+  }, [dbInvoiceTemplates, dbInvoiceFieldRequired, dbInvoiceOrder, dbInvoiceLayout, dbInvoiceHidden, business]);
 
   const discardInvoiceTheme = useCallback(() => {
     setInvoiceTheme(normalizeBundle(business?.invoice_template));
@@ -2340,7 +2369,7 @@ export default function AjustesPage() {
                                 {!isCustom ? (
                                   <>
                                     {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
-                                      <button onClick={() => toggleJobFieldHidden(key)} disabled={savingJobHidden}
+                                      <button onClick={() => toggleJobFieldHidden(key)}
                                         className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
                                         aria-label={jobHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
                                         {jobHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
@@ -2353,7 +2382,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveFieldToSection(key, e.target.value as JobLayoutSection)}
-                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {JOB_LAYOUT_SECTIONS.map(s => (
@@ -2654,7 +2683,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveClientFieldToSection(key, e.target.value as ClientFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {CLIENT_FIELD_SECTIONS.map(s => (
@@ -2818,7 +2847,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveEmpFieldToSection(key, e.target.value as EmployeeFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {EMPLOYEE_FIELD_SECTIONS.map(s => (
@@ -3296,7 +3325,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveInvoiceFieldToSection(key, e.target.value as InvoiceFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white shrink-0 max-w-[110px]"
+                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {INVOICE_FIELD_SECTIONS.map(s => (

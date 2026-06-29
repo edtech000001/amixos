@@ -166,7 +166,7 @@ const DEFAULT_EMPLOYEE_FIELD_KEYS = [
 const DEFAULT_JOB_FIELD_KEYS = [
   'client_id', 'priority', 'description',
   'job_address', 'job_city', 'job_state', 'coordinates',
-  'scheduled_date', 'time_start', 'time_end', 'total_hours',
+  'scheduled_date', 'time_start', 'total_hours',
   'assigned_workers', 'worker_notes', 'internal_notes',
 ] as const;
 
@@ -227,6 +227,43 @@ const BUSINESS_US_STATES = [
 
 function GroupLabel({ children }: { children: string }) {
   return <Text className="text-xs font-semibold text-gray-400 uppercase mt-2">{children}</Text>;
+}
+
+// Shared legend for the field-config lists (Clientes / Trabajos / Empleados /
+// Facturas). One tidy left-aligned column — each control on its own row with a
+// fixed-width icon gutter so the labels line up. Explains all three row
+// controls (drag handle, eye = show/hide, switch = required).
+function FieldListLegend() {
+  const { locale } = useLang();
+  const en = locale === 'en';
+  const rows: { icon: React.ReactNode; text: string }[] = [
+    {
+      icon: <GripVertical size={13} color="#9CA3AF" />,
+      text: en ? 'Hold a row to reorder' : 'Mantén presionada una fila para mover',
+    },
+    {
+      icon: <Eye size={13} color="#9CA3AF" />,
+      text: en ? 'Tap the eye to show or hide a field' : 'Toca el ojo para mostrar u ocultar un campo',
+    },
+    {
+      icon: (
+        <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
+          <View className="w-3 h-3 rounded-full bg-white" />
+        </View>
+      ),
+      text: en ? 'Switch makes the field required' : 'El interruptor lo hace obligatorio',
+    },
+  ];
+  return (
+    <View className="gap-1.5 px-1">
+      {rows.map((r, i) => (
+        <View key={i} className="flex-row items-center gap-2">
+          <View className="w-7 items-center">{r.icon}</View>
+          <Text className="text-[11px] text-gray-400">{r.text}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export function BusinessSection() {
@@ -595,9 +632,10 @@ export function FacturasSection() {
   const [dbLayout, setDbLayout] = useState<FieldEntry<InvoiceFieldSection>[]>(
     Array.isArray(business?.invoice_field_layout) ? (business!.invoice_field_layout as FieldEntry<InvoiceFieldSection>[]) : [],
   );
-  // Per-field show/hide (eye toggle). Saved on flip, separate from the draft.
+  // Per-field show/hide (eye toggle). Part of the draft — flipping it only edits
+  // local state; persisted by the shared save action (onSave).
   const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
-  const [savingHidden, setSavingHidden] = useState(false);
+  const [dbHidden, setDbHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.invoice_field_hidden));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -620,17 +658,17 @@ export function FacturasSection() {
     setLocalOrder(o); setDbOrder(o);
     const lay = Array.isArray(business.invoice_field_layout) ? (business.invoice_field_layout as FieldEntry<InvoiceFieldSection>[]) : [];
     setLocalLayout(lay); setDbLayout(lay);
-    setHidden(parseHiddenFields(business.invoice_field_hidden));
+    const h = parseHiddenFields(business.invoice_field_hidden);
+    setHidden(h); setDbHidden(h);
   }, [business]);
 
-  const toggleHidden = async (key: string) => {
-    if (!business || savingHidden) return;
-    const next = { ...hidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setHidden(next); setSavingHidden(true);
-    const { error } = await supabase.from('businesses').update({ invoice_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setHidden(hidden);
-    setSavingHidden(false);
+  const toggleHidden = (key: string) => {
+    setHidden((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setMsg(null);
   };
 
   const loadTemplates = useCallback(async () => {
@@ -781,6 +819,7 @@ export function FacturasSection() {
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
         invoice_field_layout: resolvedLayout,
+        invoice_field_hidden: hidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -791,6 +830,7 @@ export function FacturasSection() {
       setLocalLayout(resolvedLayout);
       setDbLayout(resolvedLayout);
       setDbRequired(required);
+      setDbHidden(hidden);
       setDbDueDays(dueDays);
       setDbNotes(notes);
       setStartNumber(String(startNum));
@@ -810,8 +850,9 @@ export function FacturasSection() {
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
+      JSON.stringify(dbHidden) !== JSON.stringify(hidden) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -920,23 +961,8 @@ export function FacturasSection() {
         </Pressable>
       </View>
 
-      {/* Legend: what the grip + switch on each row mean. */}
-      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
-        <View className="flex-row items-center gap-1.5">
-          <GripVertical size={13} color="#9CA3AF" />
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
-            <View className="w-3 h-3 rounded-full bg-white" />
-          </View>
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
-          </Text>
-        </View>
-      </View>
+      {/* Legend: what the grip / eye / switch on each row mean. */}
+      <FieldListLegend />
 
       <View className="gap-4">
         {INVOICE_FIELD_SECTIONS.map((section) => {
@@ -1154,9 +1180,8 @@ export function TrabajosFieldsSection() {
     job_city: tJobNew.cityLabel,
     job_state: tJobNew.stateLabel,
     coordinates: tJobNew.coordinatesLabel,
-    scheduled_date: tJobNew.dateLabel,
-    time_start: tJobNew.timeStartLabel,
-    time_end: tJobNew.timeEndLabel,
+    scheduled_date: tJobNew.dateFieldLabel,
+    time_start: tJobNew.timeFieldLabel,
     total_hours: tJobNew.totalHoursLabel,
     assigned_workers: tJobNew.workersHeading,
     worker_notes: tJobNew.workerNoteLabel,
@@ -1180,9 +1205,10 @@ export function TrabajosFieldsSection() {
   );
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
-  // Per-field show/hide (eye toggle). Saves on flip, separate from the draft.
+  // Per-field show/hide (eye toggle). Part of the draft — flipping it only edits
+  // local state; persisted by the shared save action (saveRequired).
   const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
-  const [savingHidden, setSavingHidden] = useState(false);
+  const [dbHidden, setDbHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.job_field_hidden));
 
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [dbTemplates, setDbTemplates] = useState<FieldTemplate[]>([]);
@@ -1197,18 +1223,18 @@ export function TrabajosFieldsSection() {
       setLocalOrder(o); setDbOrder(o);
       const lay = Array.isArray(business.job_field_layout) ? (business.job_field_layout as JobFieldEntry[]) : [];
       setLocalJobLayout(lay); setDbJobLayout(lay);
-      setHidden(parseHiddenFields(business.job_field_hidden));
+      const h = parseHiddenFields(business.job_field_hidden);
+      setHidden(h); setDbHidden(h);
     }
   }, [business]);
 
-  const toggleHidden = async (key: string) => {
-    if (!business || savingHidden) return;
-    const next = { ...hidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setHidden(next); setSavingHidden(true);
-    const { error } = await supabase.from('businesses').update({ job_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setHidden(hidden);
-    setSavingHidden(false);
+  const toggleHidden = (key: string) => {
+    setHidden((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setReqMsg(null);
   };
 
   const loadTemplates = useCallback(async () => {
@@ -1295,6 +1321,7 @@ export function TrabajosFieldsSection() {
         job_field_required: required,
         job_field_order: resolvedOrder,
         job_field_layout: resolvedLayout,
+        job_field_hidden: hidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -1302,6 +1329,7 @@ export function TrabajosFieldsSection() {
       await loadTemplates();
       setLocalOrder(resolvedOrder); setDbOrder(resolvedOrder); setDbRequired(required);
       setLocalJobLayout(resolvedLayout); setDbJobLayout(resolvedLayout);
+      setDbHidden(hidden);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
       setReqMsg({ text: t.requiredFields.saveError, isError: true });
@@ -1314,8 +1342,9 @@ export function TrabajosFieldsSection() {
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
-      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbJobLayout, localJobLayout],
+      JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout) ||
+      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbJobLayout, localJobLayout, dbHidden, hidden],
   );
 
   useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
@@ -1473,23 +1502,8 @@ export function TrabajosFieldsSection() {
         </Pressable>
       </View>
 
-      {/* Legend: what the grip + switch on each row mean. */}
-      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
-        <View className="flex-row items-center gap-1.5">
-          <GripVertical size={13} color="#9CA3AF" />
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
-            <View className="w-3 h-3 rounded-full bg-white" />
-          </View>
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
-          </Text>
-        </View>
-      </View>
+      {/* Legend: what the grip / eye / switch on each row mean. */}
+      <FieldListLegend />
 
       <View className="gap-4">
         {JOB_LAYOUT_SECTIONS.map((section) => {
@@ -1916,8 +1930,10 @@ export function ClientesSection() {
   const [dbLayout, setDbLayout] = useState<FieldEntry<ClientFieldSection>[]>(
     Array.isArray(business?.client_field_layout) ? (business!.client_field_layout as FieldEntry<ClientFieldSection>[]) : [],
   );
+  // Per-field show/hide (eye toggle). Part of the draft — flipping it only edits
+  // local state; persisted by the shared save action (saveRequired).
   const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
-  const [savingHidden, setSavingHidden] = useState(false);
+  const [dbHidden, setDbHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.client_field_hidden));
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -1947,18 +1963,18 @@ export function ClientesSection() {
       setDbOrder(o);
       const lay = Array.isArray(business.client_field_layout) ? (business.client_field_layout as FieldEntry<ClientFieldSection>[]) : [];
       setLocalLayout(lay); setDbLayout(lay);
-      setHidden(parseHiddenFields(business.client_field_hidden));
+      const h = parseHiddenFields(business.client_field_hidden);
+      setHidden(h); setDbHidden(h);
     }
   }, [business]);
 
-  const toggleHidden = async (key: string) => {
-    if (!business || savingHidden) return;
-    const next = { ...hidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setHidden(next); setSavingHidden(true);
-    const { error } = await supabase.from('businesses').update({ client_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setHidden(hidden);
-    setSavingHidden(false);
+  const toggleHidden = (key: string) => {
+    setHidden((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setReqMsg(null);
   };
 
   const loadTemplates = useCallback(async () => {
@@ -2065,6 +2081,7 @@ export function ClientesSection() {
         client_field_required: required,
         client_field_order: resolvedOrder,
         client_field_layout: resolvedLayout,
+        client_field_hidden: hidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -2075,6 +2092,7 @@ export function ClientesSection() {
       setLocalLayout(resolvedLayout);
       setDbLayout(resolvedLayout);
       setDbRequired(required);
+      setDbHidden(hidden);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
       setReqMsg({ text: t.requiredFields.saveError, isError: true });
@@ -2082,14 +2100,15 @@ export function ClientesSection() {
     setSavingReq(false);
   };
 
-  // Dirty when any of templates / required / order / layout differs from its db snapshot.
+  // Dirty when any of templates / required / order / layout / hidden differs from its db snapshot.
   const dirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
-      JSON.stringify(dbLayout) !== JSON.stringify(localLayout),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout],
+      JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
+      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden],
   );
 
   // Surface the save action to the wrapper's header. The pill auto-appears
@@ -2295,23 +2314,8 @@ export function ClientesSection() {
         </Pressable>
       </View>
 
-      {/* Legend: what the grip + switch on each row mean. */}
-      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
-        <View className="flex-row items-center gap-1.5">
-          <GripVertical size={13} color="#9CA3AF" />
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
-            <View className="w-3 h-3 rounded-full bg-white" />
-          </View>
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
-          </Text>
-        </View>
-      </View>
+      {/* Legend: what the grip / eye / switch on each row mean. */}
+      <FieldListLegend />
 
       <View className="gap-4">
         {CLIENT_FIELD_SECTIONS.map((section) => {
@@ -2445,8 +2449,10 @@ export function EmpleadosSection() {
   const [dbLayout, setDbLayout] = useState<FieldEntry<EmployeeFieldSection>[]>(
     Array.isArray(business?.employee_field_layout) ? (business!.employee_field_layout as FieldEntry<EmployeeFieldSection>[]) : [],
   );
+  // Per-field show/hide (eye toggle). Part of the draft — flipping it only edits
+  // local state; persisted by the shared save action (saveRequired).
   const [hidden, setHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
-  const [savingHidden, setSavingHidden] = useState(false);
+  const [dbHidden, setDbHidden] = useState<Record<string, boolean>>(() => parseHiddenFields(business?.employee_field_hidden));
   const [savingReq, setSavingReq] = useState(false);
   const [reqMsg, setReqMsg] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -2463,18 +2469,18 @@ export function EmpleadosSection() {
       setLocalOrder(o); setDbOrder(o);
       const lay = Array.isArray(business.employee_field_layout) ? (business.employee_field_layout as FieldEntry<EmployeeFieldSection>[]) : [];
       setLocalLayout(lay); setDbLayout(lay);
-      setHidden(parseHiddenFields(business.employee_field_hidden));
+      const h = parseHiddenFields(business.employee_field_hidden);
+      setHidden(h); setDbHidden(h);
     }
   }, [business]);
 
-  const toggleHidden = async (key: string) => {
-    if (!business || savingHidden) return;
-    const next = { ...hidden };
-    if (next[key]) delete next[key]; else next[key] = true;
-    setHidden(next); setSavingHidden(true);
-    const { error } = await supabase.from('businesses').update({ employee_field_hidden: next }).eq('id', business.id);
-    if (!error) await refetchBusiness(); else setHidden(hidden);
-    setSavingHidden(false);
+  const toggleHidden = (key: string) => {
+    setHidden((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = true;
+      return next;
+    });
+    setReqMsg(null);
   };
 
   const loadTemplates = useCallback(async () => {
@@ -2561,6 +2567,7 @@ export function EmpleadosSection() {
         employee_field_required: required,
         employee_field_order: resolvedOrder,
         employee_field_layout: resolvedLayout,
+        employee_field_hidden: hidden,
       }).eq('id', business.id);
       if (bizErr) throw bizErr;
 
@@ -2568,6 +2575,7 @@ export function EmpleadosSection() {
       await loadTemplates();
       setLocalOrder(resolvedOrder); setDbOrder(resolvedOrder); setDbRequired(required);
       setLocalLayout(resolvedLayout); setDbLayout(resolvedLayout);
+      setDbHidden(hidden);
       setReqMsg({ text: t.requiredFields.saveSuccess, isError: false });
     } catch {
       setReqMsg({ text: t.requiredFields.saveError, isError: true });
@@ -2580,8 +2588,9 @@ export function EmpleadosSection() {
       isDirty(dbTemplates, templates) ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
-      JSON.stringify(dbLayout) !== JSON.stringify(localLayout),
-    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout],
+      JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
+      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+    [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden],
   );
 
   useSettingsSaveAction({ dirty, saving: savingReq, onSave: saveRequired });
@@ -2698,23 +2707,8 @@ export function EmpleadosSection() {
         </Pressable>
       </View>
 
-      {/* Legend: what the grip + switch on each row mean. */}
-      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
-        <View className="flex-row items-center gap-1.5">
-          <GripVertical size={13} color="#9CA3AF" />
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Hold to reorder' : 'Mantén presionado para mover'}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
-            <View className="w-3 h-3 rounded-full bg-white" />
-          </View>
-          <Text className="text-[11px] text-gray-400">
-            {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
-          </Text>
-        </View>
-      </View>
+      {/* Legend: what the grip / eye / switch on each row mean. */}
+      <FieldListLegend />
 
       <View className="gap-4">
         {EMPLOYEE_FIELD_SECTIONS.map((section) => {

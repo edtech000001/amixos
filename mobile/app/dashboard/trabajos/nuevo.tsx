@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -184,7 +185,7 @@ export default function NuevoTrabajoRoute() {
   // "Privado" (owner's scheduler view); the owner explicitly flips it on
   // when the job is ready for the assigned crew to see.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
-  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress'>('scheduled');
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
   // The job's status when the edit form loaded — used to stamp the pipeline
   // timestamp only on a real status change at save time.
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
@@ -225,6 +226,7 @@ export default function NuevoTrabajoRoute() {
   const [coordsInvalid, setCoordsInvalid] = useState(false);
   const [jobLat, setJobLat] = useState<number | null>(null);
   const [jobLng, setJobLng] = useState<number | null>(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -293,7 +295,10 @@ export default function NuevoTrabajoRoute() {
           setClientId(job.client_id ?? '');
           setPublishedToCrew(!!job.published_to_crew);
           setStatus(
-            job.status === 'in_progress' ? 'in_progress' : job.status === 'posible' ? 'posible' : 'scheduled',
+            job.status === 'in_progress' ? 'in_progress'
+              : job.status === 'posible' ? 'posible'
+              : job.status === 'completed' ? 'completed'
+              : 'scheduled',
           );
           setLoadedStatus(job.status);
           setPriority(job.priority ?? 'normal');
@@ -374,6 +379,32 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
+  // Grab the device's current GPS position and fill the coordinates field.
+  const useMyLocation = async () => {
+    if (gettingLocation) return;
+    setGettingLocation(true);
+    try {
+      const { status: perm } = await Location.requestForegroundPermissionsAsync();
+      if (perm !== 'granted') {
+        Alert.alert(t.coordinatesLabel, t.locationDenied);
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const lat = Math.round(pos.coords.latitude * 1e6) / 1e6;
+      const lng = Math.round(pos.coords.longitude * 1e6) / 1e6;
+      setJobLat(lat);
+      setJobLng(lng);
+      setCoordsText(`${lat}, ${lng}`);
+      setCoordsInvalid(false);
+    } catch {
+      Alert.alert(t.coordinatesLabel, t.locationError);
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
   // Try to pull coords from a map URL. Returns true when successful.
   // Address / city / state are NOT auto-filled — Google's /place/ slug puts
   // a business name, address, city, state, country in unpredictable order,
@@ -428,7 +459,7 @@ export default function NuevoTrabajoRoute() {
   const allJobKeys = useMemo(
     () => [
       'client_id', 'priority', 'description', 'job_address', 'job_city', 'job_state',
-      'coordinates', 'scheduled_date', 'time_start', 'time_end', 'total_hours',
+      'coordinates', 'scheduled_date', 'time_start', 'total_hours',
       'assigned_workers', 'worker_notes', 'internal_notes',
       ...templates.map((tpl) => `custom:${tpl.id}`),
     ],
@@ -723,6 +754,7 @@ export default function NuevoTrabajoRoute() {
             const nowIso = new Date().toISOString();
             if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
             else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
+            else if (status === 'completed') jobUpdate.completed_at = nowIso;
           }
           const upRes = await queuedUpdate({ table: 'jobs', match: { id: editId }, payload: jobUpdate, businessId: business.id, label: `Trabajo: ${title.trim()}` });
           jobQueued = upRes.queued;
@@ -959,11 +991,12 @@ export default function NuevoTrabajoRoute() {
                   <Select
                     label={t.statusLabel}
                     value={status}
-                    onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress')}
+                    onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress' | 'completed')}
                     options={[
                       { value: 'posible', label: tStatuses.posible },
                       { value: 'scheduled', label: tStatuses.scheduled },
                       { value: 'in_progress', label: tStatuses.in_progress },
+                      { value: 'completed', label: tStatuses.completed },
                     ]}
                   />
                 </View>
@@ -1091,6 +1124,20 @@ export default function NuevoTrabajoRoute() {
                 {coordsInvalid ? (
                   <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
                 ) : null}
+                <Pressable
+                  onPress={useMyLocation}
+                  disabled={gettingLocation}
+                  className="flex-row items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/5 py-3"
+                >
+                  {gettingLocation ? (
+                    <ActivityIndicator size="small" color="#4F46E5" />
+                  ) : (
+                    <Navigation size={15} color="#4F46E5" />
+                  )}
+                  <Text className="text-sm font-semibold text-primary">
+                    {gettingLocation ? t.gettingLocation : t.useMyLocation}
+                  </Text>
+                </Pressable>
               </View>
               </>
               )}
@@ -1144,25 +1191,30 @@ export default function NuevoTrabajoRoute() {
           {/* Schedule (job mode only) */}
           {!isProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
             <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
+              {/* "Date" is a single toggle that shows/hides both start AND
+                  end date. */}
+              {!fHidden('scheduled_date') && (
               <View className="flex-row gap-3">
-                {!fHidden('scheduled_date') && (
                 <View className="flex-1">
                   <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
                 </View>
-                )}
                 <View className="flex-1">
                   <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
                 </View>
               </View>
+              )}
 
+              {/* "Time" is a single toggle gating start time, end time AND the
+                  all-day switch (which only makes sense when times are shown). */}
+              {!fHidden('time_start') && (
+              <>
               <View className="mt-4 flex-row items-center justify-between">
                 <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
                 <Toggle value={allDay} onValueChange={setAllDay} />
               </View>
 
-              {!allDay && (!fHidden('time_start') || !fHidden('time_end')) ? (
+              {!allDay ? (
                 <View className="flex-row gap-3 mt-3">
-                  {!fHidden('time_start') && (
                   <View className="flex-1">
                     <DatePicker
                       label={jrl('time_start', t.timeStartLabel)}
@@ -1171,8 +1223,6 @@ export default function NuevoTrabajoRoute() {
                       onChange={setTimeStart}
                     />
                   </View>
-                  )}
-                  {!fHidden('time_end') && (
                   <View className="flex-1">
                     <DatePicker
                       label={jrl('time_end', t.timeEndLabel)}
@@ -1181,9 +1231,10 @@ export default function NuevoTrabajoRoute() {
                       onChange={setTimeEnd}
                     />
                   </View>
-                  )}
                 </View>
               ) : null}
+              </>
+              )}
 
               {/* Total hours — auto from start/end (read-only) when both times
                   are set, else manual entry. Credited to each worker in Reports. */}

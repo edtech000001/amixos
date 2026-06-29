@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
   setActiveRolePermissions,
   mergeRolePermissions,
@@ -9,6 +10,15 @@ import {
   type Role,
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
+import {
+  subscribeImpersonation,
+  getImpersonation,
+  startImpersonation as startImp,
+  stopImpersonation as stopImp,
+  requestImpersonation,
+  notifyStopImpersonation,
+  type ImpersonationTarget,
+} from '@amixos/shared/lib/impersonation';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 
 export interface Business {
@@ -51,6 +61,7 @@ export interface Business {
   job_field_hidden: Record<string, boolean> | null;
   job_field_layout: { key: string; section: string }[] | null;
   payroll_frequency: string | null;
+  payroll_anchor_date: string | null;
   // Upcoming-job alert config (migration 046). Owner-configured tiers
   // surface a colored left border + chip on each job card. Shape:
   // see shared/src/lib/jobAlerts.ts.
@@ -148,6 +159,15 @@ interface AppContextValue {
   // The role editor reads this; falls back to DEFAULT_ROLE_PERMISSIONS.
   roleOverrides: Partial<Record<Role, RolePermissions>>;
   loading: boolean;
+  // "Ver como" (login-as-member). When set, `user`, `currentRole` and
+  // `permissions` above reflect the impersonated member (not the admin), and
+  // all data queries are RLS-filtered as that member. Null when not active.
+  impersonating: ImpersonationTarget | null;
+  // True while impersonating — the session is view-only (writes are blocked at
+  // the transport layer; surfaces should also disable write controls).
+  readOnly: boolean;
+  startImpersonation: (targetUserId: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   refetchBusiness: () => Promise<void>;
   reloadPermissions: () => Promise<void>;
   setActiveBusiness: (businessId: string) => void;
@@ -163,6 +183,10 @@ const AppContext = createContext<AppContextValue>({
   permissions: null,
   roleOverrides: {},
   loading: true,
+  impersonating: null,
+  readOnly: false,
+  startImpersonation: async () => {},
+  stopImpersonation: async () => {},
   refetchBusiness: async () => {},
   reloadPermissions: async () => {},
   setActiveBusiness: () => {},
@@ -187,16 +211,34 @@ function writeActiveCookie(id: string | null) {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const supabase = createSupabaseClient();
-  const [user, setUser] = useState<AppUser | null>(null);
+  // The admin's REAL authenticated identity. `user` exposed below may be the
+  // impersonated member instead (see impersonation override).
+  const [realUser, setRealUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [roleOverrides, setRoleOverrides] = useState<Partial<Record<Role, RolePermissions>>>({});
   const [loading, setLoading] = useState(true);
 
+  // Active "Ver como" session (subscribed module-level store). Drives the
+  // identity/role overrides below so the whole app renders as the member.
+  const impersonation = useSyncExternalStore(subscribeImpersonation, getImpersonation, () => null);
+
   // Derived state — recomputed on every render, fine here since the maps are small.
   const business = businesses.find((b) => b.id === activeBusinessId) ?? null;
-  const currentRole = activeBusinessId ? roles[activeBusinessId] ?? null : null;
+  // When impersonating, every identity-derived value reflects the target member
+  // instead of the admin — so the dashboard switches to their view (FieldHome,
+  // gated buttons, etc.) and identity-keyed queries (e.g. FieldHome's employee
+  // lookup) resolve to them. Data RLS is handled separately by the fetch wrapper.
+  const baseRole = activeBusinessId ? roles[activeBusinessId] ?? null : null;
+  const currentRole = impersonation ? impersonation.target.role : baseRole;
+  const user = impersonation
+    ? {
+        id: impersonation.target.userId,
+        email: impersonation.target.email ?? '',
+        name: impersonation.target.name ?? impersonation.target.email ?? '',
+      }
+    : realUser;
   const permissions = currentRole ? roleOverrides[currentRole] ?? permissionsForRole(currentRole) : null;
 
   // Load the active business's customized roles (business_roles) and register
@@ -227,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, job_field_hidden, job_field_layout, payroll_frequency, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
+        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, job_field_hidden, job_field_layout, payroll_frequency, payroll_anchor_date, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
         // Deterministic order: the fallback "first business" must be the
         // same on web and mobile, or per-business state (e.g. the Google
         // connection) looks inconsistent across devices.
@@ -253,8 +295,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const refetchBusiness = async () => {
-    if (user) await fetchBusinesses(user.id);
+    // Always refetch the admin's own businesses/roles, even while impersonating.
+    if (realUser) await fetchBusinesses(realUser.id);
   };
+
+  // ─── "Ver como" actions ────────────────────────────────────────────────
+  // Mint a token for a member and enter their view. The fetch wrapper + the
+  // identity overrides above do the rest. Throws the server code on failure.
+  const startImpersonation = useCallback(async (targetUserId: string) => {
+    if (!activeBusinessId) throw new Error('no_business');
+    const jwt = await getJwt();
+    const grant = await requestImpersonation({
+      apiBaseUrl: getApiBaseUrl(),
+      jwt,
+      businessId: activeBusinessId,
+      targetUserId,
+    });
+    startImp({
+      token: grant.token,
+      businessId: activeBusinessId,
+      target: grant.target,
+      expiresAt: grant.expiresAt,
+    });
+  }, [activeBusinessId]);
+
+  const stopImpersonation = useCallback(async () => {
+    const cur = getImpersonation();
+    stopImp();
+    if (cur) {
+      try {
+        const jwt = await getJwt();
+        await notifyStopImpersonation({
+          apiBaseUrl: getApiBaseUrl(),
+          jwt,
+          businessId: cur.businessId,
+          targetUserId: cur.target.userId,
+        });
+      } catch {
+        /* audit-only */
+      }
+    }
+  }, []);
 
   const setActiveBusiness = (id: string) => {
     if (!businesses.some((b) => b.id === id)) return;
@@ -267,7 +348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const u = { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) };
-        setUser(u);
+        setRealUser(u);
         await fetchBusinesses(u.id);
       } else if (window.location.pathname.startsWith('/dashboard')) {
         window.location.href = '/auth/login';
@@ -280,7 +361,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === 'SIGNED_OUT') {
-          setUser(null);
+          stopImp();
+          setRealUser(null);
           setBusinesses([]);
           setRoles({});
           setRoleOverrides({});
@@ -306,6 +388,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         permissions,
         roleOverrides,
         loading,
+        impersonating: impersonation?.target ?? null,
+        readOnly: !!impersonation,
+        startImpersonation,
+        stopImpersonation,
         refetchBusiness,
         reloadPermissions,
         setActiveBusiness,

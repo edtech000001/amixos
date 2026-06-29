@@ -16,6 +16,16 @@ import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
 
+// Build identifier for the footer: app version (from package.json, injected via
+// next.config) + the short git commit SHA (auto-set by Vercel on deploy). Falls
+// back to just the version locally where no SHA is present.
+const APP_VERSION = (() => {
+  const v = process.env.NEXT_PUBLIC_APP_VERSION;
+  if (!v) return '';
+  const sha = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
+  return sha ? `v${v} · ${sha.slice(0, 7)}` : `v${v}`;
+})();
+
 // Each nav item declares which roles may see it (mirrors the read-side RLS).
 // `inicio` + `trabajos` are universal — a field worker lands on their own home
 // and still reaches their assigned-jobs list. The rest follow their `can.*`
@@ -110,7 +120,10 @@ export function Sidebar() {
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
               )}
             >
-              <Icon size={18} color={active ? '#FFFFFF' : m.color} />
+              {/* Inherit currentColor (gray when idle, white when active) so
+                  module icons match the core nav instead of each showing their
+                  own brand color. */}
+              <Icon size={18} />
               {name}
             </Link>
           );
@@ -153,6 +166,9 @@ export function Sidebar() {
         <p className="text-[10px] text-gray-400">
           Powered by <span className="font-semibold text-gray-500">Amixos</span>
         </p>
+        {APP_VERSION && (
+          <p className="text-[10px] text-gray-300 mt-0.5">{APP_VERSION}</p>
+        )}
       </div>
     </div>
   );
