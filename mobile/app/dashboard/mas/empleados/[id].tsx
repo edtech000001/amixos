@@ -37,10 +37,12 @@ import {
   MessageSquare,
   KeyRound,
   Eye,
+  Check,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { fetchEmployeeLocations, setEmployeePrimaryLocation, toggleEmployeeBranch } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
@@ -113,7 +115,7 @@ export default function EmpleadoDetailRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, startImpersonation } = useApp();
+  const { business, user, currentRole, startImpersonation, locations } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
@@ -138,6 +140,10 @@ export default function EmpleadoDetailRoute() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [mode, setMode] = useState<'view' | 'edit'>('view');
+  // Worker's home branch (from employee_locations). Editable on the person.
+  const [homeLocation, setHomeLocation] = useState<string>('');
+  // Branches this worker is LENT to (non-home). Toggled via the share chips.
+  const [sharedLocations, setSharedLocations] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
@@ -336,6 +342,14 @@ export default function EmpleadoDetailRoute() {
     }
     const e = empRes.data as RawEmployee;
     setEmployee(e);
+    // Load this worker's branches: home (primary) + lent-to (the rest).
+    fetchEmployeeLocations(supabase, business.id)
+      .then(links => {
+        const mine = links.filter(l => l.employee_id === e.id);
+        setHomeLocation(mine.find(l => l.is_primary)?.location_id ?? '');
+        setSharedLocations(mine.filter(l => !l.is_primary).map(l => l.location_id));
+      })
+      .catch(() => { setHomeLocation(''); setSharedLocations([]); });
     // Pre-select the Invite dialog with the planned access role from import.
     if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
       setAccessRole(e.intended_access_role as Role);
@@ -361,6 +375,13 @@ export default function EmpleadoDetailRoute() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Lend / un-lend this worker to another branch (never their home branch).
+  const toggleShare = async (locationId: string) => {
+    if (!business || !employee) return;
+    const nowShared = await toggleEmployeeBranch(supabase, business.id, employee.id, locationId);
+    setSharedLocations(prev => nowShared ? [...prev, locationId] : prev.filter(x => x !== locationId));
+  };
+
   const save = async () => {
     if (!employee || !business) return;
     if (!form.first_name.trim()) { setError(t.modal.errorFirstNameRequired); return; }
@@ -381,6 +402,8 @@ export default function EmpleadoDetailRoute() {
     };
     const prev = employee;
     await supabase.from('employees').update(payload).eq('id', employee.id);
+    // Update the home branch (preserves any borrowed-branch assignments).
+    if (locations.length > 0) await setEmployeePrimaryLocation(supabase, business.id, employee.id, homeLocation || null);
     const milestones = diffEmployeeChanges(
       { pay_rate: prev.pay_rate, pay_type: prev.pay_type, role: prev.role },
       { pay_rate: form.pay_rate, pay_type: form.pay_type, role: form.role },
@@ -659,6 +682,39 @@ export default function EmpleadoDetailRoute() {
 
         {isView ? (
           <View className="gap-4">
+            {/* Branch sharing — home branch + lend to other branches (they show
+                in that branch's team list too). Home is changed via the form. */}
+            {locations.length >= 2 ? (
+              <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 gap-3">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+                    <MapPin size={16} color="#4F46E5" />
+                  </View>
+                  <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex-1">{locale === 'en' ? 'Locations' : 'Ubicaciones'}</Text>
+                </View>
+                <Text className="text-sm text-gray-700">
+                  {locale === 'en' ? 'Home branch: ' : 'Sucursal principal: '}
+                  <Text className="font-semibold">{locations.find(l => l.id === homeLocation)?.name ?? (locale === 'en' ? 'None' : 'Ninguna')}</Text>
+                </Text>
+                <Text className="text-xs text-gray-400">{locale === 'en' ? 'Share with other branches:' : 'Compartir con otras sucursales:'}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {locations.filter(l => l.id !== homeLocation).map(l => {
+                    const shared = sharedLocations.includes(l.id);
+                    return (
+                      <Pressable key={l.id} onPress={() => toggleShare(l.id)}
+                        className={`flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${shared ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
+                        {shared ? <Check size={12} color="#4F46E5" /> : null}
+                        <Text className={`text-xs font-medium ${shared ? 'text-primary' : 'text-gray-500'}`}>{l.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                  {locations.filter(l => l.id !== homeLocation).length === 0 ? (
+                    <Text className="text-xs text-gray-400">{locale === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
             {(employee.check_name || employee.phone || employee.email) ? (
               <InfoCard title={t.modal.basicInfoHeading}>
                 <InfoRow Icon={Hash} label={t.modal.checkNameLabel} value={employee.check_name} />
@@ -713,6 +769,20 @@ export default function EmpleadoDetailRoute() {
           /* Edit form */
           <View className="gap-4">
             {EMPLOYEE_FIELD_SECTIONS.map(renderSection)}
+
+            {/* Home branch — multi-location businesses only. */}
+            {locations.length >= 2 ? (
+              <View>
+                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
+                <View className="bg-white rounded-2xl border border-gray-100 p-4">
+                  <Select
+                    value={homeLocation}
+                    onValueChange={setHomeLocation}
+                    options={[{ value: '', label: locale === 'en' ? 'No location' : 'Sin ubicación' }, ...locations.map(l => ({ value: l.id, label: l.name }))]}
+                  />
+                </View>
+              </View>
+            ) : null}
 
             {error ? <Text className="text-xs text-red-500 mt-1">{error}</Text> : null}
           </View>

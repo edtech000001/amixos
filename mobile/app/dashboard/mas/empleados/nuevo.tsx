@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, DollarSign } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { setEmployeePrimaryLocation } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -95,7 +96,7 @@ const US_STATES = [
 export default function NuevoEmpleadoRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, locations, activeLocationId } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
@@ -138,6 +139,9 @@ export default function NuevoEmpleadoRoute() {
     !EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && isFieldHidden(hidden, key);
 
   const [form, setForm] = useState<EmpForm>(EMPTY_EMP);
+  // Home branch — set on the person, defaulting to the active branch so most
+  // hires need no extra tap. Lending lives in Ajustes → Ubicaciones.
+  const [homeLocation, setHomeLocation] = useState<string>(activeLocationId ?? '');
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -313,6 +317,12 @@ export default function NuevoEmpleadoRoute() {
     })();
   }, [business?.id]);
 
+  // Default the home branch once locations load (active branch, else default).
+  useEffect(() => {
+    if (homeLocation || locations.length === 0) return;
+    setHomeLocation(activeLocationId ?? '');
+  }, [locations, activeLocationId]);
+
   const goBack = () => router.replace('/dashboard/mas/empleados' as never);
 
   // Guard the back arrow + hardware back when the form has been touched.
@@ -393,6 +403,8 @@ export default function NuevoEmpleadoRoute() {
       setError(insErr?.message ?? t.modal.requiredError.replace('{{fields}}', ''));
       return;
     }
+    // Assign the home branch picked in the form (no-op for single-location).
+    if (homeLocation) await setEmployeePrimaryLocation(supabase, business.id, created.id, homeLocation);
     // Seed the timeline with the hire so future entries have a baseline.
     void logEmployeeMilestone(supabase, {
       businessId: business.id,
@@ -425,6 +437,20 @@ export default function NuevoEmpleadoRoute() {
           keyboardShouldPersistTaps="handled"
         >
           {EMPLOYEE_FIELD_SECTIONS.map(renderSection)}
+
+          {/* Home branch — multi-location businesses only. */}
+          {locations.length >= 2 ? (
+            <View>
+              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
+              <View className="bg-white rounded-2xl border border-gray-100 p-4">
+                <Select
+                  value={homeLocation}
+                  onValueChange={setHomeLocation}
+                  options={[{ value: '', label: locale === 'en' ? 'No location' : 'Sin ubicación' }, ...locations.map(l => ({ value: l.id, label: l.name }))]}
+                />
+              </View>
+            </View>
+          ) : null}
 
           {error ? <Text className="text-xs text-red-500 mt-1">{error}</Text> : null}
 

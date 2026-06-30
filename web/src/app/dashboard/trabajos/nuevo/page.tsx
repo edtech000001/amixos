@@ -117,7 +117,7 @@ function NuevoTrabajoContent() {
   };
 
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, activeLocationId, locations } = useApp();
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
@@ -160,6 +160,21 @@ function NuevoTrabajoContent() {
   const duplicateId = searchParams.get('duplicate');
   const sourceId = editId ?? duplicateId;
   const isProposal = searchParams.get('modo') === 'propuesta';
+  // Defense in depth: a role that can create jobs but not estimates
+  // (e.g. field crew) must not deep-link into proposal mode. Drop to a plain
+  // work order. Only for new creations — editing an existing record is gated
+  // elsewhere by RLS, not by this capability.
+  useEffect(() => {
+    if (!sourceId && isProposal && currentRole && !can.createEstimate(currentRole)) {
+      router.replace('/dashboard/trabajos/nuevo');
+    }
+  }, [sourceId, isProposal, currentRole, router]);
+
+  // Default a NEW job's branch to the active branch, or the business default.
+  useEffect(() => {
+    if (sourceId || locationId || locations.length === 0) return;
+    setLocationId(activeLocationId ?? '');
+  }, [sourceId, locations, activeLocationId]);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -176,6 +191,9 @@ function NuevoTrabajoContent() {
   // Form state
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
+  // Branch this job belongs to. Defaults to the active branch (or the
+  // business's default location) for new jobs; loaded from the row when editing.
+  const [locationId, setLocationId] = useState('');
   // Crew visibility (migration 044). New jobs default to "Privado" — the
   // owner-side scheduler — and flip on when they're ready for the crew.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
@@ -246,6 +264,11 @@ function NuevoTrabajoContent() {
   const [discount, setDiscount] = useState(0);
 
   const isEditProposal = sourceId ? editIsProposal : isProposal;
+
+  // Materials & Labor section visibility. The toggle hides the whole section
+  // for plain jobs (businesses that don't itemize). Proposals always keep it —
+  // an estimate IS its line items + total, and save requires at least one.
+  const showMaterials = isEditProposal || showItemTypes;
 
   // ── Custom-field layout ──
   // Standard field keys (mirrors the settings-side default) + each custom
@@ -343,6 +366,7 @@ function NuevoTrabajoContent() {
           );
           setLoadedStatus(job.status);
           setPriority(job.priority || 'normal');
+          setLocationId(job.location_id || '');
           setAddress(job.job_address || '');
           setCity(job.job_city || '');
           setState(job.job_state || '');
@@ -700,6 +724,7 @@ function NuevoTrabajoContent() {
       if (isEditProposal) {
         const proposalData: any = {
           client_id: clientId || null,
+          location_id: locationId || null,
           title: title.trim(),
           description: description.trim() || null,
           notes: clientNotes.trim() || null,
@@ -761,6 +786,7 @@ function NuevoTrabajoContent() {
       } else {
         const jobData: any = {
           client_id: clientId || null,
+          location_id: locationId || null,
           title: title.trim(),
           description: description.trim() || null,
           priority,
@@ -964,6 +990,20 @@ function NuevoTrabajoContent() {
                 )}
               </div>
             </div>
+
+            {/* Branch picker — only when the business runs multiple locations. */}
+            {locations.length >= 2 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
+                <select value={locationId} onChange={e => setLocationId(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                  <option value="">{locale === 'es' ? 'Sin ubicación' : 'No location'}</option>
+                  {locations.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {isEditProposal ? (
               /* Proposal: issue + expiry, then project start/finish + est. hours */
@@ -1411,6 +1451,7 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Líneas de trabajo / Ítems */}
+        {showMaterials && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={15} className="text-primary"/>
@@ -1518,6 +1559,7 @@ function NuevoTrabajoContent() {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── Fotos — uploads need a saved job_id, so the gallery only shows
             when editing an existing job; new jobs get a hint and land on the

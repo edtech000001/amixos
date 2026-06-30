@@ -26,6 +26,7 @@ import {
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchEmployeeLocations, employeeIdsAtLocation, setEmployeePrimaryLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import {
   EMPLOYEE_FIELD_SECTIONS,
@@ -122,8 +123,11 @@ export default function EmpleadosPage() {
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, startImpersonation } = useApp();
+  const { business, user, currentRole, startImpersonation, activeLocationId, locations } = useApp();
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  // Worker↔branch links — used to scope the list to the active branch (a worker
+  // lent to another branch appears in both). Empty in single-location mode.
+  const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [accessRoles, setAccessRoles] = useState<{ key: string; name: string | null }[]>([]);
@@ -139,6 +143,9 @@ export default function EmpleadosPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selEmp, setSelEmp] = useState<RawEmployee | null>(null);
   const [empForm, setEmpForm] = useState(EMPTY_EMP);
+  // Home branch for a new employee (set in this form so you don't have to visit
+  // Ajustes → Ubicaciones per hire). Defaults to the active branch on open.
+  const [empHomeLocation, setEmpHomeLocation] = useState<string>('');
   const [tsForm, setTsForm] = useState(EMPTY_TS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -348,6 +355,12 @@ export default function EmpleadosPage() {
 
   useEffect(() => { loadPeople(); loadTimesheets(); loadTemplates(); }, [business]);
 
+  // Worker↔branch assignments for the active business (for per-branch scoping).
+  useEffect(() => {
+    if (!business) { setEmpLocations([]); return; }
+    fetchEmployeeLocations(supabase, business.id).then(setEmpLocations).catch(() => setEmpLocations([]));
+  }, [business]);
+
   // Per-business role renames so the team CSV can use custom role labels.
   useEffect(() => {
     if (!business) return;
@@ -367,17 +380,26 @@ export default function EmpleadosPage() {
     }
   }, []);
 
-  const empList: EmployeeListItem[] = useMemo(() => employees.map(e => ({
-    id: e.id,
-    firstName: e.first_name,
-    lastName: e.last_name,
-    phone: e.phone,
-    role: e.role,
-    payType: e.pay_type,
-    payRate: e.pay_rate,
-    active: e.active,
-    access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
-  })), [employees, members, invites]);
+  const empList: EmployeeListItem[] = useMemo(() => {
+    // Scope to the active branch (home or borrowed). "All" = no filter.
+    const scoped = activeLocationId
+      ? (() => {
+          const ids = employeeIdsAtLocation(empLocations, activeLocationId);
+          return employees.filter(e => ids.has(e.id));
+        })()
+      : employees;
+    return scoped.map(e => ({
+      id: e.id,
+      firstName: e.first_name,
+      lastName: e.last_name,
+      phone: e.phone,
+      role: e.role,
+      payType: e.pay_type,
+      payRate: e.pay_rate,
+      active: e.active,
+      access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
+    }));
+  }, [employees, members, invites, activeLocationId, empLocations]);
 
   const tsList: TimesheetListItem[] = useMemo(() => timesheets.map(ts => ({
     id: ts.id,
@@ -394,7 +416,11 @@ export default function EmpleadosPage() {
   const empDirty = empModal === 'add' && JSON.stringify(empForm) !== JSON.stringify(EMPTY_EMP);
   const confirmEmpClose = useUnsavedChanges(empDirty);
 
-  const openAddEmp = () => { setEmpForm(EMPTY_EMP); setError(''); setEmpModal('add'); };
+  const openAddEmp = () => {
+    setEmpForm(EMPTY_EMP);
+    setEmpHomeLocation(activeLocationId ?? '');
+    setError(''); setEmpModal('add');
+  };
   // Row taps now navigate to the dedicated detail page; the list itself
   // only owns the "Add" modal for the create flow.
   const openEditEmpById = (id: string) => router.push(`/dashboard/empleados/${id}`);
@@ -490,6 +516,8 @@ export default function EmpleadosPage() {
     if (empModal === 'add') {
       const { data: created } = await supabase.from('employees').insert({ ...payload, business_id: business!.id }).select().single();
       if (created) {
+        // Assign the home branch picked in the form (no-op for single-location).
+        if (empHomeLocation) await setEmployeePrimaryLocation(supabase, business!.id, created.id, empHomeLocation);
         // Seed the timeline with the hire so future entries have a baseline.
         void logEmployeeMilestone(supabase, {
           businessId: business!.id,
@@ -498,6 +526,8 @@ export default function EmpleadosPage() {
           details: { role: empForm.role, pay_type: empForm.pay_type, rate: payRateNum },
           createdBy: user?.id ?? null,
         });
+        // Refresh links so the new hire shows under the right branch immediately.
+        fetchEmployeeLocations(supabase, business!.id).then(setEmpLocations).catch(() => {});
       }
     } else if (selEmp) {
       const prev = selEmp;
@@ -815,6 +845,20 @@ export default function EmpleadosPage() {
               </div>
             );
           })}
+
+          {/* Home branch — set here so you don't visit Ajustes per hire. Only
+              shown when the business runs multiple locations. */}
+          {locations.length >= 2 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-700">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
+              <select value={empHomeLocation} onChange={e => setEmpHomeLocation(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                <option value="">{lang === 'en' ? 'No location' : 'Sin ubicación'}</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              <p className="text-xs text-gray-400">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
+            </div>
+          )}
 
           {error && <p className="text-xs text-red-500">{error}</p>}
           </>

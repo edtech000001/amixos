@@ -24,6 +24,8 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
   'manageMembers',
   'viewAuditLog',
   'viewAllTimesheets',
+  'createEstimates',
+  'clockInOut',
 ];
 
 export function isRoleEditable(role: Role): boolean {

@@ -56,7 +56,7 @@ export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
-  const { business, businesses, currentRole } = useApp();
+  const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialTab, setInitialTab] = useState<TabKey>('all');
@@ -91,22 +91,24 @@ export default function TrabajosPage() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawJob>((from, to) =>
-      supabase
+    const data = await fetchAll<RawJob>((from, to) => {
+      let q = supabase
         .from('jobs')
         .select(`
           *,
           clients(first_name, last_name, company),
           job_assignments(worker_name, is_lead, employees(first_name, last_name))
         `)
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .range(from, to));
+        .eq('business_id', businessId);
+      // Scope to the active branch when one is selected ("All" = no filter).
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q.order('created_at', { ascending: false }).range(from, to);
+    });
     setRawJobs(data);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
@@ -208,6 +210,7 @@ export default function TrabajosPage() {
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}
       canCreate={can.createJob(currentRole)}
+      canCreateEstimates={can.createEstimate(currentRole)}
       alertThresholds={alertThresholds}
       businessId={business?.id}
     />

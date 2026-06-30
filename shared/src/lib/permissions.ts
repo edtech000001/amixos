@@ -89,7 +89,9 @@ export type CapabilityKey =
   | 'assignWorkers'         // assign crew to jobs
   | 'manageFiles'           // document library categories/uploads
   | 'manageIntegrations'    // SMS/Google creds, etc.
-  | 'manageAssignmentFields'; // per-worker assignment field templates
+  | 'manageAssignmentFields' // per-worker assignment field templates
+  | 'createEstimates'       // create estimates/proposals (vs plain work orders)
+  | 'clockInOut';           // show the clock in/out card on the field home
 
 export interface RolePermissions {
   resources: Record<ResourceKey, ResourcePerm>;
@@ -104,7 +106,7 @@ const caps = (overrides: Partial<Record<CapabilityKey, boolean>>): Record<Capabi
   manageSettings: false, manageMembers: false, manageBilling: false, deleteBusiness: false,
   viewAuditLog: false, viewAllTimesheets: false, writeOwnTimesheet: false, delegateJob: false,
   logCompletedJob: false, assignWorkers: false, manageFiles: false, manageIntegrations: false,
-  manageAssignmentFields: false,
+  manageAssignmentFields: false, createEstimates: false, clockInOut: false,
   ...overrides,
 });
 
@@ -125,7 +127,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       manageSettings: true, manageMembers: true, manageBilling: true, deleteBusiness: true,
       viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
       logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
-      manageAssignmentFields: true,
+      manageAssignmentFields: true, createEstimates: true,
     }),
   },
   admin: {
@@ -134,7 +136,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       manageSettings: true, manageMembers: true, manageBilling: false, deleteBusiness: false,
       viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
       logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
-      manageAssignmentFields: true,
+      manageAssignmentFields: true, createEstimates: true,
     }),
   },
   manager: {
@@ -149,7 +151,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
     },
     caps: caps({
       viewAllTimesheets: true, writeOwnTimesheet: true, assignWorkers: true,
-      manageFiles: true, manageIntegrations: true,
+      manageFiles: true, manageIntegrations: true, createEstimates: true,
     }),
   },
   office: {
@@ -163,12 +165,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       reports: R('none'),
     },
     caps: caps({
-      writeOwnTimesheet: true, manageFiles: true, manageIntegrations: true,
+      writeOwnTimesheet: true, manageFiles: true, manageIntegrations: true, createEstimates: true,
     }),
   },
   field: {
     resources: {
-      jobs: R('assigned', false, false, false),
+      // Field crew manage their (assigned) jobs by default — create/edit/delete
+      // on. Estimates stay OFF by default (createEstimates) so a business opts
+      // in per-role from the role editor.
+      jobs: R('assigned', true, true, true),
       clients: R('assigned', false, false, false),
       invoices: R('none'),
       employees: R('none'),
@@ -176,7 +181,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       inventory: R('none'),
       reports: R('none'),
     },
-    caps: caps({ writeOwnTimesheet: true, logCompletedJob: true }),
+    // Clock in/out on by default for crew (the only role with the card); a
+    // business that doesn't track shifts can turn it off in the role editor.
+    caps: caps({ writeOwnTimesheet: true, logCompletedJob: true, clockInOut: true }),
   },
   viewer: {
     resources: {
@@ -288,6 +295,10 @@ export const can = {
   deleteJob:        (role: Role | null) => !!res(role, 'jobs')?.delete,
   // Field workers see only their assigned jobs.
   seeAllJobs:       (role: Role | null) => res(role, 'jobs')?.view === 'all',
+  // Estimates/proposals: requires job-create AND the createEstimates capability
+  // (a per-role toggle so a business can let a role make work orders but not
+  // estimates — e.g. field crew by default).
+  createEstimate:   (role: Role | null) => !!res(role, 'jobs')?.create && cap(role, 'createEstimates'),
 
   // Invoices — field workers fully excluded.
   seeInvoices:    (role: Role | null) => res(role, 'invoices')?.view === 'all',
@@ -315,6 +326,9 @@ export const can = {
   // Timesheets — field workers can write their own; managers+ see all.
   seeAllTimesheets:    (role: Role | null) => cap(role, 'viewAllTimesheets'),
   writeOwnTimesheet:   (role: Role | null) => cap(role, 'writeOwnTimesheet'),
+  // Clock in/out card on the field home. On by default for the field role; a
+  // business that doesn't track shifts can turn it off in the role editor.
+  clockInOut:          (role: Role | null) => cap(role, 'clockInOut'),
 
   // Inventory + calendar — same baseline as clients.
   editInventory: (role: Role | null) => !!res(role, 'inventory')?.edit,

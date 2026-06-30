@@ -16,6 +16,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
@@ -31,6 +32,7 @@ import {
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
 import { type Role } from '@amixos/shared/lib/permissions';
@@ -140,7 +142,7 @@ const EMPTY_TS = (): TsForm => ({
 export default function EmpleadosRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, activeLocationId } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
@@ -160,6 +162,9 @@ export default function EmpleadosRoute() {
   };
 
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  // Worker↔branch links — scope the list to the active branch (borrowed workers
+  // appear in both). Empty in single-location mode.
+  const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [members, setMembers] = useState<AccessMember[]>([]);
@@ -283,12 +288,20 @@ export default function EmpleadosRoute() {
       void loadPeople();
       void loadTimesheets();
       void loadTemplates();
+      if (business) fetchEmployeeLocations(supabase, business.id).then(setEmpLocations).catch(() => setEmpLocations([]));
     }, [business?.id]),
   );
 
   const empList: EmployeeListItem[] = useMemo(
-    () =>
-      employees.map((e) => ({
+    () => {
+      // Scope to the active branch (home or borrowed). "All" = no filter.
+      const scoped = activeLocationId
+        ? (() => {
+            const ids = employeeIdsAtLocation(empLocations, activeLocationId);
+            return employees.filter((e) => ids.has(e.id));
+          })()
+        : employees;
+      return scoped.map((e) => ({
         id: e.id,
         firstName: e.first_name,
         lastName: e.last_name,
@@ -298,8 +311,9 @@ export default function EmpleadosRoute() {
         payRate: e.pay_rate,
         active: e.active,
         access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
-      })),
-    [employees, members, invites],
+      }));
+    },
+    [employees, members, invites, activeLocationId, empLocations],
   );
 
   const tsList: TimesheetListItem[] = useMemo(
@@ -761,6 +775,7 @@ export default function EmpleadosRoute() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <LocationSwitcher />
       <EmployeesScreen
         employees={empList}
         timesheets={tsList}

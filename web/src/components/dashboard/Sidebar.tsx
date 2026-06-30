@@ -13,6 +13,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { LocationSwitcher } from '@/components/dashboard/LocationSwitcher';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
 
@@ -75,8 +76,9 @@ export function Sidebar() {
   const NavContent = () => (
     <div className="flex flex-col h-full">
       {/* Business switcher (replaces the read-only logo + name block) */}
-      <div className="px-6 py-5 border-b border-gray-100">
+      <div className="px-6 py-5 border-b border-gray-100 flex flex-col gap-3">
         <BusinessSwitcher />
+        <LocationSwitcher />
       </div>
 
       {/* Nav items. Core list first, then any enabled+available modules.

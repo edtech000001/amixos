@@ -10,7 +10,7 @@ import {
 import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
-  FileText, Clock, Package, BarChart3, X, ChevronRight,
+  FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -25,7 +25,7 @@ interface Invoice {
 }
 interface Job {
   id: string; status: string; total_amount: number; created_at: string;
-  client_id: string | null;
+  client_id: string | null; location_id: string | null;
 }
 interface Client { id: string; created_at: string; }
 interface Timesheet { id: string; hours_worked: number; work_date: string; employee_id: string | null; worker_name: string | null; }
@@ -123,8 +123,8 @@ function ChartTooltip({ active, payload, label }: any) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReportesPage() {
   const supabase = createSupabaseClient();
-  const { business } = useApp();
-  const { t: full } = useLang();
+  const { business, locations } = useApp();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.reports;
   const tc = full.common;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the date-filter labels
@@ -161,7 +161,7 @@ export default function ReportesPage() {
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Job>((from, to) =>
         supabase.from('jobs')
-          .select('id, status, total_amount, created_at, client_id')
+          .select('id, status, total_amount, created_at, client_id, location_id')
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Client>((from, to) =>
         supabase.from('clients')
@@ -225,6 +225,28 @@ export default function ReportesPage() {
   const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
 
   const inventoryValue = inventory.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
+
+  // ── Per-branch breakdown ──────────────────────────────────────────────────
+  // Reports stay business-wide totals; this compares branches. jobCount = jobs
+  // created in range; revenue = total_amount of completed/invoiced jobs (the
+  // job is the only location-tagged revenue proxy — invoices carry no branch).
+  const byLocation = useMemo(() => {
+    if (locations.length === 0) return [] as { locationId: string | null; name: string; jobCount: number; revenue: number }[];
+    const agg = new Map<string, { jobCount: number; revenue: number }>();
+    filteredJobs.forEach(j => {
+      const key = j.location_id ?? '__none__';
+      const earned = j.status === 'completed' || j.status === 'invoiced' ? j.total_amount : 0;
+      const cur = agg.get(key) ?? { jobCount: 0, revenue: 0 };
+      cur.jobCount += 1; cur.revenue += earned; agg.set(key, cur);
+    });
+    const rows = locations.map(l => ({
+      locationId: l.id as string | null, name: l.name,
+      jobCount: agg.get(l.id)?.jobCount ?? 0, revenue: agg.get(l.id)?.revenue ?? 0,
+    }));
+    const none = agg.get('__none__');
+    if (none) rows.push({ locationId: null, name: locale === 'es' ? 'Sin ubicación' : 'No location', jobCount: none.jobCount, revenue: none.revenue });
+    return rows;
+  }, [locations, filteredJobs, locale]);
 
   // ── Monthly revenue chart ─────────────────────────────────────────────────
   const monthlyRevenue = useMemo(() => {
@@ -417,6 +439,28 @@ export default function ReportesPage() {
         <KpiCard icon={<Clock size={16}/>} label={t.kpis.hoursLogged} value={totalHours.toFixed(1)} color="purple"
           sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(totalPayroll))}/>
       </div>
+
+      {/* ── Per-branch breakdown (multi-location businesses only) ─────────── */}
+      {byLocation.length > 0 && (
+        <div className="mb-5">
+          <Section title={locale === 'es' ? 'Por ubicación' : 'By location'}>
+            <div className="divide-y divide-gray-50">
+              {byLocation.map(loc => (
+                <div key={loc.locationId ?? 'none'} className="flex items-center justify-between py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin size={14} className="text-gray-400 shrink-0"/>
+                    <span className="text-sm font-medium text-gray-900 truncate">{loc.name}</span>
+                  </div>
+                  <div className="flex items-center gap-6 shrink-0">
+                    <span className="text-xs text-gray-400">{loc.jobCount} {locale === 'es' ? 'trabajos' : 'jobs'}</span>
+                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{fmt(loc.revenue)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-5 mb-5">
         {/* ── Revenue chart ─────────────────────────────────────────────── */}

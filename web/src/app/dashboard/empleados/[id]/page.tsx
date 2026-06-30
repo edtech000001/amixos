@@ -12,10 +12,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2, Eye,
+  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2, Eye, MapPin, Check,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { fetchEmployeeLocations, setEmployeePrimaryLocation, toggleEmployeeBranch } from '@amixos/shared/lib/locations';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -87,7 +88,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, startImpersonation } = useApp();
+  const { business, user, currentRole, startImpersonation, locations } = useApp();
 
   const PAY_TYPES: Record<string, string> = { hourly: t.payTypes.hourly, salary: t.payTypes.salary, daily: t.payTypes.daily };
   const PAY_UNIT: Record<string, string> = { hourly: t.payRateUnit.hourly, salary: t.payRateUnit.salary, daily: t.payRateUnit.daily };
@@ -101,6 +102,11 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
 
   // 'view' = read-only; 'edit' = form. Pencil flips view→edit, Save flips back.
   const [mode, setMode] = useState<'view' | 'edit'>('view');
+  // Worker's home branch (loaded from employee_locations). Editable here so you
+  // set it on the person, not in a separate Ajustes screen.
+  const [homeLocation, setHomeLocation] = useState<string>('');
+  // Branches this worker is LENT to (non-home). Toggled via the share control.
+  const [sharedLocations, setSharedLocations] = useState<string[]>([]);
   const [form, setForm] = useState({
     first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
     pay_type: 'hourly', pay_rate: '', email: '', birthday: '', hire_date: '',
@@ -171,6 +177,14 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     }
     const e = empRes.data as RawEmployee;
     setEmployee(e);
+    // Load this worker's branches: home (primary) + lent-to (the rest).
+    fetchEmployeeLocations(supabase, business.id)
+      .then(links => {
+        const mine = links.filter(l => l.employee_id === e.id);
+        setHomeLocation(mine.find(l => l.is_primary)?.location_id ?? '');
+        setSharedLocations(mine.filter(l => !l.is_primary).map(l => l.location_id));
+      })
+      .catch(() => { setHomeLocation(''); setSharedLocations([]); });
     // Pre-select the Invite dialog with the planned access role from import.
     if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
       setAccessRole(e.intended_access_role as Role);
@@ -195,6 +209,13 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   };
 
   useEffect(() => { load(); }, [business, params.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lend / un-lend this worker to another branch (never their home branch).
+  const toggleShare = async (locationId: string) => {
+    if (!business || !employee) return;
+    const nowShared = await toggleEmployeeBranch(supabase, business.id, employee.id, locationId);
+    setSharedLocations(prev => nowShared ? [...prev, locationId] : prev.filter(x => x !== locationId));
+  };
 
   const save = async () => {
     if (!employee || !business) return;
@@ -235,6 +256,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     };
     const prev = employee;
     await supabase.from('employees').update(payload).eq('id', employee.id);
+    // Update the home branch (preserves any borrowed-branch assignments).
+    if (locations.length > 0) await setEmployeePrimaryLocation(supabase, business.id, employee.id, homeLocation || null);
     const milestones = diffEmployeeChanges(
       { pay_rate: prev.pay_rate, pay_type: prev.pay_type, role: prev.role },
       { pay_rate: payRateNum, pay_type: form.pay_type, role: form.role },
@@ -462,6 +485,37 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           ) : null}
         </div>
 
+        {/* Branch sharing — home branch + lend the worker to other branches
+            (so they show in that branch's team list too). View mode only;
+            the home branch itself is changed via the edit form. */}
+        {isView && locations.length >= 2 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <MapPin size={15} className="text-primary" />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{lang === 'en' ? 'Locations' : 'Ubicaciones'}</p>
+            </div>
+            <p className="text-sm text-gray-700">
+              {lang === 'en' ? 'Home branch: ' : 'Sucursal principal: '}
+              <span className="font-semibold">{locations.find(l => l.id === homeLocation)?.name ?? (lang === 'en' ? 'None' : 'Ninguna')}</span>
+            </p>
+            <p className="text-xs text-gray-400">{lang === 'en' ? 'Share with other branches (they appear in that team list too):' : 'Compartir con otras sucursales (aparecen también en esa lista de equipo):'}</p>
+            <div className="flex flex-wrap gap-2">
+              {locations.filter(l => l.id !== homeLocation).map(l => {
+                const shared = sharedLocations.includes(l.id);
+                return (
+                  <button key={l.id} type="button" onClick={() => toggleShare(l.id)}
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${shared ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    {shared && <Check size={12} />} {l.name}
+                  </button>
+                );
+              })}
+              {locations.filter(l => l.id !== homeLocation).length === 0 ? (
+                <p className="text-xs text-gray-400">{lang === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {isView ? (
           <ViewBody emp={employee} templates={templates} t={t} payTypes={PAY_TYPES} payUnit={PAY_UNIT} lang={lang} />
         ) : (
@@ -471,6 +525,19 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             fHidden={fHidden} layout={empLayout}
           />
         )}
+
+        {/* Home branch — editable in edit mode (multi-location businesses only). */}
+        {!isView && locations.length >= 2 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
+            <select value={homeLocation} onChange={e => setHomeLocation(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              <option value="">{lang === 'en' ? 'No location' : 'Sin ubicación'}</option>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <p className="text-xs text-gray-400">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
+          </div>
+        ) : null}
 
         {error && <p className="text-xs text-red-500">{error}</p>}
 

@@ -162,6 +162,38 @@ function inRange(dateStr: string | null, startStr: string, endStr: string): bool
 }
 
 /**
+ * Hours for ONE worker within a date window, using the exact same sources as
+ * the Payroll page (computePayrollRows): employee-linked timesheets +
+ * total_hours of jobs they're crewed on + driver_hours of jobs they drove.
+ * Shared so the field-worker home's "active hours" reconciles with Nómina.
+ */
+export function employeeHoursInRange(opts: {
+  employeeId: string;
+  timesheets: PayrollTimesheet[];
+  jobs: PayrollJob[];
+  startStr: string;
+  endStr: string;
+}): number {
+  const { employeeId, timesheets, jobs, startStr, endStr } = opts;
+  let hours = 0;
+  for (const ts of timesheets) {
+    if (ts.employee_id === employeeId && inRange(ts.work_date, startStr, endStr)) {
+      hours += ts.hours_worked ?? 0;
+    }
+  }
+  for (const job of jobs) {
+    if (!inRange(job.scheduled_date, startStr, endStr)) continue;
+    if ((job.total_hours ?? 0) && job.assignmentEmployeeIds.includes(employeeId)) {
+      hours += job.total_hours ?? 0;
+    }
+    if ((job.driver_hours ?? 0) && (job.driver_employee_ids ?? []).includes(employeeId)) {
+      hours += job.driver_hours ?? 0;
+    }
+  }
+  return Math.round(hours * 100) / 100;
+}
+
+/**
  * One row per employee with their hours + gross pay for the period. Hours =
  * timesheets (employee-linked) + total_hours of each job they're crewed on +
  * driver_hours of each job they drove. Employees with zero hours are included

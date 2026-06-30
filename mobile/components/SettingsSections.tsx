@@ -45,6 +45,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { PricingModal } from '@/components/PricingModal';
+import { UbicacionesSection } from '@/components/UbicacionesSection';
 import {
   isInTrial,
   isTrialExpired,
@@ -576,6 +577,9 @@ export function BusinessSection() {
       </View>
 
       <StatusMsg msg={msg} />
+
+      {/* Locations / branches — managed inline under Negocio (not its own screen). */}
+      <UbicacionesSection />
     </View>
   );
 }
@@ -1697,11 +1701,11 @@ export function JobItemTypesSection() {
     <View className="gap-3">
       <SectionHeader
         icon={<Sliders size={18} color="#4F46E5" />}
-        title="Categorías de materiales y mano de obra"
-        subtitle="Etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si cobras por cantidad × precio (p. ej. pies × tarifa)."
+        title="Materiales y mano de obra"
+        subtitle="Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo. Las propuestas siempre la mantienen."
       />
       <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
-        <Text className="flex-1 text-sm text-gray-900">Mostrar categorías</Text>
+        <Text className="flex-1 text-sm text-gray-900">Mostrar sección</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />

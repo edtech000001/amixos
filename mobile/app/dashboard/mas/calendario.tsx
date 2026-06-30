@@ -6,6 +6,7 @@ import { loadCached } from '@/lib/offline/cache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import {
   CalendarScreen,
   type CalItem,
@@ -81,7 +82,7 @@ function dayEndISO(d: Date) {
 export default function CalendarioRoute() {
   const supabase = createSupabaseClient();
   const router = useRouter();
-  const { business, user } = useApp();
+  const { business, user, activeLocationId } = useApp();
 
   const [items, setItems] = useState<CalItem[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
@@ -126,7 +127,7 @@ export default function CalendarioRoute() {
       // Cache the merged list so the calendar is viewable offline. fetchAll
       // throws on error → loadCached falls back to the last good fetch (the
       // cache key ignores range — offline just shows the last-loaded window).
-      const res = await loadCached(`calendar_${businessId}`, async () => {
+      const res = await loadCached(`calendar_${businessId}_${activeLocationId ?? 'all'}`, async () => {
         const events = await fetchAll<RawEvent>((from, to) =>
           supabase
             .from('calendar_events')
@@ -137,8 +138,9 @@ export default function CalendarioRoute() {
             .order('start_time')
             .range(from, to),
         );
-        const jobs = await fetchAll<JobRow>((from, to) =>
-          supabase
+        // Scoped to the active branch when set (manual events stay business-wide).
+        const jobs = await fetchAll<JobRow>((from, to) => {
+          let q = supabase
             .from('jobs')
             .select(
               'id, title, status, scheduled_date, end_date, time_start, time_end, all_day, job_city, job_state, clients(first_name, last_name), job_assignments(employee_id, is_lead, worker_name, employees(first_name, last_name))',
@@ -146,9 +148,10 @@ export default function CalendarioRoute() {
             .eq('business_id', businessId)
             .not('status', 'in', '("cancelled","declined")')
             .lte('scheduled_date', endYmd)
-            .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`)
-            .range(from, to),
-        );
+            .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`);
+          if (activeLocationId) q = q.eq('location_id', activeLocationId);
+          return q.range(from, to);
+        });
         const eventItems = events.map(eventToItem);
         const jobItems = jobs
           .map<RawJob>(j => ({
@@ -172,7 +175,7 @@ export default function CalendarioRoute() {
       });
       return res.data ?? [];
     },
-    [business],
+    [business, activeLocationId],
   );
 
   const load = useCallback(
@@ -243,6 +246,7 @@ export default function CalendarioRoute() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <LocationSwitcher />
       <CalendarScreen
         items={items}
         clients={clients}

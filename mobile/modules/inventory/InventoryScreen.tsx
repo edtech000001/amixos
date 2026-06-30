@@ -8,6 +8,7 @@ import { loadCached, writeCached } from '@/lib/offline/cache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Button, Input, Modal, Select, AutocompleteInput } from '@amixos/shared/ui';
 import {
@@ -25,10 +26,11 @@ interface RawItem {
   unit_cost: number;
   category: string | null;
   low_stock_threshold: number;
+  location_id: string | null;
 }
 
 const EMPTY: Omit<RawItem, 'id'> = {
-  name: '', sku: '', quantity: 0, unit: 'unidad', unit_cost: 0, category: '', low_stock_threshold: 5,
+  name: '', sku: '', quantity: 0, unit: 'unidad', unit_cost: 0, category: '', low_stock_threshold: 5, location_id: null,
 };
 
 const UNIT_KEYS = ['unidad', 'pieza', 'kg', 'lb', 'metro', 'pie', 'litro', 'galon', 'caja', 'rollo', 'bolsa'] as const;
@@ -38,11 +40,11 @@ const UNIT_DB_VALUES: Record<typeof UNIT_KEYS[number], string> = {
 };
 
 export default function InventoryModuleScreen() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.inventory;
   const tc = full.common;
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, locations, activeLocationId } = useApp();
 
   const [items, setItems] = useState<RawItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,15 +62,17 @@ export default function InventoryModuleScreen() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const res = await loadCached(`inventory_${businessId}`, () =>
-      fetchAll<RawItem>((from, to) =>
-        supabase.from('inventory_items').select('*').eq('business_id', businessId)
-          .order('name').range(from, to)));
+    const res = await loadCached(`inventory_${businessId}_${activeLocationId ?? 'all'}`, () =>
+      fetchAll<RawItem>((from, to) => {
+        let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
+        if (activeLocationId) q = q.eq('location_id', activeLocationId);
+        return q.order('name').range(from, to);
+      }));
     setItems(res.data ?? []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,
@@ -119,7 +123,9 @@ export default function InventoryModuleScreen() {
     setScanOpen(false);
   };
 
-  const openAdd = () => { setForm({ ...EMPTY }); setError(''); setSelected(null); setModal('add'); };
+  const openAdd = () => {
+    setForm({ ...EMPTY, location_id: activeLocationId ?? null }); setError(''); setSelected(null); setModal('add');
+  };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id);
     if (!item) return;
@@ -127,6 +133,7 @@ export default function InventoryModuleScreen() {
     setForm({
       name: item.name, sku: item.sku ?? '', quantity: item.quantity, unit: item.unit,
       unit_cost: item.unit_cost, category: item.category ?? '', low_stock_threshold: item.low_stock_threshold,
+      location_id: item.location_id ?? null,
     });
     setError('');
     setModal('edit');
@@ -257,6 +264,15 @@ export default function InventoryModuleScreen() {
             onChangeText={v => setForm(f => ({ ...f, category: v }))}
             suggestions={categorySuggestions}
           />
+          {/* Branch — only when the business runs multiple locations. */}
+          {locations.length >= 2 ? (
+            <Select
+              label={locale === 'en' ? 'Location' : 'Ubicación'}
+              value={form.location_id ?? ''}
+              onValueChange={v => setForm(f => ({ ...f, location_id: v || null }))}
+              options={[{ value: '', label: locale === 'en' ? 'No location' : 'Sin ubicación' }, ...locations.map(l => ({ value: l.id, label: l.name }))]}
+            />
+          ) : null}
           <View className="flex-row gap-3">
             <View className="flex-1">
               <Input
@@ -384,6 +400,7 @@ export default function InventoryModuleScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <LocationSwitcher />
       <SharedInventoryScreen
         loading={loading}
         items={screenItems}

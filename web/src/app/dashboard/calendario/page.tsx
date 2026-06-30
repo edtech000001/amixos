@@ -81,7 +81,7 @@ function dayEndISO(d: Date) {
 export default function CalendarioPage() {
   const supabase = createSupabaseClient();
   const router = useRouter();
-  const { business, user } = useApp();
+  const { business, user, activeLocationId } = useApp();
 
   const [items, setItems] = useState<CalItem[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
@@ -138,8 +138,10 @@ export default function CalendarioPage() {
       );
 
       // Scheduled jobs overlapping the range (skip cancelled / declined clutter).
-      const jobs = await fetchAll<JobRow>((from, to) =>
-        supabase
+      // Scoped to the active branch when one is selected (manual events stay
+      // business-wide — they aren't tied to a location).
+      const jobs = await fetchAll<JobRow>((from, to) => {
+        let q = supabase
           .from('jobs')
           .select(
             'id, title, status, scheduled_date, end_date, time_start, time_end, all_day, job_city, job_state, clients(first_name, last_name), job_assignments(employee_id, is_lead, worker_name, employees(first_name, last_name))',
@@ -147,9 +149,10 @@ export default function CalendarioPage() {
           .eq('business_id', businessId)
           .not('status', 'in', '("cancelled","declined")')
           .lte('scheduled_date', endYmd)
-          .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`)
-          .range(from, to),
-      );
+          .or(`end_date.gte.${startYmd},and(end_date.is.null,scheduled_date.gte.${startYmd})`);
+        if (activeLocationId) q = q.eq('location_id', activeLocationId);
+        return q.range(from, to);
+      });
 
       const eventItems = events.map(eventToItem);
       const jobItems = jobs
@@ -173,7 +176,7 @@ export default function CalendarioPage() {
 
       return [...eventItems, ...jobItems];
     },
-    [business],
+    [business, activeLocationId],
   );
 
   const load = useCallback(

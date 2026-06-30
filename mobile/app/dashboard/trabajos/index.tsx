@@ -6,6 +6,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached } from '@/lib/offline/cache';
 import { queuedUpdate } from '@/lib/offline/mutate';
 import { useApp } from '@/lib/AppContext';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import {
   JobsListScreen,
   type JobListItem,
@@ -57,7 +58,7 @@ export default function TrabajosTab() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
-  const { business, businesses, currentRole } = useApp();
+  const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,27 +66,29 @@ export default function TrabajosTab() {
     if (!business) return;
     const businessId = business.id;
     // Cached so the list (and navigation into a job) works offline. fetchAll
-    // throws on error, so loadCached falls back to the last good list.
-    const res = await loadCached(`jobs_list_${businessId}`, () =>
-      fetchAll<RawJob>((from, to) =>
-        supabase
+    // throws on error, so loadCached falls back to the last good list. The
+    // active branch is part of the cache key so each branch caches separately.
+    const res = await loadCached(`jobs_list_${businessId}_${activeLocationId ?? 'all'}`, () =>
+      fetchAll<RawJob>((from, to) => {
+        let q = supabase
           .from('jobs')
           .select(`
             *,
             clients(first_name, last_name, company),
             job_assignments(worker_name, is_lead, employees(first_name, last_name))
           `)
-          .eq('business_id', businessId)
-          .order('created_at', { ascending: false })
-          .range(from, to)));
+          .eq('business_id', businessId);
+        if (activeLocationId) q = q.eq('location_id', activeLocationId);
+        return q.order('created_at', { ascending: false }).range(from, to);
+      }));
     setRawJobs(res.data ?? []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   // Refresh when returning from create/edit so the new/updated job appears.
-  useFocusEffect(useCallback(() => { load(); }, [business?.id]));
+  useFocusEffect(useCallback(() => { load(); }, [business?.id, activeLocationId]));
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
@@ -145,6 +148,7 @@ export default function TrabajosTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+      <LocationSwitcher />
       <JobsListScreen
         loading={loading}
         jobs={jobs}
@@ -180,6 +184,7 @@ export default function TrabajosTab() {
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
         canCreate={can.createJob(currentRole)}
+        canCreateEstimates={can.createEstimate(currentRole)}
         alertThresholds={alertThresholds}
         businessId={business?.id}
       />

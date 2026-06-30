@@ -10,6 +10,7 @@ import {
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
+import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
 import {
   subscribeImpersonation,
   getImpersonation,
@@ -192,6 +193,12 @@ interface AuthStore {
   // (businesses, activeBusinessId). Kept on the store so existing consumers
   // of useApp().business don't break.
   business: Business | null;
+  // Branches for the active business (empty = single-location mode, no picker).
+  locations: Location[];
+  // Active location filter for list views. Null = "All locations". Persisted
+  // per business in activeLocationByBiz so each workspace restores its branch.
+  activeLocationId: string | null;
+  activeLocationByBiz: Record<string, string>;
   // Map of business_id → caller's role in that business. Populated alongside
   // `businesses` on every SIGNED_IN / refetchBusiness.
   roles: Record<string, Role>;
@@ -217,6 +224,10 @@ interface AuthStore {
   // Switch the active workspace. Re-derives `business` and writes the new
   // id to persistence so it survives reloads.
   setActiveBusiness: (businessId: string) => void;
+  // Set the active location filter (null = All). Persisted per business.
+  setActiveLocation: (locationId: string | null) => void;
+  // Load the active business's branches + restore its persisted active branch.
+  _loadLocations: (businessId: string | null) => Promise<void>;
 
   // Load the active business's customized roles and register them so can.* is
   // override-aware. Null businessId clears to defaults.
@@ -234,6 +245,9 @@ export const useAuthStore = create<AuthStore>()(
       businesses: [],
       activeBusinessId: null,
       business: null,
+      locations: [],
+      activeLocationId: null,
+      activeLocationByBiz: {},
       roles: {},
       currentRole: null,
       roleOverrides: {},
@@ -279,7 +293,7 @@ export const useAuthStore = create<AuthStore>()(
         const u = get().user;
         if (!u) {
           setActiveRolePermissions(null);
-          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, roles: {}, currentRole: null, roleOverrides: {}, permissions: null });
+          set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, locations: [], activeLocationId: null, roles: {}, currentRole: null, roleOverrides: {}, permissions: null });
           return;
         }
         try {
@@ -339,6 +353,7 @@ export const useAuthStore = create<AuthStore>()(
           // Load this business's customized role permissions (override-aware
           // can.*). Non-blocking for the rest of the dashboard.
           void get()._loadRolePermissions(activeId);
+          void get()._loadLocations(activeId);
         } catch {
           // Network/transport failure (offline). Keep the cached businesses so
           // the dashboard stays usable; only show the retry screen when there's
@@ -362,6 +377,44 @@ export const useAuthStore = create<AuthStore>()(
           currentRole: roleMap[businessId] ?? null,
         });
         void get()._loadRolePermissions(businessId);
+        void get()._loadLocations(businessId);
+      },
+
+      setActiveLocation: (locationId) => {
+        const bizId = get().activeBusinessId;
+        const map = { ...get().activeLocationByBiz };
+        // Persist the explicit choice ('__all__' so "All" sticks instead of
+        // re-defaulting to the home branch on the next load).
+        if (bizId) map[bizId] = locationId ?? '__all__';
+        set({ activeLocationId: locationId, activeLocationByBiz: map });
+      },
+
+      // A saved choice wins (including '__all__' = explicit All). With no saved
+      // choice: owners default to all branches; everyone else to their own home
+      // branch (still switchable).
+      _loadLocations: async (businessId) => {
+        if (!businessId) {
+          set({ locations: [], activeLocationId: null });
+          return;
+        }
+        try {
+          const rows = await fetchLocations(supabase, businessId);
+          const saved = get().activeLocationByBiz[businessId];
+          let active: string | null;
+          if (saved !== undefined) {
+            active = saved === '__all__' ? null : (rows.some((l) => l.id === saved) ? saved : null);
+          } else if (rows.length < 2 || get().roles[businessId] === 'owner') {
+            active = null;
+          } else {
+            const uid = get().user?.id;
+            const home = uid ? await fetchMyHomeLocation(supabase, businessId, uid) : null;
+            active = home && rows.some((l) => l.id === home) ? home : null;
+          }
+          set({ locations: rows, activeLocationId: active });
+        } catch {
+          // Offline / transient — keep whatever was cached.
+          set({ activeLocationId: get().activeLocationId });
+        }
       },
 
       _loadRolePermissions: async (businessId) => {
@@ -417,7 +470,7 @@ export const useAuthStore = create<AuthStore>()(
           case 'SIGNED_OUT':
             stopImp();
             setActiveRolePermissions(null);
-            set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null, roleOverrides: {}, permissions: null, roles: {}, currentRole: null });
+            set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null, roleOverrides: {}, permissions: null, roles: {}, currentRole: null, locations: [], activeLocationId: null });
             break;
           case 'TOKEN_REFRESHED':
           case 'USER_UPDATED':
@@ -452,6 +505,7 @@ export const useAuthStore = create<AuthStore>()(
         activeBusinessId: state.activeBusinessId,
         businesses: state.businesses,
         roles: state.roles,
+        activeLocationByBiz: state.activeLocationByBiz,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -465,6 +519,10 @@ export const useAuthStore = create<AuthStore>()(
           state.activeBusinessId = activeId;
           state.business = list.find((b) => b.id === activeId) ?? null;
           state.currentRole = activeId ? state.roles?.[activeId] ?? null : null;
+          // Restore the persisted branch for this workspace ('__all__' = All;
+          // validated against the live list once _loadLocations runs).
+          const savedLoc = activeId ? state.activeLocationByBiz?.[activeId] : undefined;
+          state.activeLocationId = savedLoc && savedLoc !== '__all__' ? savedLoc : null;
           // Having a cached business means the gate can show the dashboard
           // immediately; the background refetch still runs on INITIAL_SESSION.
           if (state.business) state.businessLoaded = true;
@@ -533,6 +591,9 @@ export function useApp() {
   const businesses = useAuthStore((s) => s.businesses);
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
+  const locations = useAuthStore((s) => s.locations);
+  const activeLocationId = useAuthStore((s) => s.activeLocationId);
+  const setActiveLocation = useAuthStore((s) => s.setActiveLocation);
   const baseRole = useAuthStore((s) => s.currentRole);
   const basePermissions = useAuthStore((s) => s.permissions);
   const roleOverrides = useAuthStore((s) => s.roleOverrides);
@@ -566,6 +627,10 @@ export function useApp() {
     businesses,
     activeBusinessId,
     setActiveBusiness,
+    locations,
+    activeLocationId,
+    setActiveLocation,
+    refetchLocations: () => useAuthStore.getState()._loadLocations(useAuthStore.getState().activeBusinessId),
     currentRole,
     permissions,
     roleOverrides,

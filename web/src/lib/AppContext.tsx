@@ -20,6 +20,7 @@ import {
   type ImpersonationTarget,
 } from '@amixos/shared/lib/impersonation';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
+import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
 
 export interface Business {
   id: string;
@@ -148,6 +149,14 @@ interface AppContextValue {
   businesses: Business[];
   business: Business | null;
   activeBusinessId: string | null;
+  // Branches for the active business (empty = single-location mode, no picker).
+  locations: Location[];
+  // Active location filter for list views. Null = "All locations" (also the
+  // value when a business has 0/1 locations). Reports always span all branches.
+  activeLocationId: string | null;
+  setActiveLocation: (locationId: string | null) => void;
+  // Reload the active business's branches (call after add/rename/archive).
+  refetchLocations: () => Promise<void>;
   roles: Record<string, Role>;
   currentRole: Role | null;
   // Effective permission grid for the current user in the active business
@@ -178,6 +187,10 @@ const AppContext = createContext<AppContextValue>({
   businesses: [],
   business: null,
   activeBusinessId: null,
+  locations: [],
+  activeLocationId: null,
+  setActiveLocation: () => {},
+  refetchLocations: async () => {},
   roles: {},
   currentRole: null,
   permissions: null,
@@ -209,6 +222,24 @@ function writeActiveCookie(id: string | null) {
   }
 }
 
+// Active location persists per business: keyed map so switching businesses
+// restores the branch you last looked at in each.
+const ACTIVE_LOC_COOKIE = 'amixos-active-location';
+function readActiveLocCookie(): Record<string, string> {
+  if (typeof document === 'undefined') return {};
+  const m = document.cookie.match(/(?:^|; )amixos-active-location=([^;]+)/);
+  if (!m) return {};
+  try {
+    return JSON.parse(decodeURIComponent(m[1])) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+function writeActiveLocCookie(map: Record<string, string>) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${ACTIVE_LOC_COOKIE}=${encodeURIComponent(JSON.stringify(map))}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const supabase = createSupabaseClient();
   // The admin's REAL authenticated identity. `user` exposed below may be the
@@ -216,6 +247,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [realUser, setRealUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [activeLocationId, setActiveLocationIdState] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [roleOverrides, setRoleOverrides] = useState<Partial<Record<Role, RolePermissions>>>({});
   const [loading, setLoading] = useState(true);
@@ -264,6 +297,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeBusinessId]);
 
   useEffect(() => { void reloadPermissions(); }, [reloadPermissions]);
+
+  // Load the active business's branches and pick the active one. A saved choice
+  // wins (including an explicit "All" = the '__all__' sentinel). With no saved
+  // choice we DEFAULT: owners see all branches; everyone else defaults to their
+  // own home branch (still switchable via the picker).
+  const loadLocations = useCallback(async () => {
+    if (!activeBusinessId) {
+      setLocations([]);
+      setActiveLocationIdState(null);
+      return;
+    }
+    const rows = await fetchLocations(supabase, activeBusinessId);
+    setLocations(rows);
+    const saved = readActiveLocCookie()[activeBusinessId];
+    if (saved !== undefined) {
+      if (saved === '__all__') { setActiveLocationIdState(null); return; }
+      setActiveLocationIdState(rows.some((l) => l.id === saved) ? saved : null);
+      return;
+    }
+    const role = roles[activeBusinessId];
+    if (rows.length < 2 || role === 'owner') { setActiveLocationIdState(null); return; }
+    const home = realUser ? await fetchMyHomeLocation(supabase, activeBusinessId, realUser.id) : null;
+    setActiveLocationIdState(home && rows.some((l) => l.id === home) ? home : null);
+  }, [activeBusinessId, roles, realUser?.id]);
+
+  useEffect(() => { void loadLocations(); }, [loadLocations]);
+
+  const setActiveLocation = useCallback((locationId: string | null) => {
+    setActiveLocationIdState(locationId);
+    if (!activeBusinessId) return;
+    const map = readActiveLocCookie();
+    // Persist the explicit choice — '__all__' so "All" sticks instead of
+    // re-defaulting to the home branch on the next load.
+    map[activeBusinessId] = locationId ?? '__all__';
+    writeActiveLocCookie(map);
+  }, [activeBusinessId]);
 
   const fetchBusinesses = async (currentUserId: string) => {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
@@ -364,6 +433,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           stopImp();
           setRealUser(null);
           setBusinesses([]);
+          setLocations([]);
+          setActiveLocationIdState(null);
           setRoles({});
           setRoleOverrides({});
           setActiveRolePermissions(null);
@@ -383,6 +454,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         businesses,
         business,
         activeBusinessId,
+        locations,
+        activeLocationId,
+        setActiveLocation,
+        refetchLocations: loadLocations,
         roles,
         currentRole,
         permissions,

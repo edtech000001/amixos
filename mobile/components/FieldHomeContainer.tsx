@@ -21,6 +21,8 @@ import {
   type FieldJobLocation,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
+import { normalizeFrequency, parsePayrollAnchor } from '@amixos/shared/lib/payroll';
+import { can } from '@amixos/shared/lib/permissions';
 
 // Field-role home for mobile. Owns data + writes via the shared fieldHome
 // module (same as web/src/components/dashboard/FieldHome.tsx) and renders the
@@ -30,9 +32,12 @@ export function FieldHomeContainer() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, loading: appLoading, readOnly } = useApp();
+  const { business, user, currentRole, loading: appLoading, readOnly } = useApp();
+  // Clock in/out is on by default for crew; off only if an owner disables it.
+  const showClock = can.clockInOut(currentRole);
 
   const [jobs, setJobs] = useState<FieldHomeJob[]>([]);
+  const [recentCompleted, setRecentCompleted] = useState<FieldHomeJob[]>([]);
   const [open, setOpen] = useState<OpenTimesheet | null>(null);
   const [stats, setStats] = useState<FieldHomeStats | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -45,8 +50,12 @@ export function FieldHomeContainer() {
 
   const load = useCallback(async () => {
     if (!business || !user) return;
-    const data = await fetchFieldHome(supabase, business.id, user.id);
+    const data = await fetchFieldHome(supabase, business.id, user.id, {
+      frequency: normalizeFrequency(business.payroll_frequency),
+      anchor: parsePayrollAnchor(business.payroll_anchor_date),
+    });
     setJobs(data.jobs);
+    setRecentCompleted(data.recentCompleted);
     setOpen(data.openTimesheet);
     setStats(data.stats);
     setEmployeeId(data.employeeId);
@@ -111,11 +120,13 @@ export function FieldHomeContainer() {
         loading={appLoading || loading}
         businessName={firstName(user?.name)}
         jobs={jobs}
+        recentCompleted={recentCompleted}
         openTimesheet={open}
         stats={stats}
         clockBusy={busy}
         error={error}
         readOnly={readOnly}
+        showClock={showClock}
         onToggleClock={onToggleClock}
         onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
         onAdvanceStatus={onAdvanceStatus}

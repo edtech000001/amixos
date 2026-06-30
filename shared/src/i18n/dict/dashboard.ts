@@ -54,6 +54,11 @@ export type DashboardDict = {
     statCompleted: string;
     statHoursWeek: string;
     statHoursMonth: string;
+    statActiveHours: string;
+    hoursToggleActive: string;
+    hoursToggleWeek: string;
+    hoursToggleMonth: string;
+    recentCompletedTitle: string;
     logJob: string;
     logTitle: string;
     jobTitleLabel: string;
@@ -90,7 +95,7 @@ export type DashboardDict = {
     scopeAssigned: string;
     scopeAll: string;
     resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; reports: string };
-    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string };
+    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; createEstimates: string; clockInOut: string };
   };
   home: {
     welcome: string;
@@ -1133,6 +1138,7 @@ export type DashboardDict = {
       actividad: string;
       tienda: string;
       navegacion: string;
+      ubicaciones: string;
     };
     navigation: {
       subtitle: string;
@@ -2038,6 +2044,11 @@ export type DashboardDict = {
       totalEstimatedPayroll: string;
       manualWorker: string;
     };
+    byLocation: {
+      title: string;
+      jobs: string;
+      unassigned: string;
+    };
     newClientsBlock: {
       newCount: string;
       totalAccumulated: string;
@@ -2135,6 +2146,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       statCompleted: 'Completados (mes)',
       statHoursWeek: 'Horas (semana)',
       statHoursMonth: 'Horas (mes)',
+      statActiveHours: 'Horas activas',
+      hoursToggleActive: 'Activas',
+      hoursToggleWeek: 'Semana',
+      hoursToggleMonth: 'Mes',
+      recentCompletedTitle: 'Completados recientes',
       logJob: 'Registrar trabajo',
       logTitle: 'Registrar trabajo',
       jobTitleLabel: 'Título del trabajo',
@@ -2171,7 +2187,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Asignados',
       scopeAll: 'Todos',
       resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', reports: 'Reportes' },
-      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas' },
+      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida' },
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -3187,6 +3203,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         actividad: 'Actividad',
         tienda: 'Tienda de módulos',
         navegacion: 'Navegación',
+        ubicaciones: 'Ubicaciones',
       },
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
@@ -4074,6 +4091,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         totalEstimatedPayroll: 'Total estimado nómina',
         manualWorker: 'Manual',
       },
+      byLocation: {
+        title: 'Por ubicación',
+        jobs: 'trabajos',
+        unassigned: 'Sin ubicación',
+      },
       newClientsBlock: {
         newCount: 'clientes nuevos',
         totalAccumulated: '{{count}} total acumulado',
@@ -4198,6 +4220,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       statCompleted: 'Completed (mo.)',
       statHoursWeek: 'Hours (week)',
       statHoursMonth: 'Hours (month)',
+      statActiveHours: 'Active hours',
+      hoursToggleActive: 'Active',
+      hoursToggleWeek: 'Week',
+      hoursToggleMonth: 'Month',
+      recentCompletedTitle: 'Recently completed',
       logJob: 'Log job',
       logTitle: 'Log a job',
       jobTitleLabel: 'Job title',
@@ -4234,7 +4261,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Assigned',
       scopeAll: 'All',
       resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', reports: 'Reports' },
-      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours' },
+      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out' },
     },
     home: {
       welcome: 'Welcome 👋',
@@ -5250,6 +5277,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         actividad: 'Activity',
         tienda: 'Module Store',
         navegacion: 'Navigation',
+        ubicaciones: 'Locations',
       },
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',
@@ -6136,6 +6164,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         hoursSuffix: '{{hours}}h',
         totalEstimatedPayroll: 'Total estimated payroll',
         manualWorker: 'Manual',
+      },
+      byLocation: {
+        title: 'By location',
+        jobs: 'jobs',
+        unassigned: 'No location',
       },
       newClientsBlock: {
         newCount: 'new clients',

@@ -14,15 +14,30 @@
 // @supabase versions and we don't want this module coupled to either.
 
 import { fetchAll } from './supabaseFetch';
+import {
+  getPayrollPeriod,
+  normalizeFrequency,
+  employeeHoursInRange,
+  type PayrollFrequency,
+  type PayrollTimesheet,
+  type PayrollJob,
+} from './payroll';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
+
+// How many pay periods back (including the current one) "active hours" looks
+// for unpaid work. Bounds the lookback so an ancient never-marked-paid period
+// can't balloon the figure; covers the realistic span of owed hours.
+const ACTIVE_HOURS_LOOKBACK_PERIODS = 6;
 
 export interface FieldHomeJob {
   id: string;
   title: string;
   status: string;
   scheduledDate: string | null;
+  /** Set on completed jobs — drives the date badge in "recent completed". */
+  completedDate?: string | null;
   timeStart: string | null;
   clientName: string | null;
   jobAddress: string | null;
@@ -41,18 +56,32 @@ export interface FieldHomeStats {
   assignedActive: number;
   /** Jobs the worker completed this calendar month. */
   completedMonth: number;
-  /** Logged hours so far this week (completed timesheet sessions). */
+  /**
+   * Unpaid hours owed: the worker's payroll-style hours (timesheets + crewed
+   * job hours + driver hours) summed across recent pay periods that haven't
+   * been marked paid in Nómina. Drops off as the owner records payouts.
+   */
+  hoursActive: number;
+  /** Payroll-style hours in the current calendar week (Sun–Sat). */
   hoursWeek: number;
-  /** Logged hours so far this calendar month. */
+  /** Payroll-style hours in the current calendar month. */
   hoursMonth: number;
 }
 
 export interface FieldHomeData {
   jobs: FieldHomeJob[];
+  /** Jobs the worker completed in the last 7 days (most recent first). */
+  recentCompleted: FieldHomeJob[];
   openTimesheet: OpenTimesheet | null;
   stats: FieldHomeStats;
   /** The caller's employees row id in this business, if one exists. */
   employeeId: string | null;
+}
+
+/** Per-business payroll settings the field home needs to bound "active hours". */
+export interface FieldHomePayrollOpts {
+  frequency: PayrollFrequency;
+  anchor: Date | null;
 }
 
 /** Format decimal hours as "Xh Ym" (omits the minutes when zero). */
@@ -75,6 +104,7 @@ interface RawFieldJob {
   title: string;
   status: string;
   scheduled_date: string | null;
+  completed_date?: string | null;
   time_start: string | null;
   job_address: string | null;
   job_city: string | null;
@@ -87,20 +117,43 @@ interface RawFieldJob {
 // office-side; once a job is scheduled it's the crew's to run.
 const FIELD_JOB_STATUSES = ['scheduled', 'in_progress', 'accepted'];
 
+/** Local YYYY-MM-DD (matches scheduled_date / completed_date / work_date). */
+function ymdLocal(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 export async function fetchFieldHome(
   supabase: SupabaseLike,
   businessId: string,
   userId: string,
+  payroll?: FieldHomePayrollOpts,
 ): Promise<FieldHomeData> {
   const now = new Date();
-  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  // Week starts Sunday (US). Midnight local so today's hours count.
-  const startWeek = new Date(now);
-  startWeek.setHours(0, 0, 0, 0);
-  startWeek.setDate(startWeek.getDate() - startWeek.getDay());
-  const startMonthDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}-01`;
+  const freq = normalizeFrequency(payroll?.frequency);
+  const anchor = payroll?.anchor ?? null;
 
-  const [jobsRes, employeeRes, timesheetRes, completedRes, monthSheetsRes] = await Promise.all([
+  // Calendar week (Sun–Sat) + month windows for the toggle views.
+  const weekStart = new Date(now); weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekStartStr = ymdLocal(weekStart);
+  const weekEndStr = ymdLocal(weekEnd);
+  const monthStartStr = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEndStr = ymdLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+  // Oldest pay period in the active-hours lookback; the fetch window must also
+  // reach back far enough to cover the week/month toggle views.
+  const oldestPeriod = getPayrollPeriod(freq, now, -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1), anchor);
+  const windowStartStr = [oldestPeriod.startStr, weekStartStr, monthStartStr].sort()[0];
+
+  // Last 7 days for "recent projects completed".
+  const recentSince = new Date(now); recentSince.setHours(0, 0, 0, 0);
+  recentSince.setDate(recentSince.getDate() - 6);
+  const recentSinceStr = ymdLocal(recentSince);
+
+  const [jobsRes, employeeRes, timesheetRes, completedRes, recentRes] = await Promise.all([
     supabase
       .from('jobs')
       .select(
@@ -131,29 +184,33 @@ export async function fetchFieldHome(
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
       .eq('status', 'completed')
-      .gte('completed_date', startMonthDate),
-    // This month's own timesheets — bounded to a month, summed for hours.
+      .gte('completed_date', monthStartStr),
+    // Recent completed (last 7 days), most recent first.
     supabase
-      .from('timesheets')
-      .select('clock_in, clock_out, hours_total')
+      .from('jobs')
+      .select(
+        'id, title, status, scheduled_date, completed_date, time_start, job_address, job_city, job_state, clients(first_name, last_name), job_assignments(is_lead, employees(user_id))',
+      )
       .eq('business_id', businessId)
-      .eq('user_id', userId)
-      .gte('clock_in', startMonth.toISOString()),
+      .eq('status', 'completed')
+      .gte('completed_date', recentSinceStr)
+      .order('completed_date', { ascending: false }),
   ]);
 
-  const rows = (jobsRes.data ?? []) as RawFieldJob[];
+  const employeeId = (employeeRes.data as { id: string } | null)?.id ?? null;
+
   // The `jobs` RLS already returns ONLY the field worker's assigned jobs (via
-  // is_assigned_to_job, migration 022), so we don't filter here — that also
-  // keeps jobs visible even if the self-read employees policy (migration 069)
-  // isn't applied yet. `isLead` is best-effort: it needs to read the caller's
-  // own employees row (069), and degrades to false without it.
-  const jobs: FieldHomeJob[] = rows.map((j) => {
-    const mine = j.job_assignments.filter((a) => a.employees?.user_id === userId);
+  // is_assigned_to_job, migration 022), so we don't filter here. `isLead` is
+  // best-effort: it needs the caller's own employees row (069), degrading to
+  // false without it.
+  const mapJob = (j: RawFieldJob): FieldHomeJob => {
+    const mine = (j.job_assignments ?? []).filter((a) => a.employees?.user_id === userId);
     return {
       id: j.id,
       title: j.title,
       status: j.status,
       scheduledDate: j.scheduled_date,
+      completedDate: j.completed_date ?? null,
       timeStart: j.time_start,
       clientName: j.clients ? `${j.clients.first_name} ${j.clients.last_name}` : null,
       jobAddress: j.job_address,
@@ -161,36 +218,83 @@ export async function fetchFieldHome(
       jobState: j.job_state,
       isLead: mine.some((a) => a.is_lead === true),
     };
-  });
+  };
 
-  // Sum completed sessions (clock_out set). hours_total is the source of
-  // truth; fall back to clock_out − clock_in for rows saved without it.
-  const sheets = (monthSheetsRes.data ?? []) as Array<{
-    clock_in: string;
-    clock_out: string | null;
-    hours_total: number | null;
-  }>;
-  const startWeekMs = startWeek.getTime();
+  const jobs = ((jobsRes.data ?? []) as RawFieldJob[]).map(mapJob);
+  const recentCompleted = ((recentRes.data ?? []) as RawFieldJob[]).map(mapJob);
+
+  // ── Payroll-style hours (active / week / month) ──
+  // Only a worker with a linked employees row accrues payroll hours; without
+  // one we can't match timesheets/assignments, so the figures read 0.
+  let hoursActive = 0;
   let hoursWeek = 0;
   let hoursMonth = 0;
-  for (const r of sheets) {
-    if (!r.clock_out) continue;
-    const h = r.hours_total != null
-      ? Number(r.hours_total)
-      : Math.max(0, (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3_600_000);
-    hoursMonth += h;
-    if (new Date(r.clock_in).getTime() >= startWeekMs) hoursWeek += h;
+  if (employeeId) {
+    const [tsRes, jobsWindowRes, paymentsRes] = await Promise.all([
+      // Own timesheets in the window (RLS scopes to the caller's rows).
+      supabase
+        .from('timesheets')
+        .select('employee_id, hours_worked, work_date')
+        .eq('business_id', businessId)
+        .gte('work_date', windowStartStr),
+      // Crewed jobs in the window (RLS scopes to assigned). Same hours sources
+      // the Payroll page uses so the figure reconciles with Nómina.
+      supabase
+        .from('jobs')
+        .select('scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
+        .eq('business_id', businessId)
+        .gte('scheduled_date', windowStartStr),
+      // Which recent periods this worker has already been paid for.
+      supabase
+        .from('payroll_payments')
+        .select('period_start')
+        .eq('business_id', businessId)
+        .eq('employee_id', employeeId),
+    ]);
+
+    const timesheets = (tsRes.data ?? []) as PayrollTimesheet[];
+    const windowJobs: PayrollJob[] = (
+      (jobsWindowRes.data ?? []) as Array<{
+        scheduled_date: string | null;
+        total_hours: number | null;
+        driver_employee_ids: string[] | null;
+        driver_hours: number | null;
+        job_assignments: { employee_id: string | null }[];
+      }>
+    ).map((j) => ({
+      scheduled_date: j.scheduled_date,
+      total_hours: j.total_hours,
+      driver_employee_ids: j.driver_employee_ids,
+      driver_hours: j.driver_hours,
+      assignmentEmployeeIds: (j.job_assignments ?? [])
+        .map((a) => a.employee_id)
+        .filter((x): x is string => !!x),
+    }));
+    const paid = new Set(
+      ((paymentsRes.data ?? []) as Array<{ period_start: string }>).map((p) => p.period_start),
+    );
+
+    for (let off = -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1); off <= 0; off++) {
+      const p = getPayrollPeriod(freq, now, off, anchor);
+      if (paid.has(p.startStr)) continue; // already paid out → no longer active
+      hoursActive += employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: p.startStr, endStr: p.endStr });
+    }
+    hoursActive = Math.round(hoursActive * 100) / 100;
+    hoursWeek = employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: weekStartStr, endStr: weekEndStr });
+    hoursMonth = employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: monthStartStr, endStr: monthEndStr });
   }
 
   return {
     jobs,
-    employeeId: (employeeRes.data as { id: string } | null)?.id ?? null,
+    recentCompleted,
+    employeeId,
     openTimesheet: timesheetRes.data
       ? { id: timesheetRes.data.id, clockIn: timesheetRes.data.clock_in }
       : null,
     stats: {
       assignedActive: jobs.length,
       completedMonth: completedRes.count ?? 0,
+      hoursActive,
       hoursWeek,
       hoursMonth,
     },

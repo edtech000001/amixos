@@ -126,6 +126,10 @@ export interface JobsListScreenProps {
    * INSERT jobs under RLS and have no clients to pick). Defaults to true.
    */
   canCreate?: boolean;
+  /** Whether the viewer may create estimates/proposals (createEstimates cap).
+   *  When false the FAB creates a work order directly and the proposal option
+   *  is hidden. Keep in sync with the web variant. Defaults to true. */
+  canCreateEstimates?: boolean;
   // Upcoming-job alert tiers from businesses.job_alert_thresholds. When
   // omitted or disabled, cards render without the indicator.
   alertThresholds?: JobAlertThresholds;
@@ -197,6 +201,7 @@ export function JobsListScreen({
   onNewJob,
   onNewProposal,
   canCreate = true,
+  canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
   businessId,
 }: JobsListScreenProps) {
@@ -955,6 +960,7 @@ export function JobsListScreen({
                   <Text className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</Text>
                 </View>
               </Pressable>
+              {canCreateEstimates ? (
               <Pressable
                 onPress={() => { setNewMenuOpen(false); onNewProposal(); }}
                 className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100"
@@ -967,6 +973,7 @@ export function JobsListScreen({
                   <Text className="text-xs text-gray-400">{t.newDropdown.proposalOptionSub}</Text>
                 </View>
               </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={() => setNewMenuOpen(false)}
@@ -983,7 +990,7 @@ export function JobsListScreen({
 
     {/* New job/proposal — floating action, bottom-right thumb reach.
        Hidden for roles that can't create jobs (field crew / viewers). */}
-    {selectMode ? null : canCreate ? <Fab onPress={() => setNewMenuOpen(true)} /> : null}
+    {selectMode ? null : canCreate ? <Fab onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} /> : null}
 
     {/* Batch-invoice FAB pill — sits above the dock (bottom-32, like Fab) so it
        isn't hidden behind the floating tab bar. Only in select mode. */}

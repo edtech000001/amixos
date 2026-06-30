@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight } from 'lucide-react-native';
+import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import {
@@ -271,6 +271,26 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
           </>
         )}
       </Section>
+
+      {/* Per-branch breakdown — multi-location businesses only. */}
+      {m.byLocation.length > 0 ? (
+        <Section title={t.byLocation.title}>
+          <View className="gap-1">
+            {m.byLocation.map(loc => (
+              <View key={loc.locationId ?? 'none'} className="flex-row items-center justify-between py-2.5 border-b border-gray-50">
+                <View className="flex-row items-center gap-2 flex-1 mr-2">
+                  <MapPin size={14} color="#9CA3AF" />
+                  <Text className="text-sm font-medium text-gray-900 flex-1" numberOfLines={1}>{loc.name}</Text>
+                </View>
+                <View className="flex-row items-center gap-4">
+                  <Text className="text-xs text-gray-400">{loc.jobCount} {t.byLocation.jobs}</Text>
+                  <Text className="text-sm font-bold text-gray-900">{fmt(loc.revenue)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Section>
+      ) : null}
 
       {/* New clients */}
       <Section title={t.sections.newClients}>

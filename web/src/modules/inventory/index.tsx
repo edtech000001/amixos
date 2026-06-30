@@ -23,10 +23,11 @@ interface RawItem {
   unit_cost: number;
   category: string | null;
   low_stock_threshold: number;
+  location_id: string | null;
 }
 
 const EMPTY: Omit<RawItem, 'id'> = {
-  name: '', sku: '', quantity: 0, unit: 'unidad', unit_cost: 0, category: '', low_stock_threshold: 5,
+  name: '', sku: '', quantity: 0, unit: 'unidad', unit_cost: 0, category: '', low_stock_threshold: 5, location_id: null,
 };
 
 const UNIT_KEYS = ['unidad', 'pieza', 'kg', 'lb', 'metro', 'pie', 'litro', 'galon', 'caja', 'rollo', 'bolsa'] as const;
@@ -36,12 +37,12 @@ const UNIT_DB_VALUES: Record<typeof UNIT_KEYS[number], string> = {
 };
 
 export default function InventoryModule() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.inventory;
   const tc = full.common;
 
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, locations, activeLocationId } = useApp();
   const [items, setItems] = useState<RawItem[]>([]);
   const [modal, setModal] = useState<'add' | 'edit' | 'adjust' | null>(null);
   const [selected, setSelected] = useState<RawItem | null>(null);
@@ -55,14 +56,17 @@ export default function InventoryModule() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawItem>((from, to) =>
-      supabase.from('inventory_items').select('*').eq('business_id', businessId)
-        .order('name').range(from, to));
+    const data = await fetchAll<RawItem>((from, to) => {
+      let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
+      // Scope stock to the active branch ("All" = no filter).
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q.order('name').range(from, to);
+    });
     setItems(data);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,
@@ -96,11 +100,14 @@ export default function InventoryModule() {
     setForm(f => ({ ...f, sku }));
   };
 
-  const openAdd = () => { setForm({ ...EMPTY }); setError(''); setModal('add'); };
+  const openAdd = () => {
+    // New stock defaults to the active branch, or the business default.
+    setForm({ ...EMPTY, location_id: activeLocationId ?? null }); setError(''); setModal('add');
+  };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id); if (!item) return;
     setSelected(item);
-    setForm({ name: item.name, sku: item.sku ?? '', quantity: item.quantity, unit: item.unit, unit_cost: item.unit_cost, category: item.category ?? '', low_stock_threshold: item.low_stock_threshold });
+    setForm({ name: item.name, sku: item.sku ?? '', quantity: item.quantity, unit: item.unit, unit_cost: item.unit_cost, category: item.category ?? '', low_stock_threshold: item.low_stock_threshold, location_id: item.location_id ?? null });
     setError(''); setModal('edit');
   };
   const openAdjust = (id: string) => {
@@ -161,6 +168,17 @@ export default function InventoryModule() {
           <datalist id="inventory-categories">
             {categorySuggestions.map(c => <option key={c} value={c} />)}
           </datalist>
+          {/* Branch — only when the business runs multiple locations. */}
+          {locations.length >= 2 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">{locale === 'en' ? 'Location' : 'Ubicación'}</label>
+              <select value={form.location_id ?? ''} onChange={e => setForm(f => ({ ...f, location_id: e.target.value || null }))}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                <option value="">{locale === 'en' ? 'No location' : 'Sin ubicación'}</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.modal.quantityLabel} type="number" min="0" value={form.quantity || ''} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
             <div className="flex flex-col gap-1.5">

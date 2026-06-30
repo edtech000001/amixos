@@ -1,8 +1,10 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, TrendingUp, type LucideIcon } from 'lucide-react-native';
+import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, Timer, type LucideIcon } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { formatHours, type FieldHomeJob, type FieldHomeStats, type OpenTimesheet } from '../../lib/fieldHome';
+
+type HoursView = 'active' | 'week' | 'month';
 
 // Purpose-built home for the "field" role (crew). Presentational — the mobile
 // wrapper owns data + writes via the shared fieldHome module, mirroring how
@@ -14,10 +16,14 @@ export interface FieldHomeScreenProps {
   businessName: string;
   businessSlot?: ReactNode;
   jobs: FieldHomeJob[];
+  /** Jobs completed in the last 7 days (most recent first). */
+  recentCompleted?: FieldHomeJob[];
   openTimesheet: OpenTimesheet | null;
   stats: FieldHomeStats | null;
   clockBusy: boolean;
   error: boolean;
+  /** Whether the clock in/out card shows (clockInOut capability, opt-in). */
+  showClock?: boolean;
   // True while an admin is viewing this member via "Ver como" — write actions
   // (clock, status advance) are hidden/disabled. Writes are also blocked at the
   // transport layer; this is the matching UX.
@@ -31,11 +37,13 @@ const JOB_STATUS_PILL_BG: Record<string, string> = {
   scheduled: 'bg-blue-100',
   in_progress: 'bg-orange-100',
   accepted: 'bg-violet-100',
+  completed: 'bg-emerald-100',
 };
 const JOB_STATUS_PILL_TEXT: Record<string, string> = {
   scheduled: 'text-blue-600',
   in_progress: 'text-orange-600',
   accepted: 'text-violet-600',
+  completed: 'text-emerald-600',
 };
 
 export function FieldHomeScreen({
@@ -43,10 +51,12 @@ export function FieldHomeScreen({
   businessName,
   businessSlot,
   jobs,
+  recentCompleted = [],
   openTimesheet,
   stats,
   clockBusy,
   error,
+  showClock = false,
   readOnly = false,
   onToggleClock,
   onJobPress,
@@ -55,6 +65,7 @@ export function FieldHomeScreen({
   const { t: full } = useLang();
   const t = full.dashboard;
   const f = t.fieldHome;
+  const [hoursView, setHoursView] = useState<HoursView>('active');
 
   if (loading) {
     return (
@@ -109,7 +120,7 @@ export function FieldHomeScreen({
             </View>
             <View className="items-end gap-1.5">
               <View className="bg-primary/10 px-2 py-1 rounded-lg">
-                <Text className="text-[11px] font-semibold text-primary">{fmtDate(job.scheduledDate)}</Text>
+                <Text className="text-[11px] font-semibold text-primary">{fmtDate(job.status === 'completed' ? (job.completedDate ?? job.scheduledDate) : job.scheduledDate)}</Text>
               </View>
               <View className={`px-2 py-0.5 rounded-full ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-gray-100'}`}>
                 <Text className={`text-[10px] font-semibold ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-gray-500'}`}>
@@ -158,7 +169,8 @@ export function FieldHomeScreen({
         </View>
       ) : null}
 
-      {/* Clock in/out */}
+      {/* Clock in/out — opt-in per role. */}
+      {showClock ? (
       <View className={`rounded-2xl p-5 mb-6 ${openTimesheet ? 'bg-emerald-600' : 'bg-white border border-gray-100'}`}>
         <View className="flex-row items-center justify-between gap-4">
           <View className="flex-row items-center gap-3 flex-1 min-w-0">
@@ -184,16 +196,16 @@ export function FieldHomeScreen({
           </Pressable>
         </View>
       </View>
+      ) : null}
 
-      {/* Summary stats — 2×2 grid */}
-      <View className="flex-row flex-wrap justify-between mb-3">
+      {/* Summary stats — assigned + completed tiles, then a single hours tile
+          that toggles between active (unpaid) / week / month. */}
+      <View className="flex-row justify-between mb-3">
         {([
           { label: f.statAssigned, value: String(stats?.assignedActive ?? 0), icon: Briefcase, color: '#059669', bg: 'bg-emerald-50' },
           { label: f.statCompleted, value: String(stats?.completedMonth ?? 0), icon: CheckCircle2, color: '#4F46E5', bg: 'bg-primary/10' },
-          { label: f.statHoursWeek, value: formatHours(stats?.hoursWeek ?? 0), icon: Clock, color: '#F97316', bg: 'bg-orange-50' },
-          { label: f.statHoursMonth, value: formatHours(stats?.hoursMonth ?? 0), icon: TrendingUp, color: '#7C3AED', bg: 'bg-violet-50' },
         ] as { label: string; value: string; icon: LucideIcon; color: string; bg: string }[]).map(({ label, value, icon: Icon, color, bg }) => (
-          <View key={label} className="w-[48%] bg-white rounded-2xl border border-gray-100 p-4 mb-3">
+          <View key={label} className="w-[48%] bg-white rounded-2xl border border-gray-100 p-4">
             <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
               <Icon size={18} color={color} />
             </View>
@@ -201,6 +213,36 @@ export function FieldHomeScreen({
             <Text className="text-xs text-gray-500 mt-0.5">{label}</Text>
           </View>
         ))}
+      </View>
+
+      {/* Hours tile with Active / Week / Month toggle. */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-3">
+        <View className="flex-row items-start justify-between mb-3">
+          <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center">
+            <Timer size={18} color="#F97316" />
+          </View>
+          <View className="flex-row rounded-lg bg-gray-100 p-0.5">
+            {([
+              { key: 'active', label: f.hoursToggleActive },
+              { key: 'week', label: f.hoursToggleWeek },
+              { key: 'month', label: f.hoursToggleMonth },
+            ] as { key: HoursView; label: string }[]).map(({ key, label }) => (
+              <Pressable
+                key={key}
+                onPress={() => setHoursView(key)}
+                className={`px-2.5 py-1 rounded-md ${hoursView === key ? 'bg-white' : ''}`}
+              >
+                <Text className={`text-xs font-semibold ${hoursView === key ? 'text-gray-900' : 'text-gray-500'}`}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <Text className="text-xl font-bold text-gray-900">
+          {formatHours(hoursView === 'active' ? (stats?.hoursActive ?? 0) : hoursView === 'week' ? (stats?.hoursWeek ?? 0) : (stats?.hoursMonth ?? 0))}
+        </Text>
+        <Text className="text-xs text-gray-500 mt-0.5">
+          {hoursView === 'active' ? f.statActiveHours : hoursView === 'week' ? f.statHoursWeek : f.statHoursMonth}
+        </Text>
       </View>
 
       {/* Today */}
@@ -225,6 +267,19 @@ export function FieldHomeScreen({
           <Text className="text-sm font-semibold text-gray-900 mb-3">{f.upcomingTitle}</Text>
           <View className="gap-3">
             {upcomingJobs.map(job => <JobCard key={job.id} job={job} />)}
+          </View>
+        </>
+      ) : null}
+
+      {/* Recent projects completed — the last 7 days. */}
+      {recentCompleted.length > 0 ? (
+        <>
+          <View className="flex-row items-center gap-2 mb-3 mt-6">
+            <CheckCircle2 size={16} color="#059669" />
+            <Text className="text-sm font-semibold text-gray-900">{f.recentCompletedTitle}</Text>
+          </View>
+          <View className="gap-3">
+            {recentCompleted.map(job => <JobCard key={job.id} job={job} />)}
           </View>
         </>
       ) : null}

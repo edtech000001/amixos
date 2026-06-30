@@ -13,7 +13,7 @@ import {
   type ReportRange,
 } from '@amixos/shared/lib/reports';
 
-const EMPTY: ReportsData = { invoices: [], jobs: [], clients: [], timesheets: [], employees: [], inventory: [] };
+const EMPTY: ReportsData = { invoices: [], jobs: [], clients: [], timesheets: [], employees: [], inventory: [], locations: [] };
 
 export default function ReportesRoute() {
   const supabase = createSupabaseClient();
@@ -22,6 +22,7 @@ export default function ReportesRoute() {
   const { t } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const manualWorker = t.dashboard.reports.employees.manualWorker;
+  const unassignedLocation = t.dashboard.reports.byLocation.unassigned;
 
   const [range, setRange] = useState<ReportRange>('year');
   // Custom date range overrides the preset when set; picking a preset clears it.
@@ -45,8 +46,8 @@ export default function ReportesRoute() {
   }, [business?.id, inventoryEnabled]);
 
   const metrics = useMemo(
-    () => (loading ? null : computeReports(data, range, dateLocale, manualWorker, { from: customFrom, to: customTo })),
-    [data, range, dateLocale, manualWorker, loading, customFrom, customTo],
+    () => (loading ? null : computeReports(data, range, dateLocale, manualWorker, { from: customFrom, to: customTo }, unassignedLocation)),
+    [data, range, dateLocale, manualWorker, loading, customFrom, customTo, unassignedLocation],
   );
 
   return (

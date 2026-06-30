@@ -564,6 +564,9 @@ export default function JobDetailRoute() {
   }
 
   const isProposal = !!job.estimate_number;
+  // Hide the whole Materials & Labor card for plain jobs when the toggle is
+  // off. Proposals always keep it (an estimate is its line items + total).
+  const showMaterials = isProposal || showItemTypes;
   const disabled = business?.job_pipeline_disabled ?? {};
   // 'posible' (lead) jobs get a posible→scheduled→… pipeline so the stepper
   // highlights their stage; other work jobs keep the standard pipeline.
@@ -1001,6 +1004,7 @@ export default function JobDetailRoute() {
         </View>
 
         {/* Items list */}
+        {showMaterials ? (
         <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xs font-semibold text-gray-400 uppercase">
@@ -1070,6 +1074,7 @@ export default function JobDetailRoute() {
             </View>
           )}
         </View>
+        ) : null}
 
         {/* Photos */}
         <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

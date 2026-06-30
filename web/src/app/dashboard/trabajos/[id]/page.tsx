@@ -432,6 +432,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   if (!job) return <div className="p-6 text-gray-400">{t.notFound}</div>;
 
   const isProposal = !!job.estimate_number;
+  // Hide the whole Materials & Labor column for plain jobs when the toggle is
+  // off. Proposals always keep it (an estimate is its line items + total).
+  const showMaterials = isProposal || showItemTypes;
   const disabled = business?.job_pipeline_disabled ?? {};
   // 'posible' (lead) jobs get a posible→scheduled→… pipeline so the stepper
   // highlights their stage; other work jobs keep the standard pipeline.
@@ -765,7 +768,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className={`grid grid-cols-1 ${showMaterials ? 'md:grid-cols-3' : ''} gap-5`}>
         {/* Left column */}
         <div className="flex flex-col gap-4">
 
@@ -914,6 +917,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         </div>
 
         {/* Right — Line items */}
+        {showMaterials && (
         <div className="md:col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between gap-3">
@@ -1018,6 +1022,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           </div>
         </div>
+        )}
       </div>
 
       {/* Photos */}

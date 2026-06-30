@@ -16,7 +16,9 @@ export interface ReportInvoice {
 }
 export interface ReportJob {
   id: string; status: string; total_amount: number; created_at: string; client_id: string | null;
+  location_id: string | null;
 }
+export interface ReportLocation { id: string; name: string; }
 export interface ReportClient { id: string; created_at: string; }
 export interface ReportTimesheet { id: string; hours_worked: number; work_date: string; employee_id: string | null; worker_name: string | null; }
 export interface ReportEmployee { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string; }
@@ -29,6 +31,8 @@ export interface ReportsData {
   timesheets: ReportTimesheet[];
   employees: ReportEmployee[];
   inventory: ReportInventoryItem[];
+  // Branches for the per-location breakdown. Empty in single-location mode.
+  locations: ReportLocation[];
 }
 
 export type ReportRange = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'all';
@@ -71,11 +75,11 @@ export async function fetchReportsData(
   businessId: string,
   inventoryEnabled: boolean,
 ): Promise<ReportsData> {
-  const [invoices, jobs, clients, timesheets, employees, inventory] = await Promise.all([
+  const [invoices, jobs, clients, timesheets, employees, inventory, locations] = await Promise.all([
     fetchAll<ReportInvoice>((from, to) =>
       supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportJob>((from, to) =>
-      supabase.from('jobs').select('id, status, total_amount, created_at, client_id').eq('business_id', businessId).range(from, to)),
+      supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportClient>((from, to) =>
       supabase.from('clients').select('id, created_at').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportTimesheet>((from, to) =>
@@ -86,8 +90,10 @@ export async function fetchReportsData(
       ? fetchAll<ReportInventoryItem>((from, to) =>
           supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId).range(from, to))
       : Promise.resolve([] as ReportInventoryItem[]),
+    fetchAll<ReportLocation>((from, to) =>
+      supabase.from('locations').select('id, name').eq('business_id', businessId).eq('archived', false).order('created_at', { ascending: true }).range(from, to)),
   ]);
-  return { invoices, jobs, clients, timesheets, employees, inventory };
+  return { invoices, jobs, clients, timesheets, employees, inventory, locations };
 }
 
 export interface ReportsMetrics {
@@ -116,6 +122,9 @@ export interface ReportsMetrics {
   inventoryItemsCount: number;
   lowStock: number;
   outOfStock: number;
+  /** Per-branch breakdown of jobs + revenue. Empty in single-location mode.
+   *  Reports stay business-wide totals; this lets the user compare branches. */
+  byLocation: { locationId: string | null; name: string; jobCount: number; revenue: number }[];
 }
 
 /** Compute all report metrics for a range. `manualWorkerLabel` names a
@@ -128,6 +137,8 @@ export function computeReports(
   // Custom date range (YYYY-MM-DD). When either side is set it OVERRIDES the
   // preset `range`: missing `from` = no lower bound, missing `to` = up to now.
   custom?: { from: string | null; to: string | null },
+  // Label for jobs with no branch in the per-location breakdown.
+  unassignedLocationLabel = 'Sin ubicación',
 ): ReportsMetrics {
   const customActive = !!(custom && (custom.from || custom.to));
   const parseLocal = (s: string) => {
@@ -222,6 +233,32 @@ export function computeReports(
     .slice(0, 8);
   const totalPayroll = employeeHours.reduce((s, e) => s + e.pay, 0);
 
+  // Per-branch breakdown — only when the business runs multiple locations.
+  // jobCount = jobs created in range; revenue = total_amount of completed /
+  // invoiced jobs in range (invoices carry no location, so jobs are the proxy).
+  let byLocation: ReportsMetrics['byLocation'] = [];
+  if (data.locations.length > 0) {
+    const agg = new Map<string, { jobCount: number; revenue: number }>();
+    const bump = (key: string, revenue: number) => {
+      const cur = agg.get(key) ?? { jobCount: 0, revenue: 0 };
+      cur.jobCount += 1;
+      cur.revenue += revenue;
+      agg.set(key, cur);
+    };
+    filteredJobs.forEach(j => {
+      const earned = j.status === 'completed' || j.status === 'invoiced' ? j.total_amount : 0;
+      bump(j.location_id ?? '__none__', earned);
+    });
+    byLocation = data.locations.map(l => ({
+      locationId: l.id,
+      name: l.name,
+      jobCount: agg.get(l.id)?.jobCount ?? 0,
+      revenue: agg.get(l.id)?.revenue ?? 0,
+    }));
+    const none = agg.get('__none__');
+    if (none) byLocation.push({ locationId: null, name: unassignedLocationLabel, jobCount: none.jobCount, revenue: none.revenue });
+  }
+
   return {
     totalRevenue, pendingRevenue, overdueRevenue,
     avgJobValue, completedJobsCount: completedJobs.length,
@@ -236,5 +273,6 @@ export function computeReports(
     inventoryItemsCount: data.inventory.length,
     lowStock: data.inventory.filter(i => i.quantity <= 5).length,
     outOfStock: data.inventory.filter(i => i.quantity === 0).length,
+    byLocation,
   };
 }

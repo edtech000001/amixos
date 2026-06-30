@@ -125,7 +125,7 @@ export default function NuevoTrabajoRoute() {
   const insets = useSafeAreaInsets();
   const { edit, duplicate, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string }>();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, activeLocationId, locations } = useApp();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
   // insert and they have no clients to pick). The entry points are hidden, but
   // guard the route too in case of a deep link.
@@ -173,14 +173,28 @@ export default function NuevoTrabajoRoute() {
   const [isProposal, setIsProposal] = useState(modo === 'propuesta');
 
   // expo-router params can hydrate after first render — keep isProposal in
-  // sync with ?modo= so the heading + form layout reflect the URL.
+  // sync with ?modo= so the heading + form layout reflect the URL. A role that
+  // can create jobs but not estimates (e.g. field crew) is forced to a plain
+  // work order even if it deep-links into proposal mode.
   useEffect(() => {
-    if (!sourceId) setIsProposal(modo === 'propuesta');
-  }, [sourceId, modo]);
+    if (!sourceId) {
+      const wantsProposal = modo === 'propuesta';
+      setIsProposal(wantsProposal && (!currentRole || can.createEstimate(currentRole)));
+    }
+  }, [sourceId, modo, currentRole]);
+
+  // Default a NEW job's branch to the active branch, or the business default.
+  useEffect(() => {
+    if (sourceId || locationId || locations.length === 0) return;
+    setLocationId(activeLocationId ?? '');
+  }, [sourceId, locations, activeLocationId]);
 
   // Form — shared
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState(clientParam ?? '');
+  // Branch this job belongs to. Defaults to the active branch for new jobs;
+  // loaded from the row when editing. See web nuevo/page.tsx.
+  const [locationId, setLocationId] = useState('');
   // Crew visibility (migration 044). Defaults to false so new jobs start as
   // "Privado" (owner's scheduler view); the owner explicitly flips it on
   // when the job is ready for the assigned crew to see.
@@ -293,6 +307,7 @@ export default function NuevoTrabajoRoute() {
           setIsProposal(proposal);
           setTitle(job.title ?? '');
           setClientId(job.client_id ?? '');
+          setLocationId(job.location_id ?? '');
           setPublishedToCrew(!!job.published_to_crew);
           setStatus(
             job.status === 'in_progress' ? 'in_progress'
@@ -676,6 +691,7 @@ export default function NuevoTrabajoRoute() {
       // worker notes work everywhere. Items/pricing are intentionally NOT
       // touched here; those live on the detail page now.
       const locationAndNotes = {
+        location_id: locationId || null,
         job_address: address.trim() || null,
         job_city: city.trim() || null,
         job_state: state || null,
@@ -961,6 +977,27 @@ export default function NuevoTrabajoRoute() {
                 <ChevronDown size={16} color="#9CA3AF" />
               </Pressable>
             </View>
+
+            {/* Branch picker — only when the business runs multiple locations. */}
+            {locations.length >= 2 ? (
+              <View className="flex flex-col gap-2 mt-3">
+                <Text className="text-sm font-semibold text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {[{ id: '', name: locale === 'es' ? 'Sin ubicación' : 'No location' }, ...locations].map((l) => {
+                    const selected = locationId === l.id;
+                    return (
+                      <Pressable
+                        key={l.id || 'none'}
+                        onPress={() => setLocationId(l.id)}
+                        className={`rounded-full border px-4 py-2 ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                      >
+                        <Text className={`text-sm font-medium ${selected ? 'text-primary' : 'text-gray-600'}`}>{l.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
 
             {isProposal ? (
               <View className="mt-3 gap-3">

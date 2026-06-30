@@ -142,6 +142,10 @@ export interface JobsListScreenProps {
    *  trigger + empty-state link when false. Keep in sync with the native
    *  variant. Defaults to true. */
   canCreate?: boolean;
+  /** Whether the viewer may create estimates/proposals (the createEstimates
+   *  capability). When false, the "new" trigger creates a work order directly
+   *  and the proposal option is hidden. Defaults to true. */
+  canCreateEstimates?: boolean;
   // Upcoming-job alert tiers (Ajustes → Trabajos, migration 046). Keep in
   // sync with JobsListScreen.tsx — the native variant declares the same prop.
   alertThresholds?: JobAlertThresholds;
@@ -201,6 +205,7 @@ export function JobsListScreen({
   onNewJob,
   onNewProposal,
   canCreate = true,
+  canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
   businessId,
 }: JobsListScreenProps) {
@@ -481,13 +486,13 @@ export function JobsListScreen({
         <div className="relative">
           {canCreate ? (
           <button
-            onClick={() => setNewMenuOpen((v) => !v)}
+            onClick={() => (canCreateEstimates ? setNewMenuOpen((v) => !v) : onNewJob())}
             className="flex items-center gap-1 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90"
           >
-            <Plus size={15} /> {t.newDropdown.trigger} <ChevronDown size={14} />
+            <Plus size={15} /> {t.newDropdown.trigger}{canCreateEstimates ? <ChevronDown size={14} /> : null}
           </button>
           ) : null}
-          {newMenuOpen ? (
+          {newMenuOpen && canCreateEstimates ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setNewMenuOpen(false)} />
               <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg overflow-hidden z-20">

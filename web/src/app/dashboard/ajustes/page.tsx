@@ -72,6 +72,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
+import { UbicacionesSettings } from '@/components/dashboard/UbicacionesSettings';
 import { formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import {
   DAY_KEYS,
@@ -2101,6 +2102,7 @@ export default function AjustesPage() {
 
           {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
           {tab === 'negocio' && (
+            <div className="flex flex-col gap-6">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               {/* Header: title left, logo top-right — fills the space instead of
                  stacking a narrow column under a centered logo. */}
@@ -2240,6 +2242,9 @@ export default function AjustesPage() {
                   <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
                 </Button>
               </div>
+            </div>
+            {/* Locations / branches — managed inline under Negocio (not its own tab). */}
+            <UbicacionesSettings />
             </div>
           )}
 
@@ -2509,11 +2514,11 @@ export default function AjustesPage() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">{locale === 'en' ? 'Material & labor categories' : 'Categorías de materiales y mano de obra'}</h2>
+                    <h2 className="text-base font-semibold text-gray-900">{locale === 'en' ? 'Materials & labor' : 'Materiales y mano de obra'}</h2>
                     <p className="text-xs text-gray-400 mt-1">
                       {locale === 'en'
-                        ? 'Shows Labor / Material / Equipment / Other tags on job line items. Turn off if you only bill by quantity × price (e.g. feet × rate).'
-                        : 'Muestra las etiquetas Mano de obra / Material / Equipo / Otro en las líneas del trabajo. Desactívalo si solo cobras por cantidad × precio (p. ej. pies × tarifa).'}
+                        ? 'Shows the Materials & Labor section (with Labor / Material / Equipment / Other tags) on jobs. Turn off to hide the section entirely — for businesses that don’t itemize. Proposals always keep it.'
+                        : 'Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo — para negocios que no detallan líneas. Las propuestas siempre la mantienen.'}
                     </p>
                   </div>
                   <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
