@@ -270,6 +270,21 @@ export function InvoiceDetailScreen({
         </View>
       ) : null}
 
+      {/* Custom fields (invoice_field_templates) — read-only. */}
+      {invoice.customFields && invoice.customFields.length > 0 ? (
+        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <Text className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</Text>
+          <View className="gap-2">
+            {invoice.customFields.map(f => (
+              <View key={f.key ?? f.label} className="flex-row justify-between gap-3">
+                <Text className="text-xs text-gray-400 flex-1">{f.label}</Text>
+                <Text className="text-sm text-gray-700 text-right flex-1">{f.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
          document is only built for print / share (PDF). */}
       <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">

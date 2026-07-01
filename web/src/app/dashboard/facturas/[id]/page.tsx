@@ -18,7 +18,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 
 const genToken = () =>
   Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -285,7 +285,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         if (v == null || v === '') return null;
         const value = tpl.field_type === 'boolean'
           ? (v === 'true' ? tc.states.yes : tc.states.no)
-          : v;
+          : tpl.field_type === 'number'
+            ? formatNumberGrouped(v as string)
+            : v;
         return { key: tpl.field_key, label: tpl.field_label, value };
       })
       .filter((e): e is { key: string; label: string; value: string } => e !== null);

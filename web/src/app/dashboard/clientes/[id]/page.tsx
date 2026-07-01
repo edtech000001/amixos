@@ -14,7 +14,7 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useLang } from '@/i18n/LangProvider';
-import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
@@ -552,7 +552,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                     <div key={tpl.field_key}>
                       <p className="text-xs text-gray-400">{tpl.field_label}</p>
                       <p className="text-sm text-gray-900 font-medium">
-                        {tpl.field_type === 'boolean' ? (val === 'true' ? tc.states.yes : tc.states.no) : val ?? '—'}
+                        {tpl.field_type === 'boolean'
+                          ? (val === 'true' ? tc.states.yes : tc.states.no)
+                          : tpl.field_type === 'number' && val
+                            ? formatNumberGrouped(val)
+                            : val ?? '—'}
                       </p>
                     </div>
                   );

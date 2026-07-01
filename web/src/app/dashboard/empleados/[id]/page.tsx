@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -647,9 +647,11 @@ function ViewBody({ emp, templates, t, payTypes, payUnit, lang }: {
       ) : null}
       {templates.length > 0 && emp.custom_fields && Object.keys(emp.custom_fields).length > 0 ? (
         <Section title={t.modal.customFieldsHeading}>
-          {templates.map(tpl => (
-            <ViewRow key={tpl.id} label={tpl.field_label} value={emp.custom_fields?.[tpl.field_key]} />
-          ))}
+          {templates.map(tpl => {
+            const raw = emp.custom_fields?.[tpl.field_key];
+            const value = tpl.field_type === 'number' && raw ? formatNumberGrouped(raw) : raw;
+            return <ViewRow key={tpl.id} label={tpl.field_label} value={value} />;
+          })}
         </Section>
       ) : null}
     </div>

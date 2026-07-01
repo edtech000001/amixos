@@ -87,8 +87,13 @@ export function BusinessSwitcher() {
               <button
                 key={b.id}
                 onClick={() => {
+                  const switching = b.id !== activeBusinessId;
                   setActiveBusiness(b.id);
                   setOpen(false);
+                  // Land on the dashboard so nothing scoped to the previous
+                  // business (a detail page, an open modal, a module) is left
+                  // showing stale/out-of-context data. Only on a real switch.
+                  if (switching) router.push('/dashboard');
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${
                   i < businesses.length - 1 ? 'border-b border-gray-50' : ''

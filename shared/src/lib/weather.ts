@@ -298,24 +298,11 @@ export function parseMaxWindMph(description: string | null | undefined): number 
   return best;
 }
 
-// Great-circle distance (miles) between two lat/lng points. Used by the
-// "storm focus" map filter to find clients/jobs/employees within X miles
-// of any active weather alert.
-export function haversineMiles(
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number {
-  const R_MI = 3958.7613;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R_MI * Math.asin(Math.sqrt(x));
-}
+// Great-circle distance (miles) — used by the "storm focus" map filter to find
+// clients/jobs/employees within X miles of an active weather alert. Hoisted to
+// shared/src/lib/geo.ts; re-exported here so existing weather callers are
+// unchanged.
+export { haversineMiles } from './geo';
 
 // Group alerts by SAME code (= unique county/state location). Each group's
 // `primary` is the most-recently-sent alert (so a fresh event "wins" the

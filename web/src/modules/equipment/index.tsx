@@ -533,6 +533,43 @@ export default function EquipmentModule() {
   const viewerRot = (viewerPhoto?.rotation ?? 0) % 360;
   const viewerSwap = viewerRot === 90 || viewerRot === 270;
 
+  // Fullscreen viewer zoom/pan. zoom===1 is the reset (fit-to-screen) state.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  // Reset zoom/pan whenever the viewed photo (or its rotation) changes.
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, [viewerIndex, viewerRot]);
+  const clampZoom = (z: number) => Math.min(Math.max(z, 1), 5);
+  const onWheelZoom = (e: React.WheelEvent) => {
+    setZoom(prev => {
+      const next = clampZoom(prev - e.deltaY * 0.0025);
+      if (next === 1) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  };
+  const toggleZoom = () =>
+    setZoom(prev => {
+      const next = prev > 1 ? 1 : 2.5;
+      if (next === 1) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (zoom <= 1) return;
+    dragRef.current = { x: pan.x, y: pan.y, px: e.clientX, py: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    setPan({ x: d.x + (e.clientX - d.px), y: d.y + (e.clientY - d.py) });
+  };
+  const onPointerUp = () => {
+    dragRef.current = null;
+  };
+
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="p-6">
@@ -1055,8 +1092,10 @@ export default function EquipmentModule() {
          orientation (persisted). Mirrors the job-photos viewer. */}
       {viewerPhoto ? (
         <div
-          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
-          onClick={() => setViewerIndex(null)}
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center overflow-hidden"
+          // Backdrop click closes — but not while zoomed (clicks are pans then).
+          onClick={() => { if (zoom === 1) setViewerIndex(null); }}
+          onWheel={onWheelZoom}
         >
           {/* Controls need z-10: the photo has a CSS transform (rotation),
              which creates a stacking context that would otherwise paint over
@@ -1111,13 +1150,21 @@ export default function EquipmentModule() {
           <img
             src={photoUrls[viewerPhoto.storage_path] ?? undefined}
             alt=""
-            className="object-contain"
+            draggable={false}
+            className="object-contain select-none"
             style={{
-              transform: `rotate(${viewerRot}deg)`,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${viewerRot}deg)`,
               maxWidth: viewerSwap ? '90vh' : '92vw',
               maxHeight: viewerSwap ? '92vw' : '90vh',
+              cursor: zoom > 1 ? 'grab' : 'zoom-in',
+              touchAction: 'none',
+              transition: dragRef.current ? 'none' : 'transform 0.15s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(); }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
           />
         </div>
       ) : null}

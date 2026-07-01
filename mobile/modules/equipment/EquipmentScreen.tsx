@@ -781,8 +781,23 @@ export default function EquipmentScreen() {
   const renderViewerPage = ({ item }: { item: EquipmentPhoto }) => {
     const r = (item.rotation ?? 0) % 360;
     const swap = r === 90 || r === 270;
+    // Zoomable page: pinch-to-zoom + pan handled natively. At zoom 1 the content
+    // fits exactly, so horizontal swipes bubble to the outer paging FlatList.
     return (
-      <View style={{ width: screenW, alignItems: 'center', justifyContent: 'center' }}>
+      <ScrollView
+        style={{ width: screenW, height: viewerAvailH }}
+        contentContainerStyle={{
+          width: screenW,
+          height: viewerAvailH,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        maximumZoomScale={4}
+        minimumZoomScale={1}
+        bouncesZoom
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+      >
         <Image
           source={{ uri: photoUrls[item.storage_path] }}
           style={{
@@ -792,7 +807,7 @@ export default function EquipmentScreen() {
           }}
           resizeMode="contain"
         />
-      </View>
+      </ScrollView>
     );
   };
 

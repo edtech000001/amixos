@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Check, Banknote, FileText, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui';
-import type { PayrollFrequency } from '../../lib/payroll';
+import type { PayrollFrequency, PayrollBreakdown } from '../../lib/payroll';
+
+export type PayMethod = 'cash' | 'check' | 'wire';
 
 export interface PayrollScreenRow {
   employeeId: string;
@@ -13,7 +15,9 @@ export interface PayrollScreenRow {
   payRate: number;
   payType: string;
   pay: number;
-  payment: { method: 'cash' | 'check'; checkNumber: string | null } | null;
+  payment: { method: PayMethod; checkNumber: string | null } | null;
+  /** Where the worker's hours came from (jobs + worked/driven split). */
+  breakdown?: PayrollBreakdown;
 }
 
 export interface PayrollScreenProps {
@@ -27,7 +31,7 @@ export interface PayrollScreenProps {
   onPrevPeriod: () => void;
   onNextPeriod: () => void;
   rows: PayrollScreenRow[];
-  onMarkPaid: (employeeId: string, method: 'cash' | 'check', checkNumber: string) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string) => void;
   onUnmark: (employeeId: string) => void;
   onBack: () => void;
   canManage: boolean;
@@ -60,8 +64,11 @@ export function PayrollScreen({
   const t = full.dashboard.reports.payroll;
 
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
-  const [method, setMethod] = useState<'cash' | 'check'>('cash');
+  const [editing, setEditing] = useState(false);
+  const [method, setMethod] = useState<PayMethod>('cash');
   const [checkNumber, setCheckNumber] = useState('');
+  // Worker whose hours breakdown is open (which projects the hours came from).
+  const [detailRow, setDetailRow] = useState<PayrollScreenRow | null>(null);
 
   const freqLabel: Record<PayrollFrequency, string> = {
     weekly: t.freqWeekly,
@@ -69,20 +76,47 @@ export function PayrollScreen({
     monthly: t.freqMonthly,
   };
 
+  const methodLabel: Record<PayMethod, string> = {
+    cash: t.methodCash,
+    check: t.methodCheck,
+    wire: t.methodWire,
+  };
+
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
   const totalPay = rows.reduce((s, r) => s + r.pay, 0);
   const paidCount = rows.filter(r => r.payment).length;
+  // Unpaid first, paid sink to the bottom. Stable sort preserves the pay-desc
+  // order the rows already arrive in within each group.
+  const sortedRows = [...rows].sort((a, b) => (a.payment ? 1 : 0) - (b.payment ? 1 : 0));
 
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
+    setEditing(false);
     setMethod('cash');
     setCheckNumber('');
+  };
+  const openEdit = (row: PayrollScreenRow) => {
+    if (!row.payment) return;
+    setPayRow(row);
+    setEditing(true);
+    setMethod(row.payment.method);
+    setCheckNumber(row.payment.checkNumber ?? '');
   };
   const confirmPay = () => {
     if (!payRow) return;
     onMarkPaid(payRow.employeeId, method, method === 'check' ? checkNumber.trim() : '');
     setPayRow(null);
   };
+  const removePay = () => {
+    if (!payRow) return;
+    onUnmark(payRow.employeeId);
+    setPayRow(null);
+  };
+
+  const paymentBadgeLabel = (payment: NonNullable<PayrollScreenRow['payment']>) =>
+    payment.method === 'check' && payment.checkNumber
+      ? `${t.checkPrefix}${payment.checkNumber}`
+      : methodLabel[payment.method];
 
   return (
     <div className="px-6 lg:px-8 pt-6 pb-12">
@@ -166,30 +200,30 @@ export function PayrollScreen({
           <p className="text-sm text-gray-400 text-center py-12">{t.empty}</p>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {rows.map((r, i) => (
-              <div key={r.employeeId} className={`px-5 py-3.5 flex items-center gap-4 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{r.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
-                  </p>
-                </div>
+            {sortedRows.map((r, i) => (
+              <div key={r.employeeId} className={`px-5 py-3.5 flex items-center gap-4 ${i < sortedRows.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                {/* Name/hours area opens the hours breakdown. */}
+                <button type="button" onClick={() => setDetailRow(r)} className="flex-1 min-w-0 flex items-center gap-2 text-left group">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-primary">{r.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
+                    </p>
+                  </div>
+                  <Chevron size={14} className="text-gray-300 group-hover:text-primary shrink-0" />
+                </button>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm font-bold text-gray-900">{fmt(r.pay)}</span>
                   {r.payment ? (
                     <button
                       type="button"
-                      onClick={() => canManage && onUnmark(r.employeeId)}
+                      onClick={() => canManage && openEdit(r)}
                       disabled={!canManage}
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:hover:bg-emerald-100"
-                      title={t.undo}
+                      title={t.methodHeading}
                     >
                       <Check size={11} />
-                      <span className="text-[11px] font-semibold">
-                        {r.payment.method === 'check' && r.payment.checkNumber
-                          ? `${t.checkPrefix}${r.payment.checkNumber}`
-                          : r.payment.method === 'check' ? t.methodCheck : t.methodCash}
-                      </span>
+                      <span className="text-[11px] font-semibold">{paymentBadgeLabel(r.payment)}</span>
                     </button>
                   ) : canManage ? (
                     <button type="button" onClick={() => openPay(r)} disabled={busy} className="text-xs font-semibold text-primary hover:underline">
@@ -219,17 +253,17 @@ export function PayrollScreen({
 
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</p>
             <div className="flex gap-2 mb-4">
-              {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck]] as const).map(([m, Icon, label]) => {
+              {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                 const on = method === m;
                 return (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setMethod(m)}
-                    className={`flex-1 py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                   >
                     <Icon size={16} />
-                    <span className="text-sm font-semibold">{label}</span>
+                    <span className="text-xs font-semibold">{label}</span>
                   </button>
                 );
               })}
@@ -249,8 +283,67 @@ export function PayrollScreen({
             )}
 
             <button type="button" onClick={confirmPay} disabled={busy} className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">
-              {t.confirmBtn}
+              {editing ? t.saveBtn : t.confirmBtn}
             </button>
+            {editing && (
+              <button type="button" onClick={removePay} disabled={busy} className="w-full py-3 mt-2 rounded-2xl text-red-600 font-semibold hover:bg-red-50 disabled:opacity-50">
+                {t.removePayment}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Worker hours breakdown */}
+      {detailRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetailRow(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-lg font-bold text-gray-900">{detailRow.name}</p>
+                <p className="text-sm text-gray-500">
+                  {fmt(detailRow.pay)} · {Math.round(detailRow.hours * 100) / 100} h
+                </p>
+              </div>
+              <button type="button" onClick={() => setDetailRow(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            {/* Worked vs driven vs logged stat cards */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {([[Wrench, t.hoursWorked, detailRow.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, detailRow.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, detailRow.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
+                <div key={i} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
+                  <Icon size={15} className="text-gray-400 mx-auto mb-1" />
+                  <p className="text-base font-bold text-gray-900">{val}</p>
+                  <p className="text-[11px] text-gray-400">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</p>
+            {detailRow.breakdown && detailRow.breakdown.jobs.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {detailRow.breakdown.jobs.map((j, i) => (
+                  <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{j.title || t.untitledJob}</p>
+                      {j.date && <p className="text-[11px] text-gray-400">{j.date}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      {j.workedHours > 0 && (
+                        <p className="text-xs text-gray-600"><Wrench size={11} className="inline mr-1 text-gray-400" />{j.workedHours} h</p>
+                      )}
+                      {j.drivenHours > 0 && (
+                        <p className="text-xs text-gray-600"><Truck size={11} className="inline mr-1 text-gray-400" />{j.drivenHours} h</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</p>
+            )}
           </div>
         </div>
       )}

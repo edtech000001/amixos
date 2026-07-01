@@ -36,6 +36,7 @@ import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { CrewFinderSheet } from '@/modules/crewFinder/CrewFinderSheet';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
@@ -250,6 +251,9 @@ export default function NuevoTrabajoRoute() {
   const [clientSearch, setClientSearch] = useState('');
   // Quick-add: create a client inline without leaving the job draft.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // iOS can't present a modal while another is open, so we close the client
+  // picker first and open quick-add from its onDismiss. This flag bridges them.
+  const [pendingQuickAdd, setPendingQuickAdd] = useState(false);
   const [qaFirstName, setQaFirstName] = useState('');
   const [qaLastName, setQaLastName] = useState('');
   const [qaCompany, setQaCompany] = useState('');
@@ -259,6 +263,7 @@ export default function NuevoTrabajoRoute() {
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [crewPickerOpen, setCrewPickerOpen] = useState(false);
+  const [crewFinderOpen, setCrewFinderOpen] = useState(false);
   const [crewSearch, setCrewSearch] = useState('');
 
   const [saving, setSaving] = useState(false);
@@ -561,7 +566,16 @@ export default function NuevoTrabajoRoute() {
     setQaCompany('');
     setQaPhone('');
     setQaError('');
-    setQuickAddOpen(true);
+    // Two RN modals can't be on screen at once on iOS — the second silently
+    // fails to present. Close the picker first; on iOS the picker's onDismiss
+    // opens quick-add once it's fully gone. Android has no such restriction.
+    if (Platform.OS === 'ios') {
+      setPendingQuickAdd(true);
+      setClientPickerOpen(false);
+    } else {
+      setClientPickerOpen(false);
+      setQuickAddOpen(true);
+    }
   };
 
   const saveQuickClient = async () => {
@@ -779,14 +793,24 @@ export default function NuevoTrabajoRoute() {
           // Client-generated id so creating a job offline works (and assignments
           // can reference it before it syncs).
           jobId = newUuid();
+          // Stamp the pipeline timestamp(s) for the INITIAL status so the stepper
+          // shows a date under each reached step (a job created straight as
+          // "scheduled" previously had a blank scheduled_at). Backfill earlier
+          // linear steps too.
+          const nowIso = new Date().toISOString();
+          const createStamps: Record<string, unknown> = {};
+          if (status === 'scheduled' || status === 'in_progress' || status === 'completed') createStamps.scheduled_at = nowIso;
+          if (status === 'in_progress' || status === 'completed') createStamps.in_progress_at = nowIso;
+          if (status === 'completed') { createStamps.completed_at = nowIso; createStamps.completed_date = nowIso.split('T')[0]; }
+          const payload = { id: jobId, business_id: business.id, status, created_by: user?.id ?? null, ...jobData, ...createStamps };
           const insRes = await queuedInsert({
             table: 'jobs',
-            payload: { id: jobId, business_id: business.id, status, created_by: user?.id ?? null, ...jobData },
+            payload,
             businessId: business.id,
             label: `Trabajo: ${title.trim()}`,
           });
           jobQueued = insRes.queued;
-          optimisticJobRow = { id: jobId, business_id: business.id, status, ...jobData, clients: null, job_assignments: [] };
+          optimisticJobRow = { ...payload, clients: null, job_assignments: [] };
         }
       }
 
@@ -1324,6 +1348,14 @@ export default function NuevoTrabajoRoute() {
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
               {employees.length > 0 ? (
                 <>
+                  {/* Crew Finder — suggest nearest + available crew for this job. */}
+                  <Pressable
+                    onPress={() => setCrewFinderOpen(true)}
+                    className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
+                  >
+                    <Navigation size={15} color="#4F46E5" />
+                    <Text className="text-sm font-semibold text-primary">{full.dashboard.crewFinder.openButton}</Text>
+                  </Pressable>
                   {/* Lead picker — one designated lead (crew mode only).
                      Tapping opens a searchable bottom sheet so picking from
                      larger teams isn't a wall of names. Picking a lead also
@@ -1550,6 +1582,13 @@ export default function NuevoTrabajoRoute() {
         animationType="fade"
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
+        onDismiss={() => {
+          // iOS: open quick-add only after the picker has fully dismissed.
+          if (pendingQuickAdd) {
+            setPendingQuickAdd(false);
+            setQuickAddOpen(true);
+          }
+        }}
       >
         {/* Inline flex:1 (not the `flex-1` class) so this root reliably fills
             the modal host — as the Modal's direct child the NativeWind class
@@ -1994,6 +2033,18 @@ export default function NuevoTrabajoRoute() {
           </View>
         </View>
       </RNModal>
+
+      {business ? (
+        <CrewFinderSheet
+          visible={crewFinderOpen}
+          businessId={business.id}
+          target={{ jobId: editId ?? null, lat: jobLat, lng: jobLng, scheduledDate: scheduledDate || null, clientId: clientId || null }}
+          currentCrew={assignedEmployees}
+          onAddCrew={(id) => setAssignedEmployees((prev) => (prev.includes(id) ? prev : [...prev, id]))}
+          onSetDate={(d) => setScheduledDate(d)}
+          onClose={() => setCrewFinderOpen(false)}
+        />
+      ) : null}
       {unsavedSheet}
     </SafeAreaView>
   );

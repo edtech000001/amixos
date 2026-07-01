@@ -9,10 +9,33 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * field reads cleanly mid-entry. Shared by every phone input.
  */
 export function formatPhoneInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  let all = raw.replace(/\D/g, '');
+  // Strip a leading US country code so pasting "+1 (555) 123-4567" from Apple
+  // Contacts (digits become "15551234567") lines up to the 10-digit number
+  // instead of keeping the "1" and dropping the last digit. A real US 10-digit
+  // number never starts with 1, so this only catches the country code.
+  if (all.length === 11 && all.startsWith('1')) all = all.slice(1);
+  const digits = all.slice(0, 10);
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+/**
+ * Group a number's integer part with US thousands separators for display:
+ * "1123.21" → "1,123.21", "1000" → "1,000", "-2500" → "-2,500". Decimals are
+ * preserved exactly as entered (no rounding). Non-numeric input (ranges, notes,
+ * text that happens to sit in a number field) is returned unchanged, and
+ * empty/null yields ''. Display-only — number inputs can't hold the commas.
+ */
+export function formatNumberGrouped(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '';
+  const str = String(value).trim();
+  const m = /^(-?)(\d+)(\.\d+)?$/.exec(str);
+  if (!m) return str;
+  const [, sign, intPart, decPart = ''] = m;
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${sign}${grouped}${decPart}`;
 }
 
 const MONTHS_EN = [

@@ -21,7 +21,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 
@@ -42,7 +42,12 @@ interface Job {
   share_token: string | null; created_by: string | null; cancelled_at: string | null;
   delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
   created_at: string; updated_at: string;
+  custom_fields: Record<string, string> | null;
   clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null } | null;
+}
+interface JobFieldTemplate {
+  id: string; field_key: string; field_label: string;
+  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
 }
 interface Assignment {
   id: string; worker_name: string | null;
@@ -99,6 +104,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [items, setItems] = useState<JobItem[]>([]);
+  const [templates, setTemplates] = useState<JobFieldTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(false);
@@ -118,11 +124,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const load = async () => {
     if (!business) return;
-    const [{ data: j }, { data: a }, { data: it }] = await Promise.all([
+    const [{ data: j }, { data: a }, { data: it }, { data: tpl }] = await Promise.all([
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name, user_id)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
+      supabase.from('job_field_templates').select('id, field_key, field_label, field_type').eq('business_id', business.id).order('sort_order'),
     ]);
+    setTemplates((tpl ?? []) as JobFieldTemplate[]);
     if (j) {
       setJob(j as Job);
       if (j.tax_rate > 0) setTaxRate(j.tax_rate);
@@ -887,6 +895,30 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-xs text-amber-800 whitespace-pre-wrap">{job.internal_notes}</p>
+            </div>
+          )}
+
+          {/* Custom fields (job_field_templates) — read-only. */}
+          {templates.length > 0 && job.custom_fields && Object.keys(job.custom_fields).length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{full.dashboard.employees.modal.customFieldsHeading}</h2>
+              <div className="flex flex-col gap-2.5">
+                {templates.map(tpl => {
+                  const raw = job.custom_fields?.[tpl.field_key];
+                  if (raw === undefined || raw === null || raw === '') return null;
+                  const value =
+                    tpl.field_type === 'boolean' ? (raw === 'true' ? (dateLoc === 'es' ? 'Sí' : 'Yes') : 'No')
+                    : tpl.field_type === 'number' ? formatNumberGrouped(raw)
+                    : tpl.field_type === 'date' ? formatDateLong(raw, dateLoc)
+                    : raw;
+                  return (
+                    <div key={tpl.id} className="flex justify-between gap-3">
+                      <span className="text-xs text-gray-400">{tpl.field_label}</span>
+                      <span className="text-sm text-gray-700 text-right">{value}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

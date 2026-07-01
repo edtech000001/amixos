@@ -61,6 +61,8 @@ export interface InvoiceDetail {
   totalAmount: number;
   notes: string | null;
   language: InvoiceLang;
+  /** Custom fields (invoice_field_templates), pre-formatted for display. */
+  customFields?: { label: string; value: string; key?: string }[];
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
   updatedAt: string | null;
@@ -272,6 +274,21 @@ export function InvoiceDetailScreen({
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">{t.notes}</p>
             <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+          </div>
+        ) : null}
+
+        {/* Custom fields (invoice_field_templates) — read-only. */}
+        {invoice.customFields && invoice.customFields.length > 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</p>
+            <div className="flex flex-col gap-2">
+              {invoice.customFields.map(f => (
+                <div key={f.key ?? f.label} className="flex justify-between gap-3">
+                  <span className="text-xs text-gray-400">{f.label}</span>
+                  <span className="text-sm text-gray-700 text-right">{f.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 

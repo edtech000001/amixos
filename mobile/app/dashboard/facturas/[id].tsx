@@ -15,7 +15,7 @@ import {
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   resolveConfig,
@@ -297,7 +297,9 @@ export default function FacturaDetailRoute() {
         if (v == null || v === '') return null;
         const value = tpl.field_type === 'boolean'
           ? (v === 'true' ? tc.states.yes : tc.states.no)
-          : v;
+          : tpl.field_type === 'number'
+            ? formatNumberGrouped(v as string)
+            : v;
         return { key: tpl.field_key, label: tpl.field_label, value };
       })
       .filter((e): e is { key: string; label: string; value: string } => e !== null);

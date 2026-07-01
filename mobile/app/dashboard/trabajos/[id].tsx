@@ -49,7 +49,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatDateTimeLong, formatStamp } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 
@@ -98,6 +98,7 @@ interface Job {
   share_token: string | null;
   created_at: string;
   updated_at: string;
+  custom_fields: Record<string, string> | null;
   clients: {
     id: string;
     first_name: string;
@@ -176,7 +177,7 @@ export default function JobDetailRoute() {
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
   const { confirm: confirmAction, confirmSheet } = useConfirmSheet();
@@ -185,6 +186,7 @@ export default function JobDetailRoute() {
 
   const [job, setJob] = useState<Job | null>(null);
   const [items, setItems] = useState<JobItem[]>([]);
+  const [templates, setTemplates] = useState<{ id: string; field_key: string; field_label: string; field_type: 'text' | 'number' | 'date' | 'boolean' | 'select' }[]>([]);
   const [itemsEditOpen, setItemsEditOpen] = useState(false);
   const [editRows, setEditRows] = useState<{ id: string; item_type: string; description: string; quantity: string; unit_price: string }[]>([]);
   const [savingItems, setSavingItems] = useState(false);
@@ -247,6 +249,16 @@ export default function JobDetailRoute() {
         return (data as JobItem[] | null) ?? [];
       }),
     ]);
+    // Custom-field templates for the read-only view (offline-cached).
+    void loadCached(`job_field_templates_${business.id}`, async () => {
+      const { data, error } = await supabase
+        .from('job_field_templates')
+        .select('id, field_key, field_label, field_type')
+        .eq('business_id', business.id)
+        .order('sort_order');
+      if (error) throw error;
+      return data ?? [];
+    }).then(res => setTemplates((res.data as typeof templates) ?? []));
     // Set null (not "leave as-is") when the row is gone — otherwise a deleted
     // job id reuses this screen's previous job, showing the wrong record
     // instead of the not-found state. (Offline with no cache also lands here.)
@@ -999,6 +1011,30 @@ export default function JobDetailRoute() {
                 {full.dashboard.jobs.new.workerNoteLabel}
               </Text>
               <Text className="text-sm text-gray-700">{job.worker_notes}</Text>
+            </View>
+          ) : null}
+
+          {/* Custom fields (job_field_templates) — read-only. */}
+          {templates.length > 0 && job.custom_fields && Object.keys(job.custom_fields).length > 0 ? (
+            <View>
+              <Text className="text-xs text-gray-500 mb-1">{full.dashboard.employees.modal.customFieldsHeading}</Text>
+              <View className="gap-1.5">
+                {templates.map(tpl => {
+                  const raw = job.custom_fields?.[tpl.field_key];
+                  if (raw == null || raw === '') return null;
+                  const value =
+                    tpl.field_type === 'boolean' ? (raw === 'true' ? (locale === 'es' ? 'Sí' : 'Yes') : 'No')
+                    : tpl.field_type === 'number' ? formatNumberGrouped(raw)
+                    : tpl.field_type === 'date' ? formatDateLong(raw, locale)
+                    : raw;
+                  return (
+                    <View key={tpl.id} className="flex-row justify-between gap-3">
+                      <Text className="text-xs text-gray-400 flex-1">{tpl.field_label}</Text>
+                      <Text className="text-sm text-gray-700 text-right flex-1">{value}</Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           ) : null}
         </View>

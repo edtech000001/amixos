@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal } from 'react-native';
-import { ChevronLeft, ChevronRight, Check, DollarSign, Banknote, FileText } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui';
-import type { PayrollFrequency } from '../../lib/payroll';
+import type { PayrollFrequency, PayrollBreakdown } from '../../lib/payroll';
+
+export type PayMethod = 'cash' | 'check' | 'wire';
 
 export interface PayrollScreenRow {
   employeeId: string;
@@ -13,7 +15,9 @@ export interface PayrollScreenRow {
   payType: string;
   pay: number;
   /** Present when the worker has been marked paid for this period. */
-  payment: { method: 'cash' | 'check'; checkNumber: string | null } | null;
+  payment: { method: PayMethod; checkNumber: string | null } | null;
+  /** Where the worker's hours came from (jobs + worked/driven split). */
+  breakdown?: PayrollBreakdown;
 }
 
 export interface PayrollScreenProps {
@@ -27,7 +31,7 @@ export interface PayrollScreenProps {
   onPrevPeriod: () => void;
   onNextPeriod: () => void;
   rows: PayrollScreenRow[];
-  onMarkPaid: (employeeId: string, method: 'cash' | 'check', checkNumber: string) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string) => void;
   onUnmark: (employeeId: string) => void;
   onBack: () => void;
   canManage: boolean;
@@ -61,8 +65,11 @@ export function PayrollScreen({
 
   // Mark-paid sheet state.
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
-  const [method, setMethod] = useState<'cash' | 'check'>('cash');
+  const [editing, setEditing] = useState(false);
+  const [method, setMethod] = useState<PayMethod>('cash');
   const [checkNumber, setCheckNumber] = useState('');
+  // Worker whose hours breakdown sheet is open.
+  const [detailRow, setDetailRow] = useState<PayrollScreenRow | null>(null);
 
   const freqLabel: Record<PayrollFrequency, string> = {
     weekly: t.freqWeekly,
@@ -70,20 +77,46 @@ export function PayrollScreen({
     monthly: t.freqMonthly,
   };
 
+  const methodLabel: Record<PayMethod, string> = {
+    cash: t.methodCash,
+    check: t.methodCheck,
+    wire: t.methodWire,
+  };
+
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
   const totalPay = rows.reduce((s, r) => s + r.pay, 0);
   const paidCount = rows.filter(r => r.payment).length;
+  // Unpaid first, paid sink to the bottom (stable — keeps pay-desc within group).
+  const sortedRows = [...rows].sort((a, b) => (a.payment ? 1 : 0) - (b.payment ? 1 : 0));
 
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
+    setEditing(false);
     setMethod('cash');
     setCheckNumber('');
+  };
+  const openEdit = (row: PayrollScreenRow) => {
+    if (!row.payment) return;
+    setPayRow(row);
+    setEditing(true);
+    setMethod(row.payment.method);
+    setCheckNumber(row.payment.checkNumber ?? '');
   };
   const confirmPay = () => {
     if (!payRow) return;
     onMarkPaid(payRow.employeeId, method, method === 'check' ? checkNumber.trim() : '');
     setPayRow(null);
   };
+  const removePay = () => {
+    if (!payRow) return;
+    onUnmark(payRow.employeeId);
+    setPayRow(null);
+  };
+
+  const paymentBadgeLabel = (payment: NonNullable<PayrollScreenRow['payment']>) =>
+    payment.method === 'check' && payment.checkNumber
+      ? `${t.checkPrefix}${payment.checkNumber}`
+      : methodLabel[payment.method];
 
   return (
     <View className="flex-1 bg-surface">
@@ -164,28 +197,30 @@ export function PayrollScreen({
           <Text className="text-sm text-gray-400 text-center py-10">{t.empty}</Text>
         ) : (
           <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {rows.map((r, i) => (
+            {sortedRows.map((r, i) => (
               <View
                 key={r.employeeId}
-                className={`px-4 py-3.5 flex-row items-center gap-3 ${i < rows.length - 1 ? 'border-b border-gray-50' : ''}`}
+                className={`px-4 py-3.5 flex-row items-center gap-3 ${i < sortedRows.length - 1 ? 'border-b border-gray-50' : ''}`}
               >
-                <View className="flex-1 min-w-0">
-                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{r.name}</Text>
-                  <Text className="text-xs text-gray-400">
-                    {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
-                  </Text>
-                </View>
+                {/* Name/hours area opens the hours breakdown. */}
+                <Pressable onPress={() => setDetailRow(r)} className="flex-1 min-w-0 flex-row items-center gap-1.5 active:opacity-60">
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{r.name}</Text>
+                    <Text className="text-xs text-gray-400">
+                      {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
+                    </Text>
+                  </View>
+                  <ChevronRight size={14} color="#D1D5DB" />
+                </Pressable>
                 <View className="items-end">
                   <Text className="text-sm font-bold text-gray-900">{fmt(r.pay)}</Text>
                   {r.payment ? (
-                    <Pressable onPress={() => canManage && onUnmark(r.employeeId)} disabled={!canManage}>
+                    <Pressable onPress={() => canManage && openEdit(r)} disabled={!canManage}>
                       <View className="flex-row items-center gap-1 mt-0.5">
                         <View className="px-2 py-0.5 rounded-full bg-emerald-100 flex-row items-center gap-1">
                           <Check size={11} color="#047857" />
                           <Text className="text-[11px] font-semibold text-emerald-700">
-                            {r.payment.method === 'check' && r.payment.checkNumber
-                              ? `${t.checkPrefix}${r.payment.checkNumber}`
-                              : r.payment.method === 'check' ? t.methodCheck : t.methodCash}
+                            {paymentBadgeLabel(r.payment)}
                           </Text>
                         </View>
                       </View>
@@ -214,16 +249,16 @@ export function PayrollScreen({
 
             <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</Text>
             <View className="flex-row gap-2 mb-4">
-              {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck]] as const).map(([m, Icon, label]) => {
+              {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                 const on = method === m;
                 return (
                   <Pressable
                     key={m}
                     onPress={() => setMethod(m)}
-                    className={`flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2 border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+                    className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
                   >
                     <Icon size={16} color={on ? '#4F46E5' : '#9CA3AF'} />
-                    <Text className={`text-sm font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
+                    <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
                   </Pressable>
                 );
               })}
@@ -244,8 +279,78 @@ export function PayrollScreen({
             ) : null}
 
             <Pressable onPress={confirmPay} disabled={busy} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
-              <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
+              <Text className="text-sm font-semibold text-white">{editing ? t.saveBtn : t.confirmBtn}</Text>
             </Pressable>
+            {editing ? (
+              <Pressable onPress={removePay} disabled={busy} className="py-3.5 mt-2 rounded-2xl items-center active:opacity-70 disabled:opacity-50">
+                <Text className="text-sm font-semibold text-red-600">{t.removePayment}</Text>
+              </Pressable>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </RNModal>
+
+      {/* Worker hours breakdown sheet */}
+      <RNModal visible={!!detailRow} transparent animationType="fade" onRequestClose={() => setDetailRow(null)}>
+        <Pressable onPress={() => setDetailRow(null)} className="flex-1 bg-black/40 justify-end">
+          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+            <View className="items-center mb-3">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="flex-row items-start justify-between mb-4">
+              <View className="flex-1 pr-3">
+                <Text className="text-lg font-bold text-gray-900">{detailRow?.name}</Text>
+                <Text className="text-sm text-gray-500">
+                  {fmt(detailRow?.pay ?? 0)} · {Math.round((detailRow?.hours ?? 0) * 100) / 100} h
+                </Text>
+              </View>
+              <Pressable onPress={() => setDetailRow(null)} hitSlop={10} className="p-1">
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
+            </View>
+
+            {/* Worked vs driven vs logged */}
+            <View className="flex-row gap-2 mb-4">
+              {([[Wrench, t.hoursWorked, detailRow?.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, detailRow?.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, detailRow?.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
+                <View key={i} className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 p-3 items-center">
+                  <Icon size={15} color="#9CA3AF" />
+                  <Text className="text-base font-bold text-gray-900 mt-1">{val}</Text>
+                  <Text className="text-[11px] text-gray-400">{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
+            {detailRow?.breakdown && detailRow.breakdown.jobs.length > 0 ? (
+              <ScrollView className="max-h-72">
+                <View className="gap-2">
+                  {detailRow.breakdown.jobs.map((j, i) => (
+                    <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                      <View className="flex-1 min-w-0">
+                        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{j.title || t.untitledJob}</Text>
+                        {j.date ? <Text className="text-[11px] text-gray-400">{j.date}</Text> : null}
+                      </View>
+                      <View className="items-end">
+                        {j.workedHours > 0 ? (
+                          <View className="flex-row items-center gap-1">
+                            <Wrench size={11} color="#9CA3AF" />
+                            <Text className="text-xs text-gray-600">{j.workedHours} h</Text>
+                          </View>
+                        ) : null}
+                        {j.drivenHours > 0 ? (
+                          <View className="flex-row items-center gap-1">
+                            <Truck size={11} color="#9CA3AF" />
+                            <Text className="text-xs text-gray-600">{j.drivenHours} h</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <Text className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</Text>
+            )}
           </Pressable>
         </Pressable>
       </RNModal>

@@ -9,6 +9,7 @@ import {
   Modal as RNModal,
   Dimensions,
   FlatList,
+  ScrollView,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
@@ -219,8 +220,25 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const renderViewerPage = ({ item }: { item: JobPhoto }) => {
     const r = (item.rotation ?? 0) % 360;
     const swap = r === 90 || r === 270;
+    // Each page is its own zoomable ScrollView: pinch-to-zoom (and pan while
+    // zoomed) is handled natively. At zoom 1 the content exactly fits, so a
+    // horizontal swipe bubbles up to the outer paging FlatList instead of
+    // scrolling here. Zoom resets to fit whenever the page unmounts on swipe.
     return (
-      <View style={{ width: screenW, alignItems: 'center', justifyContent: 'center' }}>
+      <ScrollView
+        style={{ width: screenW, height: availH }}
+        contentContainerStyle={{
+          width: screenW,
+          height: availH,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        maximumZoomScale={4}
+        minimumZoomScale={1}
+        bouncesZoom
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+      >
         <Image
           source={{ uri: photoUrls[item.storage_path] }}
           style={{
@@ -230,7 +248,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
           }}
           resizeMode="contain"
         />
-      </View>
+      </ScrollView>
     );
   };
 

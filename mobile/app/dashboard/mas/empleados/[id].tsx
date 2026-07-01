@@ -45,7 +45,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { fetchEmployeeLocations, setEmployeePrimaryLocation, toggleEmployeeBranch } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -759,9 +759,11 @@ export default function EmpleadoDetailRoute() {
 
             {templates.length > 0 && employee.custom_fields && Object.keys(employee.custom_fields).length > 0 ? (
               <InfoCard title={t.modal.customFieldsHeading}>
-                {templates.map((tpl) => (
-                  <InfoRow key={tpl.id} Icon={Hash} label={tpl.field_label} value={employee.custom_fields?.[tpl.field_key]} />
-                ))}
+                {templates.map((tpl) => {
+                  const raw = employee.custom_fields?.[tpl.field_key];
+                  const value = tpl.field_type === 'number' && raw ? formatNumberGrouped(raw) : raw;
+                  return <InfoRow key={tpl.id} Icon={Hash} label={tpl.field_label} value={value} />;
+                })}
               </InfoCard>
             ) : null}
           </View>

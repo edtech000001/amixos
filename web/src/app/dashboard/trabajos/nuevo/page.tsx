@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { CrewFinderPanel } from '@/modules/crewFinder/CrewFinderPanel';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
@@ -243,6 +244,7 @@ function NuevoTrabajoContent() {
   const [leadSearch, setLeadSearch] = useState('');
   const leadDropdownRef = useRef<HTMLDivElement>(null);
   const [crewDropdownOpen, setCrewDropdownOpen] = useState(false);
+  const [crewFinderOpen, setCrewFinderOpen] = useState(false);
   const [crewSearch, setCrewSearch] = useState('');
   const crewDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -826,8 +828,17 @@ function NuevoTrabajoContent() {
           if (jobErr) throw new Error(jobErr.message);
           finalJobId = editId;
         } else {
+          // Stamp the pipeline timestamp(s) for the INITIAL status so the
+          // stepper shows a date under each reached step — previously a job
+          // created straight as "scheduled" had a blank scheduled_at until it
+          // was bounced through in_progress. Backfill earlier linear steps too.
+          const nowIso = new Date().toISOString();
+          const createStamps: Record<string, string> = {};
+          if (status === 'scheduled' || status === 'in_progress' || status === 'completed') createStamps.scheduled_at = nowIso;
+          if (status === 'in_progress' || status === 'completed') createStamps.in_progress_at = nowIso;
+          if (status === 'completed') { createStamps.completed_at = nowIso; createStamps.completed_date = nowIso.split('T')[0]; }
           const { data: job, error: jobErr } = await supabase.from('jobs').insert({
-            business_id: business!.id, status, created_by: user?.id ?? null, ...jobData,
+            business_id: business!.id, status, created_by: user?.id ?? null, ...jobData, ...createStamps,
           }).select().single();
           if (jobErr || !job) throw new Error(jobErr?.message ?? 'Error creating job');
           finalJobId = job.id;
@@ -1245,9 +1256,17 @@ function NuevoTrabajoContent() {
         {/* ── Empleados (job mode only) */}
         {!isEditProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Users size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <Users size={15} className="text-primary"/>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
+              </div>
+              {employees.length > 0 && (
+                <button type="button" onClick={() => setCrewFinderOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors">
+                  <Navigation size={13} /> {full.dashboard.crewFinder.openButton}
+                </button>
+              )}
             </div>
             {employees.length > 0 && (
               <>
@@ -1673,6 +1692,17 @@ function NuevoTrabajoContent() {
           </div>
         </div>
       </Modal>
+
+      {crewFinderOpen && business && (
+        <CrewFinderPanel
+          businessId={business.id}
+          target={{ jobId: editId ?? null, lat: jobLat, lng: jobLng, scheduledDate: scheduledDate || null, clientId: clientId || null }}
+          currentCrew={assignedEmployees}
+          onAddCrew={id => setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]))}
+          onSetDate={d => setScheduledDate(d)}
+          onClose={() => setCrewFinderOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -99,8 +99,13 @@ export function BusinessSwitcher() {
                     disabled={locked}
                     onPress={() => {
                       if (locked) return;
+                      const switching = b.id !== activeId;
                       setActiveBusiness(b.id);
                       setOpen(false);
+                      // Land on the dashboard so nothing scoped to the previous
+                      // business (a detail screen, an open sheet) is left showing
+                      // stale/out-of-context data. Only on a real switch.
+                      if (switching) router.replace('/dashboard');
                     }}
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
                       i < businesses.length - 1 ? 'border-b border-gray-100' : ''

@@ -39,7 +39,7 @@ import { isOnlineNow } from '@/lib/offline/network';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
-import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
@@ -920,7 +920,9 @@ export default function ClienteDetailRoute() {
               if (!val && !tpl.required) return null;
               const display = tpl.field_type === 'boolean'
                 ? val === 'true' ? tc.states.yes : tc.states.no
-                : val ?? '—';
+                : tpl.field_type === 'number' && val
+                  ? formatNumberGrouped(val)
+                  : val ?? '—';
               return (
                 <View key={tpl.field_key}>
                   <Text className="text-xs text-gray-400">{tpl.field_label}</Text>

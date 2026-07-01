@@ -14,6 +14,7 @@ import {
 import {
   getPayrollPeriod,
   computePayrollRows,
+  employeeBreakdownInRange,
   normalizeFrequency,
   parsePayrollAnchor,
   type PayrollFrequency,
@@ -69,13 +70,15 @@ export default function NominaPage() {
       supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type').eq('business_id', bid),
       supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', bid)
         .gte('work_date', period.startStr).lte('work_date', period.endStr),
-      supabase.from('jobs').select('scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
+      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
         .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
       supabase.from('payroll_payments').select('employee_id, method, check_number').eq('business_id', bid).eq('period_start', period.startStr),
     ]);
     setEmployees((empRes.data ?? []) as never);
     setTimesheets((tsRes.data ?? []) as never);
-    setJobs(((jobRes.data ?? []) as Array<{ scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
+    setJobs(((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
+      id: j.id,
+      title: j.title,
       scheduled_date: j.scheduled_date,
       total_hours: j.total_hours,
       driver_employee_ids: j.driver_employee_ids,
@@ -93,9 +96,17 @@ export default function NominaPage() {
     const payByEmp = new Map(payments.map(p => [p.employee_id, p]));
     return base.map(r => {
       const p = payByEmp.get(r.employeeId);
+      const method = p ? (p.method === 'check' ? 'check' as const : p.method === 'wire' ? 'wire' as const : 'cash' as const) : null;
       return {
         ...r,
-        payment: p ? { method: p.method === 'check' ? 'check' as const : 'cash' as const, checkNumber: p.check_number } : null,
+        payment: p && method ? { method, checkNumber: p.check_number } : null,
+        breakdown: employeeBreakdownInRange({
+          employeeId: r.employeeId,
+          timesheets,
+          jobs,
+          startStr: period.startStr,
+          endStr: period.endStr,
+        }),
       };
     });
   }, [employees, timesheets, jobs, payments, period]);

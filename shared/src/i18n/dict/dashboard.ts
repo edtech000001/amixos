@@ -1953,6 +1953,29 @@ export type DashboardDict = {
       };
     };
   };
+  crewFinder: {
+    openButton: string;
+    title: string;
+    subtitle: string;
+    distanceMi: string;
+    noLocation: string;
+    basisCurrentJob: string;
+    basisJob: string;
+    basisHome: string;
+    freeOnDate: string;
+    busyNextFree: string;
+    busyNoFree: string;
+    nearbyNote: string;
+    add: string;
+    added: string;
+    scheduleThatDay: string;
+    geocoding: string;
+    needsAddresses: string;
+    targetNoCoords: string;
+    empty: string;
+    offline: string;
+    close: string;
+  };
   reports: {
     payroll: {
       title: string;
@@ -1976,11 +1999,22 @@ export type DashboardDict = {
       methodHeading: string;
       methodCash: string;
       methodCheck: string;
+      methodWire: string;
       checkNumberLabel: string;
       checkNumberPlaceholder: string;
       confirmBtn: string;
+      saveBtn: string;
+      removePayment: string;
       checkPrefix: string;
       empty: string;
+      // Worker hours breakdown
+      breakdownHours: string;
+      hoursWorked: string;
+      hoursDriven: string;
+      hoursLogged: string;
+      projectsHeading: string;
+      untitledJob: string;
+      noBreakdown: string;
     };
     title: string;
     subtitle: string;
@@ -4000,6 +4034,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
           },
         },
     },
+    crewFinder: {
+      openButton: 'Sugerir cuadrilla',
+      title: 'Cuadrilla sugerida',
+      subtitle: 'Más cercanos y disponibles primero',
+      distanceMi: '{{n}} mi',
+      noLocation: 'Sin ubicación',
+      basisCurrentJob: 'En trabajo actual',
+      basisJob: 'Según su trabajo',
+      basisHome: 'Desde casa',
+      freeOnDate: 'Libre este día',
+      busyNextFree: 'Ocupado — libre {{date}}',
+      busyNoFree: 'Ocupado',
+      nearbyNote: 'Cerca: {{miles}} mi el {{day}}',
+      add: 'Agregar',
+      added: 'Agregado',
+      scheduleThatDay: 'Programar {{day}}',
+      geocoding: 'Ubicando empleados…',
+      needsAddresses: '{{n}} sin dirección',
+      targetNoCoords: 'Este trabajo no tiene ubicación (agrega dirección o cliente).',
+      empty: 'Sin empleados para sugerir',
+      offline: 'Sin conexión — no se puede sugerir',
+      close: 'Cerrar',
+    },
     reports: {
       payroll: {
         title: 'Nómina',
@@ -4023,11 +4080,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methodHeading: 'Método de pago',
         methodCash: 'Efectivo',
         methodCheck: 'Cheque',
+        methodWire: 'Transferencia',
         checkNumberLabel: 'Número de cheque',
         checkNumberPlaceholder: 'Opcional',
         confirmBtn: 'Confirmar',
+        saveBtn: 'Guardar cambios',
+        removePayment: 'Quitar pago',
         checkPrefix: 'Cheque #',
         empty: 'No hay trabajadores con horas.',
+        breakdownHours: 'Desglose de horas',
+        hoursWorked: 'Trabajadas',
+        hoursDriven: 'Manejadas',
+        hoursLogged: 'Registradas',
+        projectsHeading: 'Trabajos',
+        untitledJob: 'Trabajo sin título',
+        noBreakdown: 'Sin horas en este periodo.',
       },
       title: 'Reportes',
       subtitle: 'Analiza el rendimiento de tu negocio',
@@ -6074,6 +6141,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
           },
         },
     },
+    crewFinder: {
+      openButton: 'Suggest crew',
+      title: 'Suggested crew',
+      subtitle: 'Nearest and available first',
+      distanceMi: '{{n}} mi',
+      noLocation: 'No location',
+      basisCurrentJob: 'On current job',
+      basisJob: 'From their job',
+      basisHome: 'From home',
+      freeOnDate: 'Free this day',
+      busyNextFree: 'Busy — free {{date}}',
+      busyNoFree: 'Busy',
+      nearbyNote: 'Nearby: {{miles}} mi on {{day}}',
+      add: 'Add',
+      added: 'Added',
+      scheduleThatDay: 'Schedule {{day}}',
+      geocoding: 'Locating employees…',
+      needsAddresses: '{{n}} without address',
+      targetNoCoords: 'This job has no location (add an address or client).',
+      empty: 'No employees to suggest',
+      offline: 'Offline — can\'t suggest',
+      close: 'Close',
+    },
     reports: {
       payroll: {
         title: 'Payroll',
@@ -6097,11 +6187,21 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methodHeading: 'Payment method',
         methodCash: 'Cash',
         methodCheck: 'Check',
+        methodWire: 'Wire',
         checkNumberLabel: 'Check number',
         checkNumberPlaceholder: 'Optional',
         confirmBtn: 'Confirm',
+        saveBtn: 'Save changes',
+        removePayment: 'Remove payment',
         checkPrefix: 'Check #',
         empty: 'No workers with hours.',
+        breakdownHours: 'Hours breakdown',
+        hoursWorked: 'Worked',
+        hoursDriven: 'Driven',
+        hoursLogged: 'Logged',
+        projectsHeading: 'Jobs',
+        untitledJob: 'Untitled job',
+        noBreakdown: 'No hours this period.',
       },
       title: 'Reports',
       subtitle: 'Analyze your business performance',

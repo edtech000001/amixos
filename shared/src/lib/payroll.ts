@@ -129,6 +129,11 @@ export interface PayrollTimesheet {
   work_date: string | null;
 }
 export interface PayrollJob {
+  /** Job id + title — optional so callers that only need pay totals can skip
+   *  them; required for the per-worker breakdown (which projects the hours
+   *  came from). */
+  id?: string | null;
+  title?: string | null;
   /** Work date the hours fall on (drives which period the job counts in). */
   scheduled_date: string | null;
   total_hours: number | null;
@@ -240,4 +245,87 @@ export function computePayrollRows(opts: {
     ? rows
     : rows.filter(r => r.hours > 0 || r.payType === 'salary');
   return filtered.sort((a, b) => b.pay - a.pay);
+}
+
+// ── Per-worker breakdown (which projects the hours came from) ────────────────
+
+/** One job contributing hours to a worker in the period, split by kind. */
+export interface PayrollBreakdownJob {
+  jobId: string | null;
+  title: string | null;
+  date: string | null;
+  /** Crew hours (job total_hours) credited because they were on the crew. */
+  workedHours: number;
+  /** Driving hours (job driver_hours) credited because they drove. */
+  drivenHours: number;
+}
+
+export interface PayrollBreakdown {
+  /** Jobs that contributed hours, oldest first. */
+  jobs: PayrollBreakdownJob[];
+  /** Standalone timesheet hours not tied to a job in this data set. */
+  loggedHours: number;
+  workedHours: number;
+  drivenHours: number;
+  totalHours: number;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Explain ONE worker's period hours: which jobs they came from (split into crew
+ * "worked" hours vs "driven" hours) plus any standalone logged timesheet hours.
+ * Uses the exact same attribution rules as computePayrollRows so the totals here
+ * reconcile with the pay shown on the row.
+ */
+export function employeeBreakdownInRange(opts: {
+  employeeId: string;
+  timesheets: PayrollTimesheet[];
+  jobs: PayrollJob[];
+  startStr: string;
+  endStr: string;
+}): PayrollBreakdown {
+  const { employeeId, timesheets, jobs, startStr, endStr } = opts;
+  const jobEntries: PayrollBreakdownJob[] = [];
+  let workedHours = 0;
+  let drivenHours = 0;
+  let loggedHours = 0;
+
+  for (const job of jobs) {
+    if (!inRange(job.scheduled_date, startStr, endStr)) continue;
+    const worked =
+      (job.total_hours ?? 0) && job.assignmentEmployeeIds.includes(employeeId)
+        ? job.total_hours ?? 0
+        : 0;
+    const driven =
+      (job.driver_hours ?? 0) && (job.driver_employee_ids ?? []).includes(employeeId)
+        ? job.driver_hours ?? 0
+        : 0;
+    if (!worked && !driven) continue;
+    workedHours += worked;
+    drivenHours += driven;
+    jobEntries.push({
+      jobId: job.id ?? null,
+      title: job.title ?? null,
+      date: job.scheduled_date,
+      workedHours: round2(worked),
+      drivenHours: round2(driven),
+    });
+  }
+
+  for (const ts of timesheets) {
+    if (ts.employee_id === employeeId && inRange(ts.work_date, startStr, endStr)) {
+      loggedHours += ts.hours_worked ?? 0;
+    }
+  }
+
+  jobEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+
+  return {
+    jobs: jobEntries,
+    loggedHours: round2(loggedHours),
+    workedHours: round2(workedHours),
+    drivenHours: round2(drivenHours),
+    totalHours: round2(workedHours + drivenHours + loggedHours),
+  };
 }
