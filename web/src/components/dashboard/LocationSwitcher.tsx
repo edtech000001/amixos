@@ -3,14 +3,18 @@
 // Branch switcher — scopes day-to-day lists (jobs, employees) to one location
 // or "All". Only renders when the business runs ≥2 branches; single-location
 // businesses never see it. Reports stay business-wide regardless of this.
+//
+// Hidden for assigned-only roles (field crew): they're locked to their home
+// branch and shouldn't roam other locations' data. Gated on can.seeAllJobs.
 
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, ChevronDown, Check } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { can } from '@amixos/shared/lib/permissions';
 
 export function LocationSwitcher() {
-  const { locations, activeLocationId, setActiveLocation } = useApp();
+  const { locations, activeLocationId, setActiveLocation, currentRole } = useApp();
   const { locale } = useLang();
   const es = locale !== 'en';
   const [open, setOpen] = useState(false);
@@ -22,7 +26,8 @@ export function LocationSwitcher() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  if (locations.length < 2) return null;
+  // Single-location businesses + assigned-only roles (field crew) never see it.
+  if (locations.length < 2 || !can.seeAllJobs(currentRole)) return null;
 
   const allLabel = es ? 'Todas las ubicaciones' : 'All locations';
   const active = locations.find((l) => l.id === activeLocationId);

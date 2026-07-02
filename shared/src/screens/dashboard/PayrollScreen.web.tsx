@@ -3,7 +3,11 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
-import { DatePicker } from '../../ui';
+// Import DatePicker from its file, NOT the '../../ui' barrel: the barrel also
+// re-exports DateRangeSheet (react-native-safe-area-context), which isn't a web
+// dependency and breaks the Next.js build. This is the only web-reachable
+// screen that pulled the barrel.
+import { DatePicker } from '../../ui/DatePicker';
 import type { PayrollFrequency, PayrollBreakdown } from '../../lib/payroll';
 
 export type PayMethod = 'cash' | 'check' | 'wire';

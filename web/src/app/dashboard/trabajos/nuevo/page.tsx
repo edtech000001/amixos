@@ -171,11 +171,25 @@ function NuevoTrabajoContent() {
     }
   }, [sourceId, isProposal, currentRole, router]);
 
+  // Field crew ("assigned-only" roles) get a simplified form: no branch picker
+  // (auto = their branch) and no crew-visibility toggle. Their job is forced
+  // visible-to-crew + self-assigned so they can actually see it (RLS 044/089
+  // hides unpublished/unassigned jobs from field). Mirrors logFieldJob.
+  const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+
   // Default a NEW job's branch to the active branch, or the business default.
   useEffect(() => {
     if (sourceId || locationId || locations.length === 0) return;
     setLocationId(activeLocationId ?? '');
   }, [sourceId, locations, activeLocationId]);
+
+  // Resolve the field creator's own employee row so we can self-assign them.
+  useEffect(() => {
+    if (!restrictedCreator || !business || !user) { setMyEmployeeId(null); return; }
+    supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
+      .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
+  }, [restrictedCreator, business?.id, user?.id]);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -747,7 +761,7 @@ function NuevoTrabajoContent() {
           total_amount: +total.toFixed(2),
           scheduled_date: scheduledDate || null,
           end_date: endDate || null,
-          published_to_crew: publishedToCrew,
+          published_to_crew: restrictedCreator ? true : publishedToCrew,
           custom_fields: customFields,
         };
 
@@ -808,7 +822,7 @@ function NuevoTrabajoContent() {
           driver_hours: driverEmployeeIds.length && driverHours.trim() ? parseFloat(driverHours) : null,
           internal_notes: internalNotes.trim() || null,
           total_amount: subtotal,
-          published_to_crew: publishedToCrew,
+          published_to_crew: restrictedCreator ? true : publishedToCrew,
           custom_fields: customFields,
         };
 
@@ -876,6 +890,11 @@ function NuevoTrabajoContent() {
         manualWorkers.filter(w => w.trim()).forEach(name => {
           assignments.push({ job_id: finalJobId, worker_name: name.trim() });
         });
+        // Field creator: self-assign so they can see their own job (RLS 044/089
+        // requires assigned + published for field reads). Lead if none yet.
+        if (restrictedCreator && !editId && myEmployeeId && !assignments.some(a => a.employee_id === myEmployeeId)) {
+          assignments.push({ job_id: finalJobId, employee_id: myEmployeeId, is_lead: !assignments.some(a => a.is_lead) });
+        }
         if (assignments.length > 0) {
           await supabase.from('job_assignments').insert(assignments);
         }
@@ -973,14 +992,14 @@ function NuevoTrabajoContent() {
                     </div>
                     <div className="max-h-60 overflow-y-auto">
                       <button type="button" onClick={() => handleClientChange('')}
-                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                        className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
                         {t.clientNone}
                       </button>
                       {filteredClients.map(c => (
                         <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
-                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                          className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
                           {c.first_name} {c.last_name}
-                          {c.company && <span className="text-gray-400 ml-1">· {c.company}</span>}
+                          {c.company && <span className="text-gray-400 ml-1 text-sm">· {c.company}</span>}
                         </button>
                       ))}
                       {filteredClients.length === 0 && (
@@ -1002,8 +1021,9 @@ function NuevoTrabajoContent() {
               </div>
             </div>
 
-            {/* Branch picker — only when the business runs multiple locations. */}
-            {locations.length >= 2 && (
+            {/* Branch picker — multi-location businesses only. Hidden for field
+               crew: their job auto-uses their own branch. */}
+            {locations.length >= 2 && !restrictedCreator && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
                 <select value={locationId} onChange={e => setLocationId(e.target.value)}
@@ -1068,9 +1088,11 @@ function NuevoTrabajoContent() {
             </div>
             )}
 
-            {/* Crew visibility — when off, the job lives only on the
-               owner's scheduler. iOS-style segmented control: active choice
-               is the white pill that "floats" above the tinted track. */}
+            {/* Crew visibility — when off, the job lives only on the owner's
+               scheduler. Hidden for field crew: their job is auto-published so
+               they (and any assigned crew) can see it. iOS-style segmented
+               control: active choice is the white pill above the tinted track. */}
+            {!restrictedCreator && (
             <div className="flex flex-col gap-1 mt-1">
               <label className="text-sm font-medium text-gray-700">{t.publishedToCrewLabel}</label>
               <p className="text-xs text-gray-500 mb-1.5">{t.publishedToCrewHint}</p>
@@ -1095,6 +1117,7 @@ function NuevoTrabajoContent() {
                 </button>
               </div>
             </div>
+            )}
             {renderCustomFields('general')}
           </div>
         </div>

@@ -200,6 +200,16 @@ export default function NuevoTrabajoRoute() {
   // "Privado" (owner's scheduler view); the owner explicitly flips it on
   // when the job is ready for the assigned crew to see.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
+  // Field crew get a simplified form: no branch picker (auto = their branch)
+  // and no crew-visibility toggle. Their job is forced visible-to-crew +
+  // self-assigned so they can see it (RLS 044/089). Mirrors logFieldJob.
+  const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!restrictedCreator || !business || !user) { setMyEmployeeId(null); return; }
+    supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
+      .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
+  }, [restrictedCreator, business?.id, user?.id]);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
   // The job's status when the edit form loaded — used to stamp the pipeline
   // timestamp only on a real status change at save time.
@@ -714,7 +724,7 @@ export default function NuevoTrabajoRoute() {
         job_lng: jobLng,
         internal_notes: internalNotes.trim() || null,
         worker_notes: workerNotes.trim() || null,
-        published_to_crew: publishedToCrew,
+        published_to_crew: restrictedCreator ? true : publishedToCrew,
         custom_fields: customFields,
       };
 
@@ -848,6 +858,11 @@ export default function NuevoTrabajoRoute() {
           .map((w) => w.trim())
           .filter(Boolean)
           .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
+        // Field creator: self-assign so they can see their own job (RLS 044/089
+        // requires assigned + published for field reads). Lead if none yet.
+        if (restrictedCreator && !editId && myEmployeeId && !assignments.some((a) => a.employee_id === myEmployeeId)) {
+          assignments.push({ job_id: jobId, employee_id: myEmployeeId, worker_name: user?.name ?? '', is_lead: !assignments.some((a) => a.is_lead) });
+        }
         // Per-assignment insert with client ids so an offline retry is idempotent.
         for (const a of assignments) {
           await queuedInsert({ table: 'job_assignments', payload: { id: newUuid(), ...a }, businessId: business.id, label: `Asignación: ${a.worker_name}` });
@@ -1002,8 +1017,9 @@ export default function NuevoTrabajoRoute() {
               </Pressable>
             </View>
 
-            {/* Branch picker — only when the business runs multiple locations. */}
-            {locations.length >= 2 ? (
+            {/* Branch picker — multi-location businesses only. Hidden for field
+               crew: their job auto-uses their own branch. */}
+            {locations.length >= 2 && !restrictedCreator ? (
               <View className="flex flex-col gap-2 mt-3">
                 <Text className="text-sm font-semibold text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
                 <View className="flex-row flex-wrap gap-2">
@@ -1095,9 +1111,10 @@ export default function NuevoTrabajoRoute() {
             </View>
             )}
 
-            {/* Crew visibility — when off, the job lives only on the
-               owner's scheduler. iOS-style segmented control: the active
-               choice is the white pill that "floats" above the tinted track. */}
+            {/* Crew visibility — when off, the job lives only on the owner's
+               scheduler. Hidden for field crew: their job is auto-published so
+               they (and any assigned crew) can see it. */}
+            {!restrictedCreator ? (
             <View className="mt-2">
               <Text className="text-sm font-semibold text-gray-700 mb-1">{t.publishedToCrewLabel}</Text>
               <Text className="text-xs text-gray-500 mb-2.5">{t.publishedToCrewHint}</Text>
@@ -1132,6 +1149,7 @@ export default function NuevoTrabajoRoute() {
                 </Pressable>
               </View>
             </View>
+            ) : null}
 
             {renderCustomFields('general')}
           </Section>
@@ -1641,7 +1659,7 @@ export default function NuevoTrabajoRoute() {
                 onPress={() => pickClient('')}
                 className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
               >
-                <Text className={`text-sm ${!clientId ? 'text-primary font-semibold' : 'text-gray-500'}`}>
+                <Text className={`text-base ${!clientId ? 'text-primary font-semibold' : 'text-gray-500'}`}>
                   {t.clientNone}
                 </Text>
                 {!clientId ? <Check size={16} color="#4F46E5" /> : null}
@@ -1658,7 +1676,7 @@ export default function NuevoTrabajoRoute() {
                   >
                     <View className="flex-1">
                       <Text
-                        className={`text-sm ${
+                        className={`text-base ${
                           isSel ? 'text-primary font-semibold' : 'text-gray-900'
                         }`}
                         numberOfLines={1}
