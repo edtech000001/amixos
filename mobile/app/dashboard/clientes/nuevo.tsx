@@ -18,7 +18,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
-import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
@@ -511,7 +511,7 @@ export default function NuevoClienteRoute() {
         const jwt = await getJwt();
         if (!apiBaseUrl || !jwt) return;
         triggerGoogleSyncOrThrow('update', editId, { apiBaseUrl, jwt })
-          .catch(() => syncBanner.reportError('No se pudo actualizar el contacto en Google Contacts.'));
+          .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo actualizar el contacto en Google Contacts.')));
       })();
       router.replace(`/dashboard/clientes/${editId}` as never);
     } else {
@@ -542,7 +542,7 @@ export default function NuevoClienteRoute() {
           const jwt = await getJwt();
           if (!apiBaseUrl || !jwt) return;
           triggerGoogleSyncOrThrow('create', newId, { apiBaseUrl, jwt })
-            .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
+            .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo agregar el contacto a Google Contacts.')));
         })();
         router.replace(`/dashboard/clientes/${newId}` as never);
       }

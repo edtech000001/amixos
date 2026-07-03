@@ -10,7 +10,7 @@ import {
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -174,8 +174,8 @@ export default function ClientesTab() {
           if (apiBaseUrl && jwt) {
             try {
               await triggerGoogleSyncOrThrow('delete', id, { apiBaseUrl, jwt });
-            } catch {
-              syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+            } catch (e) {
+              syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo eliminar el contacto de Google Contacts.'));
             }
           }
           const deleted = clients.find(c => c.id === id);

@@ -9,7 +9,7 @@ import { Upload, Download, CheckCircle2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
-import { triggerGoogleSyncOrThrow } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
@@ -214,7 +214,7 @@ export default function ClientesPage() {
           const jwt = await getJwt();
           if (!apiBaseUrl || !jwt) return;
           triggerGoogleSyncOrThrow('create', created.id, { apiBaseUrl, jwt })
-            .catch(() => syncBanner.reportError('No se pudo agregar el contacto a Google Contacts.'));
+            .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo agregar el contacto a Google Contacts.')));
         })();
       }
     } else if (formMode === 'edit' && selected) {
@@ -235,8 +235,8 @@ export default function ClientesPage() {
     if (apiBaseUrl && jwt) {
       try {
         await triggerGoogleSyncOrThrow('delete', id, { apiBaseUrl, jwt });
-      } catch {
-        syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+      } catch (e) {
+        syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo eliminar el contacto de Google Contacts.'));
       }
     }
     const deleted = clients.find(c => c.id === id);

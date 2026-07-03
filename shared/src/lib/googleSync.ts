@@ -16,6 +16,53 @@ export interface TriggerGoogleSyncOptions {
 }
 
 /**
+ * Thrown by the *OrThrow variants when the mirror didn't happen. `code`
+ * lets callers pick the right user message:
+ *  - 'reconnect_required' → the Google connection is dead (token revoked /
+ *    expired); the user must reconnect in Ajustes. Surface prominently.
+ *  - 'sync_failed' → transient failure (rate limit, People API hiccup);
+ *    the row will sync next time it's touched.
+ */
+export class GoogleSyncError extends Error {
+  code: 'reconnect_required' | 'sync_failed';
+  constructor(code: 'reconnect_required' | 'sync_failed', message: string) {
+    super(message);
+    this.name = 'GoogleSyncError';
+    this.code = code;
+  }
+}
+
+/** Banner copy for a dead connection — points the user at the fix. */
+export const GOOGLE_SYNC_RECONNECT_MESSAGE =
+  'Google Contacts se desconectó — vuelve a conectarlo en Ajustes para seguir sincronizando tus contactos.';
+
+/**
+ * Pick the right banner message for a failed *OrThrow sync: a dead
+ * connection gets the actionable reconnect copy; anything else keeps the
+ * caller's op-specific fallback ("No se pudo agregar…", etc.).
+ */
+export function googleSyncErrorMessage(e: unknown, fallback: string): string {
+  return e instanceof GoogleSyncError && e.code === 'reconnect_required'
+    ? GOOGLE_SYNC_RECONNECT_MESSAGE
+    : fallback;
+}
+
+// The sync endpoints reply 200 even when the mirror failed — the outcome
+// rides in data.error. Benign outcomes (sync paused, row never synced) are
+// NOT failures and must not throw.
+const BENIGN_SYNC_ERRORS = new Set(['sync_disabled', 'no_resource_name', 'no_etag']);
+
+async function throwIfBodyReportsFailure(res: Response, label: string): Promise<void> {
+  const json = (await res.json().catch(() => null)) as { data?: { error?: string } } | null;
+  const errCode = json?.data?.error;
+  if (!errCode || BENIGN_SYNC_ERRORS.has(errCode)) return;
+  throw new GoogleSyncError(
+    errCode === 'reconnect_required' ? 'reconnect_required' : 'sync_failed',
+    `${label}: ${errCode}`,
+  );
+}
+
+/**
  * Mirror a client_contact mutation to Google Contacts. Each client_contact
  * becomes its own Google contact whose organization is the parent client's
  * company and whose biography links it back to that client.
@@ -61,6 +108,7 @@ async function doClientContactGoogleSyncRequest(
   if (!res.ok) {
     throw new Error(`Google sync (contact) failed (${res.status})`);
   }
+  await throwIfBodyReportsFailure(res, 'Google sync (contact)');
 }
 
 /**
@@ -86,6 +134,7 @@ async function doGoogleSyncRequest(
   if (!res.ok) {
     throw new Error(`Google sync failed (${res.status})`);
   }
+  await throwIfBodyReportsFailure(res, 'Google sync');
 }
 
 export function triggerGoogleSync(

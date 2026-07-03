@@ -120,6 +120,14 @@ interface ProviderProps {
     | { mode: 'update'; remainingCount: number }
     | { mode: 'delete'; remainingCount: number },
   ) => Promise<boolean>;
+  /**
+   * Active business id. When provided, the provider runs a one-shot health
+   * check per business per app session: if a Google connection exists but is
+   * flagged reconnect-needed (enabled=false — revoked/expired token), a
+   * persistent error banner tells the user instead of letting every contact
+   * sync fail silently until they stumble into Ajustes.
+   */
+  businessKey?: string | null;
 }
 
 // Throttle between sync ops. Stays under Google's 60/min write quota
@@ -137,6 +145,7 @@ export function GoogleSyncBannerProvider({
   getJwt,
   userKey,
   onCancelImport,
+  businessKey,
 }: ProviderProps) {
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' });
   const queueRef = useRef<PendingQueue | null>(null);
@@ -423,6 +432,42 @@ export function GoogleSyncBannerProvider({
       cancelled = true;
     };
   }, [storage, userKey, runLoop]);
+
+  // One-shot connection health check per business per session. Detects the
+  // "connected but reconnect-needed" state (enabled=false after a revoked or
+  // expired token) and surfaces it as a persistent banner — otherwise the
+  // user only finds out when contacts quietly stop appearing in Google.
+  const healthCheckedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!businessKey || !getApiBaseUrl || !getJwt) return;
+    if (healthCheckedRef.current.has(businessKey)) return;
+    let cancelled = false;
+    (async () => {
+      const apiBaseUrl = getApiBaseUrl();
+      const jwt = await getJwt().catch(() => null);
+      if (!apiBaseUrl || !jwt || cancelled) return;
+      try {
+        const res = await fetch(
+          `${apiBaseUrl}/api/v1/google-sync/status?business_id=${businessKey}`,
+          { headers: { Authorization: `Bearer ${jwt}` } },
+        );
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const data = json?.data;
+        healthCheckedRef.current.add(businessKey);
+        if (data?.connected && data?.enabled === false) {
+          reportError(
+            'Google Contacts se desconectó — vuelve a conectarlo en Ajustes para seguir sincronizando tus contactos.',
+          );
+        }
+      } catch {
+        /* best-effort — retried next session */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessKey, getApiBaseUrl, getJwt, reportError]);
 
   useEffect(() => () => clearDismiss(), [clearDismiss]);
 

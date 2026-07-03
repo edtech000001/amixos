@@ -172,6 +172,39 @@ export async function requestImpersonation(
   };
 }
 
+// Server codes that reflect a real business rule — retrying can't change the
+// outcome, so they surface to the caller immediately.
+const NON_RETRYABLE_CODES = new Set(['role_not_allowed', 'not_a_member', 'impersonate_self']);
+
+/**
+ * requestImpersonation with a one-shot recovery for transient auth failures.
+ * The admin's access token can be mid-rotation right after leaving a previous
+ * "Ver como" session (autoRefreshToken race), which makes the mint 401 even
+ * though the admin is perfectly logged in. On any retryable failure we force a
+ * session refresh, grab a fresh JWT, and try once more before giving up.
+ */
+export async function requestImpersonationWithRetry(args: {
+  apiBaseUrl: string;
+  businessId: string;
+  targetUserId: string;
+  getJwt: () => Promise<string>;
+  refreshSession: () => Promise<unknown>;
+}): Promise<ImpersonationGrant> {
+  const base = { apiBaseUrl: args.apiBaseUrl, businessId: args.businessId, targetUserId: args.targetUserId };
+  try {
+    return await requestImpersonation({ ...base, jwt: await args.getJwt() });
+  } catch (e) {
+    const code = e instanceof Error ? e.message : '';
+    if (NON_RETRYABLE_CODES.has(code)) throw e;
+    try {
+      await args.refreshSession();
+    } catch {
+      /* refresh is best-effort — the retry below decides the outcome */
+    }
+    return await requestImpersonation({ ...base, jwt: await args.getJwt() });
+  }
+}
+
 /** Best-effort audit marker on exit. Failures are swallowed — the token self-expires. */
 export async function notifyStopImpersonation(args: {
   apiBaseUrl: string;

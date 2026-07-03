@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { Fragment, useCallback, useMemo } from 'react';
 import { AppProvider, useApp } from '@/lib/AppContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner';
@@ -33,7 +33,7 @@ const localStorageAdapter: SyncQueueStorage = {
 
 // Inner component so we can call useApp() inside the AppProvider.
 function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { user } = useApp();
+  const { user, business, impersonating } = useApp();
   const helpers = useMemo(() => ({
     getApiBaseUrl: () => getApiBaseUrl() || null,
     getJwt: () => getJwt().then(j => j || null).catch(() => null),
@@ -68,6 +68,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       getApiBaseUrl={helpers.getApiBaseUrl}
       getJwt={helpers.getJwt}
       userKey={user?.id ?? null}
+      businessKey={business?.id ?? null}
       onCancelImport={onCancelImport}
     >
       <div className="flex min-h-screen bg-surface">
@@ -81,7 +82,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <GoogleSyncBanner />
           </div>
           <TrialBanner />
-          {children}
+          {/* Keyed by identity: entering/leaving "Ver como" (or its auto-expiry)
+              remounts every page so no in-progress form state leaks across the
+              role switch — e.g. a half-filled "nuevo trabajo" started as the
+              member must not resurface pre-filled once back as the owner. */}
+          <Fragment key={impersonating ? `imp:${impersonating.userId}` : 'self'}>
+            {children}
+          </Fragment>
           <BillingGate />
         </main>
       </div>

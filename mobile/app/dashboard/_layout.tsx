@@ -39,6 +39,7 @@ const asyncStorageAdapter: SyncQueueStorage = {
 
 export default function DashboardLayout() {
   const user = useAuthStore(s => s.user);
+  const activeBusinessId = useAuthStore(s => s.activeBusinessId);
   const helpers = useMemo(() => ({
     getApiBaseUrl: () => getApiBaseUrl() || null,
     getJwt: () => getJwt().then(j => j || null).catch(() => null),
@@ -79,6 +80,7 @@ export default function DashboardLayout() {
       getApiBaseUrl={helpers.getApiBaseUrl}
       getJwt={helpers.getJwt}
       userKey={user?.id ?? null}
+      businessKey={activeBusinessId ?? null}
       onCancelImport={onCancelImport}
     >
       <DashboardTabs />
@@ -137,7 +139,14 @@ function DashboardTabs() {
         <GoogleSyncBanner />
       </View>
       <View style={{ flex: 1, marginTop: offset }}>
+        {/* Keyed by identity: entering/leaving "Ver como" (or its auto-expiry)
+            remounts the whole navigator so no in-progress form state leaks
+            across the role switch — e.g. a half-filled "nuevo trabajo" started
+            as the member must not resurface pre-filled once back as the owner.
+            The enter/leave flows router.replace() right after the flip, so the
+            user still lands on the intended screen. */}
         <Tabs
+          key={impersonating ? `imp:${impersonating.userId}` : 'self'}
           tabBar={props => <AnimatedDock {...props} />}
           screenOptions={{
             headerShown: false,

@@ -40,7 +40,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
 import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
-import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
+import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
 import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
@@ -393,8 +393,8 @@ export default function ClienteDetailRoute() {
           if (apiBaseUrl && jwt) {
             try {
               await triggerGoogleSyncOrThrow('delete', client.id, { apiBaseUrl, jwt });
-            } catch {
-              syncBanner.reportError('No se pudo eliminar el contacto de Google Contacts.');
+            } catch (e) {
+              syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo eliminar el contacto de Google Contacts.'));
             }
           }
           await supabase.from('clients').delete().eq('id', client.id);

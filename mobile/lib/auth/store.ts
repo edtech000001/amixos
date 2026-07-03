@@ -16,7 +16,7 @@ import {
   getImpersonation,
   startImpersonation as startImp,
   stopImpersonation as stopImp,
-  requestImpersonation,
+  requestImpersonationWithRetry,
   notifyStopImpersonation,
   type ImpersonationTarget,
 } from '@amixos/shared/lib/impersonation';
@@ -557,12 +557,15 @@ setTimeout(() => {
 async function startImpersonationAction(targetUserId: string): Promise<void> {
   const businessId = useAuthStore.getState().activeBusinessId;
   if (!businessId) throw new Error('no_business');
-  const jwt = await getJwt();
-  const grant = await requestImpersonation({
+  // Retry once through a forced session refresh — right after leaving a
+  // previous "Ver como" the admin's token can be mid-rotation, which used to
+  // fail the mint with a spurious "no se pudo iniciar" error.
+  const grant = await requestImpersonationWithRetry({
     apiBaseUrl: getApiBaseUrl(),
-    jwt,
     businessId,
     targetUserId,
+    getJwt,
+    refreshSession: () => supabase.auth.refreshSession(),
   });
   startImp({ token: grant.token, businessId, target: grant.target, expiresAt: grant.expiresAt });
 }

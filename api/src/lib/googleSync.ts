@@ -86,13 +86,20 @@ export interface OAuthCreds {
  * of credential we have by comparing the stored client_id against the
  * configured Web client.
  *
- * Returns null on failure (revoked token, network error, etc.) so callers
- * can flag the credential as needing reconnection.
+ * Distinguishes a genuinely dead credential from a transient hiccup:
+ *  - 'revoked'   → Google said invalid_grant (user revoked access, or the
+ *                  refresh token expired — e.g. OAuth app in Testing mode).
+ *                  Only this should flip the connection to "reconnect needed".
+ *  - 'transient' → 429 / 5xx / network error. Retried once with a short
+ *                  delay; if it still fails, the caller should skip this sync
+ *                  and leave the connection alone — the next sync will work.
  */
-async function refreshAccessToken(
+type RefreshResult = { token: string } | { error: 'revoked' | 'transient' };
+
+async function refreshAccessTokenDetailed(
   refreshToken: string,
   storedClientId: string | null,
-): Promise<string | null> {
+): Promise<RefreshResult> {
   const webClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const webClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   if (!webClientId || !webClientSecret) {
@@ -113,15 +120,63 @@ async function refreshAccessToken(
     params.set('client_secret', webClientSecret);
   }
 
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  });
+  const attempt = async (): Promise<RefreshResult> => {
+    let res: Response;
+    try {
+      res = await fetch(GOOGLE_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+    } catch {
+      return { error: 'transient' }; // network failure
+    }
+    if (!res.ok) {
+      // Only invalid_grant means the credential itself is dead. Everything
+      // else (rate limit, Google 5xx, malformed response) is retryable.
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      return { error: body.error === 'invalid_grant' ? 'revoked' : 'transient' };
+    }
+    const json = (await res.json()) as { access_token?: string };
+    return json.access_token ? { token: json.access_token } : { error: 'transient' };
+  };
 
-  if (!res.ok) return null;
-  const json = (await res.json()) as { access_token?: string };
-  return json.access_token ?? null;
+  const first = await attempt();
+  if (!('error' in first) || first.error === 'revoked') return first;
+  await new Promise(r => setTimeout(r, 750));
+  return attempt();
+}
+
+/**
+ * Back-compat shape for read-only/best-effort helpers (group listing, search,
+ * cleanup) where "no token" just means skip — they must NOT mark the
+ * connection as broken, so revoked/transient collapse to null here.
+ */
+async function refreshAccessToken(
+  refreshToken: string,
+  storedClientId: string | null,
+): Promise<string | null> {
+  const result = await refreshAccessTokenDetailed(refreshToken, storedClientId);
+  return 'token' in result ? result.token : null;
+}
+
+/**
+ * Refresh flow for the sync mutation paths: classifies the failure and
+ * records the right status. Revoked → mark reconnect-needed (the credential
+ * is dead until the user re-consents). Transient → record the error but keep
+ * the connection enabled; the sync is skipped and the next one will succeed.
+ */
+async function obtainAccessToken(
+  creds: OAuthCreds,
+): Promise<{ token: string } | { error: 'reconnect_required' | 'sync_transient' }> {
+  const result = await refreshAccessTokenDetailed(creds.refresh_token, creds.client_id);
+  if ('token' in result) return result;
+  if (result.error === 'revoked') {
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
+    return { error: 'reconnect_required' };
+  }
+  await recordSyncError(creds, 'Google token refresh failed temporarily; will retry on next sync');
+  return { error: 'sync_transient' };
 }
 
 /**
@@ -356,7 +411,10 @@ function buildContactPayload(
  * revoked server-side). Caller continues normally — the failed sync just
  * doesn't write a resourceName.
  */
-async function markReconnectNeeded(userId: string, message: string) {
+// NOTE: all three status writers are scoped to (user_id, business_id) — the
+// creds row is per-business (migration 031). A user-id-only filter used to
+// disable EVERY business's connection when one failed.
+async function markReconnectNeeded(creds: Pick<OAuthCreds, 'user_id' | 'business_id'>, message: string) {
   await supabase
     .from('user_oauth_credentials')
     .update({
@@ -364,20 +422,22 @@ async function markReconnectNeeded(userId: string, message: string) {
       last_sync_error: message,
       updated_at: new Date().toISOString(),
     })
-    .eq('user_id', userId);
+    .eq('user_id', creds.user_id)
+    .eq('business_id', creds.business_id);
 }
 
-async function recordSyncError(userId: string, message: string) {
+async function recordSyncError(creds: Pick<OAuthCreds, 'user_id' | 'business_id'>, message: string) {
   await supabase
     .from('user_oauth_credentials')
     .update({
       last_sync_error: message,
       updated_at: new Date().toISOString(),
     })
-    .eq('user_id', userId);
+    .eq('user_id', creds.user_id)
+    .eq('business_id', creds.business_id);
 }
 
-async function recordSyncSuccess(userId: string) {
+async function recordSyncSuccess(creds: Pick<OAuthCreds, 'user_id' | 'business_id'>) {
   await supabase
     .from('user_oauth_credentials')
     .update({
@@ -385,7 +445,8 @@ async function recordSyncSuccess(userId: string) {
       last_sync_error: null,
       updated_at: new Date().toISOString(),
     })
-    .eq('user_id', userId);
+    .eq('user_id', creds.user_id)
+    .eq('business_id', creds.business_id);
 }
 
 /**
@@ -402,11 +463,9 @@ export async function createGoogleContact(
   }
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   const { labels, notesTemplate } = await loadBusinessSyncConfig(client.business_id);
   const payload = buildContactPayload(client, creds.contact_group_id, labels, notesTemplate);
@@ -420,18 +479,18 @@ export async function createGoogleContact(
   });
 
   if (res.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API ${res.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API ${res.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${res.status}` };
   }
 
   const json = (await res.json()) as { resourceName?: string; etag?: string };
   if (!json.resourceName) {
-    await recordSyncError(creds.user_id, 'People API returned no resourceName');
+    await recordSyncError(creds, 'People API returned no resourceName');
     return { error: 'no_resource_name' };
   }
 
@@ -445,7 +504,7 @@ export async function createGoogleContact(
     })
     .eq('id', client.id);
 
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { resourceName: json.resourceName };
 }
 
@@ -546,11 +605,9 @@ export async function createClientContactGoogleContact(
   }
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   // Load the SAME notes template + labels the parent client uses, so the
   // contact's bio gets the same rendered enrichment.
@@ -566,12 +623,12 @@ export async function createClientContactGoogleContact(
   });
 
   if (res.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API (contact) ${res.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API (contact) ${res.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${res.status}` };
   }
 
@@ -585,7 +642,7 @@ export async function createClientContactGoogleContact(
     .update({ google_resource_name: json.resourceName })
     .eq('id', contact.id);
 
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { resourceName: json.resourceName };
 }
 
@@ -600,11 +657,9 @@ export async function updateClientContactGoogleContact(
   }
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   // Fetch current etag.
   const getRes = await fetch(
@@ -620,12 +675,12 @@ export async function updateClientContactGoogleContact(
     return createClientContactGoogleContact(fresh, parent, creds);
   }
   if (getRes.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!getRes.ok) {
     const text = await getRes.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${getRes.status}` };
   }
   const current = (await getRes.json()) as { etag?: string };
@@ -649,16 +704,16 @@ export async function updateClientContactGoogleContact(
   );
 
   if (updateRes.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!updateRes.ok) {
     const text = await updateRes.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${updateRes.status}` };
   }
   const updated = (await updateRes.json()) as { resourceName?: string };
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { resourceName: updated.resourceName ?? contact.google_resource_name };
 }
 
@@ -669,26 +724,24 @@ export async function deleteClientContactGoogleContact(
   if (!contact.google_resource_name) return { ok: true };
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   const res = await fetch(
     `${PEOPLE_API_BASE}/${contact.google_resource_name}:deleteContact`,
     { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (res.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!res.ok && res.status !== 404) {
     const text = await res.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API delete ${res.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API delete ${res.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${res.status}` };
   }
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { ok: true };
 }
 
@@ -723,11 +776,9 @@ export async function updateGoogleContact(
   }
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   const { labels, notesTemplate } = await loadBusinessSyncConfig(client.business_id);
   const basePayload = buildContactPayload(client, creds.contact_group_id, labels, notesTemplate);
@@ -757,12 +808,12 @@ export async function updateGoogleContact(
     );
     if (getRes.status === 404) return { recreate: true };
     if (getRes.status === 401) {
-      await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+      await markReconnectNeeded(creds, 'Token revoked, reconnect required');
       return { error: 'reconnect_required' };
     }
     if (!getRes.ok) {
       const text = await getRes.text().catch(() => '');
-      await recordSyncError(creds.user_id, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
+      await recordSyncError(creds, `People API get ${getRes.status}: ${text.slice(0, 200)}`);
       return { error: `people_api_error:${getRes.status}` };
     }
     const current = (await getRes.json()) as { etag?: string };
@@ -774,12 +825,12 @@ export async function updateGoogleContact(
   // single-API-call fast path going.
   const finalize = async (updateRes: Response): Promise<{ resourceName: string } | { error: string }> => {
     if (updateRes.status === 401) {
-      await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+      await markReconnectNeeded(creds, 'Token revoked, reconnect required');
       return { error: 'reconnect_required' };
     }
     if (!updateRes.ok) {
       const text = await updateRes.text().catch(() => '');
-      await recordSyncError(creds.user_id, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
+      await recordSyncError(creds, `People API update ${updateRes.status}: ${text.slice(0, 200)}`);
       return { error: `people_api_error:${updateRes.status}` };
     }
     const updated = (await updateRes.json()) as { resourceName?: string; etag?: string };
@@ -790,7 +841,7 @@ export async function updateGoogleContact(
         .update({ google_etag: updated.etag })
         .eq('id', client.id);
     }
-    await recordSyncSuccess(creds.user_id);
+    await recordSyncSuccess(creds);
     return { resourceName: updated.resourceName ?? client.google_resource_name! };
   };
 
@@ -858,11 +909,9 @@ export async function deleteGoogleContact(
   }
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   const res = await fetch(
     `${PEOPLE_API_BASE}/${client.google_resource_name}:deleteContact`,
@@ -873,18 +922,18 @@ export async function deleteGoogleContact(
   );
 
   if (res.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   // 404 = the contact was already gone in Google. Treat as success — our DB
   // is about to lose the row anyway. Anything else 4xx/5xx is a real error.
   if (!res.ok && res.status !== 404) {
     const text = await res.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API delete ${res.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API delete ${res.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${res.status}` };
   }
 
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { ok: true };
 }
 
@@ -902,11 +951,9 @@ export async function deleteGoogleContactByResource(
   if (!resourceName) return { ok: true };
   if (!creds.enabled) return { error: 'sync_disabled' };
 
-  const accessToken = await refreshAccessToken(creds.refresh_token, creds.client_id);
-  if (!accessToken) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
-    return { error: 'reconnect_required' };
-  }
+  const obtained = await obtainAccessToken(creds);
+  if ('error' in obtained) return { error: obtained.error };
+  const accessToken = obtained.token;
 
   const res = await fetch(`${PEOPLE_API_BASE}/${resourceName}:deleteContact`, {
     method: 'DELETE',
@@ -914,16 +961,16 @@ export async function deleteGoogleContactByResource(
   });
 
   if (res.status === 401) {
-    await markReconnectNeeded(creds.user_id, 'Token revoked, reconnect required');
+    await markReconnectNeeded(creds, 'Token revoked, reconnect required');
     return { error: 'reconnect_required' };
   }
   if (!res.ok && res.status !== 404) {
     const text = await res.text().catch(() => '');
-    await recordSyncError(creds.user_id, `People API delete ${res.status}: ${text.slice(0, 200)}`);
+    await recordSyncError(creds, `People API delete ${res.status}: ${text.slice(0, 200)}`);
     return { error: `people_api_error:${res.status}` };
   }
 
-  await recordSyncSuccess(creds.user_id);
+  await recordSyncSuccess(creds);
   return { ok: true };
 }
 
