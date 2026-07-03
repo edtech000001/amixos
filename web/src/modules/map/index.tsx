@@ -30,6 +30,7 @@ import {
   normalizeWeatherConfig,
 } from '@amixos/shared/lib/weather';
 import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/usStates';
+import { buildDateRangePresets } from '@amixos/shared/lib/dateRangePresets';
 import { buildPinMarkerIcon } from './pinIcons';
 import { MapSettingsPanel, type DeviceMapSettings } from './MapSettingsPanel';
 import { Modal } from '@/components/ui/Modal';
@@ -795,14 +796,37 @@ export default function MapModule() {
             </>
           )}
         </div>
-        {/* Weather date-range filter — appears when the calendar control is
-           toggled; hides alerts whose window falls outside [from, to]. */}
-        {weatherEnabled && weatherDateOpen ? (
-          <div className="mt-2 p-3 rounded-xl border border-gray-200 bg-white">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <label className="block text-[11px] text-gray-500 mb-1">{tdate.from}</label>
+        {/* Weather date-range filter — a proper modal (per user preference)
+           instead of an inline panel expanding from the top of the map. */}
+        <Modal
+          open={weatherEnabled && weatherDateOpen}
+          onClose={() => setWeatherDateOpen(false)}
+          title={tdate.title}
+          size="sm"
+        >
+          <div className="flex flex-col gap-4">
+            {/* Quick presets — own row above the pickers (mirrors the mobile
+               sheet). The chip matching the current range renders selected. */}
+            <div className="flex flex-wrap gap-2">
+              {buildDateRangePresets(tdate).map(p => {
+                const selected = weatherDateFrom === p.from && weatherDateTo === p.to;
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => { setWeatherDateFrom(p.from); setWeatherDateTo(p.to); }}
+                    className={`px-3.5 py-1.5 rounded-full border text-sm font-semibold transition-colors ${
+                      selected ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{tdate.from}</label>
                 <input
                   type="date"
                   value={weatherDateFrom ?? ''}
@@ -810,8 +834,8 @@ export default function MapModule() {
                   className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-              <div className="flex-1">
-                <label className="block text-[11px] text-gray-500 mb-1">{tdate.to}</label>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{tdate.to}</label>
                 <input
                   type="date"
                   value={weatherDateTo ?? ''}
@@ -819,19 +843,26 @@ export default function MapModule() {
                   className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-              {weatherDateActive ? (
-                <button
-                  onClick={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }}
-                  className="mb-1 p-1.5 text-gray-400 hover:text-gray-600"
-                  aria-label={tdate.clear}
-                  title={tdate.clear}
-                >
-                  <X size={16} />
-                </button>
-              ) : null}
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }}
+                disabled={!weatherDateActive}
+                className={`text-sm font-semibold ${weatherDateActive ? 'text-red-500 hover:text-red-600' : 'text-gray-300 cursor-default'}`}
+              >
+                {tdate.clear}
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeatherDateOpen(false)}
+                className="px-5 py-2 rounded-xl bg-primary text-sm font-semibold text-white hover:opacity-90"
+              >
+                {tdate.apply}
+              </button>
             </div>
           </div>
-        ) : null}
+        </Modal>
         {/* Storm-focus active banner — under the search bar so the
            "what's being filtered" context lives next to the filter inputs. */}
         {stormFocus && weatherEnabled ? (

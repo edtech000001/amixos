@@ -1,6 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DatePicker } from './DatePicker';
+import type { DateRangePreset } from '../lib/dateRangePresets';
 
 interface Props {
   open: boolean;
@@ -13,6 +14,12 @@ interface Props {
   toLabel: string;
   clearLabel: string;
   applyLabel: string;
+  /**
+   * Optional quick-fill presets (Hoy / Ayer / Últimos N días) rendered as a
+   * chip row above the pickers — build with buildDateRangePresets so web and
+   * mobile offer the identical set.
+   */
+  presets?: DateRangePreset[];
 }
 
 /**
@@ -34,6 +41,7 @@ export function DateRangeSheet({
   toLabel,
   clearLabel,
   applyLabel,
+  presets,
 }: Props) {
   const insets = useSafeAreaInsets();
   if (!open) return null;
@@ -58,6 +66,25 @@ export function DateRangeSheet({
             </Text>
           </Pressable>
         </View>
+
+        {/* Quick presets — own row above the pickers (mirrors the web modal).
+           The chip matching the current range renders selected. */}
+        {presets?.length ? (
+          <View className="flex-row flex-wrap gap-2 mb-4">
+            {presets.map(p => {
+              const selected = from === p.from && to === p.to;
+              return (
+                <Pressable
+                  key={p.label}
+                  onPress={() => onChange({ from: p.from, to: p.to })}
+                  className={`px-3.5 py-1.5 rounded-full border ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                >
+                  <Text className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-gray-600'}`}>{p.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View className="gap-3">
           <DatePicker label={fromLabel} value={from ?? ''} onChange={v => onChange({ from: v || null, to })} />

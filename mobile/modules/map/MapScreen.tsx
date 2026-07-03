@@ -32,6 +32,7 @@ import {
   normalizeWeatherConfig,
 } from '@amixos/shared/lib/weather';
 import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/usStates';
+import { buildDateRangePresets } from '@amixos/shared/lib/dateRangePresets';
 import { PinBadge } from '@/lib/mapPinIcons';
 import { createSupabaseClient } from '@/lib/supabase';
 import { formatRelativeLong, type RelativeTimeLabels } from '@amixos/shared/lib/format';
@@ -1036,6 +1037,7 @@ export default function MapScreen() {
         toLabel={tdate.to}
         clearLabel={tdate.clear}
         applyLabel={tdate.apply}
+        presets={buildDateRangePresets(tdate)}
       />
     </SafeAreaView>
   );

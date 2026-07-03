@@ -560,6 +560,10 @@ export type DashboardDict = {
       title: string;
       from: string;
       to: string;
+      today: string;
+      yesterday: string;
+      last2Days: string;
+      last5Days: string;
       apply: string;
       clear: string;
       summary: string;
@@ -2683,6 +2687,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Filtrar por fecha',
         from: 'Desde',
         to: 'Hasta',
+        today: 'Hoy',
+        yesterday: 'Ayer',
+        last2Days: 'Últimos 2 días',
+        last5Days: 'Últimos 5 días',
         apply: 'Aplicar filtro',
         clear: 'Borrar fechas',
         summary: '{{from}} — {{to}}',
@@ -4797,6 +4805,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Filter by date',
         from: 'From',
         to: 'To',
+        today: 'Today',
+        yesterday: 'Yesterday',
+        last2Days: 'Last 2 days',
+        last5Days: 'Last 5 days',
         apply: 'Apply filter',
         clear: 'Clear dates',
         summary: '{{from}} — {{to}}',
