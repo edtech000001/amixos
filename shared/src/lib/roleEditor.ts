@@ -26,7 +26,19 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
   'viewAllTimesheets',
   'createEstimates',
   'clockInOut',
+  'scheduleJobs',
 ];
+
+// Caps that only govern field-crew surfaces (the field home clock card, and
+// whether field crew may schedule vs record-completed-only). They're no-ops for
+// roles that already see all jobs, so the editor only shows them for 'field'.
+export const FIELD_ONLY_CAPS: CapabilityKey[] = ['clockInOut', 'scheduleJobs'];
+
+/** Whether a capability toggle is meaningful for a given role (drives editor
+ *  visibility). Field-only caps are hidden for every non-field role. */
+export function capAppliesToRole(cap: CapabilityKey, role: Role): boolean {
+  return FIELD_ONLY_CAPS.includes(cap) ? role === 'field' : true;
+}
 
 export function isRoleEditable(role: Role): boolean {
   return role !== 'owner';

@@ -204,6 +204,9 @@ export default function NuevoTrabajoRoute() {
   // and no crew-visibility toggle. Their job is forced visible-to-crew +
   // self-assigned so they can see it (RLS 044/089). Mirrors logFieldJob.
   const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  // Can this creator schedule / change status? Field crew without the toggle
+  // may only RECORD completed work — status is locked to "completed".
+  const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
   useEffect(() => {
     if (!restrictedCreator || !business || !user) { setMyEmployeeId(null); return; }
@@ -211,6 +214,11 @@ export default function NuevoTrabajoRoute() {
       .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
   }, [restrictedCreator, business?.id, user?.id]);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
+  // Field crew default a NEW job to "completed" (they log finished work).
+  useEffect(() => {
+    if (sourceId || !restrictedCreator) return;
+    setStatus('completed');
+  }, [sourceId, restrictedCreator]);
   // The job's status when the edit form loaded — used to stamp the pipeline
   // timestamp only on a real status change at save time.
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
@@ -1062,7 +1070,9 @@ export default function NuevoTrabajoRoute() {
                   </View>
                 ) : null}
               </View>
-            ) : (
+            ) : canSchedule ? (
+              /* Hidden entirely for field crew who can only log completed work
+                 (no scheduling → no status/priority). */
               <View className="flex-row gap-3 mt-3">
                 <View className="flex-1">
                   <Select
@@ -1093,7 +1103,7 @@ export default function NuevoTrabajoRoute() {
                   />
                 </View>
               </View>
-            )}
+            ) : null}
 
             {!fHidden('description') && (
             <View className="flex flex-col gap-2 mt-3">

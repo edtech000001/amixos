@@ -19,6 +19,7 @@ import {
 } from '@amixos/shared/lib/permissions';
 import {
   EDITABLE_CAPS,
+  capAppliesToRole,
   isRoleEditable,
   clonePermissions,
   equalsDefault,
@@ -198,7 +199,7 @@ export default function RolesScreen() {
 
           {/* System */}
           <Text className="text-xs font-semibold text-gray-400 uppercase mt-6 mb-1">{t.sectionSystem}</Text>
-          {EDITABLE_CAPS.map(key => (
+          {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
             <View key={key} className="flex-row items-center justify-between py-2.5 border-t border-gray-50">
               <Text className="text-sm text-gray-800 flex-1 mr-3">{t.capNames[key]}</Text>
               <CheckBox checked={draft.caps[key]} disabled={!editable} onPress={() => setCap(key, !draft.caps[key])} />

@@ -26,6 +26,7 @@ import {
 } from '@amixos/shared/lib/permissions';
 import {
   EDITABLE_CAPS,
+  capAppliesToRole,
   isRoleEditable,
   clonePermissions,
   equalsDefault,
@@ -198,7 +199,7 @@ export default function RolesSettingsPage() {
           {/* System section */}
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-6 mb-2">{t.sectionSystem}</h3>
           <div className="flex flex-col gap-1">
-            {EDITABLE_CAPS.map(key => (
+            {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
               <label key={key} className={`flex items-center justify-between py-2 ${editable ? 'cursor-pointer' : ''}`}>
                 <span className="text-sm text-gray-800">{t.capNames[key]}</span>
                 <Cell supported checked={draft.caps[key]} onChange={v => setCap(key, v)} />

@@ -404,15 +404,17 @@ export function BusinessSection() {
         operating_hours: operatingHours,
       })
       .eq('id', business.id);
-    setSaving(false);
-    setMsg({
-      text: error ? t.business.saveError : t.business.saveSuccess,
-      isError: !!error,
-    });
+    // Refetch before clearing `saving` so `dirty` clears while the pill is
+    // still disabled (prevents the pill re-appearing for a stray second tap).
     if (!error) {
       void logAudit(supabase, business.id, 'business.updated', 'business', business.id, { name });
       await refetchBusiness();
     }
+    setMsg({
+      text: error ? t.business.saveError : t.business.saveSuccess,
+      isError: !!error,
+    });
+    setSaving(false);
   };
 
   const stateOptions = [
@@ -1099,12 +1101,15 @@ export function TrabajosSection() {
       .from('businesses')
       .update({ job_pipeline_disabled: disabled })
       .eq('id', business.id);
-    setSaving(false);
+    // Refetch BEFORE clearing `saving` so the dirty snapshot updates while the
+    // header pill is still in its (disabled) saving state — otherwise the pill
+    // briefly re-appears enabled and gets a stray second tap.
+    if (!error) await refetchBusiness();
     setMsg({
       text: error ? t.pipeline.saveError : t.pipeline.saveSuccess,
       isError: !!error,
     });
-    if (!error) await refetchBusiness();
+    setSaving(false);
   };
 
   // Surface save to the page header (top-right pill) like the sibling

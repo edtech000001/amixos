@@ -176,7 +176,16 @@ function NuevoTrabajoContent() {
   // visible-to-crew + self-assigned so they can actually see it (RLS 044/089
   // hides unpublished/unassigned jobs from field). Mirrors logFieldJob.
   const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  // Can this creator schedule / change status? Field crew without the toggle
+  // may only RECORD completed work — status is locked to "completed".
+  const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+
+  // Field crew default a NEW job to "completed" (they log finished work).
+  useEffect(() => {
+    if (sourceId || !restrictedCreator) return;
+    setStatus('completed');
+  }, [sourceId, restrictedCreator]);
 
   // Default a NEW job's branch to the active branch, or the business default.
   useEffect(() => {
@@ -1053,8 +1062,9 @@ function NuevoTrabajoContent() {
                   </p>
                 )}
               </>
-            ) : (
-              /* Job: status + priority */
+            ) : canSchedule ? (
+              /* Job: status + priority. Hidden entirely for field crew who can
+                 only log completed work (no scheduling → no status/priority). */
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
@@ -1077,7 +1087,7 @@ function NuevoTrabajoContent() {
                   </select>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {!fHidden('description') && (
             <div className="flex flex-col gap-1.5">
