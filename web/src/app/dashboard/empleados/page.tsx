@@ -28,6 +28,7 @@ import {
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { fetchEmployeeLocations, employeeIdsAtLocation, setEmployeePrimaryLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   EMPLOYEE_FIELD_SECTIONS,
   EMPLOYEE_FIELDS_ALWAYS_SHOWN,
@@ -69,10 +70,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 const US_STATES = [
@@ -1048,7 +1050,22 @@ function CustomFieldInput({
   const { t: full } = useLang();
   const tc = full.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
+  const cfg = parseFieldConfig(template.field_config);
 
+  if (template.field_type === 'note') {
+    // Long free text — multiline.
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <textarea
+          rows={4}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+        />
+      </div>
+    );
+  }
   if (template.field_type === 'boolean') {
     // Three states — '', 'true', 'false'. Clicking the active button clears
     // it so the user can return to "unanswered". Required-field validation
@@ -1072,6 +1089,27 @@ function CustomFieldInput({
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {
+    // Multi-select: chips, value stored comma-joined ("A, B") so display
+    // paths read naturally. Single-select keeps the dropdown.
+    if (cfg.multi) {
+      const selected = splitMultiValue(value);
+      return (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <div className="flex flex-wrap gap-2">
+            {template.field_options.map(o => {
+              const on = selected.includes(o);
+              return (
+                <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">{label}</label>
@@ -1086,10 +1124,23 @@ function CustomFieldInput({
       </div>
     );
   }
+  if (template.field_type === 'number') {
+    // type="text" + inputMode so we can enforce numeric (and optional
+    // whole-number-only) as the user types — type="number" can't be sanitized.
+    return (
+      <Input
+        label={label}
+        type="text"
+        inputMode={cfg.integerOnly ? 'numeric' : 'decimal'}
+        value={cfg.thousands ? groupNumberString(value) : value}
+        onChange={e => onChange(sanitizeNumberInput(e.target.value, cfg.integerOnly))}
+      />
+    );
+  }
   return (
     <Input
       label={label}
-      type={template.field_type === 'date' ? 'date' : template.field_type === 'number' ? 'number' : 'text'}
+      type={template.field_type === 'date' ? 'date' : 'text'}
       value={value}
       onChange={e => onChange(e.target.value)}
     />

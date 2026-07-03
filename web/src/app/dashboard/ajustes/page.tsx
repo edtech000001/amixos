@@ -88,7 +88,7 @@ import {
   type JobAlertColor,
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
-import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
+import { moveTemplate, parseFieldConfig } from '@amixos/shared/lib/fieldTemplates';
 import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
 import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
@@ -107,10 +107,26 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
+}
+
+// Build the field_config payload from a template form. Flags only apply to
+// their matching type (integerOnly/thousands → number, multi → select).
+function buildFieldConfig(form: {
+  field_type: FieldTemplate['field_type'];
+  integer_only: boolean;
+  thousands: boolean;
+  multi: boolean;
+}): { integerOnly?: boolean; multi?: boolean; thousands?: boolean } {
+  return {
+    ...(form.integer_only && form.field_type === 'number' ? { integerOnly: true } : {}),
+    ...(form.thousands && form.field_type === 'number' ? { thousands: true } : {}),
+    ...(form.multi && form.field_type === 'select' ? { multi: true } : {}),
+  };
 }
 
 type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta' | 'soporte';
@@ -237,6 +253,7 @@ export default function AjustesPage() {
 
   const FIELD_TYPES: Record<string, string> = {
     text: t.fieldTypes.text,
+    note: t.fieldTypes.note,
     number: t.fieldTypes.number,
     date: t.fieldTypes.date,
     boolean: t.fieldTypes.boolean,
@@ -320,7 +337,7 @@ export default function AjustesPage() {
   const [addInvoiceFieldModal, setAddInvoiceFieldModal] = useState(false);
   const [editInvoiceFieldModal, setEditInvoiceFieldModal] = useState(false);
   const [editingInvoiceTpl, setEditingInvoiceTpl] = useState<FieldTemplate | null>(null);
-  const [invoiceTplForm, setInvoiceTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [invoiceTplForm, setInvoiceTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingInvoiceTpl, setSavingInvoiceTpl] = useState(false);
   const [invoiceTplError, setInvoiceTplError] = useState('');
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(
@@ -417,7 +434,7 @@ export default function AjustesPage() {
   const [addFieldModal, setAddFieldModal] = useState(false);
   const [editFieldModal, setEditFieldModal] = useState(false);
   const [editingTpl, setEditingTpl] = useState<FieldTemplate | null>(null);
-  const [tplForm, setTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [tplForm, setTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingTpl, setSavingTpl] = useState(false);
   const [tplError, setTplError] = useState('');
 
@@ -427,7 +444,7 @@ export default function AjustesPage() {
   const [addEmpFieldModal, setAddEmpFieldModal] = useState(false);
   const [editEmpFieldModal, setEditEmpFieldModal] = useState(false);
   const [editingEmpTpl, setEditingEmpTpl] = useState<FieldTemplate | null>(null);
-  const [empTplForm, setEmpTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [empTplForm, setEmpTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingEmpTpl, setSavingEmpTpl] = useState(false);
   const [empTplError, setEmpTplError] = useState('');
 
@@ -730,6 +747,7 @@ export default function AjustesPage() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbInvoiceTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('invoice_field_templates').insert(rows).select();
@@ -908,6 +926,7 @@ export default function AjustesPage() {
             field_options: tpl.field_options,
             required: tpl.required,
             sort_order: dbTemplates.length + i,
+            field_config: tpl.field_config ?? {},
           };
         });
         const { data: created, error } = await supabase
@@ -1171,6 +1190,7 @@ export default function AjustesPage() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbEmpTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('employee_field_templates').insert(rows).select();
@@ -1343,7 +1363,7 @@ export default function AjustesPage() {
   const [addJobFieldModal, setAddJobFieldModal] = useState(false);
   const [editJobFieldModal, setEditJobFieldModal] = useState(false);
   const [editingJobTpl, setEditingJobTpl] = useState<FieldTemplate | null>(null);
-  const [jobTplForm, setJobTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '' });
+  const [jobTplForm, setJobTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingJobTpl, setSavingJobTpl] = useState(false);
   const [jobTplError, setJobTplError] = useState('');
 
@@ -1445,6 +1465,7 @@ export default function AjustesPage() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbJobTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('job_field_templates').insert(rows).select();
@@ -1527,10 +1548,11 @@ export default function AjustesPage() {
       field_options: options,
       required: jobTplForm.required,
       sort_order: jobTemplates.length,
+      field_config: buildFieldConfig(jobTplForm),
     };
     setJobTemplates(prev => [...prev, newTpl]);
     setLocalJobOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setJobTplError(''); setAddJobFieldModal(false);
   };
 
@@ -1545,6 +1567,9 @@ export default function AjustesPage() {
     setJobTplForm({
       field_label: tpl.field_label, field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+      integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
+      thousands: !!parseFieldConfig(tpl.field_config).thousands,
+      multi: !!parseFieldConfig(tpl.field_config).multi,
     });
     setJobTplError('');
     setEditJobFieldModal(true);
@@ -1560,6 +1585,7 @@ export default function AjustesPage() {
       field_type: jobTplForm.field_type,
       field_options: options,
       required: jobTplForm.required,
+      field_config: buildFieldConfig(jobTplForm),
     } : tpl));
     setEditJobFieldModal(false); setEditingJobTpl(null);
   };
@@ -1796,10 +1822,11 @@ export default function AjustesPage() {
       field_options: options,
       required: tplForm.required,
       sort_order: templates.length,
+      field_config: buildFieldConfig(tplForm),
     };
     setTemplates(prev => [...prev, newTpl]);
     setLocalClientOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setTplError(''); setAddFieldModal(false);
   };
 
@@ -1814,6 +1841,9 @@ export default function AjustesPage() {
     setTplForm({
       field_label: tpl.field_label, field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+      integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
+      thousands: !!parseFieldConfig(tpl.field_config).thousands,
+      multi: !!parseFieldConfig(tpl.field_config).multi,
     });
     setTplError('');
     setEditFieldModal(true);
@@ -1829,6 +1859,7 @@ export default function AjustesPage() {
       field_type: tplForm.field_type,
       field_options: options,
       required: tplForm.required,
+      field_config: buildFieldConfig(tplForm),
     } : tpl));
     setEditFieldModal(false); setEditingTpl(null);
   };
@@ -1859,10 +1890,11 @@ export default function AjustesPage() {
       field_options: options,
       required: invoiceTplForm.required,
       sort_order: invoiceTemplates.length,
+      field_config: buildFieldConfig(invoiceTplForm),
     };
     setInvoiceTemplates(prev => [...prev, newTpl]);
     setLocalInvoiceOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setInvoiceTplError(''); setAddInvoiceFieldModal(false);
   };
 
@@ -1877,6 +1909,9 @@ export default function AjustesPage() {
     setInvoiceTplForm({
       field_label: tpl.field_label, field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+      integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
+      thousands: !!parseFieldConfig(tpl.field_config).thousands,
+      multi: !!parseFieldConfig(tpl.field_config).multi,
     });
     setInvoiceTplError('');
     setEditInvoiceFieldModal(true);
@@ -1892,6 +1927,7 @@ export default function AjustesPage() {
       field_type: invoiceTplForm.field_type,
       field_options: options,
       required: invoiceTplForm.required,
+      field_config: buildFieldConfig(invoiceTplForm),
     } : tpl));
     setEditInvoiceFieldModal(false); setEditingInvoiceTpl(null);
   };
@@ -1999,10 +2035,11 @@ export default function AjustesPage() {
       field_options: options,
       required: empTplForm.required,
       sort_order: empTemplates.length,
+      field_config: buildFieldConfig(empTplForm),
     };
     setEmpTemplates(prev => [...prev, newTpl]);
     setLocalEmpOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setEmpTplError(''); setAddEmpFieldModal(false);
   };
 
@@ -2017,6 +2054,9 @@ export default function AjustesPage() {
     setEmpTplForm({
       field_label: tpl.field_label, field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
+      integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
+      thousands: !!parseFieldConfig(tpl.field_config).thousands,
+      multi: !!parseFieldConfig(tpl.field_config).multi,
     });
     setEmpTplError('');
     setEditEmpFieldModal(true);
@@ -2032,6 +2072,7 @@ export default function AjustesPage() {
       field_type: empTplForm.field_type,
       field_options: options,
       required: empTplForm.required,
+      field_config: buildFieldConfig(empTplForm),
     } : tpl));
     setEditEmpFieldModal(false); setEditingEmpTpl(null);
   };
@@ -2298,7 +2339,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.jobsSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setJobTplError(''); setAddJobFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -2599,7 +2640,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.requiredFields.heading}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setTplError(''); setAddFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -2763,7 +2804,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.employeesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setEmpTplError(''); setAddEmpFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -3241,7 +3282,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.invoicesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '' });
+                    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setInvoiceTplError(''); setAddInvoiceFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -3441,6 +3482,33 @@ export default function AjustesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
+          {tplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.integer_only} onChange={(v) => setTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {tplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.thousands} onChange={(v) => setTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {tplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.multi} onChange={(v) => setTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Toggle checked={tplForm.required} onChange={(v) => setTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
@@ -3476,6 +3544,33 @@ export default function AjustesPage() {
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          {tplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.integer_only} onChange={(v) => setTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {tplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.thousands} onChange={(v) => setTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {tplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={tplForm.multi} onChange={(v) => setTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
@@ -3520,6 +3615,33 @@ export default function AjustesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
+          {empTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.integer_only} onChange={(v) => setEmpTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {empTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.thousands} onChange={(v) => setEmpTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {empTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.multi} onChange={(v) => setEmpTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Toggle checked={empTplForm.required} onChange={(v) => setEmpTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
@@ -3555,6 +3677,33 @@ export default function AjustesPage() {
                 value={empTplForm.options_raw}
                 onChange={e => setEmpTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          {empTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.integer_only} onChange={(v) => setEmpTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {empTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.thousands} onChange={(v) => setEmpTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {empTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={empTplForm.multi} onChange={(v) => setEmpTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
@@ -3599,6 +3748,33 @@ export default function AjustesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
+          {jobTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.integer_only} onChange={(v) => setJobTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {jobTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.thousands} onChange={(v) => setJobTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {jobTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.multi} onChange={(v) => setJobTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Toggle checked={jobTplForm.required} onChange={(v) => setJobTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
@@ -3634,6 +3810,33 @@ export default function AjustesPage() {
                 value={jobTplForm.options_raw}
                 onChange={e => setJobTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          {jobTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.integer_only} onChange={(v) => setJobTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {jobTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.thousands} onChange={(v) => setJobTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {jobTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={jobTplForm.multi} onChange={(v) => setJobTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
@@ -3678,6 +3881,33 @@ export default function AjustesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
+          {invoiceTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.integer_only} onChange={(v) => setInvoiceTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {invoiceTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.thousands} onChange={(v) => setInvoiceTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {invoiceTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.multi} onChange={(v) => setInvoiceTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Toggle checked={invoiceTplForm.required} onChange={(v) => setInvoiceTplForm(f => ({ ...f, required: v }))} />
             <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
@@ -3713,6 +3943,33 @@ export default function AjustesPage() {
                 value={invoiceTplForm.options_raw}
                 onChange={e => setInvoiceTplForm(f => ({ ...f, options_raw: e.target.value }))}
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+            </div>
+          )}
+          {invoiceTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.integer_only} onChange={(v) => setInvoiceTplForm(f => ({ ...f, integer_only: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+            </div>
+          )}
+          {invoiceTplForm.field_type === 'number' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.thousands} onChange={(v) => setInvoiceTplForm(f => ({ ...f, thousands: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+            </div>
+          )}
+          {invoiceTplForm.field_type === 'select' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle checked={invoiceTplForm.multi} onChange={(v) => setInvoiceTplForm(f => ({ ...f, multi: v }))} />
+                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+              </div>
+              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">

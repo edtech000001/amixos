@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2 } from 'lucide-react';
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { Toggle } from '@/components/ui/Toggle';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -32,10 +33,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 interface LineItem {
@@ -327,6 +329,315 @@ function NuevoTrabajoContent() {
         onChange={v => setCustomFields(f => ({ ...f, [tpl.field_key]: v }))}
       />
     ));
+
+  // Every section interleaves standard and custom fields in the saved layout
+  // order (Ajustes → Trabajos → drag to reorder), so a custom field placed
+  // between standard ones renders exactly where the user put it. Composite
+  // blocks ride on their anchor key: branch picker with 'client_id', the
+  // proposal-dates / status+priority block on 'priority', map-link+coords on
+  // 'coordinates', the city/state row on the first of job_city/job_state,
+  // and the whole lead/crew/drivers block on 'assigned_workers'.
+  const renderJobField = (k: string): React.ReactNode => {
+    if (k === 'client_id') {
+      return (
+        <Fragment key={k}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{jrl('client_id', t.clientLabel)}</label>
+            <div className="relative" ref={clientDropdownRef}>
+              <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                {selectedClient ? (
+                  <span className="text-gray-900 truncate">
+                    {selectedClient.first_name} {selectedClient.last_name}
+                    {selectedClient.company && <span className="text-gray-400"> · {selectedClient.company}</span>}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">{t.clientPlaceholder}</span>
+                )}
+                <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+              </button>
+              {clientDropdownOpen && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                      <input autoFocus type="text" placeholder={t.clientSearchPlaceholder}
+                        value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <button type="button" onClick={() => handleClientChange('')}
+                      className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                      {t.clientNone}
+                    </button>
+                    {filteredClients.map(c => (
+                      <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
+                        className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                        {c.first_name} {c.last_name}
+                        {c.company && <span className="text-gray-400 ml-1 text-sm">· {c.company}</span>}
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 && (
+                      <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.clientNoResults}</p>
+                    )}
+                  </div>
+                  <button type="button" onClick={openQuickClient}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-gray-100">
+                    {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
+                  </button>
+                </div>
+              )}
+              {clientId && (
+                <button type="button" onClick={() => handleClientChange('')}
+                  className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors">
+                  <X size={12} className="text-gray-400"/>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Branch picker — multi-location businesses only. Hidden for field
+             crew: their job auto-uses their own branch. */}
+          {locations.length >= 2 && !restrictedCreator && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
+              <select value={locationId} onChange={e => setLocationId(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="">{locale === 'es' ? 'Sin ubicación' : 'No location'}</option>
+                {locations.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </Fragment>
+      );
+    }
+    if (k === 'priority') {
+      return (
+        <Fragment key={k}>
+          {isEditProposal ? (
+            /* Proposal: issue + expiry, then project start/finish + est. hours */
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
+                <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
+                <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
+              </div>
+              {totalTimeText && (
+                <p className="text-xs text-gray-500 text-right">
+                  {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
+                </p>
+              )}
+            </>
+          ) : canSchedule ? (
+            /* Job: status + priority. Hidden entirely for field crew who can
+               only log completed work (no scheduling → no status/priority). */
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
+                <select value={status} onChange={e => setStatus(e.target.value as any)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                  <option value="posible">{tStatuses.posible}</option>
+                  <option value="scheduled">{tStatuses.scheduled}</option>
+                  <option value="in_progress">{tStatuses.in_progress}</option>
+                  <option value="completed">{tStatuses.completed}</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
+                <select value={priority} onChange={e => setPriority(e.target.value as any)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                  <option value="low">{tPriorities.low}</option>
+                  <option value="normal">{tPriorities.normal}</option>
+                  <option value="high">{tPriorities.high}</option>
+                  <option value="urgent">{tPriorities.urgent}</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
+        </Fragment>
+      );
+    }
+    if (k === 'description') {
+      if (fHidden('description')) return null;
+      return (
+        <div key={k} className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">{jrl('description', t.descriptionLabel)}</label>
+          <textarea rows={5} placeholder={t.descriptionPlaceholder}
+            value={description} onChange={e => setDescription(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+        </div>
+      );
+    }
+    // ── Location section keys ──
+    if (k === 'coordinates') {
+      if (fHidden('coordinates')) return null;
+      return (
+        <Fragment key={k}>
+          {/* "Use my location" FIRST — the most common action when creating a
+             job on-site (it also auto-runs for brand-new jobs). */}
+          <button type="button" onClick={useMyLocation} disabled={gettingLocation}
+            className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60">
+            {gettingLocation
+              ? <Loader2 size={15} className="animate-spin"/>
+              : <Navigation size={15}/>}
+            {gettingLocation ? t.gettingLocation : t.useMyLocation}
+          </button>
+
+          {/* Map link paste */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+              <Link2 size={13} className="text-gray-400"/> {jrl('coordinates', t.mapLinkLabel)}
+            </label>
+            <input type="url" placeholder={t.mapLinkPlaceholder}
+              value={mapLink} onChange={e => parseMapLink(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+            {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
+              <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
+            )}
+          </div>
+
+          {/* Coordinates — lat, lng (editable; also auto-filled by the map
+              link paste and "Use my location"). */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+              <Navigation size={13} className="text-gray-400"/> {t.coordinatesLabel}
+            </label>
+            <input type="text" inputMode="decimal" placeholder={t.coordinatesPlaceholder}
+              value={coordsText} onChange={e => onCoordsChange(e.target.value)}
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary ${coordsInvalid ? 'border-red-300' : 'border-gray-200'}`}/>
+            {coordsInvalid && (
+              <p className="text-xs text-red-500">{t.coordinatesInvalid}</p>
+            )}
+          </div>
+          <div className="border-t border-gray-100 pt-3"/>
+        </Fragment>
+      );
+    }
+    if (k === 'job_address') {
+      if (fHidden('job_address')) return null;
+      return (
+        <Input key={k} label={jrl('job_address', t.addressLabel)} placeholder={t.addressPlaceholder} value={address}
+          onChange={e => setAddress(e.target.value)}/>
+      );
+    }
+    if (k === 'job_city' || k === 'job_state') {
+      // City + state share one row — rendered at the first of the two keys
+      // in layout order; the second returns null.
+      if (fHidden('job_city') && fHidden('job_state')) return null;
+      const locKeys = fieldsInSection(jobLayout, 'location');
+      const first = locKeys.find(x => x === 'job_city' || x === 'job_state');
+      if (k !== first) return null;
+      return (
+        <div key={k} className={`grid ${!fHidden('job_city') && !fHidden('job_state') ? 'grid-cols-[1fr_120px]' : 'grid-cols-1'} gap-3`}>
+          {!fHidden('job_city') && (
+          <Input label={jrl('job_city', t.cityLabel)} placeholder={t.cityPlaceholder} value={city}
+            onChange={e => setCity(e.target.value)}/>
+          )}
+          {!fHidden('job_state') && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{jrl('job_state', t.stateLabel)}</label>
+            <select value={state} onChange={e => setState(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              <option value="">{t.stateNone}</option>
+              {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
+            </select>
+          </div>
+          )}
+        </div>
+      );
+    }
+    // ── Schedule section keys ──
+    if (k === 'scheduled_date') {
+      // "Date" is a single toggle that shows/hides both start AND end date.
+      if (fHidden('scheduled_date')) return null;
+      return (
+        <div key={k} className="grid grid-cols-2 gap-3 mt-3">
+          <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
+            onChange={e => setScheduledDate(e.target.value)}/>
+          <Input label={t.endDateLabel} type="date" value={endDate}
+            onChange={e => setEndDate(e.target.value)}/>
+        </div>
+      );
+    }
+    if (k === 'time_start') {
+      // "Time" is a single toggle gating start time, end time AND the
+      // all-day switch (which only makes sense when times are shown).
+      if (fHidden('time_start')) return null;
+      return (
+        <Fragment key={k}>
+          <div className="flex items-center justify-between mt-4">
+            <label className="text-sm font-medium text-gray-700">{t.allDayLabel}</label>
+            <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
+          </div>
+          {!allDay && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <Input label={jrl('time_start', t.timeStartLabel)} type="time" value={timeStart}
+                onChange={e => setTimeStart(e.target.value)}/>
+              <Input label={jrl('time_end', t.timeEndLabel)} type="time" value={timeEnd}
+                onChange={e => setTimeEnd(e.target.value)}/>
+            </div>
+          )}
+        </Fragment>
+      );
+    }
+    if (k === 'total_hours') {
+      // Total hours — auto from start/end (read-only) when both times are
+      // set, else manual entry. Credited to each worker in Reports.
+      if (fHidden('total_hours')) return null;
+      return (
+        <div key={k} className="mt-3">
+          <label className="block text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
+          {bothTimesSet ? (
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
+              <span>{computedHours != null ? `${computedHours} h` : '—'}</span>
+              <span className="text-xs text-gray-400">{t.totalHoursAutoHint}</span>
+            </div>
+          ) : (
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={totalHours}
+              onChange={e => setTotalHours(e.target.value.replace(/[^0-9.]/g, ''))}
+              placeholder="0"
+            />
+          )}
+          <p className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</p>
+        </div>
+      );
+    }
+    // ── Notes section key ──
+    if (k === 'internal_notes') {
+      if (!isEditProposal && fHidden('internal_notes')) return null;
+      return (
+        <div key={k} className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            {isEditProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
+          </label>
+          <textarea rows={4} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
+            value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+        </div>
+      );
+    }
+    if (k.startsWith('custom:')) {
+      const tpl = jobTemplates.find(tp => `custom:${tp.id}` === k);
+      return tpl ? (
+        <CustomFieldInput
+          key={tpl.id}
+          template={tpl}
+          value={customFields[tpl.field_key] ?? ''}
+          onChange={v => setCustomFields(f => ({ ...f, [tpl.field_key]: v }))}
+        />
+      ) : null;
+    }
+    return null;
+  };
   // Required custom fields whose section is actually rendered on this form.
   // general/location/notes/additional always render; schedule/workers only in
   // job mode (those cards don't exist for proposals).
@@ -653,6 +964,33 @@ function NuevoTrabajoContent() {
     );
   };
 
+  // Auto-fill GPS coords when CREATING a job — quiet: denied permission /
+  // failure just skips. Never runs for edit or duplicate (sourceId — those may
+  // already carry a location), and never overwrites coords the user
+  // typed/pasted while the fix was resolving.
+  const coordsTextRef = useRef('');
+  useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
+  useEffect(() => {
+    if (sourceId) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled || coordsTextRef.current.trim()) return;
+        const lat = Math.round(pos.coords.latitude * 1e6) / 1e6;
+        const lng = Math.round(pos.coords.longitude * 1e6) / 1e6;
+        setJobLat(lat);
+        setJobLng(lng);
+        setCoordsText(`${lat}, ${lng}`);
+        setCoordsInvalid(false);
+      },
+      () => { /* quiet — the user can still click "Usar mi ubicación" */ },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceId]);
+
   const toggleEmployee = (id: string) => {
     setAssignedEmployees(prev => {
       const next = prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id];
@@ -974,161 +1312,8 @@ function NuevoTrabajoContent() {
             <Input label={isEditProposal ? t.titleLabelProposal : t.titleLabelJob}
               placeholder={t.titlePlaceholder}
               value={title} onChange={e => setTitle(e.target.value)}/>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{jrl('client_id', t.clientLabel)}</label>
-              <div className="relative" ref={clientDropdownRef}>
-                <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
-                  {selectedClient ? (
-                    <span className="text-gray-900 truncate">
-                      {selectedClient.first_name} {selectedClient.last_name}
-                      {selectedClient.company && <span className="text-gray-400"> · {selectedClient.company}</span>}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">{t.clientPlaceholder}</span>
-                  )}
-                  <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
-                </button>
-                {clientDropdownOpen && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    <div className="p-2 border-b border-gray-100">
-                      <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                        <input autoFocus type="text" placeholder={t.clientSearchPlaceholder}
-                          value={clientSearch} onChange={e => setClientSearch(e.target.value)}
-                          className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
-                      </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <button type="button" onClick={() => handleClientChange('')}
-                        className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
-                        {t.clientNone}
-                      </button>
-                      {filteredClients.map(c => (
-                        <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
-                          className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
-                          {c.first_name} {c.last_name}
-                          {c.company && <span className="text-gray-400 ml-1 text-sm">· {c.company}</span>}
-                        </button>
-                      ))}
-                      {filteredClients.length === 0 && (
-                        <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.clientNoResults}</p>
-                      )}
-                    </div>
-                    <button type="button" onClick={openQuickClient}
-                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-gray-100">
-                      {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
-                    </button>
-                  </div>
-                )}
-                {clientId && (
-                  <button type="button" onClick={() => handleClientChange('')}
-                    className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors">
-                    <X size={12} className="text-gray-400"/>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Branch picker — multi-location businesses only. Hidden for field
-               crew: their job auto-uses their own branch. */}
-            {locations.length >= 2 && !restrictedCreator && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
-                <select value={locationId} onChange={e => setLocationId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                  <option value="">{locale === 'es' ? 'Sin ubicación' : 'No location'}</option>
-                  {locations.map(l => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {isEditProposal ? (
-              /* Proposal: issue + expiry, then project start/finish + est. hours */
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
-                  <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
-                  <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
-                </div>
-                {totalTimeText && (
-                  <p className="text-xs text-gray-500 text-right">
-                    {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
-                  </p>
-                )}
-              </>
-            ) : canSchedule ? (
-              /* Job: status + priority. Hidden entirely for field crew who can
-                 only log completed work (no scheduling → no status/priority). */
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
-                  <select value={status} onChange={e => setStatus(e.target.value as any)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                    <option value="posible">{tStatuses.posible}</option>
-                    <option value="scheduled">{tStatuses.scheduled}</option>
-                    <option value="in_progress">{tStatuses.in_progress}</option>
-                    <option value="completed">{tStatuses.completed}</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
-                  <select value={priority} onChange={e => setPriority(e.target.value as any)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                    <option value="low">{tPriorities.low}</option>
-                    <option value="normal">{tPriorities.normal}</option>
-                    <option value="high">{tPriorities.high}</option>
-                    <option value="urgent">{tPriorities.urgent}</option>
-                  </select>
-                </div>
-              </div>
-            ) : null}
-
-            {!fHidden('description') && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{jrl('description', t.descriptionLabel)}</label>
-              <textarea rows={5} placeholder={t.descriptionPlaceholder}
-                value={description} onChange={e => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
-            </div>
-            )}
-
-            {/* Crew visibility — when off, the job lives only on the owner's
-               scheduler. Hidden for field crew: their job is auto-published so
-               they (and any assigned crew) can see it. iOS-style segmented
-               control: active choice is the white pill above the tinted track. */}
-            {!restrictedCreator && (
-            <div className="flex flex-col gap-1 mt-1">
-              <label className="text-sm font-medium text-gray-700">{t.publishedToCrewLabel}</label>
-              <p className="text-xs text-gray-500 mb-1.5">{t.publishedToCrewHint}</p>
-              <div className="flex p-1 rounded-2xl bg-gray-100">
-                <button type="button" onClick={() => setPublishedToCrew(false)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
-                    !publishedToCrew
-                      ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  <Lock size={13} />
-                  {t.privateBadge}
-                </button>
-                <button type="button" onClick={() => setPublishedToCrew(true)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
-                    publishedToCrew
-                      ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  <Eye size={13} />
-                  {t.publicBadge}
-                </button>
-              </div>
-            </div>
-            )}
-            {renderCustomFields('general')}
+            {/* Standard + custom fields, interleaved in saved layout order. */}
+            {fieldsInSection(jobLayout, 'general').map(renderJobField)}
           </div>
         </div>
 
@@ -1141,67 +1326,8 @@ function NuevoTrabajoContent() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.locationHeading}</p>
             </div>
             <div className="flex flex-col gap-3">
-              {!fHidden('coordinates') && (
-              <>
-              {/* Map link paste */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                  <Link2 size={13} className="text-gray-400"/> {jrl('coordinates', t.mapLinkLabel)}
-                </label>
-                <input type="url" placeholder={t.mapLinkPlaceholder}
-                  value={mapLink} onChange={e => parseMapLink(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
-                {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
-                  <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
-                )}
-              </div>
-
-              {/* Coordinates — lat, lng (editable; also auto-filled by the map
-                  link paste and "Use my location"). */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                  <Navigation size={13} className="text-gray-400"/> {t.coordinatesLabel}
-                </label>
-                <input type="text" inputMode="decimal" placeholder={t.coordinatesPlaceholder}
-                  value={coordsText} onChange={e => onCoordsChange(e.target.value)}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary ${coordsInvalid ? 'border-red-300' : 'border-gray-200'}`}/>
-                {coordsInvalid && (
-                  <p className="text-xs text-red-500">{t.coordinatesInvalid}</p>
-                )}
-                <button type="button" onClick={useMyLocation} disabled={gettingLocation}
-                  className="mt-1 flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60">
-                  {gettingLocation
-                    ? <Loader2 size={15} className="animate-spin"/>
-                    : <Navigation size={15}/>}
-                  {gettingLocation ? t.gettingLocation : t.useMyLocation}
-                </button>
-              </div>
-              <div className="border-t border-gray-100 pt-3"/>
-              </>
-              )}
-              {!fHidden('job_address') && (
-              <Input label={jrl('job_address', t.addressLabel)} placeholder={t.addressPlaceholder} value={address}
-                onChange={e => setAddress(e.target.value)}/>
-              )}
-              {(!fHidden('job_city') || !fHidden('job_state')) && (
-              <div className={`grid ${!fHidden('job_city') && !fHidden('job_state') ? 'grid-cols-[1fr_120px]' : 'grid-cols-1'} gap-3`}>
-                {!fHidden('job_city') && (
-                <Input label={jrl('job_city', t.cityLabel)} placeholder={t.cityPlaceholder} value={city}
-                  onChange={e => setCity(e.target.value)}/>
-                )}
-                {!fHidden('job_state') && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{jrl('job_state', t.stateLabel)}</label>
-                  <select value={state} onChange={e => setState(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                    <option value="">{t.stateNone}</option>
-                    {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
-                  </select>
-                </div>
-                )}
-              </div>
-              )}
-              {renderCustomFields('location')}
+              {/* Standard + custom fields, interleaved in saved layout order. */}
+              {fieldsInSection(jobLayout, 'location').map(renderJobField)}
             </div>
           </div>
         )}
@@ -1213,58 +1339,11 @@ function NuevoTrabajoContent() {
               <Calendar size={15} className="text-primary"/>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
-            {/* "Date" is a single toggle that shows/hides both start AND end
-                date. */}
-            {!fHidden('scheduled_date') && (
-            <div className="grid grid-cols-2 gap-3">
-              <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
-                onChange={e => setScheduledDate(e.target.value)}/>
-              <Input label={t.endDateLabel} type="date" value={endDate}
-                onChange={e => setEndDate(e.target.value)}/>
-            </div>
-            )}
-
-            {/* "Time" is a single toggle gating start time, end time AND the
-                all-day switch (which only makes sense when times are shown). */}
-            {!fHidden('time_start') && (
-            <>
-            <div className="flex items-center justify-between mt-4">
-              <label className="text-sm font-medium text-gray-700">{t.allDayLabel}</label>
-              <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
-            </div>
-
-            {!allDay && (
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <Input label={jrl('time_start', t.timeStartLabel)} type="time" value={timeStart}
-                  onChange={e => setTimeStart(e.target.value)}/>
-                <Input label={jrl('time_end', t.timeEndLabel)} type="time" value={timeEnd}
-                  onChange={e => setTimeEnd(e.target.value)}/>
-              </div>
-            )}
-            </>
-            )}
-
-            {/* Total hours — auto from start/end (read-only) when both times are
-                set, else manual entry. Credited to each worker in Reports. */}
-            {!fHidden('total_hours') && (
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
-              {bothTimesSet ? (
-                <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
-                  <span>{computedHours != null ? `${computedHours} h` : '—'}</span>
-                  <span className="text-xs text-gray-400">{t.totalHoursAutoHint}</span>
-                </div>
-              ) : (
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={totalHours}
-                  onChange={e => setTotalHours(e.target.value.replace(/[^0-9.]/g, ''))}
-                  placeholder="0"
-                />
-              )}
-              <p className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</p>
-            </div>
+            {/* Standard + custom fields, interleaved in saved layout order.
+                Customs get an mt-3 wrapper — this card body isn't a gap
+                container like the other sections. */}
+            {fieldsInSection(jobLayout, 'schedule').map(k =>
+              k.startsWith('custom:') ? <div key={k} className="mt-3">{renderJobField(k)}</div> : renderJobField(k)
             )}
 
             {ohStatus && ohStatus.status !== 'ok' && (
@@ -1279,9 +1358,6 @@ function NuevoTrabajoContent() {
               <p className="text-xs text-gray-500 text-right mt-3">
                 {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
               </p>
-            )}
-            {customFieldsFor('schedule').length > 0 && (
-              <div className="flex flex-col gap-3 mt-3">{renderCustomFields('schedule')}</div>
             )}
           </div>
         )}
@@ -1301,6 +1377,13 @@ function NuevoTrabajoContent() {
                 </button>
               )}
             </div>
+            {/* Standard + custom fields, interleaved in saved layout order.
+                The whole lead/crew/drivers block rides on 'assigned_workers';
+                customs get an mt-4 wrapper (no gap container here). */}
+            {fieldsInSection(jobLayout, 'workers').map(k => k !== 'assigned_workers'
+              ? <div key={k} className="mt-4">{renderJobField(k)}</div>
+              : (
+              <Fragment key={k}>
             {employees.length > 0 && (
               <>
                 {/* Lead picker — searchable single-select dropdown (mirrors
@@ -1496,9 +1579,8 @@ function NuevoTrabajoContent() {
                 )}
               </div>
             )}
-            {customFieldsFor('workers').length > 0 && (
-              <div className="flex flex-col gap-3 mt-4">{renderCustomFields('workers')}</div>
-            )}
+              </Fragment>
+            ))}
           </div>
         )}
 
@@ -1644,15 +1726,8 @@ function NuevoTrabajoContent() {
                   className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
               </div>
             )}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {isEditProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
-              </label>
-              <textarea rows={4} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
-                value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
-            </div>
-            {renderCustomFields('notes')}
+            {/* Standard + custom fields, interleaved in saved layout order. */}
+            {fieldsInSection(jobLayout, 'notes').map(renderJobField)}
           </div>
         </div>
         )}
@@ -1666,6 +1741,40 @@ function NuevoTrabajoContent() {
             </p>
             <div className="flex flex-col gap-3">
               {renderCustomFields('additional')}
+            </div>
+          </div>
+        )}
+
+        {/* ── Crew visibility — LAST option of the form (per user preference).
+            When off, the job lives only on the owner's scheduler. Hidden for
+            field crew: their job is auto-published so they (and any assigned
+            crew) can see it. iOS-style segmented control. */}
+        {!restrictedCreator && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Eye size={15} className="text-primary"/>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.publishedToCrewLabel}</p>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">{t.publishedToCrewHint}</p>
+            <div className="flex p-1 rounded-2xl bg-gray-100">
+              <button type="button" onClick={() => setPublishedToCrew(false)}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
+                  !publishedToCrew
+                    ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                <Lock size={13} />
+                {t.privateBadge}
+              </button>
+              <button type="button" onClick={() => setPublishedToCrew(true)}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
+                  publishedToCrew
+                    ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                <Eye size={13} />
+                {t.publicBadge}
+              </button>
             </div>
           </div>
         )}
@@ -1757,7 +1866,19 @@ function CustomFieldInput({
   const { t: full } = useLang();
   const tc = full.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
+  const cfg = parseFieldConfig(template.field_config);
 
+  if (template.field_type === 'note') {
+    // Long free text — multiline.
+    return (
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <textarea rows={4}
+          value={value} onChange={e => onChange(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+      </div>
+    );
+  }
   if (template.field_type === 'boolean') {
     // Three states — '', 'true', 'false'. Clicking the active button clears it
     // so the user can return to "unanswered".
@@ -1780,6 +1901,27 @@ function CustomFieldInput({
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {
+    // Multi-select: chips, value stored comma-joined ("A, B") so display
+    // paths read naturally. Single-select keeps the dropdown.
+    if (cfg.multi) {
+      const selected = splitMultiValue(value);
+      return (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <div className="flex flex-wrap gap-2">
+            {template.field_options.map(o => {
+              const on = selected.includes(o);
+              return (
+                <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">{label}</label>
@@ -1794,10 +1936,23 @@ function CustomFieldInput({
       </div>
     );
   }
+  if (template.field_type === 'number') {
+    // type="text" + inputMode so we can enforce numeric (and optional
+    // whole-number-only) as the user types — type="number" can't be sanitized.
+    return (
+      <Input
+        label={label}
+        type="text"
+        inputMode={cfg.integerOnly ? 'numeric' : 'decimal'}
+        value={cfg.thousands ? groupNumberString(value) : value}
+        onChange={e => onChange(sanitizeNumberInput(e.target.value, cfg.integerOnly))}
+      />
+    );
+  }
   return (
     <Input
       label={label}
-      type={template.field_type === 'date' ? 'date' : template.field_type === 'number' ? 'number' : 'text'}
+      type={template.field_type === 'date' ? 'date' : 'text'}
       value={value}
       onChange={e => onChange(e.target.value)}
     />

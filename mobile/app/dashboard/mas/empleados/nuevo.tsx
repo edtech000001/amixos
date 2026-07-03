@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   ScrollView,
   KeyboardAvoidingView,
@@ -26,6 +27,7 @@ import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   EMPLOYEE_FIELD_SECTIONS,
   EMPLOYEE_FIELDS_ALWAYS_SHOWN,
@@ -39,10 +41,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 interface EmpForm {
@@ -471,6 +474,24 @@ function CustomFieldInput({
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
   const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
+  const cfg = parseFieldConfig(template.field_config);
+  if (template.field_type === 'note') {
+    // Long free text — multiline, grows with content.
+    return (
+      <View>
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          multiline
+          numberOfLines={4}
+          placeholderTextColor="#9CA3AF"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+          style={{ textAlignVertical: 'top' }}
+        />
+      </View>
+    );
+  }
   if (template.field_type === 'date') {
     return <DatePicker label={label} value={value} onChange={onChange} />;
   }
@@ -496,6 +517,30 @@ function CustomFieldInput({
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {
+    // Multi-select: chips, value stored comma-joined ("A, B") so display
+    // paths read naturally. Single-select keeps the dropdown.
+    if (cfg.multi) {
+      const selected = splitMultiValue(value);
+      return (
+        <View>
+          <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {template.field_options.map((o) => {
+              const on = selected.includes(o);
+              return (
+                <Pressable
+                  key={o}
+                  onPress={() => onChange(toggleMultiOption(value, o))}
+                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                >
+                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
     return (
       <Select
         label={label}
@@ -506,12 +551,13 @@ function CustomFieldInput({
       />
     );
   }
+  const isNumber = template.field_type === 'number';
   return (
     <Input
       label={label}
-      value={value}
-      onChangeText={onChange}
-      keyboardType={template.field_type === 'number' ? 'decimal-pad' : 'default'}
+      value={isNumber && cfg.thousands ? groupNumberString(value) : value}
+      onChangeText={(v) => onChange(isNumber ? sanitizeNumberInput(v, cfg.integerOnly) : v)}
+      keyboardType={isNumber ? (cfg.integerOnly ? 'number-pad' : 'decimal-pad') : 'default'}
     />
   );
 }

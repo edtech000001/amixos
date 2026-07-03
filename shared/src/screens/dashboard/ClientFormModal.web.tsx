@@ -10,6 +10,7 @@ import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
 import { usStateName } from '../../lib/usStates';
 import { parseHiddenFields, isFieldHidden } from '../../lib/fieldLayout';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '../../lib/fieldTemplates';
 import {
   CLIENT_FIELD_SECTIONS,
   CLIENT_FIELDS_ALWAYS_SHOWN,
@@ -23,9 +24,10 @@ export interface ClientFieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
+  field_config?: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 export interface ClientFormValues {
@@ -184,8 +186,43 @@ export function ClientFormModal({
   const renderCustom = (tpl: ClientFieldTemplate) => {
     const value = form.custom_fields[tpl.field_key] ?? '';
     const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+    const cfg = parseFieldConfig(tpl.field_config);
 
+    if (tpl.field_type === 'note') {
+      // Long free text — multiline.
+      return (
+        <Field key={tpl.field_key} label={labelText}>
+          <textarea
+            rows={4}
+            className={`${INPUT_CLS} resize-y`}
+            value={value}
+            onChange={e => setCustom(tpl.field_key, e.target.value)}
+          />
+        </Field>
+      );
+    }
     if (tpl.field_type === 'select' && tpl.field_options) {
+      // Multi-select: chips, value stored comma-joined ("A, B") so display
+      // paths read naturally. Single-select keeps the dropdown.
+      if (cfg.multi) {
+        const selected = splitMultiValue(value);
+        return (
+          <Field key={tpl.field_key} label={labelText}>
+            <div className="flex flex-wrap gap-2">
+              {tpl.field_options.map(o => {
+                const on = selected.includes(o);
+                return (
+                  <button key={o} type="button"
+                    onClick={() => setCustom(tpl.field_key, toggleMultiOption(value, o))}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                    {o}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        );
+      }
       return (
         <Field key={tpl.field_key} label={labelText}>
           <select
@@ -219,11 +256,26 @@ export function ClientFormModal({
         </Field>
       );
     }
+    if (tpl.field_type === 'number') {
+      // type="text" + inputMode so we can enforce numeric (and optional
+      // whole-number-only) as the user types — type="number" can't be sanitized.
+      return (
+        <Field key={tpl.field_key} label={labelText}>
+          <input
+            className={INPUT_CLS}
+            type="text"
+            inputMode={cfg.integerOnly ? 'numeric' : 'decimal'}
+            value={cfg.thousands ? groupNumberString(value) : value}
+            onChange={e => setCustom(tpl.field_key, sanitizeNumberInput(e.target.value, cfg.integerOnly))}
+          />
+        </Field>
+      );
+    }
     return (
       <Field key={tpl.field_key} label={labelText}>
         <input
           className={INPUT_CLS}
-          type={tpl.field_type === 'date' ? 'date' : tpl.field_type === 'number' ? 'number' : 'text'}
+          type={tpl.field_type === 'date' ? 'date' : 'text'}
           value={value}
           onChange={e => setCustom(tpl.field_key, e.target.value)}
         />

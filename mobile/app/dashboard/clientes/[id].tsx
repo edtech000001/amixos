@@ -50,10 +50,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean } | null;
 }
 
 interface Client {

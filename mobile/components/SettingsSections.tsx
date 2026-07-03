@@ -55,7 +55,7 @@ import {
 } from '@amixos/shared/lib/subscription';
 import { PLANS } from '@amixos/shared/lib/plans';
 import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
-import { moveTemplate } from '@amixos/shared/lib/fieldTemplates';
+import { moveTemplate, parseFieldConfig } from '@amixos/shared/lib/fieldTemplates';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import {
   JOB_ALERT_COLORS,
@@ -133,7 +133,7 @@ import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
 import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink } from 'lucide-react-native';
 
-type FieldType = 'text' | 'number' | 'date' | 'boolean' | 'select';
+type FieldType = 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
 
 interface FieldTemplate {
   id: string;
@@ -143,6 +143,7 @@ interface FieldTemplate {
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 const PIPELINE_STEP_KEYS = [
@@ -721,12 +722,13 @@ export function FacturasSection() {
     field_options: string[] | null;
     required: boolean;
     field_key: string;
+    field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => {
     if (editing) {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required }
+            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -739,6 +741,7 @@ export function FacturasSection() {
         field_options: data.field_options,
         required: data.required,
         sort_order: templates.length,
+        field_config: data.field_config,
       };
       setTemplates((prev) => [...prev, newTpl]);
       setLocalOrder((prev) => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
@@ -778,6 +781,7 @@ export function FacturasSection() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('invoice_field_templates').insert(rows).select();
@@ -1286,6 +1290,7 @@ export function TrabajosFieldsSection() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('job_field_templates').insert(rows).select();
@@ -1417,12 +1422,13 @@ export function TrabajosFieldsSection() {
     field_options: string[] | null;
     required: boolean;
     field_key: string;
+    field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => {
     if (editing) {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required }
+            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -1435,6 +1441,7 @@ export function TrabajosFieldsSection() {
         field_options: data.field_options,
         required: data.required,
         sort_order: templates.length,
+        field_config: data.field_config,
       };
       setTemplates((prev) => [...prev, newTpl]);
       setLocalOrder((prev) => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
@@ -2046,6 +2053,7 @@ export function ClientesSection() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('client_field_templates').insert(rows).select();
@@ -2191,6 +2199,7 @@ export function ClientesSection() {
     field_options: string[] | null;
     required: boolean;
     field_key: string;
+    field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => {
     if (editing) {
       setTemplates((prev) =>
@@ -2202,6 +2211,7 @@ export function ClientesSection() {
                 field_type: data.field_type,
                 field_options: data.field_options,
                 required: data.required,
+                field_config: data.field_config,
               }
             : tpl,
         ),
@@ -2215,6 +2225,7 @@ export function ClientesSection() {
         field_options: data.field_options,
         required: data.required,
         sort_order: templates.length,
+        field_config: data.field_config,
       };
       setTemplates((prev) => [...prev, newTpl]);
       setLocalOrder((prev) =>
@@ -2532,6 +2543,7 @@ export function EmpleadosSection() {
           field_options: tpl.field_options,
           required: tpl.required,
           sort_order: dbTemplates.length + i,
+          field_config: tpl.field_config ?? {},
         }));
         const { data: created, error } = await supabase
           .from('employee_field_templates').insert(rows).select();
@@ -2669,12 +2681,13 @@ export function EmpleadosSection() {
     field_options: string[] | null;
     required: boolean;
     field_key: string;
+    field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => {
     if (editing) {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required }
+            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -2687,6 +2700,7 @@ export function EmpleadosSection() {
         field_options: data.field_options,
         required: data.required,
         sort_order: templates.length,
+        field_config: data.field_config,
       };
       setTemplates((prev) => [...prev, newTpl]);
       setLocalOrder((prev) => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
@@ -2825,6 +2839,7 @@ function FieldTemplateModal({
     field_options: string[] | null;
     required: boolean;
     field_key: string;
+    field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => void;
 }) {
   const { t: full } = useLang();
@@ -2834,6 +2849,9 @@ function FieldTemplateModal({
   const [type, setType] = useState<FieldType>('text');
   const [optionsRaw, setOptionsRaw] = useState('');
   const [required, setRequired] = useState(false);
+  const [integerOnly, setIntegerOnly] = useState(false);
+  const [thousands, setThousands] = useState(false);
+  const [multi, setMulti] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -2842,17 +2860,25 @@ function FieldTemplateModal({
       setType(editing.field_type);
       setRequired(editing.required);
       setOptionsRaw(editing.field_options?.join('\n') ?? '');
+      const cfg = parseFieldConfig(editing.field_config);
+      setIntegerOnly(cfg.integerOnly === true);
+      setThousands(cfg.thousands === true);
+      setMulti(cfg.multi === true);
     } else {
       setLabel('');
       setType('text');
       setRequired(false);
       setOptionsRaw('');
+      setIntegerOnly(false);
+      setThousands(false);
+      setMulti(false);
     }
     setError('');
   }, [editing, open]);
 
   const FIELD_TYPE_OPTIONS = [
     { value: 'text', label: t.fieldTypes.text },
+    { value: 'note', label: t.fieldTypes.note },
     { value: 'number', label: t.fieldTypes.number },
     { value: 'date', label: t.fieldTypes.date },
     { value: 'boolean', label: t.fieldTypes.boolean },
@@ -2873,12 +2899,17 @@ function FieldTemplateModal({
       type === 'select'
         ? optionsRaw.split('\n').map((s) => s.trim()).filter(Boolean)
         : null;
+    const field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } = {};
+    if (type === 'number' && integerOnly) field_config.integerOnly = true;
+    if (type === 'number' && thousands) field_config.thousands = true;
+    if (type === 'select' && multi) field_config.multi = true;
     onSubmit({
       field_label: label.trim(),
       field_type: type,
       field_options: options,
       required,
       field_key: key,
+      field_config,
     });
   };
 
@@ -2916,6 +2947,36 @@ function FieldTemplateModal({
               style={{ minHeight: 80, textAlignVertical: 'top' }}
             />
             <Text className="text-xs text-gray-400 mt-1">{t.customFields.optionsHint}</Text>
+          </View>
+        ) : null}
+
+        {type === 'select' ? (
+          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-gray-900">{t.customFields.multiToggleLabel}</Text>
+              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.multiHint}</Text>
+            </View>
+            <Toggle value={multi} onValueChange={setMulti} />
+          </View>
+        ) : null}
+
+        {type === 'number' ? (
+          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-gray-900">{t.customFields.integerOnlyToggleLabel}</Text>
+              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.integerOnlyHint}</Text>
+            </View>
+            <Toggle value={integerOnly} onValueChange={setIntegerOnly} />
+          </View>
+        ) : null}
+
+        {type === 'number' ? (
+          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-gray-900">{t.customFields.thousandsToggleLabel}</Text>
+              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.thousandsHint}</Text>
+            </View>
+            <Toggle value={thousands} onValueChange={setThousands} />
           </View>
         ) : null}
 

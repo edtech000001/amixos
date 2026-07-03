@@ -29,6 +29,7 @@ import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   INVOICE_FIELD_SECTIONS,
   INVOICE_FIELDS_ALWAYS_SHOWN,
@@ -48,10 +49,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 interface LineItem {
@@ -248,10 +250,52 @@ export default function NuevaFacturaRoute() {
   const renderCustomField = (tpl: FieldTemplate) => {
     const value = customFields[tpl.field_key] ?? '';
     const labelText = `${tpl.field_label}${tpl.required ? ' *' : ''}`;
+    const cfg = parseFieldConfig(tpl.field_config);
     const setVal = (v: string) =>
       setCustomFields(prev => ({ ...prev, [tpl.field_key]: v }));
 
+    if (tpl.field_type === 'note') {
+      // Long free text — multiline, grows with content.
+      return (
+        <View key={tpl.field_key}>
+          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <TextInput
+            value={value}
+            onChangeText={setVal}
+            multiline
+            numberOfLines={4}
+            placeholderTextColor="#9CA3AF"
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+            style={{ textAlignVertical: 'top' }}
+          />
+        </View>
+      );
+    }
     if (tpl.field_type === 'select' && tpl.field_options) {
+      // Multi-select: chips, value stored comma-joined ("A, B") so display
+      // paths read naturally. Single-select keeps the dropdown.
+      if (cfg.multi) {
+        const selected = splitMultiValue(value);
+        return (
+          <View key={tpl.field_key}>
+            <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {tpl.field_options.map(o => {
+                const on = selected.includes(o);
+                return (
+                  <Pressable
+                    key={o}
+                    onPress={() => setVal(toggleMultiOption(value, o))}
+                    className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                  >
+                    <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        );
+      }
       return (
         <Select
           key={tpl.field_key}
@@ -295,13 +339,14 @@ export default function NuevaFacturaRoute() {
     if (tpl.field_type === 'date') {
       return <DatePicker key={tpl.field_key} label={labelText} value={value} onChange={setVal} />;
     }
+    const isNumber = tpl.field_type === 'number';
     return (
       <Input
         key={tpl.field_key}
         label={labelText}
-        value={value}
-        onChangeText={setVal}
-        keyboardType={tpl.field_type === 'number' ? 'numeric' : 'default'}
+        value={isNumber && cfg.thousands ? groupNumberString(value) : value}
+        onChangeText={v => setVal(isNumber ? sanitizeNumberInput(v, cfg.integerOnly) : v)}
+        keyboardType={isNumber ? (cfg.integerOnly ? 'number-pad' : 'numeric') : 'default'}
       />
     );
   };
@@ -647,26 +692,34 @@ export default function NuevaFacturaRoute() {
             </View>
           </Section>
 
-          {/* Notes section — built-in notes (gated) + notes-assigned customs. */}
+          {/* Notes section — built-in notes (gated) + notes-assigned customs,
+             interleaved in saved layout order. */}
           {(!fHidden('notes') || customFieldsFor('notes').length > 0) && (
           <Section title={sectionLabel.notes} icon={<FileText size={14} color="#4F46E5" />}>
-            {!fHidden('notes') && (
-              <TextInput
-                value={notes}
-                onChangeText={setNotes}
-                placeholder={t.notesPlaceholder}
-                placeholderTextColor="#9CA3AF"
-                multiline
-                numberOfLines={3}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
-                style={{ textAlignVertical: 'top' }}
-              />
-            )}
-            {customFieldsFor('notes').length > 0 ? (
-              <View className="gap-3 mt-3">
-                {customFieldsFor('notes').map(renderCustomField)}
-              </View>
-            ) : null}
+            <View className="gap-3">
+              {invoiceFieldsInSection(invoiceLayout, 'notes').map(k => {
+                if (k.startsWith('custom:')) {
+                  const tpl = templates.find(tp => `custom:${tp.id}` === k);
+                  return tpl ? renderCustomField(tpl) : null;
+                }
+                if (k === 'notes' && !fHidden('notes')) {
+                  return (
+                    <TextInput
+                      key={k}
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder={t.notesPlaceholder}
+                      placeholderTextColor="#9CA3AF"
+                      multiline
+                      numberOfLines={3}
+                      className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                      style={{ textAlignVertical: 'top' }}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </View>
           </Section>
           )}
 

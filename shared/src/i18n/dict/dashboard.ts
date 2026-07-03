@@ -1218,6 +1218,7 @@ export type DashboardDict = {
     discardBtn: string;
     fieldTypes: {
       text: string;
+      note: string;
       number: string;
       date: string;
       boolean: string;
@@ -1393,6 +1394,12 @@ export type DashboardDict = {
       optionsHint: string;
       optionsPlaceholder: string;
       requiredToggleLabel: string;
+      integerOnlyToggleLabel: string;
+      integerOnlyHint: string;
+      thousandsToggleLabel: string;
+      thousandsHint: string;
+      multiToggleLabel: string;
+      multiHint: string;
       addFieldBtn: string;
       updateFieldBtn: string;
       errorNameRequired: string;
@@ -3317,6 +3324,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       discardBtn: 'Descartar',
       fieldTypes: {
         text: 'Texto',
+        note: 'Nota (texto largo)',
         number: 'Número',
         date: 'Fecha',
         boolean: 'Sí / No',
@@ -3501,6 +3509,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         optionsHint: '(una por línea)',
         optionsPlaceholder: 'Opción 1\nOpción 2\nOpción 3',
         requiredToggleLabel: 'Campo requerido',
+        integerOnlyToggleLabel: 'Solo números enteros',
+        integerOnlyHint: 'Sin decimales (ej. 5, no 5.5)',
+        thousandsToggleLabel: 'Separador de miles',
+        thousandsHint: 'Muestra 1,000 en vez de 1000',
+        multiToggleLabel: 'Permitir varias opciones',
+        multiHint: 'Se pueden marcar varias a la vez',
         addFieldBtn: 'Agregar campo',
         updateFieldBtn: 'Actualizar campo',
         errorNameRequired: 'El nombre del campo es requerido',
@@ -5424,6 +5438,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       discardBtn: 'Discard',
       fieldTypes: {
         text: 'Text',
+        note: 'Note (long text)',
         number: 'Number',
         date: 'Date',
         boolean: 'Yes / No',
@@ -5608,6 +5623,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         optionsHint: '(one per line)',
         optionsPlaceholder: 'Option 1\nOption 2\nOption 3',
         requiredToggleLabel: 'Required field',
+        integerOnlyToggleLabel: 'Whole numbers only',
+        integerOnlyHint: 'No decimals (e.g. 5, not 5.5)',
+        thousandsToggleLabel: 'Thousands separator',
+        thousandsHint: 'Shows 1,000 instead of 1000',
+        multiToggleLabel: 'Allow multiple options',
+        multiHint: 'Several can be selected at once',
         addFieldBtn: 'Add field',
         updateFieldBtn: 'Update field',
         errorNameRequired: 'Field name is required',

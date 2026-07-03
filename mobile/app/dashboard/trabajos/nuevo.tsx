@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
 import { UserPlus } from 'lucide-react-native';
@@ -74,10 +75,11 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
-  field_type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
   sort_order: number;
+  field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean } | null;
 }
 
 const US_STATES = [
@@ -443,6 +445,38 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
+  // Auto-fill GPS coords when CREATING a job — the crew is usually standing
+  // at the job site. Quiet: denied permission / GPS failure just skips. Never
+  // runs for edit or duplicate (those may already carry a location), and never
+  // overwrites coords the user typed/pasted while the fix was resolving.
+  const coordsTextRef = useRef('');
+  useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
+  useEffect(() => {
+    if (editId || duplicate) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status: perm } = await Location.requestForegroundPermissionsAsync();
+        if (perm !== 'granted' || cancelled) return;
+        setGettingLocation(true);
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (cancelled || coordsTextRef.current.trim()) return;
+        const lat = Math.round(pos.coords.latitude * 1e6) / 1e6;
+        const lng = Math.round(pos.coords.longitude * 1e6) / 1e6;
+        setJobLat(lat);
+        setJobLng(lng);
+        setCoordsText(`${lat}, ${lng}`);
+        setCoordsInvalid(false);
+      } catch {
+        /* quiet — the user can still tap "Usar mi ubicación" */
+      } finally {
+        if (!cancelled) setGettingLocation(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, duplicate]);
+
   // Try to pull coords from a map URL. Returns true when successful.
   // Address / city / state are NOT auto-filled — Google's /place/ slug puts
   // a business name, address, city, state, country in unpredictable order,
@@ -521,6 +555,517 @@ export default function NuevoTrabajoRoute() {
         onChange={(v) => setCustomFields((f) => ({ ...f, [tpl.field_key]: v }))}
       />
     ));
+
+  // Every section interleaves standard and custom fields in the saved layout
+  // order (Ajustes → Trabajos → drag to reorder), so a custom field placed
+  // between standard ones renders exactly where the user put it. Composite
+  // blocks ride on their anchor key: branch picker with 'client_id', the
+  // proposal-dates / status+priority block on 'priority', map-link+coords on
+  // 'coordinates', the city/state row on the first of job_city/job_state,
+  // and the whole lead/crew/drivers block on 'assigned_workers'.
+  const renderJobField = (k: string): React.ReactNode => {
+    if (k === 'client_id') {
+      return (
+        <Fragment key={k}>
+          <View className="flex flex-col gap-2 mt-3">
+            <Text className="text-sm font-semibold text-gray-700">{jrl('client_id', t.clientLabel)}</Text>
+            <Pressable
+              onPress={() => setClientPickerOpen(true)}
+              className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+            >
+              {selectedClient ? (
+                <Text className="text-base text-gray-900 flex-1" numberOfLines={1}>
+                  {selectedClient.first_name} {selectedClient.last_name}
+                  {selectedClient.company ? ` · ${selectedClient.company}` : ''}
+                </Text>
+              ) : (
+                <Text className="text-base text-gray-400 flex-1">{t.clientPlaceholder}</Text>
+              )}
+              {clientId ? (
+                <Pressable
+                  onPress={() => setClientId('')}
+                  hitSlop={8}
+                  className="mr-2 p-1 rounded-lg"
+                >
+                  <X size={14} color="#9CA3AF" />
+                </Pressable>
+              ) : null}
+              <ChevronDown size={16} color="#9CA3AF" />
+            </Pressable>
+          </View>
+
+          {/* Branch picker — multi-location businesses only. Hidden for field
+             crew: their job auto-uses their own branch. */}
+          {locations.length >= 2 && !restrictedCreator ? (
+            <View className="flex flex-col gap-2 mt-3">
+              <Text className="text-sm font-semibold text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {[{ id: '', name: locale === 'es' ? 'Sin ubicación' : 'No location' }, ...locations].map((l) => {
+                  const selected = locationId === l.id;
+                  return (
+                    <Pressable
+                      key={l.id || 'none'}
+                      onPress={() => setLocationId(l.id)}
+                      className={`rounded-full border px-4 py-2 ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                    >
+                      <Text className={`text-sm font-medium ${selected ? 'text-primary' : 'text-gray-600'}`}>{l.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </Fragment>
+      );
+    }
+    if (k === 'priority') {
+      return (
+        <Fragment key={k}>
+          {isProposal ? (
+            <View className="mt-3 gap-3">
+              <DatePicker label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
+              <DatePicker label={t.expiryDateLabel} value={expiryDate} onChange={setExpiryDate} />
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <DatePicker
+                    label={t.projectStartLabel}
+                    value={scheduledDate}
+                    onChange={setScheduledDate}
+                  />
+                </View>
+                <View className="flex-1">
+                  <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+                </View>
+              </View>
+              {totalTimeText ? (
+                <View className="flex-row justify-end items-baseline gap-1.5">
+                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                  <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : canSchedule ? (
+            /* Hidden entirely for field crew who can only log completed work
+               (no scheduling → no status/priority). */
+            <View className="flex-row gap-3 mt-3">
+              <View className="flex-1">
+                <Select
+                  label={t.statusLabel}
+                  value={status}
+                  onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress' | 'completed')}
+                  options={[
+                    { value: 'posible', label: tStatuses.posible },
+                    { value: 'scheduled', label: tStatuses.scheduled },
+                    { value: 'in_progress', label: tStatuses.in_progress },
+                    { value: 'completed', label: tStatuses.completed },
+                  ]}
+                />
+              </View>
+              <View className="flex-1">
+                <Select
+                  label={t.priorityLabel}
+                  value={priority}
+                  onValueChange={(v) =>
+                    setPriority(v as 'low' | 'normal' | 'high' | 'urgent')
+                  }
+                  options={[
+                    { value: 'low', label: tPriorities.low },
+                    { value: 'normal', label: tPriorities.normal },
+                    { value: 'high', label: tPriorities.high },
+                    { value: 'urgent', label: tPriorities.urgent },
+                  ]}
+                />
+              </View>
+            </View>
+          ) : null}
+        </Fragment>
+      );
+    }
+    if (k === 'description') {
+      if (fHidden('description')) return null;
+      return (
+        <View key={k} className="flex flex-col gap-2 mt-3">
+          <Text className="text-sm font-semibold text-gray-700">{jrl('description', t.descriptionLabel)}</Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder={t.descriptionPlaceholder}
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={3}
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+            style={{ textAlignVertical: 'top' }}
+          />
+        </View>
+      );
+    }
+    // ── Location section keys ──
+    if (k === 'coordinates') {
+      if (fHidden('coordinates')) return null;
+      return (
+        <Fragment key={k}>
+          {/* "Use my location" FIRST — the most common action when creating a
+             job on-site (it also auto-runs for brand-new jobs). */}
+          <Pressable
+            onPress={useMyLocation}
+            disabled={gettingLocation}
+            className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/5 py-3"
+          >
+            {gettingLocation ? (
+              <ActivityIndicator size="small" color="#4F46E5" />
+            ) : (
+              <Navigation size={15} color="#4F46E5" />
+            )}
+            <Text className="text-sm font-semibold text-primary">
+              {gettingLocation ? t.gettingLocation : t.useMyLocation}
+            </Text>
+          </Pressable>
+
+          {/* Map link paste — auto-fills address/city/state */}
+          <View className="flex flex-col gap-2 mt-3">
+            <View className="flex-row items-center gap-1.5">
+              <Link2 size={13} color="#9CA3AF" />
+              <Text className="text-sm font-semibold text-gray-700">{jrl('coordinates', t.mapLinkLabel)}</Text>
+            </View>
+            <TextInput
+              value={mapLink}
+              onChangeText={parseMapLink}
+              placeholder={t.mapLinkPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
+            />
+            {mapLinkUnrecognized ? (
+              <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
+            ) : null}
+          </View>
+
+          {/* Coordinates — lat, lng */}
+          <View className="flex flex-col gap-2 mt-3">
+            <View className="flex-row items-center gap-1.5">
+              <Navigation size={13} color="#9CA3AF" />
+              <Text className="text-sm font-semibold text-gray-700">{t.coordinatesLabel}</Text>
+            </View>
+            <TextInput
+              value={coordsText}
+              onChangeText={onCoordsChange}
+              placeholder={t.coordinatesPlaceholder}
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              className={`rounded-2xl border bg-white px-4 py-3 text-base text-gray-900 ${
+                coordsInvalid ? 'border-red-300' : 'border-gray-200'
+              }`}
+            />
+            {coordsInvalid ? (
+              <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
+            ) : null}
+          </View>
+        </Fragment>
+      );
+    }
+    if (k === 'job_address') {
+      if (fHidden('job_address')) return null;
+      return (
+        <View key={k} className="mt-3">
+          <Input
+            label={jrl('job_address', t.addressLabel)}
+            placeholder={t.addressPlaceholder}
+            value={address}
+            onChangeText={setAddress}
+          />
+        </View>
+      );
+    }
+    if (k === 'job_city' || k === 'job_state') {
+      // City + state share one row — rendered at the first of the two keys
+      // in layout order; the second returns null.
+      if (fHidden('job_city') && fHidden('job_state')) return null;
+      const locKeys = fieldsInSection(jobLayout, 'location');
+      const first = locKeys.find((x) => x === 'job_city' || x === 'job_state');
+      if (k !== first) return null;
+      return (
+        <View key={k} className="flex-row gap-3 mt-3">
+          {!fHidden('job_city') && (
+          <View className="flex-1">
+            <Input
+              label={jrl('job_city', t.cityLabel)}
+              placeholder={t.cityPlaceholder}
+              value={city}
+              onChangeText={setCity}
+            />
+          </View>
+          )}
+          {!fHidden('job_state') && (
+          <View style={fHidden('job_city') ? { flex: 1 } : { width: 110 }}>
+            <Select
+              label={jrl('job_state', t.stateLabel)}
+              value={state}
+              onValueChange={setState}
+              placeholder={t.stateNone}
+              searchable
+              options={[
+                // "—" first so a previously-picked state can be cleared.
+                { value: '', label: t.stateNone },
+                ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) })),
+              ]}
+            />
+          </View>
+          )}
+        </View>
+      );
+    }
+    // ── Schedule section keys ──
+    if (k === 'scheduled_date') {
+      // "Date" is a single toggle that shows/hides both start AND end date.
+      if (fHidden('scheduled_date')) return null;
+      return (
+        <View key={k} className="flex-row gap-3 mt-3">
+          <View className="flex-1">
+            <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
+          </View>
+          <View className="flex-1">
+            <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+          </View>
+        </View>
+      );
+    }
+    if (k === 'time_start') {
+      // "Time" is a single toggle gating start time, end time AND the
+      // all-day switch (which only makes sense when times are shown).
+      if (fHidden('time_start')) return null;
+      return (
+        <Fragment key={k}>
+          <View className="mt-4 flex-row items-center justify-between">
+            <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
+            <Toggle value={allDay} onValueChange={setAllDay} />
+          </View>
+          {!allDay ? (
+            <View className="flex-row gap-3 mt-3">
+              <View className="flex-1">
+                <DatePicker
+                  label={jrl('time_start', t.timeStartLabel)}
+                  mode="time"
+                  value={timeStart}
+                  onChange={setTimeStart}
+                />
+              </View>
+              <View className="flex-1">
+                <DatePicker
+                  label={jrl('time_end', t.timeEndLabel)}
+                  mode="time"
+                  value={timeEnd}
+                  onChange={setTimeEnd}
+                />
+              </View>
+            </View>
+          ) : null}
+        </Fragment>
+      );
+    }
+    if (k === 'total_hours') {
+      // Total hours — auto from start/end (read-only) when both times are
+      // set, else manual entry. Credited to each worker in Reports.
+      if (fHidden('total_hours')) return null;
+      return (
+        <View key={k} className="mt-3">
+          <Text className="text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
+          {bothTimesSet ? (
+            <View className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 flex-row items-center justify-between">
+              <Text className="text-base text-gray-500">
+                {computedHours != null ? `${computedHours} h` : '—'}
+              </Text>
+              <Text className="text-xs text-gray-400">{t.totalHoursAutoHint}</Text>
+            </View>
+          ) : (
+            <Input
+              value={totalHours}
+              onChangeText={(v) => setTotalHours(v.replace(/[^0-9.]/g, ''))}
+              keyboardType="decimal-pad"
+              placeholder="0"
+            />
+          )}
+          <Text className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</Text>
+        </View>
+      );
+    }
+    // ── Workers section key (whole lead/crew/drivers block) ──
+    if (k === 'assigned_workers') {
+      return (
+        <Fragment key={k}>
+          {employees.length > 0 ? (
+            <>
+              {/* Crew Finder — suggest nearest + available crew for this job. */}
+              <Pressable
+                onPress={() => setCrewFinderOpen(true)}
+                className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
+              >
+                <Navigation size={15} color="#4F46E5" />
+                <Text className="text-sm font-semibold text-primary">{full.dashboard.crewFinder.openButton}</Text>
+              </Pressable>
+              {/* Lead picker — one designated lead (crew mode only). */}
+              {business?.job_crew_mode !== false ? (
+                <View className="mb-4">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.leadLabel}</Text>
+                  <Pressable
+                    onPress={() => { setLeadSearch(''); setLeadPickerOpen(true); }}
+                    className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                  >
+                    <Text className={`text-base flex-1 ${leadEmployee ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                      {leadEmployee ? `${leadEmployee.first_name} ${leadEmployee.last_name}` : t.leadNone}
+                    </Text>
+                    <ChevronDown size={16} color="#9CA3AF" />
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {/* Crew — searchable multi-select. The lead is shown in its own
+                 picker above and excluded here. */}
+              <View className="mb-3">
+                {business?.job_crew_mode !== false ? (
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.crewLabel}</Text>
+                ) : null}
+                <Pressable
+                  onPress={() => { setCrewSearch(''); setCrewPickerOpen(true); }}
+                  className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                >
+                  <Text className={`text-base flex-1 ${assignedEmployees.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                    {assignedEmployees.length > 0
+                      ? t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))
+                      : t.crewPlaceholder}
+                  </Text>
+                  <ChevronDown size={16} color="#9CA3AF" />
+                </Pressable>
+                {assignedEmployees.length > 0 ? (
+                  <View className="flex-row flex-wrap gap-2 mt-2">
+                    {employees
+                      .filter((emp) => assignedEmployees.includes(emp.id))
+                      .map((emp) => (
+                        <Pressable
+                          key={emp.id}
+                          onPress={() => toggleEmployee(emp.id)}
+                          className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
+                        >
+                          <Text className="text-xs font-medium text-primary">
+                            {emp.first_name} {emp.last_name}
+                          </Text>
+                          <X size={12} color="#4F46E5" />
+                        </Pressable>
+                      ))}
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+
+          {/* Drivers — optional multi-select (like crew). Each driver is
+              credited driverHours on top of the job's total hours. */}
+          {employees.length > 0 ? (
+            <View className="mt-4">
+              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverLabel}</Text>
+              <Pressable
+                onPress={() => { setDriverSearch(''); setDriverPickerOpen(true); }}
+                className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+              >
+                <Text className={`text-base flex-1 ${driverEmployeeIds.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                  {driverEmployeeIds.length > 0
+                    ? t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))
+                    : t.driverNone}
+                </Text>
+                <ChevronDown size={16} color="#9CA3AF" />
+              </Pressable>
+              {driverEmployeeIds.length > 0 ? (
+                <View className="flex-row flex-wrap gap-2 mt-2">
+                  {employees
+                    .filter((emp) => driverEmployeeIds.includes(emp.id))
+                    .map((emp) => (
+                      <Pressable
+                        key={emp.id}
+                        onPress={() => toggleDriver(emp.id)}
+                        className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
+                      >
+                        <Text className="text-xs font-medium text-primary">
+                          {emp.first_name} {emp.last_name}
+                        </Text>
+                        <X size={12} color="#4F46E5" />
+                      </Pressable>
+                    ))}
+                </View>
+              ) : null}
+              {driverEmployeeIds.length > 0 ? (
+                <View className="mt-3">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverHoursLabel}</Text>
+                  <Input
+                    value={driverHours}
+                    onChangeText={(v) => setDriverHours(v.replace(/[^0-9.]/g, ''))}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                  />
+                  <Text className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </Fragment>
+      );
+    }
+    // ── Notes section keys ──
+    if (k === 'internal_notes') {
+      if (!isProposal && fHidden('internal_notes')) return null;
+      return (
+        <View key={k} className="mt-3">
+          <Text className="text-sm font-semibold text-gray-700 mb-2">
+            {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
+          </Text>
+          <TextInput
+            value={internalNotes}
+            onChangeText={setInternalNotes}
+            placeholder={isProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={4}
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[100px]"
+            style={{ textAlignVertical: 'top' }}
+          />
+        </View>
+      );
+    }
+    if (k === 'worker_notes') {
+      if (isProposal || fHidden('worker_notes')) return null;
+      return (
+        <View key={k} className="mt-4">
+          <Text className="text-sm font-semibold text-gray-700 mb-2">
+            {t.workerNoteLabel}
+          </Text>
+          <TextInput
+            value={workerNotes}
+            onChangeText={setWorkerNotes}
+            placeholder={t.workerNotePlaceholder}
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={3}
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+            style={{ textAlignVertical: 'top' }}
+          />
+        </View>
+      );
+    }
+    if (k.startsWith('custom:')) {
+      const tpl = templates.find((tp) => `custom:${tp.id}` === k);
+      return tpl ? (
+        <CustomFieldInput
+          key={tpl.id}
+          template={tpl}
+          value={customFields[tpl.field_key] ?? ''}
+          onChange={(v) => setCustomFields((f) => ({ ...f, [tpl.field_key]: v }))}
+        />
+      ) : null;
+    }
+    return null;
+  };
 
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
@@ -997,136 +1542,108 @@ export default function NuevoTrabajoRoute() {
               onChangeText={setTitle}
             />
 
-            {/* Client picker */}
-            <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{jrl('client_id', t.clientLabel)}</Text>
-              <Pressable
-                onPress={() => setClientPickerOpen(true)}
-                className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
-              >
-                {selectedClient ? (
-                  <Text className="text-base text-gray-900 flex-1" numberOfLines={1}>
-                    {selectedClient.first_name} {selectedClient.last_name}
-                    {selectedClient.company ? ` · ${selectedClient.company}` : ''}
+            {/* Standard + custom fields, interleaved in saved layout order. */}
+            {fieldsInSection(jobLayout, 'general').map(renderJobField)}
+          </Section>
+
+          {/* Location — shown for jobs AND estimates (the work has a place even
+             at quote time). Save already persists it for both modes. */}
+          {(secVisible('location') || customFieldsFor('location').length > 0) && (
+            <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
+              {/* Standard + custom fields, interleaved in saved layout order. */}
+              {fieldsInSection(jobLayout, 'location').map(renderJobField)}
+            </Section>
+          )}
+
+          {/* Schedule (job mode only) */}
+          {!isProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
+            <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
+              {/* Standard + custom fields, interleaved in saved layout order. */}
+              {fieldsInSection(jobLayout, 'schedule').map(renderJobField)}
+
+              {ohStatus && ohStatus.status !== 'ok' ? (
+                <View className="mt-3 flex-row items-start gap-1.5">
+                  <Text className="text-xs text-amber-600">⚠</Text>
+                  <Text className="text-xs text-amber-600 flex-1">
+                    {ohStatus.status === 'closed'
+                      ? t.outOfHoursClosedNote
+                      : `${t.outOfHoursNote} · ${formatTime12h(ohStatus.day.start)}–${formatTime12h(ohStatus.day.end)}`}
                   </Text>
-                ) : (
-                  <Text className="text-base text-gray-400 flex-1">{t.clientPlaceholder}</Text>
-                )}
-                {clientId ? (
-                  <Pressable
-                    onPress={() => setClientId('')}
-                    hitSlop={8}
-                    className="mr-2 p-1 rounded-lg"
-                  >
-                    <X size={14} color="#9CA3AF" />
-                  </Pressable>
-                ) : null}
-                <ChevronDown size={16} color="#9CA3AF" />
-              </Pressable>
-            </View>
-
-            {/* Branch picker — multi-location businesses only. Hidden for field
-               crew: their job auto-uses their own branch. */}
-            {locations.length >= 2 && !restrictedCreator ? (
-              <View className="flex flex-col gap-2 mt-3">
-                <Text className="text-sm font-semibold text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {[{ id: '', name: locale === 'es' ? 'Sin ubicación' : 'No location' }, ...locations].map((l) => {
-                    const selected = locationId === l.id;
-                    return (
-                      <Pressable
-                        key={l.id || 'none'}
-                        onPress={() => setLocationId(l.id)}
-                        className={`rounded-full border px-4 py-2 ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
-                      >
-                        <Text className={`text-sm font-medium ${selected ? 'text-primary' : 'text-gray-600'}`}>{l.name}</Text>
-                      </Pressable>
-                    );
-                  })}
                 </View>
-              </View>
-            ) : null}
+              ) : null}
 
+              {totalTimeText ? (
+                <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
+                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                  <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
+                </View>
+              ) : null}
+            </Section>
+          )}
+
+          {/* Workers (job mode only) */}
+          {!isProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
+            <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
+              {/* Standard + custom fields, interleaved in saved layout order. */}
+              {fieldsInSection(jobLayout, 'workers').map(renderJobField)}
+            </Section>
+          )}
+
+          {/* Items section removed — pricing/line items are managed on the
+             detail page now so this form stays focused on scheduling. */}
+
+          {/* Notes (section hideable in job mode) */}
+          {(isProposal || secVisible('notes') || customFieldsFor('notes').length > 0) && (
+          <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
             {isProposal ? (
-              <View className="mt-3 gap-3">
-                <DatePicker label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
-                <DatePicker label={t.expiryDateLabel} value={expiryDate} onChange={setExpiryDate} />
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <DatePicker
-                      label={t.projectStartLabel}
-                      value={scheduledDate}
-                      onChange={setScheduledDate}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
-                  </View>
-                </View>
-                {totalTimeText ? (
-                  <View className="flex-row justify-end items-baseline gap-1.5">
-                    <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
-                    <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : canSchedule ? (
-              /* Hidden entirely for field crew who can only log completed work
-                 (no scheduling → no status/priority). */
-              <View className="flex-row gap-3 mt-3">
-                <View className="flex-1">
-                  <Select
-                    label={t.statusLabel}
-                    value={status}
-                    onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress' | 'completed')}
-                    options={[
-                      { value: 'posible', label: tStatuses.posible },
-                      { value: 'scheduled', label: tStatuses.scheduled },
-                      { value: 'in_progress', label: tStatuses.in_progress },
-                      { value: 'completed', label: tStatuses.completed },
-                    ]}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Select
-                    label={t.priorityLabel}
-                    value={priority}
-                    onValueChange={(v) =>
-                      setPriority(v as 'low' | 'normal' | 'high' | 'urgent')
-                    }
-                    options={[
-                      { value: 'low', label: tPriorities.low },
-                      { value: 'normal', label: tPriorities.normal },
-                      { value: 'high', label: tPriorities.high },
-                      { value: 'urgent', label: tPriorities.urgent },
-                    ]}
-                  />
-                </View>
+              <View className="mb-3">
+                <Text className="text-sm font-semibold text-gray-700 mb-2">
+                  {t.clientNoteLabel}
+                </Text>
+                <TextInput
+                  value={clientNotes}
+                  onChangeText={setClientNotes}
+                  placeholder={t.clientNotePlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                  style={{ textAlignVertical: 'top' }}
+                />
               </View>
             ) : null}
+            {/* Standard + custom fields, interleaved in saved layout order. */}
+            {fieldsInSection(jobLayout, 'notes').map(renderJobField)}
+          </Section>
+          )}
 
-            {!fHidden('description') && (
-            <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{jrl('description', t.descriptionLabel)}</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder={t.descriptionPlaceholder}
-                placeholderTextColor="#9CA3AF"
-                multiline
-                numberOfLines={3}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
-                style={{ textAlignVertical: 'top' }}
-              />
-            </View>
+          {/* Additional details — custom fields assigned to the 'additional'
+             section. Only rendered when there are any. */}
+          {customFieldsFor('additional').length > 0 && (
+            <Section title={locale === 'es' ? 'Detalles adicionales' : 'Additional details'}>
+              {renderCustomFields('additional')}
+            </Section>
+          )}
+
+          {/* Photos — uploads need a saved job_id, so the gallery only
+             appears when editing an existing job. New jobs get a hint and
+             land on the detail screen (which has the gallery) after save. */}
+          <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color="#4F46E5" />}>
+            {editId && business ? (
+              <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
+            ) : (
+              <Text className="text-sm text-gray-400">
+                {full.dashboard.jobs.detail.photos.addAfterSave}
+              </Text>
             )}
+          </Section>
 
-            {/* Crew visibility — when off, the job lives only on the owner's
-               scheduler. Hidden for field crew: their job is auto-published so
-               they (and any assigned crew) can see it. */}
-            {!restrictedCreator ? (
-            <View className="mt-2">
-              <Text className="text-sm font-semibold text-gray-700 mb-1">{t.publishedToCrewLabel}</Text>
+          {/* Crew visibility — LAST option of the form (per user preference).
+             When off, the job lives only on the owner's scheduler. Hidden for
+             field crew: their job is auto-published so they (and any assigned
+             crew) can see it. */}
+          {!restrictedCreator ? (
+            <Section title={t.publishedToCrewLabel} icon={<Eye size={14} color="#4F46E5" />}>
               <Text className="text-xs text-gray-500 mb-2.5">{t.publishedToCrewHint}</Text>
               <View className="flex-row p-1 rounded-2xl bg-gray-100">
                 <Pressable
@@ -1158,429 +1675,8 @@ export default function NuevoTrabajoRoute() {
                   <Text className={`text-sm font-semibold ${publishedToCrew ? 'text-primary' : 'text-gray-500'}`}>{t.publicBadge}</Text>
                 </Pressable>
               </View>
-            </View>
-            ) : null}
-
-            {renderCustomFields('general')}
-          </Section>
-
-          {/* Location — shown for jobs AND estimates (the work has a place even
-             at quote time). Save already persists it for both modes. */}
-          {(secVisible('location') || customFieldsFor('location').length > 0) && (
-            <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
-              {!fHidden('coordinates') && (
-              <>
-              {/* Map link paste — auto-fills address/city/state */}
-              <View className="flex flex-col gap-2">
-                <View className="flex-row items-center gap-1.5">
-                  <Link2 size={13} color="#9CA3AF" />
-                  <Text className="text-sm font-semibold text-gray-700">{jrl('coordinates', t.mapLinkLabel)}</Text>
-                </View>
-                <TextInput
-                  value={mapLink}
-                  onChangeText={parseMapLink}
-                  placeholder={t.mapLinkPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
-                />
-                {mapLinkUnrecognized ? (
-                  <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
-                ) : null}
-              </View>
-
-              {/* Coordinates — lat, lng */}
-              <View className="h-3" />
-              <View className="flex flex-col gap-2">
-                <View className="flex-row items-center gap-1.5">
-                  <Navigation size={13} color="#9CA3AF" />
-                  <Text className="text-sm font-semibold text-gray-700">{t.coordinatesLabel}</Text>
-                </View>
-                <TextInput
-                  value={coordsText}
-                  onChangeText={onCoordsChange}
-                  placeholder={t.coordinatesPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="numbers-and-punctuation"
-                  className={`rounded-2xl border bg-white px-4 py-3 text-base text-gray-900 ${
-                    coordsInvalid ? 'border-red-300' : 'border-gray-200'
-                  }`}
-                />
-                {coordsInvalid ? (
-                  <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
-                ) : null}
-                <Pressable
-                  onPress={useMyLocation}
-                  disabled={gettingLocation}
-                  className="flex-row items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/5 py-3"
-                >
-                  {gettingLocation ? (
-                    <ActivityIndicator size="small" color="#4F46E5" />
-                  ) : (
-                    <Navigation size={15} color="#4F46E5" />
-                  )}
-                  <Text className="text-sm font-semibold text-primary">
-                    {gettingLocation ? t.gettingLocation : t.useMyLocation}
-                  </Text>
-                </Pressable>
-              </View>
-              </>
-              )}
-
-              {!fHidden('job_address') && (
-              <>
-              <View className="h-3" />
-              <Input
-                label={jrl('job_address', t.addressLabel)}
-                placeholder={t.addressPlaceholder}
-                value={address}
-                onChangeText={setAddress}
-              />
-              </>
-              )}
-              {(!fHidden('job_city') || !fHidden('job_state')) && (
-              <View className="flex-row gap-3 mt-3">
-                {!fHidden('job_city') && (
-                <View className="flex-1">
-                  <Input
-                    label={jrl('job_city', t.cityLabel)}
-                    placeholder={t.cityPlaceholder}
-                    value={city}
-                    onChangeText={setCity}
-                  />
-                </View>
-                )}
-                {!fHidden('job_state') && (
-                <View style={fHidden('job_city') ? { flex: 1 } : { width: 110 }}>
-                  <Select
-                    label={jrl('job_state', t.stateLabel)}
-                    value={state}
-                    onValueChange={setState}
-                    placeholder={t.stateNone}
-                    searchable
-                    options={[
-                      // "—" first so a previously-picked state can be cleared.
-                      { value: '', label: t.stateNone },
-                      ...US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) })),
-                    ]}
-                  />
-                </View>
-                )}
-              </View>
-              )}
-
-              {renderCustomFields('location')}
             </Section>
-          )}
-
-          {/* Schedule (job mode only) */}
-          {!isProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
-            <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
-              {/* "Date" is a single toggle that shows/hides both start AND
-                  end date. */}
-              {!fHidden('scheduled_date') && (
-              <View className="flex-row gap-3">
-                <View className="flex-1">
-                  <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
-                </View>
-                <View className="flex-1">
-                  <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
-                </View>
-              </View>
-              )}
-
-              {/* "Time" is a single toggle gating start time, end time AND the
-                  all-day switch (which only makes sense when times are shown). */}
-              {!fHidden('time_start') && (
-              <>
-              <View className="mt-4 flex-row items-center justify-between">
-                <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
-                <Toggle value={allDay} onValueChange={setAllDay} />
-              </View>
-
-              {!allDay ? (
-                <View className="flex-row gap-3 mt-3">
-                  <View className="flex-1">
-                    <DatePicker
-                      label={jrl('time_start', t.timeStartLabel)}
-                      mode="time"
-                      value={timeStart}
-                      onChange={setTimeStart}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <DatePicker
-                      label={jrl('time_end', t.timeEndLabel)}
-                      mode="time"
-                      value={timeEnd}
-                      onChange={setTimeEnd}
-                    />
-                  </View>
-                </View>
-              ) : null}
-              </>
-              )}
-
-              {/* Total hours — auto from start/end (read-only) when both times
-                  are set, else manual entry. Credited to each worker in Reports. */}
-              {!fHidden('total_hours') && (
-              <View className="mt-3">
-                <Text className="text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
-                {bothTimesSet ? (
-                  <View className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 flex-row items-center justify-between">
-                    <Text className="text-base text-gray-500">
-                      {computedHours != null ? `${computedHours} h` : '—'}
-                    </Text>
-                    <Text className="text-xs text-gray-400">{t.totalHoursAutoHint}</Text>
-                  </View>
-                ) : (
-                  <Input
-                    value={totalHours}
-                    onChangeText={(v) => setTotalHours(v.replace(/[^0-9.]/g, ''))}
-                    keyboardType="decimal-pad"
-                    placeholder="0"
-                  />
-                )}
-                <Text className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</Text>
-              </View>
-              )}
-
-              {ohStatus && ohStatus.status !== 'ok' ? (
-                <View className="mt-3 flex-row items-start gap-1.5">
-                  <Text className="text-xs text-amber-600">⚠</Text>
-                  <Text className="text-xs text-amber-600 flex-1">
-                    {ohStatus.status === 'closed'
-                      ? t.outOfHoursClosedNote
-                      : `${t.outOfHoursNote} · ${formatTime12h(ohStatus.day.start)}–${formatTime12h(ohStatus.day.end)}`}
-                  </Text>
-                </View>
-              ) : null}
-
-              {totalTimeText ? (
-                <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
-                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
-                  <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
-                </View>
-              ) : null}
-
-              {renderCustomFields('schedule')}
-            </Section>
-          )}
-
-          {/* Workers (job mode only) */}
-          {!isProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
-            <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
-              {employees.length > 0 ? (
-                <>
-                  {/* Crew Finder — suggest nearest + available crew for this job. */}
-                  <Pressable
-                    onPress={() => setCrewFinderOpen(true)}
-                    className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
-                  >
-                    <Navigation size={15} color="#4F46E5" />
-                    <Text className="text-sm font-semibold text-primary">{full.dashboard.crewFinder.openButton}</Text>
-                  </Pressable>
-                  {/* Lead picker — one designated lead (crew mode only).
-                     Tapping opens a searchable bottom sheet so picking from
-                     larger teams isn't a wall of names. Picking a lead also
-                     assigns them to the job. */}
-                  {business?.job_crew_mode !== false ? (
-                    <View className="mb-4">
-                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.leadLabel}</Text>
-                      <Pressable
-                        onPress={() => { setLeadSearch(''); setLeadPickerOpen(true); }}
-                        className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
-                      >
-                        <Text className={`text-base flex-1 ${leadEmployee ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
-                          {leadEmployee ? `${leadEmployee.first_name} ${leadEmployee.last_name}` : t.leadNone}
-                        </Text>
-                        <ChevronDown size={16} color="#9CA3AF" />
-                      </Pressable>
-                    </View>
-                  ) : null}
-
-                  {/* Crew — searchable multi-select. Replaces the all-at-once
-                     grid so larger teams aren't overwhelming. The lead is
-                     shown in its own picker above and excluded here. */}
-                  <View className="mb-3">
-                    {business?.job_crew_mode !== false ? (
-                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.crewLabel}</Text>
-                    ) : null}
-                    <Pressable
-                      onPress={() => { setCrewSearch(''); setCrewPickerOpen(true); }}
-                      className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
-                    >
-                      <Text className={`text-base flex-1 ${assignedEmployees.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
-                        {assignedEmployees.length > 0
-                          ? t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))
-                          : t.crewPlaceholder}
-                      </Text>
-                      <ChevronDown size={16} color="#9CA3AF" />
-                    </Pressable>
-                    {assignedEmployees.length > 0 ? (
-                      <View className="flex-row flex-wrap gap-2 mt-2">
-                        {employees
-                          .filter((emp) => assignedEmployees.includes(emp.id))
-                          .map((emp) => (
-                            <Pressable
-                              key={emp.id}
-                              onPress={() => toggleEmployee(emp.id)}
-                              className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
-                            >
-                              <Text className="text-xs font-medium text-primary">
-                                {emp.first_name} {emp.last_name}
-                              </Text>
-                              <X size={12} color="#4F46E5" />
-                            </Pressable>
-                          ))}
-                      </View>
-                    ) : null}
-                  </View>
-                </>
-              ) : null}
-
-              {/* Drivers — optional multi-select (like crew). Each driver is
-                  credited driverHours on top of the job's total hours. Pool is
-                  ALL employees, so a driver who didn't work the job can be added
-                  without picking up the work hours. */}
-              {employees.length > 0 ? (
-                <View className="mt-4">
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverLabel}</Text>
-                  <Pressable
-                    onPress={() => { setDriverSearch(''); setDriverPickerOpen(true); }}
-                    className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
-                  >
-                    <Text className={`text-base flex-1 ${driverEmployeeIds.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
-                      {driverEmployeeIds.length > 0
-                        ? t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))
-                        : t.driverNone}
-                    </Text>
-                    <ChevronDown size={16} color="#9CA3AF" />
-                  </Pressable>
-                  {driverEmployeeIds.length > 0 ? (
-                    <View className="flex-row flex-wrap gap-2 mt-2">
-                      {employees
-                        .filter((emp) => driverEmployeeIds.includes(emp.id))
-                        .map((emp) => (
-                          <Pressable
-                            key={emp.id}
-                            onPress={() => toggleDriver(emp.id)}
-                            className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20"
-                          >
-                            <Text className="text-xs font-medium text-primary">
-                              {emp.first_name} {emp.last_name}
-                            </Text>
-                            <X size={12} color="#4F46E5" />
-                          </Pressable>
-                        ))}
-                    </View>
-                  ) : null}
-                  {driverEmployeeIds.length > 0 ? (
-                    <View className="mt-3">
-                      <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverHoursLabel}</Text>
-                      <Input
-                        value={driverHours}
-                        onChangeText={(v) => setDriverHours(v.replace(/[^0-9.]/g, ''))}
-                        keyboardType="decimal-pad"
-                        placeholder="0"
-                      />
-                      <Text className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {renderCustomFields('workers')}
-            </Section>
-          )}
-
-          {/* Items section removed — pricing/line items are managed on the
-             detail page now so this form stays focused on scheduling. */}
-
-          {/* Notes (section hideable in job mode) */}
-          {(isProposal || secVisible('notes') || customFieldsFor('notes').length > 0) && (
-          <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
-            {isProposal ? (
-              <View className="mb-3">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">
-                  {t.clientNoteLabel}
-                </Text>
-                <TextInput
-                  value={clientNotes}
-                  onChangeText={setClientNotes}
-                  placeholder={t.clientNotePlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  numberOfLines={3}
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
-                  style={{ textAlignVertical: 'top' }}
-                />
-              </View>
-            ) : null}
-            {(isProposal || !fHidden('internal_notes')) && (
-            <>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
-              {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
-            </Text>
-            <TextInput
-              value={internalNotes}
-              onChangeText={setInternalNotes}
-              placeholder={isProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={4}
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[100px]"
-              style={{ textAlignVertical: 'top' }}
-            />
-            </>
-            )}
-
-            {!isProposal && !fHidden('worker_notes') && (
-            <View className="mt-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">
-                {t.workerNoteLabel}
-              </Text>
-              <TextInput
-                value={workerNotes}
-                onChangeText={setWorkerNotes}
-                placeholder={t.workerNotePlaceholder}
-                placeholderTextColor="#9CA3AF"
-                multiline
-                numberOfLines={3}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
-                style={{ textAlignVertical: 'top' }}
-              />
-            </View>
-            )}
-
-            {renderCustomFields('notes')}
-          </Section>
-          )}
-
-          {/* Additional details — custom fields assigned to the 'additional'
-             section. Only rendered when there are any. */}
-          {customFieldsFor('additional').length > 0 && (
-            <Section title={locale === 'es' ? 'Detalles adicionales' : 'Additional details'}>
-              {renderCustomFields('additional')}
-            </Section>
-          )}
-
-          {/* Photos — uploads need a saved job_id, so the gallery only
-             appears when editing an existing job. New jobs get a hint and
-             land on the detail screen (which has the gallery) after save. */}
-          <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color="#4F46E5" />}>
-            {editId && business ? (
-              <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
-            ) : (
-              <Text className="text-sm text-gray-400">
-                {full.dashboard.jobs.detail.photos.addAfterSave}
-              </Text>
-            )}
-          </Section>
+          ) : null}
 
           {error ? (
             <View className="mt-4 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">
@@ -2107,6 +2203,24 @@ function CustomFieldInput({
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
   const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
+  const cfg = parseFieldConfig(template.field_config);
+  if (template.field_type === 'note') {
+    // Long free text — multiline, grows with content.
+    return (
+      <View className="mt-3">
+        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          multiline
+          numberOfLines={4}
+          placeholderTextColor="#9CA3AF"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+          style={{ textAlignVertical: 'top' }}
+        />
+      </View>
+    );
+  }
   if (template.field_type === 'date') {
     return (
       <View className="mt-3">
@@ -2136,6 +2250,30 @@ function CustomFieldInput({
     );
   }
   if (template.field_type === 'select' && template.field_options?.length) {
+    // Multi-select: chips, value stored comma-joined ("A, B") so display
+    // paths read naturally. Single-select keeps the dropdown.
+    if (cfg.multi) {
+      const selected = splitMultiValue(value);
+      return (
+        <View className="mt-3">
+          <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {template.field_options.map((o) => {
+              const on = selected.includes(o);
+              return (
+                <Pressable
+                  key={o}
+                  onPress={() => onChange(toggleMultiOption(value, o))}
+                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                >
+                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
     return (
       <View className="mt-3">
         <Select
@@ -2148,13 +2286,14 @@ function CustomFieldInput({
       </View>
     );
   }
+  const isNumber = template.field_type === 'number';
   return (
     <View className="mt-3">
       <Input
         label={label}
-        value={value}
-        onChangeText={onChange}
-        keyboardType={template.field_type === 'number' ? 'decimal-pad' : 'default'}
+        value={isNumber && cfg.thousands ? groupNumberString(value) : value}
+        onChangeText={(v) => onChange(isNumber ? sanitizeNumberInput(v, cfg.integerOnly) : v)}
+        keyboardType={isNumber ? (cfg.integerOnly ? 'number-pad' : 'decimal-pad') : 'default'}
       />
     </View>
   );
