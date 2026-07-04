@@ -4,6 +4,7 @@ import { authenticate, AuthRequest, getBusinessRole } from '../middleware/auth';
 import { rlsClient } from '../lib/supabaseRls';
 import { runAssistant } from '../lib/assistant/loop';
 import { confirmDraft, DraftValidationError } from '../lib/assistant/draft';
+import { isAssistantEnabled } from '../lib/assistant/types';
 import type { AssistantChatMessage, AssistantContext, JobDraft } from '../lib/assistant/types';
 
 // "Ami" — the in-app AI assistant. /chat runs the Claude tool loop (reads +
@@ -80,6 +81,9 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ success: false, message: 'messages required' });
   }
+  if (!isAssistantEnabled(business_id)) {
+    return res.status(403).json({ success: false, message: 'assistant_not_enabled' });
+  }
   try {
     const ctx = await buildContext(req, business_id);
     if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
@@ -101,6 +105,9 @@ assistantRouter.post('/confirm', authenticate, confirmLimiter, async (req: AuthR
   const { business_id, draft } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string' || !draft) {
     return res.status(400).json({ success: false, message: 'business_id and draft required' });
+  }
+  if (!isAssistantEnabled(business_id)) {
+    return res.status(403).json({ success: false, message: 'assistant_not_enabled' });
   }
   try {
     const ctx = await buildContext(req, business_id);

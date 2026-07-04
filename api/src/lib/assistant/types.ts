@@ -2,6 +2,16 @@
 // the api workspace doesn't depend on @amixos/shared (rootDir is scoped to
 // ./src), so like weather.ts/supabaseFetch.ts this is a synced copy.
 
+// Pilot gate — KEEP IN SYNC with shared/src/assistant/config.ts. Only these
+// businesses may use the assistant endpoints; null = enabled for everyone.
+export const ASSISTANT_ENABLED_BUSINESS_IDS: string[] | null = [
+  '47c79845-eb2b-498a-8eb1-94dbac56a5ae', // Prime Solutions
+];
+
+export function isAssistantEnabled(businessId: string): boolean {
+  return ASSISTANT_ENABLED_BUSINESS_IDS === null || ASSISTANT_ENABLED_BUSINESS_IDS.includes(businessId);
+}
+
 export interface AssistantChatMessage {
   role: 'user' | 'assistant';
   content: string;

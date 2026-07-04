@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useApp } from '@/lib/AppContext';
+import { isAssistantEnabled } from '@amixos/shared/assistant/config';
 import { AssistantFab } from './AssistantFab';
 import { AssistantPanel } from './AssistantPanel';
 
@@ -14,7 +15,8 @@ export default function AssistantWidget() {
   const { business, impersonating } = useApp();
   const [open, setOpen] = useState(false);
 
-  if (!business || impersonating) return null;
+  // Pilot gate: only enabled businesses see Ami (api enforces the same list).
+  if (!business || impersonating || !isAssistantEnabled(business.id)) return null;
 
   return (
     <>

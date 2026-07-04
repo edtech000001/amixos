@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/lib/AppContext';
+import { isAssistantEnabled } from '@amixos/shared/assistant/config';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useAssistant } from './useAssistant';
 import { AssistantFab } from './AssistantFab';
@@ -15,8 +16,9 @@ export function AssistantWidget() {
   const assistant = useAssistant(business?.id ?? null);
 
   // Hidden while "Ver como" is active — Ami acts with the OWNER's powers,
-  // which would leak past the impersonated member's permissions.
-  if (!business || impersonating) return null;
+  // which would leak past the impersonated member's permissions. Pilot gate:
+  // only enabled businesses see Ami (api enforces the same list).
+  if (!business || impersonating || !isAssistantEnabled(business.id)) return null;
 
   return (
     <>
