@@ -90,7 +90,9 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         title: { type: 'string' },
         description: { type: ['string', 'null'] },
         status: { type: 'string', enum: ['scheduled', 'in_progress', 'completed'] },
-        priority: { type: ['string', 'null'], enum: ['low', 'normal', 'high', 'urgent', null] },
+        // No enum here — enum+nullable type array is rejected by the API's
+        // schema validator; buildDraft() whitelists the values instead.
+        priority: { type: ['string', 'null'], description: 'low | normal | high | urgent' },
         scheduled_date: { type: ['string', 'null'], description: 'YYYY-MM-DD' },
         end_date: { type: ['string', 'null'] },
         all_day: { type: 'boolean' },
