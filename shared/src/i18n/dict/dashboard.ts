@@ -1972,7 +1972,11 @@ export type DashboardDict = {
     listening: string;
     micUnavailable: string;
     thinking: string;
+    emptyTitle: string;
     emptyState: string;
+    suggestion1: string;
+    suggestion2: string;
+    suggestion3: string;
     draftTitle: string;
     confirm: string;
     confirming: string;
@@ -4089,7 +4093,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       listening: 'Escuchando…',
       micUnavailable: 'Dictado no disponible en este navegador',
       thinking: 'Ami está pensando…',
-      emptyState: 'Pregúntame sobre tus trabajos, clientes o empleados — o dime que agregue un trabajo nuevo.',
+      emptyTitle: '¡Hola! Soy Ami 👋',
+      emptyState: 'Pregúntame sobre tu negocio o dime qué agregar.',
+      suggestion1: '¿Qué trabajos agregué esta semana?',
+      suggestion2: '¿Quién trabajó ayer?',
+      suggestion3: 'Agrega un trabajo nuevo para hoy',
       draftTitle: 'Borrador de trabajo',
       confirm: 'Confirmar',
       confirming: 'Creando…',
@@ -6232,7 +6240,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       listening: 'Listening…',
       micUnavailable: 'Dictation not available in this browser',
       thinking: 'Ami is thinking…',
-      emptyState: 'Ask me about your jobs, clients, or employees — or tell me to add a new job.',
+      emptyTitle: "Hi! I'm Ami 👋",
+      emptyState: 'Ask me about your business or tell me what to add.',
+      suggestion1: 'What jobs did I add this week?',
+      suggestion2: 'Who worked yesterday?',
+      suggestion3: 'Add a new job for today',
       draftTitle: 'Job draft',
       confirm: 'Confirm',
       confirming: 'Creating…',

@@ -31,7 +31,11 @@ const confirmLimiter = rateLimit({
 });
 
 /** Load everything the loop + confirm need, on the caller's RLS client. */
-async function buildContext(req: AuthRequest, businessId: string): Promise<AssistantContext | null> {
+async function buildContext(
+  req: AuthRequest,
+  businessId: string,
+  locale?: unknown,
+): Promise<AssistantContext | null> {
   const userId = req.user!.id;
   const role = await getBusinessRole(userId, businessId);
   if (!role) return null;
@@ -66,6 +70,7 @@ async function buildContext(req: AuthRequest, businessId: string): Promise<Assis
     role,
     restrictedCreator,
     myEmployeeId: mine?.id ?? null,
+    locale: locale === 'en' ? 'en' : 'es',
     db,
     employees,
     fieldTemplates: (tplRes.data ?? []) as AssistantContext['fieldTemplates'],
@@ -74,7 +79,7 @@ async function buildContext(req: AuthRequest, businessId: string): Promise<Assis
 
 // POST /api/v1/assistant/chat
 assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest, res: Response) => {
-  const { business_id, messages, pending_draft } = req.body ?? {};
+  const { business_id, messages, pending_draft, locale } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string') {
     return res.status(400).json({ success: false, message: 'business_id required' });
   }
@@ -85,7 +90,7 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
     return res.status(403).json({ success: false, message: 'assistant_not_enabled' });
   }
   try {
-    const ctx = await buildContext(req, business_id);
+    const ctx = await buildContext(req, business_id, locale);
     if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
 
     const { reply, pendingDraft } = await runAssistant(

@@ -101,6 +101,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
           confirming={confirming}
           error={error}
           onConfirm={() => void confirm()}
+          onSend={s => void send(s)}
         />
 
         {/* Input */}

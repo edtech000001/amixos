@@ -60,6 +60,8 @@ export interface AssistantContext {
   restrictedCreator: boolean;
   /** The caller's own employee row id (for field self-assign), if any. */
   myEmployeeId: string | null;
+  /** The app's configured language — Ami defaults to it. */
+  locale: 'es' | 'en';
   /** RLS-scoped supabase client (anon key + caller JWT). */
   db: import('@supabase/supabase-js').SupabaseClient;
   employees: { id: string; name: string; role: string | null }[];

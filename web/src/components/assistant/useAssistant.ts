@@ -6,12 +6,15 @@ import {
   type AssistantFetcher,
 } from '@amixos/shared/assistant/useAssistantCore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { useLang } from '@/i18n/LangProvider';
 
 /**
  * Web wiring for the platform-agnostic Ami chat core: builds the fetcher
- * from the web API helpers and hands it to useAssistantCore.
+ * from the web API helpers and hands it to useAssistantCore. The app's
+ * language rides on every request so Ami defaults to it.
  */
 export function useAssistant(businessId: string | null) {
+  const { locale } = useLang();
   const fetcher = useMemo<AssistantFetcher>(
     () => ({
       post: async <T,>(path: string, body: unknown): Promise<T> => {
@@ -22,7 +25,7 @@ export function useAssistant(businessId: string | null) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${jwt}`,
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...(body as object), locale }),
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.success) {
@@ -31,7 +34,7 @@ export function useAssistant(businessId: string | null) {
         return json.data as T;
       },
     }),
-    [],
+    [locale],
   );
 
   return useAssistantCore(businessId, fetcher);

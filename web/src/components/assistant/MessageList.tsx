@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { Sparkles } from 'lucide-react';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
 import type { JobDraft } from '@amixos/shared/assistant/types';
 import { useLang } from '@/i18n/LangProvider';
@@ -13,6 +14,8 @@ interface MessageListProps {
   confirming: boolean;
   error: boolean;
   onConfirm: () => void;
+  /** Sends a suggestion chip's text as a message (empty state). */
+  onSend: (text: string) => void;
 }
 
 export function MessageList({
@@ -22,6 +25,7 @@ export function MessageList({
   confirming,
   error,
   onConfirm,
+  onSend,
 }: MessageListProps) {
   const { t: full } = useLang();
   const t = full.dashboard.assistant;
@@ -35,8 +39,25 @@ export function MessageList({
 
   if (bubbles.length === 0 && !sending) {
     return (
-      <div className="flex flex-1 items-center justify-center px-8">
-        <p className="text-center text-sm text-gray-400">{t.emptyState}</p>
+      <div className="flex flex-1 flex-col items-center justify-center px-8">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Sparkles size={30} className="text-primary" />
+        </div>
+        <p className="text-lg font-bold text-gray-900">{t.emptyTitle}</p>
+        <p className="mb-6 mt-1 text-center text-sm text-gray-500">{t.emptyState}</p>
+        {/* Tappable examples — one click sends the question. */}
+        <div className="flex w-full flex-col gap-2.5">
+          {[t.suggestion1, t.suggestion2, t.suggestion3].map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onSend(s)}
+              className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }

@@ -94,8 +94,24 @@ export function AssistantSheet({ assistant, onClose }: Props) {
           {/* Transcript. The empty state renders outside the FlatList — RN's
              ListEmptyComponent is unreliable inside inverted lists. */}
           {bubbles.length === 0 && !sending ? (
-            <View className="flex-1 items-center justify-center px-10">
-              <Text className="text-sm text-gray-400 text-center">{a.emptyState}</Text>
+            <View className="flex-1 items-center justify-center px-8">
+              <View className="w-16 h-16 rounded-full bg-primary/10 items-center justify-center mb-4">
+                <Sparkles size={30} color={PRIMARY} />
+              </View>
+              <Text className="text-lg font-bold text-gray-900 text-center">{a.emptyTitle}</Text>
+              <Text className="text-sm text-gray-500 text-center mt-1 mb-6">{a.emptyState}</Text>
+              {/* Tappable examples — one tap sends the question. */}
+              <View className="gap-2.5 self-stretch">
+                {[a.suggestion1, a.suggestion2, a.suggestion3].map(s => (
+                  <Pressable
+                    key={s}
+                    onPress={() => send(s)}
+                    className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 active:bg-primary/10"
+                  >
+                    <Text className="text-sm font-medium text-primary text-center">{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           ) : (
             <FlatList
