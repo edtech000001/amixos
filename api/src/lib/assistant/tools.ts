@@ -9,25 +9,28 @@ import type { AssistantContext, JobDraft } from './types';
 // ── Definitions (fixed order — part of the cached prompt prefix) ───────────
 
 export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
+  // NOTE: no `strict` and no nullable type-unions — the API's schema compiler
+  // caps union-typed parameters at 16 per request, which strict-nullable
+  // schemas blow past. Optional = omitted from `required`; the executors and
+  // buildDraft() defensively validate every input anyway.
   {
     name: 'query_jobs',
     description:
       'Busca trabajos del negocio. Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
-    strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        date_from: { type: ['string', 'null'], description: 'scheduled_date >= YYYY-MM-DD' },
-        date_to: { type: ['string', 'null'], description: 'scheduled_date <= YYYY-MM-DD' },
-        created_from: { type: ['string', 'null'], description: 'created_at >= YYYY-MM-DD (fecha en que se agregó)' },
-        created_to: { type: ['string', 'null'], description: 'created_at <= YYYY-MM-DD (inclusive)' },
-        status: { type: ['string', 'null'], description: 'proposal|sent|accepted|scheduled|in_progress|completed|invoiced' },
-        client_id: { type: ['string', 'null'] },
-        search: { type: ['string', 'null'], description: 'texto a buscar en el título' },
+        date_from: { type: 'string', description: 'scheduled_date >= YYYY-MM-DD' },
+        date_to: { type: 'string', description: 'scheduled_date <= YYYY-MM-DD' },
+        created_from: { type: 'string', description: 'created_at >= YYYY-MM-DD (fecha en que se agregó)' },
+        created_to: { type: 'string', description: 'created_at <= YYYY-MM-DD (inclusive)' },
+        status: { type: 'string', description: 'proposal|sent|accepted|scheduled|in_progress|completed|invoiced' },
+        client_id: { type: 'string' },
+        search: { type: 'string', description: 'texto a buscar en el título' },
         include_assignments: { type: 'boolean', description: 'incluir nombres de cuadrilla/líder' },
         limit: { type: 'integer', description: 'máx 20, default 10' },
       },
-      required: ['date_from', 'date_to', 'created_from', 'created_to', 'status', 'client_id', 'search', 'include_assignments', 'limit'],
+      required: [],
       additionalProperties: false,
     },
   },
@@ -35,14 +38,13 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     name: 'query_clients',
     description:
       'Busca clientes por nombre o empresa. Llama SIEMPRE antes de proponer un trabajo con nombre de cliente; si no hay coincidencia, propone con client_resolved=false conservando client_name.',
-    strict: true,
     input_schema: {
       type: 'object',
       properties: {
         search: { type: 'string', description: 'nombre, apellido o empresa (parcial)' },
         limit: { type: 'integer', description: 'máx 10' },
       },
-      required: ['search', 'limit'],
+      required: ['search'],
       additionalProperties: false,
     },
   },
@@ -50,14 +52,13 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     name: 'query_employees',
     description:
       'Busca empleados (el roster ya está en el contexto; usa esto solo para refrescar o desambiguar nombres repetidos).',
-    strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        search: { type: ['string', 'null'] },
+        search: { type: 'string' },
         limit: { type: 'integer', description: 'máx 25' },
       },
-      required: ['search', 'limit'],
+      required: [],
       additionalProperties: false,
     },
   },
@@ -65,58 +66,54 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     name: 'query_timesheets',
     description:
       'Consulta registros de horas trabajadas (checadas). Usa esto para "¿trabajó X ayer?", "¿cuántas horas hizo X esta semana?".',
-    strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        employee_id: { type: ['string', 'null'] },
-        employee_name: { type: ['string', 'null'], description: 'si no tienes el id' },
+        employee_id: { type: 'string' },
+        employee_name: { type: 'string', description: 'si no tienes el id' },
         date_from: { type: 'string', description: 'work_date >= YYYY-MM-DD' },
         date_to: { type: 'string', description: 'work_date <= YYYY-MM-DD' },
         limit: { type: 'integer', description: 'máx 31' },
       },
-      required: ['employee_id', 'employee_name', 'date_from', 'date_to', 'limit'],
+      required: ['date_from', 'date_to'],
       additionalProperties: false,
     },
   },
   {
     name: 'propose_job',
     description:
-      'Genera el BORRADOR de un trabajo nuevo (o la versión corregida de un borrador pendiente). NO crea el trabajo — el usuario debe presionar Confirmar. Llama solo cuando tengas título y suficientes datos; los ids de crew/drivers deben venir del roster o de query_employees, y client_id de query_clients.',
-    strict: true,
+      'Genera el BORRADOR de un trabajo nuevo (o la versión corregida de un borrador pendiente). NO crea el trabajo — el usuario debe presionar Confirmar. Llama solo cuando tengas título y suficientes datos; los ids de crew/drivers deben venir del roster o de query_employees, y client_id de query_clients. Omite los campos que no apliquen.',
     input_schema: {
       type: 'object',
       properties: {
         title: { type: 'string' },
-        description: { type: ['string', 'null'] },
+        description: { type: 'string' },
         status: { type: 'string', enum: ['scheduled', 'in_progress', 'completed'] },
-        // No enum here — enum+nullable type array is rejected by the API's
-        // schema validator; buildDraft() whitelists the values instead.
-        priority: { type: ['string', 'null'], description: 'low | normal | high | urgent' },
-        scheduled_date: { type: ['string', 'null'], description: 'YYYY-MM-DD' },
-        end_date: { type: ['string', 'null'] },
-        all_day: { type: 'boolean' },
-        time_start: { type: ['string', 'null'], description: 'HH:MM 24h' },
-        time_end: { type: ['string', 'null'] },
-        total_hours: { type: ['number', 'null'] },
-        client_id: { type: ['string', 'null'] },
-        client_name: { type: ['string', 'null'] },
+        priority: { type: 'string', description: 'low | normal | high | urgent' },
+        scheduled_date: { type: 'string', description: 'YYYY-MM-DD' },
+        end_date: { type: 'string' },
+        all_day: { type: 'boolean', description: 'default true; false solo si el usuario dio horas de inicio/fin' },
+        time_start: { type: 'string', description: 'HH:MM 24h' },
+        time_end: { type: 'string' },
+        total_hours: { type: 'number' },
+        client_id: { type: 'string' },
+        client_name: { type: 'string' },
         client_resolved: { type: 'boolean' },
         crew: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              employee_id: { type: ['string', 'null'] },
+              employee_id: { type: 'string' },
               worker_name: { type: 'string' },
               is_lead: { type: 'boolean' },
             },
-            required: ['employee_id', 'worker_name', 'is_lead'],
+            required: ['worker_name'],
             additionalProperties: false,
           },
         },
         driver_employee_ids: { type: 'array', items: { type: 'string' } },
-        driver_hours: { type: ['number', 'null'] },
+        driver_hours: { type: 'number' },
         custom_fields: {
           type: 'array',
           description: 'valores de campos personalizados (field_key de las plantillas, valor como texto)',
@@ -130,15 +127,10 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
             additionalProperties: false,
           },
         },
-        internal_notes: { type: ['string', 'null'] },
-        worker_notes: { type: ['string', 'null'] },
+        internal_notes: { type: 'string' },
+        worker_notes: { type: 'string' },
       },
-      required: [
-        'title', 'description', 'status', 'priority', 'scheduled_date', 'end_date',
-        'all_day', 'time_start', 'time_end', 'total_hours', 'client_id', 'client_name',
-        'client_resolved', 'crew', 'driver_employee_ids', 'driver_hours',
-        'custom_fields', 'internal_notes', 'worker_notes',
-      ],
+      required: ['title', 'status', 'client_resolved'],
       additionalProperties: false,
     },
   },
