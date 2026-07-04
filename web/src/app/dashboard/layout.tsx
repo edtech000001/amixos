@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useMemo } from 'react';
 import { AppProvider, useApp } from '@/lib/AppContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
+import AssistantWidget from '@/components/assistant/AssistantWidget';
 import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner';
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
@@ -91,6 +92,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </Fragment>
           <BillingGate />
         </main>
+        {/* "Ami" assistant — fixed-position FAB + slide-over panel */}
+        <AssistantWidget />
       </div>
     </GoogleSyncBannerProvider>
   );

@@ -18,6 +18,7 @@ import { adminRouter } from './routes/admin';
 import { mapRouter } from './routes/map';
 import { weatherRouter } from './routes/weather';
 import { smsRouter } from './routes/sms';
+import { assistantRouter } from './routes/assistant';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -97,6 +98,7 @@ app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/map', mapRouter);
 app.use('/api/v1/weather', weatherRouter);
 app.use('/api/v1/sms', smsRouter);
+app.use('/api/v1/assistant', assistantRouter);
 
 // Error handling
 app.use(notFound);

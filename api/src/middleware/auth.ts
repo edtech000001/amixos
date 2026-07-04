@@ -6,6 +6,9 @@ export interface AuthRequest extends Request {
     id: string;
     email: string;
   };
+  /** The caller's verified Supabase JWT — used to build per-request
+   *  RLS-scoped clients (lib/supabaseRls.ts) so queries run AS the user. */
+  token?: string;
 }
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -30,6 +33,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       id: user.id,
       email: user.email!,
     };
+    req.token = token;
 
     next();
   } catch {

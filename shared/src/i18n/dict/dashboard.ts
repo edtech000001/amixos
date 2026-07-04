@@ -1964,6 +1964,31 @@ export type DashboardDict = {
       };
     };
   };
+  assistant: {
+    title: string;
+    subtitle: string;
+    placeholder: string;
+    send: string;
+    listening: string;
+    micUnavailable: string;
+    thinking: string;
+    emptyState: string;
+    draftTitle: string;
+    confirm: string;
+    confirming: string;
+    created: string;
+    viewJob: string;
+    unresolvedClient: string;
+    errorMsg: string;
+    clientLabel: string;
+    dateLabel: string;
+    hoursLabel: string;
+    crewLabel: string;
+    leadBadge: string;
+    driverLabel: string;
+    notesLabel: string;
+    newChat: string;
+  };
   crewFinder: {
     openButton: string;
     title: string;
@@ -4055,6 +4080,31 @@ export const dashboard: Record<Locale, DashboardDict> = {
             noPlate: 'Sin placa',
           },
         },
+    },
+    assistant: {
+      title: 'Ami',
+      subtitle: 'Tu asistente de negocio',
+      placeholder: 'Escríbele a Ami…',
+      send: 'Enviar',
+      listening: 'Escuchando…',
+      micUnavailable: 'Dictado no disponible en este navegador',
+      thinking: 'Ami está pensando…',
+      emptyState: 'Pregúntame sobre tus trabajos, clientes o empleados — o dime que agregue un trabajo nuevo.',
+      draftTitle: 'Borrador de trabajo',
+      confirm: 'Confirmar',
+      confirming: 'Creando…',
+      created: 'Trabajo creado',
+      viewJob: 'Ver trabajo',
+      unresolvedClient: 'Cliente sin coincidencia',
+      errorMsg: 'Ami no pudo responder. Intenta de nuevo.',
+      clientLabel: 'Cliente',
+      dateLabel: 'Fecha',
+      hoursLabel: 'Horas',
+      crewLabel: 'Cuadrilla',
+      leadBadge: 'Líder',
+      driverLabel: 'Chofer',
+      notesLabel: 'Notas',
+      newChat: 'Nueva conversación',
     },
     crewFinder: {
       openButton: 'Sugerir cuadrilla',
@@ -6173,6 +6223,31 @@ export const dashboard: Record<Locale, DashboardDict> = {
             noPlate: 'No plate',
           },
         },
+    },
+    assistant: {
+      title: 'Ami',
+      subtitle: 'Your business assistant',
+      placeholder: 'Message Ami…',
+      send: 'Send',
+      listening: 'Listening…',
+      micUnavailable: 'Dictation not available in this browser',
+      thinking: 'Ami is thinking…',
+      emptyState: 'Ask me about your jobs, clients, or employees — or tell me to add a new job.',
+      draftTitle: 'Job draft',
+      confirm: 'Confirm',
+      confirming: 'Creating…',
+      created: 'Job created',
+      viewJob: 'View job',
+      unresolvedClient: 'No client match',
+      errorMsg: "Ami couldn't respond. Try again.",
+      clientLabel: 'Client',
+      dateLabel: 'Date',
+      hoursLabel: 'Hours',
+      crewLabel: 'Crew',
+      leadBadge: 'Lead',
+      driverLabel: 'Driver',
+      notesLabel: 'Notes',
+      newChat: 'New conversation',
     },
     crewFinder: {
       openButton: 'Suggest crew',

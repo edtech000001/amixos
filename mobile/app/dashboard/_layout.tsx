@@ -15,6 +15,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
+import { AssistantWidget } from '@/components/assistant/AssistantWidget';
 import { startNetworkMonitor } from '@/lib/offline/network';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
 import { useOutboxStore } from '@/lib/offline/outbox';
@@ -213,6 +214,9 @@ function DashboardTabs() {
           <Tabs.Screen name="mas/modulos/[moduleId]" options={{ href: null }} />
         </Tabs>
       </View>
+      {/* Ami — floating assistant FAB + chat sheet, over every dashboard
+         screen. Self-hides while impersonating or without a business. */}
+      <AssistantWidget />
       {/* Full-screen overlay when the active business has no access (expired
          trial / canceled / 'none'). Self-hides otherwise. Sits ABOVE the tab
          bar via its own high zIndex/elevation. */}
