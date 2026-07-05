@@ -1971,6 +1971,7 @@ export type DashboardDict = {
     send: string;
     listening: string;
     micUnavailable: string;
+    voiceReplies: string;
     thinking: string;
     emptyTitle: string;
     emptyState: string;
@@ -4092,6 +4093,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       send: 'Enviar',
       listening: 'Escuchando…',
       micUnavailable: 'Dictado no disponible en este navegador',
+      voiceReplies: 'Leer respuestas en voz alta',
       thinking: 'Ami está pensando…',
       emptyTitle: '¡Hola! Soy Ami 👋',
       emptyState: 'Pregúntame sobre tu negocio o dime qué agregar.',
@@ -6239,6 +6241,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       send: 'Send',
       listening: 'Listening…',
       micUnavailable: 'Dictation not available in this browser',
+      voiceReplies: 'Read replies aloud',
       thinking: 'Ami is thinking…',
       emptyTitle: "Hi! I'm Ami 👋",
       emptyState: 'Ask me about your business or tell me what to add.',

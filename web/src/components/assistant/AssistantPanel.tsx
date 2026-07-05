@@ -1,10 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Mic, RotateCcw, Send, Sparkles, X } from 'lucide-react';
+import { Mic, RotateCcw, Send, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useAssistant } from './useAssistant';
 import { useSpeechToText } from './useSpeechToText';
+import { useSpeakReplies } from './useSpeakReplies';
 import { MessageList } from './MessageList';
 
 interface AssistantPanelProps {
@@ -24,6 +25,9 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
     useAssistant(businessId);
 
   const [input, setInput] = useState('');
+  // Voice replies (off by default — audio should be opt-in).
+  const [speakOn, setSpeakOn] = useState(false);
+  const { available: speechAvailable } = useSpeakReplies(bubbles, speakOn && open, locale);
   // Text that was already in the box when dictation started — the live
   // transcript is appended after it rather than replacing it.
   const dictationBaseRef = useRef('');
@@ -74,6 +78,18 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             <p className="text-sm font-semibold text-gray-900">{t.title}</p>
             <p className="truncate text-xs text-gray-500">{t.subtitle}</p>
           </div>
+          {/* Voice replies toggle (tier-1 TTS — free browser voice). */}
+          {speechAvailable && (
+            <button
+              type="button"
+              onClick={() => setSpeakOn(v => !v)}
+              aria-label={t.voiceReplies}
+              title={t.voiceReplies}
+              className={`rounded-lg p-2 transition-colors ${speakOn ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+            >
+              {speakOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          )}
           <button
             type="button"
             onClick={reset}

@@ -11,10 +11,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mic, RotateCcw, Send, Sparkles, X } from 'lucide-react-native';
+import { Mic, RotateCcw, Send, Sparkles, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import type { useAssistant } from './useAssistant';
 import { useSpeechRecognition } from './useSpeechRecognition';
+import { useSpeakReplies } from './useSpeakReplies';
 import { MessageBubble } from './MessageBubble';
 
 const PRIMARY = '#4F46E5';
@@ -38,6 +39,9 @@ export function AssistantSheet({ assistant, onClose }: Props) {
     locale,
     onResult: setText,
   });
+  // Voice replies (off by default — audio should be opt-in).
+  const [speakOn, setSpeakOn] = useState(false);
+  const { available: speechAvailable } = useSpeakReplies(bubbles, speakOn, locale);
 
   // Inverted FlatList (index 0 = visual bottom) keeps the transcript pinned
   // to the newest message without scroll-to-end bookkeeping.
@@ -74,11 +78,22 @@ export function AssistantSheet({ assistant, onClose }: Props) {
               <Text className="text-lg font-bold text-gray-900">{a.title}</Text>
               <Text className="text-xs text-gray-500">{a.subtitle}</Text>
             </View>
+            {/* Voice replies toggle (tier-1 TTS — free on-device voice). */}
+            {speechAvailable ? (
+              <Pressable
+                onPress={() => setSpeakOn(v => !v)}
+                hitSlop={8}
+                accessibilityLabel={a.voiceReplies}
+                className={`w-9 h-9 rounded-full items-center justify-center ${speakOn ? 'bg-primary/10' : 'active:bg-gray-100'}`}
+              >
+                {speakOn ? <Volume2 size={18} color={PRIMARY} /> : <VolumeX size={18} color="#6B7280" />}
+              </Pressable>
+            ) : null}
             <Pressable
               onPress={reset}
               hitSlop={8}
               accessibilityLabel={a.newChat}
-              className="w-9 h-9 rounded-full items-center justify-center active:bg-gray-100"
+              className="w-9 h-9 rounded-full items-center justify-center active:bg-gray-100 ml-1"
             >
               <RotateCcw size={18} color="#6B7280" />
             </Pressable>
