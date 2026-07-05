@@ -16,7 +16,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'query_jobs',
     description:
-      'Busca trabajos del negocio. Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
+      'Busca trabajos del negocio. Devuelve total_count (el TOTAL exacto que cumple los filtros — úsalo para "¿cuántos trabajos…?") y hasta `limit` filas de detalle. Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
     input_schema: {
       type: 'object',
       properties: {
@@ -37,14 +37,14 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'query_clients',
     description:
-      'Busca clientes por nombre o empresa. Llama SIEMPRE antes de proponer un trabajo con nombre de cliente; si no hay coincidencia, propone con client_resolved=false conservando client_name.',
+      'Busca clientes por nombre o empresa. Devuelve total_count (el total exacto — úsalo para "¿cuántos clientes tengo?"; omite search para contar todos). Llama SIEMPRE antes de proponer un trabajo con nombre de cliente; si no hay coincidencia, propone con client_resolved=false conservando client_name.',
     input_schema: {
       type: 'object',
       properties: {
-        search: { type: 'string', description: 'nombre, apellido o empresa (parcial)' },
+        search: { type: 'string', description: 'nombre, apellido o empresa (parcial); omite para listar/contar todos' },
         limit: { type: 'integer', description: 'máx 10' },
       },
-      required: ['search'],
+      required: [],
       additionalProperties: false,
     },
   },
@@ -150,7 +150,9 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
   const select = input.include_assignments
     ? 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company), job_assignments(worker_name, is_lead), driver_employee_ids, driver_hours'
     : 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company)';
-  let q = ctx.db.from('jobs').select(select).eq('business_id', ctx.businessId);
+  // count:'exact' rides on the same query so the model always knows the REAL
+  // total even when rows are truncated to `limit` ("¿cuántos trabajos tengo?").
+  let q = ctx.db.from('jobs').select(select, { count: 'exact' }).eq('business_id', ctx.businessId);
   if (input.status) q = q.eq('status', input.status);
   if (input.client_id) q = q.eq('client_id', input.client_id);
   if (input.date_from) q = q.gte('scheduled_date', input.date_from);
@@ -158,9 +160,9 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
   if (input.created_from) q = q.gte('created_at', `${input.created_from}T00:00:00`);
   if (input.created_to) q = q.lte('created_at', `${input.created_to}T23:59:59`);
   if (input.search) q = q.ilike('title', `%${input.search}%`);
-  const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
+  const { data, error, count } = await q.order('created_at', { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((j: any) => ({
+  const jobs = (data ?? []).map((j: any) => ({
     id: j.id,
     title: j.title,
     status: j.status,
@@ -178,32 +180,35 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
         }
       : {}),
   }));
+  return { total_count: count ?? jobs.length, showing: jobs.length, jobs };
 }
 
 export async function executeQueryClients(ctx: AssistantContext, input: ToolInput) {
   const limit = clamp(input.limit, 10, 5);
   const term = String(input.search ?? '').trim();
-  if (!term) return [];
-  // Token-split OR match across name/company so "Bob Karlton" hits
-  // first_name=Bob + last_name=Karlton.
-  const tokens = term.split(/\s+/).filter(Boolean).slice(0, 3);
-  const ors = tokens
-    .map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%,company.ilike.%${t}%`)
-    .join(',');
-  const { data, error } = await ctx.db
+  let q = ctx.db
     .from('clients')
-    .select('id, first_name, last_name, company, phone_cell, city')
-    .eq('business_id', ctx.businessId)
-    .or(ors)
-    .limit(limit);
+    .select('id, first_name, last_name, company, phone_cell, city', { count: 'exact' })
+    .eq('business_id', ctx.businessId);
+  if (term) {
+    // Token-split OR match across name/company so "Bob Karlton" hits
+    // first_name=Bob + last_name=Karlton.
+    const tokens = term.split(/\s+/).filter(Boolean).slice(0, 3);
+    const ors = tokens
+      .map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%,company.ilike.%${t}%`)
+      .join(',');
+    q = q.or(ors);
+  }
+  const { data, error, count } = await q.order('first_name').limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((c: any) => ({
+  const clients = (data ?? []).map((c: any) => ({
     id: c.id,
     name: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(),
     company: c.company,
     phone: c.phone_cell,
     city: c.city,
   }));
+  return { total_count: count ?? clients.length, showing: clients.length, clients };
 }
 
 export async function executeQueryEmployees(ctx: AssistantContext, input: ToolInput) {
