@@ -1,5 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
+import { checkRequiredFields } from './draft';
+import { geocodeAddress } from '../geocoding';
+import { buildCrewSuggestions } from '../crewFinder';
+import { fetchCrewFinderData, type CrewFinderTarget } from '../crewFinderData';
 import type { AssistantContext, JobDraft } from './types';
 
 // Tool surface for the Ami loop. All executors run on ctx.db — the caller's
@@ -16,7 +20,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'query_jobs',
     description:
-      'Busca trabajos del negocio. Devuelve total_count (el TOTAL exacto que cumple los filtros — úsalo para "¿cuántos trabajos…?") y hasta `limit` filas de detalle. Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
+      'Busca trabajos del negocio. Devuelve total_count (el TOTAL exacto que cumple los filtros — úsalo para "¿cuántos trabajos…?") y hasta `limit` filas de detalle. Usa crew_member para filtrar por persona asignada ("¿cuántos trabajos tiene Elmer?" → crew_member="Elmer", responde con total_count). Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
     input_schema: {
       type: 'object',
       properties: {
@@ -27,8 +31,10 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         status: { type: 'string', description: 'proposal|sent|accepted|scheduled|in_progress|completed|invoiced' },
         client_id: { type: 'string' },
         search: { type: 'string', description: 'texto a buscar en el título' },
+        crew_member: { type: 'string', description: 'nombre (parcial) de un empleado — solo trabajos donde está asignado en la cuadrilla; las filas incluyen la cuadrilla completa' },
+        crew_lead_only: { type: 'boolean', description: 'con crew_member: solo trabajos donde esa persona es el líder' },
         include_assignments: { type: 'boolean', description: 'incluir nombres de cuadrilla/líder' },
-        limit: { type: 'integer', description: 'máx 20, default 10' },
+        limit: { type: 'integer', description: 'máx 100, default 10' },
       },
       required: [],
       additionalProperties: false,
@@ -76,6 +82,22 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         limit: { type: 'integer', description: 'máx 31' },
       },
       required: ['date_from', 'date_to'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'suggest_crew',
+    description:
+      'Clasifica a los empleados por CERCANÍA y DISPONIBILIDAD — la misma lógica del botón "Sugerir cuadrilla" del formulario. Úsala para "¿quién está más cerca de X?", "¿quién anda por Colorado?", "¿quién está libre el martes?". La ubicación de cada empleado se toma de su trabajo actual/más próximo con pin en el mapa, o de su casa geocodificada. Da place (ciudad, estado o dirección — se geocodifica) O job_search (título parcial de un trabajo — usa su pin o el del cliente), y date opcional para disponibilidad. Para "líderes", filtra los resultados por el rol del roster.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        place: { type: 'string', description: 'lugar libre: "Colorado", "Fort Morgan CO", una dirección' },
+        job_search: { type: 'string', description: 'título (parcial) de un trabajo existente — usa sus coordenadas' },
+        date: { type: 'string', description: 'YYYY-MM-DD — para marcar quién está libre ese día' },
+        limit: { type: 'integer', description: 'máx 25, default 10' },
+      },
+      required: [],
       additionalProperties: false,
     },
   },
@@ -146,13 +168,23 @@ const clamp = (n: unknown, max: number, dflt: number) => {
 type ToolInput = Record<string, any>;
 
 export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) {
-  const limit = clamp(input.limit, 20, 10);
-  const select = input.include_assignments
+  const limit = clamp(input.limit, 100, 10);
+  const crewTerm = typeof input.crew_member === 'string' ? input.crew_member.trim() : '';
+  // A crew filter implies the caller cares about crews — return them.
+  const withAssignments = !!input.include_assignments || !!crewTerm;
+  let select = withAssignments
     ? 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company), job_assignments(worker_name, is_lead), driver_employee_ids, driver_hours'
     : 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company)';
+  // The crew filter rides on a SEPARATE aliased inner-join embed so the plain
+  // job_assignments embed still lists the FULL crew, not just the match.
+  if (crewTerm) select += ', crew_match:job_assignments!inner(worker_name, is_lead)';
   // count:'exact' rides on the same query so the model always knows the REAL
   // total even when rows are truncated to `limit` ("¿cuántos trabajos tengo?").
   let q = ctx.db.from('jobs').select(select, { count: 'exact' }).eq('business_id', ctx.businessId);
+  if (crewTerm) {
+    q = q.ilike('crew_match.worker_name', `%${crewTerm}%`);
+    if (input.crew_lead_only) q = q.eq('crew_match.is_lead', true);
+  }
   if (input.status) q = q.eq('status', input.status);
   if (input.client_id) q = q.eq('client_id', input.client_id);
   if (input.date_from) q = q.gte('scheduled_date', input.date_from);
@@ -172,7 +204,7 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
     client: j.clients
       ? `${j.clients.first_name ?? ''} ${j.clients.last_name ?? ''}`.trim() + (j.clients.company ? ` (${j.clients.company})` : '')
       : null,
-    ...(input.include_assignments
+    ...(withAssignments
       ? {
           crew: (j.job_assignments ?? []).map((a: any) => `${a.worker_name}${a.is_lead ? ' (líder)' : ''}`),
           driver_employee_ids: j.driver_employee_ids ?? [],
@@ -250,6 +282,69 @@ export async function executeQueryTimesheets(ctx: AssistantContext, input: ToolI
   return data ?? [];
 }
 
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function executeSuggestCrew(ctx: AssistantContext, input: ToolInput) {
+  const limit = clamp(input.limit, 25, 10);
+  const jobSearch = typeof input.job_search === 'string' ? input.job_search.trim() : '';
+  const place = typeof input.place === 'string' ? input.place.trim() : '';
+  const date = typeof input.date === 'string' && YMD_RE.test(input.date) ? input.date : null;
+
+  // Resolve the target point: an existing job's pin (or its client's), or a
+  // geocoded freeform place. Date-only calls still rank by availability.
+  let target: CrewFinderTarget = { jobId: null, lat: null, lng: null, scheduledDate: date, clientId: null };
+  let targetLabel: string | null = null;
+  if (jobSearch) {
+    const { data, error } = await ctx.db
+      .from('jobs')
+      .select('id, title, scheduled_date, job_lat, job_lng, client_id')
+      .eq('business_id', ctx.businessId)
+      .ilike('title', `%${jobSearch}%`)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const job = data?.[0];
+    if (!job) return { error: `no encontré un trabajo que coincida con "${jobSearch}"` };
+    target = {
+      jobId: job.id,
+      lat: job.job_lat,
+      lng: job.job_lng,
+      scheduledDate: date ?? job.scheduled_date ?? null,
+      clientId: job.client_id ?? null,
+    };
+    targetLabel = job.title;
+  } else if (place) {
+    const geo = await geocodeAddress(place);
+    if (!geo.ok) return { error: `no pude ubicar "${place}" en el mapa (${geo.reason})` };
+    target = { jobId: null, lat: geo.lat, lng: geo.lng, scheduledDate: date, clientId: null };
+    targetLabel = place;
+  } else if (!date) {
+    return { error: 'da place, job_search o date' };
+  }
+
+  const data = await fetchCrewFinderData(ctx.db, ctx.businessId, target);
+  const suggestions = buildCrewSuggestions(data);
+  const roleById = new Map(ctx.employees.map(e => [e.id, e.role]));
+  return {
+    target: targetLabel,
+    target_has_coords: data.targetHasCoords,
+    date: target.scheduledDate,
+    // Employees whose location can't be resolved rank last with distance null;
+    // this count tells the model why ("sin dirección geocodificada").
+    employees_without_location: data.needsGeocodeCount,
+    suggestions: suggestions.slice(0, limit).map(s => ({
+      employee_id: s.employeeId,
+      name: s.name,
+      role: roleById.get(s.employeeId) ?? null,
+      distance_mi: s.distanceMi,
+      location_basis: s.basis,
+      free_on_date: s.isFreeOnDate,
+      next_free_date: s.nextFreeDate,
+      nearby_jobs_count: s.nearbyJobs.length,
+    })),
+  };
+}
+
 // ── propose_job — normalize into a JobDraft (no DB write) ──────────────────
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -324,7 +419,7 @@ export function buildDraft(ctx: AssistantContext, input: ToolInput): JobDraft {
 
   const allDay = input.all_day !== false;
 
-  return {
+  const draft: JobDraft = {
     job_id: randomUUID(),
     business_id: ctx.businessId,
     title: asStr(input.title) ?? 'Trabajo',
@@ -348,4 +443,23 @@ export function buildDraft(ctx: AssistantContext, input: ToolInput): JobDraft {
     worker_notes: asStr(input.worker_notes),
     warnings,
   };
+
+  // Required-field check (same contract confirmDraft enforces) — surfaced as
+  // warnings on the card AND fed back to the model so Ami asks for what's
+  // missing instead of letting Confirmar fail.
+  const es = ctx.locale !== 'en';
+  const reqCheck = checkRequiredFields(ctx, draft);
+  if (reqCheck.missing.length) {
+    warnings.push(
+      `${es ? 'Faltan campos requeridos' : 'Missing required fields'}: ${reqCheck.missing.join(', ')} — ${es ? 'no se podrá confirmar sin ellos' : "can't be confirmed without them"}`,
+    );
+  }
+  if (reqCheck.unsupported.length) {
+    warnings.push(
+      es
+        ? `Este negocio requiere ${reqCheck.unsupported.join(', ')}, que Ami aún no maneja — crea este trabajo en la pantalla Trabajos`
+        : `This business requires ${reqCheck.unsupported.join(', ')}, which Ami can't fill yet — create this job from the Jobs screen`,
+    );
+  }
+  return draft;
 }

@@ -64,6 +64,12 @@ export interface AssistantContext {
   locale: 'es' | 'en';
   /** RLS-scoped supabase client (anon key + caller JWT). */
   db: import('@supabase/supabase-js').SupabaseClient;
+  /** Per-business required job fields (businesses.job_field_required JSONB —
+   *  Ajustes → Trabajos). Same contract the job form enforces on save. */
+  jobFieldRequired: Record<string, boolean>;
+  /** Per-business hidden job fields (businesses.job_field_hidden JSONB) —
+   *  a hidden field is never treated as required. */
+  jobFieldHidden: Record<string, boolean>;
   employees: { id: string; name: string; role: string | null }[];
   fieldTemplates: {
     field_key: string;

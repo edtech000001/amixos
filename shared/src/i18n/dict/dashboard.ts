@@ -1971,7 +1971,6 @@ export type DashboardDict = {
     send: string;
     listening: string;
     micUnavailable: string;
-    voiceReplies: string;
     thinking: string;
     emptyTitle: string;
     emptyState: string;
@@ -1993,6 +1992,16 @@ export type DashboardDict = {
     driverLabel: string;
     notesLabel: string;
     newChat: string;
+    callButton: string;
+    callListening: string;
+    callThinking: string;
+    callSpeaking: string;
+    callInterrupt: string;
+    callThinkingHint: string;
+    callConnecting: string;
+    callEnd: string;
+    callHint: string;
+    callMicDenied: string;
   };
   crewFinder: {
     openButton: string;
@@ -4093,7 +4102,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
       send: 'Enviar',
       listening: 'Escuchando…',
       micUnavailable: 'Dictado no disponible en este navegador',
-      voiceReplies: 'Leer respuestas en voz alta',
       thinking: 'Ami está pensando…',
       emptyTitle: '¡Hola! Soy Ami 👋',
       emptyState: 'Pregúntame sobre tu negocio o dime qué agregar.',
@@ -4115,6 +4123,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       driverLabel: 'Chofer',
       notesLabel: 'Notas',
       newChat: 'Nueva conversación',
+      callButton: 'Hablar con Ami',
+      callListening: 'Te escucho…',
+      callThinking: 'Pensando…',
+      callSpeaking: 'Hablando…',
+      callInterrupt: 'Toca para interrumpir',
+      callThinkingHint: 'Un momento — buscando la respuesta.',
+      callConnecting: 'Conectando…',
+      callEnd: 'Terminar',
+      callHint: 'Habla ahora — Ami te escucha.',
+      callMicDenied: 'Ami necesita permiso de micrófono para la llamada.',
     },
     crewFinder: {
       openButton: 'Sugerir cuadrilla',
@@ -6241,7 +6259,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
       send: 'Send',
       listening: 'Listening…',
       micUnavailable: 'Dictation not available in this browser',
-      voiceReplies: 'Read replies aloud',
       thinking: 'Ami is thinking…',
       emptyTitle: "Hi! I'm Ami 👋",
       emptyState: 'Ask me about your business or tell me what to add.',
@@ -6263,6 +6280,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
       driverLabel: 'Driver',
       notesLabel: 'Notes',
       newChat: 'New conversation',
+      callButton: 'Talk to Ami',
+      callListening: "I'm listening…",
+      callThinking: 'Thinking…',
+      callSpeaking: 'Speaking…',
+      callInterrupt: 'Tap to interrupt',
+      callThinkingHint: 'One moment — looking that up.',
+      callConnecting: 'Connecting…',
+      callEnd: 'End',
+      callHint: 'Speak now — Ami is listening.',
+      callMicDenied: 'Ami needs microphone permission for the call.',
     },
     crewFinder: {
       openButton: 'Suggest crew',

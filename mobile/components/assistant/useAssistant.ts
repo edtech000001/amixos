@@ -26,7 +26,7 @@ export function useAssistant(businessId: string | null) {
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.success) {
-          throw new Error(json?.error ?? `HTTP ${res.status}`);
+          throw new Error(json?.message ?? json?.error ?? `HTTP ${res.status}`);
         }
         return json.data as T;
       },

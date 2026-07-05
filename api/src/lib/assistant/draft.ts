@@ -12,6 +12,73 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export class DraftValidationError extends Error {}
 
+// ── Required-field contract ─────────────────────────────────────────────────
+// Mirrors the job form's save() checks (trabajos/nuevo.tsx): per-business
+// required built-ins (businesses.job_field_required, skipping hidden fields)
+// + required custom field templates. KEEP IN SYNC with JOB_REQUIRABLE there.
+
+const JOB_REQUIRABLE_LABELS: Record<string, { es: string; en: string }> = {
+  client_id: { es: 'Cliente', en: 'Client' },
+  description: { es: 'Descripción', en: 'Description' },
+  job_address: { es: 'Dirección', en: 'Address' },
+  job_city: { es: 'Ciudad', en: 'City' },
+  job_state: { es: 'Estado', en: 'State' },
+  coordinates: { es: 'Coordenadas', en: 'Coordinates' },
+  scheduled_date: { es: 'Fecha', en: 'Date' },
+  time_start: { es: 'Hora de inicio', en: 'Start time' },
+  time_end: { es: 'Hora de fin', en: 'End time' },
+  total_hours: { es: 'Horas totales', en: 'Total hours' },
+  assigned_workers: { es: 'Trabajadores', en: 'Workers' },
+  internal_notes: { es: 'Notas internas', en: 'Internal notes' },
+};
+// No eye toggle on the form — never treated as hidden (jobSections.ts).
+const JOB_FIELDS_ALWAYS_SHOWN = ['client_id', 'priority'];
+// Fields Ami drafts can't fill (no location support yet) — if the business
+// requires one of these, the job must be created on the Trabajos form.
+const ASSISTANT_UNSUPPORTED = new Set(['job_address', 'job_city', 'job_state', 'coordinates']);
+
+export interface RequiredFieldCheck {
+  /** Labels of required fields the draft is missing (Ami can still fill these). */
+  missing: string[];
+  /** Labels of required fields Ami cannot fill at all (location fields). */
+  unsupported: string[];
+}
+
+export function checkRequiredFields(ctx: AssistantContext, draft: JobDraft): RequiredFieldCheck {
+  const lang = ctx.locale === 'en' ? 'en' : 'es';
+  const isHidden = (key: string) =>
+    !JOB_FIELDS_ALWAYS_SHOWN.includes(key) && !!ctx.jobFieldHidden[key];
+
+  const values: Record<string, string> = {
+    client_id: draft.client_id && draft.client_resolved !== false ? 'x' : '',
+    description: draft.description ?? '',
+    job_address: '',
+    job_city: '',
+    job_state: '',
+    coordinates: '',
+    scheduled_date: draft.scheduled_date ?? '',
+    time_start: draft.all_day === false ? draft.time_start ?? '' : '',
+    time_end: draft.all_day === false ? draft.time_end ?? '' : '',
+    total_hours: draft.total_hours != null ? 'x' : '',
+    assigned_workers: draft.crew?.length ? 'x' : '',
+    internal_notes: draft.internal_notes ?? '',
+  };
+
+  const missing: string[] = [];
+  const unsupported: string[] = [];
+  for (const [key, label] of Object.entries(JOB_REQUIRABLE_LABELS)) {
+    if (!ctx.jobFieldRequired[key] || isHidden(key)) continue;
+    if (String(values[key] ?? '').trim()) continue;
+    (ASSISTANT_UNSUPPORTED.has(key) ? unsupported : missing).push(label[lang]);
+  }
+  for (const tpl of ctx.fieldTemplates) {
+    if (tpl.required && !String(draft.custom_fields?.[tpl.field_key] ?? '').trim()) {
+      missing.push(tpl.field_label);
+    }
+  }
+  return { missing, unsupported };
+}
+
 export async function confirmDraft(
   ctx: AssistantContext,
   draft: JobDraft,
@@ -36,6 +103,25 @@ export async function confirmDraft(
   const numOk = (n: unknown) => n == null || (typeof n === 'number' && Number.isFinite(n) && n >= 0);
   if (!numOk(draft.total_hours) || !numOk(draft.driver_hours)) {
     throw new DraftValidationError('horas inválidas');
+  }
+
+  // Required fields — same contract the job form enforces on save. The draft
+  // card already warned about these; confirming anyway is a hard stop.
+  const reqCheck = checkRequiredFields(ctx, draft);
+  if (reqCheck.missing.length || reqCheck.unsupported.length) {
+    const es = ctx.locale !== 'en';
+    const parts: string[] = [];
+    if (reqCheck.missing.length) {
+      parts.push(`${es ? 'Campos requeridos' : 'Required fields'}: ${reqCheck.missing.join(', ')}`);
+    }
+    if (reqCheck.unsupported.length) {
+      parts.push(
+        es
+          ? `Este negocio requiere ${reqCheck.unsupported.join(', ')} — crea este trabajo en la pantalla Trabajos`
+          : `This business requires ${reqCheck.unsupported.join(', ')} — create this job from the Jobs screen`,
+      );
+    }
+    throw new DraftValidationError(parts.join('. '));
   }
 
   // Referenced ids must exist in THIS business (RLS re-checks, but fail early

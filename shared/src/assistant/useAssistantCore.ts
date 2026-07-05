@@ -39,9 +39,10 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
   // Guard against out-of-order responses if the user fires twice quickly.
   const seqRef = useRef(0);
 
-  const send = useCallback(async (text: string) => {
+  /** Sends a user message; resolves the assistant's reply text (null on error/superseded). */
+  const send = useCallback(async (text: string): Promise<string | null> => {
     const trimmed = text.trim();
-    if (!trimmed || !businessId || sending) return;
+    if (!trimmed || !businessId || sending) return null;
     const mySeq = ++seqRef.current;
     setError(false);
     const userBubble: AssistantBubble = { id: nextId(), role: 'user', content: trimmed };
@@ -56,15 +57,17 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
         messages: wire,
         pending_draft: pendingDraft,
       });
-      if (mySeq !== seqRef.current) return; // superseded
+      if (mySeq !== seqRef.current) return null; // superseded
       setBubbles(prev => [
         ...prev,
         { id: nextId(), role: 'assistant', content: data.reply, draft: data.pending_draft ?? null },
       ]);
       setPendingDraft(data.pending_draft ?? null);
+      return data.reply;
     } catch {
-      if (mySeq !== seqRef.current) return;
+      if (mySeq !== seqRef.current) return null;
       setError(true);
+      return null;
     } finally {
       if (mySeq === seqRef.current) setSending(false);
     }
@@ -87,8 +90,16 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
       );
       setPendingDraft(null);
       return data.job_id;
-    } catch {
-      setError(true);
+    } catch (e) {
+      // Server-side validation (e.g. required fields the draft is missing)
+      // comes back as a human-readable message — say it as Ami instead of
+      // the generic error row. Machine codes / network errors stay generic.
+      const msg = e instanceof Error ? e.message : '';
+      if (msg && msg.includes(' ') && !/^HTTP \d+/.test(msg)) {
+        setBubbles(prev => [...prev, { id: nextId(), role: 'assistant', content: msg }]);
+      } else {
+        setError(true);
+      }
       return null;
     } finally {
       setConfirming(false);

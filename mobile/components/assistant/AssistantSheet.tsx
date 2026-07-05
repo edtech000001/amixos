@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -11,37 +12,97 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mic, RotateCcw, Send, BotMessageSquare, Volume2, VolumeX, X } from 'lucide-react-native';
+import {
+  AudioLines,
+  Mic,
+  PhoneOff,
+  RotateCcw,
+  Send,
+  BotMessageSquare,
+  Volume2,
+  X,
+} from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import type { useAssistant } from './useAssistant';
-import { useSpeechRecognition } from './useSpeechRecognition';
-import { useSpeakReplies } from './useSpeakReplies';
+import { useVoiceCall } from './useVoiceCall';
 import { MessageBubble } from './MessageBubble';
 
 const PRIMARY = '#4F46E5';
 
+// Show the END of a long in-progress utterance, not the start.
+const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}` : s);
+
+// Static object (not a className, not a style function) — immune to the
+// NativeWind interop quirks that swallowed this button's styles twice.
+const endPillStyle = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  borderRadius: 9999,
+  backgroundColor: '#DC2626',
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+} as const;
+
+// Expanding ring behind the mic while Ami listens — the "you can talk now"
+// signal. RN has no CSS animations, so a tiny native-driver loop.
+function PulseRing() {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.timing(scale, { toValue: 1.5, duration: 1200, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scale, opacity]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(79, 70, 229, 0.25)',
+        transform: [{ scale }],
+        opacity,
+      }}
+    />
+  );
+}
+
 interface Props {
   assistant: ReturnType<typeof useAssistant>;
+  businessId: string;
   onClose: () => void;
 }
 
 // Near-full-height chat sheet for Ami. An ABSOLUTE OVERLAY, not an RN Modal
 // (app convention — see shared/src/ui/DateRangeSheet.tsx), at zIndex 1001 so
 // it also covers the top-banner overlay (zIndex 1000 in dashboard/_layout).
-export function AssistantSheet({ assistant, onClose }: Props) {
+export function AssistantSheet({ assistant, businessId, onClose }: Props) {
   const { t: full, locale } = useLang();
   const a = full.dashboard.assistant;
   const insets = useSafeAreaInsets();
   const { bubbles, pendingDraft, sending, confirming, error, send, confirm, reset } = assistant;
 
   const [text, setText] = useState('');
-  const { supported, listening, start, stop } = useSpeechRecognition({
-    locale,
-    onResult: setText,
-  });
-  // Voice replies (off by default — audio should be opt-in).
-  const [speakOn, setSpeakOn] = useState(false);
-  const { available: speechAvailable } = useSpeakReplies(bubbles, speakOn, locale);
+  // Hands-free call mode: continuous listen → think → speak-aloud loop.
+  // (Dictation-into-the-box is the keyboard mic's job on mobile; spoken
+  // replies happen in call mode, so there's no separate read-aloud toggle.)
+  const call = useVoiceCall({ businessId, locale, send });
+
+  const callStatusLabel =
+    call.status === 'connecting'
+      ? a.callConnecting
+      : call.status === 'thinking'
+        ? a.callThinking
+        : call.status === 'speaking'
+          ? a.callSpeaking
+          : a.callListening;
 
   // Inverted FlatList (index 0 = visual bottom) keeps the transcript pinned
   // to the newest message without scroll-to-end bookkeeping.
@@ -50,7 +111,6 @@ export function AssistantSheet({ assistant, onClose }: Props) {
 
   const handleSend = () => {
     if (!canSend) return;
-    if (listening) stop();
     const value = text;
     setText('');
     void send(value);
@@ -78,17 +138,6 @@ export function AssistantSheet({ assistant, onClose }: Props) {
               <Text className="text-lg font-bold text-gray-900">{a.title}</Text>
               <Text className="text-xs text-gray-500">{a.subtitle}</Text>
             </View>
-            {/* Voice replies toggle (tier-1 TTS — free on-device voice). */}
-            {speechAvailable ? (
-              <Pressable
-                onPress={() => setSpeakOn(v => !v)}
-                hitSlop={8}
-                accessibilityLabel={a.voiceReplies}
-                className={`w-9 h-9 rounded-full items-center justify-center ${speakOn ? 'bg-primary/10' : 'active:bg-gray-100'}`}
-              >
-                {speakOn ? <Volume2 size={18} color={PRIMARY} /> : <VolumeX size={18} color="#6B7280" />}
-              </Pressable>
-            ) : null}
             <Pressable
               onPress={reset}
               hitSlop={8}
@@ -160,39 +209,82 @@ export function AssistantSheet({ assistant, onClose }: Props) {
             />
           )}
 
-          {/* Composer. */}
-          <View
-            className="flex-row items-end px-4 pt-2 border-t border-gray-100"
-            style={{ paddingBottom: insets.bottom + 12 }}
-          >
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              multiline
-              placeholder={listening ? a.listening : a.placeholder}
-              placeholderTextColor="#9CA3AF"
-              className="flex-1 rounded-2xl border border-gray-200 px-4 py-2.5 text-[15px] text-gray-900"
-              style={{ maxHeight: 100 }}
-            />
-            {supported ? (
-              <Pressable
-                onPress={() => (listening ? stop() : void start())}
-                hitSlop={4}
-                accessibilityLabel={a.listening}
-                className={`w-10 h-10 rounded-full items-center justify-center ml-2 ${listening ? 'bg-red-50' : 'bg-gray-100'}`}
-              >
-                <Mic size={18} color={listening ? '#DC2626' : '#4B5563'} />
-              </Pressable>
-            ) : null}
+          {/* Composer — swapped for the call bar during a call so the
+             transcript above stays readable while you talk (your words
+             stream into the bar, then land as bubbles like a normal chat). */}
+          {call.active ? (
             <Pressable
-              onPress={handleSend}
-              disabled={!canSend}
-              accessibilityLabel={a.send}
-              className={`w-10 h-10 rounded-full bg-primary items-center justify-center ml-2 ${canSend ? 'active:opacity-80' : 'opacity-40'}`}
+              onPress={call.status === 'speaking' ? call.interrupt : undefined}
+              className="flex-row items-center mx-4 mt-2 rounded-2xl bg-primary/5 px-3 py-2.5"
+              style={{ marginBottom: insets.bottom + 12 }}
             >
-              <Send size={18} color="#fff" />
+              <View className="w-10 h-10 items-center justify-center">
+                {call.status === 'listening' ? <PulseRing /> : null}
+                <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
+                  {call.status === 'thinking' ? (
+                    <ActivityIndicator size="small" color={PRIMARY} />
+                  ) : call.status === 'speaking' ? (
+                    <Volume2 size={18} color={PRIMARY} />
+                  ) : (
+                    <Mic size={18} color={PRIMARY} />
+                  )}
+                </View>
+              </View>
+              <View className="flex-1" style={{ marginLeft: 28, marginRight: 12 }}>
+                <Text className="text-sm font-semibold text-gray-900">{callStatusLabel}</Text>
+                <Text className="text-xs text-gray-500" numberOfLines={1}>
+                  {call.status === 'speaking'
+                    ? a.callInterrupt
+                    : call.status === 'thinking'
+                      ? a.callThinkingHint
+                      : liveTail(call.partial) || a.callHint}
+                </Text>
+              </View>
+              {/* NativeWind 4's interop drops function-style props on
+                 Pressable — keep the Pressable bare and style a plain View. */}
+              <Pressable onPress={call.end} hitSlop={4} accessibilityLabel={a.callEnd}>
+                <View style={endPillStyle}>
+                  <PhoneOff size={16} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 6 }}>
+                    {a.callEnd}
+                  </Text>
+                </View>
+              </Pressable>
             </Pressable>
-          </View>
+          ) : (
+            <View
+              className="flex-row items-end px-4 pt-2 border-t border-gray-100"
+              style={{ paddingBottom: insets.bottom + 12 }}
+            >
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                multiline
+                placeholder={a.placeholder}
+                placeholderTextColor="#9CA3AF"
+                className="flex-1 rounded-2xl border border-gray-200 px-4 py-2.5 text-[15px] text-gray-900"
+                style={{ maxHeight: 100 }}
+              />
+              {call.supported ? (
+                <Pressable
+                  onPress={call.start}
+                  hitSlop={4}
+                  accessibilityLabel={a.callButton}
+                  className="w-10 h-10 rounded-full items-center justify-center ml-2 bg-gray-100 active:bg-gray-200"
+                >
+                  <AudioLines size={18} color="#4B5563" />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={handleSend}
+                disabled={!canSend}
+                accessibilityLabel={a.send}
+                className={`w-10 h-10 rounded-full bg-primary items-center justify-center ml-2 ${canSend ? 'active:opacity-80' : 'opacity-40'}`}
+              >
+                <Send size={18} color="#fff" />
+              </Pressable>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </View>

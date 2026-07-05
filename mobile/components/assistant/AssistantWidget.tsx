@@ -23,7 +23,7 @@ export function AssistantWidget() {
   return (
     <>
       {!open && <AssistantFab onPress={() => setOpen(true)} label={full.dashboard.assistant.title} />}
-      {open && <AssistantSheet assistant={assistant} onClose={() => setOpen(false)} />}
+      {open && <AssistantSheet assistant={assistant} businessId={business.id} onClose={() => setOpen(false)} />}
     </>
   );
 }

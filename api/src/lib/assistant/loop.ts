@@ -8,6 +8,7 @@ import {
   executeQueryEmployees,
   executeQueryJobs,
   executeQueryTimesheets,
+  executeSuggestCrew,
 } from './tools';
 
 // The Ami agent loop: manual tool-use loop against claude-opus-4-8. The server
@@ -39,6 +40,8 @@ async function executeTool(
       return { result: JSON.stringify(await executeQueryEmployees(ctx, input)) };
     case 'query_timesheets':
       return { result: JSON.stringify(await executeQueryTimesheets(ctx, input)) };
+    case 'suggest_crew':
+      return { result: JSON.stringify(await executeSuggestCrew(ctx, input)) };
     case 'propose_job': {
       const draft = buildDraft(ctx, input);
       // Feed the normalized draft back so the model writes an accurate

@@ -1,11 +1,21 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Mic, RotateCcw, Send, BotMessageSquare, Volume2, VolumeX, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  AudioLines,
+  Loader2,
+  Mic,
+  PhoneOff,
+  RotateCcw,
+  Send,
+  BotMessageSquare,
+  Volume2,
+  X,
+} from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useAssistant } from './useAssistant';
 import { useSpeechToText } from './useSpeechToText';
-import { useSpeakReplies } from './useSpeakReplies';
+import { useVoiceCall } from './useVoiceCall';
 import { MessageList } from './MessageList';
 
 interface AssistantPanelProps {
@@ -13,6 +23,9 @@ interface AssistantPanelProps {
   onClose: () => void;
   businessId: string;
 }
+
+// Show the END of a long in-progress utterance, not the start.
+const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}` : s);
 
 /**
  * Right slide-over hosting the Ami chat. Stays mounted while closed so the
@@ -25,9 +38,9 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
     useAssistant(businessId);
 
   const [input, setInput] = useState('');
-  // Voice replies (off by default — audio should be opt-in).
-  const [speakOn, setSpeakOn] = useState(false);
-  const { available: speechAvailable } = useSpeakReplies(bubbles, speakOn && open, locale);
+  // Hands-free call mode: continuous listen → think → speak-aloud loop.
+  // (Spoken replies happen in call mode — no separate read-aloud toggle.)
+  const call = useVoiceCall({ businessId, locale, send });
   // Text that was already in the box when dictation started — the live
   // transcript is appended after it rather than replacing it.
   const dictationBaseRef = useRef('');
@@ -57,6 +70,21 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
     }
   };
 
+  // The panel stays mounted while closed (to keep the transcript) — hang up
+  // if the user closes it mid-call.
+  useEffect(() => {
+    if (!open && call.active) call.end();
+  }, [open, call]);
+
+  const callStatusLabel =
+    call.status === 'connecting'
+      ? t.callConnecting
+      : call.status === 'thinking'
+        ? t.callThinking
+        : call.status === 'speaking'
+          ? t.callSpeaking
+          : t.callListening;
+
   if (!open) return null;
 
   return (
@@ -78,18 +106,6 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             <p className="text-sm font-semibold text-gray-900">{t.title}</p>
             <p className="truncate text-xs text-gray-500">{t.subtitle}</p>
           </div>
-          {/* Voice replies toggle (tier-1 TTS — free browser voice). */}
-          {speechAvailable && (
-            <button
-              type="button"
-              onClick={() => setSpeakOn(v => !v)}
-              aria-label={t.voiceReplies}
-              title={t.voiceReplies}
-              className={`rounded-lg p-2 transition-colors ${speakOn ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
-            >
-              {speakOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-            </button>
-          )}
           <button
             type="button"
             onClick={reset}
@@ -120,8 +136,57 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
           onSend={s => void send(s)}
         />
 
-        {/* Input */}
+        {/* Input — swapped for the call bar during a call so the transcript
+           above stays readable while you talk (your words stream into the
+           bar, then land as bubbles like a normal chat). */}
         <div className="border-t border-gray-100 px-3 py-3">
+          {call.active ? (
+            <div
+              role={call.status === 'speaking' ? 'button' : undefined}
+              onClick={call.status === 'speaking' ? call.interrupt : undefined}
+              className={`flex items-center gap-3 rounded-2xl bg-primary/5 px-3 py-2.5 ${
+                call.status === 'speaking' ? 'cursor-pointer' : ''
+              }`}
+            >
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+                {call.status === 'listening' && (
+                  <span className="absolute h-10 w-10 animate-ping rounded-full bg-primary/25" />
+                )}
+                <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  {call.status === 'thinking' ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : call.status === 'speaking' ? (
+                    <Volume2 className="h-5 w-5" />
+                  ) : (
+                    <Mic className="h-5 w-5" />
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">{callStatusLabel}</p>
+                <p className="truncate text-xs text-gray-500">
+                  {call.status === 'speaking'
+                    ? t.callInterrupt
+                    : call.status === 'thinking'
+                      ? t.callThinkingHint
+                      : liveTail(call.partial) || t.callHint}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  call.end();
+                }}
+                aria-label={t.callEnd}
+                title={t.callEnd}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                <PhoneOff className="h-4 w-4" />
+                {t.callEnd}
+              </button>
+            </div>
+          ) : (
           <div className="flex items-end gap-2">
             <textarea
               value={input}
@@ -151,6 +216,17 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
                 <Mic className="h-5 w-5" />
               </button>
             )}
+            {call.supported && (
+              <button
+                type="button"
+                onClick={call.start}
+                aria-label={t.callButton}
+                title={t.callButton}
+                className="shrink-0 rounded-full p-2.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+              >
+                <AudioLines className="h-5 w-5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSend}
@@ -162,6 +238,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
               <Send className="h-5 w-5" />
             </button>
           </div>
+          )}
         </div>
       </div>
     </>
