@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Mic, RotateCcw, Send, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
+import { Mic, RotateCcw, Send, BotMessageSquare, Volume2, VolumeX, X } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useAssistant } from './useAssistant';
 import { useSpeechToText } from './useSpeechToText';
@@ -72,7 +72,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Sparkles className="h-5 w-5" />
+            <BotMessageSquare className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900">{t.title}</p>

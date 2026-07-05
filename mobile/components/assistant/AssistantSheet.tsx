@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mic, RotateCcw, Send, Sparkles, Volume2, VolumeX, X } from 'lucide-react-native';
+import { Mic, RotateCcw, Send, BotMessageSquare, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import type { useAssistant } from './useAssistant';
 import { useSpeechRecognition } from './useSpeechRecognition';
@@ -72,7 +72,7 @@ export function AssistantSheet({ assistant, onClose }: Props) {
           {/* Header — identity left, reset + close right. */}
           <View className="flex-row items-center px-5 pt-3 pb-3 border-b border-gray-100">
             <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
-              <Sparkles size={20} color={PRIMARY} />
+              <BotMessageSquare size={20} color={PRIMARY} />
             </View>
             <View className="flex-1 ml-3">
               <Text className="text-lg font-bold text-gray-900">{a.title}</Text>
@@ -111,7 +111,7 @@ export function AssistantSheet({ assistant, onClose }: Props) {
           {bubbles.length === 0 && !sending ? (
             <View className="flex-1 items-center justify-center px-8">
               <View className="w-16 h-16 rounded-full bg-primary/10 items-center justify-center mb-4">
-                <Sparkles size={30} color={PRIMARY} />
+                <BotMessageSquare size={30} color={PRIMARY} />
               </View>
               <Text className="text-lg font-bold text-gray-900 text-center">{a.emptyTitle}</Text>
               <Text className="text-sm text-gray-500 text-center mt-1 mb-6">{a.emptyState}</Text>

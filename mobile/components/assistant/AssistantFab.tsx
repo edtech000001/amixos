@@ -1,5 +1,5 @@
 import { Pressable } from 'react-native';
-import { Sparkles } from 'lucide-react-native';
+import { BotMessageSquare } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Floating "Ami" button. Sits ABOVE the per-screen add Fab (bottom-32 /
@@ -27,7 +27,7 @@ export function AssistantFab({ onPress, label }: { onPress: () => void; label: s
         shadowOffset: { width: 0, height: 4 },
       }}
     >
-      <Sparkles size={24} color="#fff" />
+      <BotMessageSquare size={24} color="#fff" />
     </Pressable>
   );
 }

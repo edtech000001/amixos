@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Sparkles } from 'lucide-react';
+import { BotMessageSquare } from 'lucide-react';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
 import type { JobDraft } from '@amixos/shared/assistant/types';
 import { useLang } from '@/i18n/LangProvider';
@@ -41,7 +41,7 @@ export function MessageList({
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Sparkles size={30} className="text-primary" />
+          <BotMessageSquare size={30} className="text-primary" />
         </div>
         <p className="text-lg font-bold text-gray-900">{t.emptyTitle}</p>
         <p className="mb-6 mt-1 text-center text-sm text-gray-500">{t.emptyState}</p>
