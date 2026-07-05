@@ -52,6 +52,13 @@
         {
           "cameraPermission": "Amixos usa la cámara para escanear el código VIN y tomar fotos del equipo."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Amixos usa el micrófono para que puedas hablar con Ami, tu asistente de negocio.",
+          "speechRecognitionPermission": "Amixos usa el reconocimiento de voz para entender lo que le dices a Ami."
+        }
       ]
     ],
     "experiments": {
