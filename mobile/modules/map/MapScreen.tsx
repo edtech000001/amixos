@@ -591,24 +591,27 @@ export default function MapScreen() {
 
     try {
       const jwt = await getJwt();
-      // Loop until no progress. Safety cap: 50 batches × 100 rows = 5000
-      // clients per session — protects against an unforeseen bug where
-      // the server returns nonzero attempted but zero failures forever.
-      for (let i = 0; i < 50; i++) {
-        const r = await fetch(`${apiBaseUrl}/api/v1/map/geocode-clients`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-          body: JSON.stringify({ business_id: business.id }),
-        });
-        if (!r.ok) break;
-        const j = await r.json();
-        const { attempted = 0, geocoded = 0 } = j?.data ?? {};
-        totalGeocoded += geocoded;
-        setGeocodeProgress({ done: totalGeocoded, total: initialPending });
-        // Server returned 0 rows to try → we're done (everything was
-        // either resolved, marked failed within the cooldown, or has
-        // no address).
-        if (attempted === 0) break;
+      // Drain clients, then jobs (addresses typed on the form or CSV-imported
+      // get pins too). Loop until no progress. Safety cap: 50 batches × 100
+      // rows per entity — protects against an unforeseen bug where the server
+      // returns nonzero attempted but zero failures forever.
+      for (const endpoint of ['geocode-clients', 'geocode-jobs']) {
+        for (let i = 0; i < 50; i++) {
+          const r = await fetch(`${apiBaseUrl}/api/v1/map/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+            body: JSON.stringify({ business_id: business.id }),
+          });
+          if (!r.ok) break;
+          const j = await r.json();
+          const { attempted = 0, geocoded = 0 } = j?.data ?? {};
+          totalGeocoded += geocoded;
+          setGeocodeProgress({ done: totalGeocoded, total: initialPending });
+          // Server returned 0 rows to try → this entity is done (everything
+          // was either resolved, marked failed within the cooldown, or has
+          // no address).
+          if (attempted === 0) break;
+        }
       }
       Alert.alert('', t.geocodeDone.replace('{{count}}', String(totalGeocoded)));
       await load();

@@ -5,7 +5,6 @@ import {
   Settings,
   Store as StoreIcon,
   ChevronRight,
-  HardHat,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -71,15 +70,6 @@ export default function MasMenu() {
 
   // Core tools + any enabled modules — the "what you do" group.
   const mainItems: MenuItem[] = [
-    // "Mis Trabajos" — Project-Leader shortcut. Empty list for users who
-    // aren't the lead on any job (RLS-friendly), so safe to always show.
-    {
-      key: 'misTrabajos',
-      label: sb.misTrabajos,
-      description: sb.descriptions.misTrabajos,
-      icon: HardHat,
-      path: '/dashboard/trabajos/mis-trabajos',
-    },
     // Apps not pinned to the dock (Clientes, Trabajos, Facturas, Calendario,
     // Empleados, Inventario — minus whatever is in the dock).
     ...unpinnedItems,

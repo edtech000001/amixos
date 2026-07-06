@@ -13,6 +13,14 @@ import { fetchTtsUri } from './ttsClient';
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
+// Close the user's turn this long after their last recognized words — roomy
+// enough to pause and think mid-sentence without Ami jumping in. (The browser
+// recognizer's own endpointing is ~1s, so we run it in continuous mode and
+// own the turn with this timer instead.)
+const SILENCE_MS = 2_800;
+// Hard cap per listening turn.
+const MAX_TURN_MS = 45_000;
+
 function getRecognitionCtor(): any {
   if (typeof window === 'undefined') return null;
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
@@ -75,31 +83,43 @@ export function useVoiceCall({
       if (!Ctor || gen !== genRef.current) return resolve('');
       const rec = new Ctor();
       rec.lang = localeRef.current === 'en' ? 'en-US' : 'es-US';
-      rec.continuous = false; // recognizer ends itself after the utterance
+      rec.continuous = true; // our SILENCE_MS timer owns the turn end
       rec.interimResults = true;
       let finalText = '';
+      let latestText = '';
+      let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+      const requestStop = () => {
+        try {
+          rec.stop(); // → onend → resolve
+        } catch {
+          resolve((finalText || latestText).trim());
+        }
+      };
+      const maxTimer = setTimeout(requestStop, MAX_TURN_MS);
       rec.onresult = (event: any) => {
         let text = '';
         for (let i = 0; i < event.results.length; i++) {
           text += event.results[i][0].transcript;
           if (event.results[i].isFinal) finalText = text;
         }
+        latestText = text;
         if (gen === genRef.current) setPartial(text);
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(requestStop, SILENCE_MS);
       };
-      rec.onend = () => {
+      const finish = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        clearTimeout(maxTimer);
         if (recRef.current === rec) recRef.current = null;
-        resolve(finalText.trim());
+        resolve((finalText || latestText).trim());
       };
-      rec.onerror = () => {
-        if (recRef.current === rec) recRef.current = null;
-        resolve(finalText.trim());
-      };
+      rec.onend = finish;
+      rec.onerror = finish;
       recRef.current = rec;
       try {
         rec.start();
       } catch {
-        recRef.current = null;
-        resolve('');
+        finish();
       }
     });
   }, []);

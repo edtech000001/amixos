@@ -29,9 +29,7 @@ export type DashboardDict = {
       reportes: string;
       tienda: string;
       ajustes: string;
-      misTrabajos: string;
     };
-    misTrabajos: string;
   };
   // Purpose-built home for the "field" role (crew). Replaces the widget grid.
   fieldHome: {
@@ -476,6 +474,8 @@ export type DashboardDict = {
     };
     importModal: {
       title: string;
+      colAdded: string;
+      colEdited: string;
       mapTitle: string;
       previewTitle: string;
       doneTitle: string;
@@ -711,8 +711,8 @@ export type DashboardDict = {
         limitHit: string;
         deleteConfirm: string;
         viewerClose: string;
-        // Shown in the create form before the job is saved (no id to attach to yet).
-        addAfterSave: string;
+        // Create form: staged photos upload once the job is saved.
+        pendingHint: string;
       };
     };
     new: {
@@ -2206,9 +2206,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         reportes: 'Ingresos, trabajos, horas y más.',
         tienda: 'Activa o desactiva módulos para tu negocio.',
         ajustes: 'Configura tu negocio, equipo y conexiones.',
-        misTrabajos: 'Trabajos donde eres líder.',
       },
-      misTrabajos: 'Mis Trabajos',
     },
     fieldHome: {
       greeting: 'Hola 👋',
@@ -2645,6 +2643,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       importModal: {
         title: 'Importar clientes',
+        colAdded: 'Agregado (fecha/hora)',
+        colEdited: 'Última edición (fecha/hora)',
         mapTitle: 'Mapear columnas',
         previewTitle: 'Vista previa',
         doneTitle: '¡Importación completa!',
@@ -2869,7 +2869,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           limitHit: 'Máximo {{max}} fotos por trabajo.',
           deleteConfirm: '¿Eliminar esta foto?',
           viewerClose: 'Cerrar',
-          addAfterSave: 'Guarda el trabajo primero para agregar fotos.',
+          pendingHint: 'Las fotos se subirán al guardar el trabajo.',
         },
       },
       new: {
@@ -4363,9 +4363,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         reportes: 'Revenue, jobs, hours, and more.',
         tienda: 'Enable or disable modules for your business.',
         ajustes: 'Configure your business, team, and connections.',
-        misTrabajos: "Jobs where you're the lead.",
       },
-      misTrabajos: 'My Jobs',
     },
     fieldHome: {
       greeting: 'Hi 👋',
@@ -4802,6 +4800,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       importModal: {
         title: 'Import clients',
+        colAdded: 'Added (date/time)',
+        colEdited: 'Last edited (date/time)',
         mapTitle: 'Map columns',
         previewTitle: 'Preview',
         doneTitle: 'Import complete!',
@@ -5026,7 +5026,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           limitHit: 'Maximum {{max}} photos per job.',
           deleteConfirm: 'Delete this photo?',
           viewerClose: 'Close',
-          addAfterSave: 'Save the job first to add photos.',
+          pendingHint: "Photos will upload when you save the job.",
         },
       },
       new: {

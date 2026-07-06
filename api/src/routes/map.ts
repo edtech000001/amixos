@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
-import { geocodeMissingClients, geocodeMissingEmployees } from '../lib/geocoding';
+import { geocodeMissingClients, geocodeMissingEmployees, geocodeMissingJobs } from '../lib/geocoding';
 
 export const mapRouter = Router();
 mapRouter.use(authenticate);
@@ -332,6 +332,37 @@ mapRouter.post('/geocode-clients', async (req: AuthRequest, res) => {
 
   const cap = typeof max_rows === 'number' && max_rows > 0 ? Math.min(max_rows, 250) : 100;
   const result = await geocodeMissingClients(business_id, cap);
+
+  return res.json({ success: true, data: result });
+});
+
+/**
+ * POST /api/v1/map/geocode-jobs
+ * Body: { business_id, max_rows? = 100 }
+ *
+ * Backfills missing job_lat/job_lng on jobs that have an address (typed or
+ * CSV-imported) so they get Map pins. Same auth/cap semantics as
+ * geocode-clients. Requires migration 109.
+ */
+mapRouter.post('/geocode-jobs', async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
+
+  const { business_id, max_rows } = req.body ?? {};
+  if (!business_id || typeof business_id !== 'string') {
+    return res.status(400).json({ success: false, message: 'business_id required' });
+  }
+
+  const { data: membership } = await supabase
+    .from('business_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('business_id', business_id)
+    .maybeSingle();
+  if (!membership) return res.status(403).json({ success: false, message: 'forbidden' });
+
+  const cap = typeof max_rows === 'number' && max_rows > 0 ? Math.min(max_rows, 250) : 100;
+  const result = await geocodeMissingJobs(business_id, cap);
 
   return res.json({ success: true, data: result });
 });

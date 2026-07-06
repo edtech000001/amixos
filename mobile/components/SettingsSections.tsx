@@ -44,6 +44,7 @@ import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
+import { ImportDataModal } from '@/components/ImportDataModal';
 import { PricingModal } from '@/components/PricingModal';
 import { UbicacionesSection } from '@/components/UbicacionesSection';
 import {
@@ -226,6 +227,37 @@ const BUSINESS_US_STATES = [
   'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK',
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
+
+/** Ajustes entry card for the CSV importers (jobs/invoices/employees) —
+ *  mirrors the clients import card and the web Ajustes links, so phone-only
+ *  users can migrate their data too. Owns its open state + modal. */
+function ImportEntryCard({ mode }: { mode: 'jobs' | 'invoices' | 'employees' }) {
+  const { business } = useApp();
+  const { locale } = useLang();
+  const en = locale === 'en';
+  const [open, setOpen] = useState(false);
+  if (!business) return null;
+  const title =
+    mode === 'jobs' ? (en ? 'Import jobs' : 'Importar trabajos')
+    : mode === 'employees' ? (en ? 'Import team' : 'Importar equipo')
+    : (en ? 'Import invoices' : 'Importar facturas');
+  const hint = en ? 'Bulk-load from a CSV file.' : 'Carga masiva desde un archivo CSV.';
+  return (
+    <View className="bg-white rounded-2xl border border-gray-100 p-4">
+      <Pressable onPress={() => setOpen(true)} className="flex-row items-center gap-3 active:opacity-70">
+        <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+          <Sparkles size={18} color="#4F46E5" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-gray-900">{title}</Text>
+          <Text className="text-xs text-gray-500 mt-0.5">{hint}</Text>
+        </View>
+        <Text className="text-xl text-gray-400">›</Text>
+      </Pressable>
+      <ImportDataModal open={open} mode={mode} businessId={business.id} onClose={() => setOpen(false)} />
+    </View>
+  );
+}
 
 function GroupLabel({ children }: { children: string }) {
   return <Text className="text-xs font-semibold text-gray-400 uppercase mt-2">{children}</Text>;
@@ -913,6 +945,7 @@ export function FacturasSection() {
 
   return (
     <View className="gap-5">
+      <ImportEntryCard mode="invoices" />
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<FileText size={18} color="#4F46E5" />}
@@ -1129,6 +1162,7 @@ export function TrabajosSection() {
 
   return (
     <View className="gap-5">
+      <ImportEntryCard mode="jobs" />
       <SectionHeader
         icon={<Briefcase size={18} color="#4F46E5" />}
         title={t.pipeline.heading}
@@ -2710,6 +2744,7 @@ export function EmpleadosSection() {
 
   return (
     <View className="gap-4">
+      <ImportEntryCard mode="employees" />
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader

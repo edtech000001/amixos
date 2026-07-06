@@ -27,8 +27,9 @@ interface Props {
 // Resize the longest edge down + recompress to JPEG in a canvas before
 // upload — same intent as the mobile expo-image-manipulator step, so a raw
 // 10 MB browser upload becomes a few hundred KB. Falls back to the original
-// file if anything in the canvas path fails.
-async function resizeImage(file: File): Promise<Blob> {
+// file if anything in the canvas path fails. Exported for the new-job form,
+// which stages photos and uploads them right after the job row is created.
+export async function resizeImage(file: File): Promise<Blob> {
   try {
     const bitmap = await createImageBitmap(file);
     const longest = Math.max(bitmap.width, bitmap.height);

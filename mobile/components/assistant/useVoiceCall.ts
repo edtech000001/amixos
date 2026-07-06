@@ -11,8 +11,9 @@ import { AV, Speech, SpeechRecognition, fetchTtsFileUri, setPlaybackAudioMode } 
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
-// Close the user's turn this long after their last recognized words.
-const SILENCE_MS = 1_600;
+// Close the user's turn this long after their last recognized words — roomy
+// enough to pause and think mid-sentence without Ami jumping in.
+const SILENCE_MS = 2_800;
 // Hard cap per listening turn — some recognizers never end on their own.
 const MAX_TURN_MS = 45_000;
 
@@ -104,6 +105,9 @@ export function useVoiceCall({
         speech.ExpoSpeechRecognitionModule.start({
           lang: localeRef.current === 'en' ? 'en-US' : 'es-US',
           interimResults: true,
+          // Keep the platform recognizer open — ITS end-of-speech detection
+          // cuts off after ~1.5s of silence; our SILENCE_MS timer owns the turn.
+          continuous: true,
         });
       } catch {
         finish();

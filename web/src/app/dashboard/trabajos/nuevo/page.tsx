@@ -14,7 +14,8 @@ import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toggle } from '@/components/ui/Toggle';
-import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
+import { JobPhotosSection, resizeImage } from '@/components/jobs/JobPhotosSection';
+import { JOB_PHOTOS_BUCKET, MAX_PHOTOS_PER_JOB, jobPhotoPath, jobPhotoFilename } from '@amixos/shared/lib/jobPhotos';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
@@ -252,6 +253,11 @@ function NuevoTrabajoContent() {
   const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
   const [driverSearch, setDriverSearch] = useState('');
   const driverDropdownRef = useRef<HTMLDivElement>(null);
+  // Photos picked while CREATING a job — staged locally (nothing uploads if
+  // the form is abandoned) and pushed to storage right after the insert, when
+  // the job id exists. Edit mode uses the live JobPhotosSection gallery.
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; url: string }[]>([]);
+  const pendingPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // Client search
   const [clientSearch, setClientSearch] = useState('');
@@ -1044,6 +1050,48 @@ function NuevoTrabajoContent() {
     allDay ? null : timeEnd,
   );
 
+  const addPendingPhotos = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(ev.target.files ?? []);
+    if (files.length) {
+      setPendingPhotos(prev =>
+        [...prev, ...files.map(file => ({ file, url: URL.createObjectURL(file) }))].slice(0, MAX_PHOTOS_PER_JOB),
+      );
+    }
+    ev.target.value = '';
+  };
+
+  const removePendingPhoto = (url: string) => {
+    URL.revokeObjectURL(url);
+    setPendingPhotos(prev => prev.filter(p => p.url !== url));
+  };
+
+  // Upload the staged photos once the job row exists (same resize + path +
+  // metadata as the detail gallery). A failed photo never blocks the save —
+  // the detail page's gallery is always there to retry.
+  const uploadPendingPhotos = async (jobId: string) => {
+    let order = 0;
+    for (const p of pendingPhotos) {
+      try {
+        const blob = await resizeImage(p.file);
+        const path = jobPhotoPath(business!.id, jobId, jobPhotoFilename('jpg'));
+        const { error: upErr } = await supabase.storage
+          .from(JOB_PHOTOS_BUCKET)
+          .upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
+        if (upErr) continue;
+        await supabase.from('job_photos').insert({
+          business_id: business!.id,
+          job_id: jobId,
+          storage_path: path,
+          sort_order: order++,
+          created_by: user?.id ?? null,
+        });
+      } catch {
+        /* keep going — remaining photos still upload */
+      }
+      URL.revokeObjectURL(p.url);
+    }
+  };
+
   const save = async () => {
     if (!title.trim()) { setError(isEditProposal ? t.errorTitleRequiredProposal : t.errorTitleRequiredJob); return; }
     const validItems = items.filter(i => i.description.trim());
@@ -1145,6 +1193,8 @@ function NuevoTrabajoContent() {
           );
         }
 
+        if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
+
         router.push(`/dashboard/trabajos/${finalJobId}`);
       } else {
         const jobData: any = {
@@ -1245,6 +1295,8 @@ function NuevoTrabajoContent() {
         if (assignments.length > 0) {
           await supabase.from('job_assignments').insert(assignments);
         }
+
+        if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
 
         router.push(`/dashboard/trabajos/${finalJobId}`);
       }
@@ -1695,18 +1747,61 @@ function NuevoTrabajoContent() {
         </div>
         )}
 
-        {/* ── Fotos — uploads need a saved job_id, so the gallery only shows
-            when editing an existing job; new jobs get a hint and land on the
-            detail screen (which has the gallery) after save. */}
+        {/* ── Fotos — edit mode shows the live gallery; create mode stages
+            photos locally and uploads them right after the insert (see
+            uploadPendingPhotos), so nothing is left in storage if the form
+            is abandoned. */}
         {editId && business ? (
           <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <ImagePlus size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{full.dashboard.jobs.detail.photos.heading}</p>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ImagePlus size={15} className="text-primary"/>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{full.dashboard.jobs.detail.photos.heading}</p>
+              </div>
+              <span className="text-xs text-gray-400">
+                {full.dashboard.jobs.detail.photos.countLabel
+                  .replace('{{count}}', String(pendingPhotos.length))
+                  .replace('{{max}}', String(MAX_PHOTOS_PER_JOB))}
+              </span>
             </div>
-            <p className="text-sm text-gray-400">{full.dashboard.jobs.detail.photos.addAfterSave}</p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+              {pendingPhotos.map(p => (
+                <div key={p.url} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePendingPhoto(p.url)}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+              {pendingPhotos.length < MAX_PHOTOS_PER_JOB && (
+                <button
+                  type="button"
+                  onClick={() => pendingPhotoInputRef.current?.click()}
+                  className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                >
+                  <ImagePlus size={22} />
+                  <span className="text-[11px] mt-1.5 font-medium">{full.dashboard.jobs.detail.photos.addBtn}</span>
+                </button>
+              )}
+            </div>
+            {pendingPhotos.length > 0 && (
+              <p className="text-xs text-gray-400 mt-2">{full.dashboard.jobs.detail.photos.pendingHint}</p>
+            )}
+            <input
+              ref={pendingPhotoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={addPendingPhotos}
+              className="hidden"
+            />
           </div>
         )}
 

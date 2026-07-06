@@ -8,6 +8,7 @@ import Papa from 'papaparse';
 import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users } from 'lucide-react-native';
 import { Modal, Button, Select } from '@amixos/shared/ui';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
+import { parseTimestamp } from '@amixos/shared/lib/dataImport';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -30,6 +31,8 @@ const CLIENT_FIELD_KEYS = [
   'phone_cell', 'phone_office',
   'email_office', 'email_home',
   'address', 'city', 'state', 'zip_code', 'notes',
+  // Optional source-system timestamps — blank keeps the now() defaults.
+  'created_at', 'updated_at',
 ] as const;
 
 // Lightweight US state normalizer — matches the most common spellings.
@@ -186,6 +189,7 @@ export function ImportClientsModal({
       'juan@perez.com', '',
       '123 Main St', 'Omaha', 'NE', '68102',
       'Cliente nuevo',
+      '6/9/2026 8:00', '6/12/2026 4:45 PM',
     ].join(',');
     const csv = `${headers}\n${example}\n`;
     const path = `${FileSystem.cacheDirectory}${t.importModal.templateFilename}`;
@@ -288,6 +292,8 @@ export function ImportClientsModal({
     state: t.fields.state,
     zip_code: t.fields.zipCode,
     notes: t.fields.notes,
+    created_at: t.importModal.colAdded,
+    updated_at: t.importModal.colEdited,
   };
 
   const allImportFields = [
@@ -421,6 +427,13 @@ export function ImportClientsModal({
         if (col && row[col] !== undefined) {
           let val: string | null = row[col].trim() || null;
           if (field === 'state' && val) val = normalizeState(val);
+          // Timestamps must land as valid ISO or not at all — a raw cell that
+          // Postgres can't parse would fail the whole row.
+          if (field === 'created_at' || field === 'updated_at') {
+            const ts = parseTimestamp(val);
+            if (ts) entry[field] = ts;
+            return;
+          }
           entry[field] = val;
         }
       });

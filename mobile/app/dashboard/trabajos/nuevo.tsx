@@ -7,10 +7,12 @@ import {
   TextInput,
   Modal as RNModal,
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,9 +32,12 @@ import {
   Lock,
   Eye,
   ImagePlus,
+  Camera,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
-import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
+import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
+import { isOnlineNow } from '@/lib/offline/network';
+import { JOB_PHOTOS_BUCKET, MAX_PHOTOS_PER_JOB, jobPhotoPath, jobPhotoFilename } from '@amixos/shared/lib/jobPhotos';
 import { prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
@@ -1204,6 +1209,76 @@ export default function NuevoTrabajoRoute() {
     setAssignedEmployees((prev) => (prev.includes(id) ? prev : [...prev, id]));
   };
 
+  // Photos picked while CREATING a job — staged locally (nothing uploads if
+  // the form is abandoned) and queued right after save, when the job id
+  // exists. Edit mode uses the live JobPhotosSection gallery.
+  const [pendingPhotos, setPendingPhotos] = useState<{ uri: string }[]>([]);
+
+  const pickPendingPhoto = async (source: 'camera' | 'library') => {
+    if (pendingPhotos.length >= MAX_PHOTOS_PER_JOB) return;
+    const perm =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    // Picker-side quality 0.6 — same compression as the detail gallery.
+    const result =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.6,
+          });
+    if (result.canceled || !result.assets?.[0]) return;
+    const uri = result.assets[0].uri;
+    setPendingPhotos(prev => [...prev, { uri }].slice(0, MAX_PHOTOS_PER_JOB));
+  };
+
+  // Upload (or enqueue offline) the staged photos against the new job id —
+  // same path/payload as the detail gallery's pickAndUpload. A failed photo
+  // never blocks the save; the detail gallery is always there to retry.
+  const queuePendingPhotos = async (jobId: string) => {
+    if (!business) return;
+    for (let i = 0; i < pendingPhotos.length; i++) {
+      try {
+        const path = jobPhotoPath(business.id, jobId, jobPhotoFilename('jpg'));
+        // Offline: copy into the document dir so the queued upload survives an
+        // app restart (the picker's temp uri can be cleared).
+        let uploadUri = pendingPhotos[i].uri;
+        if (!isOnlineNow()) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const FileSystem = require('expo-file-system');
+            const durable = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
+            await FileSystem.copyAsync({ from: pendingPhotos[i].uri, to: durable });
+            uploadUri = durable;
+          } catch {
+            /* fall back to the temp uri */
+          }
+        }
+        await queuedUpload({
+          table: 'job_photos',
+          payload: {
+            id: newUuid(),
+            business_id: business.id,
+            job_id: jobId,
+            storage_path: path,
+            sort_order: i,
+            created_by: user?.id ?? null,
+          },
+          businessId: business.id,
+          label: full.dashboard.jobs.detail.photos.addBtn,
+          localUri: uploadUri,
+          bucket: JOB_PHOTOS_BUCKET,
+          storagePath: path,
+          contentType: 'image/jpeg',
+        });
+      } catch {
+        /* keep going — remaining photos still upload */
+      }
+    }
+  };
+
   const save = async () => {
     if (!business) return;
     if (!title.trim()) {
@@ -1422,6 +1497,10 @@ export default function NuevoTrabajoRoute() {
         }
       }
 
+      // Staged photos (create mode) → upload now, or queue in the outbox when
+      // offline — the client-generated job id makes both paths safe.
+      if (!editId && pendingPhotos.length) await queuePendingPhotos(jobId);
+
       if (jobQueued && optimisticJobRow) {
         // Offline create: seed caches so the job shows in the list + opens, then
         // go to the list (the detail's joined client data isn't available yet).
@@ -1625,16 +1704,66 @@ export default function NuevoTrabajoRoute() {
             </Section>
           )}
 
-          {/* Photos — uploads need a saved job_id, so the gallery only
-             appears when editing an existing job. New jobs get a hint and
-             land on the detail screen (which has the gallery) after save. */}
+          {/* Photos — edit mode shows the live gallery; create mode stages
+             photos locally and queues the uploads right after save (see
+             queuePendingPhotos), so nothing lands in storage if the form
+             is abandoned. */}
           <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color="#4F46E5" />}>
             {editId && business ? (
               <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
             ) : (
-              <Text className="text-sm text-gray-400">
-                {full.dashboard.jobs.detail.photos.addAfterSave}
-              </Text>
+              <View>
+                {pendingPhotos.length > 0 ? (
+                  <View className="flex-row flex-wrap" style={{ gap: 8, marginBottom: 10 }}>
+                    {pendingPhotos.map(p => (
+                      <View
+                        key={p.uri}
+                        style={{ width: 84, height: 84, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F3F4F6' }}
+                      >
+                        <Image source={{ uri: p.uri }} style={{ width: '100%', height: '100%' }} />
+                        <Pressable
+                          onPress={() => setPendingPhotos(prev => prev.filter(x => x.uri !== p.uri))}
+                          hitSlop={6}
+                          style={{
+                            position: 'absolute', top: 4, right: 4, width: 22, height: 22,
+                            borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)',
+                            alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          <X size={12} color="#fff" />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {pendingPhotos.length < MAX_PHOTOS_PER_JOB ? (
+                  <View className="flex-row" style={{ gap: 10 }}>
+                    <Pressable
+                      onPress={() => void pickPendingPhoto('camera')}
+                      className="flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 active:bg-gray-50"
+                    >
+                      <Camera size={16} color="#4B5563" />
+                      <Text className="text-sm font-medium text-gray-600 ml-1.5">
+                        {full.dashboard.jobs.detail.photos.takePhoto}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void pickPendingPhoto('library')}
+                      className="flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 active:bg-gray-50"
+                    >
+                      <ImagePlus size={16} color="#4B5563" />
+                      <Text className="text-sm font-medium text-gray-600 ml-1.5">
+                        {full.dashboard.jobs.detail.photos.chooseFromLibrary}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {pendingPhotos.length > 0 ? (
+                  <Text className="text-xs text-gray-400 mt-2.5">
+                    {full.dashboard.jobs.detail.photos.pendingHint}
+                  </Text>
+                ) : null}
+              </View>
             )}
           </Section>
 

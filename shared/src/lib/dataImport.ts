@@ -97,6 +97,100 @@ export function parseDate(raw: string | null | undefined): string | null {
   return null;
 }
 
+/** Parse a time cell into 'HH:MM' (24h), or null if blank/unparseable.
+ *  Handles "7:30", "07:30", "7:30 AM", "3:15pm", "15:00", and bare hours
+ *  ("7", "7 AM"). Returns null rather than throwing — a bad time just leaves
+ *  the field empty. */
+export function parseTime(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/);
+  if (!m) return null;
+  let hours = parseInt(m[1], 10);
+  const minutes = m[2] ? parseInt(m[2], 10) : 0;
+  const meridiem = m[3]?.[0]; // 'a' | 'p' | undefined
+  if (minutes > 59) return null;
+  if (meridiem) {
+    if (hours < 1 || hours > 12) return null;
+    if (meridiem === 'p' && hours !== 12) hours += 12;
+    if (meridiem === 'a' && hours === 12) hours = 0;
+  } else if (hours > 23) {
+    return null;
+  }
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/** Parse a timestamp cell into an ISO string, or null if blank/unparseable.
+ *  Accepts full timestamps ("2026-06-10T14:32:00Z", "6/10/2026 14:32",
+ *  "6/10/2026 2:32 PM") via the JS Date parser; date-only values fall back to
+ *  parseDate anchored at local noon so timezones can't shift the date. */
+export function parseTimestamp(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  // Date-only forms go through parseDate (it validates M/D/Y properly).
+  const dateOnly = /^(\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})$/.test(s);
+  if (!dateOnly) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  const date = parseDate(s);
+  return date ? new Date(`${date}T12:00:00`).toISOString() : null;
+}
+
+/** Pull coordinates out of a Google/Apple Maps link — same patterns the job
+ *  form uses (@lat,lng · ?q=/ll= · !3d!4d). Shortened links (maps.app.goo.gl)
+ *  carry no coords in the URL; those return null and the raw link is still
+ *  saved. */
+export function coordsFromMapLink(link: string | null | undefined): { lat: number; lng: number } | null {
+  const s = String(link ?? '').trim();
+  if (!s) return null;
+  const m =
+    s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+    s.match(/[?&](?:q|ll)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+    s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+export type ImportJobStatus =
+  | 'proposal'
+  | 'sent'
+  | 'accepted'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'invoiced';
+
+const JOB_STATUS_SYNONYMS: Record<string, ImportJobStatus> = {
+  proposal: 'proposal', propuesta: 'proposal', cotizacion: 'proposal', estimate: 'proposal',
+  sent: 'sent', enviado: 'sent', enviada: 'sent',
+  accepted: 'accepted', aceptado: 'accepted', aceptada: 'accepted',
+  scheduled: 'scheduled', agendado: 'scheduled', agendada: 'scheduled',
+  programado: 'scheduled', programada: 'scheduled',
+  'in progress': 'in_progress', in_progress: 'in_progress',
+  'en progreso': 'in_progress', 'en proceso': 'in_progress', activo: 'in_progress',
+  completed: 'completed', completado: 'completed', completada: 'completed',
+  terminado: 'completed', terminada: 'completed', done: 'completed',
+  invoiced: 'invoiced', facturado: 'invoiced', facturada: 'invoiced',
+};
+
+/** Map a free-text status cell to a pipeline status. Blank → null (caller
+ *  applies its default); unrecognized non-blank → undefined so the caller can
+ *  record a row error instead of silently misclassifying. */
+export function parseJobStatus(
+  raw: string | null | undefined,
+): ImportJobStatus | null | undefined {
+  const s = normalizeName(raw ?? '');
+  if (!s) return null;
+  return JOB_STATUS_SYNONYMS[s];
+}
+
 /** Group invoice line-item rows into one entry per invoice number, preserving
  *  first-seen order for both invoices and their lines. Each row is whatever the
  *  caller passes (already mapped to fields); `keyOf` extracts the invoice

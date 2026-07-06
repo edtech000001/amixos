@@ -69,10 +69,10 @@ export async function geocodeAddress(addressLine: string): Promise<GeocodeOutcom
 interface AddressFields {
   id: string;
   address: string | null;
-  address_line2?: string | null; // employees have no line 2 — optional
+  address_line2?: string | null; // employees/jobs have no line 2 — optional
   city: string | null;
   state: string | null;
-  zip_code: string | null;
+  zip_code?: string | null; // jobs have no zip — optional
 }
 
 /**
@@ -168,6 +168,64 @@ export async function geocodeMissingClients(
  * current job to derive their position from. Same cooldown / cap / write-back
  * semantics as geocodeMissingClients. Employees have no address_line2.
  */
+/**
+ * Backfill job_lat/job_lng for a business's jobs that have an address but no
+ * coordinates — so typed-in and CSV-imported addresses get a Map pin without
+ * the user pasting coordinates. Same cooldown / cap / write-back semantics as
+ * geocodeMissingClients. Jobs with no address fields at all are excluded by
+ * the query (most jobs have no address — don't burn rows/attempts on them).
+ * Requires migration 109 (lat_lookup columns on jobs).
+ */
+export async function geocodeMissingJobs(
+  businessId: string,
+  maxRows: number = 100,
+): Promise<{ attempted: number; geocoded: number; failed: number }> {
+  const cutoff = new Date(Date.now() - RETRY_COOLDOWN_DAYS * 86_400_000).toISOString();
+  const { data } = await supabase
+    .from('jobs')
+    .select('id, address:job_address, city:job_city, state:job_state')
+    .eq('business_id', businessId)
+    .eq('geocoding_ignored', false)
+    .is('job_lat', null)
+    // At least one address part present (multiple .or() calls AND together).
+    .or('job_address.not.is.null,job_city.not.is.null,job_state.not.is.null')
+    .or(`lat_lookup_attempted_at.is.null,lat_lookup_attempted_at.lt.${cutoff}`)
+    .limit(maxRows);
+
+  const rows = (data ?? []) as unknown as AddressFields[];
+  let geocoded = 0;
+  let failed = 0;
+
+  for (const j of rows) {
+    const line = buildAddressLine(j);
+    const nowIso = new Date().toISOString();
+    if (!line) {
+      failed++;
+      await supabase
+        .from('jobs')
+        .update({ lat_lookup_attempted_at: nowIso, lat_lookup_failed_reason: 'no_address' })
+        .eq('id', j.id);
+      continue;
+    }
+    const result = await geocodeAddress(line);
+    if (!result.ok) {
+      failed++;
+      await supabase
+        .from('jobs')
+        .update({ lat_lookup_attempted_at: nowIso, lat_lookup_failed_reason: result.reason })
+        .eq('id', j.id);
+      continue;
+    }
+    await supabase
+      .from('jobs')
+      .update({ job_lat: result.lat, job_lng: result.lng, lat_lookup_attempted_at: null, lat_lookup_failed_reason: null })
+      .eq('id', j.id);
+    geocoded++;
+  }
+
+  return { attempted: rows.length, geocoded, failed };
+}
+
 export async function geocodeMissingEmployees(
   businessId: string,
   maxRows: number = 100,

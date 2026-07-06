@@ -642,19 +642,22 @@ export default function MapModule() {
     setGeocodeProgress({ done: 0, total: initialPending });
     try {
       const jwt = await getJwt();
-      // Loop until server returns attempted=0. Safety cap = 50 batches.
-      for (let i = 0; i < 50; i++) {
-        const r = await fetch(`${apiBaseUrl}/api/v1/map/geocode-clients`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-          body: JSON.stringify({ business_id: business.id }),
-        });
-        if (!r.ok) break;
-        const j = await r.json();
-        const { attempted = 0, geocoded = 0 } = j?.data ?? {};
-        totalGeocoded += geocoded;
-        setGeocodeProgress({ done: totalGeocoded, total: initialPending });
-        if (attempted === 0) break;
+      // Drain clients, then jobs (addresses typed on the form or CSV-imported
+      // get pins too). Loop until server returns attempted=0; cap 50 batches.
+      for (const endpoint of ['geocode-clients', 'geocode-jobs']) {
+        for (let i = 0; i < 50; i++) {
+          const r = await fetch(`${apiBaseUrl}/api/v1/map/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+            body: JSON.stringify({ business_id: business.id }),
+          });
+          if (!r.ok) break;
+          const j = await r.json();
+          const { attempted = 0, geocoded = 0 } = j?.data ?? {};
+          totalGeocoded += geocoded;
+          setGeocodeProgress({ done: totalGeocoded, total: initialPending });
+          if (attempted === 0) break;
+        }
       }
       await load();
     } catch {

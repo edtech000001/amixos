@@ -13,6 +13,7 @@ import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { parseTimestamp } from '@amixos/shared/lib/dataImport';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -380,6 +381,9 @@ export default function ClientesPage() {
     { key: 'state',        label: t.fields.state },
     { key: 'zip_code',     label: t.fields.zipCode },
     { key: 'notes',        label: t.fields.notes },
+    // Optional source-system timestamps — blank keeps the now() defaults.
+    { key: 'created_at',   label: t.importModal.colAdded },
+    { key: 'updated_at',   label: t.importModal.colEdited },
   ];
 
   const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean }[] = [
@@ -462,6 +466,13 @@ export default function ClientesPage() {
         if (col && row[col] !== undefined) {
           let val: string | null = row[col].trim() || null;
           if (field.key === 'state' && val) val = normalizeState(val);
+          // Timestamps must land as valid ISO or not at all — a raw cell that
+          // Postgres can't parse would fail the whole row.
+          if (field.key === 'created_at' || field.key === 'updated_at') {
+            const ts = parseTimestamp(val);
+            if (ts) entry[field.key] = ts;
+            return;
+          }
           entry[field.key] = val;
         }
       });
@@ -528,9 +539,10 @@ export default function ClientesPage() {
       t.fields.phoneCell, t.fields.phoneOffice,
       t.fields.emailOffice, t.fields.emailHome,
       t.fields.addressLine1, t.fields.city, t.fields.state, t.fields.zipCode, t.fields.notes,
+      t.importModal.colAdded, t.importModal.colEdited,
       ...templates.map(tpl => tpl.field_label),
     ];
-    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', '',
+    const example = ['Juan', 'Pérez', 'Construcciones JP', '555-1234', '555-5678', 'jp@empresa.com', 'juan@personal.com', '123 Main St', 'Omaha', 'NE', '68102', '', '6/9/2026 8:00', '6/12/2026 4:45 PM',
       ...templates.map(() => '')];
     const csv = [headers.join(','), example.join(',')].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
