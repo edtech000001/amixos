@@ -54,7 +54,7 @@ export default function ImportModal({
   open, mode, businessId, supabase, templates = [], accessRoles = [], invoiceTemplate, onClose, onDone,
 }: Props) {
   const { locale } = useLang();
-  const { user } = useApp();
+  const { user, business } = useApp();
   const en = locale === 'en';
   const tr = (esText: string, enText: string) => (en ? enText : esText);
 
@@ -67,10 +67,17 @@ export default function ImportModal({
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ImportResult>({ success: 0, skipped: 0, failedRows: [], notes: [] });
   const [showErrors, setShowErrors] = useState(false);
+  // Fix-and-retry for a failed row: index into result.failedRows being edited,
+  // its field values (keyed by field key), and the in-flight flag.
+  const [fixingIndex, setFixingIndex] = useState<number | null>(null);
+  const [fixValues, setFixValues] = useState<Record<string, string>>({});
+  const [retrying, setRetrying] = useState(false);
 
   const useTemplates = importModeUsesTemplates(mode);
+  // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).
+  const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false };
   const fields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean }[] = [
-    ...importFieldsFor(mode).map(f => ({ ...f, label: en ? f.en : f.es })),
+    ...importFieldsFor(mode, fieldOpts).map(f => ({ ...f, label: en ? f.en : f.es })),
     ...(useTemplates ? templates.map(t => ({ key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true })) : []),
   ];
 
@@ -97,20 +104,23 @@ export default function ImportModal({
     });
   };
 
+  const buildCtx = (importRows: Record<string, string>[]) => ({
+    supabase,
+    businessId,
+    userId: user?.id ?? null,
+    userEmail: user?.email ?? null,
+    locale: (en ? 'en' : 'es') as 'en' | 'es',
+    rows: importRows,
+    colMap,
+    templates: useTemplates ? templates : [],
+    accessRoles,
+    invoiceTemplate,
+  });
+
   const runImport = async () => {
     setImporting(true);
     try {
-      const res = await runImportFor(mode, {
-        supabase,
-        businessId,
-        userId: user?.id ?? null,
-        locale: en ? 'en' : 'es',
-        rows,
-        colMap,
-        templates: useTemplates ? templates : [],
-        accessRoles,
-        invoiceTemplate,
-      });
+      const res = await runImportFor(mode, buildCtx(rows));
       setResult(res);
       setStep('done');
       onDone?.();
@@ -122,8 +132,53 @@ export default function ImportModal({
     }
   };
 
+  const mappedFields = fields.filter(f => colMap[f.key]);
+
+  const openFix = (i: number) => {
+    const fr = result.failedRows[i];
+    if (fr.rowIndex == null) return;
+    const row = rows[fr.rowIndex] ?? {};
+    const values: Record<string, string> = {};
+    mappedFields.forEach(f => { values[f.key] = row[colMap[f.key]] ?? ''; });
+    setFixValues(values);
+    setFixingIndex(i);
+  };
+
+  // Re-run the import for JUST the edited row. Success (or "already exists")
+  // removes it from the failure list; a new failure updates the reason in place.
+  const retryFix = async () => {
+    if (fixingIndex === null) return;
+    const editedRow: Record<string, string> = {};
+    mappedFields.forEach(f => { editedRow[colMap[f.key]] = fixValues[f.key] ?? ''; });
+    setRetrying(true);
+    try {
+      const res = await runImportFor(mode, buildCtx([editedRow]));
+      if (res.success > 0 || res.skipped > 0) {
+        setResult(prev => ({
+          ...prev,
+          success: prev.success + res.success,
+          skipped: prev.skipped + res.skipped,
+          failedRows: prev.failedRows.filter((_, i) => i !== fixingIndex),
+          notes: [...prev.notes, ...res.notes.filter(n => !prev.notes.includes(n))],
+        }));
+        setFixingIndex(null);
+        onDone?.();
+      } else {
+        const reason = res.failedRows[0]?.reason;
+        if (reason) {
+          setResult(prev => ({
+            ...prev,
+            failedRows: prev.failedRows.map((f, i) => (i === fixingIndex ? { ...f, reason } : f)),
+          }));
+        }
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const downloadTemplate = () => {
-    const { filename, csv } = buildImportTemplateCsv(mode, en ? 'en' : 'es', templates);
+    const { filename, csv } = buildImportTemplateCsv(mode, en ? 'en' : 'es', templates, fieldOpts);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -141,6 +196,7 @@ export default function ImportModal({
 
   const uploadHint =
     mode === 'jobs' ? tr('Sube un CSV con un renglón por proyecto. Incluye la columna Project ID para poder enlazar las facturas después.', 'Upload a CSV with one row per project. Include the Project ID column so invoices can link to them later.')
+      + (fieldOpts.jobPricing ? tr(' Repite el mismo Project ID en varias filas para agregar líneas de materiales/precios al mismo trabajo.', ' Repeat the same Project ID on several rows to add line items to one job.') : '')
     : mode === 'employees' ? tr('Sube un CSV con un renglón por persona. Las personas se vinculan por nombre — usa los mismos nombres en tus trabajos y facturas.', 'Upload a CSV with one row per person. People are matched by name — use the same names across your jobs and invoices.')
     : tr('Sube un CSV con un renglón por línea de factura. Importa los trabajos PRIMERO — cada línea se enlaza al trabajo por su Project ID.', 'Upload a CSV with one row per invoice line. Import jobs FIRST — each line links to its job by Project ID.');
 
@@ -270,11 +326,46 @@ export default function ImportModal({
                     {showErrors ? tr('Ocultar detalles ▴', 'Hide details ▴') : tr('Ver detalles de los errores ▾', 'See error details ▾')}
                   </button>
                   {showErrors && (
-                    <div className="mt-2 max-h-64 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
+                    <div className="mt-2 max-h-80 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
                       {result.failedRows.slice(0, 50).map((f, i) => (
                         <div key={i} className="px-4 py-2 border-b border-red-100/60 last:border-b-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
-                          <p className="text-xs text-red-700">{f.reason}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
+                              <p className="text-xs text-red-700">{f.reason}</p>
+                            </div>
+                            {f.rowIndex != null && (
+                              <button
+                                type="button"
+                                onClick={() => (fixingIndex === i ? setFixingIndex(null) : openFix(i))}
+                                className="shrink-0 text-xs font-semibold text-primary hover:underline"
+                              >
+                                {fixingIndex === i ? tr('Cancelar', 'Cancel') : tr('Corregir', 'Fix')}
+                              </button>
+                            )}
+                          </div>
+                          {/* Inline editor — fix the row's values and retry just this row. */}
+                          {fixingIndex === i && (
+                            <div className="mt-2 rounded-xl bg-white border border-gray-100 p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {mappedFields.map(mf => (
+                                  <div key={mf.key} className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] font-medium text-gray-500">{mf.label}{mf.required ? ' *' : ''}</label>
+                                    <input
+                                      value={fixValues[mf.key] ?? ''}
+                                      onChange={e => setFixValues(v => ({ ...v, [mf.key]: e.target.value }))}
+                                      className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-2 flex justify-end">
+                                <Button size="sm" onClick={() => void retryFix()} loading={retrying}>
+                                  {tr('Reintentar fila', 'Retry row')}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                       {result.failedRows.length > 50 && (

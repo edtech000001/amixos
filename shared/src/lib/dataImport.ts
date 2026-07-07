@@ -139,6 +139,20 @@ export function parseTimestamp(raw: string | null | undefined): string | null {
   return date ? new Date(`${date}T12:00:00`).toISOString() : null;
 }
 
+/** Parse a raw "lat, lng" pair (comma or whitespace separated) — same format
+ *  the job form's coordinates field accepts. Null on blank/invalid/out-of-range. */
+export function parseLatLng(raw: string | null | undefined): { lat: number; lng: number } | null {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const m = s.match(/^(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
 /** Pull coordinates out of a Google/Apple Maps link — same patterns the job
  *  form uses (@lat,lng · ?q=/ll= · !3d!4d). Shortened links (maps.app.goo.gl)
  *  carry no coords in the URL; those return null and the raw link is still

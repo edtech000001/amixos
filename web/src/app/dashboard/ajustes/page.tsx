@@ -10,6 +10,8 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { usStateName } from '@amixos/shared/lib/usStates';
+import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
 import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import {
@@ -72,6 +74,8 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
+import ImportModal from '@/components/dashboard/ImportModal';
+import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { UbicacionesSettings } from '@/components/dashboard/UbicacionesSettings';
 import { formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import {
@@ -129,11 +133,11 @@ function buildFieldConfig(form: {
   };
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'cuenta' | 'soporte';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
 
 // Tabs that change business config — admin-only. The rest ('cuenta','soporte')
 // are personal and visible to every member.
-const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'facturas', 'facturatema', 'conexiones'];
+const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'facturas', 'facturatema', 'conexiones', 'importar'];
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -297,6 +301,31 @@ export default function AjustesPage() {
   const [invoiceStartNumber, setInvoiceStartNumber] = useState(
     String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER),
   );
+  const [invoiceTaxRate, setInvoiceTaxRate] = useState(
+    business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '',
+  );
+  const [invoiceEmailSubject, setInvoiceEmailSubject] = useState(business?.invoice_email_subject ?? '');
+  const [invoiceEmailBody, setInvoiceEmailBody] = useState(business?.invoice_email_body ?? '');
+  // Clickable {{token}} chips insert at the cursor. Selection is tracked via
+  // onSelect (fires on focus/click/keyup); null = never focused → append.
+  const invoiceEmailSubjectRef = useRef<HTMLInputElement>(null);
+  const invoiceEmailBodyRef = useRef<HTMLTextAreaElement>(null);
+  const emailSelRef = useRef<{ subject: { s: number; e: number } | null; body: { s: number; e: number } | null }>({ subject: null, body: null });
+  const insertEmailToken = (field: 'subject' | 'body', token: string) => {
+    const el = field === 'subject' ? invoiceEmailSubjectRef.current : invoiceEmailBodyRef.current;
+    const value = field === 'subject' ? invoiceEmailSubject : invoiceEmailBody;
+    const set = field === 'subject' ? setInvoiceEmailSubject : setInvoiceEmailBody;
+    const sel = emailSelRef.current[field];
+    const start = sel ? Math.min(sel.s, value.length) : value.length;
+    const end = sel ? Math.min(sel.e, value.length) : value.length;
+    set(value.slice(0, start) + token + value.slice(end));
+    const pos = start + token.length;
+    emailSelRef.current[field] = { s: pos, e: pos };
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState('');
   const [invoiceMsgIsError, setInvoiceMsgIsError] = useState(false);
@@ -487,6 +516,9 @@ export default function AjustesPage() {
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
       setInvoiceStartNumber(String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
+      setInvoiceTaxRate(business.invoice_tax_rate ? String(business.invoice_tax_rate) : '');
+      setInvoiceEmailSubject(business.invoice_email_subject ?? '');
+      setInvoiceEmailBody(business.invoice_email_body ?? '');
       setInvoiceTheme(normalizeBundle(business.invoice_template));
       const ireq = business.invoice_field_required ?? {};
       setInvoiceFieldRequired(ireq);
@@ -545,6 +577,27 @@ export default function AjustesPage() {
   // Viewer backdrop: dark by default; toggle to white so dark logos are visible.
   const [logoViewerLight, setLogoViewerLight] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Import hub ────────────────────────────────────────────────────────────
+  // Every step opens its wizard IN PLACE — the user never leaves the hub
+  // while migrating. Configs load when the tab opens.
+  const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices'>(null);
+  const [hubJobTemplates, setHubJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
+  const [hubEmpTemplates, setHubEmpTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
+  const [hubClientTemplates, setHubClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
+  const [hubAccessRoles, setHubAccessRoles] = useState<{ key: string; name: string | null }[]>([]);
+  useEffect(() => {
+    if (tab !== 'importar' || !business) return;
+    supabase.from('job_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: typeof hubJobTemplates | null }) => setHubJobTemplates(data ?? []));
+    supabase.from('employee_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: typeof hubEmpTemplates | null }) => setHubEmpTemplates(data ?? []));
+    supabase.from('client_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: typeof hubClientTemplates | null }) => setHubClientTemplates(data ?? []));
+    supabase.from('business_roles').select('key, name').eq('business_id', business.id)
+      .then(({ data }: { data: typeof hubAccessRoles | null }) => setHubAccessRoles(data ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, business?.id]);
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
   // from the form's Save button — same bucket path as onboarding.
@@ -647,11 +700,21 @@ export default function AjustesPage() {
       setInvoiceMsg(t.invoices.saveError);
       return;
     }
+    // Default tax %: 0–100, up to 2 decimals; blank = no tax.
+    const taxNum = invoiceTaxRate.trim() === '' ? 0 : Number(invoiceTaxRate);
+    if (!Number.isFinite(taxNum) || taxNum < 0 || taxNum > 100) {
+      setInvoiceMsgIsError(true);
+      setInvoiceMsg(t.invoices.saveError);
+      return;
+    }
     setSavingInvoice(true); setInvoiceMsg('');
     const { error } = await supabase.from('businesses').update({
       invoice_due_days: days,
       invoice_start_number: startNum,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
+      invoice_tax_rate: Math.round(taxNum * 100) / 100,
+      invoice_email_subject: invoiceEmailSubject.trim() || null,
+      invoice_email_body: invoiceEmailBody.trim() || null,
     }).eq('id', business.id);
     setInvoiceMsgIsError(!!error);
     setInvoiceMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
@@ -1982,8 +2045,11 @@ export default function AjustesPage() {
       JSON.stringify(dbInvoiceHidden) !== JSON.stringify(invoiceHidden) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
       String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
+      (business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '') !== invoiceTaxRate ||
+      (business?.invoice_email_subject ?? '') !== invoiceEmailSubject ||
+      (business?.invoice_email_body ?? '') !== invoiceEmailBody ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceEmailSubject, invoiceEmailBody, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -1999,6 +2065,9 @@ export default function AjustesPage() {
     setInvoiceHidden(dbInvoiceHidden);
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setInvoiceStartNumber(String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
+    setInvoiceTaxRate(business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '');
+    setInvoiceEmailSubject(business?.invoice_email_subject ?? '');
+    setInvoiceEmailBody(business?.invoice_email_body ?? '');
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
     setInvoiceReqMsg('');
     setInvoiceMsg('');
@@ -2145,43 +2214,41 @@ export default function AjustesPage() {
           {tab === 'negocio' && (
             <div className="flex flex-col gap-6">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              {/* Header: title left, logo top-right — fills the space instead of
-                 stacking a narrow column under a centered logo. */}
-              <div className="flex items-start justify-between gap-6 mb-6 max-w-4xl">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
-                  <p className="text-xs text-gray-400">{t.business.subtitle}</p>
-                </div>
-                {/* Logo — `contain` so round/wide logos aren't clipped. Uploads on pick. */}
-                <div className="flex flex-col items-center gap-3 shrink-0">
-                  {business?.logo_url ? (
-                    <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={business.logo_url} alt="" className="w-24 h-24 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
-                    </button>
-                  ) : (
-                    <div className="w-24 h-24 rounded-2xl bg-gray-100 flex items-center justify-center">
-                      <Building2 size={28} className="text-gray-400" />
-                    </div>
-                  )}
-                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => logoInputRef.current?.click()}
-                      disabled={uploadingLogo}
-                      className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
-                    >
-                      {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
-                    </button>
-                    {business?.logo_url && !uploadingLogo && (
-                      <button
-                        onClick={onRemoveLogo}
-                        className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
-                      >
-                        {t.business.logoRemoveBtn}
-                      </button>
-                    )}
+              <div className="mb-5 max-w-4xl">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
+                <p className="text-xs text-gray-400">{t.business.subtitle}</p>
+              </div>
+
+              {/* Logo — centered over the fields (mirrors mobile). `contain` so
+                 round/wide logos aren't clipped. Uploads on pick. */}
+              <div className="flex flex-col items-center gap-3 mb-6 max-w-4xl">
+                {business?.logo_url ? (
+                  <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={business.logo_url} alt="" className="w-36 h-36 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
+                  </button>
+                ) : (
+                  <div className="w-36 h-36 rounded-2xl bg-gray-100 flex items-center justify-center">
+                    <Building2 size={44} className="text-gray-400" />
                   </div>
+                )}
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-60"
+                  >
+                    {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
+                  </button>
+                  {business?.logo_url && !uploadingLogo && (
+                    <button
+                      onClick={onRemoveLogo}
+                      className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
+                    >
+                      {t.business.logoRemoveBtn}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2231,7 +2298,8 @@ export default function AjustesPage() {
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                   >
                     <option value="">—</option>
-                    {BIZ_US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {/* Full state names — the DB keeps the 2-letter code. */}
+                    {BIZ_US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
                 </div>
                 <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} inputMode="numeric"/>
@@ -2292,22 +2360,6 @@ export default function AjustesPage() {
           {/* ══ TRABAJOS ══════════════════════════════════════════════ */}
           {tab === 'trabajos' && (
             <div className="flex flex-col gap-5">
-              {/* Import jobs (CSV) — migration action. Opens the import wizard
-                 on the Trabajos list via ?import=1. */}
-              <Link
-                href="/dashboard/trabajos?import=1"
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <Upload size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import jobs' : 'Importar trabajos'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Upload a CSV of your projects (AppSheet). Download the template inside.' : 'Sube un CSV de tus proyectos (AppSheet). Descarga la plantilla dentro.'}</p>
-                </div>
-                <span className="text-xl text-gray-400">›</span>
-              </Link>
-
               {/* Pipeline step config */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.pipeline.heading}</h2>
@@ -2592,24 +2644,6 @@ export default function AjustesPage() {
           {/* ══ CLIENTES ═════════════════════════════════════════════ */}
           {tab === 'clientes' && (
             <div className="flex flex-col gap-5">
-              {/* Import CSV — lives here in Ajustes since it's an
-                 onboarding/migration action, not a daily one. Navigates
-                 to /dashboard/clientes?import=1 which auto-opens the
-                 existing import modal there. */}
-              <Link
-                href="/dashboard/clientes?import=1"
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <Sparkles size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{full.dashboard.clients.importBtn}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{full.dashboard.clients.importHint}</p>
-                </div>
-                <span className="text-xl text-gray-400">›</span>
-              </Link>
-
               {/* Contacts summary — total clients + employees so the user can
                  reconcile against their Google Contacts count when sync is on. */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -2767,22 +2801,6 @@ export default function AjustesPage() {
           {/* ══ EMPLEADOS ═══════════════════════════════════════════════ */}
           {tab === 'empleados' && (
             <div className="flex flex-col gap-5">
-              {/* Import team (CSV) — migration action. Opens the import wizard
-                 on the Empleados list via ?import=1. */}
-              <Link
-                href="/dashboard/empleados?import=1"
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <Upload size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import team' : 'Importar equipo'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Bulk-add all your people from a CSV. Download the template inside.' : 'Agrega a todo tu equipo desde un CSV. Descarga la plantilla dentro.'}</p>
-                </div>
-                <span className="text-xl text-gray-400">›</span>
-              </Link>
-
               {/* Roles editor lives inside Team settings. */}
               {can.manageMembers(currentRole) && (
                 <Link
@@ -3216,23 +3234,6 @@ export default function AjustesPage() {
 
           {tab === 'facturas' && (
             <div className="flex flex-col gap-5">
-              {/* Import invoices (CSV) — migration action. Opens the import
-                 wizard on the Facturas list via ?import=1. Run AFTER jobs so
-                 each line can link to its job by Project ID. */}
-              <Link
-                href="/dashboard/facturas?import=1"
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <Upload size={18} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{locale === 'en' ? 'Import invoices' : 'Importar facturas'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{locale === 'en' ? 'Upload a CSV of invoices (FileMaker). Import jobs first so they link.' : 'Sube un CSV de facturas (FileMaker). Importa los trabajos primero para enlazarlas.'}</p>
-                </div>
-                <span className="text-xl text-gray-400">›</span>
-              </Link>
-
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
                 <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
@@ -3246,6 +3247,18 @@ export default function AjustesPage() {
                       onChange={e => setInvoiceDueDays(e.target.value)}
                     />
                     <p className="text-xs text-gray-400 mt-1.5">{t.invoices.dueDaysHint}</p>
+                  </div>
+                  <div>
+                    <Input
+                      label={t.invoices.taxRateLabel}
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={invoiceTaxRate}
+                      onChange={e => setInvoiceTaxRate(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.taxRateHint}</p>
                   </div>
                   <div>
                     <Input
@@ -3267,8 +3280,79 @@ export default function AjustesPage() {
                       className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
                     />
                   </div>
+
                 </div>
                 {invoiceMsg && <p className={`text-xs mt-3 ${invoiceMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{invoiceMsg}</p>}
+                <div className="mt-5">
+                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                    <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Email al enviar factura — its OWN card: these fields
+                 customize the send EMAIL, not the invoice document. Saved by
+                 the same handler as the terms card. */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.emailHeading}</h2>
+                <p className="text-xs text-gray-400 mb-4">{t.invoices.emailSubtitle}</p>
+                <div className="flex flex-col gap-4 max-w-md">
+                  <div className="flex flex-col gap-1.5">
+                    <Input
+                      ref={invoiceEmailSubjectRef}
+                      label={t.invoices.emailSubjectLabel}
+                      value={invoiceEmailSubject}
+                      onChange={e => setInvoiceEmailSubject(e.target.value)}
+                      onSelect={e => { emailSelRef.current.subject = { s: e.currentTarget.selectionStart ?? 0, e: e.currentTarget.selectionEnd ?? 0 }; }}
+                      placeholder={full.dashboard.invoices.emailSubject}
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {INVOICE_EMAIL_TOKENS.map(tok => {
+                        const label = locale === 'en' ? tok.en : tok.es;
+                        return (
+                          <button
+                            key={tok.key}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => insertEmailToken('subject', label)}
+                            className="rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-2 py-0.5 text-[11px] font-mono transition"
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-gray-700">{t.invoices.emailBodyLabel}</label>
+                    <textarea
+                      ref={invoiceEmailBodyRef}
+                      rows={4}
+                      placeholder={full.dashboard.invoices.emailBody}
+                      value={invoiceEmailBody}
+                      onChange={e => setInvoiceEmailBody(e.target.value)}
+                      onSelect={e => { emailSelRef.current.body = { s: e.currentTarget.selectionStart ?? 0, e: e.currentTarget.selectionEnd ?? 0 }; }}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {INVOICE_EMAIL_TOKENS.map(tok => {
+                        const label = locale === 'en' ? tok.en : tok.es;
+                        return (
+                          <button
+                            key={tok.key}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => insertEmailToken('body', label)}
+                            className="rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-2 py-0.5 text-[11px] font-mono transition"
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-400">{t.invoices.emailVarsHint}</p>
+                  </div>
+                </div>
                 <div className="mt-5">
                   <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
                     <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
@@ -3427,6 +3511,74 @@ export default function AjustesPage() {
             <div className="flex flex-col gap-5">
               <GoogleSyncCard />
             </div>
+          )}
+
+          {/* ══ IMPORTAR DATOS ══════════════════════════════════════════
+             Guided migration hub — the four importers as ordered steps, since
+             the order matters: jobs match clients + team by name, invoices
+             link to jobs by Project ID. Each step opens the existing wizard
+             on its list page via ?import=1. */}
+          {tab === 'importar' && (
+            <div className="flex flex-col gap-5 max-w-3xl">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">{t.tabs.importar}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{t.importHub.subtitle}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                <p className="text-xs text-blue-800">{t.importHub.orderHint}</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                {([
+                  { key: 'clients', title: t.importHub.step1Title, desc: t.importHub.step1Desc },
+                  { key: 'employees', title: t.importHub.step2Title, desc: t.importHub.step2Desc },
+                  { key: 'jobs', title: t.importHub.step3Title, desc: t.importHub.step3Desc },
+                  { key: 'invoices', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
+                ] as const).map((step, i) => {
+                  const inner = (
+                    <>
+                      <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-sm font-semibold text-gray-900">{step.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{step.desc}</p>
+                      </div>
+                      <span className="text-xl text-gray-400">›</span>
+                    </>
+                  );
+                  const cls = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors w-full';
+                  return (
+                    <button key={step.key} type="button" onClick={() => setHubImport(step.key)} className={cls}>
+                      {inner}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Import wizards for the hub steps — mounted here so the user
+             stays on this tab throughout the migration. */}
+          {hubImport === 'clients' && business && (
+            <ImportClientsModal
+              open
+              businessId={business.id}
+              templates={hubClientTemplates}
+              onClose={() => setHubImport(null)}
+              doneLabel={full.common.buttons.close}
+            />
+          )}
+          {hubImport && hubImport !== 'clients' && business && (
+            <ImportModal
+              open
+              mode={hubImport}
+              businessId={business.id}
+              supabase={supabase}
+              templates={hubImport === 'jobs' ? hubJobTemplates : hubImport === 'employees' ? hubEmpTemplates : []}
+              accessRoles={hubAccessRoles}
+              invoiceTemplate={business.invoice_template}
+              onClose={() => setHubImport(null)}
+            />
           )}
 
           {/* ══ SOPORTE ══════════════════════════════════════════════ */}

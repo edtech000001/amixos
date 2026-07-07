@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -50,6 +50,7 @@ import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 
@@ -198,6 +199,41 @@ export default function JobDetailRoute() {
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const businesses = useAuthStore((s) => s.businesses);
+
+  // Custom fields follow the saved layout (Ajustes → Trabajos): fields
+  // assigned to real sections render inside the Details card in layout order;
+  // only 'additional' fields get their own card — mirrors the job form.
+  type DetailTemplate = (typeof templates)[number];
+  const customLayout = useMemo(
+    () => parseJobLayout(business?.job_field_layout, templates.map(tpl => `custom:${tpl.id}`)),
+    [business?.job_field_layout, templates],
+  );
+  const customsFor = (secs: JobLayoutSection[]) =>
+    secs
+      .flatMap(sec => fieldsInSection(customLayout, sec))
+      .map(k => templates.find(tpl => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is DetailTemplate => !!tpl);
+  const detailCustoms = customsFor(['general', 'location', 'schedule', 'workers', 'notes']);
+  const additionalCustoms = customsFor(['additional']);
+  const customValue = (tpl: DetailTemplate): string | null => {
+    const raw = job?.custom_fields?.[tpl.field_key];
+    if (raw == null || raw === '') return null;
+    return tpl.field_type === 'boolean' ? (raw === 'true' ? (locale === 'es' ? 'Sí' : 'Yes') : 'No')
+      : tpl.field_type === 'number' ? formatNumberGrouped(raw)
+      : tpl.field_type === 'date' ? formatDateLong(raw, locale)
+      : raw;
+  };
+  // Stacked label-over-value, matching the other Details rows.
+  const renderCustomRow = (tpl: DetailTemplate) => {
+    const value = customValue(tpl);
+    if (value === null) return null;
+    return (
+      <View key={tpl.id}>
+        <Text className="text-xs text-gray-500 mb-1">{tpl.field_label}</Text>
+        <Text className="text-sm text-gray-700">{value}</Text>
+      </View>
+    );
+  };
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
   const currentRole = useAuthStore((s) => s.currentRole);
   const tw = full.dashboard.workspaces;
@@ -317,7 +353,9 @@ export default function JobDetailRoute() {
       clientName ? `${td.crewTextClient}: ${clientName}` : '',
       job.scheduled_date ? `${td.crewTextDate}: ${fmtDate(job.scheduled_date)}` : '',
     ].filter(Boolean);
-    const message = lines.join('\n');
+    // Blank line between fields — keeps the text readable and stops iOS
+    // Messages from gluing the map-link preview to the job name.
+    const message = lines.join('\n\n');
 
     // Look up the assigned lead's phone to pre-address the text.
     let leadDigits = '';
@@ -434,8 +472,9 @@ export default function JobDetailRoute() {
     const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
     const useStored = job.estimate_number && job.subtotal_amount > 0;
     const subtotal = useStored ? job.subtotal_amount : itemSubtotal;
-    const taxRate = useStored ? job.tax_rate : 0;
-    const taxAmount = useStored ? job.tax_amount : 0;
+    // Business default tax (Ajustes → Facturas) when the job carries none.
+    const taxRate = useStored ? job.tax_rate : (business?.invoice_tax_rate ?? 0);
+    const taxAmount = useStored ? job.tax_amount : subtotal * (taxRate / 100);
     const discount = useStored ? job.discount : 0;
     const total = subtotal + taxAmount - discount;
 
@@ -1014,30 +1053,28 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
 
-          {/* Custom fields (job_field_templates) — read-only. */}
-          {templates.length > 0 && job.custom_fields && Object.keys(job.custom_fields).length > 0 ? (
-            <View>
-              <Text className="text-xs text-gray-500 mb-1">{full.dashboard.employees.modal.customFieldsHeading}</Text>
-              <View className="gap-1.5">
-                {templates.map(tpl => {
-                  const raw = job.custom_fields?.[tpl.field_key];
-                  if (raw == null || raw === '') return null;
-                  const value =
-                    tpl.field_type === 'boolean' ? (raw === 'true' ? (locale === 'es' ? 'Sí' : 'Yes') : 'No')
-                    : tpl.field_type === 'number' ? formatNumberGrouped(raw)
-                    : tpl.field_type === 'date' ? formatDateLong(raw, locale)
-                    : raw;
-                  return (
-                    <View key={tpl.id} className="flex-row justify-between gap-3">
-                      <Text className="text-xs text-gray-400 flex-1">{tpl.field_label}</Text>
-                      <Text className="text-sm text-gray-700 text-right flex-1">{value}</Text>
-                    </View>
-                  );
-                })}
-              </View>
+          {/* Custom fields assigned to real sections — no "Custom fields"
+             heading; they read like regular detail rows, in the saved layout
+             order (Ajustes → Trabajos), like the form. */}
+          {detailCustoms.some(tpl => customValue(tpl) !== null) ? (
+            <View className="gap-3">
+              {detailCustoms.map(renderCustomRow)}
             </View>
           ) : null}
         </View>
+
+        {/* Additional details — ONLY custom fields assigned to the
+           'additional' section get their own card (form parity). */}
+        {additionalCustoms.some(tpl => customValue(tpl) !== null) ? (
+          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+            <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
+              {locale === 'es' ? 'Detalles adicionales' : 'Additional details'}
+            </Text>
+            <View className="gap-3">
+              {additionalCustoms.map(renderCustomRow)}
+            </View>
+          </View>
+        ) : null}
 
         {/* Items list */}
         {showMaterials ? (

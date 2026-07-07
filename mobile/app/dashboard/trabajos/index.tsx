@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import {
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 
@@ -62,25 +63,49 @@ export default function TrabajosTab() {
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Only the columns the list actually renders/searches — `*` was hauling
+  // notes, custom fields, and every timestamp for hundreds of rows.
+  const JOB_LIST_SELECT = `
+    id, client_id, invoice_id, title, description, status, priority,
+    job_address, job_city, job_state, scheduled_date, time_start, end_date,
+    estimated_hours, time_end, total_amount, estimate_number, issue_date,
+    expiry_date, delegated_to_business_id, delegated_from_business_id,
+    published_to_crew, created_at,
+    clients(first_name, last_name, company),
+    job_assignments(worker_name, is_lead, employees(first_name, last_name))
+  `;
+
+  // Guards against a stale slow load overwriting a newer one (e.g. branch switch).
+  const loadSeqRef = useRef(0);
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
+    const seq = ++loadSeqRef.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const baseQuery = (): any => {
+      let q = supabase.from('jobs').select(JOB_LIST_SELECT).eq('business_id', businessId);
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q;
+    };
+
+    // Fast first paint — the newest 30 in one small round-trip, so switching
+    // to Jobs feels instant; the full set replaces it right after.
+    if (rawJobs.length === 0) {
+      const { data: first } = await baseQuery().order('created_at', { ascending: false }).limit(30);
+      if (seq === loadSeqRef.current && first?.length) {
+        setRawJobs(first as RawJob[]);
+        setLoading(false);
+      }
+    }
+
     // Cached so the list (and navigation into a job) works offline. fetchAll
     // throws on error, so loadCached falls back to the last good list. The
     // active branch is part of the cache key so each branch caches separately.
     const res = await loadCached(`jobs_list_${businessId}_${activeLocationId ?? 'all'}`, () =>
-      fetchAll<RawJob>((from, to) => {
-        let q = supabase
-          .from('jobs')
-          .select(`
-            *,
-            clients(first_name, last_name, company),
-            job_assignments(worker_name, is_lead, employees(first_name, last_name))
-          `)
-          .eq('business_id', businessId);
-        if (activeLocationId) q = q.eq('location_id', activeLocationId);
-        return q.order('created_at', { ascending: false }).range(from, to);
-      }));
+      fetchAll<RawJob>((from, to) =>
+        baseQuery().order('created_at', { ascending: false }).range(from, to),
+      ));
+    if (seq !== loadSeqRef.current) return;
     setRawJobs(res.data ?? []);
     setLoading(false);
   };
@@ -164,6 +189,7 @@ export default function TrabajosTab() {
             invoiceTemplate: business.invoice_template,
             startNumber: business.invoice_start_number,
             hideItemTypes: business.job_item_types_enabled === false,
+            taxRate: business.invoice_tax_rate ?? 0,
             itemTypeLabels: {
               labor: jt.itemTypeLabor,
               material: jt.itemTypeMaterial,
@@ -180,6 +206,32 @@ export default function TrabajosTab() {
             Alert.alert('', full.dashboard.jobs.batchInvoice.sameClientHint);
           }
         }}
+        onBulkDelete={
+          can.deleteJob(currentRole)
+            ? (jobIds) =>
+                new Promise<void>(resolve => {
+                  if (!business) return resolve();
+                  const msg = full.dashboard.jobs.confirmDeleteBulk.replace('{{count}}', String(jobIds.length));
+                  Alert.alert('', msg, [
+                    { text: full.common.buttons.cancel, style: 'cancel', onPress: () => resolve() },
+                    {
+                      text: full.dashboard.jobs.bulkDelete,
+                      style: 'destructive',
+                      onPress: async () => {
+                        // FK cascades clean job_items / job_assignments /
+                        // job_photos (whose trigger removes the storage files).
+                        for (let i = 0; i < jobIds.length; i += 50) {
+                          await supabase.from('jobs').delete().in('id', jobIds.slice(i, i + 50));
+                        }
+                        void logAudit(supabase, business.id, 'job.deleted', 'job', null, { count: jobIds.length, bulk: true });
+                        await load();
+                        resolve();
+                      },
+                    },
+                  ]);
+                })
+            : undefined
+        }
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}

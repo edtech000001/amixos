@@ -14,6 +14,7 @@ import {
 } from '@amixos/shared/screens/dashboard/InvoiceDetailScreen';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
@@ -31,6 +32,8 @@ interface RawClient {
   first_name: string;
   last_name: string;
   email: string | null;
+  email_office: string | null;
+  email_home: string | null;
   phone_cell: string | null;
   company: string | null;
   address: string | null;
@@ -181,7 +184,7 @@ export default function FacturaDetailRoute() {
 
   const reloadInvoice = useCallback(async () => {
     const { data } = await supabase.from('invoices')
-      .select('*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))')
+      .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
       .eq('id', id).single();
     if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
     await loadJobs();
@@ -322,7 +325,7 @@ export default function FacturaDetailRoute() {
       clients: clientList.map(c => ({
         firstName: c.first_name,
         lastName: c.last_name,
-        email: c.email,
+        email: c.email_office ?? c.email_home ?? c.email,
         phoneCell: c.phone_cell,
         company: c.company,
         address: c.address,
@@ -342,7 +345,7 @@ export default function FacturaDetailRoute() {
         supabase
           .from('invoices')
           .select(
-            '*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))',
+            '*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))',
           )
           .eq('id', id)
           .single(),
@@ -462,11 +465,35 @@ export default function FacturaDetailRoute() {
     const token = await ensureShareToken();
     const base = process.env.EXPO_PUBLIC_WEB_URL ?? '';
     const url = `${base}/factura/${token}`;
-    const subject = tInv.emailSubject.replace('{{number}}', invoice.invoiceNumber);
-    const body = tInv.emailBody.replace('{{link}}', url);
+    // Business's custom templates (Ajustes → Facturas → Email) win; blank
+    // falls back to the localized default. {{tokens}} substituted here.
+    const c = invoice.clients[0];
+    const { subject, body } = renderInvoiceEmail({
+      subjectTemplate: business?.invoice_email_subject,
+      bodyTemplate: business?.invoice_email_body,
+      defaultSubject: tInv.emailSubject,
+      defaultBody: tInv.emailBody,
+      vars: {
+        number: invoice.invoiceNumber,
+        link: url,
+        client: c ? `${c.firstName} ${c.lastName}`.trim() : '',
+        firstName: c?.firstName ?? '',
+        lastName: c?.lastName ?? '',
+        company: c?.company ?? '',
+        business: business?.name ?? '',
+        total: `$${invoice.totalAmount.toFixed(2)}`,
+        dueDate: invoice.dueDate ?? '',
+      },
+    });
     const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    try { await Linking.openURL(mailto); } catch { /* no mail app */ }
-    await updateStatus('sent');
+    try {
+      await Linking.openURL(mailto);
+      // Only mark sent when a mail composer actually opened — previously a
+      // device with no mail app flipped the status with nothing sent.
+      await updateStatus('sent');
+    } catch {
+      Alert.alert('', full.dashboard.settings.support.noMailApp.replace('{{email}}', email));
+    }
   };
 
   const canDelete = can.deleteInvoice(currentRole);

@@ -6,7 +6,7 @@
 // bundler resolves this .web.tsx variant automatically.
 
 import { Fragment, memo, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check } from 'lucide-react';
+import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
@@ -122,6 +122,14 @@ export function ClientsListScreen({
     .replace('{{count}}', String(selectedIds.size));
   const showList = !loading && filtered.length > 0;
 
+  // Selection mode — entered via the Seleccionar button (same pattern as the
+  // jobs list). Checkboxes only render while it's on; no persistent controls.
+  const [selectMode, setSelectMode] = useState(false);
+  const exitSelect = () => {
+    setSelectMode(false);
+    onClearSelection();
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl">
       {/* Header */}
@@ -171,6 +179,15 @@ export function ClientsListScreen({
               </>
             ) : null}
           </div>
+          <button
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            title={t.selectButton}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <ListChecks size={15} /> {t.selectButton}
+          </button>
           {onImportPress ? (
             <button onClick={onImportPress} className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
               <Upload size={15} /> {t.importBtn}
@@ -205,18 +222,23 @@ export function ClientsListScreen({
         ) : null}
       </div>
 
-      {/* Bulk-delete bar */}
-      {selectedIds.size > 0 ? (
+      {/* Selection bar — visible while select mode is on (jobs-list pattern). */}
+      {selectMode ? (
         <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-4">
-          <button onClick={onClearSelection} className="p-1 rounded text-primary hover:bg-primary/10">✕</button>
+          <button onClick={exitSelect} className="p-1 rounded text-primary hover:bg-primary/10">✕</button>
           <span className="text-sm font-medium text-primary">{selectedCountText}</span>
+          {filtered.length > 0 ? (
+            <button onClick={onToggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+              {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
+            </button>
+          ) : null}
           <div className="flex-1" />
           <button
             onClick={onBulkDeletePress}
-            disabled={bulkDeleting}
+            disabled={bulkDeleting || selectedIds.size === 0}
             className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60"
           >
-            <Trash2 size={14} /> {t.bulkDelete}
+            <Trash2 size={14} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
           </button>
         </div>
       ) : null}
@@ -236,16 +258,6 @@ export function ClientsListScreen({
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Select-all */}
-          <button
-            onClick={onToggleSelectAll}
-            className="w-full flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 text-left"
-          >
-            <span className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? 'border-primary bg-primary' : 'border-gray-300 bg-white'}`}>
-              {allSelected ? <span className="text-white text-[10px] font-bold">✓</span> : null}
-            </span>
-            <span className="text-xs text-gray-500">{t.selectAll}</span>
-          </button>
           {sections.map((s) => (
             <Fragment key={s.title || 'results'}>
               {s.title ? (
@@ -259,6 +271,7 @@ export function ClientsListScreen({
                   key={c.id}
                   client={c}
                   search={search}
+                  selectMode={selectMode}
                   isChecked={selectedIds.has(c.id)}
                   onToggleSelect={onToggleSelect}
                   onClientPress={onClientPress}
@@ -280,6 +293,7 @@ export function ClientsListScreen({
 const ClientRow = memo(function ClientRow({
   client: c,
   search,
+  selectMode,
   isChecked,
   onToggleSelect,
   onClientPress,
@@ -288,6 +302,7 @@ const ClientRow = memo(function ClientRow({
 }: {
   client: ClientListItem;
   search: string;
+  selectMode: boolean;
   isChecked: boolean;
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
@@ -296,15 +311,21 @@ const ClientRow = memo(function ClientRow({
 }) {
   const matchedContacts = matchingContacts(c, search);
   return (
-    <div className={`group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-gray-50'}`}>
+    // content-visibility skips layout/paint for offscreen rows — keeps huge
+    // client lists cheap. Intrinsic size ≈ row height so scrolling stays smooth.
+    <div className={`[content-visibility:auto] [contain-intrinsic-size:auto_76px] group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-gray-50'}`}>
+      {/* Checkbox only exists while selection mode is on (jobs-list pattern). */}
+      {selectMode ? (
+        <span
+          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'}`}
+        >
+          {isChecked ? <span className="text-white text-[10px] font-bold">✓</span> : null}
+        </span>
+      ) : null}
       <button
-        onClick={() => onToggleSelect(c.id)}
-        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'}`}
-        aria-label="Select"
+        onClick={() => (selectMode ? onToggleSelect(c.id) : onClientPress(c.id))}
+        className="flex items-center gap-3 min-w-0 flex-1 text-left"
       >
-        {isChecked ? <span className="text-white text-[10px] font-bold">✓</span> : null}
-      </button>
-      <button onClick={() => onClientPress(c.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
         <span className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <span className="text-primary text-sm font-bold">
             {c.firstName.charAt(0).toUpperCase()}{c.lastName.charAt(0).toUpperCase()}
@@ -337,8 +358,8 @@ const ClientRow = memo(function ClientRow({
           ) : null}
         </span>
       </button>
-      {/* Hover actions — web idiom */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      {/* Hover actions — web idiom; hidden while selecting. */}
+      <div className={`flex items-center gap-1 opacity-0 transition-opacity shrink-0 ${selectMode ? '' : 'group-hover:opacity-100'}`}>
         <button onClick={() => onEditPress(c.id)} className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100" aria-label="Edit">
           <Pencil size={15} />
         </button>

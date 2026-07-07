@@ -22,6 +22,8 @@ import {
   List,
   Lightbulb,
   Receipt,
+  Trash2,
+  X,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -118,6 +120,11 @@ export interface JobsListScreenProps {
   /** Batch-invoice: one invoice from several completed same-client jobs.
    *  When omitted, the select-to-invoice toolbar is hidden. */
   onCreateInvoice?: (jobIds: string[]) => Promise<void> | void;
+  /** Bulk delete for the selection toolbar. Pass ONLY when the current role
+   *  can delete jobs — its presence opens selection to every row (not just
+   *  invoiceable ones) and shows the red Eliminar pill. The caller owns the
+   *  confirmation dialog + the actual delete. */
+  onBulkDelete?: (jobIds: string[]) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
@@ -198,6 +205,7 @@ export function JobsListScreen({
   onUpdateStatus,
   onGenerateInvoice,
   onCreateInvoice,
+  onBulkDelete,
   onViewInvoice,
   onNewJob,
   onNewProposal,
@@ -451,26 +459,78 @@ export function JobsListScreen({
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
   const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
   const visibleInvoiceable = sections.flatMap(s => s.jobs).filter(isInvoiceable);
-  const allSelected = visibleInvoiceable.length > 0 && visibleInvoiceable.every(j => selectedIds.has(j.id));
+  // With delete available, EVERY visible row is selectable (delete applies to
+  // any job); otherwise selection stays restricted to invoiceable rows.
+  const canDelete = !!onBulkDelete;
+  const selectPool = canDelete ? sections.flatMap(s => s.jobs) : visibleInvoiceable;
+  const allSelected = selectPool.length > 0 && selectPool.every(j => selectedIds.has(j.id));
   const toggleSelectAll = () =>
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (visibleInvoiceable.every(j => prev.has(j.id))) {
-        visibleInvoiceable.forEach(j => next.delete(j.id));
+      if (selectPool.every(j => prev.has(j.id))) {
+        selectPool.forEach(j => next.delete(j.id));
       } else {
-        visibleInvoiceable.forEach(j => next.add(j.id));
+        selectPool.forEach(j => next.add(j.id));
       }
       return next;
     });
-  const canCreateInvoice = selectedJobs.length > 0 && sameClient && !creatingInvoice;
+  // Invoicing needs every picked job invoiceable (selection may now include
+  // non-invoiceable rows picked for deletion).
+  const allInvoiceable = selectedJobs.every(isInvoiceable);
+  const canCreateInvoice = selectedJobs.length > 0 && sameClient && allInvoiceable && !creatingInvoice;
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
   const runCreateInvoice = async () => {
-    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || creatingInvoice) return;
+    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || !allInvoiceable || creatingInvoice) return;
     setCreatingInvoice(true);
     await onCreateInvoice(selectedJobs.map(j => j.id));
     setCreatingInvoice(false);
     exitSelect();
   };
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const runBulkDelete = async () => {
+    if (!onBulkDelete || selectedJobs.length === 0 || bulkDeleting) return;
+    setBulkDeleting(true);
+    await onBulkDelete(selectedJobs.map(j => j.id));
+    setBulkDeleting(false);
+    exitSelect();
+  };
+
+  // Card-derived labels/styles are pure functions of the job + thresholds —
+  // precomputed here so selection taps and select-mode toggles (which
+  // re-render every visible card) skip all the date math and formatting.
+  const cardDataByJob = useMemo(() => {
+    const compute = (job: JobListItem) => {
+      const statusKey = job.status as keyof typeof t.statuses;
+      const isProposal = PROPOSAL_STATUSES.includes(job.status);
+      const alertMatch = !isProposal ? matchJobAlert(alertThresholds, job.scheduledDate) : null;
+      return {
+        statusLabel: t.statuses[statusKey] ?? job.status,
+        pillBg: STATUS_PILL_BG[job.status] ?? 'bg-blue-100',
+        pillText: STATUS_PILL_TEXT[job.status] ?? 'text-blue-700',
+        dot: STATUS_DOT[job.status] ?? 'bg-blue-500',
+        priorityLabel: t.priorities[job.priority as keyof typeof t.priorities],
+        priorityColor: PRIORITY_COLORS[job.priority] ?? 'text-blue-500',
+        expired: isExpired(job),
+        isProposal,
+        alertStyle: alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null,
+        overdue: !isProposal && isJobOverdue(alertThresholds, job.scheduledDate, job.status),
+        durationText: formatProjectDuration(
+          { startDate: job.scheduledDate, endDate: job.endDate, estimatedHours: job.estimatedHours, timeStart: job.timeStart, timeEnd: job.timeEnd },
+          full.common.duration,
+        ),
+        alertChipLabel: alertMatch
+          ? alertMatch.daysUntil === 0
+            ? t.alertChip.today
+            : alertMatch.daysUntil === 1
+              ? t.alertChip.tomorrow
+              : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
+          : null,
+      };
+    };
+    const map = new Map<string, ReturnType<typeof compute>>();
+    sections.forEach(s => s.jobs.forEach(job => map.set(job.id, compute(job))));
+    return map;
+  }, [sections, alertThresholds, t, full]);
 
   return (
     <View className="flex-1 bg-surface">
@@ -524,26 +584,22 @@ export function JobsListScreen({
           >
             <ArrowUpDown size={16} color={sortActive ? '#4F46E5' : '#6B7280'} />
           </Pressable>
-          {selectMode && visibleInvoiceable.length > 0 ? (
-            <Pressable
-              onPress={toggleSelectAll}
-              accessibilityLabel={allSelected ? t.batchInvoice.deselectAll : t.batchInvoice.selectAll}
-              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-                allSelected ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
-              }`}
-            >
-              <ListChecks size={16} color={allSelected ? '#4F46E5' : '#6B7280'} />
-            </Pressable>
-          ) : null}
-          {onCreateInvoice ? (
+          {/* Select-all moved into the selection banner below (Todos). */}
+          {onCreateInvoice || canDelete ? (
             <Pressable
               onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
-              accessibilityLabel={t.batchInvoice.selectButton}
+              accessibilityLabel={canDelete ? t.selectButton : t.batchInvoice.selectButton}
               className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
                 selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
               }`}
             >
-              <FileText size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+              {/* With delete available the mode is generic ("Seleccionar"),
+                 not invoice-specific — that's also where bulk delete lives. */}
+              {canDelete ? (
+                <ListChecks size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+              ) : (
+                <FileText size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -618,6 +674,24 @@ export function JobsListScreen({
         </ScrollView>
       </View>
 
+      {/* Selection banner — ✕ / count / Todos, same as the clients list. */}
+      {selectMode ? (
+        <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-4">
+          <Pressable onPress={exitSelect} className="p-1 rounded">
+            <X size={14} color="#4F46E5" />
+          </Pressable>
+          <Text className="text-sm font-medium text-primary flex-shrink" numberOfLines={1}>
+            {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
+          </Text>
+          <View className="flex-1" />
+          {!allSelected && selectPool.length > 0 ? (
+            <Pressable onPress={toggleSelectAll} className="px-2 py-1.5 rounded-lg active:bg-primary/10">
+              <Text className="text-xs font-semibold text-primary">{full.dashboard.clients.selectAllShort}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Job list */}
       {loading ? (
         <View className="items-center py-20">
@@ -654,40 +728,13 @@ export function JobsListScreen({
             </View>
           ) : null}
           {section.jobs.map(job => {
-            const statusKey = job.status as keyof typeof t.statuses;
-            const statusLabel = t.statuses[statusKey] ?? job.status;
-            const pillBg = STATUS_PILL_BG[job.status] ?? 'bg-blue-100';
-            const pillText = STATUS_PILL_TEXT[job.status] ?? 'text-blue-700';
-            const dot = STATUS_DOT[job.status] ?? 'bg-blue-500';
-            const priorityKey = job.priority as keyof typeof t.priorities;
-            const priorityLabel = t.priorities[priorityKey];
-            const priorityColor = PRIORITY_COLORS[job.priority] ?? 'text-blue-500';
-            const expired = isExpired(job);
-            const isProposal = PROPOSAL_STATUSES.includes(job.status);
-            // Upcoming-job alert tier. Skipped for proposal-stage cards
-            // (they don't have a real scheduled date yet) so the indicator
-            // only fires on jobs the owner actually needs to prep for.
-            const alertMatch = !isProposal
-              ? matchJobAlert(alertThresholds, job.scheduledDate)
-              : null;
-            const alertStyle = alertMatch ? JOB_ALERT_STYLE[alertMatch.level.color] : null;
-            // Past the scheduled date and not done — red date + "overdue" badge.
-            const overdue = !isProposal && isJobOverdue(alertThresholds, job.scheduledDate, job.status);
-            // How long the project runs (multi-day span / estimated hours / time window).
-            const durationText = formatProjectDuration(
-              { startDate: job.scheduledDate, endDate: job.endDate, estimatedHours: job.estimatedHours, timeStart: job.timeStart, timeEnd: job.timeEnd },
-              full.common.duration,
-            );
-            // chip copy: "Hoy" / "Mañana" / "En N días".
-            const alertChipLabel = alertMatch
-              ? alertMatch.daysUntil === 0
-                ? t.alertChip.today
-                : alertMatch.daysUntil === 1
-                  ? t.alertChip.tomorrow
-                  : t.alertChip.inDays.replace('{{count}}', String(alertMatch.daysUntil))
-              : null;
+            // Precomputed in cardDataByJob — see the useMemo above.
+            const {
+              statusLabel, pillBg, pillText, dot, priorityLabel, priorityColor,
+              expired, isProposal, alertStyle, overdue, durationText, alertChipLabel,
+            } = cardDataByJob.get(job.id)!;
 
-            const selectable = selectMode && isInvoiceable(job);
+            const selectable = selectMode && (canDelete || isInvoiceable(job));
             const picked = selectedIds.has(job.id);
             return (
               // Outer view carries the shadow; inner clips content (RN clips
@@ -706,6 +753,13 @@ export function JobsListScreen({
               >
                 <Pressable
                   onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
+                  // Long-press enters selection with this job picked — same
+                  // gesture as the clients list (discoverable bulk delete).
+                  onLongPress={() => {
+                    if (selectMode || !(canDelete || isInvoiceable(job))) return;
+                    setSelectMode(true);
+                    toggleSelect(job.id);
+                  }}
                   className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-gray-50'}`}
                 >
                   {selectMode ? (
@@ -1001,6 +1055,23 @@ export function JobsListScreen({
           <View className="absolute bottom-48 right-5 bg-amber-50 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
             <Text className="text-xs font-medium text-amber-700">{t.batchInvoice.sameClientHint}</Text>
           </View>
+        ) : null}
+        {/* Bulk-delete pill — left side, mirroring the invoice pill. */}
+        {canDelete ? (
+          <Pressable
+            onPress={runBulkDelete}
+            disabled={selectedJobs.length === 0 || bulkDeleting}
+            className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
+            style={{
+              backgroundColor: selectedJobs.length === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
+              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+            }}
+          >
+            <Trash2 size={20} color="#FFFFFF" />
+            <Text className="text-white font-semibold">
+              {`${t.bulkDelete}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
+            </Text>
+          </Pressable>
         ) : null}
         <Pressable
           onPress={runCreateInvoice}

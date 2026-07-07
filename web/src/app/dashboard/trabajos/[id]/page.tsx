@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
@@ -116,6 +117,40 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [delegating, setDelegating] = useState(false);
   const tw = full.dashboard.workspaces;
 
+  // Custom fields follow the saved layout (Ajustes → Trabajos): fields
+  // assigned to real sections render INSIDE the Details card in layout order;
+  // only 'additional' fields get their own card — mirrors the job form.
+  const customLayout = useMemo(
+    () => parseJobLayout(business?.job_field_layout, templates.map(tpl => `custom:${tpl.id}`)),
+    [business?.job_field_layout, templates],
+  );
+  const customsFor = (secs: JobLayoutSection[]) =>
+    secs
+      .flatMap(sec => fieldsInSection(customLayout, sec))
+      .map(k => templates.find(tpl => `custom:${tpl.id}` === k))
+      .filter((tpl): tpl is JobFieldTemplate => !!tpl);
+  const detailCustoms = customsFor(['general', 'location', 'schedule', 'workers', 'notes']);
+  const additionalCustoms = customsFor(['additional']);
+  const customValue = (tpl: JobFieldTemplate): string | null => {
+    const raw = job?.custom_fields?.[tpl.field_key];
+    if (raw === undefined || raw === null || raw === '') return null;
+    return tpl.field_type === 'boolean' ? (raw === 'true' ? (dateLoc === 'es' ? 'Sí' : 'Yes') : 'No')
+      : tpl.field_type === 'number' ? formatNumberGrouped(raw)
+      : tpl.field_type === 'date' ? formatDateLong(raw, dateLoc)
+      : raw;
+  };
+  // Stacked label-over-value, matching the other Details rows.
+  const renderCustomRow = (tpl: JobFieldTemplate) => {
+    const value = customValue(tpl);
+    if (value === null) return null;
+    return (
+      <div key={tpl.id}>
+        <p className="text-xs text-gray-400 mb-1">{tpl.field_label}</p>
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{value}</p>
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('action') === 'invoice') {
       setTimeout(() => setInvoiceModal(true), 500);
@@ -133,7 +168,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setTemplates((tpl ?? []) as JobFieldTemplate[]);
     if (j) {
       setJob(j as Job);
+      // Tax: the job's own rate (from a proposal) wins; otherwise the
+      // business default (Ajustes → Facturas). Editable in the modal.
       if (j.tax_rate > 0) setTaxRate(j.tax_rate);
+      else if ((business?.invoice_tax_rate ?? 0) > 0) setTaxRate(business!.invoice_tax_rate);
     } else {
       // Deleted / not found — clear so we show the not-found state instead of a
       // previously-loaded job.
@@ -418,7 +456,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       cn ? `${td.crewTextClient}: ${cn}` : '',
       job.scheduled_date ? `${td.crewTextDate}: ${formatDateLong(job.scheduled_date, dateLoc)}` : '',
     ].filter(Boolean);
-    shareText(lines.join('\n'), 'crew');
+    // Blank line between fields so the map-link preview doesn't glue to the text.
+    shareText(lines.join('\n\n'), 'crew');
   };
 
   const openPrintView = async () => {
@@ -879,6 +918,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{job.description}</p>
                 </div>
               )}
+              {/* Custom fields assigned to real sections — in the saved
+                 layout order (Ajustes → Trabajos), like the form. */}
+              {detailCustoms.map(renderCustomRow)}
             </div>
           </div>
 
@@ -898,26 +940,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             </div>
           )}
 
-          {/* Custom fields (job_field_templates) — read-only. */}
-          {templates.length > 0 && job.custom_fields && Object.keys(job.custom_fields).length > 0 && (
+          {/* Additional details — ONLY custom fields assigned to the
+             'additional' section get their own card (form parity). */}
+          {additionalCustoms.some(tpl => customValue(tpl) !== null) && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{full.dashboard.employees.modal.customFieldsHeading}</h2>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                {dateLoc === 'es' ? 'Detalles adicionales' : 'Additional details'}
+              </h2>
               <div className="flex flex-col gap-2.5">
-                {templates.map(tpl => {
-                  const raw = job.custom_fields?.[tpl.field_key];
-                  if (raw === undefined || raw === null || raw === '') return null;
-                  const value =
-                    tpl.field_type === 'boolean' ? (raw === 'true' ? (dateLoc === 'es' ? 'Sí' : 'Yes') : 'No')
-                    : tpl.field_type === 'number' ? formatNumberGrouped(raw)
-                    : tpl.field_type === 'date' ? formatDateLong(raw, dateLoc)
-                    : raw;
-                  return (
-                    <div key={tpl.id} className="flex justify-between gap-3">
-                      <span className="text-xs text-gray-400">{tpl.field_label}</span>
-                      <span className="text-sm text-gray-700 text-right">{value}</span>
-                    </div>
-                  );
-                })}
+                {additionalCustoms.map(renderCustomRow)}
               </div>
             </div>
           )}

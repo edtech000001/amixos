@@ -360,9 +360,11 @@ export function InvoiceDetailScreen({
               <span className="text-sm text-gray-500">{t.subtotal}</span>
               <span className="text-sm text-gray-900">{fmt(invoice.subtotalAmount)}</span>
             </div>
-            {invoice.taxAmount > 0 ? (
+            {/* Shown whenever a rate is set — even if the amount is $0 (e.g.
+               no line prices yet), so the configured tax is always visible. */}
+            {invoice.taxRate > 0 ? (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">{t.tax}</span>
+                <span className="text-sm text-gray-500">{`${t.tax} (${invoice.taxRate}%)`}</span>
                 <span className="text-sm text-gray-900">{fmt(invoice.taxAmount)}</span>
               </div>
             ) : null}

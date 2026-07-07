@@ -18,6 +18,7 @@ import {
   parseTime,
   parseTimestamp,
   parseJobStatus,
+  parseLatLng,
   coordsFromMapLink,
   groupBy,
   type EmployeeLite,
@@ -40,10 +41,18 @@ export interface ImportTemplateField {
   field_options?: string[] | null;
 }
 
+export interface ImportFailedRow {
+  label: string;
+  reason: string;
+  /** Index into ctx.rows of the row that failed — lets the wizard offer an
+   *  edit-and-retry flow for that specific row. */
+  rowIndex?: number;
+}
+
 export interface ImportResult {
   success: number;
   skipped: number;
-  failedRows: { label: string; reason: string }[];
+  failedRows: ImportFailedRow[];
   notes: string[];
 }
 
@@ -62,18 +71,34 @@ export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'job_city',      es: 'Ciudad', en: 'City' },
   { key: 'job_state',     es: 'Estado (dirección)', en: 'State' },
   { key: 'job_map_link',  es: 'Link de mapa', en: 'Map link' },
+  { key: 'coordinates',   es: 'Coordenadas (lat, lng)', en: 'Coordinates (lat, lng)' },
   { key: 'total_hours',   es: 'Total horas', en: 'Total hours' },
   { key: 'crew',          es: 'Trabajadores', en: 'Workers' },
   { key: 'driver',        es: 'Manejador(es)', en: 'Driver(s)' },
   { key: 'driver_hours',  es: 'Horas manejadas', en: 'Driver hours' },
-  { key: 'worker_notes',  es: 'Notas', en: 'Notes' },
-  { key: 'internal_notes',es: 'Notas de admin', en: 'Admin notes' },
+  { key: 'worker_notes',  es: 'Notas de cuadrilla (visibles a trabajadores)', en: 'Crew notes (visible to workers)' },
+  { key: 'internal_notes',es: 'Notas internas (solo oficina)', en: 'Internal notes (office only)' },
+  // Pricing block — hidden when the business has the Materiales/Precios
+  // section off (business.job_item_types_enabled === false), mirroring the
+  // job form's showMaterials gate. Line items: repeat the same Project ID on
+  // several rows and each row adds one line item to that job (same contract
+  // as the invoices importer).
   { key: 'total_amount',  es: 'Total (monto $)', en: 'Total (amount $)' },
-  // Record-keeping timestamps from the source system — optional; blank keeps
-  // the DB defaults (now()). Future in-app edits overwrite updated_at.
+  { key: 'item_description', es: 'Línea (descripción)', en: 'Line item (description)' },
+  { key: 'item_qty',      es: 'Línea (cantidad)', en: 'Line item (qty)' },
+  { key: 'item_rate',     es: 'Línea (precio unitario)', en: 'Line item (unit price)' },
+  { key: 'item_type',     es: 'Línea (tipo: labor/material/equipo/otro)', en: 'Line item (type: labor/material/equipment/other)' },
+  // Record-keeping columns from the source system — optional. created_by_email
+  // matches a team member by email (their linked account becomes the job's
+  // creator); blank/unmatched → the importing user. Timestamps: blank keeps
+  // the DB defaults (now()); future in-app edits overwrite updated_at.
+  { key: 'created_by_email', es: 'Agregado por (email)', en: 'Added by (email)' },
   { key: 'created_at',    es: 'Agregado (fecha/hora)', en: 'Added (date/time)' },
   { key: 'updated_at',    es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
 ];
+
+/** Keys hidden when the business has the pricing/items section disabled. */
+const JOB_PRICING_KEYS = new Set(['total_amount', 'item_description', 'item_qty', 'item_rate', 'item_type']);
 
 export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'invoice_number',   es: 'Número de factura', en: 'Invoice number', required: true },
@@ -92,6 +117,11 @@ export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'issue_date',       es: 'Fecha de creación', en: 'Date created' },
   { key: 'due_date',         es: 'Fecha de vencimiento', en: 'Due date' },
   { key: 'status',           es: 'Estado (borrador/enviada/pagada)', en: 'Status (draft/sent/paid)' },
+  { key: 'tax_rate',         es: 'Impuesto (%)', en: 'Tax rate (%)' },
+  // Payment record — a payment date implies the invoice is paid even when the
+  // status cell is blank. Method is free text (cash, check #, transfer…).
+  { key: 'payment_method',   es: 'Método de pago', en: 'Payment method' },
+  { key: 'paid_date',        es: 'Fecha de pago (recibido)', en: 'Payment date (received)' },
   { key: 'created_at',       es: 'Agregado (fecha/hora)', en: 'Added (date/time)' },
   { key: 'updated_at',       es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
 ];
@@ -118,8 +148,19 @@ export const EMPLOYEE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'updated_at',              es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
 ];
 
-export function importFieldsFor(mode: ImportMode): ImportFieldDef[] {
-  return mode === 'jobs' ? JOB_IMPORT_FIELDS : mode === 'employees' ? EMPLOYEE_IMPORT_FIELDS : INVOICE_IMPORT_FIELDS;
+export interface ImportFieldOptions {
+  /** jobs mode: business.job_item_types_enabled !== false — when false, the
+   *  Materiales/Precios columns (total + line items) are omitted, mirroring
+   *  the job form. */
+  jobPricing?: boolean;
+}
+
+export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {}): ImportFieldDef[] {
+  if (mode === 'employees') return EMPLOYEE_IMPORT_FIELDS;
+  if (mode === 'invoices') return INVOICE_IMPORT_FIELDS;
+  return opts.jobPricing === false
+    ? JOB_IMPORT_FIELDS.filter(f => !JOB_PRICING_KEYS.has(f.key))
+    : JOB_IMPORT_FIELDS;
 }
 
 /** Custom-field columns apply to jobs + employees (invoices have none). */
@@ -137,6 +178,9 @@ export interface ImportRunCtx {
   supabase: any;
   businessId: string;
   userId: string | null;
+  /** The importing user's login email — lets "Agregado por" match the owner
+   *  even when they have no employee row. */
+  userEmail?: string | null;
   locale: 'es' | 'en';
   rows: Record<string, string>[];
   /** field key → CSV header (from the mapping step). */
@@ -207,28 +251,74 @@ function autoCreatedNote(ctx: ImportRunCtx, autoCreated: string[]): string {
 }
 
 // ── JOBS ────────────────────────────────────────────────────────────────────
+
+/** Map a free-text line-item type to the form's categories; default 'other'. */
+function parseItemType(raw: string): 'labor' | 'material' | 'equipment' | 'other' {
+  const s = normalizeName(raw);
+  if (s.includes('labor') || s.includes('mano')) return 'labor';
+  if (s.includes('material')) return 'material';
+  if (s.includes('equip')) return 'equipment';
+  return 'other';
+}
+
 export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
-  const failedRows: { label: string; reason: string }[] = [];
+  const failedRows: ImportFailedRow[] = [];
   let success = 0, skipped = 0;
 
   const existingJobs = await fetchAll<{ external_ref: string | null }>((from, to) =>
     ctx.supabase.from('jobs').select('external_ref').eq('business_id', ctx.businessId).range(from, to));
   const existingRefs = new Set(existingJobs.map(j => j.external_ref).filter(Boolean) as string[]);
-  const employees = await fetchAll<EmployeeLite>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+  const employees = await fetchAll<EmployeeLite & { email: string | null; user_id: string | null }>((from, to) =>
+    ctx.supabase.from('employees').select('id, first_name, last_name, email, user_id').eq('business_id', ctx.businessId).range(from, to));
+  // "Agregado por (email)" → the team member's linked account. Only people
+  // with an app login can be a creator (created_by → auth.users): employees
+  // with a linked account, plus the importing user's own login email (owners
+  // often have no employee row).
+  const creatorByEmail = new Map<string, string>();
+  const employeeEmails = new Set<string>();
+  employees.forEach(e => {
+    if (!e.email) return;
+    const em = e.email.trim().toLowerCase();
+    employeeEmails.add(em);
+    if (e.user_id) creatorByEmail.set(em, e.user_id);
+  });
+  if (ctx.userEmail && ctx.userId) creatorByEmail.set(ctx.userEmail.trim().toLowerCase(), ctx.userId);
+  // Split the miss reasons: profile exists but no linked login vs. unknown email.
+  const creatorsNoAccount = new Set<string>();
+  const creatorsUnknown = new Set<string>();
   // Only pay for the client fetch when a client column is actually mapped.
   const clientResolver = ctx.colMap['client'] ? await createClientResolver(ctx) : null;
 
-  for (let idx = 0; idx < ctx.rows.length; idx++) {
-    const row = ctx.rows[idx];
+  // When line-item columns are mapped, rows sharing a Project ID collapse
+  // into ONE job whose rows each contribute a line item (same contract as
+  // the invoices importer). Otherwise: strict one-row-per-job, unchanged.
+  const itemColsMapped = ['item_description', 'item_qty', 'item_rate', 'item_type'].some(k => ctx.colMap[k]);
+  const groups = itemColsMapped
+    ? groupBy(ctx.rows.map((row, idx) => ({ row, idx })), ({ row, idx }) => get(row, 'external_ref') || `__row_${idx}`)
+    : ctx.rows.map((row, idx) => ({ key: '', rows: [{ row, idx }] }));
+
+  for (const grp of groups) {
+    // Job-level fields come from the group's FIRST row.
+    const { row, idx } = grp.rows[0];
     const csvLine = idx + 2;
     const title = get(row, 'title');
     const ref = get(row, 'external_ref');
-    const label = `${tr('Fila', 'Row')} ${csvLine} · ${title || ref || tr('(sin nombre)', '(no name)')}`;
+    // Identify the row as richly as possible so a failure is findable in the
+    // file: title/ref, else client + date, else the first non-empty cells.
+    const ident =
+      title || ref ||
+      [get(row, 'client'), get(row, 'scheduled_date')].filter(Boolean).join(' · ') ||
+      Object.entries(row)
+        .filter(([, v]) => v && String(v).trim())
+        .slice(0, 2)
+        .map(([k, v]) => `${k}: ${String(v).trim()}`)
+        .join(', ') ||
+      tr('(fila vacía)', '(empty row)');
+    const label = `${tr('Fila', 'Row')} ${csvLine} · ${ident}`;
 
-    if (!title) { failedRows.push({ label, reason: tr('Falta el nombre del proyecto', 'Missing project name') }); continue; }
+    if (!title) { failedRows.push({ label, reason: tr('Falta el nombre del proyecto', 'Missing project name'), rowIndex: idx }); continue; }
     if (ref && existingRefs.has(ref)) { skipped++; continue; }
 
     // Status: blank keeps the historical default (completed); an unrecognized
@@ -242,6 +332,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
           `Estado no reconocido: "${rawStatus}". Válidos: propuesta, enviada, aceptada, agendado, en progreso, completado, facturado.`,
           `Unrecognized status: "${rawStatus}". Valid: proposal, sent, accepted, scheduled, in progress, completed, invoiced.`,
         ),
+        rowIndex: idx,
       });
       continue;
     }
@@ -264,18 +355,45 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     const timeStart = parseTime(get(row, 'time_start'));
     const timeEnd = parseTime(get(row, 'time_end'));
     const mapLink = get(row, 'job_map_link');
-    // Coordinates drive the Map module pin — same extraction the job form does.
-    const coords = coordsFromMapLink(mapLink);
+    // Coordinates drive the Map module pin. An explicit "lat, lng" column
+    // wins; otherwise extract from the map link (same as the job form).
+    const coords = parseLatLng(get(row, 'coordinates')) ?? coordsFromMapLink(mapLink);
     const nowIso = new Date().toISOString();
     const isCompleted = rank >= JOB_STATUS_ORDER.indexOf('completed');
     const createdTs = parseTimestamp(get(row, 'created_at'));
     const updatedTs = parseTimestamp(get(row, 'updated_at'));
+
+    // Line items — one per row that has a description (form contract: a line
+    // needs a description). Explicit total wins; else sum the items.
+    const items = itemColsMapped
+      ? grp.rows
+          .map(({ row: r }) => {
+            const desc = get(r, 'item_description');
+            if (!desc) return null;
+            return {
+              item_type: parseItemType(get(r, 'item_type')),
+              description: desc,
+              quantity: parseNum(get(r, 'item_qty')) ?? 1,
+              unit_price: parseNum(get(r, 'item_rate')) ?? 0,
+            };
+          })
+          .filter((i): i is NonNullable<typeof i> => i !== null)
+      : [];
+    const itemsSubtotal = +items.reduce((s, i) => s + i.quantity * i.unit_price, 0).toFixed(2);
+
+    // Creator: the "Agregado por (email)" match wins; otherwise the importer.
+    const creatorEmail = get(row, 'created_by_email').toLowerCase();
+    const createdBy = (creatorEmail && creatorByEmail.get(creatorEmail)) || ctx.userId;
+    if (creatorEmail && !creatorByEmail.has(creatorEmail)) {
+      (employeeEmails.has(creatorEmail) ? creatorsNoAccount : creatorsUnknown).add(creatorEmail);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const entry: any = {
       business_id: ctx.businessId,
       title,
       status,
+      created_by: createdBy,
       external_ref: ref || null,
       client_id: clientId,
       description: get(row, 'description') || null,
@@ -296,7 +414,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       driver_hours: parseNum(get(row, 'driver_hours')),
       worker_notes: get(row, 'worker_notes') || null,
       internal_notes: get(row, 'internal_notes') || null,
-      total_amount: parseNum(get(row, 'total_amount')) ?? 0,
+      total_amount: parseNum(get(row, 'total_amount')) ?? (items.length ? itemsSubtotal : 0),
       crew_names: allCrew,
       driver_names: driverNames,
       driver_employee_ids: driverNames.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[],
@@ -314,7 +432,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     };
 
     const { data: job, error } = await ctx.supabase.from('jobs').insert(entry).select('id').single();
-    if (error || !job) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear', 'Could not create') }); continue; }
+    if (error || !job) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear', 'Could not create'), rowIndex: idx }); continue; }
     if (ref) existingRefs.add(ref);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -327,10 +445,27 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       assigns.push({ job_id: job.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadName });
     });
     if (assigns.length) await ctx.supabase.from('job_assignments').insert(assigns);
+    if (items.length) {
+      await ctx.supabase.from('job_items').insert(items.map(i => ({ job_id: job.id, ...i })));
+    }
     success++;
   }
   const notes: string[] = [];
   if (clientResolver?.autoCreated.length) notes.push(autoCreatedNote(ctx, clientResolver.autoCreated));
+  if (creatorsNoAccount.size) {
+    const shown = Array.from(creatorsNoAccount).slice(0, 10).join(', ');
+    notes.push(tr(
+      `"Agregado por": estos emails son de miembros SIN cuenta de la app todavía, y el creador debe ser una cuenta real — se usó tu usuario: ${shown}. Cuando acepten su invitación, los próximos imports sí los usarán.`,
+      `"Added by": these emails belong to team members WITHOUT an app account yet, and the creator must be a real account — your user was used: ${shown}. Once they accept their invite, future imports will match them.`,
+    ));
+  }
+  if (creatorsUnknown.size) {
+    const shown = Array.from(creatorsUnknown).slice(0, 10).join(', ');
+    notes.push(tr(
+      `"Agregado por": estos emails no coinciden con ningún miembro del equipo (se usó tu usuario): ${shown}.`,
+      `"Added by": these emails don't match any team member (your user was used): ${shown}.`,
+    ));
+  }
   return { success, skipped, failedRows, notes };
 }
 
@@ -338,7 +473,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
 export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
-  const failedRows: { label: string; reason: string }[] = [];
+  const failedRows: ImportFailedRow[] = [];
   let success = 0, skipped = 0;
 
   const existing = await fetchAll<EmployeeLite>((from, to) =>
@@ -388,7 +523,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     const last = get(row, 'last_name');
     const label = `${tr('Fila', 'Row')} ${csvLine} · ${[first, last].filter(Boolean).join(' ') || tr('(sin nombre)', '(no name)')}`;
 
-    if (!first) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing first name') }); continue; }
+    if (!first) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing first name'), rowIndex: idx }); continue; }
     const fullKey = normalizeName(`${first} ${last}`);
     if (existingNames.has(fullKey)) { skipped++; continue; }
 
@@ -424,7 +559,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     if (empUpdatedTs) entry.updated_at = empUpdatedTs;
 
     const { error } = await ctx.supabase.from('employees').insert(entry);
-    if (error) { failedRows.push({ label, reason: error.message }); continue; }
+    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
     existingNames.add(fullKey);
     success++;
   }
@@ -443,7 +578,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
 export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
-  const failedRows: { label: string; reason: string }[] = [];
+  const failedRows: ImportFailedRow[] = [];
   const notes: string[] = [];
   let success = 0, skipped = 0;
 
@@ -489,7 +624,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     const num = grp.key;
     const label = `${tr('Factura', 'Invoice')} ${num || tr('(sin número)', '(no number)')} · ${tr('fila', 'row')} ${csvLine}`;
 
-    if (!num) { failedRows.push({ label, reason: tr('Falta el número de factura', 'Missing invoice number') }); continue; }
+    if (!num) { failedRows.push({ label, reason: tr('Falta el número de factura', 'Missing invoice number'), rowIndex: first.idx }); continue; }
     if (existingRefs.has(num)) { skipped++; continue; }
 
     const clientId = await resolveClient(first.row);
@@ -509,8 +644,20 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       });
     }
 
-    const { subtotal, tax, total } = computeTotals(lineItems, 0, 0);
+    // Tax: percentage from the CSV ("7.5" or "7.5%"); blank → 0.
+    const taxRate = parseNum(get(first.row, 'tax_rate').replace('%', '')) ?? 0;
+    const { subtotal, tax, total } = computeTotals(lineItems, taxRate, 0);
     const st = statusOf(get(first.row, 'status'));
+    // Payment record: a real payment date beats the "now" stamp statusOf
+    // fabricates, and its presence implies the invoice was paid even when
+    // the status cell is blank.
+    const paidTs = parseTimestamp(get(first.row, 'paid_date'));
+    if (paidTs) {
+      st.status = 'paid';
+      st.paid_at = paidTs;
+      st.sent_at = st.sent_at ?? paidTs;
+    }
+    const paymentMethod = get(first.row, 'payment_method');
     // Source-system record timestamps — only set when provided (blank keeps
     // the now() defaults; the updated_at trigger only fires on UPDATE).
     const invCreatedTs = parseTimestamp(get(first.row, 'created_at'));
@@ -528,9 +675,10 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       due_date: parseDate(get(first.row, 'due_date')),
       sent_at: st.sent_at,
       paid_at: st.paid_at,
+      payment_method: paymentMethod || null,
       line_items: lineItems,
       subtotal_amount: subtotal,
-      tax_rate: 0,
+      tax_rate: taxRate,
       tax_amount: tax,
       discount: 0,
       total_amount: total,
@@ -539,7 +687,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       ...(invUpdatedTs ? { updated_at: invUpdatedTs } : {}),
     }).select('id').single();
 
-    if (error || !invoice) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear la factura', 'Could not create invoice') }); continue; }
+    if (error || !invoice) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear la factura', 'Could not create invoice'), rowIndex: first.idx }); continue; }
     existingRefs.add(num);
     success++;
 
@@ -568,15 +716,47 @@ export function runImportFor(mode: ImportMode, ctx: ImportRunCtx): Promise<Impor
 
 // ── Template CSV ────────────────────────────────────────────────────────────
 
-function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateField[]): string[] {
+function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateField[], opts: ImportFieldOptions): string[] {
   const tplCells = templates.map(t => (t.field_type === 'select' && t.field_options?.length ? t.field_options[0] : ''));
   if (mode === 'jobs') {
-    return ['Proyecto-001', en ? 'Job name' : 'Nombre del trabajo', en ? 'John Smith' : 'Juan Pérez', en ? 'completed' : 'completado', en ? 'Job description' : 'Descripción del trabajo', en ? 'Lead name' : 'Nombre del líder', '6/10/2026', '6/12/2026', '07:30', '15:00', '123 Main St', 'Omaha', 'NE', '', '10', en ? 'Worker One,Worker Two' : 'Trabajador Uno,Trabajador Dos', en ? 'Driver name' : 'Nombre del manejador', '5', en ? 'Notes' : 'Notas', '', '1297', '6/9/2026 8:00', '6/12/2026 4:45 PM', ...tplCells];
+    // Keyed so the row adapts when pricing columns are filtered out.
+    const cell: Record<string, string> = {
+      external_ref: 'Proyecto-001',
+      title: en ? 'Job name' : 'Nombre del trabajo',
+      client: en ? 'John Smith' : 'Juan Pérez',
+      status: en ? 'completed' : 'completado',
+      description: en ? 'Job description' : 'Descripción del trabajo',
+      lead_name: en ? 'Lead name' : 'Nombre del líder',
+      scheduled_date: '6/10/2026',
+      end_date: '6/12/2026',
+      time_start: '07:30',
+      time_end: '15:00',
+      job_address: '123 Main St',
+      job_city: 'Omaha',
+      job_state: 'NE',
+      job_map_link: '',
+      coordinates: '41.2565, -95.9345',
+      total_hours: '10',
+      crew: en ? 'Worker One,Worker Two' : 'Trabajador Uno,Trabajador Dos',
+      driver: en ? 'Driver name' : 'Nombre del manejador',
+      driver_hours: '5',
+      worker_notes: en ? 'Notes' : 'Notas',
+      internal_notes: '',
+      total_amount: '1297',
+      item_description: en ? 'Tower work' : 'Trabajo de torre',
+      item_qty: '1',
+      item_rate: '1297',
+      item_type: 'labor',
+      created_by_email: 'oficina@empresa.com',
+      created_at: '6/9/2026 8:00',
+      updated_at: '6/12/2026 4:45 PM',
+    };
+    return [...importFieldsFor('jobs', opts).map(f => cell[f.key] ?? ''), ...tplCells];
   }
   if (mode === 'employees') {
     return [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'office', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678', '6/1/2024 9:00', '6/12/2026 4:45 PM', ...tplCells];
   }
-  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'sent' : 'enviada', '6/8/2026 10:15', '6/22/2026 3:30 PM'];
+  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
 }
 
 /** Build the downloadable template (header + one example row). Quotes cells
@@ -585,14 +765,15 @@ export function buildImportTemplateCsv(
   mode: ImportMode,
   locale: 'es' | 'en',
   templates: ImportTemplateField[],
+  opts: ImportFieldOptions = {},
 ): { filename: string; csv: string } {
   const en = locale === 'en';
   const tpls = importModeUsesTemplates(mode) ? templates : [];
   const cols = [
-    ...importFieldsFor(mode).map(f => (en ? f.en : f.es)),
+    ...importFieldsFor(mode, opts).map(f => (en ? f.en : f.es)),
     ...tpls.map(t => t.field_label),
   ];
-  const example = exampleRowFor(mode, en, tpls);
+  const example = exampleRowFor(mode, en, tpls, opts);
   const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const csv = '﻿' + [cols.map(csvCell).join(','), example.map(csvCell).join(',')].join('\n');
   const filename = mode === 'jobs' ? 'plantilla-trabajos.csv' : mode === 'employees' ? 'plantilla-equipo.csv' : 'plantilla-facturas.csv';

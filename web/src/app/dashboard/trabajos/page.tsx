@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -13,6 +13,7 @@ import {
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
+import { logAudit } from '@amixos/shared/lib/audit';
 import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
@@ -88,22 +89,45 @@ export default function TrabajosPage() {
       .then(({ data }: { data: { field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[] | null }) => setJobTemplates(data ?? []));
   }, [business]);
 
+  // Only the columns the list actually renders/searches — `*` was hauling
+  // notes, custom fields, and every timestamp for hundreds of rows.
+  const JOB_LIST_SELECT = `
+    id, client_id, invoice_id, title, description, status, priority,
+    job_address, job_city, job_state, scheduled_date, time_start, end_date,
+    estimated_hours, time_end, total_amount, estimate_number, issue_date,
+    expiry_date, delegated_to_business_id, delegated_from_business_id,
+    published_to_crew, created_at,
+    clients(first_name, last_name, company),
+    job_assignments(worker_name, is_lead, employees(first_name, last_name))
+  `;
+
+  // Guards against a stale slow load overwriting a newer one (e.g. branch switch).
+  const loadSeqRef = useRef(0);
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawJob>((from, to) => {
-      let q = supabase
-        .from('jobs')
-        .select(`
-          *,
-          clients(first_name, last_name, company),
-          job_assignments(worker_name, is_lead, employees(first_name, last_name))
-        `)
-        .eq('business_id', businessId);
+    const seq = ++loadSeqRef.current;
+    const baseQuery = () => {
+      let q = supabase.from('jobs').select(JOB_LIST_SELECT).eq('business_id', businessId);
       // Scope to the active branch when one is selected ("All" = no filter).
       if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q.order('created_at', { ascending: false }).range(from, to);
-    });
+      return q;
+    };
+
+    // Fast first paint — the newest 30 in one small round-trip, so switching
+    // to Jobs feels instant; the full set replaces it right after.
+    if (rawJobs.length === 0) {
+      const { data: first } = await baseQuery().order('created_at', { ascending: false }).limit(30);
+      if (seq === loadSeqRef.current && first?.length) {
+        setRawJobs(first as RawJob[]);
+        setLoading(false);
+      }
+    }
+
+    const data = await fetchAll<RawJob>((from, to) =>
+      baseQuery().order('created_at', { ascending: false }).range(from, to),
+    );
+    if (seq !== loadSeqRef.current) return;
     setRawJobs(data);
     setLoading(false);
   };
@@ -190,6 +214,7 @@ export default function TrabajosPage() {
           invoiceTemplate: business.invoice_template,
           startNumber: business.invoice_start_number,
           hideItemTypes: business.job_item_types_enabled === false,
+          taxRate: business.invoice_tax_rate ?? 0,
           itemTypeLabels: {
             labor: jt.itemTypeLabor,
             material: jt.itemTypeMaterial,
@@ -206,6 +231,22 @@ export default function TrabajosPage() {
           window.alert(full.dashboard.jobs.batchInvoice.sameClientHint);
         }
       }}
+      onBulkDelete={
+        can.deleteJob(currentRole)
+          ? async (jobIds) => {
+              if (!business) return;
+              const msg = full.dashboard.jobs.confirmDeleteBulk.replace('{{count}}', String(jobIds.length));
+              if (!window.confirm(msg)) return;
+              // FK cascades clean job_items / job_assignments / job_photos
+              // (whose delete trigger also removes the storage files).
+              for (let i = 0; i < jobIds.length; i += 50) {
+                await supabase.from('jobs').delete().in('id', jobIds.slice(i, i + 50));
+              }
+              void logAudit(supabase, business.id, 'job.deleted', 'job', null, { count: jobIds.length, bulk: true });
+              await load();
+            }
+          : undefined
+      }
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}

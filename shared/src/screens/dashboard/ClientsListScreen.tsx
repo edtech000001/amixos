@@ -22,6 +22,7 @@ import {
   X,
   Layers,
   Check,
+  ListChecks,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -154,9 +155,15 @@ export function ClientsListScreen({
     [sections],
   );
 
-  // Selection mode: entered by long-pressing a row, exited when the last row
-  // is deselected (or via the X in the bulk bar). No persistent checkboxes.
-  const selectionMode = selectedIds.size > 0;
+  // Selection mode: entered via the header Seleccionar button (same pattern
+  // as the jobs list) or by long-pressing a row; exited via the ✕ in the bar.
+  // No persistent checkboxes.
+  const [selectMode, setSelectMode] = useState(false);
+  const selectionMode = selectMode || selectedIds.size > 0;
+  const exitSelect = () => {
+    setSelectMode(false);
+    onClearSelection();
+  };
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
   const selectedCountText = (
@@ -281,6 +288,16 @@ export function ClientsListScreen({
           </Text>
         </View>
         <View className="flex-row gap-2">
+          {/* Select-mode toggle — same entry point as the jobs list. */}
+          <Pressable
+            onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
+            accessibilityLabel={t.selectButton}
+            className={`items-center justify-center px-3 py-2.5 rounded-xl border active:opacity-80 ${
+              selectionMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+            }`}
+          >
+            <ListChecks size={15} color={selectionMode ? '#4F46E5' : '#374151'} />
+          </Pressable>
           {/* Group-by control — highlighted when not the default A–Z. */}
           <Pressable
             onPress={() => setGroupMenuOpen(true)}
@@ -324,7 +341,7 @@ export function ClientsListScreen({
         // gap-2 + shrinkable count text + short "Todos" label: everything has
         // to fit a 375pt screen without pushing Eliminar past the bar's edge.
         <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-4">
-          <Pressable onPress={onClearSelection} className="p-1 rounded">
+          <Pressable onPress={exitSelect} className="p-1 rounded">
             <X size={14} className="text-primary" />
           </Pressable>
           <Text
@@ -339,14 +356,7 @@ export function ClientsListScreen({
               <Text className="text-xs font-semibold text-primary">{t.selectAllShort}</Text>
             </Pressable>
           ) : null}
-          <Pressable
-            onPress={onBulkDeletePress}
-            disabled={bulkDeleting}
-            className="flex-row items-center gap-1.5 bg-red-500 px-3 py-1.5 rounded-lg active:opacity-80"
-          >
-            <Trash2 size={14} color="#FFFFFF" />
-            <Text className="text-xs font-semibold text-white">{t.bulkDelete}</Text>
-          </Pressable>
+          {/* Delete lives in the floating bottom pill (jobs pattern). */}
         </View>
       ) : null}
 
@@ -463,8 +473,27 @@ export function ClientsListScreen({
         />
       ) : null}
 
-      {/* New client — floating action, bottom-right thumb reach */}
-      <Fab onPress={onNewClientPress} />
+      {/* New client — floating action, bottom-right thumb reach. Hidden while
+         selecting so the delete pill owns the bottom edge (jobs pattern). */}
+      {selectionMode ? null : <Fab onPress={onNewClientPress} />}
+
+      {/* Bulk-delete pill — bottom-left, same as the jobs list. */}
+      {selectionMode ? (
+        <Pressable
+          onPress={onBulkDeletePress}
+          disabled={selectedIds.size === 0 || bulkDeleting}
+          className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
+          style={{
+            backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
+            elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+          }}
+        >
+          <Trash2 size={20} color="#FFFFFF" />
+          <Text className="text-white font-semibold">
+            {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Group-by bottom sheet — pills, mirrors the jobs sort menu. */}
       <RNModal

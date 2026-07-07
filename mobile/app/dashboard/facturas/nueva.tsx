@@ -103,7 +103,9 @@ export default function NuevaFacturaRoute() {
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [taxRate, setTaxRate] = useState(0);
+  // New invoices start at the business default (Ajustes → Facturas);
+  // editing an existing invoice overwrites this with its stored rate.
+  const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([newLine()]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);

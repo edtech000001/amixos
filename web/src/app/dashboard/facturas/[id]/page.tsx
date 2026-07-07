@@ -15,6 +15,7 @@ import {
 } from '@amixos/shared/screens/dashboard/InvoiceDetailScreen';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
@@ -35,6 +36,8 @@ interface RawClient {
   first_name: string;
   last_name: string;
   email: string | null;
+  email_office: string | null;
+  email_home: string | null;
   phone_cell: string | null;
   company: string | null;
   address: string | null;
@@ -165,7 +168,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Re-fetch the invoice row (after a job add/remove/move changes totals).
   const reloadInvoice = useCallback(async () => {
     const { data } = await supabase.from('invoices')
-      .select('*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))')
+      .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
       .eq('id', id).single();
     if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
     await loadJobs();
@@ -310,7 +313,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       clients: clientList.map(c => ({
         firstName: c.first_name,
         lastName: c.last_name,
-        email: c.email,
+        email: c.email_office ?? c.email_home ?? c.email,
         phoneCell: c.phone_cell,
         company: c.company,
         address: c.address,
@@ -329,7 +332,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase.from('invoices')
-          .select('*, clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, phone_cell, company, address, city, state, zip_code))')
+          .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
           .eq('id', id)
           .single(),
         supabase.from('invoice_field_templates')
@@ -440,8 +443,26 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!email) { window.alert(tInv.sendNoEmail); return; }
     const token = await ensureShareToken();
     const url = `${window.location.origin}/factura/${token}`;
-    const subject = tInv.emailSubject.replace('{{number}}', invoice.invoiceNumber);
-    const body = tInv.emailBody.replace('{{link}}', url);
+    // Business's custom templates (Ajustes → Facturas → Email) win; blank
+    // falls back to the localized default. {{tokens}} substituted here.
+    const c = invoice.clients[0];
+    const { subject, body } = renderInvoiceEmail({
+      subjectTemplate: business?.invoice_email_subject,
+      bodyTemplate: business?.invoice_email_body,
+      defaultSubject: tInv.emailSubject,
+      defaultBody: tInv.emailBody,
+      vars: {
+        number: invoice.invoiceNumber,
+        link: url,
+        client: c ? `${c.firstName} ${c.lastName}`.trim() : '',
+        firstName: c?.firstName ?? '',
+        lastName: c?.lastName ?? '',
+        company: c?.company ?? '',
+        business: business?.name ?? '',
+        total: `$${invoice.totalAmount.toFixed(2)}`,
+        dueDate: invoice.dueDate ?? '',
+      },
+    });
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     await updateStatus('sent');
   };

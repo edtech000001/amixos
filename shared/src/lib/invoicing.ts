@@ -112,6 +112,8 @@ export async function createInvoiceFromJobs(
     startNumber?: number;
     /** Drop the item-type prefix on lines (businesses.job_item_types_enabled = false). */
     hideItemTypes?: boolean;
+    /** Tax percentage for the new invoice (businesses.invoice_tax_rate). */
+    taxRate?: number;
   },
 ): Promise<CreateInvoiceResult> {
   if (!opts.jobIds.length) return { ok: false, error: 'no_jobs' };
@@ -139,7 +141,7 @@ export async function createInvoiceFromJobs(
     lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
   }
 
-  const taxRate = 0;
+  const taxRate = opts.taxRate ?? 0;
   const discount = 0;
   const { subtotal, tax, total } = computeTotals(lineItems, taxRate, discount);
 

@@ -307,6 +307,7 @@ export type DashboardDict = {
     importBtn: string;
     importHint: string;
     searchPlaceholder: string;
+    selectButton: string;
     selectAll: string;
     selectAllShort: string;
     selectedCountSingle: string;
@@ -522,6 +523,9 @@ export type DashboardDict = {
     };
     searchPlaceholder: string;
     clearFilters: string;
+    selectButton: string;
+    bulkDelete: string;
+    confirmDeleteBulk: string;
     batchInvoice: {
       selectButton: string;
       cancel: string;
@@ -1129,11 +1133,24 @@ export type DashboardDict = {
   };
   settings: {
     title: string;
+    importHub: {
+      subtitle: string;
+      orderHint: string;
+      step1Title: string;
+      step1Desc: string;
+      step2Title: string;
+      step2Desc: string;
+      step3Title: string;
+      step3Desc: string;
+      step4Title: string;
+      step4Desc: string;
+    };
     tabs: {
       negocio: string;
       trabajos: string;
       clientes: string;
       empleados: string;
+      importar: string;
       facturas: string;
       facturaTema: string;
       cuenta: string;
@@ -1300,10 +1317,17 @@ export type DashboardDict = {
       subtitle: string;
       dueDaysLabel: string;
       dueDaysHint: string;
+      taxRateLabel: string;
+      taxRateHint: string;
       startNumberLabel: string;
       startNumberHint: string;
       notesLabel: string;
       notesPlaceholder: string;
+      emailHeading: string;
+      emailSubtitle: string;
+      emailSubjectLabel: string;
+      emailBodyLabel: string;
+      emailVarsHint: string;
       saveError: string;
       saveSuccess: string;
       confirmDeleteField: string;
@@ -2476,6 +2500,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       importBtn: 'Importar clientes desde CSV',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
       searchPlaceholder: 'Buscar clientes...',
+      selectButton: 'Seleccionar',
       selectAll: 'Seleccionar todos',
       selectAllShort: 'Todos',
       selectedCountSingle: '{{count}} seleccionado',
@@ -2690,6 +2715,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
       clearFilters: 'Limpiar filtros',
+      selectButton: 'Seleccionar',
+      bulkDelete: 'Eliminar',
+      confirmDeleteBulk: '¿Eliminar {{count}} trabajo(s) permanentemente? Se borrarán también sus fotos, líneas y asignaciones.',
       batchInvoice: {
         selectButton: 'Facturar',
         cancel: 'Cancelar',
@@ -3278,11 +3306,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     settings: {
       title: 'Ajustes',
+      importHub: {
+        subtitle: 'Migra la información de tu negocio desde otra app o archivos CSV.',
+        orderHint: 'Sigue el orden — cada paso enlaza con el anterior: los trabajos se vinculan a clientes y equipo por nombre, y las facturas se enlazan a los trabajos por su Project ID.',
+        step1Title: 'Importar clientes',
+        step1Desc: 'Primero — los trabajos y facturas se vincularán a estos clientes.',
+        step2Title: 'Importar equipo',
+        step2Desc: 'Los líderes y cuadrillas de los trabajos se vinculan por nombre.',
+        step3Title: 'Importar trabajos',
+        step3Desc: 'Se enlazan a clientes y equipo. Incluye el Project ID para enlazar las facturas.',
+        step4Title: 'Importar facturas',
+        step4Desc: 'Al final — cada línea se enlaza a su trabajo por Project ID.',
+      },
       tabs: {
         negocio: 'Negocio',
         trabajos: 'Trabajos',
         clientes: 'Clientes',
         empleados: 'Equipo',
+        importar: 'Importar datos',
         facturas: 'Facturas',
         facturaTema: 'Tema de factura',
         cuenta: 'Cuenta',
@@ -3449,10 +3490,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Términos por defecto y campos personalizados de tus facturas.',
         dueDaysLabel: 'Días de vencimiento por defecto',
         dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Déjalo vacío para no usar un valor por defecto.',
+        taxRateLabel: 'Impuesto por defecto (%)',
+        taxRateHint: 'Se aplica a las facturas nuevas; puedes ajustarlo en cada factura. Déjalo vacío o en 0 para no cobrar impuesto. No cambia las facturas ya creadas.',
         startNumberLabel: 'Número inicial de factura',
         startNumberHint: 'La primera factura usará este número y las siguientes se numeran en orden (FAC-1000, FAC-1001…). No cambia las facturas ya creadas.',
         notesLabel: 'Notas / términos por defecto',
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
+        emailHeading: 'Email al enviar factura',
+        emailSubtitle: 'Personaliza el correo que se abre al presionar "Enviar factura". No cambia el documento de la factura.',
+        emailSubjectLabel: 'Asunto del email',
+        emailBodyLabel: 'Mensaje del email',
+        emailVarsHint: 'Toca una variable para insertarla donde esté el cursor. Déjalo vacío para usar el mensaje estándar.',
         saveError: 'Error al guardar.',
         saveSuccess: '¡Guardado!',
         confirmDeleteField: '¿Eliminar este campo? Los datos en facturas existentes se perderán.',
@@ -4633,6 +4681,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       importBtn: 'Import clients from CSV',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
       searchPlaceholder: 'Search clients...',
+      selectButton: 'Select',
       selectAll: 'Select all',
       selectAllShort: 'All',
       selectedCountSingle: '{{count}} selected',
@@ -4847,6 +4896,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Search by name, client, number, city...',
       clearFilters: 'Clear filters',
+      selectButton: 'Select',
+      bulkDelete: 'Delete',
+      confirmDeleteBulk: 'Delete {{count}} job(s) permanently? Their photos, line items, and assignments will be removed too.',
       batchInvoice: {
         selectButton: 'Invoice',
         cancel: 'Cancel',
@@ -5435,11 +5487,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     settings: {
       title: 'Settings',
+      importHub: {
+        subtitle: "Migrate your business data from another app or CSV files.",
+        orderHint: 'Follow the order — each step links to the previous one: jobs match clients and team by name, and invoices link to jobs by their Project ID.',
+        step1Title: 'Import clients',
+        step1Desc: 'First — jobs and invoices will link to these clients.',
+        step2Title: 'Import team',
+        step2Desc: 'Job leads and crews are matched by name.',
+        step3Title: 'Import jobs',
+        step3Desc: 'They link to clients and team. Include the Project ID so invoices can link later.',
+        step4Title: 'Import invoices',
+        step4Desc: 'Last — each line links to its job by Project ID.',
+      },
       tabs: {
         negocio: 'Business',
         trabajos: 'Jobs',
         clientes: 'Clients',
         empleados: 'Team',
+        importar: 'Import data',
         facturas: 'Invoices',
         facturaTema: 'Invoice theme',
         cuenta: 'Account',
@@ -5606,10 +5671,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Default terms and custom fields for your invoices.',
         dueDaysLabel: 'Default due window (days)',
         dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty for no default.',
+        taxRateLabel: 'Default tax rate (%)',
+        taxRateHint: 'Applied to new invoices; adjustable per invoice. Leave empty or 0 for no tax. Existing invoices are unchanged.',
         startNumberLabel: 'Starting invoice number',
         startNumberHint: 'Your first invoice uses this number and the rest are numbered in order (INV-1000, INV-1001…). Existing invoices are unchanged.',
         notesLabel: 'Default notes / terms',
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
+        emailHeading: 'Send-invoice email',
+        emailSubtitle: 'Customizes the email opened by "Send invoice". It does not change the invoice document.',
+        emailSubjectLabel: 'Email subject',
+        emailBodyLabel: 'Email message',
+        emailVarsHint: 'Tap a variable to insert it at the cursor. Leave empty to use the standard message.',
         saveError: 'Save error.',
         saveSuccess: 'Saved!',
         confirmDeleteField: 'Delete this field? Data on existing invoices will be lost.',

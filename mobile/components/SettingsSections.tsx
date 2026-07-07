@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal, Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -31,6 +31,8 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { InvoiceDesigner } from './InvoiceDesigner';
 import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { usStateName } from '@amixos/shared/lib/usStates';
+import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Input, Button, Modal, Toggle, Select, DatePicker } from '@amixos/shared/ui';
@@ -43,8 +45,6 @@ import {
 import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
-import { ImportClientsModal } from '@/components/ImportClientsModal';
-import { ImportDataModal } from '@/components/ImportDataModal';
 import { PricingModal } from '@/components/PricingModal';
 import { UbicacionesSection } from '@/components/UbicacionesSection';
 import {
@@ -132,7 +132,7 @@ const EMPLOYEE_STANDARD_KEYS = EMPLOYEE_FIELD_SECTIONS.flatMap((s) => EMPLOYEE_S
 const INVOICE_STANDARD_KEYS = INVOICE_FIELD_SECTIONS.flatMap((s) => INVOICE_SECTION_FIELDS[s]);
 import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
-import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink } from 'lucide-react-native';
+import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink, Send } from 'lucide-react-native';
 
 type FieldType = 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
 
@@ -228,37 +228,6 @@ const BUSINESS_US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-/** Ajustes entry card for the CSV importers (jobs/invoices/employees) —
- *  mirrors the clients import card and the web Ajustes links, so phone-only
- *  users can migrate their data too. Owns its open state + modal. */
-function ImportEntryCard({ mode }: { mode: 'jobs' | 'invoices' | 'employees' }) {
-  const { business } = useApp();
-  const { locale } = useLang();
-  const en = locale === 'en';
-  const [open, setOpen] = useState(false);
-  if (!business) return null;
-  const title =
-    mode === 'jobs' ? (en ? 'Import jobs' : 'Importar trabajos')
-    : mode === 'employees' ? (en ? 'Import team' : 'Importar equipo')
-    : (en ? 'Import invoices' : 'Importar facturas');
-  const hint = en ? 'Bulk-load from a CSV file.' : 'Carga masiva desde un archivo CSV.';
-  return (
-    <View className="bg-white rounded-2xl border border-gray-100 p-4">
-      <Pressable onPress={() => setOpen(true)} className="flex-row items-center gap-3 active:opacity-70">
-        <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-          <Sparkles size={18} color="#4F46E5" />
-        </View>
-        <View className="flex-1">
-          <Text className="text-sm font-semibold text-gray-900">{title}</Text>
-          <Text className="text-xs text-gray-500 mt-0.5">{hint}</Text>
-        </View>
-        <Text className="text-xl text-gray-400">›</Text>
-      </Pressable>
-      <ImportDataModal open={open} mode={mode} businessId={business.id} onClose={() => setOpen(false)} />
-    </View>
-  );
-}
-
 function GroupLabel({ children }: { children: string }) {
   return <Text className="text-xs font-semibold text-gray-400 uppercase mt-2">{children}</Text>;
 }
@@ -303,7 +272,7 @@ function FieldListLegend() {
 export function BusinessSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
   const [name, setName] = useState(business?.name ?? '');
@@ -450,9 +419,10 @@ export function BusinessSection() {
     setSaving(false);
   };
 
+  // Full state names for display — the DB keeps the 2-letter code.
   const stateOptions = [
     { value: '', label: '—' },
-    ...BUSINESS_US_STATES.map((s) => ({ value: s, label: s })),
+    ...BUSINESS_US_STATES.map((s) => ({ value: s, label: usStateName(s, locale) })),
   ];
 
   // Surface the save action to the page header (top-right pill) like the
@@ -487,11 +457,11 @@ export function BusinessSection() {
         <View className="items-center gap-3 py-1">
           {business?.logo_url ? (
             <Pressable onPress={() => setLogoViewerOpen(true)}>
-              <Image source={{ uri: business.logo_url }} className="w-24 h-24 rounded-2xl bg-gray-50" resizeMode="contain" />
+              <Image source={{ uri: business.logo_url }} className="w-32 h-32 rounded-2xl bg-gray-50" resizeMode="contain" />
             </Pressable>
           ) : (
-            <View className="w-24 h-24 rounded-2xl bg-gray-100 items-center justify-center">
-              <Building2 size={28} color="#9CA3AF" />
+            <View className="w-32 h-32 rounded-2xl bg-gray-100 items-center justify-center">
+              <Building2 size={40} color="#9CA3AF" />
             </View>
           )}
           <View className="flex-row items-center gap-2">
@@ -652,6 +622,44 @@ export function FacturasSection() {
   const startNumInit = String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER);
   const [startNumber, setStartNumber] = useState(startNumInit);
   const [dbStartNumber, setDbStartNumber] = useState(startNumInit);
+  const taxRateInit = business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '';
+  const [taxRate, setTaxRate] = useState(taxRateInit);
+  const [dbTaxRate, setDbTaxRate] = useState(taxRateInit);
+  const [emailSubject, setEmailSubject] = useState(business?.invoice_email_subject ?? '');
+  const [dbEmailSubject, setDbEmailSubject] = useState(business?.invoice_email_subject ?? '');
+  const [emailBody, setEmailBody] = useState(business?.invoice_email_body ?? '');
+  // Chip taps insert {{tokens}} at the last known cursor position, tracked
+  // via onSelectionChange (null = field never touched → append at the end).
+  // We don't force the caret back afterwards — controlled `selection` on RN
+  // TextInput is unreliable — so consecutive taps chain via the stored pos.
+  const emailSelRef = useRef<{ subject: { s: number; e: number } | null; body: { s: number; e: number } | null }>({ subject: null, body: null });
+  const insertEmailToken = (field: 'subject' | 'body', token: string) => {
+    const value = field === 'subject' ? emailSubject : emailBody;
+    const set = field === 'subject' ? setEmailSubject : setEmailBody;
+    const sel = emailSelRef.current[field];
+    const start = sel ? Math.min(sel.s, value.length) : value.length;
+    const end = sel ? Math.min(sel.e, value.length) : value.length;
+    set(value.slice(0, start) + token + value.slice(end));
+    const pos = start + token.length;
+    emailSelRef.current[field] = { s: pos, e: pos };
+  };
+  const emailTokenChips = (field: 'subject' | 'body') => (
+    <View className="flex-row flex-wrap gap-1.5 mt-1.5">
+      {INVOICE_EMAIL_TOKENS.map(tok => {
+        const label = locale === 'en' ? tok.en : tok.es;
+        return (
+          <Pressable
+            key={tok.key}
+            onPress={() => insertEmailToken(field, label)}
+            className="rounded-full bg-indigo-50 px-2.5 py-1 active:bg-indigo-100"
+          >
+            <Text className="text-[11px] font-mono text-indigo-600">{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+  const [dbEmailBody, setDbEmailBody] = useState(business?.invoice_email_body ?? '');
   const [required, setRequired] = useState<Record<string, boolean>>(
     business?.invoice_field_required ?? {},
   );
@@ -691,6 +699,12 @@ export function FacturasSection() {
     setNotes(n); setDbNotes(n);
     const sn = String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER);
     setStartNumber(sn); setDbStartNumber(sn);
+    const tx = business.invoice_tax_rate ? String(business.invoice_tax_rate) : '';
+    setTaxRate(tx); setDbTaxRate(tx);
+    const esub = business.invoice_email_subject ?? '';
+    setEmailSubject(esub); setDbEmailSubject(esub);
+    const ebody = business.invoice_email_body ?? '';
+    setEmailBody(ebody); setDbEmailBody(ebody);
     const r = business.invoice_field_required ?? {};
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
@@ -854,9 +868,17 @@ export function FacturasSection() {
         })
         .filter((e): e is FieldEntry<InvoiceFieldSection> => e !== null);
 
+      // Default tax %: 0–100; blank = 0 (no tax).
+      const taxNum = taxRate.trim() === '' ? 0 : Number(taxRate);
+      const safeTax = Number.isFinite(taxNum) && taxNum >= 0 && taxNum <= 100
+        ? Math.round(taxNum * 100) / 100
+        : 0;
       const { error: bizErr } = await supabase.from('businesses').update({
         invoice_due_days: days,
         invoice_start_number: startNum,
+        invoice_tax_rate: safeTax,
+        invoice_email_subject: emailSubject.trim() || null,
+        invoice_email_body: emailBody.trim() || null,
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
@@ -877,6 +899,9 @@ export function FacturasSection() {
       setDbNotes(notes);
       setStartNumber(String(startNum));
       setDbStartNumber(String(startNum));
+      setDbTaxRate(taxRate);
+      setDbEmailSubject(emailSubject);
+      setDbEmailBody(emailBody);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } catch {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -889,12 +914,15 @@ export function FacturasSection() {
       dueDays !== dbDueDays ||
       notes !== dbNotes ||
       startNumber !== dbStartNumber ||
+      taxRate !== dbTaxRate ||
+      emailSubject !== dbEmailSubject ||
+      emailBody !== dbEmailBody ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
       JSON.stringify(dbHidden) !== JSON.stringify(hidden) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, emailSubject, dbEmailSubject, emailBody, dbEmailBody, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -945,7 +973,6 @@ export function FacturasSection() {
 
   return (
     <View className="gap-5">
-      <ImportEntryCard mode="invoices" />
       <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
         <SectionHeader
           icon={<FileText size={18} color="#4F46E5" />}
@@ -959,6 +986,13 @@ export function FacturasSection() {
           keyboardType="number-pad"
         />
         <Text className="text-xs text-gray-400 -mt-2">{t.invoices.dueDaysHint}</Text>
+        <Input
+          label={t.invoices.taxRateLabel}
+          value={taxRate}
+          onChangeText={(v: string) => setTaxRate(v.replace(/[^0-9.]/g, ''))}
+          keyboardType="decimal-pad"
+        />
+        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.taxRateHint}</Text>
         <Input
           label={t.invoices.startNumberLabel}
           value={startNumber}
@@ -979,6 +1013,44 @@ export function FacturasSection() {
               style={{ textAlignVertical: 'top', minHeight: 70 }}
             />
           </View>
+        </View>
+
+      </View>
+
+      {/* Email al enviar factura — its OWN card: these fields customize the
+         send email, not the invoice document (that's the card above). */}
+      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+        <SectionHeader
+          icon={<Send size={18} color="#4F46E5" />}
+          title={t.invoices.emailHeading}
+          subtitle={t.invoices.emailSubtitle}
+        />
+        <View>
+          <Input
+            label={t.invoices.emailSubjectLabel}
+            value={emailSubject}
+            onChangeText={setEmailSubject}
+            onSelectionChange={e => { emailSelRef.current.subject = { s: e.nativeEvent.selection.start, e: e.nativeEvent.selection.end }; }}
+            placeholder={full.dashboard.invoices.emailSubject}
+          />
+          {emailTokenChips('subject')}
+        </View>
+        <View>
+          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.invoices.emailBodyLabel}</Text>
+          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
+            <TextInput
+              multiline
+              placeholder={full.dashboard.invoices.emailBody}
+              placeholderTextColor="#9CA3AF"
+              value={emailBody}
+              onChangeText={setEmailBody}
+              onSelectionChange={e => { emailSelRef.current.body = { s: e.nativeEvent.selection.start, e: e.nativeEvent.selection.end }; }}
+              className="text-base text-gray-900 py-2"
+              style={{ textAlignVertical: 'top', minHeight: 90 }}
+            />
+          </View>
+          {emailTokenChips('body')}
+          <Text className="text-xs text-gray-400 mt-1.5">{t.invoices.emailVarsHint}</Text>
         </View>
       </View>
 
@@ -1162,7 +1234,6 @@ export function TrabajosSection() {
 
   return (
     <View className="gap-5">
-      <ImportEntryCard mode="jobs" />
       <SectionHeader
         icon={<Briefcase size={18} color="#4F46E5" />}
         title={t.pipeline.heading}
@@ -2274,40 +2345,7 @@ export function ClientesSection() {
 
   return (
     <View className="gap-4">
-      {/* Import CSV — lives at the top of Ajustes → Clientes since it's
-         an onboarding/migration action, not a daily one. */}
-      {business ? (
-        <View className="bg-white rounded-2xl border border-gray-100 p-4">
-          <Pressable
-            onPress={() => setImportOpen(true)}
-            className="flex-row items-center gap-3 active:opacity-70"
-          >
-            <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-              <Sparkles size={18} color="#4F46E5" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-sm font-semibold text-gray-900">
-                {full.dashboard.clients.importBtn}
-              </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
-                {full.dashboard.clients.importHint}
-              </Text>
-            </View>
-            <Text className="text-xl text-gray-400">›</Text>
-          </Pressable>
-          <ImportClientsModal
-            open={importOpen}
-            onClose={() => setImportOpen(false)}
-            businessId={business.id}
-            templates={templates.map(tpl => ({
-              field_key: tpl.field_key,
-              field_label: tpl.field_label,
-            }))}
-            onImportComplete={loadCounts}
-          />
-        </View>
-      ) : null}
-
+      {/* Import moved to Ajustes → Importar datos (the guided hub). */}
       {/* Contacts summary — total clients + employees so the user can
          reconcile against their Google Contacts count when sync is on. */}
       <View className="bg-white rounded-2xl border border-gray-100 p-4">
@@ -2744,7 +2782,6 @@ export function EmpleadosSection() {
 
   return (
     <View className="gap-4">
-      <ImportEntryCard mode="employees" />
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader

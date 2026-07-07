@@ -12,6 +12,7 @@ import {
   Activity,
   LifeBuoy,
   LayoutGrid,
+  Upload,
   type LucideIcon,
 } from 'lucide-react-native';
 import Constants from 'expo-constants';
@@ -99,6 +100,13 @@ export default function AjustesIndex() {
         description: t.invoices.subtitle,
         icon: FileText,
         path: '/dashboard/mas/ajustes/facturas',
+      },
+      {
+        key: 'importar',
+        label: t.tabs.importar,
+        description: t.importHub.subtitle,
+        icon: Upload,
+        path: '/dashboard/mas/ajustes/importar',
       },
     ] : []),
     // Roles y permisos lives INSIDE the Equipo (Team) screen, not as its own
