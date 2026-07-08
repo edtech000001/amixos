@@ -220,7 +220,26 @@ export type DashboardDict = {
     noClient: string;
     dueShort: string;
     markSent: string;
+    undoSent: string;
     markPaid: string;
+    payments: {
+      title: string;
+      recordTitle: string;
+      editTitle: string;
+      recordBtn: string;
+      amountLabel: string;
+      fullAmountBtn: string;
+      methodLabel: string;
+      dateLabel: string;
+      remaining: string;
+      partialPill: string;
+      paidInFullHint: string;
+      deleteConfirm: string;
+      undoPaid: string;
+      undoPaidConfirm: string;
+      otherPlaceholder: string;
+      methods: { cash: string; check: string; card: string; transfer: string; zelle: string; cashapp: string; venmo: string; paypal: string; moneyOrder: string; other: string };
+    };
     sendInvoice: string;
     emailSubject: string;
     emailBody: string;
@@ -2414,7 +2433,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
       noClient: 'Sin cliente',
       dueShort: 'Vence {{date}}',
       markSent: 'Marcar enviada',
+      undoSent: 'Deshacer envío',
       markPaid: 'Marcar pagada',
+      payments: {
+        title: 'Pagos',
+        recordTitle: 'Registrar pago',
+        editTitle: 'Editar pago',
+        recordBtn: 'Registrar pago',
+        amountLabel: 'Monto',
+        fullAmountBtn: 'Monto completo',
+        methodLabel: 'Método de pago',
+        dateLabel: 'Fecha de pago',
+        remaining: 'Saldo pendiente',
+        partialPill: 'Pago parcial',
+        paidInFullHint: 'Con este pago la factura queda pagada.',
+        deleteConfirm: '¿Eliminar este pago?',
+        undoPaid: 'Marcar no pagada',
+        undoPaidConfirm: 'La factura volverá a enviada y se eliminarán los pagos registrados.',
+        otherPlaceholder: 'Especificar…',
+        methods: { cash: 'Efectivo', check: 'Cheque', card: 'Tarjeta', transfer: 'Transferencia', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Giro postal (money order)', other: 'Otro' },
+      },
       sendInvoice: 'Enviar factura',
       emailSubject: 'Factura {{number}}',
       emailBody: 'Hola,\n\nAdjunto encontrarás tu factura. Puedes verla aquí:\n{{link}}\n\nGracias por tu preferencia.',
@@ -4595,7 +4633,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
       noClient: 'No client',
       dueShort: 'Due {{date}}',
       markSent: 'Mark sent',
+      undoSent: 'Undo sent',
       markPaid: 'Mark paid',
+      payments: {
+        title: 'Payments',
+        recordTitle: 'Record payment',
+        editTitle: 'Edit payment',
+        recordBtn: 'Record payment',
+        amountLabel: 'Amount',
+        fullAmountBtn: 'Full amount',
+        methodLabel: 'Payment method',
+        dateLabel: 'Payment date',
+        remaining: 'Balance due',
+        partialPill: 'Partially paid',
+        paidInFullHint: 'This payment settles the invoice in full.',
+        deleteConfirm: 'Delete this payment?',
+        undoPaid: 'Mark unpaid',
+        undoPaidConfirm: 'The invoice will go back to sent and its recorded payments will be removed.',
+        otherPlaceholder: 'Specify…',
+        methods: { cash: 'Cash', check: 'Check', card: 'Card', transfer: 'Bank transfer', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Money order', other: 'Other' },
+      },
       sendInvoice: 'Send invoice',
       emailSubject: 'Invoice {{number}}',
       emailBody: 'Hi,\n\nPlease find your invoice attached. You can view it here:\n{{link}}\n\nThank you for your business.',

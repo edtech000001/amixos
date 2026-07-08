@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
   ArrowLeft,
+  ChevronDown,
   Printer,
   Link2,
   CheckCircle,
@@ -11,6 +12,7 @@ import {
   FileText,
   Pencil,
   Trash2,
+  Undo2,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import {
@@ -66,6 +68,14 @@ export interface InvoiceDetail {
   customFields?: { label: string; value: string; key?: string }[];
 }
 
+export interface InvoicePaymentRow {
+  id: string;
+  amount: number;
+  method: string | null;
+  /** ISO date (YYYY-MM-DD). */
+  paidOn: string;
+}
+
 export interface InvoiceDetailScreenProps {
   loading: boolean;
   invoice: InvoiceDetail | null;
@@ -75,7 +85,7 @@ export interface InvoiceDetailScreenProps {
   templateConfig: InvoiceTemplateConfig;
   updating: boolean;
   onBack: () => void;
-  onUpdateStatus: (status: 'sent' | 'paid') => Promise<void> | void;
+  onUpdateStatus: (status: 'sent' | 'paid' | 'draft') => Promise<void> | void;
   /** Print / export PDF (mobile: share sheet). Hidden if not provided. */
   onPrint?: () => void;
   /** Copy/share the public invoice link. Hidden if not provided. */
@@ -100,6 +110,16 @@ export interface InvoiceDetailScreenProps {
   jobBusy?: boolean;
   /** Email the invoice out (draft → opens the mail client + marks sent). */
   onSendInvoice?: () => void;
+  /** Recorded payments (partial or full). Rendered under the totals. */
+  payments?: InvoicePaymentRow[];
+  /** Open the record-payment sheet. Falls back to onUpdateStatus('paid'). */
+  onRecordPayment?: () => void;
+  /** Edit a recorded payment (opens the record sheet pre-filled). */
+  onEditPayment?: (payment: InvoicePaymentRow) => void;
+  /** Delete a recorded payment (caller confirms + reverts status if needed). */
+  onDeletePayment?: (payment: InvoicePaymentRow) => void;
+  /** Revert a paid invoice to sent (caller confirms + clears payments). */
+  onUndoPaid?: () => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -140,6 +160,11 @@ export function InvoiceDetailScreen({
   onJobPress,
   jobBusy,
   onSendInvoice,
+  payments = [],
+  onRecordPayment,
+  onEditPayment,
+  onDeletePayment,
+  onUndoPaid,
 }: InvoiceDetailScreenProps) {
   const { t: ui } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -172,6 +197,12 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
+  // null = auto (expand short lists, collapse 3+); a tap pins the choice.
+  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
+  const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
+  const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
+  const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
+  const isPartial = invoice.status === 'sent' && paidSoFar > 0;
 
   // All invoice dates render as "Mayo 24, 2026" for consistency with the
   // rest of the app. Locale comes from the invoice's printed-language
@@ -192,6 +223,11 @@ export function InvoiceDetailScreen({
               <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
                 <Text className={`text-xs font-semibold ${pillText}`}>{statusLabel}</Text>
               </View>
+              {isPartial ? (
+                <View className="px-2.5 py-1 rounded-full bg-amber-100">
+                  <Text className="text-xs font-semibold text-amber-700">{tInv.payments.partialPill}</Text>
+                </View>
+              ) : null}
             </View>
             <Text className="text-xs text-gray-400 mt-0.5">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
           </View>
@@ -313,6 +349,11 @@ export function InvoiceDetailScreen({
                 </View>
                 {showActions ? (
                   <View className="flex-row justify-end gap-4 mt-1.5">
+                    {onEditManualItem ? (
+                      <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
+                        <Text className="text-xs font-semibold text-gray-500">{ui.common.buttons.edit}</Text>
+                      </Pressable>
+                    ) : null}
                     {onMoveJob ? (
                       <Pressable onPress={() => onMoveJob(jid!)} disabled={jobBusy} hitSlop={6}>
                         <Text className="text-xs font-semibold text-gray-500">{tInv.jobsSection.moveBtn}</Text>
@@ -365,20 +406,85 @@ export function InvoiceDetailScreen({
             <Text className="text-base font-bold text-gray-900">{t.total}</Text>
             <Text className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</Text>
           </View>
+          {payments.length > 0 ? (
+            <View className="pt-2 border-t border-gray-100 gap-1.5">
+              {/* Summary row toggles the detail rows so many partials don't
+                 swamp the totals card. */}
+              <Pressable
+                onPress={() => setPaymentsToggle(!paymentsExpanded)}
+                className="flex-row items-center justify-between active:opacity-70"
+                hitSlop={4}
+              >
+                <View className="flex-row items-center gap-1">
+                  <Text className="text-sm font-medium text-gray-500">
+                    {tInv.payments.title} ({payments.length})
+                  </Text>
+                  <ChevronDown size={14} color="#9CA3AF" style={{ transform: [{ rotate: paymentsExpanded ? '180deg' : '0deg' }] }} />
+                </View>
+                <Text className="text-sm font-medium text-emerald-700">−{fmt(paidSoFar)}</Text>
+              </Pressable>
+              {paymentsExpanded ? payments.map(p => (
+                <View key={p.id} className="flex-row items-center justify-between pl-2">
+                  <Text className="text-sm text-gray-500 flex-1 pr-2" numberOfLines={1}>
+                    {p.method ?? '—'} · {formatDate(p.paidOn)}
+                  </Text>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-sm text-emerald-700">−{fmt(p.amount)}</Text>
+                    {onEditPayment ? (
+                      <Pressable onPress={() => onEditPayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
+                        <Pencil size={13} color="#9CA3AF" />
+                      </Pressable>
+                    ) : null}
+                    {onDeletePayment ? (
+                      <Pressable onPress={() => onDeletePayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
+                        <Trash2 size={13} color="#D1D5DB" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              )) : null}
+              {invoice.status !== 'paid' ? (
+                <View className="flex-row justify-between pt-1">
+                  <Text className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</Text>
+                  <Text className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </View>
 
-      {/* Primary action — Send invoice (draft) / Mark paid (sent) */}
-      {invoice.status === 'draft' && onSendInvoice ? (
-        <Pressable onPress={onSendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90 mb-4">
-          <Send size={16} color="#FFFFFF" />
-          <Text className="text-white font-semibold">{tInv.sendInvoice}</Text>
-        </Pressable>
+      {/* Primary actions — draft: Send + Mark sent (no email) · sent: Mark paid + Undo */}
+      {invoice.status === 'draft' ? (
+        <View className="gap-2.5 mb-4">
+          {onSendInvoice ? (
+            <Pressable onPress={onSendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
+              <Send size={16} color="#FFFFFF" />
+              <Text className="text-white font-semibold">{tInv.sendInvoice}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50">
+            <CheckCircle size={16} color="#374151" />
+            <Text className="text-gray-700 font-semibold">{tInv.markSent}</Text>
+          </Pressable>
+        </View>
       ) : null}
       {invoice.status === 'sent' ? (
-        <Pressable onPress={() => onUpdateStatus('paid')} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90 mb-4">
-          <CheckCircle size={16} color="#FFFFFF" />
-          <Text className="text-white font-semibold">{tInv.markPaid}</Text>
+        <View className="gap-2.5 mb-4">
+          <Pressable onPress={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
+            <CheckCircle size={16} color="#FFFFFF" />
+            <Text className="text-white font-semibold">{paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}</Text>
+          </Pressable>
+          <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50">
+            <Undo2 size={16} color="#6B7280" />
+            <Text className="text-gray-500 font-semibold">{tInv.undoSent}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {invoice.status === 'paid' && onUndoPaid ? (
+        <Pressable onPress={onUndoPaid} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50 mb-4">
+          <Undo2 size={16} color="#6B7280" />
+          <Text className="text-gray-500 font-semibold">{tInv.payments.undoPaid}</Text>
         </Pressable>
       ) : null}
 

@@ -12,6 +12,7 @@ import { useLang } from '@/i18n/LangProvider';
 import {
   InvoiceDetailScreen,
   type InvoiceDetail,
+  type InvoicePaymentRow,
 } from '@amixos/shared/screens/dashboard/InvoiceDetailScreen';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -20,6 +21,9 @@ import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+
+const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
+type PayMethodKey = (typeof PAY_METHODS)[number];
 
 const genToken = () =>
   Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -91,6 +95,19 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  // Payment ledger (invoice_payments): "Mark paid" opens a dialog recording
+  // amount + method + date; partial amounts keep status 'sent' with a balance.
+  const [payments, setPayments] = useState<InvoicePaymentRow[]>([]);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethodKey, setPayMethodKey] = useState<PayMethodKey>('cash');
+  const [payMethodOther, setPayMethodOther] = useState('');
+  const [payDate, setPayDate] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
+  const [delPayment, setDelPayment] = useState<InvoicePaymentRow | null>(null);
+  // Set → the payment sheet edits this row instead of inserting a new one.
+  const [payEditId, setPayEditId] = useState<string | null>(null);
+  const [undoPaidOpen, setUndoPaidOpen] = useState(false);
 
   // ── Jobs attached to this invoice (Phase 2 management) ──────────────
   const tj = full.dashboard.jobs;
@@ -274,6 +291,17 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setJobBusy(false);
   };
 
+  const loadPayments = async () => {
+    const { data } = await supabase
+      .from('invoice_payments')
+      .select('id, amount, method, paid_on')
+      .eq('invoice_id', id)
+      .order('paid_on')
+      .order('created_at');
+    setPayments(((data ?? []) as { id: string; amount: number; method: string | null; paid_on: string }[])
+      .map(r => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on })));
+  };
+
   const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
     const clientList: RawClient[] = raw.invoice_clients?.length
       ? raw.invoice_clients.map(ic => ic.clients)
@@ -348,24 +376,163 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         setInvoiceConfigRaw(raw.template_config ?? null);
         setInvClientId(raw.client_id ?? null);
         void loadJobs();
+        void loadPayments();
       }
       setLoading(false);
     })();
   }, [id, business]);
 
-  const updateStatus = async (status: 'sent' | 'paid') => {
+  const updateStatus = async (status: 'sent' | 'paid' | 'draft') => {
     setUpdating(true);
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
+    if (status === 'draft') update.sent_at = null; // undo "mark as sent"
     await supabase.from('invoices').update(update).eq('id', id);
     if (business) {
-      void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : 'invoice.sent', 'invoice', id, {
+      void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : status === 'sent' ? 'invoice.sent' : 'invoice.unsent', 'invoice', id, {
         invoice_number: invoice?.invoiceNumber,
       });
     }
     setInvoice(prev => prev ? { ...prev, status } : prev);
     setUpdating(false);
+  };
+
+  const paymentMethodLabel = () =>
+    payMethodKey === 'other' ? payMethodOther.trim() : tInv.payments.methods[payMethodKey];
+
+  const openRecordPayment = () => {
+    if (!invoice) return;
+    const paid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const remaining = Math.max(0, invoice.totalAmount - paid);
+    setPayEditId(null);
+    setPayAmount(remaining > 0 ? String(Math.round(remaining * 100) / 100) : '');
+    setPayMethodKey('cash');
+    setPayMethodOther('');
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayOpen(true);
+  };
+
+  const openEditPayment = (p: InvoicePaymentRow) => {
+    const key = PAY_METHODS.find(k => tInv.payments.methods[k] === p.method);
+    setPayEditId(p.id);
+    setPayAmount(String(p.amount));
+    setPayMethodKey(key ?? (p.method ? 'other' : 'cash'));
+    setPayMethodOther(key || !p.method ? '' : p.method);
+    setPayDate(p.paidOn);
+    setPayOpen(true);
+  };
+
+  /** Sync invoice status/summary after the ledger changed (edit path — can
+   *  flip either direction: newly covered → paid, no longer covered → sent). */
+  const syncInvoiceToPayments = async (rows: InvoicePaymentRow[]) => {
+    if (!invoice) return;
+    const paid = rows.reduce((sum, p) => sum + p.amount, 0);
+    const fullyPaid = paid >= invoice.totalAmount - 0.005;
+    const methods = Array.from(new Set(rows.map(p => p.method).filter(Boolean))) as string[];
+    if (fullyPaid && invoice.status !== 'paid') {
+      await supabase.from('invoices')
+        .update({ status: 'paid', paid_at: new Date().toISOString(), payment_method: methods.join(', ') || null })
+        .eq('id', id);
+      setInvoice(prev => prev ? { ...prev, status: 'paid' } : prev);
+    } else if (!fullyPaid && invoice.status === 'paid') {
+      await supabase.from('invoices')
+        .update({ status: 'sent', paid_at: null, payment_method: methods.join(', ') || null })
+        .eq('id', id);
+      setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
+    } else {
+      await supabase.from('invoices').update({ payment_method: methods.join(', ') || null }).eq('id', id);
+    }
+  };
+
+  const submitPayment = async () => {
+    if (!business || !invoice) return;
+    const amount = parseFloat(payAmount);
+    if (!amount || amount <= 0) return;
+    setPayBusy(true);
+    const method = paymentMethodLabel() || null;
+    if (payEditId) {
+      const { error } = await supabase.from('invoice_payments')
+        .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10) })
+        .eq('id', payEditId);
+      if (error) { setPayBusy(false); return; }
+      await syncInvoiceToPayments(payments.map(p => p.id === payEditId ? { ...p, amount, method, paidOn: payDate } : p));
+      void logAudit(supabase, business.id, 'invoice.payment_edited', 'invoice', id, {
+        invoice_number: invoice.invoiceNumber, amount, method,
+      });
+      await loadPayments();
+      setPayOpen(false);
+      setPayEditId(null);
+      setPayBusy(false);
+      return;
+    }
+    const { error } = await supabase.from('invoice_payments').insert({
+      business_id: business.id,
+      invoice_id: id,
+      amount,
+      method,
+      paid_on: payDate || new Date().toISOString().slice(0, 10),
+    });
+    if (error) { setPayBusy(false); return; }
+    const next = [...payments, { id: 'tmp', amount, method, paidOn: payDate }];
+    const paid = next.reduce((sum, p) => sum + p.amount, 0);
+    // Half-cent tolerance absorbs float drift on split payments.
+    const fullyPaid = paid >= invoice.totalAmount - 0.005;
+    if (fullyPaid) {
+      const methods = Array.from(new Set(next.map(p => p.method).filter(Boolean))) as string[];
+      await supabase.from('invoices')
+        .update({ status: 'paid', paid_at: new Date().toISOString(), payment_method: methods.join(', ') || null })
+        .eq('id', id);
+      setInvoice(prev => prev ? { ...prev, status: 'paid' } : prev);
+    }
+    void logAudit(supabase, business.id, 'invoice.payment', 'invoice', id, {
+      invoice_number: invoice.invoiceNumber, amount, method, paid_in_full: fullyPaid,
+    });
+    await loadPayments();
+    setPayOpen(false);
+    setPayBusy(false);
+  };
+
+  const doDeletePayment = async () => {
+    if (!business || !invoice || !delPayment) return;
+    setPayBusy(true);
+    await supabase.from('invoice_payments').delete().eq('id', delPayment.id);
+    const rest = payments.filter(p => p.id !== delPayment.id);
+    const paid = rest.reduce((sum, p) => sum + p.amount, 0);
+    const methods = Array.from(new Set(rest.map(p => p.method).filter(Boolean))) as string[];
+    if (invoice.status === 'paid' && paid < invoice.totalAmount - 0.005) {
+      // No longer covered — drop back to 'sent' so the balance is visible.
+      await supabase.from('invoices')
+        .update({ status: 'sent', paid_at: null, payment_method: methods.join(', ') || null })
+        .eq('id', id);
+      setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
+    } else {
+      await supabase.from('invoices').update({ payment_method: methods.join(', ') || null }).eq('id', id);
+    }
+    void logAudit(supabase, business.id, 'invoice.payment_deleted', 'invoice', id, {
+      invoice_number: invoice.invoiceNumber, amount: delPayment.amount, method: delPayment.method,
+    });
+    await loadPayments();
+    setDelPayment(null);
+    setPayBusy(false);
+  };
+
+  // Paid → sent: undoing "paid" means the recorded payments were a mistake,
+  // so they're removed too (a single wrong partial has its own row delete).
+  const undoPaid = async () => {
+    if (!business || !invoice) return;
+    setPayBusy(true);
+    await supabase.from('invoice_payments').delete().eq('invoice_id', id);
+    await supabase.from('invoices')
+      .update({ status: 'sent', paid_at: null, payment_method: null })
+      .eq('id', id);
+    setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
+    void logAudit(supabase, business.id, 'invoice.unpaid', 'invoice', id, {
+      invoice_number: invoice.invoiceNumber,
+    });
+    setPayments([]);
+    setUndoPaidOpen(false);
+    setPayBusy(false);
   };
 
   const deleteInvoice = async () => {
@@ -491,6 +658,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onJobPress={(jobId) => router.push(`/dashboard/trabajos/${jobId}?from=invoice&invoice=${id}`)}
         jobBusy={jobBusy}
         onSendInvoice={sendInvoice}
+        payments={payments}
+        onRecordPayment={openRecordPayment}
+        onEditPayment={openEditPayment}
+        onDeletePayment={setDelPayment}
+        onUndoPaid={() => setUndoPaidOpen(true)}
       />
 
       {/* Move-to-another-invoice picker */}
@@ -607,6 +779,108 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             </div>
           </div>
           <Button onClick={doEditSave} loading={jobBusy} disabled={!editDesc.trim()} fullWidth>{tc.buttons.save}</Button>
+        </div>
+      </Modal>
+
+      {/* Record payment — amount defaults to the remaining balance */}
+      <Modal open={payOpen} onClose={() => setPayOpen(false)} title={payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{tInv.payments.amountLabel}</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input
+                value={payAmount}
+                inputMode="decimal"
+                onChange={e => setPayAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                className="w-full rounded-xl border border-gray-200 bg-white pl-6 pr-32 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!invoice) return;
+                  const remaining = Math.max(0, invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0));
+                  setPayAmount(String(Math.round(remaining * 100) / 100));
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-2.5 py-1 text-xs font-semibold transition"
+              >
+                {tInv.payments.fullAmountBtn}
+              </button>
+            </div>
+            {invoice && parseFloat(payAmount) >= (invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0)) - 0.005 && parseFloat(payAmount) > 0 ? (
+              <p className="text-xs text-emerald-600">{tInv.payments.paidInFullHint}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{tInv.payments.methodLabel}</label>
+            <select
+              value={payMethodKey}
+              onChange={e => setPayMethodKey(e.target.value as PayMethodKey)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            >
+              {PAY_METHODS.map(k => (
+                <option key={k} value={k}>{tInv.payments.methods[k]}</option>
+              ))}
+            </select>
+            {payMethodKey === 'other' ? (
+              <input
+                value={payMethodOther}
+                onChange={e => setPayMethodOther(e.target.value)}
+                placeholder={tInv.payments.otherPlaceholder}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              />
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700">{tInv.payments.dateLabel}</label>
+            <input
+              type="date"
+              value={payDate}
+              onChange={e => setPayDate(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            />
+          </div>
+          <Button onClick={submitPayment} loading={payBusy} disabled={!parseFloat(payAmount)} fullWidth>
+            {payEditId ? tc.buttons.save : tInv.payments.recordBtn}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Delete a recorded payment */}
+      <Modal open={delPayment !== null} onClose={() => setDelPayment(null)} title={tInv.payments.title} size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600">{tInv.payments.deleteConfirm}</p>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setDelPayment(null)} fullWidth>
+              {tc.buttons.cancel}
+            </Button>
+            <button
+              onClick={doDeletePayment}
+              disabled={payBusy}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {tc.buttons.delete}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Undo paid — reverts to sent and clears recorded payments */}
+      <Modal open={undoPaidOpen} onClose={() => setUndoPaidOpen(false)} title={tInv.payments.undoPaid} size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600">{tInv.payments.undoPaidConfirm}</p>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setUndoPaidOpen(false)} fullWidth>
+              {tc.buttons.cancel}
+            </Button>
+            <button
+              onClick={undoPaid}
+              disabled={payBusy}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {tInv.payments.undoPaid}
+            </button>
+          </div>
         </div>
       </Modal>
 

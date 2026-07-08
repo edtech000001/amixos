@@ -61,6 +61,15 @@ interface LineItem {
   description: string;
   qty: number;
   rate: number;
+  /** Source job (invoices built from jobs) — must survive an edit round-trip
+   *  or Move/Remove on the detail screen breaks. */
+  job_id?: string | null;
+  /** Hand-edited job line: the draft rebuild keeps it instead of re-deriving. */
+  edited?: boolean;
+  // Raw input text while typing, so intermediate states like "12." aren't
+  // collapsed by parseFloat. Display prefers these; numbers stay in sync.
+  qtyText?: string;
+  rateText?: string;
 }
 
 const newId = () => Math.random().toString(36).slice(2);
@@ -106,6 +115,7 @@ export default function NuevaFacturaRoute() {
   // New invoices start at the business default (Ajustes → Facturas);
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
+  const [taxRateText, setTaxRateText] = useState<string | null>(null);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([newLine()]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -198,10 +208,10 @@ export default function NuevaFacturaRoute() {
           setTaxRate(inv.tax_rate ?? 0);
           setLanguage((inv.language as InvoiceLang) ?? 'es');
           setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
-          const items = (inv.line_items as { description: string; qty: number; rate: number }[] | null) ?? [];
+          const items = (inv.line_items as { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean }[] | null) ?? [];
           setLines(
             items.length > 0
-              ? items.map((i) => ({ id: newId(), description: i.description, qty: i.qty, rate: i.rate }))
+              ? items.map((i) => ({ id: newId(), description: i.description, qty: i.qty, rate: i.rate, job_id: i.job_id ?? null, edited: i.edited }))
               : [newLine()],
           );
           const idsFromLinks = (links ?? []).map((r: { client_id: string }) => r.client_id);
@@ -435,7 +445,9 @@ export default function NuevaFacturaRoute() {
   const total = subtotal + taxAmount;
 
   const updateLine = <K extends keyof LineItem>(id: string, field: K, value: LineItem[K]) =>
-    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
+    setLines((prev) => prev.map((l) => (l.id === id
+      ? { ...l, [field]: value, ...(l.job_id && field !== 'qtyText' && field !== 'rateText' ? { edited: true } : {}) }
+      : l)));
 
   const removeLine = (id: string) =>
     setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
@@ -498,7 +510,7 @@ export default function NuevaFacturaRoute() {
       invoice_number: invoiceNumber,
       issue_date: issueDate,
       due_date: dueDate || null,
-      line_items: validLines.map((l) => ({ description: l.description, qty: l.qty, rate: l.rate })),
+      line_items: validLines.map((l) => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}) })),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,
@@ -623,10 +635,12 @@ export default function NuevaFacturaRoute() {
                     <View className="flex-1">
                       <Text className="text-[10px] text-gray-400 mb-1">{t.colQty}</Text>
                       <TextInput
-                        value={line.qty ? String(line.qty) : ''}
-                        onChangeText={(v) =>
-                          updateLine(line.id, 'qty', parseFloat(v) || 0)
-                        }
+                        value={line.qtyText ?? (line.qty ? String(line.qty) : '')}
+                        onChangeText={(v) => {
+                          const clean = v.replace(/[^0-9.]/g, '');
+                          updateLine(line.id, 'qtyText', clean);
+                          updateLine(line.id, 'qty', parseFloat(clean) || 0);
+                        }}
                         keyboardType="decimal-pad"
                         placeholder="1"
                         placeholderTextColor="#9CA3AF"
@@ -636,10 +650,12 @@ export default function NuevaFacturaRoute() {
                     <View className="flex-1">
                       <Text className="text-[10px] text-gray-400 mb-1">{t.colRate}</Text>
                       <TextInput
-                        value={line.rate ? String(line.rate) : ''}
-                        onChangeText={(v) =>
-                          updateLine(line.id, 'rate', parseFloat(v) || 0)
-                        }
+                        value={line.rateText ?? (line.rate ? String(line.rate) : '')}
+                        onChangeText={(v) => {
+                          const clean = v.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '');
+                          updateLine(line.id, 'rateText', clean);
+                          updateLine(line.id, 'rate', parseFloat(clean) || 0);
+                        }}
                         keyboardType="decimal-pad"
                         placeholder="0.00"
                         placeholderTextColor="#9CA3AF"
@@ -678,8 +694,12 @@ export default function NuevaFacturaRoute() {
                 <View className="flex-row justify-between items-center">
                   <Text className="text-sm text-gray-500">{t.taxPercent}</Text>
                   <TextInput
-                    value={taxRate ? String(taxRate) : ''}
-                    onChangeText={(v) => setTaxRate(parseFloat(v) || 0)}
+                    value={taxRateText ?? (taxRate ? String(taxRate) : '')}
+                    onChangeText={(v) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      setTaxRateText(clean);
+                      setTaxRate(parseFloat(clean) || 0);
+                    }}
                     keyboardType="decimal-pad"
                     placeholder="0"
                     placeholderTextColor="#9CA3AF"

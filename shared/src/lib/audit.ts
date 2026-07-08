@@ -19,6 +19,11 @@ export type AuditAction =
   | 'invoice.created'
   | 'invoice.deleted'
   | 'invoice.sent'
+  | 'invoice.unsent'
+  | 'invoice.payment'
+  | 'invoice.payment_deleted'
+  | 'invoice.payment_edited'
+  | 'invoice.unpaid'
   | 'invoice.paid'
   | 'invoice.voided'
   // Clients
@@ -91,6 +96,11 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'invoice.created':     { es: 'Factura creada',           en: 'Invoice created' },
   'invoice.deleted':     { es: 'Factura eliminada',        en: 'Invoice deleted' },
   'invoice.sent':        { es: 'Factura enviada',          en: 'Invoice sent' },
+  'invoice.unsent':      { es: 'Factura devuelta a borrador', en: 'Invoice reverted to draft' },
+  'invoice.payment':     { es: 'Pago registrado',           en: 'Payment recorded' },
+  'invoice.payment_deleted': { es: 'Pago eliminado',        en: 'Payment deleted' },
+  'invoice.payment_edited': { es: 'Pago editado',           en: 'Payment edited' },
+  'invoice.unpaid':      { es: 'Factura marcada como no pagada', en: 'Invoice marked unpaid' },
   'invoice.paid':        { es: 'Factura pagada',           en: 'Invoice paid' },
   'invoice.voided':      { es: 'Factura anulada',          en: 'Invoice voided' },
   'client.deleted':      { es: 'Cliente eliminado',        en: 'Client deleted' },

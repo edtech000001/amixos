@@ -35,6 +35,9 @@ export interface InvoiceLineItem {
   /** Source job, so the line can be moved/removed with its job. Legacy lines
    *  (created before this feature) may be undefined. */
   job_id?: string | null;
+  /** Hand-edited on the invoice: the draft rebuild keeps this job's lines
+   *  as-is instead of re-deriving them from job_items. */
+  edited?: boolean;
 }
 
 /** Build the line items for one job from its job_items, tagged with the job id
@@ -221,10 +224,16 @@ export async function rebuildInvoiceLineItems(
   for (const j of (jobs ?? []) as any[]) {
     jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
   }
+  // A job whose lines were hand-edited on the invoice keeps them verbatim —
+  // re-deriving would silently undo the user's price/qty override.
+  const overriddenJobs = new Set(existing.filter(li => li.job_id && li.edited).map(li => li.job_id as string));
+  const keptJobLines = jobLines.filter(l => !overriddenJobs.has(l.job_id as string));
+  const overriddenLines = existing.filter(li => li.job_id && overriddenJobs.has(li.job_id));
+  const finalJobLines = [...overriddenLines, ...keptJobLines];
   const lineKey = (l: InvoiceLineItem) => `${l.description}|${l.qty}|${l.rate}`;
-  const jobLineKeys = new Set(jobLines.map(lineKey));
+  const jobLineKeys = new Set(finalJobLines.map(lineKey));
   const manual = existing.filter(li => !li.job_id && !jobLineKeys.has(lineKey(li)));
-  const next: InvoiceLineItem[] = [...manual, ...jobLines];
+  const next: InvoiceLineItem[] = [...manual, ...finalJobLines];
   if (JSON.stringify(next) === JSON.stringify(existing)) return { changed: false };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
@@ -277,7 +286,7 @@ export async function updateLineItemAt(
   if (opts.index < 0 || opts.index >= items.length) return;
   const next = items.map((li, i) =>
     i === opts.index
-      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate }
+      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, ...(li.job_id ? { edited: true } : {}) }
       : li,
   );
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);

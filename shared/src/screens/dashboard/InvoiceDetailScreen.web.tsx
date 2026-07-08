@@ -4,8 +4,10 @@
 // InvoiceDetailScreen.tsx so the web page wrapper is untouched and the bundler
 // resolves this .web.tsx variant automatically.
 
+import { useState } from 'react';
 import {
   ArrowLeft,
+  ChevronDown,
   Printer,
   Link2,
   CheckCircle,
@@ -15,6 +17,7 @@ import {
   FileText,
   Pencil,
   Trash2,
+  Undo2,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -69,6 +72,14 @@ export interface InvoiceDetail {
   clients: InvoiceDetailClient[];
 }
 
+export interface InvoicePaymentRow {
+  id: string;
+  amount: number;
+  method: string | null;
+  /** ISO date (YYYY-MM-DD). */
+  paidOn: string;
+}
+
 export interface InvoiceDetailScreenProps {
   loading: boolean;
   invoice: InvoiceDetail | null;
@@ -78,7 +89,7 @@ export interface InvoiceDetailScreenProps {
   templateConfig: InvoiceTemplateConfig;
   updating: boolean;
   onBack: () => void;
-  onUpdateStatus: (status: 'sent' | 'paid') => Promise<void> | void;
+  onUpdateStatus: (status: 'sent' | 'paid' | 'draft') => Promise<void> | void;
   /** Print / download PDF. Hidden if not provided. */
   onPrint?: () => void;
   /** Copy/share the public invoice link. Hidden if not provided. */
@@ -100,6 +111,16 @@ export interface InvoiceDetailScreenProps {
   jobBusy?: boolean;
   /** Email the invoice out (draft → opens the mail client + marks sent). */
   onSendInvoice?: () => void;
+  /** Recorded payments (partial or full). Rendered under the totals. */
+  payments?: InvoicePaymentRow[];
+  /** Open the record-payment dialog. Falls back to onUpdateStatus('paid'). */
+  onRecordPayment?: () => void;
+  /** Edit a recorded payment (opens the record sheet pre-filled). */
+  onEditPayment?: (payment: InvoicePaymentRow) => void;
+  /** Delete a recorded payment (caller confirms + reverts status if needed). */
+  onDeletePayment?: (payment: InvoicePaymentRow) => void;
+  /** Revert a paid invoice to sent (caller confirms + clears payments). */
+  onUndoPaid?: () => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -139,6 +160,11 @@ export function InvoiceDetailScreen({
   onJobPress,
   jobBusy,
   onSendInvoice,
+  payments = [],
+  onRecordPayment,
+  onEditPayment,
+  onDeletePayment,
+  onUndoPaid,
 }: InvoiceDetailScreenProps) {
   const { t: ui } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -171,6 +197,12 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
+  // null = auto (expand short lists, collapse 3+); a click pins the choice.
+  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
+  const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
+  const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
+  const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
+  const isPartial = invoice.status === 'sent' && paidSoFar > 0;
 
   const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
 
@@ -188,6 +220,11 @@ export function InvoiceDetailScreen({
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pillBg} ${pillText}`}>
                 {statusLabel}
               </span>
+              {isPartial ? (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                  {tInv.payments.partialPill}
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
               {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
@@ -318,6 +355,11 @@ export function InvoiceDetailScreen({
                   <div className="flex items-center gap-3 shrink-0">
                     {showActions ? (
                       <>
+                        {onEditManualItem ? (
+                          <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
+                            {ui.common.buttons.edit}
+                          </button>
+                        ) : null}
                         {onMoveJob ? (
                           <button onClick={() => onMoveJob(jid!)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
                             {tInv.jobsSection.moveBtn}
@@ -372,18 +414,88 @@ export function InvoiceDetailScreen({
               <span className="text-base font-bold text-gray-900">{t.total}</span>
               <span className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</span>
             </div>
+            {payments.length > 0 ? (
+              <div className="pt-2 border-t border-gray-100 flex flex-col gap-1.5">
+                {/* Summary row toggles the detail rows so many partials don't
+                   swamp the totals card. */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentsToggle(!paymentsExpanded)}
+                  className="flex items-center justify-between w-full"
+                >
+                  <span className="flex items-center gap-1 text-sm font-medium text-gray-500">
+                    {tInv.payments.title} ({payments.length})
+                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${paymentsExpanded ? 'rotate-180' : ''}`} />
+                  </span>
+                  <span className="text-sm font-medium text-emerald-700">−{fmt(paidSoFar)}</span>
+                </button>
+                {paymentsExpanded ? payments.map(p => (
+                  <div key={p.id} className="flex items-center justify-between group pl-2">
+                    <span className="text-sm text-gray-500">
+                      {p.method ?? '—'} · {formatDate(p.paidOn)}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
+                      {onEditPayment ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditPayment(p)}
+                          disabled={updating}
+                          className="p-1 rounded-lg text-gray-300 hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      ) : null}
+                      {onDeletePayment ? (
+                        <button
+                          type="button"
+                          onClick={() => onDeletePayment(p)}
+                          disabled={updating}
+                          className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      ) : null}
+                    </span>
+                  </div>
+                )) : null}
+                {invoice.status !== 'paid' ? (
+                  <div className="flex justify-between pt-1">
+                    <span className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</span>
+                    <span className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {/* Primary action — Send invoice (draft) / Mark paid (sent) */}
-        {invoice.status === 'draft' && onSendInvoice ? (
-          <button onClick={onSendInvoice} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
-            <Send size={16} /> {tInv.sendInvoice}
-          </button>
+        {/* Primary actions — draft: Send + Mark sent (no email) · sent: Mark paid + Undo */}
+        {invoice.status === 'draft' ? (
+          <div className="flex flex-col gap-2">
+            {onSendInvoice ? (
+              <button onClick={onSendInvoice} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
+                <Send size={16} /> {tInv.sendInvoice}
+              </button>
+            ) : null}
+            <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-700 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+              <CheckCircle size={16} /> {tInv.markSent}
+            </button>
+          </div>
         ) : null}
         {invoice.status === 'sent' ? (
-          <button onClick={() => onUpdateStatus('paid')} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
-            <CheckCircle size={16} /> {tInv.markPaid}
+          <div className="flex flex-col gap-2">
+            <button onClick={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
+              <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
+            </button>
+            <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-500 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+              <Undo2 size={16} /> {tInv.undoSent}
+            </button>
+          </div>
+        ) : null}
+        {invoice.status === 'paid' && onUndoPaid ? (
+          <button onClick={onUndoPaid} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-500 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+            <Undo2 size={16} /> {tInv.payments.undoPaid}
           </button>
         ) : null}
 

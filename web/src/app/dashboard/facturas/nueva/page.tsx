@@ -25,7 +25,10 @@ import {
   type InvoiceFieldSection,
 } from '@amixos/shared/lib/invoiceFieldSections';
 
-interface LineItem { description: string; qty: number; rate: number; }
+// job_id/edited: source-job linkage — must survive an edit round-trip or
+// Move/Remove on the detail screen breaks. qtyText/rateText hold the raw
+// input while typing so "12." isn't collapsed by parseFloat (stripped on save).
+interface LineItem { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; qtyText?: string; rateText?: string; }
 interface Client { id: string; first_name: string; last_name: string; }
 interface FieldTemplate {
   id: string;
@@ -84,6 +87,7 @@ function NuevaFacturaContent() {
   // New invoices start at the business default (Ajustes → Facturas);
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
+  const [taxRateText, setTaxRateText] = useState<string | null>(null);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
   const [customTemplates, setCustomTemplates] = useState<FieldTemplate[]>([]);
@@ -174,7 +178,9 @@ function NuevaFacturaContent() {
 
   const updateLine = (i: number, field: keyof LineItem, value: string | number) => {
     setLines(prev => {
-      const updated = prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l);
+      const updated = prev.map((l, idx) => idx === i
+        ? { ...l, [field]: value, ...(l.job_id && field !== 'qtyText' && field !== 'rateText' ? { edited: true } : {}) }
+        : l);
       // Auto-add a new row when the last row's description is filled
       if (field === 'description' && i === updated.length - 1 && (value as string).trim()) {
         updated.push({ ...EMPTY_LINE });
@@ -312,7 +318,7 @@ function NuevaFacturaContent() {
       invoice_number: invoiceNumber,
       issue_date: issueDate,
       due_date: dueDate || null,
-      line_items: validLines,
+      line_items: validLines.map(l => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}) })),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,
@@ -436,19 +442,26 @@ function NuevaFacturaContent() {
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <input
-                  type="number"
-                  min="1"
-                  value={line.qty}
-                  onChange={e => updateLine(i, 'qty', parseFloat(e.target.value) || 1)}
+                  type="text"
+                  inputMode="decimal"
+                  value={line.qtyText ?? (line.qty ? String(line.qty) : '')}
+                  onChange={e => {
+                    const clean = e.target.value.replace(/[^0-9.]/g, '');
+                    updateLine(i, 'qtyText', clean);
+                    updateLine(i, 'qty', parseFloat(clean) || 0);
+                  }}
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.00"
-                  value={line.rate || ''}
-                  onChange={e => updateLine(i, 'rate', parseFloat(e.target.value) || 0)}
+                  value={line.rateText ?? (line.rate ? String(line.rate) : '')}
+                  onChange={e => {
+                    const clean = e.target.value.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '');
+                    updateLine(i, 'rateText', clean);
+                    updateLine(i, 'rate', parseFloat(clean) || 0);
+                  }}
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-right text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <button onClick={() => removeLine(i)} disabled={lines.length === 1} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-20">
@@ -467,10 +480,14 @@ function NuevaFacturaContent() {
             <div className="flex items-center gap-4 text-sm">
               <span className="text-gray-500">{t.taxPercent}</span>
               <input
-                type="number" min="0" max="100" step="0.1"
-                value={taxRate || ''}
+                type="text" inputMode="decimal"
+                value={taxRateText ?? (taxRate ? String(taxRate) : '')}
                 placeholder="0"
-                onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                onChange={e => {
+                  const clean = e.target.value.replace(/[^0-9.]/g, '');
+                  setTaxRateText(clean);
+                  setTaxRate(parseFloat(clean) || 0);
+                }}
                 className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <span className="font-medium text-gray-900 w-24 text-right">{fmt(taxAmount)}</span>
