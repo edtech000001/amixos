@@ -37,6 +37,7 @@ const escapeHtml = (s: string) =>
   );
 
 interface RawClient {
+  id: string;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -185,7 +186,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Re-fetch the invoice row (after a job add/remove/move changes totals).
   const reloadInvoice = useCallback(async () => {
     const { data } = await supabase.from('invoices')
-      .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
+      .select('*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
       .eq('id', id).single();
     if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
     await loadJobs();
@@ -339,6 +340,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       updatedAt: raw.updated_at,
       customFields,
       clients: clientList.map(c => ({
+        id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
         email: c.email_office ?? c.email_home ?? c.email,
@@ -360,7 +362,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase.from('invoices')
-          .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
+          .select('*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
           .eq('id', id)
           .single(),
         supabase.from('invoice_field_templates')
@@ -663,6 +665,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onEditPayment={openEditPayment}
         onDeletePayment={setDelPayment}
         onUndoPaid={() => setUndoPaidOpen(true)}
+        onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
       />
 
       {/* Move-to-another-invoice picker */}

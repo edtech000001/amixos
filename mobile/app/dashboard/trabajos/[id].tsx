@@ -49,7 +49,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h } from '@amixos/shared/lib/format';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
@@ -72,6 +72,11 @@ interface Job {
   scheduled_date: string | null;
   end_date: string | null;
   estimated_hours: number | null;
+  time_start: string | null;
+  time_end: string | null;
+  total_hours: number | null;
+  driver_hours: number | null;
+  driver_names: string[] | null;
   completed_date: string | null;
   all_day: boolean | null;
   total_amount: number;
@@ -115,6 +120,13 @@ interface Job {
     zip_code: string | null;
     custom_fields: Record<string, string> | null;
   } | null;
+}
+
+interface JobAssignment {
+  id: string;
+  worker_name: string | null;
+  is_lead: boolean | null;
+  employees: { first_name: string; last_name: string } | null;
 }
 
 interface JobItem {
@@ -187,6 +199,7 @@ export default function JobDetailRoute() {
 
   const [job, setJob] = useState<Job | null>(null);
   const [items, setItems] = useState<JobItem[]>([]);
+  const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [templates, setTemplates] = useState<{ id: string; field_key: string; field_label: string; field_type: 'text' | 'number' | 'date' | 'boolean' | 'select' }[]>([]);
   const [itemsEditOpen, setItemsEditOpen] = useState(false);
   const [editRows, setEditRows] = useState<{ id: string; item_type: string; description: string; quantity: string; unit_price: string }[]>([]);
@@ -267,7 +280,7 @@ export default function JobDetailRoute() {
     setLoading(true);
     // Cached so a crew can open the job offline (to mark status / log actuals).
     // Each fetcher throws on error so loadCached can fall back to the cache.
-    const [jobRes, itemsRes] = await Promise.all([
+    const [jobRes, itemsRes, asgRes] = await Promise.all([
       loadCached(`job_${id}`, async () => {
         const { data, error } = await supabase
           .from('jobs')
@@ -283,6 +296,14 @@ export default function JobDetailRoute() {
         const { data, error } = await supabase.from('job_items').select('*').eq('job_id', id).order('created_at');
         if (error) throw error;
         return (data as JobItem[] | null) ?? [];
+      }),
+      loadCached(`job_assignments_${id}`, async () => {
+        const { data, error } = await supabase
+          .from('job_assignments')
+          .select('id, worker_name, is_lead, employees(first_name, last_name)')
+          .eq('job_id', id);
+        if (error) throw error;
+        return data ?? [];
       }),
     ]);
     // Custom-field templates for the read-only view (offline-cached).
@@ -300,6 +321,7 @@ export default function JobDetailRoute() {
     // instead of the not-found state. (Offline with no cache also lands here.)
     setJob(jobRes.data ? (jobRes.data as Job) : null);
     setItems((itemsRes.data as JobItem[] | null) ?? []);
+    setAssignments((asgRes.data as unknown as JobAssignment[] | null) ?? []);
     setLoading(false);
   };
 
@@ -996,6 +1018,11 @@ export default function JobDetailRoute() {
                   {fmtDate(job.scheduled_date)}
                   {job.end_date ? ` — ${fmtDate(job.end_date)}` : ''}
                 </Text>
+                {(job.time_start || job.time_end) ? (
+                  <Text className="text-xs text-gray-400 mt-0.5">
+                    {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
+                  </Text>
+                ) : null}
                 {(() => {
                   const totalTimeText = formatProjectDuration(
                     { startDate: job.scheduled_date, endDate: job.end_date, estimatedHours: job.estimated_hours },
@@ -1005,6 +1032,26 @@ export default function JobDetailRoute() {
                     <Text className="text-xs text-gray-400 mt-0.5">{t.new.totalTimeLabel}: {totalTimeText}</Text>
                   ) : null;
                 })()}
+              </View>
+            </View>
+          ) : null}
+
+          {((job.total_hours ?? 0) > 0 || (job.driver_hours ?? 0) > 0 || (job.driver_names?.length ?? 0) > 0) ? (
+            <View className="flex-row items-start gap-3">
+              <Clock size={16} color="#6B7280" />
+              <View className="flex-1">
+                {(job.total_hours ?? 0) > 0 ? (
+                  <>
+                    <Text className="text-xs text-gray-500">{t.new.totalHoursLabel}</Text>
+                    <Text className="text-sm text-gray-900">{job.total_hours} h</Text>
+                  </>
+                ) : null}
+                {((job.driver_names?.length ?? 0) > 0 || (job.driver_hours ?? 0) > 0) ? (
+                  <Text className="text-xs text-gray-400 mt-0.5">
+                    {t.new.driverLabel}: {job.driver_names?.length ? job.driver_names.join(', ') : '—'}
+                    {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
+                  </Text>
+                ) : null}
               </View>
             </View>
           ) : null}
@@ -1072,6 +1119,31 @@ export default function JobDetailRoute() {
             </Text>
             <View className="gap-3">
               {additionalCustoms.map(renderCustomRow)}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Workers card — assigned crew with the lead badged (web parity). */}
+        {assignments.length > 0 ? (
+          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+            <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">{td.workersHeading}</Text>
+            <View className="gap-2.5">
+              {assignments.map(a => {
+                const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
+                return (
+                  <View key={a.id} className="flex-row items-center gap-2">
+                    <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
+                      <Text className="text-primary text-xs font-bold">{name.charAt(0)}</Text>
+                    </View>
+                    <Text className="text-sm text-gray-900 font-medium">{name}</Text>
+                    {a.is_lead ? (
+                      <View className="px-2 py-0.5 rounded-full bg-amber-100">
+                        <Text className="text-[10px] font-semibold text-amber-700">{t.new.leadBadge}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </View>
         ) : null}

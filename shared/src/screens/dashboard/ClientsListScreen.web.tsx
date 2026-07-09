@@ -131,7 +131,7 @@ export function ClientsListScreen({
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl">
+    <div className="p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -336,16 +336,14 @@ const ClientRow = memo(function ClientRow({
             {c.firstName} {c.lastName}
             {c.company ? <span className="text-gray-400 font-normal"> · {c.company}</span> : null}
           </span>
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+          {/* Compact meta under the name only when the columns are hidden. */}
+          <span className="md:hidden flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
             {c.phoneDisplay ? <span className="flex items-center gap-1 text-xs text-gray-400"><Phone size={11} /> {c.phoneDisplay}</span> : null}
             {c.emailDisplay ? (
-              // min-w-0 + truncate: a long email truncates in place instead of
-              // wrapping the meta line and making rows uneven.
               <span className="flex items-center gap-1 text-xs text-gray-400 min-w-0">
                 <Mail size={11} className="shrink-0" /> <span className="truncate">{c.emailDisplay}</span>
               </span>
             ) : null}
-            {c.city ? <span className="flex items-center gap-1 text-xs text-gray-400"><MapPin size={11} /> {c.city}{c.state ? `, ${c.state}` : ''}</span> : null}
           </span>
           {matchedContacts.length > 0 ? (
             <span className="flex flex-col gap-0.5 mt-1">
@@ -356,6 +354,18 @@ const ClientRow = memo(function ClientRow({
               ))}
             </span>
           ) : null}
+        </span>
+        {/* Aligned columns across the row's width: phone | email | location.
+           Fixed widths keep every row lined up; they drop off as the window
+           narrows (xl → lg → md). */}
+        <span className="hidden md:flex w-44 shrink-0 items-center gap-1 text-xs text-gray-400">
+          {c.phoneDisplay ? (<><Phone size={11} className="shrink-0" /> {c.phoneDisplay}</>) : null}
+        </span>
+        <span className="hidden lg:flex w-64 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
+          {c.emailDisplay ? (<><Mail size={11} className="shrink-0" /> <span className="truncate">{c.emailDisplay}</span></>) : null}
+        </span>
+        <span className="hidden xl:flex w-44 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
+          {c.city ? (<><MapPin size={11} className="shrink-0" /> <span className="truncate">{c.city}{c.state ? `, ${c.state}` : ''}</span></>) : null}
         </span>
       </button>
       {/* Hover actions — web idiom; hidden while selecting. */}

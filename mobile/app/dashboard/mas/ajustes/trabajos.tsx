@@ -7,6 +7,7 @@ import {
   JobAlertsSection,
   CrewModeSection,
   JobItemTypesSection,
+  JobPrivateOnInvoiceSection,
 } from '@/components/SettingsSections';
 
 /**
@@ -30,6 +31,8 @@ export default function TrabajosPage() {
         <JobAlertsSection />
         <View className="h-px bg-gray-100 -mx-6" />
         <JobItemTypesSection />
+        <View className="h-px bg-gray-100 -mx-6" />
+        <JobPrivateOnInvoiceSection />
         <View className="h-px bg-gray-100 -mx-6" />
         <CrewModeSection />
       </View>

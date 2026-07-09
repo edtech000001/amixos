@@ -147,7 +147,7 @@ const EMPTY_CONTACT = {
 
 export default function ClienteDetailRoute() {
   const router = useRouter();
-  const { id, from, jobId } = useLocalSearchParams<{ id: string; from?: string; jobId?: string }>();
+  const { id, from, jobId, invoice } = useLocalSearchParams<{ id: string; from?: string; jobId?: string; invoice?: string }>();
   // Honor ?from=map so the back arrow returns to the map module instead of the
   // clientes list. ?from=job&jobId=… returns to that specific job. We navigate
   // explicitly (not router.back()) because clientes/[id] and trabajos/[id] live
@@ -157,6 +157,8 @@ export default function ClienteDetailRoute() {
       router.replace('/dashboard/mas/modulos/map' as never);
     } else if (from === 'job' && jobId) {
       router.replace(`/dashboard/trabajos/${jobId}` as never);
+    } else if (from === 'invoice' && invoice) {
+      router.replace(`/dashboard/facturas/${invoice}` as never);
     } else {
       router.replace('/dashboard/clientes' as never);
     }
@@ -910,8 +912,9 @@ export default function ClienteDetailRoute() {
           )}
         </View>
 
-        {/* Custom fields card */}
-        {templates.length > 0 ? (
+        {/* Custom fields card — hidden entirely when no field would render
+           (only rows with a value, or required ones, are shown). */}
+        {templates.some(tpl => client.custom_fields?.[tpl.field_key] || tpl.required) ? (
           <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-2.5">
             <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">
               {t.sections.customFields}

@@ -6,13 +6,14 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { ImportDataModal } from '@/components/ImportDataModal';
+import { ImportPhotosModal } from '@/components/ImportPhotosModal';
 
 // Ajustes → Importar datos: guided migration hub. The four importers as
 // ORDERED steps, because the order matters — jobs match clients + team by
 // name, and invoices link to jobs by Project ID. Mirrors the web Ajustes
 // "Importar datos" tab.
 
-type StepKey = 'clients' | 'employees' | 'jobs' | 'invoices';
+type StepKey = 'clients' | 'employees' | 'jobs' | 'photos' | 'invoices';
 
 export default function ImportarDatosPage() {
   const { t: full } = useLang();
@@ -39,7 +40,8 @@ export default function ImportarDatosPage() {
     { key: 'clients', title: t.importHub.step1Title, desc: t.importHub.step1Desc },
     { key: 'employees', title: t.importHub.step2Title, desc: t.importHub.step2Desc },
     { key: 'jobs', title: t.importHub.step3Title, desc: t.importHub.step3Desc },
-    { key: 'invoices', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
+    { key: 'photos', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
+    { key: 'invoices', title: t.importHub.step5Title, desc: t.importHub.step5Desc },
   ];
 
   if (!business) return null;
@@ -78,6 +80,11 @@ export default function ImportarDatosPage() {
         businessId={business.id}
         templates={clientTemplates}
         onImportComplete={() => {}}
+      />
+      <ImportPhotosModal
+        open={openStep === 'photos'}
+        businessId={business.id}
+        onClose={() => setOpenStep(null)}
       />
       {(['employees', 'jobs', 'invoices'] as const).map(mode => (
         <ImportDataModal

@@ -78,6 +78,11 @@ export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'driver_hours',  es: 'Horas manejadas', en: 'Driver hours' },
   { key: 'worker_notes',  es: 'Notas de cuadrilla (visibles a trabajadores)', en: 'Crew notes (visible to workers)' },
   { key: 'internal_notes',es: 'Notas internas (solo oficina)', en: 'Internal notes (office only)' },
+  // Photo file names (separated by ; or ,) — NOT uploaded here. They're
+  // stored on the job as pending names; the "Subir fotos" import step then
+  // bulk-matches dropped files against them (any naming scheme works since
+  // the mapping lives in this column, not the file name).
+  { key: 'photos',        es: 'Fotos (nombres de archivo)', en: 'Photos (file names)' },
   // Pricing block — hidden when the business has the Materiales/Precios
   // section off (business.job_item_types_enabled === false), mirroring the
   // job form's showMaterials gate. Line items: repeat the same Project ID on
@@ -381,6 +386,15 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       : [];
     const itemsSubtotal = +items.reduce((s, i) => s + i.quantity * i.unit_price, 0).toFixed(2);
 
+    // Pending photo names — union across the group's rows, deduped. The
+    // bulk photo step matches uploaded files against these and clears them.
+    const photoNames = Array.from(new Set(
+      grp.rows
+        .flatMap(({ row: r }) => get(r, 'photos').split(/[;,]/))
+        .map(n => n.trim())
+        .filter(Boolean),
+    ));
+
     // Creator: the "Agregado por (email)" match wins; otherwise the importer.
     const creatorEmail = get(row, 'created_by_email').toLowerCase();
     const createdBy = (creatorEmail && creatorByEmail.get(creatorEmail)) || ctx.userId;
@@ -418,8 +432,12 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       crew_names: allCrew,
       driver_names: driverNames,
       driver_employee_ids: driverNames.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[],
-      published_to_crew: true,
+      // Only ACTIVE imported work goes to crews — historical completed/
+      // invoiced imports (the bulk of a migration) would flood every field
+      // worker's list. Proposals aren't crew-facing either.
+      published_to_crew: status === 'scheduled' || status === 'in_progress',
       custom_fields: customFields,
+      import_photo_names: photoNames.length ? photoNames : null,
       // Source-system record timestamps — only set when the CSV provides them
       // (blank keeps the now() defaults; updated_at trigger only fires on UPDATE).
       ...(createdTs ? { created_at: createdTs } : {}),
@@ -742,6 +760,7 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
       driver_hours: '5',
       worker_notes: en ? 'Notes' : 'Notas',
       internal_notes: '',
+      photos: 'Proyecto-001.Foto 1.jpg; Proyecto-001.Foto 2.jpg',
       total_amount: '1297',
       item_description: en ? 'Tower work' : 'Trabajo de torre',
       item_qty: '1',

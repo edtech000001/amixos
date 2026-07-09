@@ -413,9 +413,15 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     return q ? `https://maps.google.com/?q=${encodeURIComponent(q)}` : '';
   })();
 
-  // ?from=job&job=… → back arrow returns to that job instead of the list.
+  // ?from=job&job=… / ?from=invoice&invoice=… → back arrow returns to that
+  // record instead of the clients list.
   const fromJob = searchParams.get('from') === 'job' ? searchParams.get('job') : null;
-  const backHref = fromJob ? `/dashboard/trabajos/${fromJob}` : '/dashboard/clientes';
+  const fromInvoice = searchParams.get('from') === 'invoice' ? searchParams.get('invoice') : null;
+  const backHref = fromJob
+    ? `/dashboard/trabajos/${fromJob}`
+    : fromInvoice
+      ? `/dashboard/facturas/${fromInvoice}`
+      : '/dashboard/clientes';
 
   const dateLoc = full.dashboard.dateLocale;
 
@@ -540,8 +546,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          {/* Custom fields */}
-          {templates.length > 0 && (
+          {/* Custom fields — hidden entirely when no field would render
+             (only rows with a value, or required ones, are shown). */}
+          {templates.some(tpl => client.custom_fields?.[tpl.field_key] || tpl.required) && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</h2>
               <div className="flex flex-col gap-2.5">

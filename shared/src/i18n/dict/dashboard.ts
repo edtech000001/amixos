@@ -1163,6 +1163,27 @@ export type DashboardDict = {
       step3Desc: string;
       step4Title: string;
       step4Desc: string;
+      step5Title: string;
+      step5Desc: string;
+      photos: {
+        title: string;
+        intro: string;
+        pendingSummary: string;
+        noPending: string;
+        chooseBtn: string;
+        dropHint: string;
+        matchedSummary: string;
+        unmatchedTitle: string;
+        unmatchedHint: string;
+        uploadBtn: string;
+        uploading: string;
+        doneMsg: string;
+        failedMsg: string;
+        alreadyMsg: string;
+        retryBtn: string;
+        limitSkipped: string;
+        clearBtn: string;
+      };
     };
     tabs: {
       negocio: string;
@@ -1214,6 +1235,11 @@ export type DashboardDict = {
       saveBtn: string;
       saveSuccess: string;
       saveError: string;
+    };
+    privateOnInvoice: {
+      heading: string;
+      subtitle: string;
+      toggleLabel: string;
     };
     jobAlerts: {
       heading: string;
@@ -3353,8 +3379,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step2Desc: 'Los líderes y cuadrillas de los trabajos se vinculan por nombre.',
         step3Title: 'Importar trabajos',
         step3Desc: 'Se enlazan a clientes y equipo. Incluye el Project ID para enlazar las facturas.',
-        step4Title: 'Importar facturas',
-        step4Desc: 'Al final — cada línea se enlaza a su trabajo por Project ID.',
+        step4Title: 'Subir fotos',
+        step4Desc: 'Selecciona todas las fotos a la vez — se asignan a cada proyecto por el nombre de archivo de la columna "Fotos".',
+        step5Title: 'Importar facturas',
+        step5Desc: 'Al final — cada línea se enlaza a su trabajo por Project ID.',
+        photos: {
+          title: 'Subir fotos de proyectos',
+          intro: 'Selecciona todas las fotos de una vez. Cada archivo se asigna a su proyecto según la columna "Fotos (nombres de archivo)" del CSV de trabajos (o si el nombre contiene el Project ID). Las fotos sin coincidencia NO se suben ni ocupan almacenamiento.',
+          pendingSummary: '{{names}} fotos esperadas en {{jobs}} proyectos.',
+          noPending: 'No hay fotos pendientes. Importa trabajos con la columna "Fotos (nombres de archivo)" primero.',
+          chooseBtn: 'Elegir fotos',
+          dropHint: 'o arrastra los archivos aquí',
+          matchedSummary: '{{files}} fotos coinciden con {{jobs}} proyectos.',
+          unmatchedTitle: 'Sin coincidencia ({{count}})',
+          unmatchedHint: 'Estos archivos no se subirán. Revisa el nombre o agrégalos manualmente en el proyecto.',
+          uploadBtn: 'Subir {{count}} fotos',
+          uploading: 'Subiendo {{done}} de {{total}}…',
+          doneMsg: '{{count}} fotos subidas.',
+          failedMsg: '{{count}} fotos fallaron.',
+          alreadyMsg: '{{count}} ya estaban subidas — omitidas.',
+          retryBtn: 'Reintentar fallidas',
+          limitSkipped: '{{count}} omitidas por el límite de {{max}} fotos por proyecto.',
+          clearBtn: 'Elegir otras fotos',
+        },
       },
       tabs: {
         negocio: 'Negocio',
@@ -3406,6 +3453,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveBtn: 'Guardar modo cuadrilla',
         saveSuccess: 'Modo cuadrilla guardado.',
         saveError: 'No se pudo guardar.',
+      },
+      privateOnInvoice: {
+        heading: 'Privado al facturar',
+        subtitle: 'Cambia automáticamente los trabajos a privado (ocultos para la cuadrilla) en cuanto se facturan. Aplica a todos los caminos: detalle, generación de factura e importación.',
+        toggleLabel: 'Cambiar trabajos a privado al facturar',
       },
       jobAlerts: {
         heading: 'Alertas de trabajos próximos',
@@ -5553,8 +5605,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step2Desc: 'Job leads and crews are matched by name.',
         step3Title: 'Import jobs',
         step3Desc: 'They link to clients and team. Include the Project ID so invoices can link later.',
-        step4Title: 'Import invoices',
-        step4Desc: 'Last — each line links to its job by Project ID.',
+        step4Title: 'Upload photos',
+        step4Desc: 'Select all photos at once — each is matched to its project by the file name from the "Photos" column.',
+        step5Title: 'Import invoices',
+        step5Desc: 'Last — each line links to its job by Project ID.',
+        photos: {
+          title: 'Upload project photos',
+          intro: 'Select all your photos at once. Each file is matched to its project using the jobs CSV\'s "Photos (file names)" column (or a file name containing the Project ID). Unmatched photos are NOT uploaded and use no storage.',
+          pendingSummary: '{{names}} photos expected across {{jobs}} projects.',
+          noPending: 'No pending photos. Import jobs with the "Photos (file names)" column first.',
+          chooseBtn: 'Choose photos',
+          dropHint: 'or drag the files here',
+          matchedSummary: '{{files}} photos match {{jobs}} projects.',
+          unmatchedTitle: 'No match ({{count}})',
+          unmatchedHint: 'These files will not be uploaded. Check the name or add them manually on the project.',
+          uploadBtn: 'Upload {{count}} photos',
+          uploading: 'Uploading {{done}} of {{total}}…',
+          doneMsg: '{{count}} photos uploaded.',
+          failedMsg: '{{count}} photos failed.',
+          alreadyMsg: '{{count}} were already uploaded — skipped.',
+          retryBtn: 'Retry failed',
+          limitSkipped: '{{count}} skipped by the {{max}} photos-per-project limit.',
+          clearBtn: 'Choose different photos',
+        },
       },
       tabs: {
         negocio: 'Business',
@@ -5606,6 +5679,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveBtn: 'Save crew mode',
         saveSuccess: 'Crew mode saved.',
         saveError: 'Could not save.',
+      },
+      privateOnInvoice: {
+        heading: 'Private after invoicing',
+        subtitle: 'Automatically switches jobs to private (hidden from the crew) as soon as they are invoiced. Applies everywhere: job detail, invoice generation and imports.',
+        toggleLabel: 'Automatically switch jobs to private after invoice',
       },
       jobAlerts: {
         heading: 'Upcoming-job alerts',

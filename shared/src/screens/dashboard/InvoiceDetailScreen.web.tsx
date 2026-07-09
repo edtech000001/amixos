@@ -32,6 +32,8 @@ import {
 } from '../../lib/invoiceTemplate';
 
 export interface InvoiceDetailClient {
+  /** clients.id — enables the name → client detail link. */
+  id?: string | null;
   firstName: string;
   lastName: string;
   email: string | null;
@@ -121,6 +123,8 @@ export interface InvoiceDetailScreenProps {
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
   onUndoPaid?: () => void;
+  /** Open a client's detail (the billed name becomes a link). */
+  onClientPress?: (clientId: string) => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -165,6 +169,7 @@ export function InvoiceDetailScreen({
   onEditPayment,
   onDeletePayment,
   onUndoPaid,
+  onClientPress,
 }: InvoiceDetailScreenProps) {
   const { t: ui } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -217,11 +222,11 @@ export function InvoiceDetailScreen({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{invoice.invoiceNumber}</h1>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pillBg} ${pillText}`}>
+              <span className={`px-3.5 py-1.5 rounded-full text-sm font-bold ${pillBg} ${pillText}`}>
                 {statusLabel}
               </span>
               {isPartial ? (
-                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                <span className="px-3.5 py-1.5 rounded-full text-sm font-bold bg-amber-100 text-amber-700">
                   {tInv.payments.partialPill}
                 </span>
               ) : null}
@@ -255,7 +260,10 @@ export function InvoiceDetailScreen({
         </div>
       </div>
 
-      <div className="max-w-2xl flex flex-col gap-4">
+      {/* Two-column grid on wide screens: summary cards left, line items +
+         actions right — mirrors the job detail layout. Stacks on small. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="flex flex-col gap-4">
         {/* Quick total */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -275,7 +283,13 @@ export function InvoiceDetailScreen({
             const loc = [c.address, cityStateZip].filter(Boolean).join(' · ');
             return (
               <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-gray-50' : ''}>
-                <p className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</p>
+                {onClientPress && c.id ? (
+                  <button type="button" onClick={() => onClientPress(c.id!)} className="text-base font-semibold text-primary hover:underline text-left">
+                    {c.firstName} {c.lastName}
+                  </button>
+                ) : (
+                  <p className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</p>
+                )}
                 {c.company ? <p className="text-sm text-gray-600 mt-0.5">{c.company}</p> : null}
                 {loc ? <p className="text-sm text-gray-500 mt-0.5">{loc}</p> : null}
                 {c.phoneCell ? <p className="text-sm text-gray-500 mt-0.5">{c.phoneCell}</p> : null}
@@ -329,6 +343,9 @@ export function InvoiceDetailScreen({
           </div>
         ) : null}
 
+        </div>
+
+        <div className="lg:col-span-2 flex flex-col gap-4">
         {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
            document is only built for print / share (PDF). */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -505,6 +522,7 @@ export function InvoiceDetailScreen({
             {tInv.lastEditedLabel}: {formatDateTimeLong(invoice.updatedAt, dateLoc)}
           </p>
         ) : null}
+        </div>
       </div>
     </div>
   );

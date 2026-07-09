@@ -431,12 +431,23 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const isView = mode === 'view';
 
   return (
-    <div className="p-6 max-w-3xl">
-      {/* Header */}
+    <div className="p-6">
+      {/* Header — edit mode's back returns to the member's view (no extra ✕);
+         delete lives top-right like mobile. Deactivate moved under App Access. */}
       <div className="flex items-center justify-between mb-6">
-        <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
-          <ArrowLeft size={16} /> {tc.buttons.back}
-        </Link>
+        {isView ? (
+          <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
+            <ArrowLeft size={16} /> {tc.buttons.back}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { setMode('view'); setError(''); load(); }}
+            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900"
+          >
+            <ArrowLeft size={16} /> {tc.buttons.back}
+          </button>
+        )}
         <div className="flex items-center gap-1">
           {isView ? (
             <>
@@ -447,31 +458,26 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
               >
                 <Pencil size={16} className="text-gray-500" />
               </button>
-              <button
-                type="button"
-                onClick={toggleActive}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                {employee.active ? (
-                  <UserX size={16} className="text-gray-500" />
-                ) : (
-                  <UserCheck size={16} className="text-emerald-500" />
-                )}
-              </button>
+              {canDeleteEmployee ? (
+                <button
+                  type="button"
+                  onClick={deleteEmployee}
+                  disabled={accessBusy}
+                  className="p-2 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 size={16} className="text-red-500" />
+                </button>
+              ) : null}
             </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => { setMode('view'); setError(''); load(); }}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <X size={16} className="text-gray-500" />
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      <div className="flex flex-col gap-5">
+      {isView ? (
+        /* View mode fills the page: identity + access + record actions on the
+           left, the detail sections on the right. Stacks below lg. */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="flex flex-col gap-5">
         {/* Avatar + name — floats above the section cards (matches mobile) */}
         <div className="flex flex-col items-center gap-2 py-2">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
@@ -518,15 +524,73 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           </div>
         ) : null}
 
-        {isView ? (
-          <ViewBody emp={employee} templates={templates} t={t} payTypes={PAY_TYPES} payUnit={PAY_UNIT} lang={lang} />
-        ) : (
-          <EditForm
-            form={form} setForm={setForm} templates={templates} t={t} tc={tc}
-            rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES} lang={lang}
-            fHidden={fHidden} layout={empLayout}
+        {selAccess ? (
+          <AccessSection
+            selAccess={selAccess} email={form.email.trim()} canManage={canManageAccess}
+            lang={lang} role={accessRole} setRole={setAccessRole}
+            busy={accessBusy} error={accessError}
+            onInvite={inviteToApp} onRevoke={revokeInvite}
+            onChangeRole={changeAccessRole} onRemove={removeAccess}
+            onVerComo={verComoMember} canVerComo={canVerComoSel}
+            teamT={teamT} t={t}
           />
-        )}
+        ) : null}
+
+            {/* Deactivate / reactivate — labeled button under App Access
+               (used to be the cryptic person-✕ icon in the header). */}
+            <button
+              type="button"
+              onClick={toggleActive}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
+                employee.active ? 'bg-gray-50 hover:bg-gray-100' : 'bg-emerald-50 hover:bg-emerald-100'
+              }`}
+            >
+              {employee.active ? (
+                <>
+                  <UserX size={15} className="text-gray-500" />
+                  <span className="text-sm font-semibold text-gray-600">{t.deactivateBtn}</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck size={15} className="text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-600">{t.reactivateBtn}</span>
+                </>
+              )}
+            </button>
+
+            {/* Historial */}
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            <Clock size={15} className="text-primary" />
+            <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
+          </button>
+          </div>
+
+          <div className="lg:col-span-2 flex flex-col gap-5">
+            <ViewBody emp={employee} templates={templates} t={t} payTypes={PAY_TYPES} payUnit={PAY_UNIT} lang={lang} />
+            {error && <p className="text-xs text-red-500">{error}</p>}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="flex flex-col gap-5">
+        {/* Avatar + name — floats above the section cards (matches mobile) */}
+        <div className="flex flex-col items-center gap-2 py-2">
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
+            <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
+              {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
+            </span>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">
+            {employee.first_name} {employee.last_name}
+          </h1>
+          {!employee.active ? (
+            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">{t.inactiveBadge}</span>
+          ) : null}
+        </div>
 
         {/* Home branch — editable in edit mode (multi-location businesses only). */}
         {!isView && locations.length >= 2 ? (
@@ -541,9 +605,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           </div>
         ) : null}
 
-        {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500">{error}</p>}
 
-        {/* App access — visible in both view and edit modes (its own action gates) */}
         {selAccess ? (
           <AccessSection
             selAccess={selAccess} email={form.email.trim()} canManage={canManageAccess}
@@ -555,44 +618,26 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             teamT={teamT} t={t}
           />
         ) : null}
-
-        {/* Historial — view mode only (edit mode skips it; user re-enters view to access). */}
-        {isView ? (
-          <button
-            type="button"
-            onClick={() => setHistoryOpen(true)}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
-          >
-            <Clock size={15} className="text-primary" />
-            <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
-          </button>
-        ) : null}
-
-        {/* Delete — view mode, owner/admin only (not self / owner). */}
-        {isView && canDeleteEmployee ? (
-          <button
-            type="button"
-            onClick={deleteEmployee}
-            disabled={accessBusy}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
-          >
-            <Trash2 size={15} className="text-red-600" />
-            <span className="text-sm font-semibold text-red-600">{t.deleteBtn}</span>
-          </button>
-        ) : null}
-
-        {/* Save row — edit mode only */}
-        {!isView ? (
-          <div className="flex gap-3 pt-1">
-            <Button variant="secondary" onClick={() => { setMode('view'); setError(''); load(); }} fullWidth>
-              {tc.buttons.cancel}
-            </Button>
-            <Button onClick={save} loading={saving} fullWidth>
-              <Save size={14} className="mr-1.5" /> {tc.buttons.save}
-            </Button>
           </div>
-        ) : null}
-      </div>
+
+          <div className="lg:col-span-2 flex flex-col gap-5">
+            <EditForm
+              form={form} setForm={setForm} templates={templates} t={t} tc={tc}
+              rLabel={rLabel} payTypes={PAY_TYPES} payUnit={PAY_UNIT} usStates={US_STATES} lang={lang}
+              fHidden={fHidden} layout={empLayout}
+            />
+            {/* Save row — follows the form so it's where editing ends. */}
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" onClick={() => { setMode('view'); setError(''); load(); }} fullWidth>
+                {tc.buttons.cancel}
+              </Button>
+              <Button onClick={save} loading={saving} fullWidth>
+                <Save size={14} className="mr-1.5" /> {tc.buttons.save}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title={t.history.title}>
         <EmployeeHistoryView supabase={supabase} employeeId={employee.id} />

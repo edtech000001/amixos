@@ -76,6 +76,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
 import ImportModal from '@/components/dashboard/ImportModal';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
+import { ImportPhotosModal } from '@/components/dashboard/ImportPhotosModal';
 import { UbicacionesSettings } from '@/components/dashboard/UbicacionesSettings';
 import { formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import {
@@ -581,7 +582,7 @@ export default function AjustesPage() {
   // ── Import hub ────────────────────────────────────────────────────────────
   // Every step opens its wizard IN PLACE — the user never leaves the hub
   // while migrating. Configs load when the tab opens.
-  const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices'>(null);
+  const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices' | 'photos'>(null);
   const [hubJobTemplates, setHubJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubEmpTemplates, setHubEmpTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubClientTemplates, setHubClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
@@ -1718,12 +1719,17 @@ export default function AjustesPage() {
   const [itemTypesOn, setItemTypesOn] = useState<boolean>(business?.job_item_types_enabled !== false);
   const [savingItemTypes, setSavingItemTypes] = useState(false);
 
+  // Auto-privatize on invoice toggle (trigger in migration 117). Saves on flip.
+  const [privateOnInvoice, setPrivateOnInvoice] = useState<boolean>(business?.job_private_on_invoice === true);
+  const [savingPrivateOnInvoice, setSavingPrivateOnInvoice] = useState(false);
+
   useEffect(() => {
     if (business) {
       const cm = business.job_crew_mode ?? true;
       setCrewMode(cm);
       setDbCrewMode(cm);
       setItemTypesOn(business.job_item_types_enabled !== false);
+      setPrivateOnInvoice(business.job_private_on_invoice === true);
       const h = parseHiddenFields(business.job_field_hidden);
       setJobHidden(h);
       setDbJobHidden(h);
@@ -1746,6 +1752,15 @@ export default function AjustesPage() {
       .update({ job_item_types_enabled: value }).eq('id', business.id);
     if (!error) await refetchBusiness(); else setItemTypesOn(!value);
     setSavingItemTypes(false);
+  };
+
+  const savePrivateOnInvoice = async (value: boolean) => {
+    if (!business) return;
+    setPrivateOnInvoice(value); setSavingPrivateOnInvoice(true);
+    const { error } = await supabase.from('businesses')
+      .update({ job_private_on_invoice: value }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setPrivateOnInvoice(!value);
+    setSavingPrivateOnInvoice(false);
   };
 
   const saveCrewMode = async () => {
@@ -2615,6 +2630,18 @@ export default function AjustesPage() {
                     </p>
                   </div>
                   <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
+                </div>
+              </div>
+
+              {/* Auto-privatize on invoice — hides billed jobs from crews
+                 (DB trigger covers every invoicing path, migration 117). */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-gray-900">{t.privateOnInvoice.heading}</h2>
+                    <p className="text-xs text-gray-400 mt-1">{t.privateOnInvoice.subtitle}</p>
+                  </div>
+                  <Toggle checked={privateOnInvoice} onChange={() => savePrivateOnInvoice(!privateOnInvoice)} disabled={savingPrivateOnInvoice} />
                 </div>
               </div>
 
@@ -3532,7 +3559,8 @@ export default function AjustesPage() {
                   { key: 'clients', title: t.importHub.step1Title, desc: t.importHub.step1Desc },
                   { key: 'employees', title: t.importHub.step2Title, desc: t.importHub.step2Desc },
                   { key: 'jobs', title: t.importHub.step3Title, desc: t.importHub.step3Desc },
-                  { key: 'invoices', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
+                  { key: 'photos', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
+                  { key: 'invoices', title: t.importHub.step5Title, desc: t.importHub.step5Desc },
                 ] as const).map((step, i) => {
                   const inner = (
                     <>
@@ -3568,7 +3596,14 @@ export default function AjustesPage() {
               doneLabel={full.common.buttons.close}
             />
           )}
-          {hubImport && hubImport !== 'clients' && business && (
+          {hubImport === 'photos' && business && (
+            <ImportPhotosModal
+              open
+              businessId={business.id}
+              onClose={() => setHubImport(null)}
+            />
+          )}
+          {hubImport && hubImport !== 'clients' && hubImport !== 'photos' && business && (
             <ImportModal
               open
               mode={hubImport}

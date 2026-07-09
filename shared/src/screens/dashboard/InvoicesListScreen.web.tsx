@@ -135,7 +135,7 @@ export function InvoicesListScreen({
   const total = filtered.reduce((s, i) => s + i.totalAmount, 0);
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl">
+    <div className="p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -327,17 +327,27 @@ export function InvoicesListScreen({
                       onClick={() => onInvoicePress(inv.id)}
                       className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0 text-left hover:bg-gray-50 transition-colors"
                     >
-                      <div className="flex-1 min-w-0">
-                        <span className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">{inv.invoiceNumber}</span>
+                      {/* Aligned columns: number | status | client | due | amount.
+                         Fixed widths keep rows lined up; on narrow windows the
+                         columns collapse back under the number. */}
+                      <div className="flex-1 md:flex-none md:w-36 min-w-0">
+                        <span className="block text-sm font-semibold text-gray-900 truncate">{inv.invoiceNumber}</span>
+                        <span className="md:hidden flex items-center gap-2 flex-wrap mt-0.5">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
                         </span>
-                        <span className="block text-xs text-gray-400 mt-0.5 truncate">
+                        <span className="md:hidden block text-xs text-gray-400 mt-0.5 truncate">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                         </span>
                       </div>
-                      <span className="text-sm font-bold text-gray-900 shrink-0">{fmt(inv.totalAmount)}</span>
+                      <span className="hidden md:flex w-28 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
+                      </span>
+                      <span className="hidden md:block flex-1 min-w-0 text-sm text-gray-600 truncate">{client}</span>
+                      <span className="hidden lg:block w-48 shrink-0 text-xs text-gray-400 truncate">
+                        {due ? t.dueShort.replace('{{date}}', due) : ''}
+                      </span>
+                      <span className="text-sm font-bold text-gray-900 shrink-0 w-28 text-right">{fmt(inv.totalAmount)}</span>
                     </button>
                   );
                 })}

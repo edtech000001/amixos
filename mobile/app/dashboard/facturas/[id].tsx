@@ -34,6 +34,7 @@ const genToken = () =>
   Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 
 interface RawClient {
+  id: string;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -189,7 +190,7 @@ export default function FacturaDetailRoute() {
 
   const reloadInvoice = useCallback(async () => {
     const { data } = await supabase.from('invoices')
-      .select('*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
+      .select('*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
       .eq('id', id).single();
     if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
     await loadJobs();
@@ -494,6 +495,7 @@ export default function FacturaDetailRoute() {
       updatedAt: raw.updated_at,
       customFields,
       clients: clientList.map(c => ({
+        id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
         email: c.email_office ?? c.email_home ?? c.email,
@@ -516,7 +518,7 @@ export default function FacturaDetailRoute() {
         supabase
           .from('invoices')
           .select(
-            '*, clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))',
+            '*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))',
           )
           .eq('id', id)
           .single(),
@@ -698,6 +700,7 @@ export default function FacturaDetailRoute() {
         onEditPayment={openEditPayment}
         onDeletePayment={deletePayment}
         onUndoPaid={undoPaid}
+        onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
       />
 
       {/* Move-to-another-invoice picker */}

@@ -352,7 +352,7 @@ export function JobsListScreen({
     const expired = isExpired(job);
     if (job.status === 'posible') {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'scheduled')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Calendar size={11} /> {t.actions.schedule}
           </button>
@@ -361,7 +361,7 @@ export function JobsListScreen({
     }
     if (job.status === 'proposal') {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'sent')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Send size={11} /> {t.actions.markSent}
           </button>
@@ -370,7 +370,7 @@ export function JobsListScreen({
     }
     if (job.status === 'sent' && !expired) {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'accepted')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-emerald-50 text-xs font-semibold text-emerald-600">
             <CheckCircle2 size={11} /> {t.actions.markAccepted}
           </button>
@@ -382,7 +382,7 @@ export function JobsListScreen({
     }
     if (job.status === 'accepted') {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'scheduled')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Calendar size={11} /> {t.actions.schedule}
           </button>
@@ -394,7 +394,7 @@ export function JobsListScreen({
     }
     if (job.status === 'scheduled') {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'in_progress')} className="px-3 py-1.5 rounded-lg hover:bg-amber-50 text-xs font-semibold text-amber-600">
             {t.actions.startWork}
           </button>
@@ -403,7 +403,7 @@ export function JobsListScreen({
     }
     if (job.status === 'in_progress') {
       return (
-        <div className="flex items-center gap-2 border-t border-gray-50 px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
           <button onClick={() => onUpdateStatus(job.id, 'completed')} className="px-3 py-1.5 rounded-lg hover:bg-emerald-50 text-xs font-semibold text-emerald-600">
             {t.actions.markCompleted}
           </button>
@@ -412,7 +412,7 @@ export function JobsListScreen({
     }
     if (job.status === 'completed') {
       return (
-        <div className="border-t border-gray-50 px-5 py-2.5">
+        <div className="flex items-center justify-end shrink-0">
           <button onClick={() => onGenerateInvoice(job.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-purple-50 text-xs font-semibold text-purple-600">
             <FileText size={12} /> {t.actions.generateInvoice}
           </button>
@@ -421,7 +421,7 @@ export function JobsListScreen({
     }
     if (job.status === 'invoiced' && job.invoiceId) {
       return (
-        <div className="border-t border-gray-50 px-5 py-2.5">
+        <div className="flex items-center justify-end shrink-0">
           <button onClick={() => onViewInvoice(job.invoiceId!)} className="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:underline">
             <FileText size={12} /> {t.actions.viewInvoice} <ArrowRight size={11} />
           </button>
@@ -519,7 +519,7 @@ export function JobsListScreen({
   }, [sections, alertThresholds, t, full]);
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl pb-24">
+    <div className="p-6 lg:p-8 pb-24">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
@@ -813,11 +813,11 @@ export function JobsListScreen({
             return (
               <div
                 key={job.id}
-                // content-visibility skips layout/paint for offscreen cards —
+                // content-visibility skips layout/paint for offscreen rows —
                 // keeps huge lists (hundreds of jobs) cheap to render/scroll.
                 // contain-intrinsic-size reserves an estimated height so the
                 // scrollbar doesn't jump. Unsupported browsers ignore both.
-                className={`[content-visibility:auto] [contain-intrinsic-size:auto_170px] rounded-2xl border shadow-sm overflow-hidden transition-opacity ${
+                className={`[content-visibility:auto] [contain-intrinsic-size:auto_72px] rounded-2xl border shadow-sm overflow-hidden transition-opacity ${
                   selectMode && !selectable ? 'opacity-40' : ''
                 } ${
                   picked
@@ -829,48 +829,70 @@ export function JobsListScreen({
                       : 'bg-white border-gray-100'
                 }`}
               >
-                <button
-                  onClick={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
-                  className={`w-full flex items-start gap-4 p-5 text-left ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}
-                >
-                  {selectMode ? (
-                    <span className={`w-5 h-5 mt-0.5 shrink-0 rounded-md border flex items-center justify-center ${
-                      picked ? 'bg-primary border-primary' : selectable ? 'border-gray-300' : 'border-gray-200'
-                    }`}>
-                      {picked ? <Check size={13} className="text-white" /> : null}
-                    </span>
-                  ) : (
-                    <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${dot}`} />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    {/* Title — full width on its own line so it isn't squeezed
-                       by the status pills. */}
-                    <div className="flex items-center gap-2 min-w-0">
-                      {job.estimateNumber ? <span className="text-xs font-mono text-gray-400 shrink-0">{job.estimateNumber}</span> : null}
-                      <span className="text-sm font-bold text-gray-900 truncate">{job.title}</span>
-                    </div>
-                    {job.clientName ? (
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {job.clientName}
-                        {job.clientCompany ? ` · ${job.clientCompany}` : ''}
-                      </p>
-                    ) : null}
-                    {/* Status indicators — their own line, wrap as needed. */}
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      {!isProposal && job.priority !== 'normal' ? (
-                        <span className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</span>
+                {/* One wide scannable row: title/client | status | date | lead |
+                   location | amount | actions. Fixed column widths keep rows
+                   aligned like a table; columns drop off as the window narrows
+                   (xl → lg → md) — the detail view still has everything. */}
+                <div className={`flex items-center gap-3 pr-4 ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}>
+                  <button
+                    onClick={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left pl-5 pr-1 py-3.5"
+                  >
+                    {selectMode ? (
+                      <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${
+                        picked ? 'bg-primary border-primary' : selectable ? 'border-gray-300' : 'border-gray-200'
+                      }`}>
+                        {picked ? <Check size={13} className="text-white" /> : null}
+                      </span>
+                    ) : (
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                    )}
+
+                    {/* Title + client */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {job.estimateNumber ? <span className="text-xs font-mono text-gray-400 shrink-0">{job.estimateNumber}</span> : null}
+                        <span className="text-sm font-bold text-gray-900 truncate">{job.title}</span>
+                      </div>
+                      {job.clientName ? (
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">
+                          {job.clientName}
+                          {job.clientCompany ? ` · ${job.clientCompany}` : ''}
+                        </p>
                       ) : null}
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
-                      {expired ? <span className="text-xs text-orange-500 font-medium">{t.expired}</span> : null}
+                      {job.delegatedToBusinessName ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-purple-600 mt-0.5">
+                          <Building2 size={12} />
+                          {tw.delegatedBadge.replace('{{name}}', job.delegatedToBusinessName)}
+                        </span>
+                      ) : null}
+                      {/* Status pill inline when the dedicated column is hidden */}
+                      <div className="md:hidden mt-1.5">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
+                      </div>
                     </div>
 
-                    {/* Meta row */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                    {/* Status — pills anchored to a SHARED LEFT EDGE so they
+                       line up row-to-row; priority/expired sit to the right of
+                       the pill and the alert chip below, so neither can shift
+                       the pill's position. */}
+                    <div className="hidden md:flex w-40 shrink-0 flex-col items-start gap-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
+                        {!isProposal && job.priority !== 'normal' ? (
+                          <span className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</span>
+                        ) : null}
+                        {expired ? <span className="text-xs text-orange-500 font-medium">{t.expired}</span> : null}
+                      </span>
                       {alertStyle && alertChipLabel ? (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${alertStyle.bgClass} ${alertStyle.textClass}`}>
                           {alertChipLabel}
                         </span>
                       ) : null}
+                    </div>
+
+                    {/* Date / duration */}
+                    <div className="hidden lg:flex w-44 shrink-0 flex-col gap-0.5">
                       {isProposal && job.issueDate ? (
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Calendar size={12} />
@@ -891,36 +913,47 @@ export function JobsListScreen({
                           {durationText}
                         </span>
                       ) : null}
-                      {job.jobCity || job.jobAddress ? (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <MapPin size={12} />
-                          {job.jobCity || job.jobAddress}
-                          {job.jobState ? `, ${job.jobState}` : ''}
-                        </span>
-                      ) : null}
-                      {job.totalAmount > 0 ? <span className="text-xs font-bold text-gray-700">{fmt(job.totalAmount)}</span> : null}
-                      {job.delegatedToBusinessName ? (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-purple-600">
-                          <Building2 size={12} />
-                          {tw.delegatedBadge.replace('{{name}}', job.delegatedToBusinessName)}
-                        </span>
+                    </div>
+
+                    {/* Lead / crew */}
+                    <div className="hidden xl:flex w-40 shrink-0 items-center gap-1 text-xs text-gray-500 font-medium min-w-0">
+                      {job.leadName || job.workerNames.length > 0 ? (
+                        <>
+                          <Users size={12} className="shrink-0" />
+                          <span className="truncate">
+                            {job.leadName
+                              ? `${t.leadPrefix}: ${job.leadName}`
+                              : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
+                          </span>
+                        </>
                       ) : null}
                     </div>
 
-                    {/* Lead / crew — its own right-aligned line near the bottom
-                       so the lead is easy to scan, distinct from the meta row. */}
-                    {job.leadName || job.workerNames.length > 0 ? (
-                      <div className="flex items-center gap-1 text-xs text-gray-500 font-medium mt-2">
-                        <Users size={12} />
-                        {job.leadName
-                          ? `${t.leadPrefix}: ${job.leadName}`
-                          : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
-                      </div>
-                    ) : null}
-                  </div>
-                  {selectMode ? null : <ChevronRight size={16} className="text-gray-400 shrink-0 mt-1" />}
-                </button>
-                {selectMode ? null : renderActionBar(job)}
+                    {/* Location */}
+                    <div className="hidden xl:flex w-36 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
+                      {job.jobCity || job.jobAddress ? (
+                        <>
+                          <MapPin size={12} className="shrink-0" />
+                          <span className="truncate">
+                            {job.jobCity || job.jobAddress}
+                            {job.jobState ? `, ${job.jobState}` : ''}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+
+                    {/* Amount */}
+                    <div className="hidden md:block w-24 shrink-0 text-right">
+                      {job.totalAmount > 0 ? <span className="text-xs font-bold text-gray-700">{fmt(job.totalAmount)}</span> : null}
+                    </div>
+                  </button>
+
+                  {/* Status action(s) inline on the right */}
+                  {/* Fixed width: "Start work" vs "Mark completed" differ in length —
+                     an auto-width action area shifts every column row-by-row. */}
+                  {selectMode ? null : <div className="hidden sm:flex w-48 shrink-0 justify-end">{renderActionBar(job)}</div>}
+                  {selectMode ? null : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
+                </div>
               </div>
             );
           })}
@@ -932,7 +965,7 @@ export function JobsListScreen({
       {/* Sticky batch-invoice action bar */}
       {selectMode ? (
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-          <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">
               {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
             </span>

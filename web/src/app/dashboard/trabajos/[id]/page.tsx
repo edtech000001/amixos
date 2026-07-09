@@ -35,6 +35,8 @@ interface Job {
   scheduled_date: string | null; end_date: string | null; estimated_hours: number | null;
   time_start: string | null; time_end: string | null;
   completed_date: string | null; total_amount: number; internal_notes: string | null;
+  worker_notes: string | null;
+  total_hours: number | null; driver_hours: number | null; driver_names: string[] | null;
   estimate_number: string | null; notes: string | null;
   issue_date: string | null; expiry_date: string | null;
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
@@ -887,6 +889,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   </div>
                 );
               })()}
+              {((job.total_hours ?? 0) > 0 || (job.driver_hours ?? 0) > 0 || (job.driver_names?.length ?? 0) > 0) && (
+                <div className="flex items-start gap-2.5">
+                  <Clock size={15} className="text-gray-400 mt-0.5 shrink-0"/>
+                  <div>
+                    {(job.total_hours ?? 0) > 0 ? (
+                      <>
+                        <p className="text-xs text-gray-400">{t.new.totalHoursLabel}</p>
+                        <p className="text-sm font-medium text-gray-900">{job.total_hours} h</p>
+                      </>
+                    ) : null}
+                    {((job.driver_names?.length ?? 0) > 0 || (job.driver_hours ?? 0) > 0) ? (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {t.new.driverLabel}: {job.driver_names?.length ? job.driver_names.join(', ') : '—'}
+                        {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
               {(job.job_address || job.job_city || job.job_lat != null || job.job_map_link) && (
                 <div className="flex items-start gap-2.5">
                   <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0"/>
@@ -937,6 +958,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-xs text-amber-800 whitespace-pre-wrap">{job.internal_notes}</p>
+            </div>
+          )}
+
+          {/* Crew notes — visible to workers (mobile parity) */}
+          {job.worker_notes && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.new.workerNoteLabel}</h2>
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{job.worker_notes}</p>
             </div>
           )}
 

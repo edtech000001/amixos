@@ -27,6 +27,8 @@ import {
 } from '../../lib/invoiceTemplate';
 
 export interface InvoiceDetailClient {
+  /** clients.id — enables the name → client detail link. */
+  id?: string | null;
   firstName: string;
   lastName: string;
   email: string | null;
@@ -120,6 +122,8 @@ export interface InvoiceDetailScreenProps {
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
   onUndoPaid?: () => void;
+  /** Open a client's detail (the billed name becomes a link). */
+  onClientPress?: (clientId: string) => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -165,6 +169,7 @@ export function InvoiceDetailScreen({
   onEditPayment,
   onDeletePayment,
   onUndoPaid,
+  onClientPress,
 }: InvoiceDetailScreenProps) {
   const { t: ui } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -218,18 +223,20 @@ export function InvoiceDetailScreen({
             <ArrowLeft size={18} color="#6B7280" />
           </Pressable>
           <View className="flex-1 min-w-0">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-xl font-bold text-gray-900">{invoice.invoiceNumber}</Text>
-              <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
-                <Text className={`text-xs font-semibold ${pillText}`}>{statusLabel}</Text>
+            <Text className="text-xl font-bold text-gray-900">{invoice.invoiceNumber}</Text>
+            {/* Pills on their own row — inline they collide with the header
+               action icons on narrow screens. */}
+            <View className="flex-row items-center gap-2 flex-wrap mt-1">
+              <View className={`px-3.5 py-1.5 rounded-full ${pillBg}`}>
+                <Text className={`text-sm font-bold ${pillText}`}>{statusLabel}</Text>
               </View>
               {isPartial ? (
-                <View className="px-2.5 py-1 rounded-full bg-amber-100">
-                  <Text className="text-xs font-semibold text-amber-700">{tInv.payments.partialPill}</Text>
+                <View className="px-3.5 py-1.5 rounded-full bg-amber-100">
+                  <Text className="text-sm font-bold text-amber-700">{tInv.payments.partialPill}</Text>
                 </View>
               ) : null}
             </View>
-            <Text className="text-xs text-gray-400 mt-0.5">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
+            <Text className="text-xs text-gray-400 mt-1">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
           </View>
         </View>
         <View className="flex-row items-center gap-0.5 shrink-0">
@@ -267,7 +274,13 @@ export function InvoiceDetailScreen({
           const loc = [c.address, cityStateZip].filter(Boolean).join(' · ');
           return (
             <View key={i} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-50' : ''}>
-              <Text className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</Text>
+              {onClientPress && c.id ? (
+                  <Pressable onPress={() => onClientPress(c.id!)} hitSlop={4}>
+                    <Text className="text-base font-semibold text-primary">{c.firstName} {c.lastName}</Text>
+                  </Pressable>
+                ) : (
+                  <Text className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</Text>
+                )}
               {c.company ? <Text className="text-sm text-gray-600 mt-0.5">{c.company}</Text> : null}
               {loc ? <Text className="text-sm text-gray-500 mt-0.5">{loc}</Text> : null}
               {c.phoneCell ? <Text className="text-sm text-gray-500 mt-0.5">{c.phoneCell}</Text> : null}

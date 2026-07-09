@@ -177,12 +177,33 @@ export function EmployeesScreen({
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {employees.map((e, i) => (
+            {employees.map((e, i) => {
+              // App-access / inactive badges — rendered in their own column on
+              // wide windows, under the name on small ones.
+              const badges = (!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
+                <>
+                  {!e.active ? (
+                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
+                      {t.inactiveBadge}
+                    </span>
+                  ) : null}
+                  {e.access?.kind === 'active' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {ROLE_LABELS[e.access.role][lang]}
+                    </span>
+                  ) : e.access?.kind === 'invited' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
+                      {teamT.pendingBadge}
+                    </span>
+                  ) : null}
+                </>
+              ) : null;
+              return (
               <button
                 type="button"
                 key={e.id}
                 onClick={() => onEditEmployee(e.id)}
-                className={`w-full text-left flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition-colors ${
+                className={`w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors ${
                   i < employees.length - 1 ? 'border-b border-gray-50' : ''
                 }`}
               >
@@ -195,35 +216,33 @@ export function EmployeesScreen({
                     {e.firstName.charAt(0)}{e.lastName.charAt(0)}
                   </span>
                 </div>
+                {/* Name (flex) | role | pay | phone | badges — aligned columns
+                   that collapse back under the name on narrow windows. */}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900 break-words">
                     {e.firstName} {e.lastName}
                   </p>
-                  {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      {!e.active ? (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">
-                          {t.inactiveBadge}
-                        </span>
-                      ) : null}
-                      {e.access?.kind === 'active' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                          {ROLE_LABELS[e.access.role][lang]}
-                        </span>
-                      ) : e.access?.kind === 'invited' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
-                          {teamT.pendingBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <p className="text-xs text-gray-400 mt-1 truncate">
+                  {badges ? <div className="md:hidden flex flex-wrap items-center gap-1.5 mt-1">{badges}</div> : null}
+                  <p className="md:hidden text-xs text-gray-400 mt-1 truncate">
                     {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
                     {e.phone ? ` · ${e.phone}` : ''}
                   </p>
                 </div>
+                <span className="hidden md:block w-40 shrink-0 text-sm text-gray-600 truncate">
+                  {ROLES[e.role] ?? e.role}
+                </span>
+                <span className="hidden md:block w-44 shrink-0 text-xs text-gray-500">
+                  {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+                </span>
+                <span className="hidden lg:block w-40 shrink-0 text-xs text-gray-400 truncate">
+                  {e.phone ?? ''}
+                </span>
+                <span className="hidden md:flex w-40 shrink-0 flex-wrap items-center gap-1.5">
+                  {badges}
+                </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         )
       ) : tab === 'horas' ? (

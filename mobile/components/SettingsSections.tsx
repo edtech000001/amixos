@@ -1830,6 +1830,64 @@ export function JobItemTypesSection() {
   );
 }
 
+// Auto-privatize jobs when invoiced (businesses.job_private_on_invoice,
+// migration 117 — a DB trigger flips published_to_crew=false on every
+// invoicing path). Mirrors the web Ajustes → Trabajos toggle.
+export function JobPrivateOnInvoiceSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
+  const t = full.dashboard.settings.privateOnInvoice;
+
+  const initial = business?.job_private_on_invoice === true;
+  const [value, setValue] = useState<boolean>(initial);
+  const [saved, setSaved] = useState<boolean>(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = business.job_private_on_invoice === true;
+      setValue(fresh);
+      setSaved(fresh);
+    }
+  }, [business]);
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ job_private_on_invoice: value })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({ text: error ? 'No se pudo guardar' : 'Guardado', isError: !!error });
+    if (!error) {
+      setSaved(value);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = value !== saved;
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Sliders size={18} color="#4F46E5" />}
+        title={t.heading}
+        subtitle={t.subtitle}
+      />
+      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center gap-3">
+        <Text className="flex-1 text-sm text-gray-900">{t.toggleLabel}</Text>
+        <Toggle value={value} onValueChange={setValue} />
+      </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
 // ─── Job alerts (upcoming-job tier highlight) ─────────────────────────────
 // Owner-configured tiers (e.g. "1 day before = red, 3 days before = orange")
 // that surface as a colored left border + chip on each job card. Schema:
