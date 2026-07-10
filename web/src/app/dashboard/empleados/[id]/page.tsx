@@ -50,6 +50,9 @@ interface RawEmployee {
   role: string;
   pay_type: string;
   pay_rate: number;
+  overtime_eligible?: boolean | null;
+  overtime_threshold?: number | null;
+  overtime_multiplier?: number | null;
   active: boolean;
   user_id: string | null;
   email: string | null;
@@ -111,7 +114,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const [sharedLocations, setSharedLocations] = useState<string[]>([]);
   const [form, setForm] = useState({
     first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
-    pay_type: 'hourly', pay_rate: '', email: '', birthday: '', hire_date: '',
+    pay_type: 'hourly', pay_rate: '', overtime_eligible: false, overtime_threshold: '', overtime_multiplier: '', email: '', birthday: '', hire_date: '',
     address: '', city: '', state: '', zip_code: '',
     emergency_contact_name: '', emergency_contact_phone: '',
     custom_fields: {} as Record<string, string>,
@@ -201,6 +204,9 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     setForm({
       first_name: e.first_name, last_name: e.last_name, check_name: e.check_name ?? '', phone: e.phone ?? '', role: e.role,
       pay_type: e.pay_type, pay_rate: e.pay_rate ? String(e.pay_rate) : '',
+      overtime_eligible: e.overtime_eligible ?? false,
+      overtime_threshold: e.overtime_threshold != null ? String(e.overtime_threshold) : '',
+      overtime_multiplier: e.overtime_multiplier != null ? String(e.overtime_multiplier) : '',
       email: e.email ?? '', birthday: e.birthday ?? '', hire_date: e.hire_date ?? '',
       address: e.address ?? '', city: e.city ?? '', state: e.state ?? '', zip_code: e.zip_code ?? '',
       emergency_contact_name: e.emergency_contact_name ?? '',
@@ -248,6 +254,9 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     const payRateNum = parseFloat(form.pay_rate) || 0;
     const payload = {
       ...form, pay_rate: payRateNum,
+      overtime_eligible: form.overtime_eligible,
+      overtime_threshold: form.overtime_threshold.trim() === '' ? null : parseFloat(form.overtime_threshold) || 0,
+      overtime_multiplier: form.overtime_multiplier.trim() === '' ? null : parseFloat(form.overtime_multiplier) || 1,
       check_name: form.check_name.trim() || null,
       birthday: form.birthday || null, hire_date: form.hire_date || null,
       email: form.email.trim() || null, address: form.address.trim() || null,
@@ -673,6 +682,14 @@ function ViewBody({ emp, templates, t, payTypes, payUnit, lang }: {
             value={`$${emp.pay_rate.toFixed(2)} / ${payUnit[emp.pay_type] ?? payUnit.hourly}`}
           />
         ) : null}
+        {emp.pay_type === 'hourly' ? (
+          <ViewRow
+            label={t.modal.overtimeLabel}
+            value={(emp.overtime_eligible ?? false)
+              ? `${lang === 'en' ? 'Yes' : 'Sí'}${emp.overtime_threshold != null || emp.overtime_multiplier != null ? ` · ${emp.overtime_threshold ?? '—'} h × ${emp.overtime_multiplier ?? '—'}` : ''}`
+              : lang === 'en' ? 'No' : 'No'}
+          />
+        ) : null}
       </Section>
       {(emp.birthday || emp.address || emp.city || emp.state || emp.zip_code) ? (
         <Section title={t.modal.personalHeading}>
@@ -719,7 +736,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 // ─── Editable form body ─────────────────────────────────────────────────
 type FormState = {
   first_name: string; last_name: string; check_name: string; phone: string; role: string;
-  pay_type: string; pay_rate: string; email: string;
+  pay_type: string; pay_rate: string; overtime_eligible: boolean; overtime_threshold: string; overtime_multiplier: string; email: string;
   birthday: string; hire_date: string; address: string; city: string;
   state: string; zip_code: string;
   emergency_contact_name: string; emergency_contact_phone: string;
@@ -791,7 +808,49 @@ function EditForm({
           </div>
         );
       case 'pay_rate':
-        return <Input key={key} label={rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', payUnit[form.pay_type] ?? payUnit.hourly))} type="number" min="0" step="0.01" value={form.pay_rate} onChange={e => setForm(f => ({ ...f, pay_rate: e.target.value }))} leftIcon={<DollarSign size={15} />} />;
+        return (
+          <div key={key} className="flex flex-col gap-2">
+            <Input label={rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', payUnit[form.pay_type] ?? payUnit.hourly))} type="number" min="0" step="0.01" value={form.pay_rate} onChange={e => setForm(f => ({ ...f, pay_rate: e.target.value }))} leftIcon={<DollarSign size={15} />} />
+            {/* Overtime — hardcoded companion of the pay rate (hourly only). */}
+            {form.pay_type === 'hourly' ? (
+              <>
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</span>
+                  <input
+                    type="checkbox"
+                    checked={form.overtime_eligible}
+                    onChange={e => setForm(f => ({ ...f, overtime_eligible: e.target.checked }))}
+                    className="w-4 h-4 accent-indigo-600"
+                  />
+                </label>
+                {form.overtime_eligible ? (
+                  <div className="flex gap-3">
+                    <label className="flex-1 text-xs text-gray-500">
+                      {t.modal.overtimeThresholdLabel}
+                      <input
+                        type="number" min="0"
+                        value={form.overtime_threshold}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        onChange={e => setForm(f => ({ ...f, overtime_threshold: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </label>
+                    <label className="flex-1 text-xs text-gray-500">
+                      {t.modal.overtimeMultiplierLabel}
+                      <input
+                        type="number" min="1" step="0.1"
+                        value={form.overtime_multiplier}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        onChange={e => setForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        );
       case 'address':
         return <Input key={key} label={rLabel('address', t.modal.addressLabel)} placeholder={t.modal.addressPlaceholder} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />;
       case 'city':

@@ -666,6 +666,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onDeletePayment={setDelPayment}
         onUndoPaid={() => setUndoPaidOpen(true)}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
+        jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
       />
 
       {/* Move-to-another-invoice picker */}

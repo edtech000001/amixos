@@ -89,7 +89,13 @@ export default function ImportModal({
     }) : []),
   ];
 
-  const noun = mode === 'jobs' ? tr('trabajos', 'jobs') : mode === 'employees' ? tr('empleados', 'employees') : tr('facturas', 'invoices');
+  const noun =
+    mode === 'jobs' ? tr('trabajos', 'jobs')
+    : mode === 'employees' ? tr('empleados', 'employees')
+    : mode === 'payroll' ? tr('pagos de nómina', 'payroll payments')
+    : mode === 'equipment' ? tr('equipos', 'equipment')
+    : mode === 'inventory' ? tr('artículos', 'items')
+    : tr('facturas', 'invoices');
 
   const reset = () => {
     setStep('upload'); setHeaders([]); setRows([]); setColMap({});
@@ -169,6 +175,7 @@ export default function ImportModal({
           ...prev,
           success: prev.success + res.success,
           skipped: prev.skipped + res.skipped,
+          updated: (prev.updated ?? 0) + (res.updated ?? 0),
           failedRows: prev.failedRows.filter((_, i) => i !== fixingIndex),
           notes: [...prev.notes, ...res.notes.filter(n => !prev.notes.includes(n))],
         }));
@@ -203,12 +210,18 @@ export default function ImportModal({
     step === 'done' ? tr('Importación completada', 'Import complete')
     : mode === 'jobs' ? tr('Importar trabajos', 'Import jobs')
     : mode === 'employees' ? tr('Importar equipo', 'Import team')
+    : mode === 'payroll' ? tr('Importar historial de nómina', 'Import payroll history')
+    : mode === 'equipment' ? tr('Importar equipos', 'Import equipment')
+    : mode === 'inventory' ? tr('Importar inventario', 'Import inventory')
     : tr('Importar facturas', 'Import invoices');
 
   const uploadHint =
     mode === 'jobs' ? tr('Sube un CSV con un renglón por proyecto. Incluye la columna Project ID para poder enlazar las facturas después.', 'Upload a CSV with one row per project. Include the Project ID column so invoices can link to them later.')
       + (fieldOpts.jobPricing ? tr(' Repite el mismo Project ID en varias filas para agregar líneas de materiales/precios al mismo trabajo.', ' Repeat the same Project ID on several rows to add line items to one job.') : '')
     : mode === 'employees' ? tr('Sube un CSV con un renglón por persona. Las personas se vinculan por nombre — usa los mismos nombres en tus trabajos y facturas.', 'Upload a CSV with one row per person. People are matched by name — use the same names across your jobs and invoices.')
+    : mode === 'payroll' ? tr('Sube un CSV con un renglón por trabajador por período de pago. Importa el equipo PRIMERO — los pagos se vinculan por nombre. Los registros aparecen en Nómina → Historial de pagos.', 'Upload a CSV with one row per worker per pay period. Import your team FIRST — payments link by name. Records show up in Payroll → Payment history.')
+    : mode === 'equipment' ? tr('Sube un CSV con un renglón por vehículo o máquina. Los nombres repetidos se omiten.', 'Upload a CSV with one row per vehicle or machine. Duplicate names are skipped.')
+    : mode === 'inventory' ? tr('Sube un CSV con un renglón por artículo o material. Los SKU o nombres repetidos se omiten.', 'Upload a CSV with one row per item or material. Duplicate SKUs or names are skipped.')
     : tr('Sube un CSV con un renglón por línea de factura. Importa los trabajos PRIMERO — cada línea se enlaza al trabajo por su Project ID.', 'Upload a CSV with one row per invoice line. Import jobs FIRST — each line links to its job by Project ID.');
 
   return (
@@ -342,6 +355,7 @@ export default function ImportModal({
                 <p className="text-sm text-gray-500 mt-1">
                   <span className="text-emerald-600 font-semibold">{result.success} {noun} {tr('importadas', 'imported')}</span>
                   {result.skipped > 0 && <span className="text-gray-500 font-semibold ml-2">· {result.skipped} {tr('ya existían', 'already existed')}</span>}
+                  {(result.updated ?? 0) > 0 && <span className="text-blue-600 font-semibold ml-2">· {result.updated} {tr('actualizados', 'updated')}</span>}
                   {result.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {result.failedRows.length} {tr('con error', 'with errors')}</span>}
                 </p>
               </div>

@@ -150,7 +150,7 @@ export default function EmpleadoDetailRoute() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
-    pay_type: 'hourly', pay_rate: 0, email: '',
+    pay_type: 'hourly', pay_rate: 0, overtime_eligible: false, overtime_threshold: '', overtime_multiplier: '', email: '',
     birthday: '', hire_date: '',
     address: '', city: '', state: '', zip_code: '',
     emergency_contact_name: '', emergency_contact_phone: '',
@@ -251,6 +251,46 @@ export default function EmpleadoDetailRoute() {
                 keyboardType="decimal-pad"
               />
             </View>
+            {/* Overtime — hardcoded companion of the pay rate (hourly only). */}
+            {form.pay_type === 'hourly' ? (
+              <View className="mt-3 gap-2">
+                <Pressable
+                  onPress={() => setForm(f => ({ ...f, overtime_eligible: !f.overtime_eligible }))}
+                  className="flex-row items-center justify-between"
+                >
+                  <Text className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</Text>
+                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-gray-200'}`}>
+                    <View className={`w-5 h-5 rounded-full bg-white ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
+                  </View>
+                </Pressable>
+                {form.overtime_eligible ? (
+                  <View className="flex-row gap-3">
+                    <View className="flex-1">
+                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeThresholdLabel}</Text>
+                      <TextInput
+                        value={form.overtime_threshold}
+                        onChangeText={v => setForm(f => ({ ...f, overtime_threshold: v.replace(/[^0-9.]/g, '') }))}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="decimal-pad"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeMultiplierLabel}</Text>
+                      <TextInput
+                        value={form.overtime_multiplier}
+                        onChangeText={v => setForm(f => ({ ...f, overtime_multiplier: v.replace(/[^0-9.]/g, '') }))}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="decimal-pad"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         );
       case 'birthday':
@@ -367,6 +407,9 @@ export default function EmpleadoDetailRoute() {
     setForm({
       first_name: e.first_name, last_name: e.last_name, check_name: e.check_name ?? '', phone: e.phone ?? '', role: e.role,
       pay_type: e.pay_type, pay_rate: e.pay_rate,
+      overtime_eligible: (e as { overtime_eligible?: boolean | null }).overtime_eligible ?? false,
+      overtime_threshold: (e as { overtime_threshold?: number | null }).overtime_threshold != null ? String((e as { overtime_threshold?: number | null }).overtime_threshold) : '',
+      overtime_multiplier: (e as { overtime_multiplier?: number | null }).overtime_multiplier != null ? String((e as { overtime_multiplier?: number | null }).overtime_multiplier) : '',
       email: e.email ?? '', birthday: e.birthday ?? '', hire_date: e.hire_date ?? '',
       address: e.address ?? '', city: e.city ?? '', state: e.state ?? '', zip_code: e.zip_code ?? '',
       emergency_contact_name: e.emergency_contact_name ?? '',
@@ -392,6 +435,8 @@ export default function EmpleadoDetailRoute() {
     setSaving(true); setError('');
     const payload = {
       ...form,
+      overtime_threshold: form.overtime_threshold.trim() === '' ? null : parseFloat(form.overtime_threshold) || 0,
+      overtime_multiplier: form.overtime_multiplier.trim() === '' ? null : parseFloat(form.overtime_multiplier) || 1,
       check_name: form.check_name.trim() || null,
       birthday: form.birthday || null,
       hire_date: form.hire_date || null,
@@ -736,6 +781,10 @@ export default function EmpleadoDetailRoute() {
               {employee.pay_rate ? (
                 <InfoRow Icon={DollarSign} label={t.modal.payRateLabel.replace(' ({{unit}})', '')}
                   value={`$${employee.pay_rate.toFixed(2)} / ${PAY_UNIT[employee.pay_type] ?? PAY_UNIT.hourly}`} />
+              ) : null}
+              {employee.pay_type === 'hourly' ? (
+                <InfoRow Icon={Clock} label={t.modal.overtimeLabel}
+                  value={((employee as { overtime_eligible?: boolean | null }).overtime_eligible ?? false) ? 'Sí' : 'No'} />
               ) : null}
             </InfoCard>
 

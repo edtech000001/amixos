@@ -104,6 +104,9 @@ const EMPTY_EMP = {
   // Kept as a string so the user can type "18." mid-entry without losing
   // the decimal point. Parsed to a number on save.
   pay_rate: '',
+  overtime_eligible: false,
+  overtime_threshold: '',
+  overtime_multiplier: '',
   email: '',
   birthday: '',
   hire_date: '',
@@ -246,21 +249,60 @@ export default function EmpleadosPage() {
         );
       case 'pay_rate':
         return (
-          <Input
-            key={key}
-            label={rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly))}
-            type="text"
-            inputMode="decimal"
-            value={empForm.pay_rate}
-            onChange={e => {
-              const cleaned = e.target.value.replace(/[^0-9.]/g, '');
-              const parts = cleaned.split('.');
-              const next = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
-              setEmpForm(f => ({ ...f, pay_rate: next }));
-            }}
-            placeholder="0.00"
-            leftIcon={<DollarSign size={15}/>}
-          />
+          <div key={key} className="flex flex-col gap-2">
+            <Input
+              label={rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[empForm.pay_type] ?? PAY_UNIT.hourly))}
+              type="text"
+              inputMode="decimal"
+              value={empForm.pay_rate}
+              onChange={e => {
+                const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                const parts = cleaned.split('.');
+                const next = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+                setEmpForm(f => ({ ...f, pay_rate: next }));
+              }}
+              placeholder="0.00"
+              leftIcon={<DollarSign size={15}/>}
+            />
+            {/* Overtime — hardcoded companion of the pay rate (hourly only). */}
+            {empForm.pay_type === 'hourly' ? (
+              <>
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</span>
+                  <input
+                    type="checkbox"
+                    checked={empForm.overtime_eligible}
+                    onChange={e => setEmpForm(f => ({ ...f, overtime_eligible: e.target.checked }))}
+                    className="w-4 h-4 accent-indigo-600"
+                  />
+                </label>
+                {empForm.overtime_eligible ? (
+                  <div className="flex gap-3">
+                    <label className="flex-1 text-xs text-gray-500">
+                      {t.modal.overtimeThresholdLabel}
+                      <input
+                        type="number" min="0"
+                        value={empForm.overtime_threshold}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        onChange={e => setEmpForm(f => ({ ...f, overtime_threshold: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </label>
+                    <label className="flex-1 text-xs text-gray-500">
+                      {t.modal.overtimeMultiplierLabel}
+                      <input
+                        type="number" min="1" step="0.1"
+                        value={empForm.overtime_multiplier}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        onChange={e => setEmpForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         );
       case 'address':
         return <Input key={key} label={rLabel('address', t.modal.addressLabel)} placeholder={t.modal.addressPlaceholder} value={empForm.address} onChange={e => setEmpForm(f => ({ ...f, address: e.target.value }))} />;
@@ -400,6 +442,17 @@ export default function EmpleadosPage() {
       payRate: e.pay_rate,
       active: e.active,
       access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
+      // Every field value — categorical queries (overtime/access/status)
+      // are handled by the filter panel, not keywords.
+      searchExtra: [
+        e.check_name ?? '', e.email ?? '', e.phone ?? '',
+        e.address ?? '', e.city ?? '', e.state ?? '',
+        ...Object.values((e.custom_fields ?? {}) as Record<string, string>),
+      ].join(' '),
+      overtimeEligible: e.pay_type === 'hourly' && ((e as { overtime_eligible?: boolean | null }).overtime_eligible ?? false),
+      city: e.city,
+      state: e.state,
+      customFields: (e.custom_fields ?? {}) as Record<string, string>,
     }));
   }, [employees, members, invites, activeLocationId, empLocations]);
 
@@ -438,6 +491,9 @@ export default function EmpleadosPage() {
       last_name: e.last_name,
       check_name: e.check_name ?? '',
       phone: e.phone ?? '',
+      overtime_eligible: (e as { overtime_eligible?: boolean | null }).overtime_eligible ?? true,
+      overtime_threshold: '',
+      overtime_multiplier: '',
       role: e.role,
       pay_type: e.pay_type,
       pay_rate: e.pay_rate ? String(e.pay_rate) : '',
@@ -504,6 +560,8 @@ export default function EmpleadosPage() {
     const payload = {
       ...empForm,
       pay_rate: payRateNum,
+      overtime_threshold: empForm.overtime_threshold.trim() === '' ? null : parseFloat(empForm.overtime_threshold) || 0,
+      overtime_multiplier: empForm.overtime_multiplier.trim() === '' ? null : parseFloat(empForm.overtime_multiplier) || 1,
       check_name: empForm.check_name.trim() || null,
       birthday: empForm.birthday || null,
       hire_date: empForm.hire_date || null,
@@ -1023,6 +1081,12 @@ export default function EmpleadosPage() {
 
   return (
     <EmployeesScreen
+      customFieldDefs={templates.map(tpl => ({
+        key: tpl.field_key,
+        label: tpl.field_label,
+        multi: tpl.field_type === 'select' && !!tpl.field_config?.multi,
+        boolean: tpl.field_type === 'boolean',
+      }))}
       employees={empList}
       timesheets={tsList}
       onAddEmployee={openAddEmp}

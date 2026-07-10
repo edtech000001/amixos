@@ -701,6 +701,7 @@ export default function FacturaDetailRoute() {
         onDeletePayment={deletePayment}
         onUndoPaid={undoPaid}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
+        jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
       />
 
       {/* Move-to-another-invoice picker */}

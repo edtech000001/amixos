@@ -5,7 +5,7 @@
 // API as ClientsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { Fragment, memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
@@ -34,6 +34,8 @@ export interface ClientsListScreenProps {
   onSearchChange: (text: string) => void;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** Shift-click range add (web idiom). Optional — plain toggle without it. */
+  onSelectMany?: (ids: string[]) => void;
   onToggleSelectAll: () => void;
   onClientPress: (id: string) => void;
   onEditPress: (id: string) => void;
@@ -57,6 +59,7 @@ export function ClientsListScreen({
   onSearchChange,
   selectedIds,
   onToggleSelect,
+  onSelectMany,
   onToggleSelectAll,
   onClientPress,
   onEditPress,
@@ -125,9 +128,27 @@ export function ClientsListScreen({
   // Selection mode — entered via the Seleccionar button (same pattern as the
   // jobs list). Checkboxes only render while it's on; no persistent controls.
   const [selectMode, setSelectMode] = useState(false);
+  const lastPickRef = useRef<string | null>(null);
   const exitSelect = () => {
     setSelectMode(false);
     onClearSelection();
+    lastPickRef.current = null;
+  };
+  // Shift-click selects the visible range between the last plain click and
+  // this row (standard desktop multi-select). Order = rendered sections.
+  const handleSelectClick = (id: string, shiftKey?: boolean) => {
+    const anchor = lastPickRef.current;
+    if (shiftKey && anchor && anchor !== id && onSelectMany) {
+      const order = sections.flatMap(sec => sec.data);
+      const a = order.findIndex(c => c.id === anchor);
+      const b = order.findIndex(c => c.id === id);
+      if (a >= 0 && b >= 0) {
+        onSelectMany(order.slice(Math.min(a, b), Math.max(a, b) + 1).map(c => c.id));
+        return; // anchor stays at the plain click
+      }
+    }
+    lastPickRef.current = id;
+    onToggleSelect(id);
   };
 
   return (
@@ -143,6 +164,40 @@ export function ClientsListScreen({
           </p>
         </div>
         <div className="flex gap-2">
+          {onImportPress ? (
+            <button onClick={onImportPress} className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <Upload size={15} /> {t.importBtn}
+            </button>
+          ) : null}
+          <button onClick={onNewClientPress} className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
+            <Plus size={15} /> {t.newClient}
+          </button>
+        </div>
+      </div>
+
+      {/* Search + view controls (jobs-layout pattern: controls beside the bar) */}
+      <div className="flex items-start gap-2 mb-4">
+      <div className="relative flex-1">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={t.searchPlaceholder}
+          autoCapitalize="none"
+          autoCorrect="off"
+          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        {search ? (
+          <button
+            type="button"
+            onClick={() => onSearchChange('')}
+            aria-label="Limpiar búsqueda"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X size={16} />
+          </button>
+        ) : null}
+      </div>
           {/* Group-by control — highlighted when not the default A–Z. */}
           <div className="relative">
             <button
@@ -188,38 +243,6 @@ export function ClientsListScreen({
           >
             <ListChecks size={15} /> {t.selectButton}
           </button>
-          {onImportPress ? (
-            <button onClick={onImportPress} className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
-              <Upload size={15} /> {t.importBtn}
-            </button>
-          ) : null}
-          <button onClick={onNewClientPress} className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
-            <Plus size={15} /> {t.newClient}
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        <input
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t.searchPlaceholder}
-          autoCapitalize="none"
-          autoCorrect="off"
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        {search ? (
-          <button
-            type="button"
-            onClick={() => onSearchChange('')}
-            aria-label="Limpiar búsqueda"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            <X size={16} />
-          </button>
-        ) : null}
       </div>
 
       {/* Selection bar — visible while select mode is on (jobs-list pattern). */}
@@ -257,7 +280,7 @@ export function ClientsListScreen({
           ) : null}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
           {sections.map((s) => (
             <Fragment key={s.title || 'results'}>
               {s.title ? (
@@ -273,7 +296,7 @@ export function ClientsListScreen({
                   search={search}
                   selectMode={selectMode}
                   isChecked={selectedIds.has(c.id)}
-                  onToggleSelect={onToggleSelect}
+                  onToggleSelect={handleSelectClick}
                   onClientPress={onClientPress}
                   onEditPress={onEditPress}
                   onDeletePress={onDeletePress}
@@ -304,7 +327,7 @@ const ClientRow = memo(function ClientRow({
   search: string;
   selectMode: boolean;
   isChecked: boolean;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onClientPress: (id: string) => void;
   onEditPress: (id: string) => void;
   onDeletePress: (id: string) => void;
@@ -323,7 +346,7 @@ const ClientRow = memo(function ClientRow({
         </span>
       ) : null}
       <button
-        onClick={() => (selectMode ? onToggleSelect(c.id) : onClientPress(c.id))}
+        onClick={(e) => (selectMode ? onToggleSelect(c.id, e.shiftKey) : onClientPress(c.id))}
         className="flex items-center gap-3 min-w-0 flex-1 text-left"
       >
         <span className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">

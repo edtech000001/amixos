@@ -56,6 +56,9 @@ interface EmpForm {
   role: string;
   pay_type: string;
   pay_rate: string;
+  overtime_eligible: boolean;
+  overtime_threshold: string;
+  overtime_multiplier: string;
   email: string;
   birthday: string;
   hire_date: string;
@@ -78,6 +81,9 @@ const EMPTY_EMP: EmpForm = {
   role: 'worker',
   pay_type: 'hourly',
   pay_rate: '',
+  overtime_eligible: false,
+  overtime_threshold: '',
+  overtime_multiplier: '',
   email: '',
   birthday: '',
   hire_date: '',
@@ -230,6 +236,46 @@ export default function NuevoEmpleadoRoute() {
                 keyboardType="decimal-pad"
               />
             </View>
+            {/* Overtime — hardcoded companion of the pay rate (hourly only). */}
+            {form.pay_type === 'hourly' ? (
+              <View className="mt-3 gap-2">
+                <Pressable
+                  onPress={() => setForm(f => ({ ...f, overtime_eligible: !f.overtime_eligible }))}
+                  className="flex-row items-center justify-between"
+                >
+                  <Text className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</Text>
+                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-gray-200'}`}>
+                    <View className={`w-5 h-5 rounded-full bg-white ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
+                  </View>
+                </Pressable>
+                {form.overtime_eligible ? (
+                  <View className="flex-row gap-3">
+                    <View className="flex-1">
+                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeThresholdLabel}</Text>
+                      <TextInput
+                        value={form.overtime_threshold}
+                        onChangeText={v => setForm(f => ({ ...f, overtime_threshold: v.replace(/[^0-9.]/g, '') }))}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="decimal-pad"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeMultiplierLabel}</Text>
+                      <TextInput
+                        value={form.overtime_multiplier}
+                        onChangeText={v => setForm(f => ({ ...f, overtime_multiplier: v.replace(/[^0-9.]/g, '') }))}
+                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="decimal-pad"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         );
       case 'birthday':
@@ -388,6 +434,8 @@ export default function NuevoEmpleadoRoute() {
         ...form,
         business_id: business.id,
         pay_rate: payRateNum,
+        overtime_threshold: form.overtime_threshold.trim() === '' ? null : parseFloat(form.overtime_threshold) || 0,
+        overtime_multiplier: form.overtime_multiplier.trim() === '' ? null : parseFloat(form.overtime_multiplier) || 1,
         check_name: form.check_name.trim() || null,
         birthday: form.birthday || null,
         hire_date: form.hire_date || null,

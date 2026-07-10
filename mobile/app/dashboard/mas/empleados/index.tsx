@@ -48,6 +48,7 @@ interface RawEmployee {
   active: boolean;
   user_id: string | null;
   email: string | null;
+  check_name?: string | null;
   birthday: string | null;
   hire_date: string | null;
   address: string | null;
@@ -301,17 +302,30 @@ export default function EmpleadosRoute() {
             return employees.filter((e) => ids.has(e.id));
           })()
         : employees;
-      return scoped.map((e) => ({
-        id: e.id,
-        firstName: e.first_name,
-        lastName: e.last_name,
-        phone: e.phone,
-        role: e.role,
-        payType: e.pay_type,
-        payRate: e.pay_rate,
-        active: e.active,
-        access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
-      }));
+      return scoped.map((e) => {
+        const access = resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites);
+        return {
+          id: e.id,
+          firstName: e.first_name,
+          lastName: e.last_name,
+          phone: e.phone,
+          role: e.role,
+          payType: e.pay_type,
+          payRate: e.pay_rate,
+          active: e.active,
+          access,
+          // Every field value — categorical queries are the filter panel's job.
+          searchExtra: [
+            e.check_name ?? '', e.email ?? '', e.phone ?? '',
+            e.address ?? '', e.city ?? '', e.state ?? '',
+            ...Object.values((e.custom_fields ?? {}) as Record<string, string>),
+          ].join(' '),
+          overtimeEligible: e.pay_type === 'hourly' && ((e as { overtime_eligible?: boolean | null }).overtime_eligible ?? false),
+          city: e.city,
+          state: e.state,
+          customFields: (e.custom_fields ?? {}) as Record<string, string>,
+        };
+      });
     },
     [employees, members, invites, activeLocationId, empLocations],
   );
@@ -777,6 +791,14 @@ export default function EmpleadosRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <EmployeesScreen
+        customFieldDefs={templates.map((tpl) => ({
+          key: tpl.field_key,
+          label: tpl.field_label,
+          multi:
+            tpl.field_type === 'select' &&
+            !!(tpl as { field_config?: { multi?: boolean } | null }).field_config?.multi,
+          boolean: tpl.field_type === 'boolean',
+        }))}
         employees={empList}
         timesheets={tsList}
         onAddEmployee={openAddEmp}

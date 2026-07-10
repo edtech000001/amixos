@@ -396,6 +396,7 @@ export default function ClientesPage() {
       onSearchChange={(text) => { setSearch(text); setSelectedIds(new Set()); }}
       selectedIds={selectedIds}
       onToggleSelect={toggleSelect}
+      onSelectMany={(ids) => setSelectedIds(prev => { const next = new Set(prev); ids.forEach(i => next.add(i)); return next; })}
       onToggleSelectAll={toggleSelectAll}
       onClientPress={(id) => router.push(`/dashboard/clientes/${id}`)}
       onEditPress={editById}

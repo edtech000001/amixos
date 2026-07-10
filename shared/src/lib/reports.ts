@@ -35,8 +35,8 @@ export interface ReportsData {
   locations: ReportLocation[];
 }
 
-export type ReportRange = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'all';
-export const REPORT_RANGE_KEYS: ReportRange[] = ['month', 'last_month', 'quarter', 'half', 'year', 'all'];
+export type ReportRange = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'last_year' | 'all';
+export const REPORT_RANGE_KEYS: ReportRange[] = ['month', 'last_month', 'quarter', 'half', 'year', 'last_year', 'all'];
 
 // Status keys + colors used by the job-status breakdown (label mapping is done
 // in the UI via the jobs.tabs i18n).
@@ -61,12 +61,14 @@ export function getReportRangeStart(range: ReportRange): Date | null {
     case 'quarter':    return new Date(now.getFullYear(), now.getMonth() - 2, 1);
     case 'half':       return new Date(now.getFullYear(), now.getMonth() - 5, 1);
     case 'year':       return new Date(now.getFullYear(), 0, 1);
+    case 'last_year':  return new Date(now.getFullYear() - 1, 0, 1);
     case 'all':        return null;
   }
 }
 export function getReportRangeEnd(range: ReportRange): Date {
   const now = new Date();
   if (range === 'last_month') return new Date(now.getFullYear(), now.getMonth(), 0);
+  if (range === 'last_year') return new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
   return now;
 }
 
@@ -163,7 +165,10 @@ export function computeReports(
     return true;
   };
 
-  const filteredInvoices = data.invoices.filter(i => inRange(i.created_at));
+  // Invoices bucket by ISSUE date (accrual billing view): an invoice created
+  // in Jan but issued in March belongs to March. created_at is only a
+  // fallback for rows with no issue date (and equals import time on imports).
+  const filteredInvoices = data.invoices.filter(i => inRange(i.issue_date || i.created_at));
   const filteredJobs = data.jobs.filter(j => inRange(j.created_at));
   const filteredClients = data.clients.filter(c => inRange(c.created_at));
   const filteredSheets = data.timesheets.filter(ts => inRange(ts.work_date));
@@ -182,16 +187,29 @@ export function computeReports(
 
   // Monthly revenue + job-count series.
   const now = new Date();
-  const months = range === 'month' || range === 'last_month' ? 1
-    : range === 'quarter' ? 3
-    : range === 'half' ? 6
-    : 12;
+  let months: number;
+  let start: Date;
+  if (customActive && rangeStart) {
+    // Custom range: buckets span the range itself (capped at 24 months).
+    start = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    months = Math.max(1, Math.min(24,
+      (rangeEnd.getFullYear() - start.getFullYear()) * 12 + (rangeEnd.getMonth() - start.getMonth()) + 1));
+  } else {
+    months = range === 'month' || range === 'last_month' ? 1
+      : range === 'quarter' ? 3
+      : range === 'half' ? 6
+      : range === 'year' ? now.getMonth() + 1   // Jan → current month
+      : 12;                                     // last_year (Jan–Dec) / all (rolling 12)
+    // First bucket month: calendar-year ranges anchor at January.
+    start = range === 'last_month' ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      : range === 'year' ? new Date(now.getFullYear(), 0, 1)
+      : range === 'last_year' ? new Date(now.getFullYear() - 1, 0, 1)
+      : new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  }
   const monthlyRevenue = Array.from({ length: months }, (_, i) => {
-    const d = range === 'last_month'
-      ? new Date(now.getFullYear(), now.getMonth() - 1 + i, 1)
-      : new Date(now.getFullYear(), now.getMonth() - (months - 1) + i, 1);
+    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
     const revenue = +paidInvoices.filter(inv => {
-      const pd = new Date(inv.paid_at ?? inv.created_at);
+      const pd = new Date(inv.issue_date || inv.paid_at || inv.created_at);
       return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth();
     }).reduce((s, x) => s + x.total_amount, 0).toFixed(0);
     const jobsCount = filteredJobs.filter(j => {

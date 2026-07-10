@@ -83,6 +83,7 @@ interface Job {
   worker_notes: string | null;
   archived_at: string | null;
   estimate_number: string | null;
+  external_ref: string | null;
   notes: string | null;
   issue_date: string | null;
   expiry_date: string | null;
@@ -875,6 +876,9 @@ export default function JobDetailRoute() {
             <Text className="text-xs font-mono text-gray-400 mb-1">{job.estimate_number}</Text>
           ) : null}
           <Text className="text-2xl font-bold text-gray-900">{job.title}</Text>
+          {job.external_ref ? (
+            <Text className="text-xs font-mono text-gray-400 mt-0.5">{job.external_ref}</Text>
+          ) : null}
           {clientName ? (
             <Pressable
               onPress={() =>

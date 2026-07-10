@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks } from 'lucide-react-native';
+import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
@@ -20,6 +21,8 @@ export interface InvoiceListItem {
   state: string | null;
   /** Invoice issue date (yyyy-mm-dd) — drives the date-range filter. */
   issueDate: string | null;
+  /** Extra search text: line-item names + linked jobs' Project IDs. */
+  searchExtra?: string;
 }
 
 export interface InvoicesListScreenProps {
@@ -28,6 +31,12 @@ export interface InvoicesListScreenProps {
   onInvoicePress: (id: string) => void;
   onNewInvoicePress: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
+  /** Bulk delete for selection mode. Pass ONLY when the role can delete
+   *  invoices — its presence shows the Select tool. Caller owns the confirm
+   *  + the actual delete (incl. reverting linked jobs). */
+  onBulkDelete?: (ids: string[]) => Promise<void> | void;
+  /** Scopes the persisted group-by preference per business. */
+  businessId?: string;
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
@@ -60,6 +69,8 @@ export function InvoicesListScreen({
   onInvoicePress,
   onNewInvoicePress,
   onUpdateStatus,
+  onBulkDelete,
+  businessId,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices;
@@ -77,9 +88,21 @@ export function InvoicesListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
-  // Group the list into sections by a client attribute (mirrors the equipment
-  // "Agrupar por" control).
-  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+  // Group the list into sections — persisted per device+business, like the
+  // jobs list, so leaving the screen keeps the chosen grouping.
+  const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
+  const [groupBy, setGroupByState] = useState<GroupKey>('none');
+  useEffect(() => {
+    AsyncStorage.getItem(groupStoreKey)
+      .then(saved => {
+        if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved as GroupKey);
+      })
+      .catch(() => {});
+  }, [groupStoreKey]);
+  const setGroupBy = (g: GroupKey) => {
+    setGroupByState(g);
+    void AsyncStorage.setItem(groupStoreKey, g).catch(() => {});
+  };
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const statusLabels: Record<StatusKey, string> = {
@@ -119,7 +142,10 @@ export function InvoicesListScreen({
       if (statuses.length && !statusSet.has(inv.status)) return false;
       if (!inDateRange(inv.issueDate)) return false;
       const cn = (inv.clientNames ?? '').toLowerCase();
-      return `${inv.invoiceNumber} ${cn}`.toLowerCase().includes(q);
+      // Amount search: digits (with optional $ , .) match against the total.
+      const qAmount = q.replace(/[$,\s]/g, '');
+      const amountHit = qAmount !== '' && /^[\d.]+$/.test(qAmount) && inv.totalAmount.toFixed(2).includes(qAmount);
+      return amountHit || `${inv.invoiceNumber} ${cn} ${inv.searchExtra ?? ''}`.toLowerCase().includes(q);
     })
       // Newest first, by issue date (fallback: keep the fetch order).
       .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
@@ -165,9 +191,35 @@ export function InvoicesListScreen({
   // .66499…, the toFixed pass restores the intended half-up → .67).
   const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
 
+  // ── Selection mode (mass delete) — jobs/clients mobile pattern.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const visibleOrder = sections.flatMap(sec => sec.data);
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const allSelected = visibleOrder.length > 0 && visibleOrder.every(i => selectedIds.has(i.id));
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (visibleOrder.every(i => prev.has(i.id))) visibleOrder.forEach(i => next.delete(i.id));
+      else visibleOrder.forEach(i => next.add(i.id));
+      return next;
+    });
+  const runBulkDelete = async () => {
+    if (!onBulkDelete || selectedIds.size === 0 || bulkDeleting) return;
+    setBulkDeleting(true);
+    await onBulkDelete(Array.from(selectedIds));
+    setBulkDeleting(false);
+    exitSelect();
+  };
+  const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
+    .replace('{{count}}', String(selectedIds.size));
+
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
+    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-64' : 'pb-36'}`}>
       {/* Header — filter controls live up here so the search bar gets the full
           width (mirrors the jobs list). */}
       <View className="flex-row items-start justify-between mb-5">
@@ -198,6 +250,17 @@ export function InvoicesListScreen({
           >
             <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
           </Pressable>
+          {onBulkDelete ? (
+            <Pressable
+              onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              accessibilityLabel={t.selectButton}
+              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+                selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              }`}
+            >
+              <ListChecks size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setGroupMenuOpen(true)}
             accessibilityLabel={tg.button}
@@ -261,6 +324,41 @@ export function InvoicesListScreen({
         })}
       </ScrollView>
 
+    {/* Bulk-delete pill — floating left, like the jobs list. */}
+    {selectMode && onBulkDelete ? (
+      <Pressable
+        onPress={runBulkDelete}
+        disabled={selectedIds.size === 0 || bulkDeleting}
+        className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
+        style={{
+          backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
+          elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+        }}
+      >
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text className="text-white font-semibold">
+          {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
+        </Text>
+      </Pressable>
+    ) : null}
+
+      {/* Selection banner — ✕ / count / Todas (clients mobile pattern). */}
+      {selectMode ? (
+        <View className="flex-row items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-3">
+          <Pressable onPress={exitSelect} hitSlop={8}>
+            <X size={16} color="#4F46E5" />
+          </Pressable>
+          <Text className="text-sm font-medium text-primary flex-1">{selectedCountText}</Text>
+          {visibleOrder.length > 0 ? (
+            <Pressable onPress={toggleSelectAll} hitSlop={8}>
+              <Text className="text-xs font-semibold text-primary">
+                {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Summary */}
       {filtered.length > 0 ? (
         <Text className="text-xs text-gray-500 mb-3">
@@ -306,11 +404,18 @@ export function InvoicesListScreen({
                   return (
                     <Pressable
                       key={inv.id}
-                      onPress={() => onInvoicePress(inv.id)}
-                      className={`flex-row items-center gap-4 px-5 py-4 active:bg-gray-50 ${
-                        i < section.data.length - 1 ? 'border-b border-gray-50' : ''
-                      }`}
+                      onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
+                      className={`flex-row items-center gap-4 px-5 py-4 ${
+                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'active:bg-gray-50'
+                      } ${i < section.data.length - 1 ? 'border-b border-gray-50' : ''}`}
                     >
+                      {selectMode ? (
+                        <View className={`w-5 h-5 rounded-md border items-center justify-center ${
+                          selectedIds.has(inv.id) ? 'bg-primary border-primary' : 'border-gray-300'
+                        }`}>
+                          {selectedIds.has(inv.id) ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
+                        </View>
+                      ) : null}
                       <View className="flex-1 min-w-0">
                         <View className="flex-row items-center gap-2 flex-wrap">
                           <Text className="text-sm font-semibold text-gray-900">

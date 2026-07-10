@@ -5,7 +5,7 @@
 // API as JobsListScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus,
   Search,
@@ -66,6 +66,8 @@ export interface JobListItem {
   status: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   estimateNumber: string | null;
+  /** Source-system Project ID (jobs.external_ref) — the job's visible identifier. */
+  externalRef?: string | null;
   totalAmount: number;
   scheduledDate: string | null;
   timeStart: string | null;
@@ -323,7 +325,7 @@ export function JobsListScreen({
   const filtered = useMemo(() => {
     return jobs.filter((j) => {
       const matchSearch = searchMatches(
-        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState,
+        [j.title, j.estimateNumber, j.externalRef, j.clientName, j.clientCompany, j.jobCity, j.jobState,
          j.leadName, ...j.workerNames]
           .filter(Boolean)
           .join(' '),
@@ -458,6 +460,29 @@ export function JobsListScreen({
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  // Shift-click selects the whole visible range between the last clicked row
+  // and this one (standard desktop multi-select). Anchor = last plain click.
+  const lastPickRef = useRef<string | null>(null);
+  const handleSelectClick = (id: string, shiftKey: boolean) => {
+    const order = sections.flatMap(sec => sec.jobs);
+    const anchor = lastPickRef.current;
+    if (shiftKey && anchor && anchor !== id) {
+      const a = order.findIndex(j => j.id === anchor);
+      const b = order.findIndex(j => j.id === id);
+      if (a >= 0 && b >= 0) {
+        const range = order.slice(Math.min(a, b), Math.max(a, b) + 1)
+          .filter(j => canDelete || isInvoiceable(j));
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          range.forEach(j => next.add(j.id));
+          return next;
+        });
+        return; // anchor stays where the plain click set it
+      }
+    }
+    lastPickRef.current = id;
+    toggleSelect(id);
+  };
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
   // All picked jobs must share a client to land on one invoice.
   const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
@@ -477,7 +502,7 @@ export function JobsListScreen({
       }
       return next;
     });
-  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); lastPickRef.current = null; };
   // Invoicing needs every picked job invoiceable (selection may now include
   // non-invoiceable rows picked for deletion).
   const allInvoiceable = selectedJobs.every(isInvoiceable);
@@ -553,7 +578,7 @@ export function JobsListScreen({
   }, [sections, alertThresholds, t, full]);
 
   return (
-    <div className="p-6 lg:p-8 pb-24">
+    <div className={`p-6 lg:p-8 ${selectMode ? 'pb-72 lg:pb-72' : 'pb-24 lg:pb-24'}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
@@ -823,7 +848,7 @@ export function JobsListScreen({
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className={`flex flex-col gap-3 ${selectMode ? 'select-none' : ''}`}>
           {sections.map(section => (
           <Fragment key={section.title ?? '__all__'}>
           {section.title ? (
@@ -869,7 +894,7 @@ export function JobsListScreen({
                    (xl → lg → md) — the detail view still has everything. */}
                 <div className={`flex items-center gap-3 pr-4 ${overdue ? 'hover:bg-red-100/60' : 'hover:bg-gray-50'}`}>
                   <button
-                    onClick={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
+                    onClick={(e) => (selectable ? handleSelectClick(job.id, e.shiftKey) : selectMode ? undefined : onJobPress(job.id))}
                     className="flex items-center gap-3 flex-1 min-w-0 text-left pl-5 pr-1 py-3.5"
                   >
                     {selectMode ? (

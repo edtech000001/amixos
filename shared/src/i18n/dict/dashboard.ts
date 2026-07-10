@@ -188,6 +188,12 @@ export type DashboardDict = {
     title: string;
     countTotal: string;
     countFound: string;
+    selectButton: string;
+    selectAll: string;
+    bulkDelete: string;
+    confirmDeleteBulk: string;
+    selectedCountSingle: string;
+    selectedCountPlural: string;
     newInvoice: string;
     filters: {
       all: string;
@@ -883,6 +889,27 @@ export type DashboardDict = {
     title: string;
     summary: string;
     logHours: string;
+    teamSearchPlaceholder: string;
+    filter: {
+      button: string;
+      status: string;
+      active: string;
+      inactive: string;
+      access: string;
+      accessYes: string;
+      accessInvited: string;
+      accessNo: string;
+      overtime: string;
+      yes: string;
+      no: string;
+      payType: string;
+      role: string;
+      city: string;
+      state: string;
+      empty: string;
+      searchValue: string;
+      clear: string;
+    };
     addBtn: string;
     deleteBtn: string;
     deleteConfirm: string;
@@ -948,6 +975,10 @@ export type DashboardDict = {
       roleLabel: string;
       payTypeLabel: string;
       payRateLabel: string;
+      overtimeLabel: string;
+      overtimeThresholdLabel: string;
+      overtimeMultiplierLabel: string;
+      overtimeDefaultPlaceholder: string;
       errorFirstNameRequired: string;
       requiredError: string;
       // New standard fields
@@ -1174,6 +1205,12 @@ export type DashboardDict = {
       step4Desc: string;
       step5Title: string;
       step5Desc: string;
+      step6Title: string;
+      step6Desc: string;
+      step7Title: string;
+      step7Desc: string;
+      step8Title: string;
+      step8Desc: string;
       photos: {
         title: string;
         intro: string;
@@ -2111,6 +2148,73 @@ export type DashboardDict = {
       entry: string;
       freqLabel: string;
       freqWeekly: string;
+      settingsTitle: string;
+      componentsHeading: string;
+      otEnable: string;
+      otThresholdLabel: string;
+      otMultiplierLabel: string;
+      otEligibleHeading: string;
+      otEligibleHint: string;
+      driverHeading: string;
+      driverSame: string;
+      driverRate: string;
+      driverFlat: string;
+      driverRateLabel: string;
+      driverFlatLabel: string;
+      formulaHeading: string;
+      formulaStandardHint: string;
+      formulaCreate: string;
+      formulaRemove: string;
+      formulaBuildHint: string;
+      formulaEmpty: string;
+      formulaInvalid: string;
+      formulaVarsHeading: string;
+      formulaEmpFieldsHeading: string;
+      formulaJobFieldsHeading: string;
+      formulaJobFieldHint: string;
+      formulaNumberPlaceholder: string;
+      formulaAddNumber: string;
+      formulaClear: string;
+      formulaVarNames: {
+        pay_rate: string;
+        worked_hours: string;
+        driven_hours: string;
+        total_hours: string;
+        normal_hours: string;
+        overtime_hours: string;
+        normal_pay: string;
+        overtime_pay: string;
+        driver_pay: string;
+        standard_pay: string;
+      };
+      formulaVarDescs: {
+        pay_rate: string;
+        worked_hours: string;
+        driven_hours: string;
+        total_hours: string;
+        normal_hours: string;
+        overtime_hours: string;
+        normal_pay: string;
+        overtime_pay: string;
+        driver_pay: string;
+        standard_pay: string;
+      };
+      formulaEcfDesc: string;
+      formulaJcfDesc: string;
+      formulaEcfMatchDesc: string;
+      formulaJcfCountDesc: string;
+      historyTitle: string;
+      historyEmpty: string;
+      historyBonus: string;
+      amountLabel: string;
+      partialLabel: string;
+      hoursCoveredLabel: string;
+      alreadyPaidLabel: string;
+      clearPaymentsLabel: string;
+      clearPaymentsConfirm: string;
+      bonusLabel: string;
+      otShort: string;
+      driveShort: string;
       freqBiweekly: string;
       freqMonthly: string;
       anchorLabel: string;
@@ -2152,6 +2256,7 @@ export type DashboardDict = {
       quarter: string;
       half: string;
       year: string;
+      last_year: string;
       all: string;
     };
     customRange: string;
@@ -2436,6 +2541,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Facturas',
       countTotal: '{{count}} en total',
       countFound: '{{count}} encontradas',
+      selectButton: 'Seleccionar',
+      selectAll: 'Todas',
+      bulkDelete: 'Eliminar',
+      confirmDeleteBulk: '¿Eliminar {{count}} factura(s) permanentemente? Los trabajos enlazados vuelven a Completado y pueden refacturarse.',
+      selectedCountSingle: '{{count}} seleccionada',
+      selectedCountPlural: '{{count}} seleccionadas',
       newInvoice: 'Nueva factura',
       filters: {
         all: 'Todas',
@@ -2461,7 +2572,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         state: 'Estado',
         status: 'Estado de pago',
       },
-      searchPlaceholder: 'Buscar factura o cliente...',
+      searchPlaceholder: 'Buscar por número, cliente, trabajo o monto...',
       summarySingle: '{{count}} factura',
       summaryPlural: '{{count}} facturas',
       summaryTotal: 'Total',
@@ -3115,6 +3226,27 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Equipo',
       summary: '{{active}} activos · {{hours}}h esta semana',
       logHours: 'Registrar horas',
+      teamSearchPlaceholder: 'Buscar por nombre, teléfono o campo…',
+      filter: {
+        button: 'Filtrar',
+        status: 'Estado',
+        active: 'Activo',
+        inactive: 'Inactivo',
+        access: 'Acceso a la app',
+        accessYes: 'Con acceso',
+        accessInvited: 'Invitado',
+        accessNo: 'Sin acceso',
+        overtime: 'Horas extra',
+        yes: 'Sí',
+        no: 'No',
+        payType: 'Tipo de pago',
+        role: 'Rol',
+        city: 'Ciudad',
+        state: 'Estado (dirección)',
+        empty: '(Vacío)',
+        searchValue: 'Buscar valor…',
+        clear: 'Limpiar filtros',
+      },
       addBtn: 'Agregar',
       deleteBtn: 'Eliminar empleado',
       deleteConfirm: '¿Eliminar a {{name}}? Esta acción no se puede deshacer y borra su historial.',
@@ -3180,6 +3312,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         roleLabel: 'Puesto',
         payTypeLabel: 'Tipo de pago',
         payRateLabel: 'Tarifa ({{unit}})',
+        overtimeLabel: 'Recibe horas extra',
+        overtimeThresholdLabel: 'Horas regulares/semana',
+        overtimeMultiplierLabel: 'Multiplicador',
+        overtimeDefaultPlaceholder: 'Predeterminado',
         errorFirstNameRequired: 'El nombre es requerido',
         requiredError: 'Campos requeridos: {{fields}}',
         emailLabel: 'Correo personal',
@@ -3401,6 +3537,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step4Desc: 'Selecciona todas las fotos a la vez — se asignan a cada proyecto por el nombre de archivo de la columna "Fotos".',
         step5Title: 'Importar facturas',
         step5Desc: 'Al final — cada línea se enlaza a su trabajo por Project ID.',
+        step6Title: 'Importar historial de nómina',
+        step6Desc: 'Pagos anteriores por trabajador y período — aparecen en Nómina → Historial de pagos.',
+        step7Title: 'Importar equipos',
+        step7Desc: 'Vehículos y maquinaria: marca, modelo, placa, valor, seguro y más.',
+        step8Title: 'Importar inventario',
+        step8Desc: 'Materiales y artículos: cantidades, costos, categorías y alertas de stock.',
         photos: {
           title: 'Subir fotos de proyectos',
           intro: 'Selecciona todas las fotos de una vez. Cada archivo se asigna a su proyecto según la columna "Fotos (nombres de archivo)" del CSV de trabajos (o si el nombre contiene el Project ID). Las fotos sin coincidencia NO se suben ni ocupan almacenamiento.',
@@ -4320,6 +4462,73 @@ export const dashboard: Record<Locale, DashboardDict> = {
         entry: 'Nómina',
         freqLabel: 'Frecuencia',
         freqWeekly: 'Semanal',
+        settingsTitle: 'Configuración de nómina',
+        componentsHeading: 'Componentes de pago',
+        otEnable: 'Pagar horas extra',
+        otThresholdLabel: 'Horas regulares por semana',
+        otMultiplierLabel: 'Multiplicador (ej. 1.5)',
+        otEligibleHeading: 'Quién recibe horas extra',
+        otEligibleHint: 'Solo trabajadores por hora. Los cambios se guardan al instante.',
+        driverHeading: 'Pago por manejo',
+        driverSame: 'Misma tarifa',
+        driverRate: 'Tarifa por hora',
+        driverFlat: 'Fijo por viaje',
+        driverRateLabel: 'Tarifa por hora manejada ($)',
+        driverFlatLabel: 'Monto por viaje ($)',
+        formulaHeading: 'Cálculo de pago',
+        formulaStandardHint: 'Cálculo estándar: horas × tarifa, más horas extra y pago por manejo.',
+        formulaCreate: 'Crear fórmula personalizada',
+        formulaRemove: 'Usar cálculo estándar',
+        formulaBuildHint: 'La fórmula calcula el pago bruto de los trabajadores por hora. Toca una ficha para quitarla.',
+        formulaEmpty: 'Toca variables, operadores y números para armar la fórmula.',
+        formulaInvalid: 'Fórmula incompleta — revisa paréntesis y operadores.',
+        formulaVarsHeading: 'Variables',
+        formulaEmpFieldsHeading: 'Campos del equipo',
+        formulaJobFieldsHeading: 'Campos de trabajos',
+        formulaJobFieldHint: 'Los campos de trabajos se suman entre los trabajos del período de cada trabajador.',
+        formulaNumberPlaceholder: 'Número',
+        formulaAddNumber: 'Agregar',
+        formulaClear: 'Borrar todo',
+        formulaVarNames: {
+          pay_rate: 'Tarifa de pago',
+          worked_hours: 'Horas trabajadas',
+          driven_hours: 'Horas manejadas',
+          total_hours: 'Horas totales',
+          normal_hours: 'Horas normales',
+          overtime_hours: 'Horas extra',
+          normal_pay: 'Pago normal',
+          overtime_pay: 'Pago de horas extra',
+          driver_pay: 'Pago por manejo',
+          standard_pay: 'Pago estándar',
+        },
+        formulaVarDescs: {
+          pay_rate: 'La tarifa del trabajador según su tipo de pago (por hora, por día o salario).',
+          worked_hours: 'Horas de trabajo del período: horas registradas + horas totales de los trabajos donde está asignado.',
+          driven_hours: 'Horas de manejo del período: horas de manejo de los trabajos donde figura como chofer.',
+          total_hours: 'Horas trabajadas + horas manejadas.',
+          normal_hours: 'Horas hasta el límite de horas extra (p. ej. 40 por semana, ajustado al período). Si el trabajador no tiene horas extra activadas, son todas sus horas.',
+          overtime_hours: 'Horas que superan el límite. Es 0 si el trabajador no tiene horas extra activadas.',
+          normal_pay: 'Horas normales × tarifa. No incluye horas extra ni pago por manejo.',
+          overtime_pay: 'Horas extra × tarifa × multiplicador (p. ej. 1.5). Es 0 si no aplica.',
+          driver_pay: 'Pago por manejo según el modo elegido (tarifa por hora manejada o monto por viaje). Es 0 en modo «misma tarifa».',
+          standard_pay: 'El cálculo estándar completo: pago normal + pago de horas extra + pago por manejo.',
+        },
+        formulaEcfDesc: 'Usa el valor de este campo en la ficha del trabajador.',
+        formulaJcfDesc: 'Suma este campo entre los trabajos del trabajador en el período.',
+        formulaEcfMatchDesc: 'Vale 1 si el campo del trabajador tiene esta respuesta; 0 si no.',
+        formulaJcfCountDesc: 'Cuenta los trabajos del período del trabajador donde este campo tiene esta respuesta.',
+        historyTitle: 'Historial de pagos',
+        historyEmpty: 'Aún no hay pagos registrados. Marca un pago como pagado y quedará guardado aquí.',
+        historyBonus: 'Bono',
+        amountLabel: 'Monto a pagar',
+        partialLabel: 'Parcial',
+        hoursCoveredLabel: 'Horas que cubre este pago',
+        alreadyPaidLabel: 'Pagos anteriores',
+        clearPaymentsLabel: 'Eliminar todos los pagos',
+        clearPaymentsConfirm: '¿Eliminar todos los pagos registrados de este período para {{name}}?',
+        bonusLabel: 'Bono (opcional)',
+        otShort: 'extra',
+        driveShort: 'manejo',
         freqBiweekly: 'Quincenal',
         freqMonthly: 'Mensual',
         anchorLabel: 'Inicio de pago',
@@ -4360,6 +4569,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         quarter: 'Últimos 3 meses',
         half: 'Últimos 6 meses',
         year: 'Este año',
+        last_year: 'Año pasado',
         all: 'Todo el tiempo',
       },
       customRange: 'Personalizado',
@@ -4671,6 +4881,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Invoices',
       countTotal: '{{count}} total',
       countFound: '{{count}} found',
+      selectButton: 'Select',
+      selectAll: 'All',
+      bulkDelete: 'Delete',
+      confirmDeleteBulk: 'Permanently delete {{count}} invoice(s)? Linked jobs go back to Completed and can be re-invoiced.',
+      selectedCountSingle: '{{count}} selected',
+      selectedCountPlural: '{{count}} selected',
       newInvoice: 'New invoice',
       filters: {
         all: 'All',
@@ -4696,7 +4912,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         state: 'State',
         status: 'Status',
       },
-      searchPlaceholder: 'Search invoice or client...',
+      searchPlaceholder: 'Search number, client, job or amount...',
       summarySingle: '{{count}} invoice',
       summaryPlural: '{{count}} invoices',
       summaryTotal: 'Total',
@@ -5350,6 +5566,27 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Team',
       summary: '{{active}} active · {{hours}}h this week',
       logHours: 'Log hours',
+      teamSearchPlaceholder: 'Search name, phone or field…',
+      filter: {
+        button: 'Filter',
+        status: 'Status',
+        active: 'Active',
+        inactive: 'Inactive',
+        access: 'App access',
+        accessYes: 'Has access',
+        accessInvited: 'Invited',
+        accessNo: 'No access',
+        overtime: 'Overtime',
+        yes: 'Yes',
+        no: 'No',
+        payType: 'Pay type',
+        role: 'Role',
+        city: 'City',
+        state: 'State',
+        empty: '(Empty)',
+        searchValue: 'Search value…',
+        clear: 'Clear filters',
+      },
       addBtn: 'Add',
       deleteBtn: 'Delete employee',
       deleteConfirm: 'Delete {{name}}? This cannot be undone and removes their history.',
@@ -5415,6 +5652,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         roleLabel: 'Role',
         payTypeLabel: 'Pay type',
         payRateLabel: 'Rate ({{unit}})',
+        overtimeLabel: 'Gets overtime',
+        overtimeThresholdLabel: 'Regular hours/week',
+        overtimeMultiplierLabel: 'Multiplier',
+        overtimeDefaultPlaceholder: 'Default',
         errorFirstNameRequired: 'First name is required',
         requiredError: 'Required fields: {{fields}}',
         emailLabel: 'Personal email',
@@ -5636,6 +5877,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step4Desc: 'Select all photos at once — each is matched to its project by the file name from the "Photos" column.',
         step5Title: 'Import invoices',
         step5Desc: 'Last — each line links to its job by Project ID.',
+        step6Title: 'Import payroll history',
+        step6Desc: 'Past payments per worker and period — they show up in Payroll → Payment history.',
+        step7Title: 'Import equipment',
+        step7Desc: 'Vehicles and machinery: make, model, plate, value, insurance and more.',
+        step8Title: 'Import inventory',
+        step8Desc: 'Materials and items: quantities, costs, categories and stock alerts.',
         photos: {
           title: 'Upload project photos',
           intro: 'Select all your photos at once. Each file is matched to its project using the jobs CSV\'s "Photos (file names)" column (or a file name containing the Project ID). Unmatched photos are NOT uploaded and use no storage.',
@@ -6555,6 +6802,73 @@ export const dashboard: Record<Locale, DashboardDict> = {
         entry: 'Payroll',
         freqLabel: 'Frequency',
         freqWeekly: 'Weekly',
+        settingsTitle: 'Payroll settings',
+        componentsHeading: 'Pay components',
+        otEnable: 'Pay overtime',
+        otThresholdLabel: 'Regular hours per week',
+        otMultiplierLabel: 'Multiplier (e.g. 1.5)',
+        otEligibleHeading: 'Who gets overtime',
+        otEligibleHint: 'Hourly workers only. Changes save instantly.',
+        driverHeading: 'Driver pay',
+        driverSame: 'Same rate',
+        driverRate: 'Hourly rate',
+        driverFlat: 'Flat per trip',
+        driverRateLabel: 'Rate per driven hour ($)',
+        driverFlatLabel: 'Amount per trip ($)',
+        formulaHeading: 'Pay calculation',
+        formulaStandardHint: 'Standard calculation: hours × rate, plus overtime and driver pay.',
+        formulaCreate: 'Create custom formula',
+        formulaRemove: 'Use standard calculation',
+        formulaBuildHint: 'The formula computes gross pay for hourly workers. Tap a chip to remove it.',
+        formulaEmpty: 'Tap variables, operators and numbers to build the formula.',
+        formulaInvalid: 'Incomplete formula — check parentheses and operators.',
+        formulaVarsHeading: 'Variables',
+        formulaEmpFieldsHeading: 'Team fields',
+        formulaJobFieldsHeading: 'Job fields',
+        formulaJobFieldHint: 'Job fields are summed across each worker\'s jobs in the period.',
+        formulaNumberPlaceholder: 'Number',
+        formulaAddNumber: 'Add',
+        formulaClear: 'Clear all',
+        formulaVarNames: {
+          pay_rate: 'Pay rate',
+          worked_hours: 'Worked hours',
+          driven_hours: 'Driven hours',
+          total_hours: 'Total hours',
+          normal_hours: 'Normal hours',
+          overtime_hours: 'Overtime hours',
+          normal_pay: 'Normal pay',
+          overtime_pay: 'Overtime pay',
+          driver_pay: 'Driver pay',
+          standard_pay: 'Standard pay',
+        },
+        formulaVarDescs: {
+          pay_rate: 'The worker\'s rate based on their pay type (hourly, daily or salary).',
+          worked_hours: 'Work hours in the period: logged timesheets + total hours of jobs they\'re assigned to.',
+          driven_hours: 'Driving hours in the period: driver hours of jobs where they\'re listed as a driver.',
+          total_hours: 'Worked hours + driven hours.',
+          normal_hours: 'Hours up to the overtime threshold (e.g. 40 per week, scaled to the period). If the worker doesn\'t have overtime enabled, this is all their hours.',
+          overtime_hours: 'Hours above the threshold. 0 if the worker doesn\'t have overtime enabled.',
+          normal_pay: 'Normal hours × rate. Excludes overtime and driver pay.',
+          overtime_pay: 'Overtime hours × rate × multiplier (e.g. 1.5). 0 when it doesn\'t apply.',
+          driver_pay: 'Driver pay per the chosen mode (rate per driven hour or amount per trip). 0 in "same rate" mode.',
+          standard_pay: 'The full standard calculation: normal pay + overtime pay + driver pay.',
+        },
+        formulaEcfDesc: 'Uses this field\'s value from the worker\'s record.',
+        formulaJcfDesc: 'Sums this field across the worker\'s jobs in the period.',
+        formulaEcfMatchDesc: '1 if the worker\'s field has this answer, 0 otherwise.',
+        formulaJcfCountDesc: 'Counts the worker\'s jobs in the period where this field has this answer.',
+        historyTitle: 'Payment history',
+        historyEmpty: 'No payments recorded yet. Mark someone as paid and it will be saved here.',
+        historyBonus: 'Bonus',
+        amountLabel: 'Amount to pay',
+        partialLabel: 'Partial',
+        hoursCoveredLabel: 'Hours this payment covers',
+        alreadyPaidLabel: 'Previous payments',
+        clearPaymentsLabel: 'Delete all payments',
+        clearPaymentsConfirm: 'Delete all recorded payments for {{name}} in this period?',
+        bonusLabel: 'Bonus (optional)',
+        otShort: 'OT',
+        driveShort: 'driving',
         freqBiweekly: 'Biweekly',
         freqMonthly: 'Monthly',
         anchorLabel: 'Pay start date',
@@ -6595,6 +6909,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         quarter: 'Last 3 months',
         half: 'Last 6 months',
         year: 'This year',
+        last_year: 'Last year',
         all: 'All time',
       },
       customRange: 'Custom',

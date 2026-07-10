@@ -53,6 +53,8 @@ export interface ClientsListScreenProps {
   onSearchChange: (text: string) => void;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** Shift-click range add — web-only idiom; unused on native. */
+  onSelectMany?: (ids: string[]) => void;
   onToggleSelectAll: () => void;
   onClientPress: (id: string) => void;
   onEditPress: (id: string) => void;
@@ -453,7 +455,7 @@ export function ClientsListScreen({
         // 12px side inset so rows are visibly wider but the card still has a
         // small breathing margin from the screen edges. Top inset is on the
         // header row (pt-6) so getItemLayout offsets start at 0.
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 144 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: selectMode ? 256 : 144 }}
         // Tuning for long lists — keep the visible window small, recycle
         // aggressively. (No removeClippedSubviews: it glitches sticky headers
         // on Android.)

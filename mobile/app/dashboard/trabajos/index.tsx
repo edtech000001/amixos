@@ -36,6 +36,7 @@ interface RawJob {
   time_end: string | null;
   total_amount: number;
   estimate_number: string | null;
+  external_ref?: string | null;
   issue_date: string | null;
   expiry_date: string | null;
   delegated_to_business_id: string | null;
@@ -69,7 +70,7 @@ export default function TrabajosTab() {
   const JOB_LIST_SELECT = `
     id, client_id, invoice_id, title, description, status, priority,
     job_address, job_city, job_state, scheduled_date, time_start, end_date,
-    estimated_hours, time_end, total_amount, estimate_number, issue_date,
+    estimated_hours, time_end, total_amount, estimate_number, external_ref, issue_date,
     expiry_date, delegated_to_business_id, delegated_from_business_id,
     published_to_crew, created_at, archived_at,
     clients(first_name, last_name, company),
@@ -137,6 +138,7 @@ export default function TrabajosTab() {
     status: j.status,
     priority: j.priority,
     estimateNumber: j.estimate_number,
+    externalRef: j.external_ref ?? null,
     totalAmount: j.total_amount,
     scheduledDate: j.scheduled_date,
     timeStart: j.time_start,

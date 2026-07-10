@@ -4,8 +4,8 @@
 // for the rationale). Same exported API as InvoicesListScreen.tsx so the web
 // page wrapper is untouched and the bundler resolves this .web.tsx variant.
 
-import { useMemo, useState } from 'react';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -22,6 +22,8 @@ export interface InvoiceListItem {
   state: string | null;
   /** Invoice issue date (yyyy-mm-dd) — drives the date-range filter. */
   issueDate: string | null;
+  /** Extra search text: line-item names + linked jobs' Project IDs. */
+  searchExtra?: string;
 }
 
 export interface InvoicesListScreenProps {
@@ -30,6 +32,12 @@ export interface InvoicesListScreenProps {
   onInvoicePress: (id: string) => void;
   onNewInvoicePress: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
+  /** Bulk delete for selection mode. Pass ONLY when the role can delete
+   *  invoices — its presence shows the Select tool. Caller owns the confirm
+   *  + the actual delete (incl. reverting linked jobs). */
+  onBulkDelete?: (ids: string[]) => Promise<void> | void;
+  /** Scopes the persisted group-by preference per business. */
+  businessId?: string;
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
@@ -55,6 +63,8 @@ export function InvoicesListScreen({
   onInvoicePress,
   onNewInvoicePress,
   onUpdateStatus,
+  onBulkDelete,
+  businessId,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices;
@@ -70,8 +80,20 @@ export function InvoicesListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
-  // Group the list into sections by a client attribute.
-  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+  // Group the list into sections — persisted per device+business, like the
+  // jobs list, so leaving the page keeps the chosen grouping.
+  const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
+  const [groupBy, setGroupByState] = useState<GroupKey>('none');
+  useEffect(() => {
+    // Restored after mount — reading localStorage during initial render
+    // would mismatch the server-rendered HTML.
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem(groupStoreKey) : null;
+    if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved);
+  }, [groupStoreKey]);
+  const setGroupBy = (g: GroupKey) => {
+    setGroupByState(g);
+    try { window.localStorage.setItem(groupStoreKey, g); } catch { /* private mode */ }
+  };
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const statusLabels: Record<StatusKey, string> = {
@@ -110,7 +132,10 @@ export function InvoicesListScreen({
       if (statuses.length && !statusSet.has(inv.status)) return false;
       if (!inDateRange(inv.issueDate)) return false;
       const cn = (inv.clientNames ?? '').toLowerCase();
-      return `${inv.invoiceNumber} ${cn}`.toLowerCase().includes(q);
+      // Amount search: digits (with optional $ , .) match against the total.
+      const qAmount = q.replace(/[$,\s]/g, '');
+      const amountHit = qAmount !== '' && /^[\d.]+$/.test(qAmount) && inv.totalAmount.toFixed(2).includes(qAmount);
+      return amountHit || `${inv.invoiceNumber} ${cn} ${inv.searchExtra ?? ''}`.toLowerCase().includes(q);
     })
       // Newest first, by issue date (fallback: keep the fetch order).
       .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
@@ -155,6 +180,50 @@ export function InvoicesListScreen({
   // .66499…, the toFixed pass restores the intended half-up → .67).
   const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
 
+  // ── Selection mode (mass delete) — jobs/clients pattern + shift-click range.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const lastPickRef = useRef<string | null>(null);
+  const visibleOrder = sections.flatMap(sec => sec.data);
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); lastPickRef.current = null; };
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const handleSelectClick = (id: string, shiftKey: boolean) => {
+    const anchor = lastPickRef.current;
+    if (shiftKey && anchor && anchor !== id) {
+      const a = visibleOrder.findIndex(i => i.id === anchor);
+      const b = visibleOrder.findIndex(i => i.id === id);
+      if (a >= 0 && b >= 0) {
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          visibleOrder.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(i => next.add(i.id));
+          return next;
+        });
+        return;
+      }
+    }
+    lastPickRef.current = id;
+    toggleSelect(id);
+  };
+  const allSelected = visibleOrder.length > 0 && visibleOrder.every(i => selectedIds.has(i.id));
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (visibleOrder.every(i => prev.has(i.id))) visibleOrder.forEach(i => next.delete(i.id));
+      else visibleOrder.forEach(i => next.add(i.id));
+      return next;
+    });
+  const runBulkDelete = async () => {
+    if (!onBulkDelete || selectedIds.size === 0 || bulkDeleting) return;
+    setBulkDeleting(true);
+    await onBulkDelete(Array.from(selectedIds));
+    setBulkDeleting(false);
+    exitSelect();
+  };
+  const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
+    .replace('{{count}}', String(selectedIds.size));
+
   return (
     <div className="p-6 lg:p-8">
       {/* Header */}
@@ -193,6 +262,17 @@ export function InvoicesListScreen({
             </button>
           ) : null}
         </div>
+        {onBulkDelete ? (
+          <button
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            title={t.selectButton}
+            className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <ListChecks size={15} /> {t.selectButton}
+          </button>
+        ) : null}
         {dateActive ? (
           <button
             onClick={clearDate}
@@ -310,6 +390,27 @@ export function InvoicesListScreen({
         })}
       </div>
 
+      {/* Selection bar — visible while select mode is on (clients pattern). */}
+      {selectMode ? (
+        <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-4">
+          <button onClick={exitSelect} className="p-1 rounded text-primary hover:bg-primary/10">✕</button>
+          <span className="text-sm font-medium text-primary">{selectedCountText}</span>
+          {visibleOrder.length > 0 ? (
+            <button onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+              {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
+            </button>
+          ) : null}
+          <div className="flex-1" />
+          <button
+            onClick={runBulkDelete}
+            disabled={bulkDeleting || selectedIds.size === 0}
+            className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+          >
+            <Trash2 size={14} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
+          </button>
+        </div>
+      ) : null}
+
       {/* Summary */}
       {filtered.length > 0 ? (
         <p className="text-xs text-gray-500 mb-3">
@@ -337,7 +438,7 @@ export function InvoicesListScreen({
                   {section.title} · {section.data.length}
                 </p>
               ) : null}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
                 {section.data.map((inv) => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
@@ -347,9 +448,18 @@ export function InvoicesListScreen({
                   return (
                     <button
                       key={inv.id}
-                      onClick={() => onInvoicePress(inv.id)}
-                      className="w-full flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0 text-left hover:bg-gray-50 transition-colors"
+                      onClick={(e) => (selectMode ? handleSelectClick(inv.id, e.shiftKey) : onInvoicePress(inv.id))}
+                      className={`w-full flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0 text-left transition-colors ${
+                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'hover:bg-gray-50'
+                      }`}
                     >
+                      {selectMode ? (
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          selectedIds.has(inv.id) ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
+                        }`}>
+                          {selectedIds.has(inv.id) ? <span className="text-white text-[10px] font-bold">✓</span> : null}
+                        </span>
+                      ) : null}
                       {/* Aligned columns: number | status | client | due | amount.
                          Fixed widths keep rows lined up; on narrow windows the
                          columns collapse back under the number. */}

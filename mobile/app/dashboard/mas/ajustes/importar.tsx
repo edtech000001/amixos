@@ -13,7 +13,7 @@ import { ImportPhotosModal } from '@/components/ImportPhotosModal';
 // name, and invoices link to jobs by Project ID. Mirrors the web Ajustes
 // "Importar datos" tab.
 
-type StepKey = 'clients' | 'employees' | 'jobs' | 'photos' | 'invoices';
+type StepKey = 'clients' | 'employees' | 'jobs' | 'photos' | 'invoices' | 'payroll' | 'equipment' | 'inventory';
 
 export default function ImportarDatosPage() {
   const { t: full } = useLang();
@@ -42,6 +42,9 @@ export default function ImportarDatosPage() {
     { key: 'jobs', title: t.importHub.step3Title, desc: t.importHub.step3Desc },
     { key: 'photos', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
     { key: 'invoices', title: t.importHub.step5Title, desc: t.importHub.step5Desc },
+    { key: 'payroll', title: t.importHub.step6Title, desc: t.importHub.step6Desc },
+    { key: 'equipment', title: t.importHub.step7Title, desc: t.importHub.step7Desc },
+    { key: 'inventory', title: t.importHub.step8Title, desc: t.importHub.step8Desc },
   ];
 
   if (!business) return null;
@@ -86,7 +89,7 @@ export default function ImportarDatosPage() {
         businessId={business.id}
         onClose={() => setOpenStep(null)}
       />
-      {(['employees', 'jobs', 'invoices'] as const).map(mode => (
+      {(['employees', 'jobs', 'invoices', 'payroll', 'equipment', 'inventory'] as const).map(mode => (
         <ImportDataModal
           key={mode}
           open={openStep === mode}

@@ -37,7 +37,7 @@ interface Job {
   worker_notes: string | null;
   archived_at: string | null;
   total_hours: number | null; driver_hours: number | null; driver_names: string[] | null;
-  estimate_number: string | null; notes: string | null;
+  estimate_number: string | null; external_ref: string | null; notes: string | null;
   issue_date: string | null; expiry_date: string | null;
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
@@ -543,7 +543,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 {isExpired && <span className="text-xs text-orange-500 font-medium">{t.expired}</span>}
               </div>
             )}
-            <h1 className="text-xl font-bold text-gray-900">{job.title}</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {job.title}
+              {job.external_ref ? <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref}</span> : null}
+            </h1>
             {clientName && (
               <Link href={`/dashboard/clientes/${job.client_id}?from=job&job=${job.id}`}
                 className="text-sm text-primary hover:underline font-medium">

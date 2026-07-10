@@ -125,6 +125,10 @@ export interface InvoiceDetailScreenProps {
   onUndoPaid?: () => void;
   /** Open a client's detail (the billed name becomes a link). */
   onClientPress?: (clientId: string) => void;
+  /** jobId → job title. Job-backed lines display the JOB NAME instead of the
+   *  stored line description (imports can glue description+name together);
+   *  the printed document still uses the stored description. */
+  jobTitles?: Record<string, string>;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -170,8 +174,9 @@ export function InvoiceDetailScreen({
   onDeletePayment,
   onUndoPaid,
   onClientPress,
+  jobTitles,
 }: InvoiceDetailScreenProps) {
-  const { t: ui } = useLang();
+  const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
   const tStatus = ui.dashboard.invoiceStatus;
 
@@ -195,9 +200,13 @@ export function InvoiceDetailScreen({
     );
   }
 
-  const lang: InvoiceLang = invoice.language ?? 'es';
-  const t = getInvoiceLabels(lang);
-  const dateLoc = getInvoiceDateLocale(lang);
+  // SCREEN labels/dates follow the APP language. invoice.language is the
+  // PRINTED document's language (client-facing PDF / public link) and only
+  // applies there — mixing it into the screen made an English app show
+  // "Fecha de emisión" on imported Spanish-language invoices.
+  const uiLang: InvoiceLang = locale === 'en' ? 'en' : 'es';
+  const t = getInvoiceLabels(uiLang);
+  const dateLoc = getInvoiceDateLocale(uiLang);
   const statusKey = invoice.status as keyof typeof tStatus;
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
@@ -362,10 +371,10 @@ export function InvoiceDetailScreen({
                   <div className="flex-1 pr-3 min-w-0">
                     {jid && onJobPress ? (
                       <button onClick={() => onJobPress(jid)} className="block text-sm font-medium text-primary hover:underline truncate text-left max-w-full">
-                        {li.description}
+                        {(jid && jobTitles?.[jid]) || li.description}
                       </button>
                     ) : (
-                      <p className="text-sm text-gray-900 truncate">{li.description}</p>
+                      <p className="text-sm text-gray-900 truncate">{(jid && jobTitles?.[jid]) || li.description}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-0.5">{q} × {fmt(r)}</p>
                   </div>

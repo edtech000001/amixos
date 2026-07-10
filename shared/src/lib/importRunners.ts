@@ -6,6 +6,7 @@
 // implementations.)
 
 import { fetchAll } from './supabaseFetch';
+import { getPayrollPeriod, normalizeFrequency, parsePayrollAnchor } from './payroll';
 import { invoiceDefaultLanguage } from './invoiceTemplate';
 import { INVITABLE_ROLES, ROLE_LABELS } from './permissions';
 import { computeTotals, type InvoiceLineItem } from './invoicing';
@@ -24,7 +25,7 @@ import {
   type EmployeeLite,
 } from './dataImport';
 
-export type ImportMode = 'jobs' | 'invoices' | 'employees';
+export type ImportMode = 'jobs' | 'invoices' | 'employees' | 'payroll' | 'equipment' | 'inventory';
 
 export interface ImportFieldDef {
   key: string;
@@ -55,6 +56,8 @@ export interface ImportFailedRow {
 export interface ImportResult {
   success: number;
   skipped: number;
+  /** Existing rows whose custom fields were backfilled by a re-import. */
+  updated?: number;
   failedRows: ImportFailedRow[];
   notes: string[];
 }
@@ -127,7 +130,9 @@ export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'project_id',       es: 'Project ID (enlace al trabajo)', en: 'Project ID (links to job)',
     hintEs: 'Debe coincidir con el Project ID del CSV de trabajos para enlazar la línea a su trabajo.',
     hintEn: 'Must match the jobs CSV Project ID to link the line to its job.' },
-  { key: 'line_description', es: 'Descripción', en: 'Description' },
+  { key: 'line_description', es: 'Nombre del trabajo', en: 'Job name',
+    hintEs: 'El nombre que muestra la línea. Vacío = se usa el nombre del trabajo enlazado por Project ID.',
+    hintEn: 'The name shown on the line. Blank = the linked job\'s name (via Project ID) is used.' },
   { key: 'line_qty',         es: 'Cantidad', en: 'Quantity' },
   { key: 'line_rate',        es: 'Precio unitario', en: 'Unit price' },
   { key: 'customer_name',    es: 'Cliente (nombre)', en: 'Customer (name)' },
@@ -191,9 +196,75 @@ export interface ImportFieldOptions {
   jobPricing?: boolean;
 }
 
+export const PAYROLL_IMPORT_FIELDS: ImportFieldDef[] = [
+  { key: 'worker',       es: 'Trabajador (nombre)', en: 'Worker (name)', required: true,
+    hintEs: 'Se vincula a tu equipo por nombre — debe existir el empleado.',
+    hintEn: 'Matched to your team by name — the employee must already exist.' },
+  { key: 'paid_date',    es: 'Fecha de pago', en: 'Paid date', required: true,
+    hintEs: 'El período de nómina se calcula con esta fecha y tu frecuencia de pago. Un renglón por trabajador por período.',
+    hintEn: 'The pay period is derived from this date and your pay frequency. One row per worker per period.' },
+  { key: 'period_start', es: 'Inicio del período', en: 'Period start',
+    hintEs: 'Opcional — si lo incluyes, define el período en lugar de calcularlo con la fecha de pago.',
+    hintEn: 'Optional — when included it defines the period instead of deriving it from the paid date.' },
+  { key: 'hours',        es: 'Horas trabajadas', en: 'Worked hours' },
+  { key: 'driver_hours', es: 'Horas manejadas', en: 'Driver hours' },
+  { key: 'bonus',        es: 'Bono', en: 'Bonus' },
+  { key: 'gross_pay',    es: 'Total pagado', en: 'Total paid', required: true },
+  { key: 'method',       es: 'Método de pago', en: 'Payment method',
+    hintEs: 'Valores: efectivo, cheque, transferencia. Vacío = efectivo.',
+    hintEn: 'Values: cash, check, wire. Blank = cash.' },
+  { key: 'check_number', es: 'Número de cheque', en: 'Check number' },
+];
+
+export const EQUIPMENT_IMPORT_FIELDS: ImportFieldDef[] = [
+  { key: 'name',                    es: 'Nombre', en: 'Name', required: true },
+  { key: 'equipment_type',          es: 'Tipo', en: 'Type' },
+  { key: 'make',                    es: 'Marca', en: 'Make' },
+  { key: 'model',                   es: 'Modelo', en: 'Model' },
+  { key: 'year',                    es: 'Año', en: 'Year' },
+  { key: 'color',                   es: 'Color', en: 'Color' },
+  { key: 'vin',                     es: 'VIN', en: 'VIN' },
+  { key: 'serial_number',           es: 'Número de serie', en: 'Serial number' },
+  { key: 'mileage',                 es: 'Millas', en: 'Mileage' },
+  { key: 'plate_number',            es: 'Placa', en: 'Plate number' },
+  { key: 'plate_expiration',        es: 'Vencimiento de placa', en: 'Plate expiration' },
+  { key: 'value',                   es: 'Valor ($)', en: 'Value ($)' },
+  { key: 'paid_off',                es: 'Pagado (sí/no)', en: 'Paid off (yes/no)',
+    hintEs: 'Valores: sí / no. Vacío = no.',
+    hintEn: 'Values: yes / no. Blank = no.' },
+  { key: 'loan_lender',             es: 'Prestamista', en: 'Lender' },
+  { key: 'loan_amount',             es: 'Monto del préstamo ($)', en: 'Loan amount ($)' },
+  { key: 'assigned_to',             es: 'Asignado a (nombre)', en: 'Assigned to (name)',
+    hintEs: 'Se vincula a tu equipo por nombre.',
+    hintEn: 'Matched to your team by name.' },
+  { key: 'location',                es: 'Ubicación', en: 'Location' },
+  { key: 'purchase_date',           es: 'Fecha de compra', en: 'Purchase date' },
+  { key: 'insurance_carrier',       es: 'Aseguradora', en: 'Insurance carrier' },
+  { key: 'insurance_policy_number', es: 'Número de póliza', en: 'Policy number' },
+  { key: 'insurance_expiration',    es: 'Vencimiento del seguro', en: 'Insurance expiration' },
+  { key: 'notes',                   es: 'Notas', en: 'Notes' },
+];
+
+export const INVENTORY_IMPORT_FIELDS: ImportFieldDef[] = [
+  { key: 'name',      es: 'Nombre', en: 'Name', required: true },
+  { key: 'sku',       es: 'SKU / Código', en: 'SKU / Code' },
+  { key: 'quantity',  es: 'Cantidad', en: 'Quantity' },
+  { key: 'unit',      es: 'Unidad', en: 'Unit',
+    hintEs: 'Ej.: unidad, caja, pies, libras. Vacío = unidad.',
+    hintEn: 'E.g.: unit, box, feet, pounds. Blank = unit.' },
+  { key: 'unit_cost', es: 'Costo unitario ($)', en: 'Unit cost ($)' },
+  { key: 'category',  es: 'Categoría', en: 'Category' },
+  { key: 'low_stock', es: 'Alerta de stock bajo', en: 'Low stock alert',
+    hintEs: 'Cantidad mínima antes de avisar. Vacío = 0 (sin alerta).',
+    hintEn: 'Minimum quantity before warning. Blank = 0 (no alert).' },
+];
+
 export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {}): ImportFieldDef[] {
   if (mode === 'employees') return EMPLOYEE_IMPORT_FIELDS;
   if (mode === 'invoices') return INVOICE_IMPORT_FIELDS;
+  if (mode === 'payroll') return PAYROLL_IMPORT_FIELDS;
+  if (mode === 'equipment') return EQUIPMENT_IMPORT_FIELDS;
+  if (mode === 'inventory') return INVENTORY_IMPORT_FIELDS;
   return opts.jobPricing === false
     ? JOB_IMPORT_FIELDS.filter(f => !JOB_PRICING_KEYS.has(f.key))
     : JOB_IMPORT_FIELDS;
@@ -301,11 +372,15 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0;
+  let success = 0, skipped = 0, updated = 0;
 
-  const existingJobs = await fetchAll<{ external_ref: string | null }>((from, to) =>
-    ctx.supabase.from('jobs').select('external_ref').eq('business_id', ctx.businessId).range(from, to));
+  const existingJobs = await fetchAll<{
+    id: string; external_ref: string | null; custom_fields: Record<string, string> | null;
+    scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
+  }>((from, to) =>
+    ctx.supabase.from('jobs').select('id, external_ref, custom_fields, scheduled_at, in_progress_at, completed_at, invoiced_at').eq('business_id', ctx.businessId).range(from, to));
   const existingRefs = new Set(existingJobs.map(j => j.external_ref).filter(Boolean) as string[]);
+  const existingByRef = new Map(existingJobs.filter(j => j.external_ref).map(j => [j.external_ref as string, j]));
   const employees = await fetchAll<EmployeeLite & { email: string | null; user_id: string | null }>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name, email, user_id').eq('business_id', ctx.businessId).range(from, to));
   // "Agregado por (email)" → the team member's linked account. Only people
@@ -367,8 +442,125 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       tr('(fila vacía)', '(empty row)');
     const label = `${tr('Fila', 'Row')} ${csvLine} · ${ident}`;
 
-    if (!title) { failedRows.push({ label, reason: tr('Falta el nombre del proyecto', 'Missing project name'), rowIndex: idx }); continue; }
-    if (ref && existingRefs.has(ref)) { skipped++; continue; }
+    // Existing Project ID → UPDATE. Exactly the columns included in the file
+    // (non-empty cells) overwrite the job; everything else — including photos
+    // and invoice links — stays. A file with just Project ID + one column
+    // touches only that column. Line items are never updated (invoices may
+    // reference the amounts); the Total column can still overwrite the total.
+    if (ref && existingRefs.has(ref)) {
+      const existing = existingByRef.get(ref);
+      if (!existing) { skipped++; continue; } // duplicate ref within this same file
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const up: any = {};
+      if (title) up.title = title;
+      const rawStatusUp = get(row, 'status');
+      if (rawStatusUp) {
+        const ps = parseJobStatus(rawStatusUp);
+        if (ps === undefined || ps === null) {
+          failedRows.push({
+            label,
+            reason: tr(
+              `Estado no reconocido: "${rawStatusUp}". Válidos: propuesta, enviada, aceptada, agendado, en progreso, completado, facturado.`,
+              `Unrecognized status: "${rawStatusUp}". Valid: proposal, sent, accepted, scheduled, in progress, completed, invoiced.`,
+            ),
+            rowIndex: idx,
+          });
+          continue;
+        }
+        up.status = ps;
+        // Pipeline stamps: NEVER overwrite an existing stamp — a re-import
+        // must not rewrite history. Only stages newly reached get stamped.
+        const rankUp = JOB_STATUS_ORDER.indexOf(ps);
+        const nowIsoUp = new Date().toISOString();
+        if (rankUp >= JOB_STATUS_ORDER.indexOf('scheduled') && !existing.scheduled_at) up.scheduled_at = nowIsoUp;
+        if (rankUp >= JOB_STATUS_ORDER.indexOf('in_progress') && !existing.in_progress_at) up.in_progress_at = nowIsoUp;
+        if (rankUp >= JOB_STATUS_ORDER.indexOf('completed') && !existing.completed_at) up.completed_at = nowIsoUp;
+        if (ps === 'invoiced' && !existing.invoiced_at) up.invoiced_at = nowIsoUp;
+      }
+      const clientCellUp = get(row, 'client');
+      if (clientCellUp && clientResolver) {
+        const cid = await clientResolver.resolve(clientCellUp, '');
+        if (cid) up.client_id = cid;
+      }
+      if (get(row, 'description')) up.description = get(row, 'description');
+      if (get(row, 'job_address')) up.job_address = get(row, 'job_address');
+      if (get(row, 'job_city')) up.job_city = get(row, 'job_city');
+      if (get(row, 'job_state')) up.job_state = get(row, 'job_state');
+      const mapLinkUp = get(row, 'job_map_link');
+      if (mapLinkUp) up.job_map_link = mapLinkUp;
+      const coordsUp = parseLatLng(get(row, 'coordinates')) ?? (mapLinkUp ? coordsFromMapLink(mapLinkUp) : null);
+      if (coordsUp) { up.job_lat = coordsUp.lat; up.job_lng = coordsUp.lng; }
+      const schedUp = parseDate(get(row, 'scheduled_date'));
+      if (schedUp) up.scheduled_date = schedUp;
+      const endUp = parseDate(get(row, 'end_date'));
+      if (endUp) up.end_date = endUp;
+      const timeStartUp = parseTime(get(row, 'time_start'));
+      if (timeStartUp) {
+        up.time_start = timeStartUp;
+        up.all_day = false;
+        const timeEndUp = parseTime(get(row, 'time_end'));
+        if (timeEndUp) up.time_end = timeEndUp;
+      }
+      if (get(row, 'total_hours')) { const n = parseNum(get(row, 'total_hours')); if (n !== null) up.total_hours = n; }
+      if (get(row, 'driver_hours')) { const n = parseNum(get(row, 'driver_hours')); if (n !== null) up.driver_hours = n; }
+      if (get(row, 'worker_notes')) up.worker_notes = get(row, 'worker_notes');
+      if (get(row, 'internal_notes')) up.internal_notes = get(row, 'internal_notes');
+      if (get(row, 'total_amount')) { const n = parseNum(get(row, 'total_amount')); if (n !== null) up.total_amount = n; }
+      // People columns REPLACE the job's crew/drivers when included.
+      const leadUp = get(row, 'lead_name');
+      const crewUp = splitNames(get(row, 'crew'));
+      if (leadUp || crewUp.length) up.crew_names = [...(leadUp ? [leadUp] : []), ...crewUp];
+      const driversUp = splitNames(get(row, 'driver'));
+      if (driversUp.length) {
+        up.driver_names = driversUp;
+        up.driver_employee_ids = driversUp.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[];
+      }
+      // Pending photo names re-seed the photo step; uploads dedupe by name.
+      const photoNamesUp = Array.from(new Set(
+        grp.rows.flatMap(({ row: r }) => get(r, 'photos').split(/[;,]/)).map(n => n.trim()).filter(Boolean),
+      ));
+      if (photoNamesUp.length) up.import_photo_names = photoNamesUp;
+      // Custom fields merge — CSV wins per field, unmentioned fields survive.
+      const cfUp: Record<string, string> = {};
+      ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) cfUp[t.field_key] = v; });
+      if (Object.keys(cfUp).length) {
+        const merged = { ...(existing.custom_fields ?? {}), ...cfUp };
+        if (JSON.stringify(merged) !== JSON.stringify(existing.custom_fields ?? {})) up.custom_fields = merged;
+        existing.custom_fields = merged;
+      }
+
+      if (!Object.keys(up).length) { skipped++; continue; }
+      const { error: upErr } = await ctx.supabase.from('jobs').update(up).eq('id', existing.id);
+      if (upErr) { failedRows.push({ label, reason: upErr.message, rowIndex: idx }); continue; }
+      if (up.crew_names) {
+        await ctx.supabase.from('job_assignments').delete().eq('job_id', existing.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const assignsUp: any[] = [];
+        const seenUp = new Set<string>();
+        (up.crew_names as string[]).forEach((name, i) => {
+          const n2 = normalizeName(name);
+          if (seenUp.has(n2)) return;
+          seenUp.add(n2);
+          assignsUp.push({ job_id: existing.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadUp });
+        });
+        if (assignsUp.length) await ctx.supabase.from('job_assignments').insert(assignsUp);
+      }
+      updated++;
+      continue;
+    }
+    if (!title) {
+      failedRows.push({
+        label,
+        reason: ref
+          ? tr('Falta el nombre del proyecto', 'Missing project name')
+          : tr(
+              'Sin Project ID la fila se trata como trabajo NUEVO y requiere al menos el nombre del proyecto',
+              'Without a Project ID the row is treated as a NEW job and needs at least the project name',
+            ),
+        rowIndex: idx,
+      });
+      continue;
+    }
 
     // Status: blank keeps the historical default (completed); an unrecognized
     // value fails the row rather than silently misclassifying it.
@@ -528,7 +720,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       `"Added by": these emails don't match any team member (your user was used): ${shown}.`,
     ));
   }
-  return { success, skipped, failedRows, notes };
+  return { success, skipped, updated, failedRows, notes };
 }
 
 // ── EMPLOYEES ───────────────────────────────────────────────────────────────
@@ -650,10 +842,10 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     ctx.supabase.from('invoices').select('external_ref').eq('business_id', ctx.businessId).range(from, to));
   const existingRefs = new Set(existingInv.map(i => i.external_ref).filter(Boolean) as string[]);
 
-  const jobs = await fetchAll<{ id: string; external_ref: string | null; client_id: string | null }>((from, to) =>
-    ctx.supabase.from('jobs').select('id, external_ref, client_id').eq('business_id', ctx.businessId).range(from, to));
-  const jobByRef = new Map<string, { id: string; client_id: string | null }>();
-  jobs.forEach(j => { if (j.external_ref) jobByRef.set(j.external_ref, { id: j.id, client_id: j.client_id }); });
+  const jobs = await fetchAll<{ id: string; external_ref: string | null; client_id: string | null; title: string | null }>((from, to) =>
+    ctx.supabase.from('jobs').select('id, external_ref, client_id, title').eq('business_id', ctx.businessId).range(from, to));
+  const jobByRef = new Map<string, { id: string; client_id: string | null; title: string | null }>();
+  jobs.forEach(j => { if (j.external_ref) jobByRef.set(j.external_ref, { id: j.id, client_id: j.client_id, title: j.title }); });
 
   const { resolve, autoCreated } = await createClientResolver(ctx);
   const resolveClient = (row: Record<string, string>): Promise<string | null> =>
@@ -712,7 +904,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       if (projId && !job) unlinkedLines++;
       if (job) linkedJobIds.add(job.id);
       lineItems.push({
-        description: get(row, 'line_description') || `${tr('Factura', 'Invoice')} ${num}`,
+        description: get(row, 'line_description') || job?.title || `${tr('Factura', 'Invoice')} ${num}`,
         qty: parseNum(get(row, 'line_qty')) ?? 1,
         rate: parseNum(get(row, 'line_rate')) ?? 0,
         job_id: job?.id ?? null,
@@ -785,8 +977,213 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   return { success, skipped, failedRows, notes };
 }
 
+// ── Payroll history import ──────────────────────────────────────────────────
+
+/** efectivo/cheque/transferencia (+ EN synonyms) → PayMethod. Blank → null
+ *  (caller defaults to cash); unrecognized → undefined (row fails). */
+function parsePayMethod(raw: string): 'cash' | 'check' | 'wire' | null | undefined {
+  const s = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!s) return null;
+  if (['efectivo', 'cash'].includes(s)) return 'cash';
+  if (['cheque', 'check'].includes(s)) return 'check';
+  if (['transferencia', 'transfer', 'wire', 'deposito', 'deposit', 'ach', 'zelle'].includes(s)) return 'wire';
+  return undefined;
+}
+
+/**
+ * Historical pay records → payroll_payments (the permanent snapshots behind
+ * the Payment history view). One row per worker per pay period. The period
+ * comes from the "Period start" column when present, else it's derived from
+ * the paid date + the business's pay frequency/anchor. Existing
+ * (worker, period) records are never overwritten.
+ */
+export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult> {
+  const tr = trOf(ctx);
+  const get = getOf(ctx);
+  const failedRows: ImportFailedRow[] = [];
+  let success = 0, skipped = 0;
+
+  const employees = await fetchAll<EmployeeLite>((from, to) =>
+    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+  const { data: biz } = await ctx.supabase
+    .from('businesses').select('payroll_frequency, payroll_anchor_date').eq('id', ctx.businessId).single();
+  const freq = normalizeFrequency(biz?.payroll_frequency);
+  const anchor = parsePayrollAnchor(biz?.payroll_anchor_date);
+  const existing = await fetchAll<{ employee_id: string | null; period_start: string | null }>((from, to) =>
+    ctx.supabase.from('payroll_payments').select('employee_id, period_start').eq('business_id', ctx.businessId).range(from, to));
+  const existingKeys = new Set(existing.map(e => `${e.employee_id}|${(e.period_start ?? '').slice(0, 10)}`));
+
+  for (let idx = 0; idx < ctx.rows.length; idx++) {
+    const row = ctx.rows[idx];
+    const workerName = get(row, 'worker');
+    const label = `${tr('Fila', 'Row')} ${idx + 2} · ${workerName || get(row, 'paid_date') || tr('(fila vacía)', '(empty row)')}`;
+
+    if (!workerName) { failedRows.push({ label, reason: tr('Falta el trabajador', 'Missing worker'), rowIndex: idx }); continue; }
+    const empId = matchEmployeeId(workerName, employees);
+    if (!empId) {
+      failedRows.push({ label, reason: tr(`No se encontró a "${workerName}" en tu equipo — impórtalo primero`, `"${workerName}" not found on your team — import them first`), rowIndex: idx });
+      continue;
+    }
+
+    const paidDate = parseDate(get(row, 'paid_date'));
+    const periodStartRaw = parseDate(get(row, 'period_start'));
+    const refDate = periodStartRaw ?? paidDate;
+    if (!refDate) { failedRows.push({ label, reason: tr('Falta la fecha de pago', 'Missing paid date'), rowIndex: idx }); continue; }
+    const period = getPayrollPeriod(freq, new Date(`${refDate}T00:00:00`), 0, anchor);
+
+    const key = `${empId}|${period.startStr}`;
+    if (existingKeys.has(key)) { skipped++; continue; }
+
+    const gross = parseNum(get(row, 'gross_pay'));
+    if (gross === null) { failedRows.push({ label, reason: tr('Falta el total pagado', 'Missing total paid'), rowIndex: idx }); continue; }
+    const method = parsePayMethod(get(row, 'method'));
+    if (method === undefined) {
+      failedRows.push({ label, reason: tr(`Método no reconocido: "${get(row, 'method')}". Válidos: efectivo, cheque, transferencia.`, `Unrecognized method: "${get(row, 'method')}". Valid: cash, check, wire.`), rowIndex: idx });
+      continue;
+    }
+
+    const { error } = await ctx.supabase.from('payroll_payments').insert({
+      business_id: ctx.businessId,
+      employee_id: empId,
+      period_start: period.startStr,
+      period_end: period.endStr,
+      hours: parseNum(get(row, 'hours')) ?? 0,
+      driver_hours: parseNum(get(row, 'driver_hours')),
+      bonus: parseNum(get(row, 'bonus')),
+      gross_pay: gross,
+      method: method ?? 'cash',
+      check_number: get(row, 'check_number') || null,
+      created_by: ctx.userId,
+      // The paid date becomes the record's timestamp so history shows it.
+      ...(paidDate ? { created_at: `${paidDate}T12:00:00` } : {}),
+    });
+    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
+    existingKeys.add(key);
+    success++;
+  }
+
+  return { success, skipped, failedRows, notes: [] };
+}
+
+// ── Equipment import ─────────────────────────────────────────────────────────
+
+/** sí/yes/true → true; anything else (incl. blank) → false. */
+function parseYesNo(raw: string): boolean {
+  const s = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return ['si', 'yes', 'true', '1', 'x'].includes(s);
+}
+
+const parseInt10 = (raw: string): number | null => {
+  const n = parseNum(raw);
+  return n === null ? null : Math.round(n);
+};
+
+/** Vehicles/machines → equipment. Deduped by name (case/accent-insensitive). */
+export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResult> {
+  const tr = trOf(ctx);
+  const get = getOf(ctx);
+  const failedRows: ImportFailedRow[] = [];
+  let success = 0, skipped = 0;
+
+  const existing = await fetchAll<{ name: string }>((from, to) =>
+    ctx.supabase.from('equipment').select('name').eq('business_id', ctx.businessId).range(from, to));
+  const existingNames = new Set(existing.map(e => normalizeName(e.name)));
+  const employees = await fetchAll<EmployeeLite>((from, to) =>
+    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+
+  for (let idx = 0; idx < ctx.rows.length; idx++) {
+    const row = ctx.rows[idx];
+    const name = get(row, 'name');
+    const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || tr('(fila vacía)', '(empty row)')}`;
+    if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
+    if (existingNames.has(normalizeName(name))) { skipped++; continue; }
+
+    const paidOff = parseYesNo(get(row, 'paid_off'));
+    const assignedName = get(row, 'assigned_to');
+    const { error } = await ctx.supabase.from('equipment').insert({
+      business_id: ctx.businessId,
+      name,
+      equipment_type: get(row, 'equipment_type') || null,
+      make: get(row, 'make') || null,
+      model: get(row, 'model') || null,
+      year: parseInt10(get(row, 'year')),
+      color: get(row, 'color') || null,
+      vin: get(row, 'vin') || null,
+      serial_number: get(row, 'serial_number') || null,
+      mileage: parseInt10(get(row, 'mileage')),
+      plate_number: get(row, 'plate_number') || null,
+      plate_expiration: parseDate(get(row, 'plate_expiration')),
+      value: parseNum(get(row, 'value')),
+      paid_off: paidOff,
+      loan_lender: paidOff ? null : (get(row, 'loan_lender') || null),
+      loan_amount: paidOff ? null : parseNum(get(row, 'loan_amount')),
+      assigned_employee_id: assignedName ? matchEmployeeId(assignedName, employees) : null,
+      location: get(row, 'location') || null,
+      purchase_date: parseDate(get(row, 'purchase_date')),
+      insurance_carrier: get(row, 'insurance_carrier') || null,
+      insurance_policy_number: get(row, 'insurance_policy_number') || null,
+      insurance_expiration: parseDate(get(row, 'insurance_expiration')),
+      notes: get(row, 'notes') || null,
+      created_by: ctx.userId,
+    });
+    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
+    existingNames.add(normalizeName(name));
+    success++;
+  }
+
+  return { success, skipped, failedRows, notes: [] };
+}
+
+// ── Inventory import ─────────────────────────────────────────────────────────
+
+/** Materials/stock → inventory_items. Deduped by SKU when present, else name. */
+export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResult> {
+  const tr = trOf(ctx);
+  const get = getOf(ctx);
+  const failedRows: ImportFailedRow[] = [];
+  let success = 0, skipped = 0;
+
+  const existing = await fetchAll<{ name: string; sku: string | null }>((from, to) =>
+    ctx.supabase.from('inventory_items').select('name, sku').eq('business_id', ctx.businessId).range(from, to));
+  const existingNames = new Set(existing.map(e => normalizeName(e.name)));
+  const existingSkus = new Set(existing.map(e => (e.sku ?? '').trim().toLowerCase()).filter(Boolean));
+
+  for (let idx = 0; idx < ctx.rows.length; idx++) {
+    const row = ctx.rows[idx];
+    const name = get(row, 'name');
+    const sku = get(row, 'sku');
+    const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || sku || tr('(fila vacía)', '(empty row)')}`;
+    if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
+    if ((sku && existingSkus.has(sku.toLowerCase())) || existingNames.has(normalizeName(name))) { skipped++; continue; }
+
+    const { error } = await ctx.supabase.from('inventory_items').insert({
+      business_id: ctx.businessId,
+      name,
+      sku: sku || null,
+      quantity: parseInt10(get(row, 'quantity')) ?? 0,
+      unit: get(row, 'unit') || 'unidad',
+      unit_cost: parseNum(get(row, 'unit_cost')) ?? 0,
+      category: get(row, 'category') || null,
+      low_stock_threshold: parseInt10(get(row, 'low_stock')) ?? 0,
+    });
+    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
+    existingNames.add(normalizeName(name));
+    if (sku) existingSkus.add(sku.toLowerCase());
+    success++;
+  }
+
+  return { success, skipped, failedRows, notes: [] };
+}
+
 export function runImportFor(mode: ImportMode, ctx: ImportRunCtx): Promise<ImportResult> {
-  return mode === 'jobs' ? runJobsImport(ctx) : mode === 'employees' ? runEmployeesImport(ctx) : runInvoicesImport(ctx);
+  switch (mode) {
+    case 'jobs': return runJobsImport(ctx);
+    case 'employees': return runEmployeesImport(ctx);
+    case 'payroll': return runPayrollImport(ctx);
+    case 'equipment': return runEquipmentImport(ctx);
+    case 'inventory': return runInventoryImport(ctx);
+    default: return runInvoicesImport(ctx);
+  }
 }
 
 // ── Template CSV ────────────────────────────────────────────────────────────
@@ -832,6 +1229,15 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
   if (mode === 'employees') {
     return [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'office', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678', '6/1/2024 9:00', '6/12/2026 4:45 PM', ...tplCells];
   }
+  if (mode === 'payroll') {
+    return [en ? 'Worker One' : 'Trabajador Uno', '6/26/2026', '', '80', '5', '100', '1460', en ? 'check' : 'cheque', '1024'];
+  }
+  if (mode === 'equipment') {
+    return ['Truck #1', en ? 'Truck' : 'Camioneta', 'Ford', 'F-350', '2019', en ? 'White' : 'Blanco', '1FT8W3BT5KED12345', '', '98500', 'ABC-1234', '3/1/2027', '42000', en ? 'no' : 'no', 'Wells Fargo', '18500', en ? 'Worker One' : 'Trabajador Uno', en ? 'Main yard' : 'Yarda principal', '5/15/2019', 'Progressive', 'POL-993312', '11/30/2026', ''];
+  }
+  if (mode === 'inventory') {
+    return [en ? 'Galvanized wire' : 'Alambre galvanizado', 'ALM-12', '250', en ? 'feet' : 'pies', '0.85', en ? 'Materials' : 'Materiales', '50'];
+  }
   return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
 }
 
@@ -866,9 +1272,15 @@ export function buildImportTemplateCsv(
   const exampleRows = [exampleRowFor(mode, en, tpls, opts), ...extraExampleRowsFor(mode, en)];
   const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const csv = '﻿' + [cols, ...exampleRows].map(r => r.map(csvCell).join(',')).join('\n');
-  const filename = en
-    ? (mode === 'jobs' ? 'jobs-template.csv' : mode === 'employees' ? 'team-template.csv' : 'invoices-template.csv')
-    : (mode === 'jobs' ? 'plantilla-trabajos.csv' : mode === 'employees' ? 'plantilla-equipo.csv' : 'plantilla-facturas.csv');
+  const names: Record<ImportMode, [string, string]> = {
+    jobs: ['jobs-template.csv', 'plantilla-trabajos.csv'],
+    employees: ['team-template.csv', 'plantilla-equipo.csv'],
+    invoices: ['invoices-template.csv', 'plantilla-facturas.csv'],
+    payroll: ['payroll-template.csv', 'plantilla-nomina.csv'],
+    equipment: ['equipment-template.csv', 'plantilla-equipos.csv'],
+    inventory: ['inventory-template.csv', 'plantilla-inventario.csv'],
+  };
+  const filename = names[mode][en ? 0 : 1];
   return { filename, csv };
 }
 

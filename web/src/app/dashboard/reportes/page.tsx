@@ -10,8 +10,7 @@ import {
 import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
-  FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin,
-} from 'lucide-react';
+  FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin, Calendar, XCircle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -32,9 +31,9 @@ interface Timesheet { id: string; hours_worked: number; work_date: string; emplo
 interface Employee { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string; }
 interface InventoryItem { id: string; quantity: number; unit_cost: number; }
 
-type Range = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'all';
+type Range = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'last_year' | 'all';
 
-const RANGE_KEYS: Range[] = ['month', 'last_month', 'quarter', 'half', 'year', 'all'];
+const RANGE_KEYS: Range[] = ['month', 'last_month', 'quarter', 'half', 'year', 'last_year', 'all'];
 
 const PIE_COLORS = {
   paid: '#10B981', sent: '#6366F1', draft: '#9CA3AF',
@@ -57,12 +56,14 @@ function getRangeStart(range: Range): Date | null {
     case 'quarter':    return new Date(now.getFullYear(), now.getMonth() - 2, 1);
     case 'half':       return new Date(now.getFullYear(), now.getMonth() - 5, 1);
     case 'year':       return new Date(now.getFullYear(), 0, 1);
+    case 'last_year':  return new Date(now.getFullYear() - 1, 0, 1);
     case 'all':        return null;
   }
 }
 function getRangeEnd(range: Range): Date {
   const now = new Date();
   if (range === 'last_month') return new Date(now.getFullYear(), now.getMonth(), 0);
+  if (range === 'last_year') return new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
   return now;
 }
 
@@ -135,6 +136,7 @@ export default function ReportesPage() {
 
   const [range, setRange] = useState<Range>('year');
   // Custom date range overrides the preset when set; picking a preset clears it.
+  const [dateOpen, setDateOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -210,7 +212,8 @@ export default function ReportesPage() {
     return true;
   };
 
-  const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.created_at)), [invoices, range, customFrom, customTo]);
+  // Invoices bucket by ISSUE date (accrual billing view) — see shared reports.ts.
+  const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.issue_date || i.created_at)), [invoices, range, customFrom, customTo]);
   const filteredJobs     = useMemo(() => jobs.filter(j => inRange(j.created_at)), [jobs, range, customFrom, customTo]);
   const filteredClients  = useMemo(() => clients.filter(c => inRange(c.created_at)), [clients, range, customFrom, customTo]);
   const filteredSheets   = useMemo(() => timesheets.filter(ts => inRange(ts.work_date)), [timesheets, range, customFrom, customTo]);
@@ -255,17 +258,32 @@ export default function ReportesPage() {
   // ── Monthly revenue chart ─────────────────────────────────────────────────
   const monthlyRevenue = useMemo(() => {
     const now = new Date();
-    const months = range === 'month' || range === 'last_month' ? 1
-      : range === 'quarter' ? 3
-      : range === 'half' ? 6
-      : range === 'year' || range === 'all' ? 12 : 12;
+    let months: number;
+    let start: Date;
+    if (customActive) {
+      // Custom range: buckets span the range itself (capped at 24 months) —
+      // a 2024 range must chart 2024's months, not the last 12 from today.
+      const s0 = rangeStart ?? new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      start = new Date(s0.getFullYear(), s0.getMonth(), 1);
+      months = Math.max(1, Math.min(24,
+        (rangeEnd.getFullYear() - start.getFullYear()) * 12 + (rangeEnd.getMonth() - start.getMonth()) + 1));
+    } else {
+      months = range === 'month' || range === 'last_month' ? 1
+        : range === 'quarter' ? 3
+        : range === 'half' ? 6
+        : range === 'year' ? now.getMonth() + 1   // Jan → current month
+        : 12;                                     // last_year (Jan–Dec) / all (rolling 12)
+      // First bucket month: calendar-year ranges anchor at January.
+      start = range === 'last_month' ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        : range === 'year' ? new Date(now.getFullYear(), 0, 1)
+        : range === 'last_year' ? new Date(now.getFullYear() - 1, 0, 1)
+        : new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+    }
 
     return Array.from({ length: months }, (_, i) => {
-      const d = range === 'last_month'
-        ? new Date(now.getFullYear(), now.getMonth() - 1 + i, 1)
-        : new Date(now.getFullYear(), now.getMonth() - (months - 1) + i, 1);
+      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
       const monthInvoices = paidInvoices.filter(inv => {
-        const pd = new Date(inv.paid_at ?? inv.created_at);
+        const pd = new Date(inv.issue_date || inv.paid_at || inv.created_at);
         return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth();
       });
       const monthJobs = filteredJobs.filter(j => {
@@ -280,7 +298,7 @@ export default function ReportesPage() {
         [t.chart.jobsSeries]: monthJobs.length,
       };
     });
-  }, [paidInvoices, filteredJobs, range, dateLocale, t.chart.revenueSeries, t.chart.jobsSeries]);
+  }, [paidInvoices, filteredJobs, range, customFrom, customTo, dateLocale, t.chart.revenueSeries, t.chart.jobsSeries]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Invoice status pie ────────────────────────────────────────────────────
   const invoiceStatusData = useMemo(() => {
@@ -388,31 +406,76 @@ export default function ReportesPage() {
               );
             })}
           </div>
-          {/* Custom date range — overrides the preset when either side is set. */}
-          <div className={`flex items-center gap-1.5 rounded-xl border px-2 py-1 ${customActive ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
-            <input
-              type="date"
-              value={customFrom}
-              onChange={e => setCustomFrom(e.target.value)}
-              aria-label={tdate.from}
-              className="text-xs text-gray-700 bg-transparent focus:outline-none"
-            />
-            <span className="text-gray-300">–</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={e => setCustomTo(e.target.value)}
-              aria-label={tdate.to}
-              className="text-xs text-gray-700 bg-transparent focus:outline-none"
-            />
-            {customActive ? (
-              <button
-                onClick={() => { setCustomFrom(''); setCustomTo(''); }}
-                aria-label={tdate.clear}
-                className="ml-0.5 text-gray-400 hover:text-red-500"
-              >
-                <X size={14} />
-              </button>
+          {/* Custom date range — compact calendar icon + popover (same
+             pattern as the invoices/jobs list filters). Overrides the
+             preset when either side is set. */}
+          {customActive ? (
+            <button
+              onClick={() => { setCustomFrom(''); setCustomTo(''); }}
+              title={tdate.clear}
+              aria-label={tdate.clear}
+              className="shrink-0 flex items-center justify-center p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+            >
+              <XCircle size={16} />
+            </button>
+          ) : null}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setDateOpen(o => !o)}
+              title={tdate.button}
+              aria-label={tdate.button}
+              className={`flex items-center justify-center p-2.5 rounded-xl border transition-colors ${
+                customActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Calendar size={16} />
+            </button>
+            {dateOpen ? (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
+                  {/* One-click previous years — no manual from/to typing. */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(y => {
+                      const on = customFrom === `${y}-01-01` && customTo === `${y}-12-31`;
+                      return (
+                        <button
+                          key={y}
+                          onClick={() => { setCustomFrom(`${y}-01-01`); setCustomTo(`${y}-12-31`); }}
+                          className={`px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
+                            on ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          {y}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.from}</label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={e => setCustomFrom(e.target.value)}
+                    className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.to}</label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={e => setCustomTo(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  {customActive ? (
+                    <button
+                      onClick={() => { setCustomFrom(''); setCustomTo(''); }}
+                      className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                    >
+                      {tdate.clear}
+                    </button>
+                  ) : null}
+                </div>
+              </>
             ) : null}
           </div>
         </div>

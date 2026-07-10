@@ -62,6 +62,8 @@ export interface JobListItem {
   status: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   estimateNumber: string | null;
+  /** Source-system Project ID (jobs.external_ref) — the job's visible identifier. */
+  externalRef?: string | null;
   totalAmount: number;
   scheduledDate: string | null;
   timeStart: string | null;
@@ -319,7 +321,7 @@ export function JobsListScreen({
   const filtered = useMemo(() => {
     return jobs.filter(j => {
       const matchSearch = searchMatches(
-        [j.title, j.estimateNumber, j.clientName, j.clientCompany, j.jobCity, j.jobState,
+        [j.title, j.estimateNumber, j.externalRef, j.clientName, j.clientCompany, j.jobCity, j.jobState,
          j.leadName, ...j.workerNames]
           .filter(Boolean)
           .join(' '),
@@ -564,7 +566,7 @@ export function JobsListScreen({
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
+    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-96' : 'pb-36'}`}>
       {/* Header */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">

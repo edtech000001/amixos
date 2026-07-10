@@ -582,7 +582,7 @@ export default function AjustesPage() {
   // ── Import hub ────────────────────────────────────────────────────────────
   // Every step opens its wizard IN PLACE — the user never leaves the hub
   // while migrating. Configs load when the tab opens.
-  const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices' | 'photos'>(null);
+  const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices' | 'photos' | 'payroll' | 'equipment' | 'inventory'>(null);
   const [hubJobTemplates, setHubJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubEmpTemplates, setHubEmpTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubClientTemplates, setHubClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
@@ -3561,6 +3561,9 @@ export default function AjustesPage() {
                   { key: 'jobs', title: t.importHub.step3Title, desc: t.importHub.step3Desc },
                   { key: 'photos', title: t.importHub.step4Title, desc: t.importHub.step4Desc },
                   { key: 'invoices', title: t.importHub.step5Title, desc: t.importHub.step5Desc },
+                  { key: 'payroll', title: t.importHub.step6Title, desc: t.importHub.step6Desc },
+                  { key: 'equipment', title: t.importHub.step7Title, desc: t.importHub.step7Desc },
+                  { key: 'inventory', title: t.importHub.step8Title, desc: t.importHub.step8Desc },
                 ] as const).map((step, i) => {
                   const inner = (
                     <>
