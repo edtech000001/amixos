@@ -26,7 +26,10 @@ export interface ReportsScreenProps {
 }
 
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  // Decimal-aware half-up to the cent (float .665 stores as .66499… — the
+  // toFixed pass restores the intended .67 before formatting).
+  const cents = Math.round(Number((n * 100).toFixed(3))) / 100;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents);
 }
 
 const KPI_BG: Record<string, string> = {

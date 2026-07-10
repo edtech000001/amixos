@@ -34,8 +34,7 @@ import {
   Share2,
   X,
   Sparkles,
-  type LucideIcon,
-} from 'lucide-react-native';
+  type LucideIcon, Archive } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
@@ -82,6 +81,7 @@ interface Job {
   total_amount: number;
   internal_notes: string | null;
   worker_notes: string | null;
+  archived_at: string | null;
   estimate_number: string | null;
   notes: string | null;
   issue_date: string | null;
@@ -999,6 +999,31 @@ export default function JobDetailRoute() {
             >
               <XCircle size={16} color="#EF4444" />
               <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* Archive — the exit for completed work that will never be
+             invoiced (internal hours etc). Reversible. */}
+          {job.status === 'completed' ? (
+            <Pressable
+              onPress={() => {
+                const archive = !job.archived_at;
+                const doIt = async () => {
+                  const archived_at = archive ? new Date().toISOString() : null;
+                  await supabase.from('jobs').update({ archived_at }).eq('id', job.id);
+                  if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', job.id, { title: job.title });
+                  setJob(prev => (prev ? { ...prev, archived_at } : prev));
+                };
+                if (!archive) { void doIt(); return; }
+                Alert.alert('', full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'), [
+                  { text: tc.buttons.cancel, style: 'cancel' },
+                  { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
+                ]);
+              }}
+              className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 active:bg-gray-200"
+            >
+              <Archive size={16} color="#6B7280" />
+              <Text className="text-sm font-semibold text-gray-600">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
             </Pressable>
           ) : null}
         </View>

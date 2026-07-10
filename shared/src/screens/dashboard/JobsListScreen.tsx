@@ -23,6 +23,7 @@ import {
   Lightbulb,
   Receipt,
   Trash2,
+  Archive,
   X,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -78,6 +79,9 @@ export interface JobListItem {
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
+  /** Archived (jobs.archived_at, migration 118) — hidden from every tab
+   *  except 'archived'; the second exit from Completed besides invoicing. */
+  archivedAt?: string | null;
   /** Assignment marked is_lead (migration 033) — drives sort/group by lead. */
   leadName?: string | null;
   delegatedToBusinessName?: string | null;
@@ -91,7 +95,7 @@ const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 // Closed/terminal work hidden from the default (no-tab) "active" view — still
 // reachable by selecting the corresponding status tab.
 const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
-const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
 // Selectable status filters (everything except the "all" reset). Multi-select.
@@ -108,6 +112,7 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
   invoiced: Receipt,
   cancelled: XCircle,
   delegated: Send,
+  archived: Archive,
 };
 
 export interface JobsListScreenProps {
@@ -125,6 +130,9 @@ export interface JobsListScreenProps {
    *  invoiceable ones) and shows the red Eliminar pill. The caller owns the
    *  confirmation dialog + the actual delete. */
   onBulkDelete?: (jobIds: string[]) => Promise<void> | void;
+  /** Archive/unarchive the selection (jobs.archived_at). archive=false on the
+   *  Archivados tab (restore). Caller owns confirmation + the update. */
+  onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
@@ -206,6 +214,7 @@ export function JobsListScreen({
   onGenerateInvoice,
   onCreateInvoice,
   onBulkDelete,
+  onBulkArchive,
   onViewInvoice,
   onNewJob,
   onNewProposal,
@@ -286,18 +295,24 @@ export function JobsListScreen({
     invoiced: t.tabs.invoiced,
     cancelled: t.tabs.cancelled,
     delegated: tw.delegatedFilterTab,
+    archived: t.tabs.archived,
   };
 
   // Multi-select: a job matches if it satisfies ANY selected tab. With no tabs
   // (the default "active" view) we hide closed work — invoiced + cancelled.
   const matchesTab = (j: JobListItem) => {
-    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status);
+    // Archived jobs only surface under their own tab.
+    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status) && !j.archivedAt;
     return tabs.some(tk =>
-      tk === 'propuestas'
-        ? PROPOSAL_STATUSES.includes(j.status)
-        : tk === 'delegated'
-          ? !!j.delegatedToBusinessName
-          : j.status === tk,
+      tk === 'archived'
+        ? !!j.archivedAt
+        : j.archivedAt
+          ? false
+          : tk === 'propuestas'
+            ? PROPOSAL_STATUSES.includes(j.status)
+            : tk === 'delegated'
+              ? !!j.delegatedToBusinessName
+              : j.status === tk,
     );
   };
 
@@ -343,7 +358,8 @@ export function JobsListScreen({
       if (k === 'all') acc[k] = jobs.length;
       else if (k === 'propuestas') acc[k] = jobs.filter(j => PROPOSAL_STATUSES.includes(j.status)).length;
       else if (k === 'delegated') acc[k] = jobs.filter(j => !!j.delegatedToBusinessName).length;
-      else acc[k] = jobs.filter(j => j.status === k).length;
+      else if (k === 'archived') acc[k] = jobs.filter(j => !!j.archivedAt).length;
+      else acc[k] = jobs.filter(j => j.status === k && !j.archivedAt).length;
       return acc;
     }, {} as Record<TabKey, number>),
   [jobs]);
@@ -486,6 +502,20 @@ export function JobsListScreen({
     setCreatingInvoice(false);
     exitSelect();
   };
+  // Archive: on the Archivados tab the pill restores instead. Only completed
+  // jobs archive (that's the "never invoicing this" case).
+  const archivedTabActive = tabs.includes('archived');
+  const allArchivable = selectedJobs.length > 0 && selectedJobs.every(j =>
+    archivedTabActive ? !!j.archivedAt : j.status === 'completed' && !j.archivedAt);
+  const [bulkArchiving, setBulkArchiving] = useState(false);
+  const runBulkArchive = async () => {
+    if (!onBulkArchive || !allArchivable || bulkArchiving) return;
+    setBulkArchiving(true);
+    await onBulkArchive(selectedJobs.map(j => j.id), !archivedTabActive);
+    setBulkArchiving(false);
+    exitSelect();
+  };
+
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const runBulkDelete = async () => {
     if (!onBulkDelete || selectedJobs.length === 0 || bulkDeleting) return;
@@ -1055,6 +1085,23 @@ export function JobsListScreen({
           <View className="absolute bottom-48 right-5 bg-amber-50 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
             <Text className="text-xs font-medium text-amber-700">{t.batchInvoice.sameClientHint}</Text>
           </View>
+        ) : null}
+        {/* Bulk-archive pill — stacked above delete on the left. */}
+        {onBulkArchive ? (
+          <Pressable
+            onPress={runBulkArchive}
+            disabled={!allArchivable || bulkArchiving}
+            className="absolute bottom-48 left-5 flex-row items-center gap-2 px-5 h-12 rounded-full"
+            style={{
+              backgroundColor: !allArchivable || bulkArchiving ? '#D1D5DB' : '#374151',
+              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+            }}
+          >
+            <Archive size={18} color="#FFFFFF" />
+            <Text className="text-white font-semibold">
+              {`${archivedTabActive ? t.bulkUnarchive : t.bulkArchive}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
+            </Text>
+          </Pressable>
         ) : null}
         {/* Bulk-delete pill — left side, mirroring the invoice pill. */}
         {canDelete ? (

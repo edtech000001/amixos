@@ -31,6 +31,7 @@ import {
   Lightbulb,
   Receipt,
   Trash2,
+  Archive,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -82,6 +83,9 @@ export interface JobListItem {
   clientName: string | null;
   clientCompany: string | null;
   workerNames: string[];
+  /** Archived (jobs.archived_at, migration 118) — hidden from every tab
+   *  except 'archived'; the second exit from Completed besides invoicing. */
+  archivedAt?: string | null;
   /** Assignment marked is_lead (migration 033) — drives sort/group by lead. */
   leadName?: string | null;
   delegatedToBusinessName?: string | null;
@@ -92,7 +96,7 @@ const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 // Closed/terminal work hidden from the default (no-tab) "active" view — still
 // reachable by selecting the corresponding status tab.
 const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
-const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
 // Selectable status filters (everything except the "all" reset). Multi-select.
@@ -109,6 +113,7 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
   invoiced: Receipt,
   cancelled: XCircle,
   delegated: Send,
+  archived: Archive,
 };
 
 // Icons for the sort/group menu chips — mirror the mobile sort sheet so both
@@ -141,6 +146,9 @@ export interface JobsListScreenProps {
    *  invoiceable ones) and shows the red Eliminar button. The caller owns
    *  the confirmation dialog + the actual delete. */
   onBulkDelete?: (jobIds: string[]) => Promise<void> | void;
+  /** Archive/unarchive the selection (jobs.archived_at). archive=false on the
+   *  Archivados tab (restore). Caller owns confirmation + the update. */
+  onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   onNewJob: () => void;
   onNewProposal: () => void;
@@ -208,6 +216,7 @@ export function JobsListScreen({
   onGenerateInvoice,
   onCreateInvoice,
   onBulkDelete,
+  onBulkArchive,
   onViewInvoice,
   onNewJob,
   onNewProposal,
@@ -286,6 +295,7 @@ export function JobsListScreen({
     scheduled: t.tabs.scheduled,
     in_progress: t.tabs.in_progress,
     completed: t.tabs.completed,
+    archived: t.tabs.archived,
     invoiced: t.tabs.invoiced,
     cancelled: t.tabs.cancelled,
     delegated: tw.delegatedFilterTab,
@@ -295,13 +305,18 @@ export function JobsListScreen({
   // (the default "active" view) we hide closed work — invoiced + cancelled —
   // so the working list stays clean. Those are one tap away via their tab.
   const matchesTab = (j: JobListItem) => {
-    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status);
+    // Archived jobs only surface under their own tab.
+    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status) && !j.archivedAt;
     return tabs.some(tk =>
-      tk === 'propuestas'
-        ? PROPOSAL_STATUSES.includes(j.status)
-        : tk === 'delegated'
-          ? !!j.delegatedToBusinessName
-          : j.status === tk,
+      tk === 'archived'
+        ? !!j.archivedAt
+        : j.archivedAt
+          ? false
+          : tk === 'propuestas'
+            ? PROPOSAL_STATUSES.includes(j.status)
+            : tk === 'delegated'
+              ? !!j.delegatedToBusinessName
+              : j.status === tk,
     );
   };
 
@@ -335,7 +350,8 @@ export function JobsListScreen({
         if (k === 'all') acc[k] = jobs.length;
         else if (k === 'propuestas') acc[k] = jobs.filter((j) => PROPOSAL_STATUSES.includes(j.status)).length;
         else if (k === 'delegated') acc[k] = jobs.filter((j) => !!j.delegatedToBusinessName).length;
-        else acc[k] = jobs.filter((j) => j.status === k).length;
+        else if (k === 'archived') acc[k] = jobs.filter((j) => !!j.archivedAt).length;
+        else acc[k] = jobs.filter((j) => j.status === k && !j.archivedAt).length;
         return acc;
       }, {} as Record<TabKey, number>),
     [jobs],
@@ -472,6 +488,20 @@ export function JobsListScreen({
     setCreatingInvoice(false);
     exitSelect();
   };
+  // Archive: on the Archivados tab the button restores instead. Only
+  // completed jobs archive (that's the "never invoicing this" case).
+  const archivedTabActive = tabs.includes('archived');
+  const allArchivable = selectedJobs.length > 0 && selectedJobs.every(j =>
+    archivedTabActive ? !!j.archivedAt : j.status === 'completed' && !j.archivedAt);
+  const [bulkArchiving, setBulkArchiving] = useState(false);
+  const runBulkArchive = async () => {
+    if (!onBulkArchive || !allArchivable || bulkArchiving) return;
+    setBulkArchiving(true);
+    await onBulkArchive(selectedJobs.map(j => j.id), !archivedTabActive);
+    setBulkArchiving(false);
+    exitSelect();
+  };
+
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const runBulkDelete = async () => {
     if (!onBulkDelete || selectedJobs.length === 0 || bulkDeleting) return;
@@ -485,6 +515,10 @@ export function JobsListScreen({
   // precomputed here so selection clicks and select-mode toggles (which
   // re-render every visible card — potentially hundreds) skip all the date
   // math and formatting.
+  // Amount column only renders when some visible job HAS an amount —
+  // otherwise it's a blank hole and the title can use the width instead.
+  const showAmountCol = useMemo(() => filtered.some(j => j.totalAmount > 0), [filtered]);
+
   const cardDataByJob = useMemo(() => {
     const compute = (job: JobListItem) => {
       const statusKey = job.status as keyof typeof t.statuses;
@@ -876,7 +910,7 @@ export function JobsListScreen({
                        line up row-to-row; priority/expired sit to the right of
                        the pill and the alert chip below, so neither can shift
                        the pill's position. */}
-                    <div className="hidden md:flex w-40 shrink-0 flex-col items-start gap-1">
+                    <div className="hidden md:flex w-36 shrink-0 flex-col items-start gap-1">
                       <span className="flex items-center gap-1.5">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{statusLabel}</span>
                         {!isProposal && job.priority !== 'normal' ? (
@@ -892,7 +926,7 @@ export function JobsListScreen({
                     </div>
 
                     {/* Date / duration */}
-                    <div className="hidden lg:flex w-44 shrink-0 flex-col gap-0.5">
+                    <div className="hidden lg:flex w-40 shrink-0 flex-col gap-0.5">
                       {isProposal && job.issueDate ? (
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Calendar size={12} />
@@ -915,43 +949,43 @@ export function JobsListScreen({
                       ) : null}
                     </div>
 
-                    {/* Lead / crew */}
-                    <div className="hidden xl:flex w-40 shrink-0 items-center gap-1 text-xs text-gray-500 font-medium min-w-0">
+                    {/* Lead + location — ONE stacked column (rows are already
+                       two lines tall), so both stay visible without starving
+                       the job title at laptop widths. */}
+                    <div className="hidden xl:flex w-44 shrink-0 flex-col gap-0.5 min-w-0">
                       {job.leadName || job.workerNames.length > 0 ? (
-                        <>
+                        <span className="flex items-center gap-1 text-xs text-gray-500 font-medium min-w-0">
                           <Users size={12} className="shrink-0" />
                           <span className="truncate">
                             {job.leadName
                               ? `${t.leadPrefix}: ${job.leadName}`
                               : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
                           </span>
-                        </>
+                        </span>
                       ) : null}
-                    </div>
-
-                    {/* Location */}
-                    <div className="hidden xl:flex w-36 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
                       {job.jobCity || job.jobAddress ? (
-                        <>
+                        <span className="flex items-center gap-1 text-xs text-gray-400 min-w-0">
                           <MapPin size={12} className="shrink-0" />
                           <span className="truncate">
                             {job.jobCity || job.jobAddress}
                             {job.jobState ? `, ${job.jobState}` : ''}
                           </span>
-                        </>
+                        </span>
                       ) : null}
                     </div>
 
-                    {/* Amount */}
-                    <div className="hidden md:block w-24 shrink-0 text-right">
-                      {job.totalAmount > 0 ? <span className="text-xs font-bold text-gray-700">{fmt(job.totalAmount)}</span> : null}
-                    </div>
+                    {/* Amount — hidden entirely when no visible job has one */}
+                    {showAmountCol ? (
+                      <div className="hidden md:block w-24 shrink-0 text-right">
+                        {job.totalAmount > 0 ? <span className="text-xs font-bold text-gray-700">{fmt(job.totalAmount)}</span> : null}
+                      </div>
+                    ) : null}
                   </button>
 
                   {/* Status action(s) inline on the right */}
                   {/* Fixed width: "Start work" vs "Mark completed" differ in length —
                      an auto-width action area shifts every column row-by-row. */}
-                  {selectMode ? null : <div className="hidden sm:flex w-48 shrink-0 justify-end">{renderActionBar(job)}</div>}
+                  {selectMode ? null : <div className="hidden sm:flex w-44 shrink-0 justify-end">{renderActionBar(job)}</div>}
                   {selectMode ? null : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
                 </div>
               </div>
@@ -981,6 +1015,16 @@ export function JobsListScreen({
             <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
               {t.batchInvoice.cancel}
             </button>
+            {onBulkArchive ? (
+              <button
+                onClick={runBulkArchive}
+                disabled={!allArchivable || bulkArchiving}
+                title={t.confirmArchiveBulk.replace('{{count}}', String(selectedJobs.length))}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-40"
+              >
+                <Archive size={15} /> {archivedTabActive ? t.bulkUnarchive : t.bulkArchive}{selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}
+              </button>
+            ) : null}
             {canDelete ? (
               <button
                 onClick={runBulkDelete}

@@ -41,7 +41,7 @@ interface Props {
 
 export default function ImportClientsModal({ open, businessId, templates, onClose, onDone, doneLabel }: Props) {
   const supabase = createSupabaseClient();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
   const syncBanner = useGoogleSyncBanner();
@@ -59,8 +59,8 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
   }>({ success: 0, failedRows: [] });
   const [showImportErrorDetails, setShowImportErrorDetails] = useState(false);
 
-  const CLIENT_FIELDS: { key: string; label: string; required?: boolean }[] = [
-    { key: 'first_name',   label: t.fields.firstName },
+  const CLIENT_FIELDS: { key: string; label: string; required?: boolean; hint?: string }[] = [
+    { key: 'first_name',   label: t.fields.firstName, hint: locale === 'en' ? 'Each row needs a first name, last name or company.' : 'Cada fila necesita nombre, apellido o empresa.' },
     { key: 'last_name',    label: t.fields.lastName },
     { key: 'company',      label: t.fields.company },
     { key: 'phone_cell',   label: t.fields.phoneCell },
@@ -73,11 +73,11 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
     { key: 'zip_code',     label: t.fields.zipCode },
     { key: 'notes',        label: t.fields.notes },
     // Optional source-system timestamps — blank keeps the now() defaults.
-    { key: 'created_at',   label: t.importModal.colAdded },
-    { key: 'updated_at',   label: t.importModal.colEdited },
+    { key: 'created_at',   label: t.importModal.colAdded, hint: locale === 'en' ? 'Blank = current date/time.' : 'Vacío = fecha/hora actual.' },
+    { key: 'updated_at',   label: t.importModal.colEdited, hint: locale === 'en' ? 'Blank = current date/time.' : 'Vacío = fecha/hora actual.' },
   ];
 
-  const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean }[] = [
+  const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean; hint?: string }[] = [
     ...CLIENT_FIELDS,
     ...templates.map(tpl => ({ key: `custom:${tpl.field_key}`, label: tpl.field_label, isCustom: true })),
   ];
@@ -85,14 +85,15 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
   const handleFileSelect = (file: File) => {
     Papa.parse<Record<string, string>>(file, {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
       encoding: 'UTF-8',
       transform: (value: string) => sanitize(value),
       transformHeader: (header: string) => sanitize(header),
       complete: (result) => {
         const headers = result.meta.fields ?? [];
         setCsvHeaders(headers);
-        setCsvRows(result.data);
+        // Drop all-blank rows — Excel exports carry ",,,,," to the sheet end.
+        setCsvRows(result.data.filter((r: Record<string, string>) => Object.values(r).some(v => v && String(v).trim() !== '')));
         const auto: Record<string, string> = {};
         // Lowercase, strip diacritics, keep letters/digits — "Código postal"
         // matches "Codigo postal", "phone-1" matches "phone1", etc.
@@ -298,6 +299,7 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
                         {field.required && <span className="text-red-400">*</span>}
                         {field.isCustom && <span className="text-blue-400 text-[10px]">{t.importModal.customLabel}</span>}
                       </label>
+                      {field.hint ? <p className="text-[10px] leading-snug text-gray-400 -mt-0.5">{field.hint}</p> : null}
                       <select
                         value={colMap[field.key] ?? ''}
                         onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}

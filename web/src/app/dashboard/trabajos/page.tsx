@@ -41,6 +41,7 @@ interface RawJob {
   delegated_to_business_id: string | null;
   delegated_from_business_id: string | null;
   published_to_crew: boolean;
+  archived_at?: string | null;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   job_assignments: { worker_name: string | null; is_lead: boolean | null; employees: { first_name: string; last_name: string } | null }[];
@@ -96,7 +97,7 @@ export default function TrabajosPage() {
     job_address, job_city, job_state, scheduled_date, time_start, end_date,
     estimated_hours, time_end, total_amount, estimate_number, issue_date,
     expiry_date, delegated_to_business_id, delegated_from_business_id,
-    published_to_crew, created_at,
+    published_to_crew, created_at, archived_at,
     clients(first_name, last_name, company),
     job_assignments(worker_name, is_lead, employees(first_name, last_name))
   `;
@@ -178,6 +179,7 @@ export default function TrabajosPage() {
       ? businesses.find(b => b.id === j.delegated_from_business_id)?.name ?? null
       : null,
     publishedToCrew: j.published_to_crew,
+    archivedAt: j.archived_at ?? null,
   })), [rawJobs, businesses]);
 
   const alertThresholds = useMemo(
@@ -247,6 +249,20 @@ export default function TrabajosPage() {
             }
           : undefined
       }
+      onBulkArchive={async (jobIds, archive) => {
+        if (!business) return;
+        if (archive) {
+          const msg = full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', String(jobIds.length));
+          if (!window.confirm(msg)) return;
+        }
+        for (let i = 0; i < jobIds.length; i += 50) {
+          await supabase.from('jobs')
+            .update({ archived_at: archive ? new Date().toISOString() : null })
+            .in('id', jobIds.slice(i, i + 50));
+        }
+        void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
+        await load();
+      }}
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}

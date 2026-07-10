@@ -187,6 +187,7 @@ export type DashboardDict = {
   invoices: {
     title: string;
     countTotal: string;
+    countFound: string;
     newInvoice: string;
     filters: {
       all: string;
@@ -210,6 +211,7 @@ export type DashboardDict = {
       none: string;
       company: string;
       state: string;
+      status: string;
     };
     searchPlaceholder: string;
     summarySingle: string;
@@ -544,6 +546,10 @@ export type DashboardDict = {
     clearFilters: string;
     selectButton: string;
     bulkDelete: string;
+    bulkArchive: string;
+    bulkUnarchive: string;
+    confirmArchiveBulk: string;
+    archivedBadge: string;
     confirmDeleteBulk: string;
     batchInvoice: {
       selectButton: string;
@@ -600,6 +606,7 @@ export type DashboardDict = {
       completed: string;
       invoiced: string;
       cancelled: string;
+      archived: string;
     };
     statuses: {
       proposal: string;
@@ -716,6 +723,8 @@ export type DashboardDict = {
       deleteJobTitle: string;
       deleteJobConfirm: string;
       cancelJobBtn: string;
+      archiveBtn: string;
+      unarchiveBtn: string;
       cancelJobConfirm: string;
       deleteInvoiceWarning: string;
       deleting: string;
@@ -2426,6 +2435,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     invoices: {
       title: 'Facturas',
       countTotal: '{{count}} en total',
+      countFound: '{{count}} encontradas',
       newInvoice: 'Nueva factura',
       filters: {
         all: 'Todas',
@@ -2449,6 +2459,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         none: 'Ninguno',
         company: 'Empresa',
         state: 'Estado',
+        status: 'Estado de pago',
       },
       searchPlaceholder: 'Buscar factura o cliente...',
       summarySingle: '{{count}} factura',
@@ -2781,6 +2792,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       clearFilters: 'Limpiar filtros',
       selectButton: 'Seleccionar',
       bulkDelete: 'Eliminar',
+      bulkArchive: 'Archivar',
+      bulkUnarchive: 'Desarchivar',
+      confirmArchiveBulk: '¿Archivar {{count}} trabajo(s)? Se ocultan de las listas pero siguen contando en reportes y horas.',
+      archivedBadge: 'Archivado',
       confirmDeleteBulk: '¿Eliminar {{count}} trabajo(s) permanentemente? Se borrarán también sus fotos, líneas y asignaciones.',
       batchInvoice: {
         selectButton: 'Facturar',
@@ -2835,6 +2850,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         completed: 'Completados',
         invoiced: 'Facturados',
         cancelled: 'Cancelados',
+        archived: 'Archivados',
       },
       statuses: {
         proposal: 'Cotización',
@@ -2944,6 +2960,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteJobTitle: 'Eliminar trabajo',
         deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
         cancelJobBtn: 'Cancelar trabajo',
+        archiveBtn: 'Archivar trabajo',
+        unarchiveBtn: 'Desarchivar trabajo',
         cancelJobConfirm: '¿Cancelar este trabajo?',
         deleteInvoiceWarning: 'Este trabajo tiene una factura vinculada — permanecerá en Facturas.',
         deleting: 'Eliminando...',
@@ -4652,6 +4670,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     invoices: {
       title: 'Invoices',
       countTotal: '{{count}} total',
+      countFound: '{{count}} found',
       newInvoice: 'New invoice',
       filters: {
         all: 'All',
@@ -4675,6 +4694,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         none: 'None',
         company: 'Company',
         state: 'State',
+        status: 'Status',
       },
       searchPlaceholder: 'Search invoice or client...',
       summarySingle: '{{count}} invoice',
@@ -5007,6 +5027,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       clearFilters: 'Clear filters',
       selectButton: 'Select',
       bulkDelete: 'Delete',
+      bulkArchive: 'Archive',
+      bulkUnarchive: 'Unarchive',
+      confirmArchiveBulk: 'Archive {{count}} job(s)? They are hidden from lists but still count in reports and hours.',
+      archivedBadge: 'Archived',
       confirmDeleteBulk: 'Delete {{count}} job(s) permanently? Their photos, line items, and assignments will be removed too.',
       batchInvoice: {
         selectButton: 'Invoice',
@@ -5061,6 +5085,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         completed: 'Completed',
         invoiced: 'Invoiced',
         cancelled: 'Cancelled',
+        archived: 'Archived',
       },
       statuses: {
         proposal: 'Estimate',
@@ -5170,6 +5195,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         deleteJobTitle: 'Delete job',
         deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
         cancelJobBtn: 'Cancel job',
+        archiveBtn: 'Archive job',
+        unarchiveBtn: 'Unarchive job',
         cancelJobConfirm: 'Cancel this job?',
         deleteInvoiceWarning: 'This job has a linked invoice — it will stay in Facturas.',
         deleting: 'Deleting...',

@@ -76,9 +76,17 @@ export default function ImportModal({
   const useTemplates = importModeUsesTemplates(mode);
   // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).
   const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false };
-  const fields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean }[] = [
+  const fields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean; hintEs?: string; hintEn?: string }[] = [
     ...importFieldsFor(mode, fieldOpts).map(f => ({ ...f, label: en ? f.en : f.es })),
-    ...(useTemplates ? templates.map(t => ({ key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true })) : []),
+    ...(useTemplates ? templates.map(t => {
+      // Constrained custom fields surface their accepted values in the UI.
+      const hint = t.field_type === 'select' && t.field_options?.length
+        ? `${tr('Valores', 'Values')}: ${t.field_options.join(', ')}`
+        : t.field_type === 'boolean'
+          ? tr('Valores: sí/no (true/false)', 'Values: yes/no (true/false)')
+          : undefined;
+      return { key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true, hintEs: hint, hintEn: hint };
+    }) : []),
   ];
 
   const noun = mode === 'jobs' ? tr('trabajos', 'jobs') : mode === 'employees' ? tr('empleados', 'employees') : tr('facturas', 'invoices');
@@ -91,13 +99,16 @@ export default function ImportModal({
 
   const handleFile = (file: File) => {
     Papa.parse<Record<string, string>>(file, {
-      header: true, skipEmptyLines: true, encoding: 'UTF-8',
+      header: true, skipEmptyLines: 'greedy', encoding: 'UTF-8',
       transform: (v: string) => sanitize(v),
       transformHeader: (h: string) => sanitize(h),
       complete: (res) => {
         const hdrs = res.meta.fields ?? [];
         setHeaders(hdrs);
-        setRows(res.data);
+        // 'greedy' skips whitespace-only lines, and the filter drops rows
+        // whose every cell is blank — Excel exports often carry ",,,,," rows
+        // down to the sheet limit (1,048,575 detected rows).
+        setRows(res.data.filter(r => Object.values(r).some(v => v && String(v).trim() !== '')));
         setColMap(autoMapHeaders(fields, hdrs));
         setStep('map');
       },
@@ -230,6 +241,23 @@ export default function ImportModal({
                   <Download size={14} /> {tr('Descargar plantilla', 'Download template')}
                 </button>
               </div>
+
+              {/* Column guide — every column with its accepted values /
+                 behavior, readable BEFORE filling in the template. */}
+              <details className="bg-gray-50 rounded-xl px-4 py-3">
+                <summary className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                  {tr('Guía de columnas (valores aceptados)', 'Column guide (accepted values)')}
+                </summary>
+                <div className="mt-2 flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  <p className="text-[11px] text-gray-400">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</p>
+                  {fields.map(f => (
+                    <p key={f.key} className="text-[11px] leading-snug">
+                      <span className="font-semibold text-gray-700">{f.label}{f.required ? ' *' : ''}</span>
+                      {(en ? f.hintEn : f.hintEs) ? <span className="text-gray-500"> — {en ? f.hintEn : f.hintEs}</span> : null}
+                    </p>
+                  ))}
+                </div>
+              </details>
             </>
           )}
 
@@ -237,6 +265,8 @@ export default function ImportModal({
             <>
               <p className="text-xs text-gray-500">
                 <span className="font-medium text-gray-900">{rows.length} {tr('renglones detectados', 'rows detected')}</span>. {tr('Empareja cada campo con la columna de tu archivo.', 'Match each field to a column in your file.')}
+                {' '}
+                <span className="text-gray-400">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</span>
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                 {fields.map(f => {
@@ -248,6 +278,9 @@ export default function ImportModal({
                         {f.required && <span className="text-red-400">*</span>}
                         {f.isCustom && <span className="text-blue-400 text-[10px]">{tr('personalizado', 'custom')}</span>}
                       </label>
+                      {(en ? f.hintEn : f.hintEs) ? (
+                        <p className="text-[10px] leading-snug text-gray-400 -mt-0.5">{en ? f.hintEn : f.hintEs}</p>
+                      ) : null}
                       <select
                         value={colMap[f.key] ?? ''}
                         onChange={e => setColMap(m => ({ ...m, [f.key]: e.target.value }))}

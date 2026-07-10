@@ -87,9 +87,14 @@ export function computeTotals(
   taxRate: number,
   discount: number,
 ): { subtotal: number; tax: number; total: number } {
-  const subtotal = lineItems.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0);
-  const tax = subtotal * ((taxRate ?? 0) / 100);
-  const total = subtotal + tax - (discount ?? 0);
+  // Stored amounts keep FULL DECIMAL precision (mirror of the source data);
+  // rounding to cents happens ONCE, at display time. dec() strips float
+  // binary noise (….125 computes as .124999… in floats) without altering
+  // the decimal value — source data has ≤4 decimals, 6 is lossless.
+  const dec = (n: number) => Number(n.toFixed(6));
+  const subtotal = dec(lineItems.reduce((s, i) => s + dec((Number(i.qty) || 0) * (Number(i.rate) || 0)), 0));
+  const tax = dec(subtotal * ((taxRate ?? 0) / 100));
+  const total = dec(subtotal + tax - (discount ?? 0));
   return { subtotal, tax, total };
 }
 

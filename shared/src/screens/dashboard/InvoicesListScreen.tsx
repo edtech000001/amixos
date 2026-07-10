@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check } from 'lucide-react-native';
+import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
@@ -33,7 +33,7 @@ export interface InvoicesListScreenProps {
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
 const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
-type GroupKey = 'none' | 'company' | 'state';
+type GroupKey = 'none' | 'status' | 'company' | 'state';
 
 const STATUS_PILL_BG: Record<string, string> = {
   draft: 'bg-gray-100',
@@ -90,6 +90,7 @@ export function InvoicesListScreen({
   };
   const groupOptions: { key: GroupKey; label: string; Icon: typeof List }[] = [
     { key: 'none', label: tg.none, Icon: List },
+    { key: 'status', label: tg.status, Icon: ListChecks },
     { key: 'company', label: tg.company, Icon: Building2 },
     { key: 'state', label: tg.state, Icon: MapPin },
   ];
@@ -119,13 +120,31 @@ export function InvoicesListScreen({
       if (!inDateRange(inv.issueDate)) return false;
       const cn = (inv.clientNames ?? '').toLowerCase();
       return `${inv.invoiceNumber} ${cn}`.toLowerCase().includes(q);
-    });
+    })
+      // Newest first, by issue date (fallback: keep the fetch order).
+      .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, statuses, search, dateFrom, dateTo]);
 
   // Sections for the chosen grouping. 'none' = one untitled section.
   const sections = useMemo(() => {
     if (groupBy === 'none') return [{ title: '', data: filtered }];
+    if (groupBy === 'status') {
+      // Actionable first: overdue → sent (awaiting payment) → draft → paid.
+      const ORDER = ['overdue', 'sent', 'draft', 'paid'];
+      const map = new Map<string, InvoiceListItem[]>();
+      for (const inv of filtered) {
+        const arr = map.get(inv.status);
+        if (arr) arr.push(inv); else map.set(inv.status, [inv]);
+      }
+      return Array.from(map.entries())
+        .sort((a, b) => {
+          const ia = ORDER.indexOf(a[0]); const ib = ORDER.indexOf(b[0]);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+        })
+        .map(([key, data]) => ({ title: (tStatus as Record<string, string>)[key] ?? key, data }));
+    }
+
     const noVal = '—';
     const map = new Map<string, InvoiceListItem[]>();
     for (const inv of filtered) {
@@ -142,7 +161,9 @@ export function InvoicesListScreen({
       }));
   }, [filtered, groupBy, locale]);
 
-  const total = filtered.reduce((s, i) => s + i.totalAmount, 0);
+  // Raw sum, rounded ONCE to the cent (decimal-aware: float .665 stores as
+  // .66499…, the toFixed pass restores the intended half-up → .67).
+  const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
 
   return (
     <View className="flex-1 bg-surface">
@@ -153,7 +174,9 @@ export function InvoicesListScreen({
         <View className="flex-1">
           <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
           <Text className="text-sm text-gray-500 mt-0.5">
-            {t.countTotal.replace('{{count}}', String(invoices.length))}
+            {search.trim() || statuses.length || dateFrom || dateTo
+              ? t.countFound.replace('{{count}}', String(filtered.length))
+              : t.countTotal.replace('{{count}}', String(invoices.length))}
           </Text>
         </View>
         <View className="flex-row items-center gap-2 ml-2">

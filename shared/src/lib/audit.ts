@@ -12,6 +12,8 @@ export type AuditAction =
   | 'job.created'
   | 'job.updated'
   | 'job.deleted'
+  | 'job.archived'
+  | 'job.unarchived'
   | 'job.status_changed'
   | 'job.delegated'
   | 'job.completion_logged'
@@ -90,6 +92,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'job.created':         { es: 'Trabajo creado',           en: 'Job created' },
   'job.updated':         { es: 'Trabajo actualizado',      en: 'Job updated' },
   'job.deleted':         { es: 'Trabajo eliminado',        en: 'Job deleted' },
+  'job.archived':        { es: 'Trabajo archivado',        en: 'Job archived' },
+  'job.unarchived':      { es: 'Trabajo desarchivado',     en: 'Job unarchived' },
   'job.status_changed':  { es: 'Estado de trabajo cambiado', en: 'Job status changed' },
   'job.delegated':       { es: 'Trabajo delegado',         en: 'Job delegated' },
   'job.completion_logged': { es: 'Trabajo finalizado registrado', en: 'Job completion logged' },

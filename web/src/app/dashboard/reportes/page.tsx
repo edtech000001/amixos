@@ -43,7 +43,10 @@ const PIE_COLORS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  // Decimal-aware half-up to the cent (float .665 stores as .66499… — the
+  // toFixed pass restores the intended .67 before formatting).
+  const cents = Math.round(Number((n * 100).toFixed(3))) / 100;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents);
 }
 
 function getRangeStart(range: Range): Date | null {
@@ -214,6 +217,7 @@ export default function ReportesPage() {
 
   // ── Revenue KPIs ─────────────────────────────────────────────────────────
   const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
+  // Raw sums; rounding to cents happens once at display (see fmt).
   const totalRevenue = paidInvoices.reduce((s, i) => s + i.total_amount, 0);
   const pendingRevenue = filteredInvoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
   const overdueRevenue = filteredInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i.total_amount, 0);

@@ -5,7 +5,7 @@
 // page wrapper is untouched and the bundler resolves this .web.tsx variant.
 
 import { useMemo, useState } from 'react';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -35,7 +35,7 @@ export interface InvoicesListScreenProps {
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
 const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
-type GroupKey = 'none' | 'company' | 'state';
+type GroupKey = 'none' | 'status' | 'company' | 'state';
 
 const STATUS_PILL: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-500',
@@ -82,6 +82,7 @@ export function InvoicesListScreen({
   };
   const groupOptions: { key: GroupKey; label: string; Icon: typeof List }[] = [
     { key: 'none', label: tg.none, Icon: List },
+    { key: 'status', label: tg.status, Icon: ListChecks },
     { key: 'company', label: tg.company, Icon: Building2 },
     { key: 'state', label: tg.state, Icon: MapPin },
   ];
@@ -110,12 +111,30 @@ export function InvoicesListScreen({
       if (!inDateRange(inv.issueDate)) return false;
       const cn = (inv.clientNames ?? '').toLowerCase();
       return `${inv.invoiceNumber} ${cn}`.toLowerCase().includes(q);
-    });
+    })
+      // Newest first, by issue date (fallback: keep the fetch order).
+      .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, statuses, search, dateFrom, dateTo]);
 
   const sections = useMemo(() => {
     if (groupBy === 'none') return [{ title: '', data: filtered }];
+    if (groupBy === 'status') {
+      // Actionable first: overdue → sent (awaiting payment) → draft → paid.
+      const ORDER = ['overdue', 'sent', 'draft', 'paid'];
+      const map = new Map<string, InvoiceListItem[]>();
+      for (const inv of filtered) {
+        const arr = map.get(inv.status);
+        if (arr) arr.push(inv); else map.set(inv.status, [inv]);
+      }
+      return Array.from(map.entries())
+        .sort((a, b) => {
+          const ia = ORDER.indexOf(a[0]); const ib = ORDER.indexOf(b[0]);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+        })
+        .map(([key, data]) => ({ title: (tStatus as Record<string, string>)[key] ?? key, data }));
+    }
+
     const noVal = '—';
     const map = new Map<string, InvoiceListItem[]>();
     for (const inv of filtered) {
@@ -132,7 +151,9 @@ export function InvoicesListScreen({
       }));
   }, [filtered, groupBy, locale]);
 
-  const total = filtered.reduce((s, i) => s + i.totalAmount, 0);
+  // Raw sum, rounded ONCE to the cent (decimal-aware: float .665 stores as
+  // .66499…, the toFixed pass restores the intended half-up → .67).
+  const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
 
   return (
     <div className="p-6 lg:p-8">
@@ -140,7 +161,9 @@ export function InvoicesListScreen({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t.countTotal.replace('{{count}}', String(invoices.length))}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo
+              ? t.countFound.replace('{{count}}', String(filtered.length))
+              : t.countTotal.replace('{{count}}', String(invoices.length))}</p>
         </div>
         <button onClick={onNewInvoicePress} className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
           <Plus size={16} /> {t.newInvoice}

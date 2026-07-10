@@ -296,12 +296,20 @@ export function ImportClientsModal({
     updated_at: t.importModal.colEdited,
   };
 
+  // Behavior notes for non-obvious columns, shown under the mapping select.
+  const FIELD_HINTS: Record<string, string> = {
+    first_name: 'Cada fila necesita nombre, apellido o empresa.',
+    created_at: 'Vacío = fecha/hora actual.',
+    updated_at: 'Vacío = fecha/hora actual.',
+  };
+
   const allImportFields = [
-    ...CLIENT_FIELD_KEYS.map(k => ({ key: k, label: FIELD_LABELS[k], isCustom: false })),
+    ...CLIENT_FIELD_KEYS.map(k => ({ key: k, label: FIELD_LABELS[k], isCustom: false, hint: FIELD_HINTS[k] })),
     ...templates.map(tpl => ({
       key: `custom:${tpl.field_key}`,
       label: tpl.field_label,
       isCustom: true,
+      hint: undefined as string | undefined,
     })),
   ];
 
@@ -387,7 +395,7 @@ export function ImportClientsModal({
 
       const parsed = Papa.parse<Record<string, string>>(csv, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: 'greedy',
         transform: (v: string) => sanitize(v),
         transformHeader: (h: string) => sanitize(h),
       });
@@ -399,7 +407,7 @@ export function ImportClientsModal({
         return;
       }
 
-      setRows(parsed.data);
+      setRows(parsed.data.filter((r: Record<string, string>) => Object.values(r).some(v => v && String(v).trim() !== '')));
       setCsvHeaders(headers);
       setColMap(autoMapColumns(headers));
       setParsing(false);
@@ -582,8 +590,8 @@ export function ImportClientsModal({
                 ...csvHeaders.map(h => ({ value: h, label: h })),
               ];
               return (
+                <View key={f.key}>
                 <Select
-                  key={f.key}
                   label={f.label}
                   value={colMap[f.key] ?? SKIP}
                   highlight={!colMap[f.key]}
@@ -597,6 +605,8 @@ export function ImportClientsModal({
                   }}
                   options={options}
                 />
+                {f.hint ? <Text className="text-[10px] leading-4 text-gray-400 mt-1">{f.hint}</Text> : null}
+                </View>
               );
             })}
           </View>

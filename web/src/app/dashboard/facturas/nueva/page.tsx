@@ -190,9 +190,10 @@ function NuevaFacturaContent() {
   };
   const removeLine = (i: number) => setLines(prev => prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i));
 
-  const subtotal = lines.reduce((s, l) => s + (l.qty * l.rate), 0);
-  const taxAmount = subtotal * (taxRate / 100);
-  const total = subtotal + taxAmount;
+  // toFixed(6) strips float noise, preserving exact decimals (see computeTotals).
+  const subtotal = Number(lines.reduce((s, l) => s + Number((l.qty * l.rate).toFixed(6)), 0).toFixed(6));
+  const taxAmount = Number((subtotal * (taxRate / 100)).toFixed(6));
+  const total = Number((subtotal + taxAmount).toFixed(6));
 
   // Per-field show/hide (always-shown fields can never be hidden).
   const invHidden = parseHiddenFields(business?.invoice_field_hidden);

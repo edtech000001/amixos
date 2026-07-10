@@ -56,6 +56,8 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState('');
   const [error, setError] = useState('');
+  // Upload-step column guide (accepted values per column), collapsed by default.
+  const [guideOpen, setGuideOpen] = useState(false);
   const [result, setResult] = useState<ImportResult>({ success: 0, skipped: 0, failedRows: [], notes: [] });
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   // Fix-and-retry for a failed row: index into result.failedRows being edited,
@@ -98,9 +100,17 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
   const useTemplates = importModeUsesTemplates(mode);
   // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).
   const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false };
-  const allImportFields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean }[] = [
+  const allImportFields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean; hintEs?: string; hintEn?: string }[] = [
     ...importFieldsFor(mode, fieldOpts).map(f => ({ ...f, label: en ? f.en : f.es })),
-    ...(useTemplates ? templates.map(t => ({ key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true })) : []),
+    ...(useTemplates ? templates.map(t => {
+      // Constrained custom fields surface their accepted values in the UI.
+      const hint = t.field_type === 'select' && t.field_options?.length
+        ? `${tr('Valores', 'Values')}: ${t.field_options.join(', ')}`
+        : t.field_type === 'boolean'
+          ? tr('Valores: sí/no (true/false)', 'Values: yes/no (true/false)')
+          : undefined;
+      return { key: `custom:${t.field_key}`, es: t.field_label, en: t.field_label, label: t.field_label, isCustom: true, hintEs: hint, hintEn: hint };
+    }) : []),
   ];
 
   const noun = mode === 'jobs' ? tr('trabajos', 'jobs') : mode === 'employees' ? tr('empleados', 'employees') : tr('facturas', 'invoices');
@@ -157,7 +167,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
       const parsed = Papa.parse<Record<string, string>>(csv, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: 'greedy',
         transform: (v: string) => sanitize(v),
         transformHeader: (h: string) => sanitize(h),
       });
@@ -167,7 +177,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
         setParsing(false);
         return;
       }
-      setRows(parsed.data);
+      setRows(parsed.data.filter((r: Record<string, string>) => Object.values(r).some(v => v && String(v).trim() !== '')));
       setCsvHeaders(headers);
       setColMap(autoMapHeaders(allImportFields, headers));
       setParsing(false);
@@ -312,6 +322,29 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             </Text>
           </Pressable>
 
+          {/* Column guide — accepted values / behavior per column, readable
+             BEFORE filling in the template. */}
+          <View className="bg-gray-50 rounded-xl px-4 py-3">
+            <Pressable onPress={() => setGuideOpen(o => !o)} className="active:opacity-70">
+              <Text className="text-xs font-semibold text-gray-700">
+                {guideOpen ? '▾ ' : '▸ '}{tr('Guía de columnas (valores aceptados)', 'Column guide (accepted values)')}
+              </Text>
+            </Pressable>
+            {guideOpen ? (
+              <View className="mt-2 gap-1.5">
+                <Text className="text-[11px] text-gray-400">
+                  {tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}
+                </Text>
+                {allImportFields.map(f => (
+                  <Text key={f.key} className="text-[11px] leading-4">
+                    <Text className="font-semibold text-gray-700">{f.label}{f.required ? ' *' : ''}</Text>
+                    {(en ? f.hintEn : f.hintEs) ? <Text className="text-gray-500"> — {en ? f.hintEn : f.hintEs}</Text> : null}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
           {error ? (
             <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex-row items-start gap-2">
               <AlertCircle size={16} color="#EF4444" />
@@ -335,12 +368,14 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
           <Text className="text-xs text-gray-500 leading-5">
             {tr('Asigna cada campo a una columna del CSV. Los campos no mapeados se omiten.', 'Match each field to a CSV column. Unmapped fields are skipped.')}
+            {' '}
+            {tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}
           </Text>
 
           <View className="gap-3">
             {allImportFields.map(f => (
+              <View key={f.key}>
               <Select
-                key={f.key}
                 label={f.required ? `${f.label} *` : f.label}
                 value={colMap[f.key] ?? SKIP}
                 highlight={!colMap[f.key]}
@@ -357,6 +392,10 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
                   ...csvHeaders.map(h => ({ value: h, label: h })),
                 ]}
               />
+              {(en ? f.hintEn : f.hintEs) ? (
+                <Text className="text-[10px] leading-4 text-gray-400 mt-1">{en ? f.hintEn : f.hintEs}</Text>
+              ) : null}
+              </View>
             ))}
           </View>
 

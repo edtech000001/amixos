@@ -169,6 +169,7 @@ export function computeReports(
   const filteredSheets = data.timesheets.filter(ts => inRange(ts.work_date));
 
   const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
+  // Raw sums; rounding to cents happens once at display (see the fmt helpers).
   const totalRevenue = paidInvoices.reduce((s, i) => s + i.total_amount, 0);
   const pendingRevenue = filteredInvoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
   const overdueRevenue = filteredInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i.total_amount, 0);

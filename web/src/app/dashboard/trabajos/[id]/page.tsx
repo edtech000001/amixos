@@ -9,8 +9,7 @@ import {
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
-  MessageSquare, Navigation,
-} from 'lucide-react';
+  MessageSquare, Navigation, Archive } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +35,7 @@ interface Job {
   time_start: string | null; time_end: string | null;
   completed_date: string | null; total_amount: number; internal_notes: string | null;
   worker_notes: string | null;
+  archived_at: string | null;
   total_hours: number | null; driver_hours: number | null; driver_names: string[] | null;
   estimate_number: string | null; notes: string | null;
   issue_date: string | null; expiry_date: string | null;
@@ -746,6 +746,21 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <Button variant="secondary" size="sm" loading={updatingStatus}
                 onClick={() => { if (window.confirm(td.cancelJobConfirm)) void updateStatus('cancelled'); }}>
                 <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
+              </Button>
+            )}
+
+            {/* Archive — the exit for completed work that will never be
+               invoiced (internal hours etc). Reversible. */}
+            {job.status === 'completed' && (
+              <Button variant="secondary" size="sm" onClick={async () => {
+                const archive = !job.archived_at;
+                if (archive && !window.confirm(full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'))) return;
+                const archived_at = archive ? new Date().toISOString() : null;
+                await supabase.from('jobs').update({ archived_at }).eq('id', id);
+                if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', id, { title: job.title });
+                setJob(prev => prev ? { ...prev, archived_at } : prev);
+              }}>
+                <Archive size={14} className="mr-1.5"/> {job.archived_at ? td.unarchiveBtn : td.archiveBtn}
               </Button>
             )}
 

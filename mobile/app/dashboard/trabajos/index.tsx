@@ -41,6 +41,7 @@ interface RawJob {
   delegated_to_business_id: string | null;
   delegated_from_business_id: string | null;
   published_to_crew: boolean;
+  archived_at?: string | null;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   job_assignments: {
@@ -70,7 +71,7 @@ export default function TrabajosTab() {
     job_address, job_city, job_state, scheduled_date, time_start, end_date,
     estimated_hours, time_end, total_amount, estimate_number, issue_date,
     expiry_date, delegated_to_business_id, delegated_from_business_id,
-    published_to_crew, created_at,
+    published_to_crew, created_at, archived_at,
     clients(first_name, last_name, company),
     job_assignments(worker_name, is_lead, employees(first_name, last_name))
   `;
@@ -164,6 +165,7 @@ export default function TrabajosTab() {
       ? businesses.find(b => b.id === j.delegated_from_business_id)?.name ?? null
       : null,
     publishedToCrew: j.published_to_crew,
+    archivedAt: j.archived_at ?? null,
   })), [rawJobs, businesses]);
 
   const alertThresholds = useMemo(
@@ -231,6 +233,27 @@ export default function TrabajosTab() {
                   ]);
                 })
             : undefined
+        }
+        onBulkArchive={(jobIds, archive) =>
+          new Promise<void>(resolve => {
+            if (!business) return resolve();
+            const doIt = async () => {
+              for (let i = 0; i < jobIds.length; i += 50) {
+                await supabase.from('jobs')
+                  .update({ archived_at: archive ? new Date().toISOString() : null })
+                  .in('id', jobIds.slice(i, i + 50));
+              }
+              void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
+              await load();
+              resolve();
+            };
+            if (!archive) { void doIt(); return; }
+            const msg = full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', String(jobIds.length));
+            Alert.alert('', msg, [
+              { text: full.common.buttons.cancel, style: 'cancel', onPress: () => resolve() },
+              { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
+            ]);
+          })
         }
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}

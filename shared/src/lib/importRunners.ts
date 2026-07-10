@@ -32,6 +32,9 @@ export interface ImportFieldDef {
   en: string;
   required?: boolean;
   isCustom?: boolean;
+  /** Accepted-values / behavior note shown under the field in the mapping UI. */
+  hintEs?: string;
+  hintEn?: string;
 }
 
 export interface ImportTemplateField {
@@ -59,8 +62,12 @@ export interface ImportResult {
 export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'external_ref',  es: 'Project ID', en: 'Project ID' },
   { key: 'title',         es: 'Nombre del proyecto', en: 'Project name', required: true },
-  { key: 'client',        es: 'Cliente (nombre o empresa)', en: 'Client (name or company)' },
-  { key: 'status',        es: 'Estado del trabajo', en: 'Job status' },
+  { key: 'client',        es: 'Cliente (nombre o empresa)', en: 'Client (name or company)',
+    hintEs: 'Se busca entre tus clientes por nombre o empresa; si no existe, se crea automáticamente.',
+    hintEn: 'Matched to your clients by name or company; auto-created if no match.' },
+  { key: 'status',        es: 'Estado del trabajo', en: 'Job status',
+    hintEs: 'Valores: propuesta, enviada, aceptada, agendado, en progreso, completado, facturado. Vacío = completado.',
+    hintEn: 'Values: proposal, sent, accepted, scheduled, in progress, completed, invoiced. Blank = completed.' },
   { key: 'description',   es: 'Descripción', en: 'Description' },
   { key: 'lead_name',     es: 'Líder', en: 'Lead' },
   { key: 'scheduled_date',es: 'Fecha', en: 'Date' },
@@ -71,9 +78,13 @@ export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'job_city',      es: 'Ciudad', en: 'City' },
   { key: 'job_state',     es: 'Estado (dirección)', en: 'State' },
   { key: 'job_map_link',  es: 'Link de mapa', en: 'Map link' },
-  { key: 'coordinates',   es: 'Coordenadas (lat, lng)', en: 'Coordinates (lat, lng)' },
+  { key: 'coordinates',   es: 'Coordenadas (lat, lng)', en: 'Coordinates (lat, lng)',
+    hintEs: 'Formato: 41.2565, -95.9345. Vacío = se intenta extraer del link de mapa.',
+    hintEn: 'Format: 41.2565, -95.9345. Blank = extracted from the map link if possible.' },
   { key: 'total_hours',   es: 'Total horas', en: 'Total hours' },
-  { key: 'crew',          es: 'Trabajadores', en: 'Workers' },
+  { key: 'crew',          es: 'Trabajadores', en: 'Workers',
+    hintEs: 'Nombres separados por comas — se vinculan al equipo por nombre.',
+    hintEn: 'Comma-separated names — matched to your team by name.' },
   { key: 'driver',        es: 'Manejador(es)', en: 'Driver(s)' },
   { key: 'driver_hours',  es: 'Horas manejadas', en: 'Driver hours' },
   { key: 'worker_notes',  es: 'Notas de cuadrilla (visibles a trabajadores)', en: 'Crew notes (visible to workers)' },
@@ -82,7 +93,9 @@ export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   // stored on the job as pending names; the "Subir fotos" import step then
   // bulk-matches dropped files against them (any naming scheme works since
   // the mapping lives in this column, not the file name).
-  { key: 'photos',        es: 'Fotos (nombres de archivo)', en: 'Photos (file names)' },
+  { key: 'photos',        es: 'Fotos (nombres de archivo)', en: 'Photos (file names)',
+    hintEs: 'Nombres separados por ; — las fotos se suben después en el paso "Subir fotos".',
+    hintEn: 'Names separated by ; — the photos upload later in the "Upload photos" step.' },
   // Pricing block — hidden when the business has the Materiales/Precios
   // section off (business.job_item_types_enabled === false), mirroring the
   // job form's showMaterials gate. Line items: repeat the same Project ID on
@@ -92,14 +105,18 @@ export const JOB_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'item_description', es: 'Línea (descripción)', en: 'Line item (description)' },
   { key: 'item_qty',      es: 'Línea (cantidad)', en: 'Line item (qty)' },
   { key: 'item_rate',     es: 'Línea (precio unitario)', en: 'Line item (unit price)' },
-  { key: 'item_type',     es: 'Línea (tipo: labor/material/equipo/otro)', en: 'Line item (type: labor/material/equipment/other)' },
+  { key: 'item_type',     es: 'Línea (tipo: labor/material/equipo/otro)', en: 'Line item (type: labor/material/equipment/other)',
+    hintEs: 'Valores: mano de obra, material, equipo, otro. Vacío = otro.',
+    hintEn: 'Values: labor, material, equipment, other. Blank = other.' },
   // Record-keeping columns from the source system — optional. created_by_email
   // matches a team member by email (their linked account becomes the job's
   // creator); blank/unmatched → the importing user. Timestamps: blank keeps
   // the DB defaults (now()); future in-app edits overwrite updated_at.
-  { key: 'created_by_email', es: 'Agregado por (email)', en: 'Added by (email)' },
-  { key: 'created_at',    es: 'Agregado (fecha/hora)', en: 'Added (date/time)' },
-  { key: 'updated_at',    es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
+  { key: 'created_by_email', es: 'Agregado por (email)', en: 'Added by (email)',
+    hintEs: 'Email de un miembro con cuenta vinculada; vacío o sin coincidencia = quien importa.',
+    hintEn: 'Email of a member with a linked account; blank or no match = the importer.' },
+  { key: 'created_at',    es: 'Agregado (fecha/hora)', en: 'Added (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
+  { key: 'updated_at',    es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
 ];
 
 /** Keys hidden when the business has the pricing/items section disabled. */
@@ -107,28 +124,38 @@ const JOB_PRICING_KEYS = new Set(['total_amount', 'item_description', 'item_qty'
 
 export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'invoice_number',   es: 'Número de factura', en: 'Invoice number', required: true },
-  { key: 'project_id',       es: 'Project ID (enlace al trabajo)', en: 'Project ID (links to job)' },
+  { key: 'project_id',       es: 'Project ID (enlace al trabajo)', en: 'Project ID (links to job)',
+    hintEs: 'Debe coincidir con el Project ID del CSV de trabajos para enlazar la línea a su trabajo.',
+    hintEn: 'Must match the jobs CSV Project ID to link the line to its job.' },
   { key: 'line_description', es: 'Descripción', en: 'Description' },
-  { key: 'line_qty',         es: 'Total pies o libras (cantidad)', en: 'Total feet or pounds (qty)' },
+  { key: 'line_qty',         es: 'Cantidad', en: 'Quantity' },
   { key: 'line_rate',        es: 'Precio unitario', en: 'Unit price' },
   { key: 'customer_name',    es: 'Cliente (nombre)', en: 'Customer (name)' },
   { key: 'customer_company', es: 'Cliente (empresa)', en: 'Customer (company)' },
-  { key: 'customer_address', es: 'Dirección', en: 'Address' },
-  { key: 'customer_city',    es: 'Ciudad', en: 'City' },
-  { key: 'customer_state',   es: 'Estado', en: 'State' },
-  { key: 'customer_zip',     es: 'Código postal', en: 'ZIP code' },
-  { key: 'customer_phone',   es: 'Teléfono', en: 'Phone' },
-  { key: 'customer_email',   es: 'Email', en: 'Email' },
+  // Only used when NO existing client matches the name/company — they fill
+  // in the auto-created client record. Matching itself is by name/company.
+  { key: 'customer_address', es: 'Dirección (solo clientes nuevos)', en: 'Address (new clients only)' },
+  { key: 'customer_city',    es: 'Ciudad (solo clientes nuevos)', en: 'City (new clients only)' },
+  { key: 'customer_state',   es: 'Estado (solo clientes nuevos)', en: 'State (new clients only)' },
+  { key: 'customer_zip',     es: 'Código postal (solo clientes nuevos)', en: 'ZIP code (new clients only)' },
+  { key: 'customer_phone',   es: 'Teléfono (solo clientes nuevos)', en: 'Phone (new clients only)' },
+  { key: 'customer_email',   es: 'Email (solo clientes nuevos)', en: 'Email (new clients only)' },
   { key: 'issue_date',       es: 'Fecha de creación', en: 'Date created' },
   { key: 'due_date',         es: 'Fecha de vencimiento', en: 'Due date' },
-  { key: 'status',           es: 'Estado (borrador/enviada/pagada)', en: 'Status (draft/sent/paid)' },
+  { key: 'status',           es: 'Estado (borrador/enviada/pagada)', en: 'Status (draft/sent/paid)',
+    hintEs: 'Valores: borrador, enviada, pagada. Vacío u otro valor = enviada (no pagada).',
+    hintEn: 'Values: draft, sent, paid. Blank or anything else = sent (unpaid).' },
   { key: 'tax_rate',         es: 'Impuesto (%)', en: 'Tax rate (%)' },
   // Payment record — a payment date implies the invoice is paid even when the
   // status cell is blank. Method is free text (cash, check #, transfer…).
-  { key: 'payment_method',   es: 'Método de pago', en: 'Payment method' },
-  { key: 'paid_date',        es: 'Fecha de pago (recibido)', en: 'Payment date (received)' },
-  { key: 'created_at',       es: 'Agregado (fecha/hora)', en: 'Added (date/time)' },
-  { key: 'updated_at',       es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
+  { key: 'payment_method',   es: 'Método de pago', en: 'Payment method',
+    hintEs: 'Texto libre: efectivo, cheque #1024, Zelle… No marca la factura como pagada por sí solo.',
+    hintEn: 'Free text: cash, check #1024, Zelle… Does not mark the invoice paid by itself.' },
+  { key: 'paid_date',        es: 'Fecha de pago (recibido)', en: 'Payment date (received)',
+    hintEs: 'Con fecha aquí la factura se marca pagada aunque Estado esté vacío.',
+    hintEn: 'A date here marks the invoice paid even if Status is blank.' },
+  { key: 'created_at',       es: 'Agregado (fecha/hora)', en: 'Added (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
+  { key: 'updated_at',       es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
 ];
 
 export const EMPLOYEE_IMPORT_FIELDS: ImportFieldDef[] = [
@@ -137,8 +164,12 @@ export const EMPLOYEE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'check_name',  es: 'Nombre para el cheque', en: 'Check name' },
   { key: 'phone',       es: 'Teléfono', en: 'Phone' },
   { key: 'email',       es: 'Email', en: 'Email' },
-  { key: 'access_role', es: 'Rol de acceso a la app (admin/manager/oficina/campo)', en: 'App access role (admin/manager/office/field)' },
-  { key: 'pay_type',    es: 'Tipo de pago (por hora/salario/diario)', en: 'Pay type (hourly/salary/daily)' },
+  { key: 'access_role', es: 'Rol de acceso a la app (admin/manager/oficina/campo)', en: 'App access role (admin/manager/office/field)',
+    hintEs: 'Valores: admin, manager, oficina, campo. Vacío = sin acceso a la app.',
+    hintEn: 'Values: admin, manager, office, field. Blank = no app access.' },
+  { key: 'pay_type',    es: 'Tipo de pago (por hora/salario/diario)', en: 'Pay type (hourly/salary/daily)',
+    hintEs: 'Valores: por hora, salario, diario. Vacío = por hora.',
+    hintEn: 'Values: hourly, salary, daily. Blank = hourly.' },
   { key: 'pay_rate',    es: 'Tarifa de pago', en: 'Pay rate' },
   { key: 'hire_date',   es: 'Fecha de contratación', en: 'Hire date' },
   { key: 'birthday',    es: 'Cumpleaños', en: 'Birthday' },
@@ -149,8 +180,8 @@ export const EMPLOYEE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'emergency_contact_name',  es: 'Contacto de emergencia (nombre)', en: 'Emergency contact (name)' },
   { key: 'emergency_contact_phone', es: 'Contacto de emergencia (teléfono)', en: 'Emergency contact (phone)' },
   // Optional source-system timestamps (employees updated_at needs migration 110).
-  { key: 'created_at',              es: 'Agregado (fecha/hora)', en: 'Added (date/time)' },
-  { key: 'updated_at',              es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)' },
+  { key: 'created_at',              es: 'Agregado (fecha/hora)', en: 'Added (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
+  { key: 'updated_at',              es: 'Última edición (fecha/hora)', en: 'Last edited (date/time)', hintEs: 'Vacío = fecha/hora actual.', hintEn: 'Blank = current date/time.' },
 ];
 
 export interface ImportFieldOptions {
@@ -300,9 +331,22 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   // into ONE job whose rows each contribute a line item (same contract as
   // the invoices importer). Otherwise: strict one-row-per-job, unchanged.
   const itemColsMapped = ['item_description', 'item_qty', 'item_rate', 'item_type'].some(k => ctx.colMap[k]);
+  // Continuation rows: a row with NO title and NO Project ID but with line
+  // content inherits the ref above it (spreadsheet style — the id is only on
+  // each job's first row). Without this these rows fail "missing name".
+  const refCol = ctx.colMap['external_ref'];
+  let lastRef = '';
+  const jobRows = ctx.rows.map(row => {
+    const ref = get(row, 'external_ref');
+    if (ref) { lastRef = ref; return row; }
+    const hasItem = get(row, 'item_description') || get(row, 'item_qty') || get(row, 'item_rate');
+    return itemColsMapped && !get(row, 'title') && hasItem && lastRef && refCol
+      ? { ...row, [refCol]: lastRef }
+      : row;
+  });
   const groups = itemColsMapped
-    ? groupBy(ctx.rows.map((row, idx) => ({ row, idx })), ({ row, idx }) => get(row, 'external_ref') || `__row_${idx}`)
-    : ctx.rows.map((row, idx) => ({ key: '', rows: [{ row, idx }] }));
+    ? groupBy(jobRows.map((row, idx) => ({ row, idx })), ({ row, idx }) => get(row, 'external_ref') || `__row_${idx}`)
+    : jobRows.map((row, idx) => ({ key: '', rows: [{ row, idx }] }));
 
   for (const grp of groups) {
     // Job-level fields come from the group's FIRST row.
@@ -633,7 +677,20 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     return { status: 'sent', sent_at: now, paid_at: null };
   };
 
-  const groups = groupBy(ctx.rows.map((row, idx) => ({ row, idx })), ({ row }) => get(row, 'invoice_number'));
+  // Spreadsheet exports usually carry the invoice number only on the FIRST
+  // row of each invoice, leaving continuation rows blank. Forward-fill so
+  // those rows join the invoice above — but only when the row actually has
+  // line content, so stray empty rows don't inherit a number.
+  const numCol = ctx.colMap['invoice_number'];
+  let lastNum = '';
+  const filledRows = ctx.rows.map(row => {
+    const num = get(row, 'invoice_number');
+    if (num) { lastNum = num; return row; }
+    const hasLine = get(row, 'project_id') || get(row, 'line_description') || get(row, 'line_qty') || get(row, 'line_rate');
+    return hasLine && lastNum && numCol ? { ...row, [numCol]: lastNum } : row;
+  });
+
+  const groups = groupBy(filledRows.map((row, idx) => ({ row, idx })), ({ row }) => get(row, 'invoice_number'));
   let unlinkedLines = 0;
 
   for (const grp of groups) {
@@ -778,6 +835,20 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
   return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
 }
 
+/** Extra example rows (beyond exampleRowFor's first). Invoices show TWO
+ *  invoices with TWO project lines each: the invoice number goes on the
+ *  first row and continuation rows leave it blank (the importer forward-
+ *  fills), so the multi-line structure is obvious in the template. */
+function extraExampleRowsFor(mode: ImportMode, en: boolean): string[][] {
+  if (mode !== 'invoices') return [];
+  const blank = Array(16).fill('') as string[];
+  return [
+    ['', 'Proyecto-002', en ? 'Pivot teardown' : 'Desarmar pivote', '1', '850', ...blank],
+    ['257557', 'Proyecto-003', en ? 'Tower repair' : 'Reparar torre', '2', '400', en ? 'Mary Jones' : 'María García', en ? 'ABC Irrigation' : 'Riegos ABC', '', '', '', '', '', '', '6/15/2026', '6/29/2026', en ? 'sent' : 'enviada', '0', '', '', '', ''],
+    ['', 'Proyecto-004', en ? 'Hang tower' : 'Colgar torre', '1', '300', ...blank],
+  ];
+}
+
 /** Build the downloadable template (header + one example row). Quotes cells
  *  with commas/quotes/newlines; leads with a BOM so Excel reads UTF-8. */
 export function buildImportTemplateCsv(
@@ -792,10 +863,12 @@ export function buildImportTemplateCsv(
     ...importFieldsFor(mode, opts).map(f => (en ? f.en : f.es)),
     ...tpls.map(t => t.field_label),
   ];
-  const example = exampleRowFor(mode, en, tpls, opts);
+  const exampleRows = [exampleRowFor(mode, en, tpls, opts), ...extraExampleRowsFor(mode, en)];
   const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const csv = '﻿' + [cols.map(csvCell).join(','), example.map(csvCell).join(',')].join('\n');
-  const filename = mode === 'jobs' ? 'plantilla-trabajos.csv' : mode === 'employees' ? 'plantilla-equipo.csv' : 'plantilla-facturas.csv';
+  const csv = '﻿' + [cols, ...exampleRows].map(r => r.map(csvCell).join(',')).join('\n');
+  const filename = en
+    ? (mode === 'jobs' ? 'jobs-template.csv' : mode === 'employees' ? 'team-template.csv' : 'invoices-template.csv')
+    : (mode === 'jobs' ? 'plantilla-trabajos.csv' : mode === 'employees' ? 'plantilla-equipo.csv' : 'plantilla-facturas.csv');
   return { filename, csv };
 }
 
