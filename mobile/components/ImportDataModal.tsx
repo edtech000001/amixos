@@ -15,6 +15,7 @@ import {
   type ImportMode,
   type ImportResult,
   type ImportTemplateField,
+  formulaComponentTemplates,
 } from '@amixos/shared/lib/importRunners';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -74,7 +75,13 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
     if (!open) return;
     let cancelled = false;
     (async () => {
-      if (importModeUsesTemplates(mode)) {
+      if (mode === 'payroll') {
+        // Payroll's extra columns come from the PAY FORMULA: one per job
+        // custom field it reads (e.g. an overnight-stay count).
+        const { data } = await supabase
+          .from('businesses').select('payroll_config').eq('id', businessId).single();
+        if (!cancelled) setTemplates(formulaComponentTemplates(data?.payroll_config));
+      } else if (importModeUsesTemplates(mode)) {
         const table = mode === 'jobs' ? 'job_field_templates' : 'employee_field_templates';
         const { data } = await supabase
           .from(table)

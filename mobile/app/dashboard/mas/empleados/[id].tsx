@@ -83,6 +83,8 @@ interface RawEmployee {
   pay_type: string;
   pay_rate: number;
   active: boolean;
+  /** Offered in job crew/lead/driver pickers (migration 128). */
+  show_in_roster?: boolean | null;
   user_id: string | null;
   email: string | null;
   birthday: string | null;
@@ -478,6 +480,15 @@ export default function EmpleadoDetailRoute() {
       eventType: nextActive ? 'rehired' : 'terminated', createdBy: user?.id ?? null,
     });
     setEmployee((prev) => prev ? { ...prev, active: nextActive } : prev);
+  };
+
+  // Roster flag — office members (owner/admin) stay ACTIVE but stop being
+  // offered as field crew on jobs. Saves instantly, like deactivate.
+  const toggleRoster = async () => {
+    if (!employee) return;
+    const next = !(employee.show_in_roster ?? true);
+    await supabase.from('employees').update({ show_in_roster: next }).eq('id', employee.id);
+    setEmployee((prev) => prev ? { ...prev, show_in_roster: next } : prev);
   };
 
   // ─── Access section ────────────────────────────────────────────────
@@ -960,6 +971,25 @@ export default function EmpleadoDetailRoute() {
             )}
             <Text className={`text-sm font-semibold ${employee.active ? 'text-gray-600' : 'text-emerald-700'}`}>
               {employee.active ? t.deactivateBtn : t.reactivateBtn}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {/* Roster flag — keep office members out of job crew pickers. */}
+        {isView ? (
+          <Pressable
+            onPress={toggleRoster}
+            className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
+              (employee.show_in_roster ?? true) ? 'bg-gray-50 active:bg-gray-100' : 'bg-amber-50 active:bg-amber-100'
+            }`}
+          >
+            {(employee.show_in_roster ?? true) ? (
+              <UserX size={16} color="#6B7280" />
+            ) : (
+              <UserCheck size={16} color="#D97706" />
+            )}
+            <Text className={`text-sm font-semibold ${(employee.show_in_roster ?? true) ? 'text-gray-600' : 'text-amber-700'}`}>
+              {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
             </Text>
           </Pressable>
         ) : null}

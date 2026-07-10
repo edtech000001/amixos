@@ -914,6 +914,9 @@ export type DashboardDict = {
     deleteBtn: string;
     deleteConfirm: string;
     deactivateBtn: string;
+    rosterRemoveBtn: string;
+    rosterAddBtn: string;
+    rosterHint: string;
     reactivateBtn: string;
     tabs: {
       empleados: string;
@@ -2212,6 +2215,8 @@ export type DashboardDict = {
       alreadyPaidLabel: string;
       clearPaymentsLabel: string;
       clearPaymentsConfirm: string;
+      totalPending: string;
+      ofTotal: string;
       bonusLabel: string;
       otShort: string;
       driveShort: string;
@@ -3251,6 +3256,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteBtn: 'Eliminar empleado',
       deleteConfirm: '¿Eliminar a {{name}}? Esta acción no se puede deshacer y borra su historial.',
       deactivateBtn: 'Desactivar empleado',
+      rosterRemoveBtn: 'Quitar de cuadrillas',
+      rosterAddBtn: 'Incluir en cuadrillas',
+      rosterHint: 'No aparecerá al elegir líder, trabajadores o manejadores en un trabajo. Sigue activo para nómina y acceso.',
       reactivateBtn: 'Reactivar empleado',
       tabs: {
         empleados: 'Equipo',
@@ -4526,6 +4534,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         alreadyPaidLabel: 'Pagos anteriores',
         clearPaymentsLabel: 'Eliminar todos los pagos',
         clearPaymentsConfirm: '¿Eliminar todos los pagos registrados de este período para {{name}}?',
+        totalPending: 'Pendiente por pagar',
+        ofTotal: 'de {{total}}',
         bonusLabel: 'Bono (opcional)',
         otShort: 'extra',
         driveShort: 'manejo',
@@ -5591,6 +5601,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteBtn: 'Delete employee',
       deleteConfirm: 'Delete {{name}}? This cannot be undone and removes their history.',
       deactivateBtn: 'Deactivate employee',
+      rosterRemoveBtn: 'Remove from crews',
+      rosterAddBtn: 'Include in crews',
+      rosterHint: 'Won\'t be offered when picking a lead, workers or drivers on a job. Still active for payroll and app access.',
       reactivateBtn: 'Reactivate employee',
       tabs: {
         empleados: 'Team',
@@ -6866,6 +6879,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         alreadyPaidLabel: 'Previous payments',
         clearPaymentsLabel: 'Delete all payments',
         clearPaymentsConfirm: 'Delete all recorded payments for {{name}} in this period?',
+        totalPending: 'Pending to pay',
+        ofTotal: 'of {{total}}',
         bonusLabel: 'Bonus (optional)',
         otShort: 'OT',
         driveShort: 'driving',

@@ -225,6 +225,10 @@ export interface PayrollRow {
   overtimeHours: number;
   overtimePay: number;
   driverPay: number;
+  /** Formula job-field sums for this worker's period (display label →
+   *  number), e.g. { "Regresaron: No": 2 }. Only set when a formula reads
+   *  job custom fields — feeds per-payment component snapshots. */
+  formulaJobFields?: Record<string, number>;
 }
 
 /** Gross pay for a worker's hours, matching the reports estimate: hourly →
@@ -394,6 +398,17 @@ export function computePayrollRows(opts: {
       if (result !== null) pay = result;
     }
 
+    // Per-label sums of the formula's job-field reads — snapshot material
+    // for payment records ("this check paid 2 overnights").
+    let formulaJobFields: Record<string, number> | undefined;
+    if (cfg.formula && jcfRefs.length) {
+      formulaJobFields = {};
+      for (const tok of cfg.formula) {
+        if (tok.t !== 'jcf') continue;
+        formulaJobFields[tok.label] = jcfById[e.id]?.[fieldRefId(tok)] ?? 0;
+      }
+    }
+
     const hours = Math.round((worked + driven) * 100) / 100;
     return {
       employeeId: e.id,
@@ -407,6 +422,7 @@ export function computePayrollRows(opts: {
       overtimeHours: Math.round(overtimeHours * 100) / 100,
       overtimePay: Math.round(overtimePay * 100) / 100,
       driverPay: Math.round(driverPay * 100) / 100,
+      ...(formulaJobFields ? { formulaJobFields } : {}),
     };
   });
 

@@ -75,6 +75,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
 import ImportModal from '@/components/dashboard/ImportModal';
+import { formulaComponentTemplates } from '@amixos/shared/lib/importRunners';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { ImportPhotosModal } from '@/components/dashboard/ImportPhotosModal';
 import { UbicacionesSettings } from '@/components/dashboard/UbicacionesSettings';
@@ -3612,7 +3613,7 @@ export default function AjustesPage() {
               mode={hubImport}
               businessId={business.id}
               supabase={supabase}
-              templates={hubImport === 'jobs' ? hubJobTemplates : hubImport === 'employees' ? hubEmpTemplates : []}
+              templates={hubImport === 'jobs' ? hubJobTemplates : hubImport === 'employees' ? hubEmpTemplates : hubImport === 'payroll' ? formulaComponentTemplates(business.payroll_config) : []}
               accessRoles={hubAccessRoles}
               invoiceTemplate={business.invoice_template}
               onClose={() => setHubImport(null)}

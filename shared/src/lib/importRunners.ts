@@ -7,6 +7,7 @@
 
 import { fetchAll } from './supabaseFetch';
 import { getPayrollPeriod, normalizeFrequency, parsePayrollAnchor } from './payroll';
+import { fieldRefId, normalizeFormula } from './payrollFormula';
 import { invoiceDefaultLanguage } from './invoiceTemplate';
 import { INVITABLE_ROLES, ROLE_LABELS } from './permissions';
 import { computeTotals, type InvoiceLineItem } from './invoicing';
@@ -270,9 +271,32 @@ export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {})
     : JOB_IMPORT_FIELDS;
 }
 
-/** Custom-field columns apply to jobs + employees (invoices have none). */
+/**
+ * Payroll's extra import columns: one per job custom field the business's
+ * PAY FORMULA reads (e.g. "Regresaron el mismo día?: No" — an overnight
+ * count). Imported values land in payroll_payments.components so history
+ * shows what each check paid for. No formula → no extra columns.
+ */
+export function formulaComponentTemplates(payrollConfig: unknown): ImportTemplateField[] {
+  const formula = normalizeFormula((payrollConfig as { formula?: unknown } | null)?.formula);
+  if (!formula) return [];
+  const out: ImportTemplateField[] = [];
+  const seen = new Set<string>();
+  formula.forEach(tok => {
+    if (tok.t !== 'jcf') return;
+    const id = fieldRefId(tok);
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ field_key: id, field_label: tok.label, field_type: 'number' });
+  });
+  return out;
+}
+
+/** Custom-field columns apply to jobs + employees (invoices have none).
+ *  Payroll uses them too — one column per job field the PAY FORMULA reads
+ *  (callers build those from payroll_config, not a template table). */
 export function importModeUsesTemplates(mode: ImportMode): boolean {
-  return mode === 'jobs' || mode === 'employees';
+  return mode === 'jobs' || mode === 'employees' || mode === 'payroll';
 }
 
 // Pipeline order — a status implies every earlier stage's timestamp, mirroring
@@ -1004,7 +1028,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   let success = 0, skipped = 0;
 
   const employees = await fetchAll<EmployeeLite>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+    ctx.supabase.from('employees').select('id, first_name, last_name, check_name').eq('business_id', ctx.businessId).range(from, to));
   const { data: biz } = await ctx.supabase
     .from('businesses').select('payroll_frequency, payroll_anchor_date').eq('id', ctx.businessId).single();
   const freq = normalizeFrequency(biz?.payroll_frequency);
@@ -1012,6 +1036,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const existing = await fetchAll<{ employee_id: string | null; period_start: string | null }>((from, to) =>
     ctx.supabase.from('payroll_payments').select('employee_id, period_start').eq('business_id', ctx.businessId).range(from, to));
   const existingKeys = new Set(existing.map(e => `${e.employee_id}|${(e.period_start ?? '').slice(0, 10)}`));
+  const autoCreatedWorkers: string[] = [];
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
     const row = ctx.rows[idx];
@@ -1019,10 +1044,26 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${workerName || get(row, 'paid_date') || tr('(fila vacía)', '(empty row)')}`;
 
     if (!workerName) { failedRows.push({ label, reason: tr('Falta el trabajador', 'Missing worker'), rowIndex: idx }); continue; }
-    const empId = matchEmployeeId(workerName, employees);
+    let empId = matchEmployeeId(workerName, employees);
     if (!empId) {
-      failedRows.push({ label, reason: tr(`No se encontró a "${workerName}" en tu equipo — impórtalo primero`, `"${workerName}" not found on your team — import them first`), rowIndex: idx });
-      continue;
+      // Ex-workers: auto-create as an INACTIVE team member so historical
+      // payments keep a real record without cluttering the active roster.
+      const parts = workerName.trim().split(/\s+/);
+      const { data: created, error: createErr } = await ctx.supabase.from('employees').insert({
+        business_id: ctx.businessId,
+        first_name: parts[0],
+        last_name: parts.slice(1).join(' ') || '',
+        pay_type: 'hourly',
+        pay_rate: 0,
+        active: false,
+      }).select('id, first_name, last_name').single();
+      if (createErr || !created) {
+        failedRows.push({ label, reason: createErr?.message ?? tr(`No se pudo crear a "${workerName}"`, `Could not create "${workerName}"`), rowIndex: idx });
+        continue;
+      }
+      employees.push(created as EmployeeLite);
+      autoCreatedWorkers.push(workerName);
+      empId = created.id;
     }
 
     const paidDate = parseDate(get(row, 'paid_date'));
@@ -1042,6 +1083,14 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       continue;
     }
 
+    // Formula-component columns (one per job field the pay formula reads,
+    // e.g. an overnight-stay count) → the per-payment components snapshot.
+    const components: Record<string, number> = {};
+    ctx.templates.forEach(tpl => {
+      const v = parseNum(get(row, `custom:${tpl.field_key}`));
+      if (v !== null) components[tpl.field_label] = v;
+    });
+
     const { error } = await ctx.supabase.from('payroll_payments').insert({
       business_id: ctx.businessId,
       employee_id: empId,
@@ -1053,6 +1102,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       gross_pay: gross,
       method: method ?? 'cash',
       check_number: get(row, 'check_number') || null,
+      components: Object.keys(components).length ? components : null,
       created_by: ctx.userId,
       // The paid date becomes the record's timestamp so history shows it.
       ...(paidDate ? { created_at: `${paidDate}T12:00:00` } : {}),
@@ -1062,7 +1112,15 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
     success++;
   }
 
-  return { success, skipped, failedRows, notes: [] };
+  const notes: string[] = [];
+  if (autoCreatedWorkers.length) {
+    const shown = autoCreatedWorkers.slice(0, 15).join(', ');
+    notes.push(tr(
+      `${autoCreatedWorkers.length} trabajador(es) creado(s) como INACTIVOS: ${shown}${autoCreatedWorkers.length > 15 ? '…' : ''}. Actívalos en Equipo si vuelven.`,
+      `${autoCreatedWorkers.length} worker(s) created as INACTIVE: ${shown}${autoCreatedWorkers.length > 15 ? '…' : ''}. Reactivate them in Team if they return.`,
+    ));
+  }
+  return { success, skipped, failedRows, notes };
 }
 
 // ── Equipment import ─────────────────────────────────────────────────────────
@@ -1230,7 +1288,7 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
     return [en ? 'First' : 'Nombre', en ? 'Last' : 'Apellido', en ? 'Full legal name' : 'Nombre legal completo', '555-1234', 'persona@email.com', 'office', en ? 'hourly' : 'por hora', '25', '6/1/2024', '1/15/1990', '123 Main St', 'Omaha', 'NE', '68102', en ? 'Contact name' : 'Nombre contacto', '555-5678', '6/1/2024 9:00', '6/12/2026 4:45 PM', ...tplCells];
   }
   if (mode === 'payroll') {
-    return [en ? 'Worker One' : 'Trabajador Uno', '6/26/2026', '', '80', '5', '100', '1460', en ? 'check' : 'cheque', '1024'];
+    return [en ? 'Worker One' : 'Trabajador Uno', '6/26/2026', '', '80', '5', '100', '1460', en ? 'check' : 'cheque', '1024', ...templates.map(() => '2')];
   }
   if (mode === 'equipment') {
     return ['Truck #1', en ? 'Truck' : 'Camioneta', 'Ford', 'F-350', '2019', en ? 'White' : 'Blanco', '1FT8W3BT5KED12345', '', '98500', 'ABC-1234', '3/1/2027', '42000', en ? 'no' : 'no', 'Wells Fargo', '18500', en ? 'Worker One' : 'Trabajador Uno', en ? 'Main yard' : 'Yarda principal', '5/15/2019', 'Progressive', 'POL-993312', '11/30/2026', ''];

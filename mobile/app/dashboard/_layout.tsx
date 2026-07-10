@@ -202,6 +202,7 @@ function DashboardTabs() {
           <Tabs.Screen name="mas/equipo" options={{ href: null }} />
           {/* Payroll — reached from Reports, not the dock. */}
           <Tabs.Screen name="mas/nomina" options={{ href: null }} />
+          <Tabs.Screen name="mas/nomina-historial" options={{ href: null }} />
           {/* Inventario is a MODULE (mas/inventario is a redirect to
              mas/modulos/inventory) — kept off the dock; reached via Más only
              when the module is enabled. */}

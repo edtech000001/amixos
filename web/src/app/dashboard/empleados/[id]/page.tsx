@@ -54,6 +54,8 @@ interface RawEmployee {
   overtime_threshold?: number | null;
   overtime_multiplier?: number | null;
   active: boolean;
+  /** Offered in job crew/lead/driver pickers (migration 128). */
+  show_in_roster?: boolean | null;
   user_id: string | null;
   email: string | null;
   birthday: string | null;
@@ -293,6 +295,15 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
       eventType: nextActive ? 'rehired' : 'terminated', createdBy: user?.id ?? null,
     });
     setEmployee(prev => prev ? { ...prev, active: nextActive } : prev);
+  };
+
+  // Roster flag — office members (owner/admin) stay ACTIVE but stop being
+  // offered as field crew on jobs. Saves instantly, like deactivate.
+  const toggleRoster = async () => {
+    if (!employee) return;
+    const next = !(employee.show_in_roster ?? true);
+    await supabase.from('employees').update({ show_in_roster: next }).eq('id', employee.id);
+    setEmployee(prev => prev ? { ...prev, show_in_roster: next } : prev);
   };
 
   // ─── Access section handlers ──────────────────────────────────────
@@ -563,6 +574,28 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
                 <>
                   <UserCheck size={15} className="text-emerald-600" />
                   <span className="text-sm font-semibold text-emerald-600">{t.reactivateBtn}</span>
+                </>
+              )}
+            </button>
+
+            {/* Roster flag — keep office members out of job crew pickers. */}
+            <button
+              type="button"
+              onClick={toggleRoster}
+              title={t.rosterHint}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
+                (employee.show_in_roster ?? true) ? 'bg-gray-50 hover:bg-gray-100' : 'bg-amber-50 hover:bg-amber-100'
+              }`}
+            >
+              {(employee.show_in_roster ?? true) ? (
+                <>
+                  <UserX size={15} className="text-gray-500" />
+                  <span className="text-sm font-semibold text-gray-600">{t.rosterRemoveBtn}</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck size={15} className="text-amber-600" />
+                  <span className="text-sm font-semibold text-amber-600">{t.rosterAddBtn}</span>
                 </>
               )}
             </button>

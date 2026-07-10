@@ -29,6 +29,8 @@ export interface EmployeeLite {
   id: string;
   first_name: string;
   last_name: string | null;
+  /** "Name on checks" — matched too (payroll exports often use it). */
+  check_name?: string | null;
 }
 
 /** Resolve a free-text name to an employee id, or null if no confident match.
@@ -44,6 +46,18 @@ export function matchEmployeeId(name: string, employees: EmployeeLite[]): string
   const exact = employees.filter(e => full(e) === target);
   if (exact.length === 1) return exact[0].id;
   if (exact.length > 1) return null; // ambiguous full-name dup → don't guess
+
+  // Check-name match ("name on checks" often IS the payroll-export name).
+  const byCheck = employees.filter(e => e.check_name && normalizeName(e.check_name) === target);
+  if (byCheck.length === 1) return byCheck[0].id;
+
+  // Prefix tolerance: "Edvin Ramirez" ↔ stored "Edvin Ramirez Gomez" (extra
+  // surname on either side). Only when exactly one candidate qualifies.
+  const byPrefix = employees.filter(e => {
+    const f = full(e);
+    return f.startsWith(`${target} `) || target.startsWith(`${f} `);
+  });
+  if (byPrefix.length === 1) return byPrefix[0].id;
 
   // First-name-only fallback, but ONLY when it's unambiguous.
   const byFirst = employees.filter(e => normalizeName(e.first_name) === target);

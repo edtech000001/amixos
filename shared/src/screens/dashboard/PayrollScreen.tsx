@@ -25,21 +25,10 @@ export interface PayrollPaymentEntry {
   /** Hours this payment covers ("$800 for 25 h"). */
   hours: number | null;
   paidAt: string | null;
+  /** Formula job-field counts this check paid for (label → number). */
+  components?: Record<string, number> | null;
 }
 
-/** One saved payroll payment — the permanent record, immune to job edits. */
-export interface PayrollHistoryEntry {
-  periodStart: string;
-  periodEnd: string;
-  name: string;
-  hours: number;
-  driverHours: number;
-  bonus: number | null;
-  grossPay: number;
-  method: string;
-  checkNumber: string | null;
-  paidAt: string | null;
-}
 
 export interface PayrollScreenRow {
   employeeId: string;
@@ -56,6 +45,8 @@ export interface PayrollScreenRow {
   /** Payments recorded this period — a LEDGER: several partial checks can
    *  cover one period, each with the amount and the hours it covers. */
   payments?: PayrollPaymentEntry[];
+  /** Formula job-field sums for the period (from computePayrollRows). */
+  formulaJobFields?: Record<string, number>;
   /** Where the worker's hours came from (jobs + worked/driven split). */
   breakdown?: PayrollBreakdown;
 }
@@ -75,8 +66,12 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings sheet list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null) => void;
   onDeletePayment: (paymentId: string) => void;
+  /** Opens a job from the hours-breakdown list. */
+  onJobPress?: (jobId: string, employeeId: string) => void;
+  /** Re-opens this worker's hours breakdown on mount (back-from-job nav). */
+  initialDetailEmployeeId?: string | null;
   /** Deletes EVERY payment of the period for one worker (confirmed in UI). */
   onClearPayments: (employeeId: string) => void;
   onBack: () => void;
@@ -85,8 +80,8 @@ export interface PayrollScreenProps {
   /** Custom fields offered in the formula builder palette (number/boolean/
    *  select only — text and dates are excluded by the callers). */
   formulaFields?: { emp: FormulaFieldDef[]; job: FormulaFieldDef[] };
-  /** Loads ALL saved payments (newest period first) for the history sheet. */
-  onLoadHistory?: () => Promise<PayrollHistoryEntry[]>;
+  /** Opens the Payment history page (its own route now). */
+  onHistoryPress?: () => void;
 }
 
 function fmt(n: number) {
@@ -109,12 +104,14 @@ export function PayrollScreen({
   onConfigChange,
   onMarkPaid,
   onDeletePayment,
+  onJobPress,
+  initialDetailEmployeeId,
   onClearPayments,
   onBack,
   canManage,
   busy,
   formulaFields,
-  onLoadHistory,
+  onHistoryPress,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -173,27 +170,8 @@ export function PayrollScreen({
         ]
       : (f.options ?? []).map(o => ({ key: f.key, label: `${f.label}: ${o}`, eq: o })));
 
-  // Payment history sheet — the saved payroll_payments records.
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<PayrollHistoryEntry[] | null>(null);
-  const openHistory = () => {
-    setHistoryOpen(true);
-    // Always refetch — payments are added/deleted on the live view, so a
-    // cached list would show stale records.
-    setHistory(null);
-    if (onLoadHistory) onLoadHistory().then(setHistory).catch(() => setHistory([]));
-  };
   const dateLocale = full.dashboard.dateLocale;
   const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' });
-  const historyGroups = useMemo(() => {
-    const by = new Map<string, PayrollHistoryEntry[]>();
-    (history ?? []).forEach(h => {
-      const list = by.get(h.periodStart) ?? [];
-      list.push(h);
-      by.set(h.periodStart, list);
-    });
-    return Array.from(by.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [history]);
 
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -211,10 +189,7 @@ export function PayrollScreen({
   const [method, setMethod] = useState<PayMethod>('cash');
   const [checkNumber, setCheckNumber] = useState('');
   const [bonus, setBonus] = useState('');
-  // Base amount being paid — defaults to what's still owed; lower = partial.
-  const [amount, setAmount] = useState('');
-  // Hours this payment covers ("$800 for 25 h") — defaults to unpaid hours.
-  const [hoursCovered, setHoursCovered] = useState('');
+
   // Worker whose hours breakdown sheet is open.
   const [detailRow, setDetailRow] = useState<PayrollScreenRow | null>(null);
 
@@ -242,32 +217,63 @@ export function PayrollScreen({
   // Unpaid first, paid sink to the bottom (stable — keeps pay-desc within group).
   const sortedRows = [...rows].sort((a, b) => (isFullyPaid(a) ? 1 : 0) - (isFullyPaid(b) ? 1 : 0));
 
-  // The pay sheet is a mini-ledger: it lists this period's payments and the
-  // form below ADDS one. Defaults pre-fill whatever is still owed.
+  // The pay sheet is a mini-ledger: it lists this period's payments and
+  // adds one check for EVERYTHING currently owed (computed pay − already
+  // paid). No custom amount: a check always covers all data entered so far,
+  // so formula components (overnights, overtime) are consumed exactly once.
+  // "Partial" happens naturally: pay week 1's data, enter week 2, pay the
+  // remainder.
+  const checkBaseOf = (r: PayrollScreenRow) =>
+    Math.max(0, Math.round((r.pay + bonusTotal(r) - paidTotal(r)) * 100) / 100);
+  const checkHoursOf = (r: PayrollScreenRow) =>
+    Math.max(0, Math.round((r.hours - paidHours(r)) * 100) / 100);
+  /** What's still owed across ALL workers — the number that matters most. */
+  const totalPending = rows.reduce((sum, r) => sum + checkBaseOf(r), 0);
+  /** Formula components still unpaid: period totals − already-recorded. */
+  const checkComponentsOf = (r: PayrollScreenRow): Record<string, number> | null => {
+    if (!r.formulaJobFields) return null;
+    const already: Record<string, number> = {};
+    (r.payments ?? []).forEach(pm =>
+      Object.entries(pm.components ?? {}).forEach(([l, v]) => { already[l] = (already[l] ?? 0) + v; }));
+    const out: Record<string, number> = {};
+    Object.entries(r.formulaJobFields).forEach(([l, v]) => {
+      out[l] = Math.max(0, Math.round((v - (already[l] ?? 0)) * 100) / 100);
+    });
+    return out;
+  };
+  const componentsText = (c: Record<string, number> | null | undefined) =>
+    c ? Object.entries(c).filter(([, v]) => v).map(([l, v]) => `${v} × ${l}`).join(' · ') : '';
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
     setMethod('cash');
     setCheckNumber('');
     setBonus('');
-    const remaining = Math.max(0, row.pay + bonusTotal(row) - paidTotal(row));
-    setAmount(String(Math.round(remaining * 100) / 100));
-    setHoursCovered(String(Math.max(0, Math.round((row.hours - paidHours(row)) * 100) / 100)));
   };
   const confirmPay = () => {
     if (!payRow) return;
-    const amt = amount.trim() === '' ? payRow.pay : parseFloat(amount) || 0;
     onMarkPaid(
       payRow.employeeId,
       method,
       method === 'check' ? checkNumber.trim() : '',
       parseFloat(bonus) || 0,
-      amt,
-      parseFloat(hoursCovered) || 0,
+      checkBaseOf(payRow),
+      checkHoursOf(payRow),
+      checkComponentsOf(payRow),
     );
     setPayRow(null);
   };
-  // Live total shown big at the top of the sheet: amount + bonus.
-  const modalTotal = (parseFloat(amount) || 0) + (parseFloat(bonus) || 0);
+  // Live total shown big at the top of the sheet: what's owed + bonus.
+  const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
+
+  // Coming back from a job opened out of the breakdown: reopen that worker.
+  const [initialDetailDone, setInitialDetailDone] = useState(!initialDetailEmployeeId);
+  useEffect(() => {
+    if (initialDetailDone || !rows.length) return;
+    const match = rows.find(x => x.employeeId === initialDetailEmployeeId);
+    if (match) setDetailRow(match);
+    setInitialDetailDone(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   // Keep the open sheet in sync after a delete/reload refreshes the rows.
   useEffect(() => {
@@ -291,8 +297,8 @@ export function PayrollScreen({
           <Text className="text-base font-semibold text-gray-900">{t.title}</Text>
           <Text className="text-xs text-gray-400">{t.subtitle}</Text>
         </View>
-        {onLoadHistory ? (
-          <Pressable onPress={openHistory} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
+        {onHistoryPress ? (
+          <Pressable onPress={onHistoryPress} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
             <History size={20} color="#6B7280" />
           </Pressable>
         ) : null}
@@ -324,6 +330,10 @@ export function PayrollScreen({
           <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
             <Text className="text-[11px] text-gray-400">{t.totalPay}</Text>
             <Text className="text-lg font-bold text-primary">{fmt(totalPay)}</Text>
+          </View>
+          <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+            <Text className="text-[11px] text-gray-400">{t.totalPending}</Text>
+            <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{fmt(totalPending)}</Text>
           </View>
         </View>
         {rows.length > 0 ? (
@@ -361,7 +371,14 @@ export function PayrollScreen({
                   </Text>
                   <Text className="text-sm font-semibold text-gray-900 mt-0.5" numberOfLines={1}>{r.name}</Text>
                 </Pressable>
-                <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
+                {isPartial(r) ? (
+                  <Text className="text-xl font-bold text-amber-600 mt-1">
+                    {fmt(checkBaseOf(r))}
+                    <Text className="text-xs font-semibold text-gray-400"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                  </Text>
+                ) : (
+                  <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
+                )}
                 <View className="mt-2">
                   {(r.payments?.length ?? 0) > 0 ? (
                     <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage} className="self-start">
@@ -403,7 +420,14 @@ export function PayrollScreen({
                   <ChevronRight size={14} color="#D1D5DB" />
                 </Pressable>
                 <View className="items-end">
-                  <Text className="text-sm font-bold text-gray-900">{fmt(r.pay)}</Text>
+                  {isPartial(r) ? (
+                    <View className="items-end">
+                      <Text className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</Text>
+                      <Text className="text-[11px] text-gray-400">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                    </View>
+                  ) : (
+                    <Text className="text-sm font-bold text-gray-900">{fmt(r.pay)}</Text>
+                  )}
                   {(r.payments?.length ?? 0) > 0 ? (
                     <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage}>
                       <View className="flex-row items-center gap-1 mt-0.5">
@@ -428,57 +452,6 @@ export function PayrollScreen({
           </View>
         )}
       </ScrollView>
-
-      {/* Payment history — the saved records, independent of live job data. */}
-      <RNModal visible={historyOpen} transparent animationType="fade" onRequestClose={() => setHistoryOpen(false)}>
-        <Pressable onPress={() => setHistoryOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" onStartShouldSetResponder={() => true}>
-            <Text className="text-lg font-bold text-gray-900 mb-4">{t.historyTitle}</Text>
-            {history === null ? (
-              <View className="items-center py-10">
-                <View className="flex-row gap-1">
-                  {[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
-                </View>
-              </View>
-            ) : historyGroups.length === 0 ? (
-              <Text className="text-sm text-gray-400 text-center py-10">{t.historyEmpty}</Text>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {historyGroups.map(([periodStart, entries]) => (
-                  <View key={periodStart} className="mb-4">
-                    <View className="flex-row items-center justify-between mb-1.5">
-                      <Text className="text-xs font-semibold text-gray-500">
-                        {fmtDay(periodStart)} – {fmtDay(entries[0].periodEnd)}
-                      </Text>
-                      <Text className="text-xs font-bold text-gray-700">
-                        {fmt(entries.reduce((sum, e) => sum + e.grossPay, 0))}
-                      </Text>
-                    </View>
-                    <View className="rounded-xl border border-gray-100 overflow-hidden">
-                      {entries.map((h, i) => (
-                        <View key={`${h.name}-${i}`} className={`px-4 py-2.5 flex-row items-center gap-3 ${i < entries.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                          <View className="flex-1 min-w-0">
-                            <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{h.name}</Text>
-                            <Text className="text-[11px] text-gray-400">
-                              {Math.round(h.hours * 100) / 100} h
-                              {h.driverHours > 0 ? ` · ${Math.round(h.driverHours * 100) / 100} h ${t.driveShort}` : ''}
-                              {h.bonus ? ` · ${t.historyBonus} ${fmt(h.bonus)}` : ''}
-                              {' · '}
-                              {h.method === 'check' && h.checkNumber ? `${t.checkPrefix}${h.checkNumber}` : (methodLabel[h.method as PayMethod] ?? h.method)}
-                              {h.paidAt ? ` · ${fmtDay(h.paidAt)}` : ''}
-                            </Text>
-                          </View>
-                          <Text className="text-sm font-bold text-gray-900">{fmt(h.grossPay)}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </Pressable>
-      </RNModal>
 
       {/* Payroll settings sheet — frequency / anchor / pay components. */}
       <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={() => setSettingsOpen(false)}>
@@ -685,7 +658,10 @@ export function PayrollScreen({
             <View className="items-center mb-4">
               <Text className="text-base font-semibold text-gray-900">{payRow?.name}</Text>
               <Text className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</Text>
-              <Text className="text-sm text-gray-400 mt-0.5">{Math.round((payRow?.hours ?? 0) * 100) / 100} h</Text>
+              <Text className="text-sm text-gray-400 mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
+              {payRow && componentsText(checkComponentsOf(payRow)) ? (
+                <Text className="text-xs text-gray-400 mt-0.5">{componentsText(checkComponentsOf(payRow))}</Text>
+              ) : null}
             </View>
 
             {(payRow?.payments ?? []).length > 0 ? (
@@ -700,6 +676,7 @@ export function PayrollScreen({
                           {pmt.hours ? `${Math.round(pmt.hours * 100) / 100} h · ` : ''}
                           {paymentBadgeLabel(pmt)}
                           {pmt.paidAt ? ` · ${fmtDay(pmt.paidAt)}` : ''}
+                          {componentsText(pmt.components) ? ` · ${componentsText(pmt.components)}` : ''}
                         </Text>
                       </View>
                       <Pressable onPress={() => onDeletePayment(pmt.id)} disabled={busy} hitSlop={8} className="p-1.5 rounded-lg active:bg-red-50">
@@ -759,29 +736,6 @@ export function PayrollScreen({
               </View>
             ) : null}
 
-            <View className="mb-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.amountLabel}</Text>
-              <TextInput
-                value={amount}
-                onChangeText={v => setAmount(v.replace(/[^0-9.]/g, ''))}
-                placeholder="0.00"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="decimal-pad"
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
-              />
-            </View>
-
-            <View className="mb-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.hoursCoveredLabel}</Text>
-              <TextInput
-                value={hoursCovered}
-                onChangeText={v => setHoursCovered(v.replace(/[^0-9.]/g, ''))}
-                placeholder="0"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="decimal-pad"
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
-              />
-            </View>
 
             <View className="mb-4">
               <Text className="text-sm font-semibold text-gray-700 mb-2">{t.bonusLabel}</Text>
@@ -795,7 +749,7 @@ export function PayrollScreen({
               />
             </View>
 
-            <Pressable onPress={confirmPay} disabled={busy || !(parseFloat(amount) > 0 || parseFloat(bonus) > 0)} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+            <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
             </Pressable>
           </Pressable>
@@ -838,10 +792,14 @@ export function PayrollScreen({
                 <View className="gap-2">
                   {detailRow.breakdown.jobs.map((j, i) => (
                     <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
-                      <View className="flex-1 min-w-0">
+                      <Pressable
+                        disabled={!j.jobId || !onJobPress}
+                        onPress={() => { if (j.jobId && onJobPress) { setDetailRow(null); onJobPress(j.jobId, detailRow.employeeId); } }}
+                        className="flex-1 min-w-0 active:opacity-60"
+                      >
                         <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                        {j.date ? <Text className="text-[11px] text-gray-400">{j.date}</Text> : null}
-                      </View>
+                        {j.date ? <Text className="text-[11px] text-gray-400">{fmtDay(j.date)}</Text> : null}
+                      </Pressable>
                       <View className="items-end">
                         {j.workedHours > 0 ? (
                           <View className="flex-row items-center gap-1">

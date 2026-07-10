@@ -23,7 +23,6 @@ import {
   type PayrollJob,
 } from '@amixos/shared/lib/payroll';
 import type { FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 
 interface PaymentRow {
   id: string;
@@ -34,6 +33,7 @@ interface PaymentRow {
   gross_pay?: number | null;
   hours?: number | null;
   created_at?: string | null;
+  components?: Record<string, number> | null;
 }
 
 export default function NominaPage() {
@@ -53,6 +53,9 @@ export default function NominaPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Worker whose hours breakdown should reopen (back-from-job navigation).
+  const [initialWorker] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('worker'));
 
   useEffect(() => { setFrequency(normalizeFrequency(business?.payroll_frequency)); }, [business?.payroll_frequency]);
   useEffect(() => { setAnchorDate(business?.payroll_anchor_date ?? null); }, [business?.payroll_anchor_date]);
@@ -81,7 +84,7 @@ export default function NominaPage() {
         .gte('work_date', period.startStr).lte('work_date', period.endStr),
       supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
         .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
-      supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at').eq('business_id', bid).eq('period_start', period.startStr),
+      supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at, components').eq('business_id', bid).eq('period_start', period.startStr),
     ]);
     setEmployees((empRes.data ?? []) as never);
     setTimesheets((tsRes.data ?? []) as never);
@@ -100,6 +103,13 @@ export default function NominaPage() {
   }, [business, supabase, period.startStr, period.endStr]);
 
   useEffect(() => { void load(); }, [load]);
+  // Refetch on tab focus — hours added in another tab/device must reflect on
+  // the live payroll (a fully-paid worker flips to Parcial when pay grows).
+  useEffect(() => {
+    const onFocus = () => { void load(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   // Formula builder palette — numeric/boolean custom fields only, so a text
   // field can never end up multiplied into a paycheck.
@@ -134,37 +144,6 @@ export default function NominaPage() {
 
 
 
-  // Payment history — every saved payroll_payments row, the permanent record.
-  const loadHistory = async () => {
-    if (!business) return [];
-    const rows = await fetchAll<{
-      period_start: string; period_end: string | null; hours: number | null; driver_hours: number | null;
-      bonus: number | null; gross_pay: number | null; method: string; check_number: string | null;
-      created_at: string | null;
-      // Typed clients infer to-one joins as arrays — accept both shapes.
-      employees: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
-    }>((from, to) =>
-      supabase.from('payroll_payments')
-        .select('period_start, period_end, hours, driver_hours, bonus, gross_pay, method, check_number, created_at, employees(first_name, last_name)')
-        .eq('business_id', business.id)
-        .order('period_start', { ascending: false })
-        .range(from, to));
-    return rows.map(r => {
-      const emp = Array.isArray(r.employees) ? r.employees[0] : r.employees;
-      return {
-      periodStart: r.period_start,
-      periodEnd: r.period_end ?? r.period_start,
-      name: emp ? `${emp.first_name} ${emp.last_name}` : '—',
-      hours: r.hours ?? 0,
-      driverHours: r.driver_hours ?? 0,
-      bonus: r.bonus,
-      grossPay: r.gross_pay ?? 0,
-      method: r.method,
-      checkNumber: r.check_number,
-      paidAt: r.created_at,
-      };
-    });
-  };
 
   const rows: PayrollScreenRow[] = useMemo(() => {
     const base = computePayrollRows({ employees, timesheets, jobs, period, includeZero: false, config });
@@ -187,6 +166,7 @@ export default function NominaPage() {
           grossPay: p.gross_pay ?? 0,
           hours: p.hours ?? null,
           paidAt: p.created_at ?? null,
+          components: p.components ?? null,
         })),
         breakdown: employeeBreakdownInRange({
           employeeId: r.employeeId,
@@ -214,7 +194,7 @@ export default function NominaPage() {
 
   // Each confirm ADDS a payment record (ledger) — partial checks stack up
   // within the period. Requires migration 126 (drops the one-per-period key).
-  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number) => {
+  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null) => {
     if (!business) return;
     const row = rows.find(r => r.employeeId === employeeId);
     setBusy(true);
@@ -229,6 +209,7 @@ export default function NominaPage() {
       gross_pay: amount + (bonus || 0),
       method,
       check_number: method === 'check' && checkNumber ? checkNumber : null,
+      components: components && Object.values(components).some(v => v) ? components : null,
       created_by: user?.id ?? null,
     });
     await load();
@@ -265,10 +246,12 @@ export default function NominaPage() {
       rows={rows}
       config={config}
       formulaFields={formulaFields}
-      onLoadHistory={loadHistory}
+      onHistoryPress={() => router.push('/dashboard/reportes/nomina/historial')}
       onConfigChange={onConfigChange}
       onMarkPaid={onMarkPaid}
       onDeletePayment={onDeletePayment}
+      onJobPress={(id, employeeId) => router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}`)}
+      initialDetailEmployeeId={initialWorker}
       onClearPayments={onClearPayments}
       onBack={() => router.push('/dashboard/reportes')}
       canManage={canManage}

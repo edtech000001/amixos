@@ -310,7 +310,7 @@ export default function NuevoTrabajoRoute() {
         fetchAll<Employee>((from, to) =>
           supabase
             .from('employees')
-            .select('id, first_name, last_name, role')
+            .select('id, first_name, last_name, role, show_in_roster')
             .eq('business_id', business.id)
             .eq('active', true)
             .order('first_name')
@@ -323,7 +323,8 @@ export default function NuevoTrabajoRoute() {
       ]);
       if (cancelled) return;
       setClients(cl);
-      setEmployees(emp);
+      // Roster flag (migration 128): office members opt out of crew pickers.
+      setEmployees(emp.filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
       setTemplates((tpl ?? []) as FieldTemplate[]);
 
       if (sourceId) {

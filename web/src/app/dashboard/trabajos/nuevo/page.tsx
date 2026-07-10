@@ -679,11 +679,12 @@ function NuevoTrabajoContent() {
           supabase.from('clients').select('id, first_name, last_name, company, address, city, state')
             .eq('business_id', businessId).order('first_name').range(from, to)),
         fetchAll<Employee>((from, to) =>
-          supabase.from('employees').select('id, first_name, last_name, role')
+          supabase.from('employees').select('id, first_name, last_name, role, show_in_roster')
             .eq('business_id', businessId).eq('active', true).order('first_name').range(from, to)),
       ]);
       setClients(cl);
-      setEmployees(emp);
+      // Roster flag (migration 128): office members opt out of crew pickers.
+      setEmployees(emp.filter(e => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
 
       // Custom job fields config (bounded per-business table — no pagination).
       const { data: tmpls } = await supabase.from('job_field_templates')

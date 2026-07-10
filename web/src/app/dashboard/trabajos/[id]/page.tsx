@@ -526,7 +526,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const backHref =
     backSearch?.get('from') === 'invoice' && backSearch.get('invoice')
       ? `/dashboard/facturas/${backSearch.get('invoice')}`
-      : '/dashboard/trabajos';
+      : backSearch?.get('from') === 'nomina'
+        ? `/dashboard/reportes/nomina${backSearch.get('worker') ? `?worker=${backSearch.get('worker')}` : ''}`
+        : '/dashboard/trabajos';
 
   return (
     <div className="p-6">
