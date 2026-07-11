@@ -6,19 +6,13 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { FieldHomeScreen } from '@amixos/shared/screens/dashboard/FieldHomeScreen';
 import { firstName } from '@amixos/shared/lib/userName';
-import { Fab } from '@amixos/shared/ui/Fab';
-import { LogJobSheet } from '@/components/LogJobSheet';
 import {
   fetchFieldHome,
-  fetchFieldClients,
-  logFieldJob,
   clockIn as doClockIn,
   clockOut as doClockOut,
   updateFieldJobStatus,
   type FieldHomeJob,
   type FieldHomeStats,
-  type FieldClient,
-  type FieldJobLocation,
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
 import { normalizeFrequency, parsePayrollAnchor } from '@amixos/shared/lib/payroll';
@@ -44,9 +38,6 @@ export function FieldHomeContainer() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [clients, setClients] = useState<FieldClient[]>([]);
-  const [clientsLoading, setClientsLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!business || !user) return;
@@ -87,31 +78,6 @@ export function FieldHomeContainer() {
     else setError(true);
   };
 
-  const openSheet = () => {
-    setSheetOpen(true);
-    // Lazy-load the client list the first time the sheet opens.
-    if (clients.length === 0 && business) {
-      setClientsLoading(true);
-      void fetchFieldClients(supabase, business.id)
-        .then(setClients)
-        .finally(() => setClientsLoading(false));
-    }
-  };
-
-  const handleLog = async (input: { title: string; clientId: string | null; description: string | null; location: FieldJobLocation | null }) => {
-    if (!business) return false;
-    const ok = await logFieldJob(supabase, {
-      businessId: business.id,
-      employeeId,
-      title: input.title,
-      clientId: input.clientId,
-      completedDate: new Date().toISOString().split('T')[0],
-      description: input.description,
-      location: input.location,
-    });
-    if (ok) void load();
-    return ok;
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
@@ -130,16 +96,6 @@ export function FieldHomeContainer() {
         onToggleClock={onToggleClock}
         onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
         onAdvanceStatus={onAdvanceStatus}
-      />
-      {/* Quick-log a completed job — one-handed FAB + bottom sheet. Hidden in
-          read-only "Ver como" preview. */}
-      {!loading && !readOnly ? <Fab onPress={openSheet} /> : null}
-      <LogJobSheet
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        clients={clients}
-        clientsLoading={clientsLoading}
-        onSubmit={handleLog}
       />
     </View>
   );
