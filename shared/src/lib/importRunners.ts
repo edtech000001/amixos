@@ -1085,7 +1085,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const employees = await fetchAll<EmployeeLite>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name, check_name').eq('business_id', ctx.businessId).range(from, to));
   const { data: biz } = await ctx.supabase
-    .from('businesses').select('payroll_frequency, payroll_anchor_date').eq('id', ctx.businessId).single();
+    .from('businesses').select('payroll_frequency, payroll_anchor_date, payroll_custom_days').eq('id', ctx.businessId).single();
   const freq = normalizeFrequency(biz?.payroll_frequency);
   const anchor = parsePayrollAnchor(biz?.payroll_anchor_date);
   // Dedupe key = one CHECK, not one period: (worker, period, check #, amount).
@@ -1155,7 +1155,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
     const periodStartRaw = parseDate(get(row, 'period_start'));
     const refDate = periodStartRaw ?? paidDate;
     if (!refDate) { failedRows.push({ label, reason: tr('Falta la fecha de pago', 'Missing paid date'), rowIndex: idx }); continue; }
-    const period = getPayrollPeriod(freq, new Date(`${refDate}T00:00:00`), 0, anchor);
+    const period = getPayrollPeriod(freq, new Date(`${refDate}T00:00:00`), 0, anchor, biz?.payroll_custom_days ?? null);
 
     const gross = parseNum(get(row, 'gross_pay'));
     if (gross === null) { failedRows.push({ label, reason: tr('Falta el total pagado', 'Missing total paid'), rowIndex: idx }); continue; }

@@ -89,6 +89,18 @@ async function fetchAll<T>(
 - **Empleados (Employees):** list, assignments to jobs
 - **Ajustes (Settings):** Negocio, Trabajos (pipeline config), Clientes (required fields + custom fields), Cuenta
 
+## Mobile Bottom Sheets (CRITICAL — recurring bug)
+
+RNModal bottom sheets MUST be structured as: a plain root `View` (`flex-1 justify-end`), an **absolutely-positioned backdrop `Pressable` as the FIRST child** (`position:absolute` inset 0 + the dim color), and the sheet card as a **plain sibling `View` after it** — the card renders on top, so taps on it never reach the backdrop, and its ScrollView receives drags natively.
+
+Two patterns that LOOK equivalent but break scrolling (drag only works when it starts on a touchable child — this bug has shipped several times):
+- Wrapping the card inside the backdrop `Pressable` and giving the card `onPress={() => {}}` to stop close-propagation.
+- Wrapping the card inside the backdrop and giving the card `onStartShouldSetResponder={() => true}`.
+
+Reference implementation: the job form's lead/crew picker modals in `mobile/app/dashboard/trabajos/nuevo.tsx`.
+
+Related iOS rule: never open a second `RNModal` while one is visible — iOS silently refuses to present it (button appears dead). Render an in-modal absolute overlay instead (see the manual-payment worker picker in `PayrollScreen.tsx`).
+
 ## Design Preferences
 
 - Full-width left-aligned dashboard layout (no `max-w` + `mx-auto` centering)

@@ -15,7 +15,7 @@ import {
   numericFieldValue,
 } from './payrollFormula';
 
-export type PayrollFrequency = 'weekly' | 'biweekly' | 'monthly';
+export type PayrollFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom';
 
 // ── Pay components config (businesses.payroll_config, migration 123) ────────
 // Defaults reproduce the legacy behavior EXACTLY: all hours (incl. driven)
@@ -67,10 +67,16 @@ export function normalizePayrollConfig(raw: unknown): PayrollConfig {
   };
 }
 
-export const PAYROLL_FREQUENCIES: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly'];
+export const PAYROLL_FREQUENCIES: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly', 'custom'];
 
 export function normalizeFrequency(raw: unknown): PayrollFrequency {
-  return raw === 'weekly' || raw === 'biweekly' ? raw : 'monthly';
+  return raw === 'weekly' || raw === 'biweekly' || raw === 'custom' ? raw : 'monthly';
+}
+
+/** Days per period for frequency='custom' — clamp to something sane. */
+export function normalizeCustomDays(raw: unknown): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 90 ? Math.round(n) : 7;
 }
 
 export interface PayrollPeriod {
@@ -138,6 +144,8 @@ export function getPayrollPeriod(
   ref: Date,
   offset = 0,
   anchor?: Date | null,
+  /** Days per period when frequency='custom' (e.g. pay every 3 days). */
+  customDays?: number | null,
 ): PayrollPeriod {
   const base = startOfDay(ref);
 
@@ -166,11 +174,12 @@ export function getPayrollPeriod(
     return { start, end, startStr: ymd(start), endStr: ymd(end) };
   }
 
-  // biweekly
+  // biweekly (14-day) or custom (N-day) — same fixed-window stepping.
+  const len = frequency === 'custom' ? normalizeCustomDays(customDays) : 14;
   const a = anchor ? startOfDay(anchor) : BIWEEKLY_ANCHOR;
-  const idx = Math.floor(daysBetween(a, base) / 14) + offset;
-  const start = addDays(a, idx * 14);
-  const end = addDays(start, 13);
+  const idx = Math.floor(daysBetween(a, base) / len) + offset;
+  const start = addDays(a, idx * len);
+  const end = addDays(start, len - 1);
   return { start, end, startStr: ymd(start), endStr: ymd(end) };
 }
 

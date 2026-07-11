@@ -37,7 +37,7 @@ export interface PayrollHistoryScreenProps {
   /** Bulk delete (admin) — the page reloads entries afterwards. */
   onDeleteEntries?: (ids: string[]) => void | Promise<void>;
   /** Business payroll settings — enables the this/last pay-period presets. */
-  payPeriod?: { frequency: unknown; anchorDate: unknown };
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
   /** Loads the hours breakdown (jobs/timesheets of the record's period) for
    *  the in-place detail modal — same content as the live Payroll view. */
   onLoadBreakdown?: (entry: PayrollHistoryEntry) => Promise<PayrollBreakdown | null>;

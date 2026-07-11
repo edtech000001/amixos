@@ -47,6 +47,7 @@ export default function NominaPage() {
 
   const [frequency, setFrequency] = useState<PayrollFrequency>(normalizeFrequency(business?.payroll_frequency));
   const [anchorDate, setAnchorDate] = useState<string | null>(business?.payroll_anchor_date ?? null);
+  const [customDays, setCustomDays] = useState<number | null>((business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days ?? null);
   const [offset, setOffset] = useState(0);
   const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[]>([]);
   const [timesheets, setTimesheets] = useState<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }[]>([]);
@@ -66,7 +67,7 @@ export default function NominaPage() {
     // Walk back period by period until the start matches (history is past).
     const anchor = parsePayrollAnchor(anchorDate);
     for (let k = 0; k >= -1040; k--) {
-      if (getPayrollPeriod(frequency, new Date(), k, anchor).startStr === periodParam) {
+      if (getPayrollPeriod(frequency, new Date(), k, anchor, customDays).startStr === periodParam) {
         setOffset(k);
         break;
       }
@@ -77,10 +78,12 @@ export default function NominaPage() {
 
   useEffect(() => { setFrequency(normalizeFrequency(business?.payroll_frequency)); }, [business?.payroll_frequency]);
   useEffect(() => { setAnchorDate(business?.payroll_anchor_date ?? null); }, [business?.payroll_anchor_date]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setCustomDays((business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days ?? null); }, [business]);
 
   const period = useMemo(
-    () => getPayrollPeriod(frequency, new Date(), offset, parsePayrollAnchor(anchorDate)),
-    [frequency, offset, anchorDate],
+    () => getPayrollPeriod(frequency, new Date(), offset, parsePayrollAnchor(anchorDate), customDays),
+    [frequency, offset, anchorDate, customDays],
   );
 
   const periodLabel = useMemo(() => {
@@ -205,6 +208,12 @@ export default function NominaPage() {
     if (business) await supabase.from('businesses').update({ payroll_frequency: f }).eq('id', business.id);
   };
 
+  const onCustomDaysChange = async (days: number) => {
+    setCustomDays(days);
+    setOffset(0);
+    if (business) await supabase.from('businesses').update({ payroll_custom_days: days }).eq('id', business.id);
+  };
+
   const onAnchorChange = async (date: string) => {
     const next = date || null;
     setAnchorDate(next);
@@ -214,15 +223,19 @@ export default function NominaPage() {
 
   // Each confirm ADDS a payment record (ledger) — partial checks stack up
   // within the period. Requires migration 126 (drops the one-per-period key).
-  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null) => {
+  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => {
     if (!business) return;
     const row = rows.find(r => r.employeeId === employeeId);
     setBusy(true);
+    // Manual payments may target a PAST period — resolve its exact bounds.
+    const target = periodStart && periodStart !== period.startStr
+      ? getPayrollPeriod(frequency, new Date(`${periodStart}T00:00:00`), 0, parsePayrollAnchor(anchorDate), customDays)
+      : period;
     await supabase.from('payroll_payments').insert({
       business_id: business.id,
       employee_id: employeeId,
-      period_start: period.startStr,
-      period_end: period.endStr,
+      period_start: target.startStr,
+      period_end: target.endStr,
       hours: hoursCovered || 0,
       driver_hours: row?.drivenHours ?? 0,
       bonus: bonus || null,
@@ -231,7 +244,7 @@ export default function NominaPage() {
       check_number: method === 'check' && checkNumber ? checkNumber : null,
       components: components && Object.values(components).some(v => v) ? components : null,
       // Pay-time snapshot: how these hours were earned (survives job deletes).
-      breakdown: employeeBreakdownInRange({ employeeId, timesheets, jobs, startStr: period.startStr, endStr: period.endStr }),
+      breakdown: employeeBreakdownInRange({ employeeId, timesheets, jobs, startStr: target.startStr, endStr: target.endStr }),
       created_by: user?.id ?? null,
     });
     const emp = employees.find(e => e.id === employeeId);
@@ -239,7 +252,7 @@ export default function NominaPage() {
       name: emp ? `${emp.first_name} ${emp.last_name}` : undefined,
       amount: Math.round((amount + (bonus || 0)) * 100) / 100,
       method,
-      period_start: period.startStr,
+      period_start: target.startStr,
     });
     await load();
     setBusy(false);
@@ -282,6 +295,9 @@ export default function NominaPage() {
       anchorDate={anchorDate}
       onAnchorChange={onAnchorChange}
       periodLabel={periodLabel}
+      periodStartStr={period.startStr}
+      customDays={customDays}
+      onCustomDaysChange={onCustomDaysChange}
       onPrevPeriod={() => setOffset(o => o - 1)}
       onNextPeriod={() => setOffset(o => o + 1)}
       rows={rows}

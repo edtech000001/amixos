@@ -226,9 +226,11 @@ export function EmployeesScreen({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {t.summary
-              .replace('{{active}}', String(activeCount))
-              .replace('{{hours}}', String(totalHoursThisWeek))}
+            {tab === 'empleados' && (search.trim() !== '' || filtersActive)
+              ? t.resultsCount.replace('{{count}}', String(filteredEmployees.length))
+              : t.summary
+                  .replace('{{active}}', String(activeCount))
+                  .replace('{{hours}}', String(totalHoursThisWeek))}
           </p>
         </div>
         <div className="flex gap-2">

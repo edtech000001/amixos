@@ -580,7 +580,9 @@ export default function EquipmentModule() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-            <p className="text-xs text-gray-500">{t.subtitle}</p>
+            <p className="text-xs text-gray-500">
+              {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
+            </p>
           </div>
         </div>
         <Button onClick={openAdd}>

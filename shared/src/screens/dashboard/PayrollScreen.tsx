@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
+import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
 import {
   type FormulaFieldDef,
   type FormulaToken,
@@ -55,11 +56,17 @@ export interface PayrollScreenRow {
 export interface PayrollScreenProps {
   loading: boolean;
   frequency: PayrollFrequency;
+  /** Days per period when frequency='custom'. */
+  customDays?: number | null;
+  onCustomDaysChange?: (days: number) => void;
   onFrequencyChange: (f: PayrollFrequency) => void;
   /** Pay-period start date (YYYY-MM-DD) anchoring every period, or null for legacy defaults. */
   anchorDate: string | null;
   onAnchorChange: (date: string) => void;
   periodLabel: string;
+  /** Start (YYYY-MM-DD) of the period being viewed — the manual-payment
+   *  dialog defaults its period selector to it. */
+  periodStartStr?: string;
   onPrevPeriod: () => void;
   onNextPeriod: () => void;
   rows: PayrollScreenRow[];
@@ -67,7 +74,7 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings sheet list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => void;
   onDeletePayment: (paymentId: string) => void;
   /** Opens a job from the hours-breakdown list. */
   onJobPress?: (jobId: string, employeeId: string) => void;
@@ -92,15 +99,18 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly'];
+const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly', 'custom'];
 
 export function PayrollScreen({
   loading,
   frequency,
+  customDays,
+  onCustomDaysChange,
   onFrequencyChange,
   anchorDate,
   onAnchorChange,
   periodLabel,
+  periodStartStr,
   onPrevPeriod,
   onNextPeriod,
   rows,
@@ -126,10 +136,12 @@ export function PayrollScreen({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftFreq, setDraftFreq] = useState<PayrollFrequency>(frequency);
   const [draftAnchor, setDraftAnchor] = useState<string>(anchorDate ?? '');
+  const [draftCustomDays, setDraftCustomDays] = useState<string>(String(customDays ?? 7));
   const [draftConfig, setDraftConfig] = useState<PayrollConfig>(config);
   const openSettings = () => {
     setDraftFreq(frequency);
     setDraftAnchor(anchorDate ?? '');
+    setDraftCustomDays(String(customDays ?? 7));
     setDraftConfig(config);
     setSettingsOpen(true);
   };
@@ -139,6 +151,8 @@ export function PayrollScreen({
     const cleaned = { ...draftConfig, formula: f && f.length ? f : null };
     if (draftFreq !== frequency) onFrequencyChange(draftFreq);
     if (draftAnchor !== (anchorDate ?? '')) onAnchorChange(draftAnchor);
+    const cd = Math.max(1, Math.min(90, parseInt(draftCustomDays, 10) || 7));
+    if (draftFreq === 'custom' && cd !== (customDays ?? 7)) onCustomDaysChange?.(cd);
     if (JSON.stringify(cleaned) !== JSON.stringify(config)) onConfigChange(cleaned);
     setSettingsOpen(false);
   };
@@ -186,21 +200,39 @@ export function PayrollScreen({
   const [manualHours, setManualHours] = useState('');
   const [manualMethod, setManualMethod] = useState<PayMethod>('check');
   const [manualCheck, setManualCheck] = useState('');
+  const [manualPeriod, setManualPeriod] = useState('');
+  // Selectable pay periods: the viewed one + the last ~26 (a year biweekly).
+  const manualPeriods = useMemo(() => {
+    const anchor = parsePayrollAnchor(anchorDate);
+    const list: { start: string; label: string }[] = [];
+    for (let k = 0; k >= -26; k--) {
+      const per = getPayrollPeriod(frequency, new Date(), k, anchor, customDays);
+      list.push({ start: per.startStr, label: `${fmtDay(per.startStr)} – ${fmtDay(per.endStr)}` });
+    }
+    if (periodStartStr && !list.some(x => x.start === periodStartStr)) {
+      const per = getPayrollPeriod(frequency, new Date(`${periodStartStr}T00:00:00`), 0, anchor, customDays);
+      list.push({ start: per.startStr, label: `${fmtDay(per.startStr)} – ${fmtDay(per.endStr)}` });
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frequency, anchorDate, periodStartStr]);
   const [workerSearch, setWorkerSearch] = useState('');
   const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  const [manualPeriodPickerOpen, setManualPeriodPickerOpen] = useState(false);
   const openManual = () => {
     setManualWorker('');
     setManualAmount('');
     setManualHours('');
     setManualMethod('check');
     setManualCheck('');
+    setManualPeriod(periodStartStr ?? manualPeriods[0]?.start ?? '');
     setWorkerSearch('');
     setManualOpen(true);
   };
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
-    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null);
+    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined);
     setManualOpen(false);
   };
 
@@ -229,6 +261,7 @@ export function PayrollScreen({
     weekly: t.freqWeekly,
     biweekly: t.freqBiweekly,
     monthly: t.freqMonthly,
+    custom: t.freqCustom,
   };
 
   const methodLabel: Record<PayMethod, string> = {
@@ -505,8 +538,12 @@ export function PayrollScreen({
 
       {/* Manual payment sheet */}
       <RNModal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
-        <Pressable onPress={() => setManualOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" onStartShouldSetResponder={() => true}>
+        <View className="flex-1 justify-end">
+                  <Pressable
+                    onPress={() => setManualOpen(false)}
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                  />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -517,6 +554,17 @@ export function PayrollScreen({
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
+              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.manualPeriodLabel}</Text>
+              <Pressable
+                onPress={() => setManualPeriodPickerOpen(true)}
+                className="mb-4 flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+              >
+                <Text className="text-base flex-1 text-gray-900" numberOfLines={1}>
+                  {manualPeriods.find(pr => pr.start === manualPeriod)?.label ?? ''}
+                </Text>
+                <ChevronDown size={16} color="#9CA3AF" />
+              </Pressable>
+
               <Text className="text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</Text>
               <Pressable
                 onPress={() => { setWorkerSearch(''); setManualPickerOpen(true); }}
@@ -571,6 +619,42 @@ export function PayrollScreen({
               </Pressable>
             </ScrollView>
           </View>
+
+          {/* Period picker — overlay inside this modal (see worker picker). */}
+          {manualPeriodPickerOpen ? (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
+              <Pressable
+                onPress={() => setManualPeriodPickerOpen(false)}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+              />
+              <View
+                className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+                style={{ height: '70%', marginBottom: insets.bottom + 12, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 24 }}
+              >
+                <View className="items-center mb-2">
+                  <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                </View>
+                <View className="px-5 mb-3">
+                  <Text className="text-base font-semibold text-gray-900">{t.manualPeriodLabel}</Text>
+                </View>
+                <ScrollView className="flex-1">
+                  {manualPeriods.map(pr => {
+                    const isSel = pr.start === manualPeriod;
+                    return (
+                      <Pressable
+                        key={pr.start}
+                        onPress={() => { setManualPeriod(pr.start); setManualPeriodPickerOpen(false); }}
+                        className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}
+                      >
+                        <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{pr.label}</Text>
+                        {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          ) : null}
 
           {/* Worker picker — overlay INSIDE this modal (iOS won't present a
              second native Modal on top of an open one). Same look as the job
@@ -633,13 +717,17 @@ export function PayrollScreen({
           </View>
           </View>
           ) : null}
-        </Pressable>
+        </View>
       </RNModal>
 
       {/* Payroll settings sheet — frequency / anchor / pay components. */}
       <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={() => setSettingsOpen(false)}>
-        <Pressable onPress={() => setSettingsOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" onStartShouldSetResponder={() => true}>
+        <View className="flex-1 justify-end">
+                  <Pressable
+                    onPress={() => setSettingsOpen(false)}
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                  />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-lg font-bold text-gray-900">{t.settingsTitle}</Text>
               <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100">
@@ -659,6 +747,18 @@ export function PayrollScreen({
                   );
                 })}
               </View>
+
+              {draftFreq === 'custom' ? (
+                <View className="mb-4">
+                  <Text className="text-xs text-gray-500 mb-1">{t.customDaysLabel}</Text>
+                  <TextInput
+                    value={draftCustomDays}
+                    onChangeText={setDraftCustomDays}
+                    keyboardType="number-pad"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                </View>
+              ) : null}
 
               <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.anchorLabel}</Text>
               <DatePicker value={draftAnchor} onChange={setDraftAnchor} />
@@ -833,13 +933,17 @@ export function PayrollScreen({
               </Pressable>
             </ScrollView>
           </View>
-        </Pressable>
+        </View>
       </RNModal>
 
       {/* Mark-paid sheet */}
       <RNModal visible={!!payRow} transparent animationType="fade" onRequestClose={() => setPayRow(null)}>
-        <Pressable onPress={() => setPayRow(null)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-5 pb-10">
+        <View className="flex-1 justify-end">
+                  <Pressable
+                    onPress={() => setPayRow(null)}
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                  />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -943,14 +1047,18 @@ export function PayrollScreen({
             <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Worker hours breakdown sheet */}
       <RNModal visible={!!detailRow} transparent animationType="fade" onRequestClose={() => setDetailRow(null)}>
-        <Pressable onPress={() => setDetailRow(null)} className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onStartShouldSetResponder={() => true}>
+        <View className="flex-1 justify-end">
+                  <Pressable
+                    onPress={() => setDetailRow(null)}
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                  />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -1018,7 +1126,7 @@ export function PayrollScreen({
               <Text className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</Text>
             )}
           </View>
-        </Pressable>
+        </View>
       </RNModal>
     </View>
   );

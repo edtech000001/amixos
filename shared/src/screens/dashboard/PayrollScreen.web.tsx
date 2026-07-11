@@ -57,11 +57,17 @@ export interface PayrollScreenRow {
 export interface PayrollScreenProps {
   loading: boolean;
   frequency: PayrollFrequency;
+  /** Days per period when frequency='custom'. */
+  customDays?: number | null;
+  onCustomDaysChange?: (days: number) => void;
   onFrequencyChange: (f: PayrollFrequency) => void;
   /** Pay-period start date (YYYY-MM-DD) anchoring every period, or null for legacy defaults. */
   anchorDate: string | null;
   onAnchorChange: (date: string) => void;
   periodLabel: string;
+  /** Start (YYYY-MM-DD) of the period being viewed — the manual-payment
+   *  dialog defaults its period selector to it. */
+  periodStartStr?: string;
   onPrevPeriod: () => void;
   onNextPeriod: () => void;
   rows: PayrollScreenRow[];
@@ -70,7 +76,7 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings modal list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => void;
   onDeletePayment: (paymentId: string) => void;
   /** Opens a job from the hours-breakdown list. */
   onJobPress?: (jobId: string, employeeId: string) => void;
@@ -95,15 +101,18 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly'];
+const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly', 'custom'];
 
 export function PayrollScreen({
   loading,
   frequency,
+  customDays,
+  onCustomDaysChange,
   onFrequencyChange,
   anchorDate,
   onAnchorChange,
   periodLabel,
+  periodStartStr,
   onPrevPeriod,
   onNextPeriod,
   rows,
@@ -128,10 +137,12 @@ export function PayrollScreen({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftFreq, setDraftFreq] = useState<PayrollFrequency>(frequency);
   const [draftAnchor, setDraftAnchor] = useState<string>(anchorDate ?? '');
+  const [draftCustomDays, setDraftCustomDays] = useState<string>(String(customDays ?? 7));
   const [draftConfig, setDraftConfig] = useState<PayrollConfig>(config);
   const openSettings = () => {
     setDraftFreq(frequency);
     setDraftAnchor(anchorDate ?? '');
+    setDraftCustomDays(String(customDays ?? 7));
     setDraftConfig(config);
     setSettingsOpen(true);
   };
@@ -141,6 +152,8 @@ export function PayrollScreen({
     const cleaned = { ...draftConfig, formula: f && f.length ? f : null };
     if (draftFreq !== frequency) onFrequencyChange(draftFreq);
     if (draftAnchor !== (anchorDate ?? '')) onAnchorChange(draftAnchor);
+    const cd = Math.max(1, Math.min(90, parseInt(draftCustomDays, 10) || 7));
+    if (draftFreq === 'custom' && cd !== (customDays ?? 7)) onCustomDaysChange?.(cd);
     if (JSON.stringify(cleaned) !== JSON.stringify(config)) onConfigChange(cleaned);
     setSettingsOpen(false);
   };
@@ -188,18 +201,35 @@ export function PayrollScreen({
   const [manualHours, setManualHours] = useState('');
   const [manualMethod, setManualMethod] = useState<PayMethod>('check');
   const [manualCheck, setManualCheck] = useState('');
+  const [manualPeriod, setManualPeriod] = useState('');
+  // Selectable pay periods: the viewed one + the last ~26 (a year biweekly).
+  const manualPeriods = useMemo(() => {
+    const anchor = parsePayrollAnchor(anchorDate);
+    const list: { start: string; label: string }[] = [];
+    for (let k = 0; k >= -26; k--) {
+      const per = getPayrollPeriod(frequency, new Date(), k, anchor, customDays);
+      list.push({ start: per.startStr, label: `${fmtDay(per.startStr)} – ${fmtDay(per.endStr)}` });
+    }
+    if (periodStartStr && !list.some(x => x.start === periodStartStr)) {
+      const per = getPayrollPeriod(frequency, new Date(`${periodStartStr}T00:00:00`), 0, anchor, customDays);
+      list.push({ start: per.startStr, label: `${fmtDay(per.startStr)} – ${fmtDay(per.endStr)}` });
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frequency, anchorDate, periodStartStr]);
   const openManual = () => {
     setManualWorker('');
     setManualAmount('');
     setManualHours('');
     setManualMethod('check');
     setManualCheck('');
+    setManualPeriod(periodStartStr ?? manualPeriods[0]?.start ?? '');
     setManualOpen(true);
   };
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
-    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null);
+    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined);
     setManualOpen(false);
   };
 
@@ -225,6 +255,7 @@ export function PayrollScreen({
     weekly: t.freqWeekly,
     biweekly: t.freqBiweekly,
     monthly: t.freqMonthly,
+    custom: t.freqCustom,
   };
 
   const methodLabel: Record<PayMethod, string> = {
@@ -516,6 +547,15 @@ export function PayrollScreen({
               </button>
             </div>
 
+            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.manualPeriodLabel}</label>
+            <select
+              value={manualPeriod}
+              onChange={e => setManualPeriod(e.target.value)}
+              className="w-full mb-4 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {manualPeriods.map(pr => <option key={pr.start} value={pr.start}>{pr.label}</option>)}
+            </select>
+
             <label className="block text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</label>
             <select
               value={manualWorker}
@@ -591,6 +631,18 @@ export function PayrollScreen({
                 );
               })}
             </div>
+
+            {draftFreq === 'custom' ? (
+              <label className="block text-xs text-gray-500 mb-4">
+                {t.customDaysLabel}
+                <input
+                  type="number" min="1" max="90"
+                  value={draftCustomDays}
+                  onChange={e => setDraftCustomDays(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </label>
+            ) : null}
 
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.anchorLabel}</p>
             <DatePicker value={draftAnchor} onChange={setDraftAnchor} />

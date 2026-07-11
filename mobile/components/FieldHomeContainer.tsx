@@ -44,6 +44,7 @@ export function FieldHomeContainer() {
     const data = await fetchFieldHome(supabase, business.id, user.id, {
       frequency: normalizeFrequency(business.payroll_frequency),
       anchor: parsePayrollAnchor(business.payroll_anchor_date),
+      customDays: (business as { payroll_custom_days?: number | null }).payroll_custom_days ?? null,
     });
     setJobs(data.jobs);
     setRecentCompleted(data.recentCompleted);

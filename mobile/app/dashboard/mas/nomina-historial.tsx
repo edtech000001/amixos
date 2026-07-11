@@ -121,7 +121,7 @@ export default function NominaHistorialScreen() {
           void logAudit(supabase, business.id, 'payroll.payments_cleared', 'payroll', null, { count: ids.length });
           setReloadTick((n) => n + 1);
         }}
-        payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date }}
+        payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date, customDays: (business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days }}
         onLoadBreakdown={loadBreakdown}
         onJobPress={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
       />

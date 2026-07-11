@@ -82,6 +82,8 @@ export interface FieldHomeData {
 export interface FieldHomePayrollOpts {
   frequency: PayrollFrequency;
   anchor: Date | null;
+  /** Days per period when frequency='custom'. */
+  customDays?: number | null;
 }
 
 /** Format decimal hours as "Xh Ym" (omits the minutes when zero). */
@@ -133,6 +135,7 @@ export async function fetchFieldHome(
   const now = new Date();
   const freq = normalizeFrequency(payroll?.frequency);
   const anchor = payroll?.anchor ?? null;
+  const customDays = payroll?.customDays ?? null;
 
   // Calendar week (Sun–Sat) + month windows for the toggle views.
   const weekStart = new Date(now); weekStart.setHours(0, 0, 0, 0);
@@ -145,7 +148,7 @@ export async function fetchFieldHome(
 
   // Oldest pay period in the active-hours lookback; the fetch window must also
   // reach back far enough to cover the week/month toggle views.
-  const oldestPeriod = getPayrollPeriod(freq, now, -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1), anchor);
+  const oldestPeriod = getPayrollPeriod(freq, now, -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1), anchor, customDays);
   const windowStartStr = [oldestPeriod.startStr, weekStartStr, monthStartStr].sort()[0];
 
   // Last 7 days for "recent projects completed".
@@ -275,7 +278,7 @@ export async function fetchFieldHome(
     );
 
     for (let off = -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1); off <= 0; off++) {
-      const p = getPayrollPeriod(freq, now, off, anchor);
+      const p = getPayrollPeriod(freq, now, off, anchor, customDays);
       if (paid.has(p.startStr)) continue; // already paid out → no longer active
       hoursActive += employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: p.startStr, endStr: p.endStr });
     }

@@ -821,7 +821,9 @@ export default function EquipmentScreen() {
         </Pressable>
         <View className="ml-1 flex-1">
           <Text className="text-lg font-semibold text-gray-900">{t.title}</Text>
-          <Text className="text-xs text-gray-500">{t.subtitle}</Text>
+          <Text className="text-xs text-gray-500">
+            {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
+          </Text>
         </View>
         {/* Group-by — icon-only, highlighted when active (matches clients). */}
         <Pressable

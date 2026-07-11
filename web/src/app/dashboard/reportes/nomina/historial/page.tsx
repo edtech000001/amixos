@@ -121,7 +121,7 @@ export default function NominaHistorialPage() {
       entries={entries}
       onBack={() => router.push('/dashboard/reportes/nomina')}
       onDeleteEntries={onDeleteEntries}
-      payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date }}
+      payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date, customDays: (business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days }}
       onLoadBreakdown={loadBreakdown}
       onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
     />

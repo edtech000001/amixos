@@ -28,6 +28,12 @@ cssInterop(SafeAreaView, { className: 'style' });
 //      the rejection bubbles up from inside the expo-splash-screen module
 //      via a code path our wrap can't reach.
 LogBox.ignoreLogs([
+  // NativeWind's CssInterop "upgrade warning": fires on any conditional
+  // className that adds style features after first render — harmless (the
+  // component just remounts) and dev-only, but dozens of copies bury real
+  // warnings.
+  /CssInterop upgrade warning/,
+  /The previous warning was caused by a component/,
   // Plain text form (when the throw is caught + logged directly).
   'No native splash screen registered',
   // Rejection-envelope form. RegExp scoped to this specific cause so we

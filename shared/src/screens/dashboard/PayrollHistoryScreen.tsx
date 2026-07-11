@@ -37,7 +37,7 @@ export interface PayrollHistoryScreenProps {
   /** Bulk delete (admin) — the page reloads entries afterwards. */
   onDeleteEntries?: (ids: string[]) => void | Promise<void>;
   /** Business payroll settings — enables the this/last pay-period presets. */
-  payPeriod?: { frequency: unknown; anchorDate: unknown };
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
   /** Loads the hours breakdown (jobs/timesheets of the record's period) for
    *  the in-place detail sheet — same content as the live Payroll view. */
   onLoadBreakdown?: (entry: PayrollHistoryEntry) => Promise<PayrollBreakdown | null>;
@@ -256,8 +256,12 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
       {/* In-place record detail — mirrors the live Payroll breakdown. */}
       <RNModal visible={!!detail} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
-        <Pressable onPress={() => setDetail(null)} className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onStartShouldSetResponder={() => true}>
+        <View className="flex-1 justify-end">
+                  <Pressable
+                    onPress={() => setDetail(null)}
+                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                  />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
             <View className="flex-row items-start justify-between mb-4">
               <View className="flex-1 pr-3">
                 <Text className="text-lg font-bold text-gray-900">{detail?.entry.name}</Text>
@@ -331,7 +335,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
               <Text className="text-sm text-gray-400 text-center py-8">{t.historyNoResults}</Text>
             )}
           </View>
-        </Pressable>
+        </View>
       </RNModal>
 
       <DateRangeSheet

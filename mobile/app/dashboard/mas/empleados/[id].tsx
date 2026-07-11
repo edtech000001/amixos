@@ -1013,8 +1013,12 @@ export default function EmpleadoDetailRoute() {
 
       {/* Historial modal */}
       <RNModal visible={historyOpen} transparent animationType="fade" onRequestClose={() => setHistoryOpen(false)}>
-        <Pressable onPress={() => setHistoryOpen(false)} className="flex-1 justify-end bg-black/60">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setHistoryOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View className="bg-white rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -1027,8 +1031,8 @@ export default function EmpleadoDetailRoute() {
             <ScrollView contentContainerClassName="px-5 py-5 pb-10">
               <EmployeeHistoryView supabase={supabase} employeeId={employee.id} />
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
       {unsavedSheet}
     </SafeAreaView>

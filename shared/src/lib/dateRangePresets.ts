@@ -1,4 +1,4 @@
-import { getPayrollPeriod, normalizeFrequency, parsePayrollAnchor } from './payroll';
+import { getPayrollPeriod, normalizeCustomDays, normalizeFrequency, parsePayrollAnchor } from './payroll';
 
 // Quick presets for date-range filters (map weather filter, jobs list, …).
 // Shared by web and mobile so both platforms offer the identical chip row:
@@ -56,7 +56,7 @@ export function buildHistoryRangePresets(
   },
   /** Business payroll settings — adds "this/last pay period" presets that
    *  match the Payroll screen's periods exactly. */
-  payPeriod?: { frequency: unknown; anchorDate: unknown },
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown },
 ): DateRangePreset[] {
   const ymd = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -66,8 +66,9 @@ export function buildHistoryRangePresets(
   if (payPeriod) {
     const freq = normalizeFrequency(payPeriod.frequency);
     const anchor = parsePayrollAnchor(payPeriod.anchorDate);
-    const cur = getPayrollPeriod(freq, now, 0, anchor);
-    const prev = getPayrollPeriod(freq, now, -1, anchor);
+    const cd = payPeriod.customDays != null ? normalizeCustomDays(payPeriod.customDays) : null;
+    const cur = getPayrollPeriod(freq, now, 0, anchor, cd);
+    const prev = getPayrollPeriod(freq, now, -1, anchor, cd);
     periodPresets.push(
       { label: labels.thisPeriod, from: cur.startStr, to: cur.endStr },
       { label: labels.lastPeriod, from: prev.startStr, to: prev.endStr },

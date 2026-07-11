@@ -893,6 +893,7 @@ export type DashboardDict = {
     summary: string;
     logHours: string;
     teamSearchPlaceholder: string;
+    resultsCount: string;
     filter: {
       button: string;
       status: string;
@@ -1972,6 +1973,7 @@ export type DashboardDict = {
     equipment: {
       title: string;
       subtitle: string;
+      countTotal: string;
       addBtn: string;
       searchPlaceholder: string;
       emptyTitle: string;
@@ -2160,6 +2162,8 @@ export type DashboardDict = {
       entry: string;
       freqLabel: string;
       freqWeekly: string;
+      freqCustom: string;
+      customDaysLabel: string;
       settingsTitle: string;
       componentsHeading: string;
       otEnable: string;
@@ -2248,6 +2252,7 @@ export type DashboardDict = {
       manualPayBtn: string;
       manualWorkerLabel: string;
       manualSelectWorker: string;
+      manualPeriodLabel: string;
       clearPaymentsLabel: string;
       clearPaymentsConfirm: string;
       totalPending: string;
@@ -3270,6 +3275,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       summary: '{{active}} activos · {{hours}}h esta semana',
       logHours: 'Registrar horas',
       teamSearchPlaceholder: 'Buscar por nombre, teléfono o campo…',
+      resultsCount: '{{count}} resultados',
       filter: {
         button: 'Filtrar',
         status: 'Estado',
@@ -4326,6 +4332,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       equipment: {
         title: 'Maquinaria',
           subtitle: 'Camiones, autos, equipos pesados y todo lo demás.',
+          countTotal: '{{count}} en total',
           addBtn: 'Agregar equipo',
           searchPlaceholder: 'Buscar por nombre, marca o placa...',
           emptyTitle: 'Sin equipos aún',
@@ -4514,6 +4521,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         entry: 'Nómina',
         freqLabel: 'Frecuencia',
         freqWeekly: 'Semanal',
+        freqCustom: 'Personalizado',
+        customDaysLabel: 'Días por período (ej. 3)',
         settingsTitle: 'Configuración de nómina',
         componentsHeading: 'Componentes de pago',
         otEnable: 'Pagar horas extra',
@@ -4602,6 +4611,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         manualPayBtn: 'Registrar pago',
         manualWorkerLabel: 'Trabajador',
         manualSelectWorker: 'Elegir trabajador…',
+        manualPeriodLabel: 'Período de pago',
         clearPaymentsLabel: 'Eliminar todos los pagos',
         clearPaymentsConfirm: '¿Eliminar todos los pagos registrados de este período para {{name}}?',
         totalPending: 'Pendiente por pagar',
@@ -5650,6 +5660,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       summary: '{{active}} active · {{hours}}h this week',
       logHours: 'Log hours',
       teamSearchPlaceholder: 'Search name, phone or field…',
+      resultsCount: '{{count}} results',
       filter: {
         button: 'Filter',
         status: 'Status',
@@ -6706,6 +6717,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       equipment: {
         title: 'Equipment',
           subtitle: 'Trucks, cars, heavy equipment, and everything else.',
+          countTotal: '{{count}} total',
           addBtn: 'Add equipment',
           searchPlaceholder: 'Search by name, make, or plate...',
           emptyTitle: 'No equipment yet',
@@ -6894,6 +6906,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         entry: 'Payroll',
         freqLabel: 'Frequency',
         freqWeekly: 'Weekly',
+        freqCustom: 'Custom',
+        customDaysLabel: 'Days per period (e.g. 3)',
         settingsTitle: 'Payroll settings',
         componentsHeading: 'Pay components',
         otEnable: 'Pay overtime',
@@ -6982,6 +6996,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         manualPayBtn: 'Record payment',
         manualWorkerLabel: 'Worker',
         manualSelectWorker: 'Choose worker…',
+        manualPeriodLabel: 'Pay period',
         clearPaymentsLabel: 'Delete all payments',
         clearPaymentsConfirm: 'Delete all recorded payments for {{name}} in this period?',
         totalPending: 'Pending to pay',
