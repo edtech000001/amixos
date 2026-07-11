@@ -32,13 +32,15 @@ export interface PayrollHistoryScreenProps {
   onBack: () => void;
   /** Bulk delete (admin) — the page reloads entries afterwards. */
   onDeleteEntries?: (ids: string[]) => void | Promise<void>;
+  /** Business payroll settings — enables the this/last pay-period presets. */
+  payPeriod?: { frequency: unknown; anchorDate: unknown };
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries }: PayrollHistoryScreenProps) {
+export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
@@ -237,7 +239,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
         toLabel={fullDate.to}
         clearLabel={fullDate.clear}
         applyLabel={fullDate.apply}
-        presets={buildHistoryRangePresets(t.historyPresets)}
+        presets={buildHistoryRangePresets(t.historyPresets, payPeriod)}
       />
 
       {/* Sticky bulk-delete bar — same layout as the jobs list. */}

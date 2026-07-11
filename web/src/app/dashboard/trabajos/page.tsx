@@ -269,6 +269,8 @@ export default function TrabajosPage() {
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}
       canCreate={can.createJob(currentRole)}
+      canCreateInvoice={can.createInvoice(currentRole)}
+      canViewInvoice={can.seeInvoices(currentRole)}
       canCreateEstimates={can.createEstimate(currentRole)}
       alertThresholds={alertThresholds}
       businessId={business?.id}

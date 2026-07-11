@@ -162,6 +162,9 @@ function NuevoTrabajoContent() {
   // Duplicate mode: prefill the whole form from an existing job but save as
   // a brand-new record (editId stays null so the insert path runs).
   const duplicateId = searchParams.get('duplicate');
+  // Duplicate mode 'team': carry over ONLY client + crew/drivers — dates,
+  // hours, notes, photos etc. start blank for the new visit.
+  const teamOnly = !!duplicateId && searchParams.get('copy') === 'team';
   const sourceId = editId ?? duplicateId;
   const isProposal = searchParams.get('modo') === 'propuesta';
   // Defense in depth: a role that can create jobs but not estimates
@@ -698,7 +701,11 @@ function NuevoTrabajoContent() {
           supabase.from('job_items').select('*').eq('job_id', sourceId).order('created_at'),
           supabase.from('job_assignments').select('*').eq('job_id', sourceId),
         ]);
-        if (job) {
+        if (job && teamOnly) {
+          setClientId(job.client_id ?? '');
+          if (job.location_id) setLocationId(job.location_id);
+          setDriverEmployeeIds(job.driver_employee_ids ?? []);
+        } else if (job) {
           setTitle(job.title || '');
           setClientId(job.client_id || '');
           setPublishedToCrew(!!job.published_to_crew);
@@ -750,7 +757,7 @@ function NuevoTrabajoContent() {
             setDiscount(job.discount || 0);
           }
         }
-        if (jobItems && jobItems.length > 0) {
+        if (jobItems && jobItems.length > 0 && !teamOnly) {
           setItems(jobItems.map((i: any) => ({
             id: i.id,
             item_type: i.item_type || 'other',
@@ -1109,7 +1116,9 @@ function NuevoTrabajoContent() {
         job_city: city,
         job_state: state,
         coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
-        scheduled_date: scheduledDate,
+        // 'Fecha' is ONE requirable unit covering start AND end date
+        // (jobSections: scheduled_date represents both pickers).
+        scheduled_date: scheduledDate && endDate ? 'x' : '',
         time_start: timeStart,
         time_end: timeEnd,
         total_hours: effectiveTotalHours != null ? 'x' : '',

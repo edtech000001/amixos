@@ -32,13 +32,15 @@ export interface PayrollHistoryScreenProps {
   onBack: () => void;
   /** Bulk delete (admin) — the page reloads entries afterwards. */
   onDeleteEntries?: (ids: string[]) => void | Promise<void>;
+  /** Business payroll settings — enables the this/last pay-period presets. */
+  payPeriod?: { frequency: unknown; anchorDate: unknown };
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries }: PayrollHistoryScreenProps) {
+export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
@@ -62,7 +64,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
   const [dateOpen, setDateOpen] = useState(false);
   const dateActive = !!(dateFrom || dateTo);
   // Recomputed per render so a tab left open past midnight stays correct.
-  const presets = buildHistoryRangePresets(t.historyPresets);
+  const presets = buildHistoryRangePresets(t.historyPresets, payPeriod);
   const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const filtered = useMemo(() => {
     const q = norm(search.trim());

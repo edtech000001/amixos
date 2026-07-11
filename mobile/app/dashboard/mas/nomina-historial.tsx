@@ -76,6 +76,7 @@ export default function NominaHistorialScreen() {
           }
           setReloadTick((n) => n + 1);
         }}
+        payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date }}
       />
     </SafeAreaView>
   );

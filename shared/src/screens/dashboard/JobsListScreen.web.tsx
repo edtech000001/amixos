@@ -152,6 +152,10 @@ export interface JobsListScreenProps {
    *  Archivados tab (restore). Caller owns confirmation + the update. */
   onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
+  /** Role gates (role editor): hide the invoice actions when the member
+   *  can't create / view invoices (e.g. field crew). Default allowed. */
+  canCreateInvoice?: boolean;
+  canViewInvoice?: boolean;
   onNewJob: () => void;
   onNewProposal: () => void;
   /** Whether the viewer may create jobs/proposals. Hides the "+ Nuevo"
@@ -220,6 +224,8 @@ export function JobsListScreen({
   onBulkDelete,
   onBulkArchive,
   onViewInvoice,
+  canCreateInvoice = true,
+  canViewInvoice = true,
   onNewJob,
   onNewProposal,
   canCreate = true,
@@ -404,9 +410,11 @@ export function JobsListScreen({
           <button onClick={() => onUpdateStatus(job.id, 'scheduled')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-semibold text-blue-600">
             <Calendar size={11} /> {t.actions.schedule}
           </button>
+          {canCreateInvoice ? (
           <button onClick={() => onGenerateInvoice(job.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-purple-50 text-xs font-semibold text-purple-600">
             <FileText size={11} /> {t.actions.generateInvoice}
           </button>
+          ) : null}
         </div>
       );
     }
@@ -431,18 +439,22 @@ export function JobsListScreen({
     if (job.status === 'completed') {
       return (
         <div className="flex items-center justify-end shrink-0">
+{canCreateInvoice ? (
           <button onClick={() => onGenerateInvoice(job.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-purple-50 text-xs font-semibold text-purple-600">
             <FileText size={12} /> {t.actions.generateInvoice}
           </button>
+) : null}
         </div>
       );
     }
     if (job.status === 'invoiced' && job.invoiceId) {
       return (
         <div className="flex items-center justify-end shrink-0">
+{canViewInvoice ? (
           <button onClick={() => onViewInvoice(job.invoiceId!)} className="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:underline">
             <FileText size={12} /> {t.actions.viewInvoice} <ArrowRight size={11} />
           </button>
+) : null}
         </div>
       );
     }

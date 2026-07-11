@@ -136,6 +136,10 @@ export interface JobsListScreenProps {
    *  Archivados tab (restore). Caller owns confirmation + the update. */
   onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
+  /** Role gates (role editor): hide the invoice actions when the member
+   *  can't create / view invoices (e.g. field crew). Default allowed. */
+  canCreateInvoice?: boolean;
+  canViewInvoice?: boolean;
   onNewJob: () => void;
   onNewProposal: () => void;
   /**
@@ -218,6 +222,8 @@ export function JobsListScreen({
   onBulkDelete,
   onBulkArchive,
   onViewInvoice,
+  canCreateInvoice: canInvoicePerm = true,
+  canViewInvoice: canViewInvoicePerm = true,
   onNewJob,
   onNewProposal,
   canCreate = true,
@@ -414,10 +420,12 @@ export function JobsListScreen({
             <Calendar size={11} color="#2563EB" />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.schedule}</Text>
           </Pressable>
+          {canInvoicePerm ? (
           <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-50">
             <FileText size={11} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.generateInvoice}</Text>
           </Pressable>
+          ) : null}
         </View>
       );
     }
@@ -442,21 +450,25 @@ export function JobsListScreen({
     if (job.status === 'completed') {
       return (
         <View className="border-t border-gray-50 px-5 py-2.5">
+          {canInvoicePerm ? (
           <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-50 self-start">
             <FileText size={12} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.generateInvoice}</Text>
           </Pressable>
+          ) : null}
         </View>
       );
     }
     if (job.status === 'invoiced' && job.invoiceId) {
       return (
         <View className="border-t border-gray-50 px-5 py-2.5">
+{canViewInvoicePerm ? (
           <Pressable onPress={() => onViewInvoice(job.invoiceId!)} className="flex-row items-center gap-1 self-start">
             <FileText size={12} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.viewInvoice}</Text>
             <ArrowRight size={11} color="#9333EA" />
           </Pressable>
+) : null}
         </View>
       );
     }

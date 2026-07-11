@@ -78,6 +78,7 @@ export default function NominaHistorialPage() {
       entries={entries}
       onBack={() => router.push('/dashboard/reportes/nomina')}
       onDeleteEntries={onDeleteEntries}
+      payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date }}
     />
   );
 }

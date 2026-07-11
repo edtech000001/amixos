@@ -132,7 +132,7 @@ function hoursFromTimes(start: string, end: string): number | null {
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { edit, duplicate, modo, client: clientParam } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string }>();
+  const { edit, duplicate, modo, client: clientParam, copy } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string }>();
   const supabase = createSupabaseClient();
   const { business, user, currentRole, activeLocationId, locations } = useApp();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
@@ -175,6 +175,9 @@ export default function NuevoTrabajoRoute() {
   // Duplicate mode: prefill the whole form from an existing job but save as
   // a brand-new record (editId stays null so the insert path runs).
   const duplicateId = duplicate ?? null;
+  // Duplicate mode 'team': carry over ONLY client + crew/drivers — dates,
+  // hours, notes, photos etc. start blank for the new visit.
+  const teamOnly = !!duplicateId && copy === 'team';
   const sourceId = editId ?? duplicateId;
   const [loadingEdit, setLoadingEdit] = useState(!!sourceId);
   // For new mode the URL drives this; for edit/duplicate mode we overwrite
@@ -334,7 +337,12 @@ export default function NuevoTrabajoRoute() {
           supabase.from('job_assignments').select('*').eq('job_id', sourceId),
         ]);
         if (cancelled) return;
-        if (job) {
+        if (job && teamOnly) {
+          setClientId(job.client_id ?? '');
+          setLocationId(job.location_id ?? '');
+          setDriverEmployeeIds(job.driver_employee_ids ?? []);
+          if (restrictedCreator) setStatus('completed');
+        } else if (job) {
           const proposal = !!job.estimate_number;
           setIsProposal(proposal);
           setTitle(job.title ?? '');
@@ -1321,7 +1329,9 @@ export default function NuevoTrabajoRoute() {
         job_city: city,
         job_state: state,
         coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
-        scheduled_date: scheduledDate,
+        // 'Fecha' is ONE requirable unit covering start AND end date
+        // (jobSections: scheduled_date represents both pickers).
+        scheduled_date: scheduledDate && endDate ? 'x' : '',
         time_start: timeStart,
         time_end: timeEnd,
         total_hours: effectiveTotalHours != null ? 'x' : '',

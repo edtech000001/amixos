@@ -144,8 +144,11 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       // Online write lands immediately → refresh. Offline → the pending tile
       // (from the outbox) shows it until it syncs.
       if (!queued) await load();
-    } catch {
-      setError(t.uploadError);
+    } catch (err) {
+      // Include the server's reason — "can't upload" alone made an RLS denial
+      // indistinguishable from a network blip while debugging field roles.
+      const detail = (err as { message?: string })?.message;
+      setError(detail ? `${t.uploadError} (${detail})` : t.uploadError);
     }
     setUploading(false);
   };

@@ -433,6 +433,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   // Share via the Web Share API when available (mobile browsers), otherwise
   // copy to clipboard and flash a "copied" hint keyed by `key`.
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [dupMenuOpen, setDupMenuOpen] = useState(false);
   const shareText = async (text: string, key: string) => {
     if (!text) return;
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -518,7 +519,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
-  const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
+  const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
 
   // Back target — return to the invoice when this job was opened from one
   // (?from=invoice&invoice=<id>), otherwise the jobs list.
@@ -561,7 +562,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           <div className="flex gap-2">
             {/* Generate-invoice lives in the pipeline action row below; no
                duplicate here. */}
-            {job.invoice_id && (
+            {job.invoice_id && can.seeInvoices(currentRole) && (
               <Link href={`/dashboard/facturas/${job.invoice_id}?from=job&job=${job.id}`}>
                 <Button variant="secondary" size="sm">
                   <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn} <ArrowRight size={13} className="ml-1"/>
@@ -587,7 +588,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 </button>
               </>
             )}
-            {job.status !== 'cancelled' && job.status !== 'declined' && (
+            {job.status !== 'cancelled' && job.status !== 'declined' && can.seeAllJobs(currentRole) && (
               <button onClick={shareJobToCrew}
                 className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors relative"
                 title={td.sendToCrew}>
@@ -608,11 +609,29 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </button>
             )}
             {can.createJob(currentRole) && (
-              <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}`}
-                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
-                title={td.duplicateTooltip}>
-                <Copy size={16}/>
-              </Link>
+              <div className="relative">
+                <button type="button" onClick={() => setDupMenuOpen(o => !o)}
+                  className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                  title={td.duplicateTooltip}>
+                  <Copy size={16}/>
+                </button>
+                {dupMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setDupMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-white rounded-xl border border-gray-100 shadow-lg py-1">
+                      <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{td.duplicateAskTitle}</p>
+                      <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}`}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        {td.duplicateFullOption}
+                      </Link>
+                      <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}&copy=team`}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        {td.duplicateTeamOption}
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             {can.editJobMetadata(currentRole) && (
               <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
@@ -756,7 +775,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
             {/* Archive — the exit for completed work that will never be
                invoiced (internal hours etc). Reversible. */}
-            {job.status === 'completed' && (
+            {job.status === 'completed' && can.seeAllJobs(currentRole) && (
               <Button variant="secondary" size="sm" onClick={async () => {
                 const archive = !job.archived_at;
                 if (archive && !window.confirm(full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'))) return;

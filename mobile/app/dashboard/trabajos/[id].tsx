@@ -673,7 +673,7 @@ export default function JobDetailRoute() {
     });
   const pipelineIdx = pipeline.findIndex((s) => s.key === job.status);
   const isCancelled = job.status === 'cancelled' || job.status === 'declined';
-  const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id;
+  const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const total = isProposal && job.total_amount > 0 ? job.total_amount : itemSubtotal;
@@ -841,7 +841,19 @@ export default function JobDetailRoute() {
           ) : null}
           {can.createJob(currentRole) ? (
             <Pressable
-              onPress={() => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}` as never)}
+              onPress={() =>
+                Alert.alert(td.duplicateTooltip, td.duplicateAskTitle, [
+                  { text: tc.buttons.cancel, style: 'cancel' },
+                  {
+                    text: td.duplicateTeamOption,
+                    onPress: () => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}&copy=team` as never),
+                  },
+                  {
+                    text: td.duplicateFullOption,
+                    onPress: () => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}` as never),
+                  },
+                ])
+              }
               hitSlop={8}
               className="p-2 rounded-lg active:bg-gray-100"
             >
@@ -938,7 +950,7 @@ export default function JobDetailRoute() {
             </Button>
           ) : null}
 
-          {job.invoice_id ? (
+          {job.invoice_id && can.seeInvoices(currentRole) ? (
             <Pressable
               onPress={() => router.push(`/dashboard/facturas/${job.invoice_id}?from=job&jobId=${job.id}` as never)}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
@@ -985,7 +997,7 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
 
-          {!isCancelled ? (
+          {!isCancelled && can.seeAllJobs(currentRole) ? (
             <Pressable
               onPress={shareJobToCrew}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
@@ -1008,7 +1020,7 @@ export default function JobDetailRoute() {
 
           {/* Archive — the exit for completed work that will never be
              invoiced (internal hours etc). Reversible. */}
-          {job.status === 'completed' ? (
+          {job.status === 'completed' && can.seeAllJobs(currentRole) ? (
             <Pressable
               onPress={() => {
                 const archive = !job.archived_at;

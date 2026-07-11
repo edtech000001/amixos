@@ -261,6 +261,8 @@ export default function TrabajosTab() {
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
         canCreate={can.createJob(currentRole)}
+        canCreateInvoice={can.createInvoice(currentRole)}
+        canViewInvoice={can.seeInvoices(currentRole)}
         canCreateEstimates={can.createEstimate(currentRole)}
         alertThresholds={alertThresholds}
         businessId={business?.id}

@@ -662,6 +662,9 @@ export type DashboardDict = {
       printTooltip: string;
       editTooltip: string;
       duplicateTooltip: string;
+      duplicateAskTitle: string;
+      duplicateFullOption: string;
+      duplicateTeamOption: string;
       deleteTooltip: string;
       sendAction: string;
       sendActionMessage: string;
@@ -2221,6 +2224,8 @@ export type DashboardDict = {
       historyTotalLabel: string;
       historyPaymentsCount: string;
       historyPresets: {
+        thisPeriod: string;
+        lastPeriod: string;
         thisWeek: string;
         lastWeek: string;
         last2Weeks: string;
@@ -3041,6 +3046,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         printTooltip: 'Descargar PDF',
         editTooltip: 'Editar trabajo',
         duplicateTooltip: 'Duplicar trabajo',
+        duplicateAskTitle: '¿Qué quieres copiar?',
+        duplicateFullOption: 'Copiar todo',
+        duplicateTeamOption: 'Solo cliente y equipo',
         deleteTooltip: 'Eliminar trabajo',
         generateInvoiceBtn: 'Generar factura',
         viewInvoiceBtn: 'Ver factura',
@@ -4560,6 +4568,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyTotalLabel: 'Total mostrado',
         historyPaymentsCount: '{{count}} pagos',
         historyPresets: {
+          thisPeriod: 'Este período de pago',
+          lastPeriod: 'Período anterior',
           thisWeek: 'Esta semana',
           lastWeek: 'Semana pasada',
           last2Weeks: 'Últimas 2 semanas',
@@ -5406,6 +5416,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         printTooltip: 'Download PDF',
         editTooltip: 'Edit job',
         duplicateTooltip: 'Duplicate job',
+        duplicateAskTitle: 'What do you want to copy?',
+        duplicateFullOption: 'Copy everything',
+        duplicateTeamOption: 'Client and crew only',
         deleteTooltip: 'Delete job',
         generateInvoiceBtn: 'Generate invoice',
         viewInvoiceBtn: 'View invoice',
@@ -6925,6 +6938,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyTotalLabel: 'Shown total',
         historyPaymentsCount: '{{count}} payments',
         historyPresets: {
+          thisPeriod: 'This pay period',
+          lastPeriod: 'Last pay period',
           thisWeek: 'This week',
           lastWeek: 'Last week',
           last2Weeks: 'Last 2 weeks',
