@@ -298,8 +298,13 @@ export function PayrollScreen({
           <Text className="text-xs text-gray-400">{t.subtitle}</Text>
         </View>
         {onHistoryPress ? (
-          <Pressable onPress={onHistoryPress} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
-            <History size={20} color="#6B7280" />
+          <Pressable
+            onPress={onHistoryPress}
+            hitSlop={8}
+            className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-xl mr-1 active:bg-gray-50"
+          >
+            <History size={15} color="#374151" />
+            <Text className="text-xs font-semibold text-gray-700">{t.historyTitle}</Text>
           </Pressable>
         ) : null}
         {canManage ? (

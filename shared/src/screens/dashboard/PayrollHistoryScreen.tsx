@@ -3,12 +3,15 @@
 // PERMANENT records (immune to job edits/deletes) — the screen is the audit
 // trail and the landing spot for future features (filters, export…).
 
-import { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { ChevronLeft } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
+import { ChevronLeft, Search, Check, Trash2, Calendar } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { DateRangeSheet } from '../../ui/DateRangeSheet';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 
 export interface PayrollHistoryEntry {
+  id: string;
   periodStart: string;
   periodEnd: string;
   name: string;
@@ -27,13 +30,15 @@ export interface PayrollHistoryScreenProps {
   loading: boolean;
   entries: PayrollHistoryEntry[];
   onBack: () => void;
+  /** Bulk delete (admin) — the page reloads entries afterwards. */
+  onDeleteEntries?: (ids: string[]) => void | Promise<void>;
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistoryScreenProps) {
+export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
@@ -44,18 +49,79 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
     check: t.methodCheck,
     wire: t.methodWire,
   };
+  const fullDate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
+  const tSel = full.dashboard.jobs.batchInvoice; // reuse the jobs selection-bar labels
   const componentsText = (c: Record<string, number> | null | undefined) =>
     c ? Object.entries(c).filter(([, v]) => v).map(([l, v]) => `${v} × ${l}`).join(' · ') : '';
 
+  // Search + date-range filter. Range matches by PERIOD OVERLAP so a period
+  // straddling the boundary still counts.
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [dateOpen, setDateOpen] = useState(false);
+  const dateActive = !!(dateFrom || dateTo);
+  const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filtered = useMemo(() => {
+    const q = norm(search.trim());
+    return entries.filter(h => {
+      if (dateFrom && h.periodEnd.slice(0, 10) < dateFrom) return false;
+      if (dateTo && h.periodStart.slice(0, 10) > dateTo) return false;
+      if (!q) return true;
+      return norm([
+        h.name,
+        h.checkNumber ?? '',
+        methodLabel[h.method] ?? h.method,
+        h.grossPay.toFixed(2),
+        String(h.grossPay),
+        componentsText(h.components),
+      ].join(' ')).includes(q);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, search, dateFrom, dateTo]);
   const groups = useMemo(() => {
     const by = new Map<string, PayrollHistoryEntry[]>();
-    entries.forEach(h => {
+    filtered.forEach(h => {
       const list = by.get(h.periodStart) ?? [];
       list.push(h);
       by.set(h.periodStart, list);
     });
     return Array.from(by.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [entries]);
+  }, [filtered]);
+
+  // Summary of whatever is currently shown — "worker X earned $Y all time"
+  // is just: search the worker, read this line. Add dates for a range.
+  const shownTotal = filtered.reduce((sum, h) => sum + h.grossPay, 0);
+  const shownHours = filtered.reduce((sum, h) => sum + h.hours + h.driverHours, 0);
+
+  // Multi-select + bulk delete.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelected = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+  const allSelected = filtered.length > 0 && filtered.every(h => selected.has(h.id));
+  const toggleSelectAll = () =>
+    setSelected(allSelected ? new Set() : new Set(filtered.map(h => h.id)));
+  const deleteSelected = () => {
+    if (!onDeleteEntries || selected.size === 0) return;
+    Alert.alert(
+      t.historyDeleteBtn,
+      t.historyDeleteConfirm.replace('{{count}}', String(selected.size)),
+      [
+        { text: full.common.buttons.cancel, style: 'cancel' },
+        {
+          text: t.historyDeleteBtn,
+          style: 'destructive',
+          onPress: () => { void Promise.resolve(onDeleteEntries(Array.from(selected))).then(exitSelect); },
+        },
+      ],
+    );
+  };
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -67,14 +133,55 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
         <Text className="ml-1 text-base font-semibold text-gray-900">{t.historyTitle}</Text>
       </View>
 
+      {/* Search + select */}
+      <View className="px-5 pt-4 flex-row items-center gap-2">
+        <View className="flex-1 flex-row items-center rounded-2xl border border-gray-200 bg-white px-3.5">
+          <Search size={16} color="#9CA3AF" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t.historySearchPlaceholder}
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            autoCorrect={false}
+            className="flex-1 px-2.5 py-2.5 text-sm text-gray-900"
+          />
+        </View>
+        {/* Date range — same calendar sheet as the invoices list. */}
+        <Pressable
+          onPress={() => setDateOpen(true)}
+          className={`p-2.5 rounded-2xl border ${dateActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+        >
+          <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
+        </Pressable>
+        {onDeleteEntries ? (
+          <Pressable
+            onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            className={`px-3 py-2.5 rounded-2xl border ${selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+          >
+            <Text className={`text-sm font-semibold ${selectMode ? 'text-primary' : 'text-gray-600'}`}>
+              {selectMode ? t.historyCancelSelect : t.historySelect}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* Shown-total summary — reflects the current search + date range. */}
+      <View className="mx-5 mt-3 flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
+        <Text className="text-xs text-gray-500">
+          {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
+        </Text>
+        <Text className="text-base font-bold text-primary">{fmt(shownTotal)}</Text>
+      </View>
+
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#4F46E5" />
         </View>
       ) : groups.length === 0 ? (
-        <Text className="text-sm text-gray-400 text-center py-16 px-6">{t.historyEmpty}</Text>
+        <Text className="text-sm text-gray-400 text-center py-16 px-6">{search ? t.historyNoResults : t.historyEmpty}</Text>
       ) : (
-        <ScrollView contentContainerClassName="px-5 py-5 pb-24">
+        <ScrollView contentContainerClassName={`px-5 py-5 ${selectMode ? 'pb-40' : 'pb-24'}`}>
           {groups.map(([periodStart, list]) => (
             <View key={periodStart} className="mb-5">
               <View className="flex-row items-center justify-between mb-1.5">
@@ -87,7 +194,17 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
               </View>
               <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {list.map((h, i) => (
-                  <View key={`${h.name}-${i}`} className={`px-4 py-3 flex-row items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <Pressable
+                    key={h.id}
+                    disabled={!selectMode}
+                    onPress={() => toggleSelected(h.id)}
+                    className={`px-4 py-3 flex-row items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'active:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
+                  >
+                    {selectMode ? (
+                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                        {selected.has(h.id) ? <Check size={13} color="#fff" /> : null}
+                      </View>
+                    ) : null}
                     <View className="flex-1 min-w-0">
                       <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{h.name}</Text>
                       <Text className="text-xs text-gray-400">
@@ -101,13 +218,59 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
                       </Text>
                     </View>
                     <Text className="text-sm font-bold text-gray-900">{fmt(h.grossPay)}</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             </View>
           ))}
         </ScrollView>
       )}
+
+      <DateRangeSheet
+        open={dateOpen}
+        onClose={() => setDateOpen(false)}
+        from={dateFrom || null}
+        to={dateTo || null}
+        onChange={({ from, to }) => { setDateFrom(from ?? ''); setDateTo(to ?? ''); }}
+        title={fullDate.title}
+        fromLabel={fullDate.from}
+        toLabel={fullDate.to}
+        clearLabel={fullDate.clear}
+        applyLabel={fullDate.apply}
+        presets={buildHistoryRangePresets(t.historyPresets)}
+      />
+
+      {/* Sticky bulk-delete bar — same layout as the jobs list. */}
+      {selectMode ? (
+        <View className="absolute bottom-0 left-0 right-0 border-t border-gray-200 bg-white px-5 pt-3 pb-8">
+          <View className="flex-row items-center gap-3">
+            <Text className="text-sm text-gray-600">
+              {tSel.selectedCount.replace('{{count}}', String(selected.size))}
+            </Text>
+            {filtered.length > 0 ? (
+              <Pressable onPress={toggleSelectAll} hitSlop={8}>
+                <Text className="text-xs font-semibold text-primary">
+                  {allSelected ? tSel.deselectAll : tSel.selectAll}
+                </Text>
+              </Pressable>
+            ) : null}
+            <View className="flex-1" />
+            <Pressable onPress={exitSelect} className="px-3 py-2 rounded-xl active:bg-gray-100">
+              <Text className="text-sm font-semibold text-gray-600">{tSel.cancel}</Text>
+            </Pressable>
+            <Pressable
+              onPress={deleteSelected}
+              disabled={selected.size === 0}
+              className={`flex-row items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 active:bg-red-700 ${selected.size === 0 ? 'opacity-40' : ''}`}
+            >
+              <Trash2 size={15} color="#fff" />
+              <Text className="text-sm font-semibold text-white">
+                {t.historyDeleteBtn}{selected.size > 0 ? ` · ${selected.size}` : ''}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

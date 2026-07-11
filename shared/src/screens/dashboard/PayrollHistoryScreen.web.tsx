@@ -5,11 +5,13 @@
 // records (immune to job edits/deletes) — the page is the audit trail and the
 // landing spot for future features (filters, export, per-worker view…).
 
-import { useMemo } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { ChevronLeft, Search, X, Check, Trash2, Calendar } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 
 export interface PayrollHistoryEntry {
+  id: string;
   periodStart: string;
   periodEnd: string;
   name: string;
@@ -28,13 +30,15 @@ export interface PayrollHistoryScreenProps {
   loading: boolean;
   entries: PayrollHistoryEntry[];
   onBack: () => void;
+  /** Bulk delete (admin) — the page reloads entries afterwards. */
+  onDeleteEntries?: (ids: string[]) => void | Promise<void>;
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistoryScreenProps) {
+export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
@@ -45,27 +49,200 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
     check: t.methodCheck,
     wire: t.methodWire,
   };
+  const fullDate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
+  const tSel = full.dashboard.jobs.batchInvoice; // reuse the jobs selection-bar labels
   const componentsText = (c: Record<string, number> | null | undefined) =>
     c ? Object.entries(c).filter(([, v]) => v).map(([l, v]) => `${v} × ${l}`).join(' · ') : '';
 
+  // Search + date-range filter. Range matches by PERIOD OVERLAP so a period
+  // straddling the boundary still counts.
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [dateOpen, setDateOpen] = useState(false);
+  const dateActive = !!(dateFrom || dateTo);
+  // Recomputed per render so a tab left open past midnight stays correct.
+  const presets = buildHistoryRangePresets(t.historyPresets);
+  const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filtered = useMemo(() => {
+    const q = norm(search.trim());
+    return entries.filter(h => {
+      if (dateFrom && h.periodEnd.slice(0, 10) < dateFrom) return false;
+      if (dateTo && h.periodStart.slice(0, 10) > dateTo) return false;
+      if (!q) return true;
+      return norm([
+        h.name,
+        h.checkNumber ?? '',
+        methodLabel[h.method] ?? h.method,
+        h.grossPay.toFixed(2),
+        String(h.grossPay),
+        componentsText(h.components),
+      ].join(' ')).includes(q);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, search, dateFrom, dateTo]);
   const groups = useMemo(() => {
     const by = new Map<string, PayrollHistoryEntry[]>();
-    entries.forEach(h => {
+    filtered.forEach(h => {
       const list = by.get(h.periodStart) ?? [];
       list.push(h);
       by.set(h.periodStart, list);
     });
     return Array.from(by.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [entries]);
+  }, [filtered]);
+
+  // Summary of whatever is currently shown — "worker X earned $Y all time"
+  // is just: search the worker, read this line. Add dates for a range.
+  const shownTotal = filtered.reduce((sum, h) => sum + h.grossPay, 0);
+  const shownHours = filtered.reduce((sum, h) => sum + h.hours + h.driverHours, 0);
+
+  // Multi-select + bulk delete.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Shift-click selects the whole range since the last picked row (same as
+  // the jobs list). Visible order = the grouped list, top to bottom.
+  const lastPickRef = useRef<string | null>(null);
+  const handleSelectClick = (id: string, shiftKey: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      const flat = groups.flatMap(([, list]) => list.map(h => h.id));
+      const anchor = lastPickRef.current;
+      if (shiftKey && anchor && flat.includes(anchor) && flat.includes(id)) {
+        const a = flat.indexOf(anchor);
+        const b = flat.indexOf(id);
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const turningOn = !next.has(id);
+        for (let i = lo; i <= hi; i++) {
+          if (turningOn) next.add(flat[i]); else next.delete(flat[i]);
+        }
+      } else if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      lastPickRef.current = id;
+      return next;
+    });
+  };
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+  const allSelected = filtered.length > 0 && filtered.every(h => selected.has(h.id));
+  const toggleSelectAll = () =>
+    setSelected(allSelected ? new Set() : new Set(filtered.map(h => h.id)));
+  const deleteSelected = async () => {
+    if (!onDeleteEntries || selected.size === 0) return;
+    if (!window.confirm(t.historyDeleteConfirm.replace('{{count}}', String(selected.size)))) return;
+    await onDeleteEntries(Array.from(selected));
+    exitSelect();
+  };
 
   return (
-    <div className="px-6 lg:px-8 pt-6 pb-12">
+    <div className={`px-6 lg:px-8 pt-6 ${selectMode ? 'pb-28' : 'pb-12'}`}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <ChevronLeft size={18} className="text-gray-500" />
         </button>
         <h1 className="text-xl font-bold text-gray-900">{t.historyTitle}</h1>
+      </div>
+
+      {/* Search + date range + select */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t.historySearchPlaceholder}
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          {search ? (
+            <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
+        {/* Date range — same calendar popover as the invoices list. */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setDateOpen(o => !o)}
+            title={fullDate.title}
+            className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
+              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Calendar size={16} />
+          </button>
+          {dateOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{fullDate.title}</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {presets.map(pr => {
+                    const on = dateFrom === pr.from && dateTo === pr.to;
+                    return (
+                      <button
+                        key={pr.label}
+                        type="button"
+                        onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); }}
+                        className={`px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
+                          on ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {pr.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{fullDate.from}</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <label className="block text-xs font-medium text-gray-600 mb-1">{fullDate.to}</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                {dateActive ? (
+                  <button
+                    type="button"
+                    onClick={() => { setDateFrom(''); setDateTo(''); }}
+                    className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                  >
+                    {fullDate.clear}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+        {onDeleteEntries ? (
+          <button
+            type="button"
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            className={`px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {selectMode ? t.historyCancelSelect : t.historySelect}
+          </button>
+        ) : null}
+      </div>
+
+      {/* Shown-total summary — reflects the current search + date range. */}
+      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 mb-4">
+        <p className="text-xs text-gray-500">
+          {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
+        </p>
+        <p className="text-base font-bold text-primary">{fmt(shownTotal)}</p>
       </div>
 
       {loading ? (
@@ -77,7 +254,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
           </div>
         </div>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-16">{t.historyEmpty}</p>
+        <p className="text-sm text-gray-400 text-center py-16">{search ? t.historyNoResults : t.historyEmpty}</p>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([periodStart, list]) => (
@@ -92,7 +269,16 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
               </div>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {list.map((h, i) => (
-                  <div key={`${h.name}-${i}`} className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <div
+                    key={h.id}
+                    onClick={selectMode ? (e) => handleSelectClick(h.id, e.shiftKey) : undefined}
+                    className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'cursor-pointer hover:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
+                  >
+                    {selectMode ? (
+                      <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                        {selected.has(h.id) ? <Check size={13} className="text-white" /> : null}
+                      </span>
+                    ) : null}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{h.name}</p>
                       <p className="text-xs text-gray-400">
@@ -113,6 +299,34 @@ export function PayrollHistoryScreen({ loading, entries, onBack }: PayrollHistor
           ))}
         </div>
       )}
+
+      {/* Sticky bulk-delete bar — same layout as the jobs list. */}
+      {selectMode ? (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">
+              {tSel.selectedCount.replace('{{count}}', String(selected.size))}
+            </span>
+            {filtered.length > 0 ? (
+              <button type="button" onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+                {allSelected ? tSel.deselectAll : tSel.selectAll}
+              </button>
+            ) : null}
+            <div className="flex-1" />
+            <button type="button" onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+              {tSel.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={deleteSelected}
+              disabled={selected.size === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+            >
+              <Trash2 size={15} /> {t.historyDeleteBtn}{selected.size > 0 ? ` · ${selected.size}` : ''}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Building2, Check, X, ArrowRight } from 'lucide-react';
+import { Building2, Check, X, ArrowRight, Smartphone } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +32,13 @@ export default function AceptarInvitacionPage({ params }: { params: { token: str
   const [status, setStatus] = useState<'loading' | 'need_login' | 'ready' | 'error' | 'accepted' | 'accepting'>('loading');
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // On a phone, offer to hand the invite to the installed app (custom scheme
+  // — Safari/Chrome prompt to open it; nothing happens if it's not installed,
+  // so the web flow stays as the fallback).
+  const [isMobileUA, setIsMobileUA] = useState(false);
+  useEffect(() => {
+    setIsMobileUA(/iphone|ipad|ipod|android/i.test(navigator.userAgent));
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -132,6 +139,16 @@ export default function AceptarInvitacionPage({ params }: { params: { token: str
               {lang === 'es' ? `Ahora eres parte de ${invite.business_name}.` : `You're now part of ${invite.business_name}.`}
             </p>
           </div>
+        )}
+
+        {isMobileUA && (status === 'need_login' || status === 'ready') && (
+          <a
+            href={`amixos://invitacion/${token}`}
+            className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
+            <Smartphone size={15} />
+            {lang === 'es' ? 'Abrir en la app' : 'Open in the app'}
+          </a>
         )}
 
         {status === 'error' && (

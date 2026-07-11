@@ -300,8 +300,13 @@ export function PayrollScreen({
           <p className="text-xs text-gray-400">{t.subtitle}</p>
         </div>
         {onHistoryPress ? (
-          <button type="button" onClick={onHistoryPress} title={t.historyTitle} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-            <History size={18} className="text-gray-500" />
+          <button
+            type="button"
+            onClick={onHistoryPress}
+            className="flex items-center gap-1.5 bg-white border border-gray-200 px-3.5 py-2 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <History size={15} className="text-gray-700" />
+            {t.historyTitle}
           </button>
         ) : null}
         {canManage && (

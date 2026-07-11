@@ -8,6 +8,14 @@ export type OnboardingDict = {
     finishGenericError: string;
     bizCreateError: string;
   };
+  invites: {
+    title: string;
+    body: string;
+    joinBtn: string;
+    joining: string;
+    orCreate: string;
+    error: string;
+  };
   businessName: {
     heading: string;
     sub: string;
@@ -76,6 +84,14 @@ export const onboarding: Record<Locale, OnboardingDict> = {
       footerNote: 'Puedes agregar más negocios y cambiar ajustes en cualquier momento.',
       finishGenericError: 'Algo salió mal. Intenta de nuevo.',
       bizCreateError: 'Error al crear negocio',
+    },
+    invites: {
+      title: '¡Te invitaron a un negocio!',
+      body: 'Detectamos una invitación pendiente para tu correo. Únete o crea tu propio negocio abajo.',
+      joinBtn: 'Unirse a {{name}}',
+      joining: 'Uniéndote…',
+      orCreate: 'O crea tu propio negocio:',
+      error: 'No se pudo aceptar la invitación.',
     },
     businessName: {
       heading: '¿Cómo se llama tu negocio?',
@@ -153,6 +169,14 @@ export const onboarding: Record<Locale, OnboardingDict> = {
       footerNote: 'You can add more businesses and change settings anytime.',
       finishGenericError: 'Something went wrong. Try again.',
       bizCreateError: 'Error creating business',
+    },
+    invites: {
+      title: "You've been invited to a business!",
+      body: 'We found a pending invitation for your email. Join it, or create your own business below.',
+      joinBtn: 'Join {{name}}',
+      joining: 'Joining…',
+      orCreate: 'Or create your own business:',
+      error: "Couldn't accept the invitation.",
     },
     businessName: {
       heading: "What's your business called?",

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { createClient } from '@supabase/supabase-js';
@@ -141,11 +142,42 @@ export default function OnboardingRoute() {
     }
   };
 
+  // Pending invites for this email — the user may be here BECAUSE someone
+  // invited them (account created before the invite existed). Requires
+  // migration 129 (my_pending_invites RPC).
+  const [pendingInvites, setPendingInvites] = useState<
+    { token: string; businessName: string; role: string; businessId: string }[]
+  >([]);
+  useEffect(() => {
+    supabase
+      .rpc('my_pending_invites')
+      .then(({ data }: { data: { token: string; business_id: string; business_name: string; role: string }[] | null }) => {
+        setPendingInvites((data ?? []).map((r) => ({
+          token: r.token,
+          businessId: r.business_id,
+          businessName: r.business_name,
+          role: r.role,
+        })));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const acceptInvite = async (token: string): Promise<string | null> => {
+    const { error } = await supabase.rpc('accept_invite', { invite_token: token });
+    if (error) return error.message;
+    const inv = pendingInvites.find((i) => i.token === token);
+    await useAuthStore.getState().refetchBusiness();
+    if (inv) useAuthStore.getState().setActiveBusiness(inv.businessId);
+    router.replace('/(tabs)');
+    return null;
+  };
+
   return (
     <OnboardingScreen
       onPickLogo={handlePickLogo}
       onFinish={handleFinish}
       onLogout={() => { void useAuthStore.getState().logout(); }}
+      pendingInvites={pendingInvites}
+      onAcceptInvite={acceptInvite}
     />
   );
 }

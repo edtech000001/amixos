@@ -44,9 +44,19 @@ const FEATURE_ICONS: Record<string, LucideIcon> = {
 
 export type PickLogoResult = { url: string } | { error: string } | null;
 
+export interface OnboardingPendingInvite {
+  token: string;
+  businessName: string;
+  role: string;
+}
+
 export interface OnboardingScreenProps {
   onPickLogo: () => Promise<PickLogoResult>;
   onFinish: (data: OnboardingData) => Promise<{ ok: true } | { ok: false; error?: string }>;
+  /** Pending invites for the signed-in email — offered before "create". */
+  pendingInvites?: OnboardingPendingInvite[];
+  /** Accepts one invite; resolves to an error message or null on success. */
+  onAcceptInvite?: (token: string) => Promise<string | null>;
 }
 
 const TOTAL_STEPS = 5;
@@ -76,7 +86,7 @@ const US_STATES = [
   'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
 ];
 
-export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
 
@@ -113,6 +123,21 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
     setStep(TOTAL_STEPS + 1);
   };
 
+  // Pending-invite banner (step 1 only): joining is usually why they're here.
+  const [joiningToken, setJoiningToken] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState('');
+  const acceptInvite = async (token: string) => {
+    if (!onAcceptInvite) return;
+    setJoiningToken(token);
+    setInviteError('');
+    const err = await onAcceptInvite(token);
+    if (err) {
+      setInviteError(err);
+      setJoiningToken(null);
+    }
+    // On success the caller redirects to the dashboard — leave the spinner on.
+  };
+
   const progress = Math.min(step, TOTAL_STEPS);
 
   return (
@@ -129,6 +154,27 @@ export function OnboardingScreen({ onPickLogo, onFinish }: OnboardingScreenProps
       </div>
 
       <div className="w-full max-w-lg bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+        {step === 1 && (pendingInvites?.length ?? 0) > 0 && (
+          <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <p className="text-sm font-bold text-gray-900">{t.invites.title}</p>
+            <p className="text-xs text-gray-500 mt-0.5 mb-3">{t.invites.body}</p>
+            <div className="flex flex-col gap-2">
+              {pendingInvites!.map(inv => (
+                <button
+                  key={inv.token}
+                  type="button"
+                  onClick={() => acceptInvite(inv.token)}
+                  disabled={joiningToken !== null}
+                  className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                >
+                  {joiningToken === inv.token ? t.invites.joining : t.invites.joinBtn.replace('{{name}}', inv.businessName)}
+                </button>
+              ))}
+            </div>
+            {inviteError ? <p className="text-xs text-red-500 mt-2">{inviteError}</p> : null}
+            <p className="text-[11px] text-gray-400 mt-3">{t.invites.orCreate}</p>
+          </div>
+        )}
         {step === 1 && <StepBusinessName value={data.businessName} onChange={(v) => update({ businessName: v })} onNext={next} />}
         {step === 2 && <StepServiceType value={data.serviceType} onChange={(v) => update({ serviceType: v, features: featuresForIndustry(v) })} onNext={next} onBack={back} />}
         {step === 3 && <StepLocation address={data.address} city={data.city} state={data.state} postalCode={data.postalCode} operatingHours={data.operatingHours} onChange={update} onNext={next} onBack={back} />}

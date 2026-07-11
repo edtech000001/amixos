@@ -2209,6 +2209,26 @@ export type DashboardDict = {
       historyTitle: string;
       historyEmpty: string;
       historyBonus: string;
+      historySearchPlaceholder: string;
+      historyNoResults: string;
+      historyFrom: string;
+      historyTo: string;
+      historySelect: string;
+      historyCancelSelect: string;
+      historySelectedCount: string;
+      historyDeleteBtn: string;
+      historyDeleteConfirm: string;
+      historyTotalLabel: string;
+      historyPaymentsCount: string;
+      historyPresets: {
+        thisWeek: string;
+        lastWeek: string;
+        last2Weeks: string;
+        thisMonth: string;
+        lastMonth: string;
+        thisYear: string;
+        lastYear: string;
+      };
       amountLabel: string;
       partialLabel: string;
       hoursCoveredLabel: string;
@@ -4528,6 +4548,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyTitle: 'Historial de pagos',
         historyEmpty: 'Aún no hay pagos registrados. Marca un pago como pagado y quedará guardado aquí.',
         historyBonus: 'Bono',
+        historySearchPlaceholder: 'Buscar por nombre, cheque o monto…',
+        historyNoResults: 'Sin resultados para esta búsqueda.',
+        historyFrom: 'Desde',
+        historyTo: 'Hasta',
+        historySelect: 'Seleccionar',
+        historyCancelSelect: 'Cancelar',
+        historySelectedCount: '{{count}} seleccionados',
+        historyDeleteBtn: 'Eliminar',
+        historyDeleteConfirm: '¿Eliminar {{count}} pago(s) del historial? Esta acción no se puede deshacer.',
+        historyTotalLabel: 'Total mostrado',
+        historyPaymentsCount: '{{count}} pagos',
+        historyPresets: {
+          thisWeek: 'Esta semana',
+          lastWeek: 'Semana pasada',
+          last2Weeks: 'Últimas 2 semanas',
+          thisMonth: 'Este mes',
+          lastMonth: 'Mes pasado',
+          thisYear: 'Este año',
+          lastYear: 'Año pasado',
+        },
         amountLabel: 'Monto a pagar',
         partialLabel: 'Parcial',
         hoursCoveredLabel: 'Horas que cubre este pago',
@@ -6873,6 +6913,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyTitle: 'Payment history',
         historyEmpty: 'No payments recorded yet. Mark someone as paid and it will be saved here.',
         historyBonus: 'Bonus',
+        historySearchPlaceholder: 'Search name, check or amount…',
+        historyNoResults: 'No results for this search.',
+        historyFrom: 'From',
+        historyTo: 'To',
+        historySelect: 'Select',
+        historyCancelSelect: 'Cancel',
+        historySelectedCount: '{{count}} selected',
+        historyDeleteBtn: 'Delete',
+        historyDeleteConfirm: 'Delete {{count}} payment(s) from history? This cannot be undone.',
+        historyTotalLabel: 'Shown total',
+        historyPaymentsCount: '{{count}} payments',
+        historyPresets: {
+          thisWeek: 'This week',
+          lastWeek: 'Last week',
+          last2Weeks: 'Last 2 weeks',
+          thisMonth: 'This month',
+          lastMonth: 'Last month',
+          thisYear: 'This year',
+          lastYear: 'Last year',
+        },
         amountLabel: 'Amount to pay',
         partialLabel: 'Partial',
         hoursCoveredLabel: 'Hours this payment covers',

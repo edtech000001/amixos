@@ -94,6 +94,16 @@ export interface OnboardingScreenProps {
    * link shows at the top.
    */
   onLogout?: () => void;
+  /** Pending invites for the signed-in email — offered before "create". */
+  pendingInvites?: OnboardingPendingInvite[];
+  /** Accepts one invite; resolves to an error message or null on success. */
+  onAcceptInvite?: (token: string) => Promise<string | null>;
+}
+
+export interface OnboardingPendingInvite {
+  token: string;
+  businessName: string;
+  role: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +145,7 @@ const US_STATES = [
 // react-native-web) and mobile (via Expo) render the same component.
 // Platform-specific concerns (Supabase, image pickers, post-finish nav)
 // are supplied by the route-level wrapper on each platform.
-export function OnboardingScreen({ onPickLogo, onFinish, onLogout }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
 
@@ -175,6 +185,21 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout }: OnboardingS
     // handle the actual navigation to the dashboard.
     setLoading(false);
     setStep(TOTAL_STEPS + 1);
+  };
+
+  // Pending-invite banner (step 1 only): joining is usually why they're here.
+  const [joiningToken, setJoiningToken] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState('');
+  const acceptInvite = async (token: string) => {
+    if (!onAcceptInvite) return;
+    setJoiningToken(token);
+    setInviteError('');
+    const err = await onAcceptInvite(token);
+    if (err) {
+      setInviteError(err);
+      setJoiningToken(null);
+    }
+    // On success the caller redirects to the dashboard — leave the spinner on.
   };
 
   const progress = Math.min(step, TOTAL_STEPS);
@@ -218,6 +243,28 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout }: OnboardingS
 
       {/* Step content */}
       <View className="w-full max-w-lg bg-white rounded-2xl border border-gray-100 p-8">
+        {step === 1 && (pendingInvites?.length ?? 0) > 0 ? (
+          <View className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <Text className="text-sm font-bold text-gray-900">{t.invites.title}</Text>
+            <Text className="text-xs text-gray-500 mt-0.5 mb-3">{t.invites.body}</Text>
+            <View className="gap-2">
+              {pendingInvites!.map(inv => (
+                <Pressable
+                  key={inv.token}
+                  onPress={() => acceptInvite(inv.token)}
+                  disabled={joiningToken !== null}
+                  className={`w-full py-2.5 rounded-xl bg-primary items-center active:opacity-90 ${joiningToken !== null ? 'opacity-60' : ''}`}
+                >
+                  <Text className="text-sm font-semibold text-white">
+                    {joiningToken === inv.token ? t.invites.joining : t.invites.joinBtn.replace('{{name}}', inv.businessName)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {inviteError ? <Text className="text-xs text-red-500 mt-2">{inviteError}</Text> : null}
+            <Text className="text-[11px] text-gray-400 mt-3">{t.invites.orCreate}</Text>
+          </View>
+        ) : null}
         {step === 1 && (
           <StepBusinessName
             value={data.businessName}
