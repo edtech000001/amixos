@@ -716,6 +716,9 @@ export type DashboardDict = {
       itemsHeadingJob: string;
       noItems: string;
       colUnitPriceShort: string;
+      autopriceBtn: string;
+      autopriceVerify: string;
+      measuredNote: string;
       tax: string;
       discount: string;
       totalEstimated: string;
@@ -1249,6 +1252,7 @@ export type DashboardDict = {
       trabajos: string;
       clientes: string;
       empleados: string;
+      precios: string;
       importar: string;
       facturas: string;
       facturaTema: string;
@@ -1259,6 +1263,44 @@ export type DashboardDict = {
       tienda: string;
       navegacion: string;
       ubicaciones: string;
+    };
+    priceSheet: {
+      title: string;
+      subtitle: string;
+      addBtn: string;
+      empty: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      categoryLabel: string;
+      categoryPlaceholder: string;
+      uncategorized: string;
+      modeLabel: string;
+      modePerUnit: string;
+      modeFlat: string;
+      unitLabel: string;
+      unitPlaceholder: string;
+      rateLabel: string;
+      flatWord: string;
+      stateRatesLabel: string;
+      stateRatesHint: string;
+      addStateRate: string;
+      statePlaceholder: string;
+      inactiveBadge: string;
+      deactivate: string;
+      activate: string;
+      deleteConfirm: string;
+      saveBtn: string;
+      tiersTitle: string;
+      tiersHint: string;
+      addTier: string;
+      tierNamePlaceholder: string;
+      deleteTierConfirm: string;
+      tierRatesLabel: string;
+      matchTermsLabel: string;
+      matchTermsHint: string;
+      matchTermsPlaceholder: string;
+      clientTierLabel: string;
+      clientTierNone: string;
     };
     navigation: {
       subtitle: string;
@@ -3105,6 +3147,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         itemsHeadingJob: 'Materiales y mano de obra',
         noItems: 'Sin ítems registrados.',
         colUnitPriceShort: 'P/u',
+        autopriceBtn: 'Autoprecio',
+        autopriceVerify: 'Precios calculados automáticamente — por favor verifica cada línea, no siempre es exacto.',
+        measuredNote: 'medido {{qty}}',
         tax: 'Impuesto ({{rate}}%)',
         discount: 'Descuento',
         totalEstimated: 'Total estimado',
@@ -3626,6 +3671,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Trabajos',
         clientes: 'Clientes',
         empleados: 'Equipo',
+        precios: 'Precios',
         importar: 'Importar datos',
         facturas: 'Facturas',
         facturaTema: 'Tema de factura',
@@ -3636,6 +3682,44 @@ export const dashboard: Record<Locale, DashboardDict> = {
         tienda: 'Tienda de módulos',
         navegacion: 'Navegación',
         ubicaciones: 'Ubicaciones',
+      },
+      priceSheet: {
+        title: 'Lista de precios',
+        subtitle: 'Precios para cobrar trabajos automáticamente.',
+        addBtn: 'Agregar precio',
+        empty: 'Aún no hay precios. Agrega el primero para autocalcular trabajos.',
+        nameLabel: 'Nombre',
+        namePlaceholder: 'Ej. Ensamble de pivote nuevo',
+        categoryLabel: 'Categoría',
+        categoryPlaceholder: 'Ej. Pivotes nuevos',
+        uncategorized: 'Sin categoría',
+        modeLabel: 'Cómo se cobra',
+        modePerUnit: 'Por unidad',
+        modeFlat: 'Precio fijo',
+        unitLabel: 'Unidad',
+        unitPlaceholder: 'pies, corte, artículo…',
+        rateLabel: 'Precio',
+        flatWord: 'fijo',
+        stateRatesLabel: 'Precios por estado',
+        stateRatesHint: 'Opcional. Si el trabajo es en ese estado, se usa este precio.',
+        addStateRate: 'Agregar estado',
+        statePlaceholder: 'Estado (ej. NE)',
+        inactiveBadge: 'Inactivo',
+        deactivate: 'Desactivar',
+        activate: 'Activar',
+        deleteConfirm: '¿Eliminar este precio?',
+        saveBtn: 'Guardar',
+        tiersTitle: 'Niveles de precio',
+        tiersHint: 'Modelos de precio para distintos clientes (ej. Estándar, Lejos, Mayoreo). Asigna un nivel a cada cliente.',
+        addTier: 'Agregar nivel',
+        tierNamePlaceholder: 'Ej. Lejos',
+        deleteTierConfirm: '¿Eliminar este nivel?',
+        tierRatesLabel: 'Precios por nivel',
+        matchTermsLabel: 'Términos para autoprecio',
+        matchTermsHint: 'Opcional. Otras formas de decirlo, siglas o abreviaturas — ayudan al botón Autoprecio a encontrar este precio.',
+        matchTermsPlaceholder: 'torre, tower, pivote nuevo…',
+        clientTierLabel: 'Nivel de precio',
+        clientTierNone: 'Estándar (base)',
       },
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
@@ -5490,6 +5574,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         itemsHeadingJob: 'Materials and labor',
         noItems: 'No items recorded.',
         colUnitPriceShort: 'U/p',
+        autopriceBtn: 'Autoprice',
+        autopriceVerify: 'Prices were auto-calculated — please double-check each line, it is not always exact.',
+        measuredNote: 'measured {{qty}}',
         tax: 'Tax ({{rate}}%)',
         discount: 'Discount',
         totalEstimated: 'Estimated total',
@@ -6011,6 +6098,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         trabajos: 'Jobs',
         clientes: 'Clients',
         empleados: 'Team',
+        precios: 'Price sheet',
         importar: 'Import data',
         facturas: 'Invoices',
         facturaTema: 'Invoice theme',
@@ -6021,6 +6109,44 @@ export const dashboard: Record<Locale, DashboardDict> = {
         tienda: 'Module Store',
         navegacion: 'Navigation',
         ubicaciones: 'Locations',
+      },
+      priceSheet: {
+        title: 'Price sheet',
+        subtitle: 'Prices used to autoprice jobs.',
+        addBtn: 'Add price',
+        empty: 'No prices yet. Add the first to autoprice jobs.',
+        nameLabel: 'Name',
+        namePlaceholder: 'e.g. New pivot assembly',
+        categoryLabel: 'Category',
+        categoryPlaceholder: 'e.g. New pivots',
+        uncategorized: 'Uncategorized',
+        modeLabel: 'How it is charged',
+        modePerUnit: 'Per unit',
+        modeFlat: 'Flat price',
+        unitLabel: 'Unit',
+        unitPlaceholder: 'ft, cut, item…',
+        rateLabel: 'Price',
+        flatWord: 'flat',
+        stateRatesLabel: 'Prices by state',
+        stateRatesHint: 'Optional. Used when the job is in that state.',
+        addStateRate: 'Add state',
+        statePlaceholder: 'State (e.g. NE)',
+        inactiveBadge: 'Inactive',
+        deactivate: 'Deactivate',
+        activate: 'Activate',
+        deleteConfirm: 'Delete this price?',
+        saveBtn: 'Save',
+        tiersTitle: 'Price tiers',
+        tiersHint: 'Pricing models for different clients (e.g. Standard, Far, Wholesale). Assign a tier to each client.',
+        addTier: 'Add tier',
+        tierNamePlaceholder: 'e.g. Far',
+        deleteTierConfirm: 'Delete this tier?',
+        tierRatesLabel: 'Prices by tier',
+        matchTermsLabel: 'Auto-price terms',
+        matchTermsHint: 'Optional. Other phrasings, acronyms or abbreviations — help the Auto-price button find this price.',
+        matchTermsPlaceholder: 'tower, pivot, new pivot…',
+        clientTierLabel: 'Price tier',
+        clientTierNone: 'Standard (base)',
       },
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',

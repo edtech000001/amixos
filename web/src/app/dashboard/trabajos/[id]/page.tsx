@@ -21,6 +21,7 @@ import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
+import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
@@ -107,6 +108,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [items, setItems] = useState<JobItem[]>([]);
+  const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
+  const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [showPriceVerify, setShowPriceVerify] = useState(false);
   const [templates, setTemplates] = useState<JobFieldTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -161,6 +165,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   const load = async () => {
     if (!business) return;
+    void supabase.from('price_sheet_items')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .eq('business_id', business.id).eq('active', true)
+      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
     const [{ data: j }, { data: a }, { data: it }, { data: tpl }] = await Promise.all([
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name, user_id)').eq('job_id', id),
@@ -170,6 +178,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setTemplates((tpl ?? []) as JobFieldTemplate[]);
     if (j) {
       setJob(j as Job);
+      if (j.client_id) {
+        void supabase.from('clients').select('price_tier_id').eq('id', j.client_id).single()
+          .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+      } else setClientTierId(null);
       // Tax: the job's own rate (from a proposal) wins; otherwise the
       // business default (Ajustes → Facturas). Editable in the modal.
       if (j.tax_rate > 0) setTaxRate(j.tax_rate);
@@ -221,16 +233,16 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   // ── Inline job-items editor (labor / material / equipment / other) ──
   // The items card edits in place — rows sync from the loaded items; a Save
   // bar appears only when there are unsaved changes.
-  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string };
+  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string; price_item_id: string | null; original_quantity: number | null };
   const ITEM_TYPES = ['labor', 'material', 'equipment', 'other'];
   const [editRows, setEditRows] = useState<EditRow[]>([]);
   const [savingItems, setSavingItems] = useState(false);
   const [itemsDirty, setItemsDirty] = useState(false);
-  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0' });
+  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0', price_item_id: null, original_quantity: null });
   // Re-seed the editable rows whenever the saved items change (initial load +
   // after a save), clearing the dirty flag.
   useEffect(() => {
-    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) })));
+    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price), price_item_id: (i as { price_item_id?: string | null }).price_item_id ?? null, original_quantity: (i as { original_quantity?: number | null }).original_quantity ?? null })));
     setItemsDirty(false);
   }, [items]);
   const updateRow = (rid: string, field: keyof EditRow, value: string) => {
@@ -240,14 +252,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const addRow = () => { setEditRows(prev => [...prev, newRow()]); setItemsDirty(true); };
   const removeRow = (rid: string) => { setEditRows(prev => prev.filter(r => r.id !== rid)); setItemsDirty(true); };
   const discardItems = () => {
-    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) })));
+    setEditRows(items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price), price_item_id: (i as { price_item_id?: string | null }).price_item_id ?? null, original_quantity: (i as { original_quantity?: number | null }).original_quantity ?? null })));
     setItemsDirty(false);
   };
   const saveItems = async () => {
     if (!job || !business) return;
     setSavingItems(true);
     const valid = editRows
-      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0 }))
+      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0, price_item_id: r.price_item_id, original_quantity: r.original_quantity }))
       // Keep a row if it has a description OR a cost — a bare amount + cost
       // (no description) is valid; the invoice falls back to the job title.
       .filter(r => r.description !== '' || r.unit_price > 0);
@@ -264,6 +276,26 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   };
   const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
   const editSubtotal = editRows.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unit_price) || 0), 0);
+
+  // Autoprice — best-effort: for each row, match a price item from its text
+  // (+ job context) and apply the state/tier-aware rate. Rows with no match
+  // are left untouched. NOT reliable → banner tells the user to verify.
+  const jobContext = job ? `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}` : '';
+  const autopriceRows = () => {
+    if (!priceItems.length) return;
+    let matched = 0;
+    setEditRows(prev => prev.map(r => {
+      if (!r.description.trim()) return r;
+      const hit = suggestPriceItem(`${r.description} ${jobContext}`, priceItems);
+      if (!hit) return r;
+      const enteredQty = parseFloat(r.quantity);
+      const measured = enteredQty > 1 ? enteredQty : (extractQuantity(r.description) ?? (enteredQty || 1));
+      const priced = autopriceLine(hit.item, measured, { state: job?.job_state, tierId: clientTierId });
+      matched++;
+      return { ...r, price_item_id: hit.item.id, quantity: String(priced.quantity), unit_price: String(priced.unitPrice), original_quantity: priced.originalQuantity };
+    }));
+    if (matched) { setItemsDirty(true); setShowPriceVerify(true); }
+  };
 
   const [unInvoicing, setUnInvoicing] = useState(false);
   // Undo an accidental "facturado": detach the job from its invoice, revert to
@@ -1086,7 +1118,17 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <button onClick={() => removeRow(r.id)} className="text-gray-300 hover:text-red-500" aria-label="Remove"><XCircle size={16}/></button>
                   </div>
                 ))}
-                <button onClick={addRow} className="self-start text-sm font-semibold text-primary hover:underline mt-1">+ {td.addItemsBtn}</button>
+                <div className="flex items-center justify-between mt-1">
+                  <button onClick={addRow} className="text-sm font-semibold text-primary hover:underline">+ {td.addItemsBtn}</button>
+                  {priceItems.length > 0 ? (
+                    <button onClick={autopriceRows} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg">
+                      <DollarSign size={14} /> {td.autopriceBtn}
+                    </button>
+                  ) : null}
+                </div>
+                {showPriceVerify ? (
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700">{td.autopriceVerify}</div>
+                ) : null}
                 {itemsDirty ? (
                   <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-gray-100">
                     <Button variant="secondary" size="sm" onClick={discardItems}>{tc.buttons.cancel}</Button>
@@ -1108,7 +1150,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   {items.map(item => (
                     <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} items-center px-5 py-3 hover:bg-gray-50 transition-colors`}>
                       {showItemTypes ? <span className="text-xs text-gray-400">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span> : null}
-                      <span className="text-sm text-gray-900 truncate pr-2">{item.description}</span>
+                      <span className="text-sm text-gray-900 truncate pr-2">
+                        {item.description}
+                        {(item as { original_quantity?: number | null }).original_quantity ? <span className="text-xs text-gray-400"> · {td.measuredNote.replace('{{qty}}', String((item as { original_quantity?: number | null }).original_quantity))}</span> : null}
+                      </span>
                       <span className="text-sm text-center text-gray-600">{item.quantity}</span>
                       <span className="text-sm text-right text-gray-600">${item.unit_price.toFixed(2)}</span>
                       <span className="text-sm text-right font-semibold text-gray-900">${item.total.toFixed(2)}</span>

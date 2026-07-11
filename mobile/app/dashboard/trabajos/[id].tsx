@@ -34,7 +34,7 @@ import {
   Share2,
   X,
   Sparkles,
-  type LucideIcon, Archive } from 'lucide-react-native';
+  type LucideIcon, Archive, DollarSign } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
@@ -48,6 +48,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
+import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h } from '@amixos/shared/lib/format';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -203,7 +204,10 @@ export default function JobDetailRoute() {
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [templates, setTemplates] = useState<{ id: string; field_key: string; field_label: string; field_type: 'text' | 'number' | 'date' | 'boolean' | 'select' }[]>([]);
   const [itemsEditOpen, setItemsEditOpen] = useState(false);
-  const [editRows, setEditRows] = useState<{ id: string; item_type: string; description: string; quantity: string; unit_price: string }[]>([]);
+  const [editRows, setEditRows] = useState<EditRow[]>([]);
+  const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
+  const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [showPriceVerify, setShowPriceVerify] = useState(false);
   const [savingItems, setSavingItems] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -777,14 +781,33 @@ export default function JobDetailRoute() {
   };
 
   // ── Inline job-items editor ─────────────────────────────────────────
-  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string };
+  type EditRow = { id: string; item_type: string; description: string; quantity: string; unit_price: string; price_item_id: string | null; original_quantity: number | null };
   const ITEM_TYPES = ['labor', 'material', 'equipment', 'other'];
-  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0' });
+  const newRow = (): EditRow => ({ id: `${Date.now()}-${Math.random()}`, item_type: 'labor', description: '', quantity: '1', unit_price: '0', price_item_id: null, original_quantity: null });
   const openItemsEdit = () => {
     setEditRows(items.length
-      ? items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) }))
+      ? items.map(i => ({ id: i.id, item_type: i.item_type, description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price), price_item_id: (i as { price_item_id?: string | null }).price_item_id ?? null, original_quantity: (i as { original_quantity?: number | null }).original_quantity ?? null }))
       : [newRow()]);
+    setShowPriceVerify(false);
     setItemsEditOpen(true);
+  };
+
+  // Autoprice — best-effort text match → state/tier-aware rate (see web).
+  const autopriceRows = () => {
+    if (!priceItems.length || !job) return;
+    const ctxText = `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}`;
+    let matched = 0;
+    setEditRows(prev => prev.map(r => {
+      if (!r.description.trim()) return r;
+      const hit = suggestPriceItem(`${r.description} ${ctxText}`, priceItems);
+      if (!hit) return r;
+      const enteredQty = parseFloat(r.quantity);
+      const measured = enteredQty > 1 ? enteredQty : (extractQuantity(r.description) ?? (enteredQty || 1));
+      const priced = autopriceLine(hit.item, measured, { state: job.job_state, tierId: clientTierId });
+      matched++;
+      return { ...r, price_item_id: hit.item.id, quantity: String(priced.quantity), unit_price: String(priced.unitPrice), original_quantity: priced.originalQuantity };
+    }));
+    if (matched) setShowPriceVerify(true);
   };
   const updateRow = (rid: string, field: keyof EditRow, value: string) =>
     setEditRows(prev => prev.map(r => (r.id === rid ? { ...r, [field]: value } : r)));
@@ -792,7 +815,7 @@ export default function JobDetailRoute() {
     if (!job) return;
     setSavingItems(true);
     const valid = editRows
-      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0 }))
+      .map(r => ({ item_type: r.item_type, description: r.description.trim(), quantity: parseFloat(r.quantity) || 0, unit_price: parseFloat(r.unit_price) || 0, price_item_id: r.price_item_id, original_quantity: r.original_quantity }))
       // Keep a row if it has a description OR a cost — a bare amount + cost
       // (no description) is valid; the invoice falls back to the job title.
       .filter(r => r.description !== '' || r.unit_price > 0);
@@ -808,6 +831,21 @@ export default function JobDetailRoute() {
     setSavingItems(false);
     setItemsEditOpen(false);
   };
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('price_sheet_items')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .eq('business_id', business.id).eq('active', true)
+      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+  useEffect(() => {
+    if (!job?.client_id) { setClientTierId(null); return; }
+    void supabase.from('clients').select('price_tier_id').eq('id', job.client_id).single()
+      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.client_id]);
+
   const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
 
   return (
@@ -1229,7 +1267,7 @@ export default function JobDetailRoute() {
                     ) : null}
                     <Text className="text-sm text-gray-900">{it.description}</Text>
                     <Text className="text-xs text-gray-500 mt-0.5">
-                      {it.quantity} × {fmt(it.unit_price)}
+                      {it.quantity} × {fmt(it.unit_price)}{(it as { original_quantity?: number | null }).original_quantity ? `  ·  ${td.measuredNote.replace('{{qty}}', String((it as { original_quantity?: number | null }).original_quantity))}` : ''}
                     </Text>
                   </View>
                   <Text className="text-sm font-semibold text-gray-900">{fmt(it.total)}</Text>
@@ -1341,9 +1379,22 @@ export default function JobDetailRoute() {
                   </View>
                 </View>
               ))}
-              <Pressable onPress={() => setEditRows(prev => [...prev, newRow()])} className="self-start py-1">
-                <Text className="text-sm font-semibold text-primary">+ {td.addItemsBtn}</Text>
-              </Pressable>
+              <View className="flex-row items-center justify-between">
+                <Pressable onPress={() => setEditRows(prev => [...prev, newRow()])} className="py-1">
+                  <Text className="text-sm font-semibold text-primary">+ {td.addItemsBtn}</Text>
+                </Pressable>
+                {priceItems.length > 0 ? (
+                  <Pressable onPress={autopriceRows} className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg active:bg-primary/5">
+                    <DollarSign size={14} color="#4F46E5" />
+                    <Text className="text-sm font-semibold text-primary">{td.autopriceBtn}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {showPriceVerify ? (
+                <View className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+                  <Text className="text-xs text-amber-700">{td.autopriceVerify}</Text>
+                </View>
+              ) : null}
             </ScrollView>
             <View className="flex-row gap-3 px-5 pt-3 pb-8 border-t border-gray-100">
               <Button variant="secondary" onPress={() => setItemsEditOpen(false)} className="flex-1">{full.common.buttons.cancel}</Button>

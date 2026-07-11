@@ -95,6 +95,8 @@ export default function NuevoClienteRoute() {
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [notes, setNotes] = useState('');
+  const [priceTierId, setPriceTierId] = useState('');
+  const [priceTiers, setPriceTiers] = useState<{ id: string; name: string }[]>([]);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -132,6 +134,7 @@ export default function NuevoClienteRoute() {
         setState(c.state ?? '');
         setZipCode(c.zip_code ?? '');
         setNotes(c.notes ?? '');
+        setPriceTierId((c as { price_tier_id?: string | null }).price_tier_id ?? '');
         setCustomFields(c.custom_fields ?? {});
         setLoadingEdit(false);
       }
@@ -140,6 +143,13 @@ export default function NuevoClienteRoute() {
       cancelled = true;
     };
   }, [business?.id, editId]);
+
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('price_tiers').select('id, name').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: { id: string; name: string }[] | null }) => setPriceTiers(data ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
 
   const requiredFlags = business?.client_field_required ?? {};
 
@@ -541,6 +551,7 @@ export default function NuevoClienteRoute() {
       state: state.trim() || null,
       zip_code: zipCode.trim() || null,
       notes: notes.trim() || null,
+      price_tier_id: priceTierId || null,
       custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
@@ -625,6 +636,17 @@ export default function NuevoClienteRoute() {
           keyboardShouldPersistTaps="handled"
         >
           {CLIENT_FIELD_SECTIONS.map(renderSection)}
+
+          {priceTiers.length > 0 ? (
+            <View className="mb-3">
+              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{full.dashboard.settings.priceSheet.clientTierLabel}</Text>
+              <Select
+                value={priceTierId}
+                onValueChange={setPriceTierId}
+                options={[{ value: '', label: full.dashboard.settings.priceSheet.clientTierNone }, ...priceTiers.map(pt => ({ value: pt.id, label: pt.name }))]}
+              />
+            </View>
+          ) : null}
 
           {error ? <Text className="text-xs text-red-500 mb-2">{error}</Text> : null}
 
