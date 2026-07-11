@@ -1033,9 +1033,15 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
     .from('businesses').select('payroll_frequency, payroll_anchor_date').eq('id', ctx.businessId).single();
   const freq = normalizeFrequency(biz?.payroll_frequency);
   const anchor = parsePayrollAnchor(biz?.payroll_anchor_date);
-  const existing = await fetchAll<{ employee_id: string | null; period_start: string | null }>((from, to) =>
-    ctx.supabase.from('payroll_payments').select('employee_id, period_start').eq('business_id', ctx.businessId).range(from, to));
-  const existingKeys = new Set(existing.map(e => `${e.employee_id}|${(e.period_start ?? '').slice(0, 10)}`));
+  // Dedupe key = one CHECK, not one period: (worker, period, check #, amount).
+  // The ledger (126) allows several checks per worker per period — two rows
+  // that are legitimately different checks must both import, while re-running
+  // the same file stays idempotent.
+  const checkKey = (emp: string | null, period: string | null, check: string | null, gross: unknown) =>
+    `${emp}|${(period ?? '').slice(0, 10)}|${(check ?? '').trim()}|${Number(gross ?? 0).toFixed(2)}`;
+  const existing = await fetchAll<{ employee_id: string | null; period_start: string | null; check_number: string | null; gross_pay: number | null }>((from, to) =>
+    ctx.supabase.from('payroll_payments').select('employee_id, period_start, check_number, gross_pay').eq('business_id', ctx.businessId).range(from, to));
+  const existingKeys = new Set(existing.map(e => checkKey(e.employee_id, e.period_start, e.check_number, e.gross_pay)));
   const autoCreatedWorkers: string[] = [];
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
@@ -1072,11 +1078,10 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
     if (!refDate) { failedRows.push({ label, reason: tr('Falta la fecha de pago', 'Missing paid date'), rowIndex: idx }); continue; }
     const period = getPayrollPeriod(freq, new Date(`${refDate}T00:00:00`), 0, anchor);
 
-    const key = `${empId}|${period.startStr}`;
-    if (existingKeys.has(key)) { skipped++; continue; }
-
     const gross = parseNum(get(row, 'gross_pay'));
     if (gross === null) { failedRows.push({ label, reason: tr('Falta el total pagado', 'Missing total paid'), rowIndex: idx }); continue; }
+    const key = checkKey(empId, period.startStr, get(row, 'check_number') || null, gross);
+    if (existingKeys.has(key)) { skipped++; continue; }
     const method = parsePayMethod(get(row, 'method'));
     if (method === undefined) {
       failedRows.push({ label, reason: tr(`Método no reconocido: "${get(row, 'method')}". Válidos: efectivo, cheque, transferencia.`, `Unrecognized method: "${get(row, 'method')}". Valid: cash, check, wire.`), rowIndex: idx });

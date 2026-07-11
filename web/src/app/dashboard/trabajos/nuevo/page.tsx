@@ -619,6 +619,7 @@ function NuevoTrabajoContent() {
     }
     // ── Notes section key ──
     if (k === 'internal_notes') {
+      if (restrictedCreator) return null; // office-only note
       if (!isEditProposal && fHidden('internal_notes')) return null;
       return (
         <div key={k} className="flex flex-col gap-1.5">
@@ -1115,7 +1116,7 @@ function NuevoTrabajoContent() {
         assigned_workers: assignedEmployees.length ? 'x' : '',
         internal_notes: internalNotes,
       };
-      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
+      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !(restrictedCreator && f.key === 'internal_notes') && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
       missing.push(...missingRequiredCustomFields());
       if (missing.length) {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
@@ -1423,7 +1424,7 @@ function NuevoTrabajoContent() {
                 <Users size={15} className="text-primary"/>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
               </div>
-              {employees.length > 0 && (
+              {employees.length > 0 && !restrictedCreator && (
                 <button type="button" onClick={() => setCrewFinderOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors">
                   <Navigation size={13} /> {full.dashboard.crewFinder.openButton}
@@ -1440,8 +1441,9 @@ function NuevoTrabajoContent() {
             {employees.length > 0 && (
               <>
                 {/* Lead picker — searchable single-select dropdown (mirrors
-                   the client picker). Picking a lead also assigns them. */}
-                {business?.job_crew_mode !== false && (
+                   the client picker). Hidden for field creators: the person
+                   logging the job IS the lead. */}
+                {business?.job_crew_mode !== false && !restrictedCreator && (
                   <div className="flex flex-col gap-1.5 mb-4 max-w-xs">
                     <label className="text-sm font-medium text-gray-700">{t.leadLabel}</label>
                     <div className="relative" ref={leadDropdownRef}>

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Alert,
 } from 'react-native';
@@ -569,7 +570,12 @@ export default function NuevoTrabajoRoute() {
   // proposal-dates / status+priority block on 'priority', map-link+coords on
   // 'coordinates', the city/state row on the first of job_city/job_state,
   // and the whole lead/crew/drivers block on 'assigned_workers'.
-  const renderJobField = (k: string): React.ReactNode => {
+  // Keys that failed the required-fields check on the last save attempt —
+  // their blocks get a red outline so the culprit is visible, not just the
+  // message at the bottom.
+  const [missingKeys, setMissingKeys] = useState<string[]>([]);
+
+  const renderJobFieldInner = (k: string): React.ReactNode => {
     if (k === 'client_id') {
       return (
         <Fragment key={k}>
@@ -904,7 +910,8 @@ export default function NuevoTrabajoRoute() {
         <Fragment key={k}>
           {employees.length > 0 ? (
             <>
-              {/* Crew Finder — suggest nearest + available crew for this job. */}
+              {/* Crew Finder — dispatcher tool; hidden for field creators. */}
+              {!restrictedCreator ? (
               <Pressable
                 onPress={() => setCrewFinderOpen(true)}
                 className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
@@ -912,8 +919,10 @@ export default function NuevoTrabajoRoute() {
                 <Navigation size={15} color="#4F46E5" />
                 <Text className="text-sm font-semibold text-primary">{full.dashboard.crewFinder.openButton}</Text>
               </Pressable>
-              {/* Lead picker — one designated lead (crew mode only). */}
-              {business?.job_crew_mode !== false ? (
+              ) : null}
+              {/* Lead picker — one designated lead (crew mode only). Hidden for
+                 field creators: the person logging the job IS the lead. */}
+              {business?.job_crew_mode !== false && !restrictedCreator ? (
                 <View className="mb-4">
                   <Text className="text-sm font-semibold text-gray-700 mb-2">{t.leadLabel}</Text>
                   <Pressable
@@ -1020,6 +1029,7 @@ export default function NuevoTrabajoRoute() {
     }
     // ── Notes section keys ──
     if (k === 'internal_notes') {
+      if (restrictedCreator) return null; // office-only note
       if (!isProposal && fHidden('internal_notes')) return null;
       return (
         <View key={k} className="mt-3">
@@ -1280,6 +1290,16 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
+  const renderJobField = (k: string): React.ReactNode => {
+    const node = renderJobFieldInner(k);
+    if (!node || !missingKeys.includes(k)) return node;
+    return (
+      <View key={`req-${k}`} className="rounded-2xl border-2 border-red-400 px-2 pt-2 mb-4">
+        {node}
+      </View>
+    );
+  };
+
   const save = async () => {
     if (!business) return;
     if (!title.trim()) {
@@ -1304,9 +1324,10 @@ export default function NuevoTrabajoRoute() {
         assigned_workers: assignedEmployees.length ? 'x' : '',
         internal_notes: internalNotes,
       };
-      const missing = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !String(fieldVal[f.key] ?? '').trim()).map(f => f.label);
-      if (missing.length) {
-        setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
+      const missingDefs = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !(restrictedCreator && f.key === 'internal_notes') && !String(fieldVal[f.key] ?? '').trim());
+      setMissingKeys(missingDefs.map(f => f.key));
+      if (missingDefs.length) {
+        setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missingDefs.map(f => f.label).join(', ')}`);
         return;
       }
     }
@@ -1885,7 +1906,6 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setClientSearch}
                   placeholder={t.clientSearchPlaceholder}
                   placeholderTextColor="#9CA3AF"
-                  autoFocus
                   className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
                 />
               </View>
@@ -1994,7 +2014,6 @@ export default function NuevoTrabajoRoute() {
                   label={locale === 'es' ? 'Nombre *' : 'First name *'}
                   value={qaFirstName}
                   onChangeText={setQaFirstName}
-                  autoFocus
                 />
                 <Input
                   label={locale === 'es' ? 'Apellido' : 'Last name'}
@@ -2072,7 +2091,6 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setLeadSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor="#9CA3AF"
-                  autoFocus
                   className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
                 />
               </View>
@@ -2159,7 +2177,6 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setCrewSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor="#9CA3AF"
-                  autoFocus
                   className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
                 />
               </View>
@@ -2193,7 +2210,7 @@ export default function NuevoTrabajoRoute() {
             </ScrollView>
             <View className="px-5 pt-3 border-t border-gray-100">
               <Pressable
-                onPress={() => setCrewPickerOpen(false)}
+                onPress={() => { Keyboard.dismiss(); setCrewPickerOpen(false); }}
                 className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
               >
                 <Text className="text-sm font-semibold text-white">{t.crewDoneBtn}</Text>
@@ -2244,7 +2261,6 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setDriverSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor="#9CA3AF"
-                  autoFocus
                   className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
                 />
               </View>
