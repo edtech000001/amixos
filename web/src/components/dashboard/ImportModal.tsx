@@ -29,6 +29,7 @@ import {
   type ImportMode,
   type ImportResult,
   type ImportTemplateField,
+  logImportRun,
 } from '@amixos/shared/lib/importRunners';
 import { useApp } from '@/lib/AppContext';
 
@@ -64,6 +65,9 @@ export default function ImportModal({
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
+  // Import progress (rows/groups processed) — throttled by the runner cb.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const abortRef = useRef(false);
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ImportResult>({ success: 0, skipped: 0, failedRows: [], notes: [] });
   const [showErrors, setShowErrors] = useState(false);
@@ -97,6 +101,17 @@ export default function ImportModal({
     : mode === 'inventory' ? tr('artículos', 'items')
     : tr('facturas', 'invoices');
 
+  const [fileName, setFileName] = useState('');
+  // Recent runs of THIS import mode (migration 137) — lazy-loaded on expand.
+  const [recentLogs, setRecentLogs] = useState<{ id: string; file_name: string | null; success: number; updated: number; skipped: number; failed: number; created_at: string }[] | null>(null);
+  const loadRecent = () => {
+    if (recentLogs !== null) return;
+    void supabase.from('import_logs')
+      .select('id, file_name, success, updated, skipped, failed, created_at')
+      .eq('business_id', businessId).eq('mode', mode)
+      .order('created_at', { ascending: false }).limit(10)
+      .then(({ data }: { data: typeof recentLogs }) => setRecentLogs(data ?? []));
+  };
   const reset = () => {
     setStep('upload'); setHeaders([]); setRows([]); setColMap({});
     setResult({ success: 0, skipped: 0, failedRows: [], notes: [] }); setShowErrors(false);
@@ -104,6 +119,7 @@ export default function ImportModal({
   const close = () => { reset(); onClose(); };
 
   const handleFile = (file: File) => {
+    setFileName(file.name);
     Papa.parse<Record<string, string>>(file, {
       header: true, skipEmptyLines: 'greedy', encoding: 'UTF-8',
       transform: (v: string) => sanitize(v),
@@ -132,14 +148,32 @@ export default function ImportModal({
     templates: useTemplates ? templates : [],
     accessRoles,
     invoiceTemplate,
+    // Throttle renders: every 5 units (or the final tick) is plenty.
+    onProgress: (done: number, total: number) => {
+      if (done >= total || done % 5 === 0) setProgress({ done, total });
+    },
+    shouldAbort: () => abortRef.current,
   });
 
   const runImport = async () => {
+    abortRef.current = false;
     setImporting(true);
+    setProgress({ done: 0, total: rows.length });
     try {
       const res = await runImportFor(mode, buildCtx(rows));
+      // Audit trail (migration 137) — the hub's "recent imports" list. Logged
+      // for aborted runs too: the partial rows ARE in the database.
+      void logImportRun(supabase, businessId, mode, fileName || null, res, user?.id ?? null);
+      if (abortRef.current) {
+        // Aborted: stay on the preview with Back/Import restored — dedupe
+        // makes a re-run pick up where this one stopped.
+        setProgress(null);
+        setImporting(false);
+        return;
+      }
       setResult(res);
       setStep('done');
+      setProgress(null);
       onDone?.();
     } catch (e: any) {
       setResult({ success: 0, skipped: 0, failedRows: [{ label: 'Error', reason: e?.message ?? String(e) }], notes: [] });
@@ -231,6 +265,14 @@ export default function ImportModal({
 
       <Modal open={open} onClose={close} title={title} size="lg">
         <div className="flex flex-col gap-4">
+          {importing && progress ? (
+            <div className="flex items-center gap-3 -mt-1">
+              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
+              </div>
+              <p className="text-xs font-semibold text-gray-500 shrink-0">{progress.done} / {progress.total}</p>
+            </div>
+          ) : null}
           {step === 'upload' && (
             <>
               <p className="text-xs text-gray-500">{uploadHint}</p>
@@ -269,6 +311,37 @@ export default function ImportModal({
                       {(en ? f.hintEn : f.hintEs) ? <span className="text-gray-500"> — {en ? f.hintEn : f.hintEs}</span> : null}
                     </p>
                   ))}
+                </div>
+              </details>
+
+              {/* Recent runs of this importer — collapsed like the guide. */}
+              <details className="bg-gray-50 rounded-xl px-4 py-3" onToggle={e => { if ((e.target as HTMLDetailsElement).open) loadRecent(); }}>
+                <summary className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                  {tr('Importaciones recientes', 'Recent imports')}
+                </summary>
+                <div className="mt-2 flex flex-col gap-1 max-h-56 overflow-y-auto pr-1">
+                  {recentLogs === null ? (
+                    <p className="text-[11px] text-gray-400">…</p>
+                  ) : recentLogs.length === 0 ? (
+                    <p className="text-[11px] text-gray-400">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</p>
+                  ) : (
+                    recentLogs.map(l => (
+                      <div key={l.id} className="flex items-center justify-between gap-3 py-1 border-b border-gray-100 last:border-0">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-800 truncate">{l.file_name || '—'}</p>
+                          <p className="text-[11px] text-gray-400">
+                            {new Date(l.created_at).toLocaleString(en ? 'en-US' : 'es-MX', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <p className="text-[11px] text-gray-500 shrink-0 text-right">
+                          <span className="text-emerald-600 font-semibold">{l.success}</span>
+                          {l.updated > 0 ? <> · <span className="text-blue-600">{l.updated}↺</span></> : null}
+                          {l.skipped > 0 ? <> · {l.skipped}=</> : null}
+                          {l.failed > 0 ? <> · <span className="text-red-500">{l.failed}✗</span></> : null}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </details>
             </>
@@ -339,7 +412,13 @@ export default function ImportModal({
                 </table>
               </div>
               <div className="flex gap-3 pt-1">
-                <Button variant="secondary" onClick={() => setStep('map')} fullWidth>{tr('Atrás', 'Back')}</Button>
+                {importing ? (
+                  <Button variant="secondary" onClick={() => { abortRef.current = true; }} fullWidth>
+                    {tr('Cancelar importación', 'Cancel import')}
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={() => setStep('map')} fullWidth>{tr('Atrás', 'Back')}</Button>
+                )}
                 <Button onClick={runImport} loading={importing} fullWidth>{tr('Importar', 'Import')} {rows.length} {tr('renglones', 'rows')}</Button>
               </div>
             </>

@@ -6,12 +6,14 @@
 // landing spot for future features (filters, export, per-worker view…).
 
 import { useMemo, useRef, useState } from 'react';
-import { ChevronLeft, Search, X, Check, Trash2, Calendar } from 'lucide-react';
+import { ChevronLeft, Search, X, Check, Trash2, Calendar, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import type { PayrollBreakdown } from '../../lib/payroll';
 
 export interface PayrollHistoryEntry {
   id: string;
+  employeeId: string | null;
   periodStart: string;
   periodEnd: string;
   name: string;
@@ -24,6 +26,8 @@ export interface PayrollHistoryEntry {
   paidAt: string | null;
   /** Formula job-field counts this check paid for (label → number). */
   components?: Record<string, number> | null;
+  /** Pay-time hours-breakdown snapshot (136). Null on old records/imports. */
+  breakdown?: PayrollBreakdown | null;
 }
 
 export interface PayrollHistoryScreenProps {
@@ -34,13 +38,18 @@ export interface PayrollHistoryScreenProps {
   onDeleteEntries?: (ids: string[]) => void | Promise<void>;
   /** Business payroll settings — enables the this/last pay-period presets. */
   payPeriod?: { frequency: unknown; anchorDate: unknown };
+  /** Loads the hours breakdown (jobs/timesheets of the record's period) for
+   *  the in-place detail modal — same content as the live Payroll view. */
+  onLoadBreakdown?: (entry: PayrollHistoryEntry) => Promise<PayrollBreakdown | null>;
+  /** Opens a job from the breakdown's job list. */
+  onJobPress?: (jobId: string) => void;
 }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod }: PayrollHistoryScreenProps) {
+export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod, onLoadBreakdown, onJobPress }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
@@ -83,6 +92,23 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, search, dateFrom, dateTo]);
+  // In-place record detail — the check header + that period's hours
+  // breakdown, without leaving the history page.
+  const [detail, setDetail] = useState<{ entry: PayrollHistoryEntry; breakdown: PayrollBreakdown | null; loading: boolean } | null>(null);
+  const openDetail = (entry: PayrollHistoryEntry) => {
+    // Snapshot-first: what the check actually paid for, frozen at pay time.
+    // Old records (pre-136) fall back to a live recomputation.
+    if (entry.breakdown) {
+      setDetail({ entry, breakdown: entry.breakdown, loading: false });
+      return;
+    }
+    if (!onLoadBreakdown) return;
+    setDetail({ entry, breakdown: null, loading: true });
+    void onLoadBreakdown(entry)
+      .then(b => setDetail(d => (d && d.entry.id === entry.id ? { entry, breakdown: b, loading: false } : d)))
+      .catch(() => setDetail(d => (d && d.entry.id === entry.id ? { entry, breakdown: null, loading: false } : d)));
+  };
+
   const groups = useMemo(() => {
     const by = new Map<string, PayrollHistoryEntry[]>();
     filtered.forEach(h => {
@@ -105,15 +131,19 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
   // the jobs list). Visible order = the grouped list, top to bottom.
   const lastPickRef = useRef<string | null>(null);
   const handleSelectClick = (id: string, shiftKey: boolean) => {
+    // Range + anchor math OUTSIDE the state updater: React may invoke
+    // updaters more than once, and mutating lastPickRef inside made the
+    // second run see anchor === id — collapsing the shift-range to one row.
+    const flat = groups.flatMap(([, list]) => list.map(h => h.id));
+    const anchor = lastPickRef.current;
+    const useRange = shiftKey && !!anchor && anchor !== id && flat.includes(anchor) && flat.includes(id);
     setSelected(prev => {
       const next = new Set(prev);
-      const flat = groups.flatMap(([, list]) => list.map(h => h.id));
-      const anchor = lastPickRef.current;
-      if (shiftKey && anchor && flat.includes(anchor) && flat.includes(id)) {
-        const a = flat.indexOf(anchor);
+      if (useRange) {
+        const a = flat.indexOf(anchor as string);
         const b = flat.indexOf(id);
         const [lo, hi] = a < b ? [a, b] : [b, a];
-        const turningOn = !next.has(id);
+        const turningOn = !prev.has(id);
         for (let i = lo; i <= hi; i++) {
           if (turningOn) next.add(flat[i]); else next.delete(flat[i]);
         }
@@ -122,9 +152,9 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       } else {
         next.add(id);
       }
-      lastPickRef.current = id;
       return next;
     });
+    lastPickRef.current = id;
   };
   const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
   const allSelected = filtered.length > 0 && filtered.every(h => selected.has(h.id));
@@ -273,8 +303,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                 {list.map((h, i) => (
                   <div
                     key={h.id}
-                    onClick={selectMode ? (e) => handleSelectClick(h.id, e.shiftKey) : undefined}
-                    className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'cursor-pointer hover:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
+                    onClick={selectMode
+                      ? (e) => handleSelectClick(h.id, e.shiftKey)
+                      : (h.breakdown || (onLoadBreakdown && h.employeeId)) ? () => openDetail(h) : undefined}
+                    className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'cursor-pointer hover:bg-gray-50 select-none' : ''} ${!selectMode && (h.breakdown || (onLoadBreakdown && h.employeeId)) ? 'cursor-pointer hover:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
                   >
                     {selectMode ? (
                       <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
@@ -299,6 +331,84 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* In-place record detail — mirrors the live Payroll breakdown. */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetail(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-lg font-bold text-gray-900">{detail.entry.name}</p>
+                <p className="text-sm text-gray-500">
+                  {fmt(detail.entry.grossPay)} · {Math.round(detail.entry.hours * 100) / 100} h
+                  {' · '}
+                  {detail.entry.method === 'check' && detail.entry.checkNumber ? `${t.checkPrefix}${detail.entry.checkNumber}` : (methodLabel[detail.entry.method] ?? detail.entry.method)}
+                  {detail.entry.paidAt ? ` · ${fmtDay(detail.entry.paidAt)}` : ''}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {fmtDay(detail.entry.periodStart)} – {fmtDay(detail.entry.periodEnd)}
+                  {componentsText(detail.entry.components) ? ` · ${componentsText(detail.entry.components)}` : ''}
+                </p>
+              </div>
+              <button type="button" onClick={() => setDetail(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            {detail.loading ? (
+              <div className="flex justify-center py-10">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </div>
+              </div>
+            ) : detail.breakdown ? (
+              <>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {([[Wrench, t.hoursWorked, detail.breakdown.workedHours], [Truck, t.hoursDriven, detail.breakdown.drivenHours], [Clock, t.hoursLogged, detail.breakdown.loggedHours]] as const).map(([Icon, label, val], i) => (
+                    <div key={i} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
+                      <Icon size={15} className="text-gray-400 mx-auto mb-1" />
+                      <p className="text-base font-bold text-gray-900">{val}</p>
+                      <p className="text-[11px] text-gray-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                {detail.breakdown.jobs.length > 0 ? (
+                  <>
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {detail.breakdown.jobs.map((j, i) => (
+                        <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                          <button
+                            type="button"
+                            disabled={!j.jobId || !onJobPress}
+                            onClick={() => { if (j.jobId && onJobPress) onJobPress(j.jobId); }}
+                            className="flex-1 min-w-0 text-left group disabled:cursor-default"
+                          >
+                            <p className={`text-sm font-semibold text-gray-900 truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
+                            {j.date && <p className="text-[11px] text-gray-400">{fmtDay(j.date)}</p>}
+                          </button>
+                          <div className="text-right shrink-0">
+                            {j.workedHours > 0 && (
+                              <p className="text-xs text-gray-600"><Wrench size={11} className="inline mr-1 text-gray-400" />{j.workedHours} h</p>
+                            )}
+                            {j.drivenHours > 0 && (
+                              <p className="text-xs text-gray-600"><Truck size={11} className="inline mr-1 text-gray-400" />{j.drivenHours} h</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-8">{t.historyNoResults}</p>
+            )}
+          </div>
         </div>
       )}
 

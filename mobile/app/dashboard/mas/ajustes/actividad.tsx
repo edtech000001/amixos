@@ -94,6 +94,11 @@ export default function ActividadPage() {
     if (d.invoice_number) bits.push(String(d.invoice_number));
     if (typeof d.count === 'number') bits.push(`${d.count}`);
     if (d.email) bits.push(String(d.email));
+  // Imports + payroll events (137/audit additions).
+  if (d.file) bits.push(String(d.file));
+  if (typeof d.amount === 'number') bits.push(`$${Number(d.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+  if (typeof d.success === 'number') bits.push(`${d.success} ✓`);
+  if (typeof d.failed === 'number' && d.failed > 0) bits.push(`${d.failed} ✗`);
     if (d.target_business_name) bits.push(String(d.target_business_name));
     return bits.length ? `${label} — ${bits.join(' · ')}` : label;
   };

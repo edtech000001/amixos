@@ -1,6 +1,7 @@
 'use client';
 
 // Step 4 of the import hub: bulk photo upload. The jobs CSV's "Fotos
+import { logImportRun } from '@amixos/shared/lib/importRunners';
 // (nombres de archivo)" column left pending file names on each imported job
 // (jobs.import_photo_names); here the user drops their whole photo dump,
 // files are matched to jobs CLIENT-SIDE (shared/lib/importPhotos), and only
@@ -209,6 +210,12 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
     setLimitSkipped(prev => prev + skippedByLimit);
     setPicked([...next]);
     setPhase('done');
+    // Audit trail (migration 137): success = uploaded, skipped = the rest.
+    // Read from `next` — the state var would be a stale closure here.
+    {
+      const up = next.filter(x => x.status === 'uploaded').length;
+      void logImportRun(supabase, businessId, 'photos', `${next.length} fotos`, { success: up, skipped: next.length - up, failedRows: next.filter(x => x.status === 'failed') });
+    }
   };
 
   const uploadedCount = picked.filter(p => p.status === 'uploaded').length;

@@ -42,9 +42,17 @@ export type AuditAction =
   | 'business.deleted'
   // Modules (Addon Store)
   | 'module.enabled'
-  | 'module.disabled';
+  | 'module.disabled'
+  // Imports (any of the 8 hub steps)
+  | 'import.completed'
+  // Payroll
+  | 'payroll.paid'
+  | 'payroll.payment_deleted'
+  | 'payroll.payments_cleared';
 
 export type EntityType =
+  | 'import'
+  | 'payroll'
   | 'job'
   | 'invoice'
   | 'client'
@@ -118,4 +126,8 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'business.deleted':    { es: 'Negocio eliminado',         en: 'Business deleted' },
   'module.enabled':      { es: 'Módulo activado',           en: 'Module enabled' },
   'module.disabled':     { es: 'Módulo desactivado',        en: 'Module disabled' },
+  'import.completed':    { es: 'Importación realizada',    en: 'Import completed' },
+  'payroll.paid':        { es: 'Pago de nómina registrado', en: 'Payroll payment recorded' },
+  'payroll.payment_deleted': { es: 'Pago de nómina eliminado', en: 'Payroll payment deleted' },
+  'payroll.payments_cleared': { es: 'Pagos de nómina eliminados', en: 'Payroll payments deleted' },
 };

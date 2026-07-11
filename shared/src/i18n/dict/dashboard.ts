@@ -1217,6 +1217,12 @@ export type DashboardDict = {
       step7Desc: string;
       step8Title: string;
       step8Desc: string;
+      recentTitle: string;
+      recentEmpty: string;
+      recNew: string;
+      recUpdated: string;
+      recExisted: string;
+      recFailed: string;
       photos: {
         title: string;
         intro: string;
@@ -2238,6 +2244,10 @@ export type DashboardDict = {
       partialLabel: string;
       hoursCoveredLabel: string;
       alreadyPaidLabel: string;
+      paidSoFarLabel: string;
+      manualPayBtn: string;
+      manualWorkerLabel: string;
+      manualSelectWorker: string;
       clearPaymentsLabel: string;
       clearPaymentsConfirm: string;
       totalPending: string;
@@ -3579,6 +3589,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step7Desc: 'Vehículos y maquinaria: marca, modelo, placa, valor, seguro y más.',
         step8Title: 'Importar inventario',
         step8Desc: 'Materiales y artículos: cantidades, costos, categorías y alertas de stock.',
+        recentTitle: 'Importaciones recientes',
+        recentEmpty: 'Aún no hay importaciones registradas.',
+        recNew: 'nuevos',
+        recUpdated: 'actualizados',
+        recExisted: 'ya existían',
+        recFailed: 'con errores',
         photos: {
           title: 'Subir fotos de proyectos',
           intro: 'Selecciona todas las fotos de una vez. Cada archivo se asigna a su proyecto según la columna "Fotos (nombres de archivo)" del CSV de trabajos (o si el nombre contiene el Project ID). Las fotos sin coincidencia NO se suben ni ocupan almacenamiento.',
@@ -4582,6 +4598,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         partialLabel: 'Parcial',
         hoursCoveredLabel: 'Horas que cubre este pago',
         alreadyPaidLabel: 'Pagos anteriores',
+        paidSoFarLabel: 'Pagado',
+        manualPayBtn: 'Registrar pago',
+        manualWorkerLabel: 'Trabajador',
+        manualSelectWorker: 'Elegir trabajador…',
         clearPaymentsLabel: 'Eliminar todos los pagos',
         clearPaymentsConfirm: '¿Eliminar todos los pagos registrados de este período para {{name}}?',
         totalPending: 'Pendiente por pagar',
@@ -5949,6 +5969,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         step7Desc: 'Vehicles and machinery: make, model, plate, value, insurance and more.',
         step8Title: 'Import inventory',
         step8Desc: 'Materials and items: quantities, costs, categories and stock alerts.',
+        recentTitle: 'Recent imports',
+        recentEmpty: 'No imports recorded yet.',
+        recNew: 'new',
+        recUpdated: 'updated',
+        recExisted: 'already existed',
+        recFailed: 'failed',
         photos: {
           title: 'Upload project photos',
           intro: 'Select all your photos at once. Each file is matched to its project using the jobs CSV\'s "Photos (file names)" column (or a file name containing the Project ID). Unmatched photos are NOT uploaded and use no storage.',
@@ -6952,6 +6978,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         partialLabel: 'Partial',
         hoursCoveredLabel: 'Hours this payment covers',
         alreadyPaidLabel: 'Previous payments',
+        paidSoFarLabel: 'Paid',
+        manualPayBtn: 'Record payment',
+        manualWorkerLabel: 'Worker',
+        manualSelectWorker: 'Choose worker…',
         clearPaymentsLabel: 'Delete all payments',
         clearPaymentsConfirm: 'Delete all recorded payments for {{name}} in this period?',
         totalPending: 'Pending to pay',

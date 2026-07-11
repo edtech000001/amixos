@@ -242,38 +242,6 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         )}
       </Section>
 
-      {/* Hours by employee */}
-      <Section title={t.sections.hoursByEmployee}>
-        {m.employeeHours.length === 0 ? (
-          <View className="items-center py-8">
-            <Clock size={32} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-2">{t.empty.hours}</Text>
-          </View>
-        ) : (
-          <>
-            <View className="gap-3">
-              {m.employeeHours.map(e => (
-                <View key={e.name}>
-                  <View className="flex-row justify-between mb-1">
-                    <Text className="text-xs font-medium text-gray-700 flex-1 mr-2" numberOfLines={1}>{e.name}</Text>
-                    <View className="flex-row gap-3">
-                      <Text className="text-xs text-gray-500">{t.employees.hoursSuffix.replace('{{hours}}', String(e.hours))}</Text>
-                      <Text className="text-xs font-bold text-gray-900">{fmt(e.pay)}</Text>
-                    </View>
-                  </View>
-                  <View className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <View className="h-full bg-primary rounded-full" style={{ width: `${Math.round((e.hours / maxHours) * 100)}%` }} />
-                  </View>
-                </View>
-              ))}
-            </View>
-            <View className="border-t border-gray-100 pt-3 mt-3 flex-row justify-between">
-              <Text className="text-sm font-bold text-gray-500">{t.employees.totalEstimatedPayroll}</Text>
-              <Text className="text-sm font-bold text-primary">{fmt(m.totalPayroll)}</Text>
-            </View>
-          </>
-        )}
-      </Section>
 
       {/* Per-branch breakdown — multi-location businesses only. */}
       {m.byLocation.length > 0 ? (

@@ -86,6 +86,9 @@ export interface PayrollScreenProps {
   formulaFields?: { emp: FormulaFieldDef[]; job: FormulaFieldDef[] };
   /** Opens the Payment history page (its own route now). */
   onHistoryPress?: () => void;
+  /** Every employee (active first) — powers the manual "Registrar pago"
+   *  dialog for people not on the period's list (owner checks, ex-workers). */
+  allWorkers?: { id: string; name: string }[];
 }
 
 function fmt(n: number) {
@@ -116,6 +119,7 @@ export function PayrollScreen({
   busy,
   formulaFields,
   onHistoryPress,
+  allWorkers,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -175,6 +179,29 @@ export function PayrollScreen({
 
   const dateLocale = full.dashboard.dateLocale;
   const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Manual payment — record a check for ANYONE (owner's own paycheck, a
+  // worker with no hours this period…). Same insert path as Mark paid.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualWorker, setManualWorker] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualHours, setManualHours] = useState('');
+  const [manualMethod, setManualMethod] = useState<PayMethod>('check');
+  const [manualCheck, setManualCheck] = useState('');
+  const openManual = () => {
+    setManualWorker('');
+    setManualAmount('');
+    setManualHours('');
+    setManualMethod('check');
+    setManualCheck('');
+    setManualOpen(true);
+  };
+  const confirmManual = () => {
+    const amt = parseFloat(manualAmount) || 0;
+    if (!manualWorker || amt <= 0) return;
+    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null);
+    setManualOpen(false);
+  };
 
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -267,15 +294,19 @@ export function PayrollScreen({
   // Live total shown big at the top of the modal: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
 
-  // Coming back from a job opened out of the breakdown: reopen that worker.
-  const [initialDetailDone, setInitialDetailDone] = useState(!initialDetailEmployeeId);
+  // Coming back from a job / arriving from Payment history: open that
+  // worker's breakdown once their row exists (the prop may arrive after the
+  // right period has been applied — only consume on an actual match).
+  const [initialDetailDone, setInitialDetailDone] = useState(false);
   useEffect(() => {
-    if (initialDetailDone || !rows.length) return;
+    if (initialDetailDone || !initialDetailEmployeeId || !rows.length) return;
     const match = rows.find(x => x.employeeId === initialDetailEmployeeId);
-    if (match) setDetailRow(match);
-    setInitialDetailDone(true);
+    if (match) {
+      setDetailRow(match);
+      setInitialDetailDone(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
+  }, [rows, initialDetailEmployeeId]);
 
   // Keep the open dialog in sync after a delete/reload refreshes the rows.
   useEffect(() => {
@@ -348,6 +379,13 @@ export function PayrollScreen({
             <p className="text-xs text-gray-400">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </p>
+            <div className="flex items-center gap-2">
+            {canManage && allWorkers && allWorkers.length > 0 ? (
+              <button type="button" onClick={openManual}
+                className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                <Banknote size={13} /> {t.manualPayBtn}
+              </button>
+            ) : null}
             <div className="inline-flex gap-1 bg-gray-100 p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 <button key={v} type="button" onClick={() => changeView(v)}
@@ -355,6 +393,7 @@ export function PayrollScreen({
                   <Icon size={15} />
                 </button>
               ))}
+            </div>
             </div>
           </div>
         )}
@@ -465,6 +504,69 @@ export function PayrollScreen({
           </div>
         )}
       </div>
+
+      {/* Manual payment dialog */}
+      {manualOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setManualOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <p className="text-lg font-bold text-gray-900">{t.manualPayBtn}</p>
+              <button type="button" onClick={() => setManualOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</label>
+            <select
+              value={manualWorker}
+              onChange={e => setManualWorker(e.target.value)}
+              className="w-full mb-4 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">{t.manualSelectWorker}</option>
+              {(allWorkers ?? []).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</p>
+            <div className="flex gap-2 mb-4">
+              {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
+                const on = manualMethod === m;
+                return (
+                  <button key={m} type="button" onClick={() => setManualMethod(m)}
+                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    <Icon size={16} />
+                    <span className="text-xs font-semibold">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {manualMethod === 'check' && (
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</label>
+                <input value={manualCheck} onChange={e => setManualCheck(e.target.value)} placeholder={t.checkNumberPlaceholder} inputMode="numeric"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">{t.amountLabel}</label>
+              <input value={manualAmount} onChange={e => setManualAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
+                className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">{t.hoursCoveredLabel}</label>
+              <input value={manualHours} onChange={e => setManualHours(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" inputMode="decimal"
+                className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            <button type="button" onClick={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
+              className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">
+              {t.confirmBtn}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Payroll settings modal — frequency / anchor / pay components. */}
       {settingsOpen && (
@@ -772,13 +874,18 @@ export function PayrollScreen({
       {/* Worker hours breakdown */}
       {detailRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetailRow(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-lg font-bold text-gray-900">{detailRow.name}</p>
                 <p className="text-sm text-gray-500">
                   {fmt(detailRow.pay)} · {Math.round(detailRow.hours * 100) / 100} h
                 </p>
+                {paidTotal(detailRow) > 0 ? (
+                  <p className={`text-xs font-semibold mt-0.5 ${isFullyPaid(detailRow) ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {t.paidSoFarLabel}: {fmt(paidTotal(detailRow))}{paidHours(detailRow) > 0 ? ` · ${Math.round(paidHours(detailRow) * 100) / 100} h` : ''}
+                  </p>
+                ) : null}
               </div>
               <button type="button" onClick={() => setDetailRow(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
                 <X size={18} className="text-gray-400" />
@@ -798,7 +905,7 @@ export function PayrollScreen({
 
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</p>
             {detailRow.breakdown && detailRow.breakdown.jobs.length > 0 ? (
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {detailRow.breakdown.jobs.map((j, i) => (
                   <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
                     <button

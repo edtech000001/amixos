@@ -13,6 +13,8 @@ type SupabaseLike = any;
 export interface ReportInvoice {
   id: string; status: string; total_amount: number;
   paid_at: string | null; created_at: string; issue_date: string;
+  /** Invoice lines — each tagged with the job it bills (nullable). */
+  line_items?: { job_id?: string | null; qty?: number; rate?: number }[] | null;
 }
 export interface ReportJob {
   id: string; status: string; total_amount: number; created_at: string; client_id: string | null;
@@ -79,7 +81,7 @@ export async function fetchReportsData(
 ): Promise<ReportsData> {
   const [invoices, jobs, clients, timesheets, employees, inventory, locations] = await Promise.all([
     fetchAll<ReportInvoice>((from, to) =>
-      supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date').eq('business_id', businessId).range(from, to)),
+      supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportJob>((from, to) =>
       supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportClient>((from, to) =>
@@ -180,7 +182,26 @@ export function computeReports(
   const overdueRevenue = filteredInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i.total_amount, 0);
 
   const completedJobs = filteredJobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
-  const avgJobValue = completedJobs.length ? completedJobs.reduce((s, j) => s + j.total_amount, 0) / completedJobs.length : 0;
+  // Average job value, best-available source:
+  //   1. jobs with their own amount (user-entered totals),
+  //   2. invoice LINE ITEMS summed per job_id — the true per-job revenue for
+  //      migrated data where pricing lives on invoices,
+  //   3. average invoice total as the last resort.
+  const pricedJobs = completedJobs.filter(j => (j.total_amount ?? 0) > 0);
+  const perJobRevenue = new Map<string, number>();
+  filteredInvoices.forEach(inv => (inv.line_items ?? []).forEach(li => {
+    if (!li?.job_id) return;
+    const amt = (Number(li.qty ?? 1) || 0) * (Number(li.rate ?? 0) || 0);
+    perJobRevenue.set(li.job_id, (perJobRevenue.get(li.job_id) ?? 0) + amt);
+  }));
+  const perJobValues = Array.from(perJobRevenue.values());
+  const avgJobValue = pricedJobs.length
+    ? pricedJobs.reduce((s, j) => s + j.total_amount, 0) / pricedJobs.length
+    : perJobValues.length
+      ? perJobValues.reduce((s, v) => s + v, 0) / perJobValues.length
+      : filteredInvoices.length
+        ? filteredInvoices.reduce((s, i) => s + i.total_amount, 0) / filteredInvoices.length
+        : 0;
 
   const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
   const inventoryValue = data.inventory.reduce((s, i) => s + i.quantity * i.unit_cost, 0);

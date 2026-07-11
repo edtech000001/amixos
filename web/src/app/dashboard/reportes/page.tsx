@@ -21,6 +21,7 @@ import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 interface Invoice {
   id: string; status: string; total_amount: number;
   paid_at: string | null; created_at: string; issue_date: string;
+  line_items?: { job_id?: string | null; qty?: number; rate?: number }[] | null;
 }
 interface Job {
   id: string; status: string; total_amount: number; created_at: string;
@@ -162,7 +163,7 @@ export default function ReportesPage() {
     Promise.all([
       fetchAll<Invoice>((from, to) =>
         supabase.from('invoices')
-          .select('id, status, total_amount, paid_at, created_at, issue_date')
+          .select('id, status, total_amount, paid_at, created_at, issue_date, line_items')
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Job>((from, to) =>
         supabase.from('jobs')
@@ -227,7 +228,26 @@ export default function ReportesPage() {
   const avgInvoice = paidInvoices.length ? totalRevenue / paidInvoices.length : 0;
 
   const completedJobs = filteredJobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
-  const avgJobValue = completedJobs.length ? completedJobs.reduce((s, j) => s + j.total_amount, 0) / completedJobs.length : 0;
+  // Average job value, best-available source:
+  //   1. jobs with their own amount (user-entered totals),
+  //   2. invoice LINE ITEMS summed per job_id — the true per-job revenue for
+  //      migrated data where pricing lives on invoices,
+  //   3. average invoice total as the last resort.
+  const pricedJobs = completedJobs.filter(j => (j.total_amount ?? 0) > 0);
+  const perJobRevenue = new Map<string, number>();
+  filteredInvoices.forEach(inv => (inv.line_items ?? []).forEach(li => {
+    if (!li?.job_id) return;
+    const amt = (Number(li.qty ?? 1) || 0) * (Number(li.rate ?? 0) || 0);
+    perJobRevenue.set(li.job_id, (perJobRevenue.get(li.job_id) ?? 0) + amt);
+  }));
+  const perJobValues = Array.from(perJobRevenue.values());
+  const avgJobValue = pricedJobs.length
+    ? pricedJobs.reduce((s, j) => s + j.total_amount, 0) / pricedJobs.length
+    : perJobValues.length
+      ? perJobValues.reduce((s, v) => s + v, 0) / perJobValues.length
+      : filteredInvoices.length
+        ? filteredInvoices.reduce((s, i) => s + i.total_amount, 0) / filteredInvoices.length
+        : 0;
 
   const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
 
@@ -637,45 +657,6 @@ export default function ReportesPage() {
           )}
         </Section>
 
-        {/* ── Employee hours ─────────────────────────────────────────────── */}
-        <Section title={t.sections.hoursByEmployee}>
-          {employeeHours.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400">
-              <div className="text-center">
-                <Clock size={32} className="mx-auto mb-2 opacity-30"/>
-                <p className="text-sm">{t.empty.hours}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-2.5">
-                {employeeHours.map(emp => {
-                  const maxHours = Math.max(...employeeHours.map(e => e.hours));
-                  const pct = maxHours > 0 ? (emp.hours / maxHours) * 100 : 0;
-                  return (
-                    <div key={emp.name}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-gray-700 truncate max-w-[140px]">{emp.name}</span>
-                        <div className="flex gap-3 shrink-0">
-                          <span className="text-gray-500">{t.employees.hoursSuffix.replace('{{hours}}', String(emp.hours))}</span>
-                          <span className="font-bold text-gray-900">{fmt(emp.pay)}</span>
-                        </div>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${pct}%` }}/>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between text-sm font-bold">
-                <span className="text-gray-500">{t.employees.totalEstimatedPayroll}</span>
-                <span className="text-primary">{fmt(totalPayroll)}</span>
-              </div>
-            </>
-          )}
-        </Section>
       </div>
 
       {/* ── Bottom row ───────────────────────────────────────────────────────── */}

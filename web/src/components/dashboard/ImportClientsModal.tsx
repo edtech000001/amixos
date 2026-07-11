@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
+import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
@@ -82,7 +83,11 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
     ...templates.map(tpl => ({ key: `custom:${tpl.field_key}`, label: tpl.field_label, isCustom: true })),
   ];
 
+  const [fileName, setFileName] = useState('');
+  // Import progress (per 50-row batch).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const handleFileSelect = (file: File) => {
+    setFileName(file.name);
     Papa.parse<Record<string, string>>(file, {
       header: true,
       skipEmptyLines: 'greedy',
@@ -183,6 +188,7 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
     let success = 0;
     const insertedIds: string[] = [];
     for (let i = 0; i < batch.length; i += 50) {
+      setProgress({ done: i, total: batch.length });
       const slice = batch.slice(i, i + 50);
       const { data, error } = await supabase.from('clients').insert(slice.map(b => b.entry)).select('id');
       if (error) {
@@ -213,6 +219,8 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
       if (connected) syncBanner.runCreateBatch(insertedIds);
     }
     setImportResult({ success, failedRows });
+    // Audit trail (migration 137).
+    void logImportRun(supabase, businessId, 'clients', fileName || null, { success, skipped: 0, failedRows });
     onDone?.();
     setImporting(false);
     setImportStep('done');
@@ -353,6 +361,14 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
               </div>
               <div className="flex gap-3 pt-1">
                 <Button variant="secondary" onClick={() => setImportStep('map')} fullWidth>{tc.buttons.back}</Button>
+                {importing && progress ? (
+                  <div className="mb-2">
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1 text-center">{progress.done} / {progress.total}</p>
+                  </div>
+                ) : null}
                 <Button onClick={runImport} loading={importing} fullWidth>
                   {t.importModal.importNRows.replace('{{count}}', String(csvRows.length))}
                 </Button>

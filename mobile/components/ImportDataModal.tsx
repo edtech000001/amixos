@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -16,6 +16,7 @@ import {
   type ImportResult,
   type ImportTemplateField,
   formulaComponentTemplates,
+  logImportRun,
 } from '@amixos/shared/lib/importRunners';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -52,6 +53,22 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
   const [step, setStep] = useState<Step>('upload');
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Import progress (rows/groups processed) — throttled by the runner cb.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const abortRef = useRef(false);
+  // Recent runs of THIS import mode (migration 137) — lazy-loaded on expand.
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recentLogs, setRecentLogs] = useState<{ id: string; file_name: string | null; success: number; updated: number; skipped: number; failed: number; created_at: string }[] | null>(null);
+  const toggleRecent = () => {
+    setRecentOpen(o => !o);
+    if (recentLogs === null) {
+      void supabase.from('import_logs')
+        .select('id, file_name, success, updated, skipped, failed, created_at')
+        .eq('business_id', businessId).eq('mode', mode)
+        .order('created_at', { ascending: false }).limit(10)
+        .then(({ data }: { data: typeof recentLogs }) => setRecentLogs(data ?? []));
+    }
+  };
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
@@ -232,12 +249,28 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
     templates: useTemplates ? templates : [],
     accessRoles,
     invoiceTemplate: business?.invoice_template,
+    // Throttle renders: every 5 units (or the final tick) is plenty.
+    onProgress: (done: number, total: number) => {
+      if (done >= total || done % 5 === 0) setProgress({ done, total });
+    },
+    shouldAbort: () => abortRef.current,
   });
 
   const runImport = async () => {
+    abortRef.current = false;
     setImporting(true);
+    setProgress({ done: 0, total: rows.length });
     try {
       const res = await runImportFor(mode, buildCtx(rows));
+      // Audit trail (migration 137) — the hub's "recent imports" list.
+      void logImportRun(supabase, businessId, mode, filename || null, res, user?.id ?? null);
+      if (abortRef.current) {
+        // Aborted: stay on the preview with Back/Import restored — dedupe
+        // makes a re-run pick up where this one stopped.
+        setProgress(null);
+        setImporting(false);
+        return;
+      }
       setResult(res);
       setStep('done');
       onDone?.();
@@ -364,6 +397,38 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             ) : null}
           </View>
 
+          {/* Recent runs of this importer — collapsed like the guide. */}
+          <View className="bg-gray-50 rounded-xl px-4 py-3">
+            <Pressable onPress={toggleRecent} className="active:opacity-70">
+              <Text className="text-xs font-semibold text-gray-700">
+                {recentOpen ? '▾ ' : '▸ '}{tr('Importaciones recientes', 'Recent imports')}
+              </Text>
+            </Pressable>
+            {recentOpen ? (
+              <View className="mt-2 gap-1">
+                {recentLogs === null ? (
+                  <Text className="text-[11px] text-gray-400">…</Text>
+                ) : recentLogs.length === 0 ? (
+                  <Text className="text-[11px] text-gray-400">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</Text>
+                ) : (
+                  recentLogs.map(l => (
+                    <View key={l.id} className="flex-row items-center justify-between gap-3 py-1 border-b border-gray-100">
+                      <View className="flex-1 min-w-0">
+                        <Text className="text-xs font-semibold text-gray-800" numberOfLines={1}>{l.file_name || '—'}</Text>
+                        <Text className="text-[11px] text-gray-400">
+                          {new Date(l.created_at).toLocaleString(en ? 'en-US' : 'es-MX', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Text className="text-[11px] text-gray-500">
+                        {l.success} ✓{l.updated > 0 ? ` · ${l.updated}↺` : ''}{l.skipped > 0 ? ` · ${l.skipped}=` : ''}{l.failed > 0 ? ` · ${l.failed}✗` : ''}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
+          </View>
+
           {error ? (
             <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex-row items-start gap-2">
               <AlertCircle size={16} color="#EF4444" />
@@ -476,17 +541,33 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             </ScrollView>
           </View>
 
+          {importing && progress ? (
+            <View className="flex-row items-center gap-3 pt-2">
+              <View className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <View className="h-full bg-primary rounded-full" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
+              </View>
+              <Text className="text-xs font-semibold text-gray-500">{progress.done} / {progress.total}</Text>
+            </View>
+          ) : null}
           <View className="flex-row items-center justify-between pt-2">
-            <Pressable onPress={() => setStep('map')} className="px-3 py-2 rounded-lg active:bg-gray-100">
-              <Text className="text-sm font-semibold text-gray-700">{tr('Atrás', 'Back')}</Text>
-            </Pressable>
+            {importing ? (
+              <Pressable onPress={() => { abortRef.current = true; }} className="px-3 py-2 rounded-lg active:bg-red-50">
+                <Text className="text-sm font-semibold text-red-600">{tr('Cancelar importación', 'Cancel import')}</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setStep('map')} className="px-3 py-2 rounded-lg active:bg-gray-100">
+                <Text className="text-sm font-semibold text-gray-700">{tr('Atrás', 'Back')}</Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={runImport}
               disabled={importing}
               className={`px-4 py-2 rounded-lg ${importing ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
             >
               <Text className="text-sm font-semibold text-white">
-                {importing ? tr('Importando…', 'Importing…') : `${tr('Importar', 'Import')} ${rows.length}`}
+                {importing
+                  ? `${tr('Importando…', 'Importing…')}${progress ? ` ${progress.done}/${progress.total}` : ''}`
+                  : `${tr('Importar', 'Import')} ${rows.length}`}
               </Text>
             </Pressable>
           </View>

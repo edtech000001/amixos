@@ -6,8 +6,9 @@
 // implementations.)
 
 import { fetchAll } from './supabaseFetch';
-import { getPayrollPeriod, normalizeFrequency, parsePayrollAnchor } from './payroll';
+import { employeeBreakdownInRange, getPayrollPeriod, normalizeFrequency, parsePayrollAnchor, type PayrollJob, type PayrollTimesheet } from './payroll';
 import { fieldRefId, normalizeFormula } from './payrollFormula';
+import { logAudit } from './audit';
 import { invoiceDefaultLanguage } from './invoiceTemplate';
 import { INVITABLE_ROLES, ROLE_LABELS } from './permissions';
 import { computeTotals, type InvoiceLineItem } from './invoicing';
@@ -272,6 +273,44 @@ export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {})
 }
 
 /**
+ * Audit-trail row for one import run (migration 137) — the hub's "recent
+ * imports" list. Best-effort: a logging failure never breaks the import.
+ */
+export async function logImportRun(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  businessId: string,
+  mode: string,
+  fileName: string | null,
+  res: { success: number; skipped: number; updated?: number; failedRows?: unknown[] },
+  userId?: string | null,
+): Promise<void> {
+  try {
+    await supabase.from('import_logs').insert({
+      business_id: businessId,
+      mode,
+      file_name: fileName,
+      success: res.success,
+      updated: res.updated ?? 0,
+      skipped: res.skipped,
+      failed: res.failedRows?.length ?? 0,
+      created_by: userId ?? null,
+    });
+  } catch {
+    /* best-effort */
+  }
+  // Mirror into the business activity log.
+  void logAudit(supabase, businessId, 'import.completed', 'import', null, {
+    mode,
+    file: fileName,
+    success: res.success,
+    updated: res.updated ?? 0,
+    skipped: res.skipped,
+    failed: res.failedRows?.length ?? 0,
+  });
+}
+
+/**
  * Payroll's extra import columns: one per job custom field the business's
  * PAY FORMULA reads (e.g. "Regresaron el mismo día?: No" — an overnight
  * count). Imported values land in payroll_payments.components so history
@@ -319,6 +358,11 @@ export interface ImportRunCtx {
   templates: ImportTemplateField[];
   /** employees mode: per-business role renames. */
   accessRoles?: { key: string; name: string | null }[];
+  /** Progress ticks for the wizard's bar: (done, total) row/group units. */
+  onProgress?: (done: number, total: number) => void;
+  /** Polled each row/group — return true to stop (partial results stand;
+   *  dedupe makes a re-run resume where it left off). */
+  shouldAbort?: () => boolean;
   /** invoices mode: businesses.invoice_template (picks es/en for new invoices). */
   invoiceTemplate?: unknown;
 }
@@ -447,7 +491,10 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     ? groupBy(jobRows.map((row, idx) => ({ row, idx })), ({ row, idx }) => get(row, 'external_ref') || `__row_${idx}`)
     : jobRows.map((row, idx) => ({ key: '', rows: [{ row, idx }] }));
 
+  let progressDone = 0;
   for (const grp of groups) {
+    ctx.onProgress?.(progressDone++, groups.length);
+    if (ctx.shouldAbort?.()) break;
     // Job-level fields come from the group's FIRST row.
     const { row, idx } = grp.rows[0];
     const csvLine = idx + 2;
@@ -744,6 +791,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       `"Added by": these emails don't match any team member (your user was used): ${shown}.`,
     ));
   }
+  ctx.onProgress?.(groups.length, groups.length);
   return { success, skipped, updated, failedRows, notes };
 }
 
@@ -795,6 +843,8 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
   };
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
+    ctx.onProgress?.(idx, ctx.rows.length);
+    if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const csvLine = idx + 2;
     const first = get(row, 'first_name');
@@ -849,6 +899,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
       `Unrecognized access role (the person was imported, just without a role): ${shown}. Valid: admin, manager, office, field, viewer.`,
     ));
   }
+  ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   return { success, skipped, failedRows, notes };
 }
 
@@ -909,7 +960,10 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   const groups = groupBy(filledRows.map((row, idx) => ({ row, idx })), ({ row }) => get(row, 'invoice_number'));
   let unlinkedLines = 0;
 
+  let progressDone = 0;
   for (const grp of groups) {
+    ctx.onProgress?.(progressDone++, groups.length);
+    if (ctx.shouldAbort?.()) break;
     const first = grp.rows[0];
     const csvLine = first.idx + 2;
     const num = grp.key;
@@ -998,6 +1052,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     `${unlinkedLines} line(s) with no matching Project ID — kept on the invoice but not linked to a job.`,
   ));
 
+  ctx.onProgress?.(groups.length, groups.length);
   return { success, skipped, failedRows, notes };
 }
 
@@ -1044,7 +1099,31 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const existingKeys = new Set(existing.map(e => checkKey(e.employee_id, e.period_start, e.check_number, e.gross_pay)));
   const autoCreatedWorkers: string[] = [];
 
+  // Jobs + timesheets fetched ONCE — each imported payment gets a frozen
+  // hours-breakdown snapshot for its period (mirrors live mark-paid, 136).
+  const allJobs: PayrollJob[] = (await fetchAll<{
+    id: string; title: string | null; scheduled_date: string | null; total_hours: number | null;
+    driver_employee_ids: string[] | null; driver_hours: number | null;
+    job_assignments: { employee_id: string | null }[];
+  }>((from, to) =>
+    ctx.supabase.from('jobs')
+      .select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
+      .eq('business_id', ctx.businessId).not('scheduled_date', 'is', null).range(from, to)))
+    .map(j => ({
+      id: j.id,
+      title: j.title,
+      scheduled_date: j.scheduled_date,
+      total_hours: j.total_hours,
+      driver_employee_ids: j.driver_employee_ids,
+      driver_hours: j.driver_hours,
+      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+    }));
+  const allTimesheets: PayrollTimesheet[] = await fetchAll<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }>((from, to) =>
+    ctx.supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', ctx.businessId).range(from, to));
+
   for (let idx = 0; idx < ctx.rows.length; idx++) {
+    ctx.onProgress?.(idx, ctx.rows.length);
+    if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const workerName = get(row, 'worker');
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${workerName || get(row, 'paid_date') || tr('(fila vacía)', '(empty row)')}`;
@@ -1108,6 +1187,14 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       method: method ?? 'cash',
       check_number: get(row, 'check_number') || null,
       components: Object.keys(components).length ? components : null,
+      // Frozen breakdown snapshot (same as live mark-paid).
+      breakdown: employeeBreakdownInRange({
+        employeeId: empId,
+        timesheets: allTimesheets,
+        jobs: allJobs,
+        startStr: period.startStr,
+        endStr: period.endStr,
+      }),
       created_by: ctx.userId,
       // The paid date becomes the record's timestamp so history shows it.
       ...(paidDate ? { created_at: `${paidDate}T12:00:00` } : {}),
@@ -1125,6 +1212,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       `${autoCreatedWorkers.length} worker(s) created as INACTIVE: ${shown}${autoCreatedWorkers.length > 15 ? '…' : ''}. Reactivate them in Team if they return.`,
     ));
   }
+  ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   return { success, skipped, failedRows, notes };
 }
 
@@ -1155,6 +1243,8 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
     ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
+    ctx.onProgress?.(idx, ctx.rows.length);
+    if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const name = get(row, 'name');
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || tr('(fila vacía)', '(empty row)')}`;
@@ -1194,6 +1284,7 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
     success++;
   }
 
+  ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   return { success, skipped, failedRows, notes: [] };
 }
 
@@ -1212,6 +1303,8 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
   const existingSkus = new Set(existing.map(e => (e.sku ?? '').trim().toLowerCase()).filter(Boolean));
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
+    ctx.onProgress?.(idx, ctx.rows.length);
+    if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const name = get(row, 'name');
     const sku = get(row, 'sku');
@@ -1235,6 +1328,7 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
     success++;
   }
 
+  ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   return { success, skipped, failedRows, notes: [] };
 }
 

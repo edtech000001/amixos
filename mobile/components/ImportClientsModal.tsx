@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -87,6 +88,8 @@ export function ImportClientsModal({
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState('');
+  // Import progress (per 50-row batch).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{
     success: number;
@@ -150,6 +153,7 @@ export function ImportClientsModal({
     const insertedIds: string[] = [];
     const failedRows: { label: string; reason: string }[] = [];
     for (let i = 0; i < batch.length; i += 50) {
+      setProgress({ done: i, total: batch.length });
       const slice = batch.slice(i, i + 50);
       const { data, error: err } = await supabase
         .from('clients')
@@ -480,6 +484,8 @@ export function ImportClientsModal({
     // and auto-resume if the app is killed mid-batch.
     await queueGoogleMirrorIfConnected(insertedIds);
 
+    // Audit trail (migration 137).
+    void logImportRun(supabase, businessId, 'clients', filename || null, { success, skipped: 0, failedRows });
     setResult({ success, failedRows });
     setImporting(false);
     setStep('done');
@@ -710,7 +716,7 @@ export function ImportClientsModal({
               className={`px-4 py-2 rounded-lg ${importing ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
             >
               <Text className="text-sm font-semibold text-white">
-                {importing ? 'Importando…' : `Importar ${rows.length}`}
+                {importing ? `Importando…${progress ? ` ${progress.done}/${progress.total}` : ''}` : `Importar ${rows.length}`}
               </Text>
             </Pressable>
           </View>

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert } from 'react-native';
-import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2 } from 'lucide-react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard } from 'react-native';
+import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
@@ -82,6 +83,9 @@ export interface PayrollScreenProps {
   formulaFields?: { emp: FormulaFieldDef[]; job: FormulaFieldDef[] };
   /** Opens the Payment history page (its own route now). */
   onHistoryPress?: () => void;
+  /** Every employee (active first) — powers the manual "Registrar pago"
+   *  sheet for people not on the period's list (owner checks, ex-workers). */
+  allWorkers?: { id: string; name: string }[];
 }
 
 function fmt(n: number) {
@@ -112,6 +116,7 @@ export function PayrollScreen({
   busy,
   formulaFields,
   onHistoryPress,
+  allWorkers,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -173,6 +178,32 @@ export function PayrollScreen({
   const dateLocale = full.dashboard.dateLocale;
   const fmtDay = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' });
 
+  // Manual payment — record a check for ANYONE (owner's own paycheck, a
+  // worker with no hours this period…). Same insert path as Mark paid.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualWorker, setManualWorker] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualHours, setManualHours] = useState('');
+  const [manualMethod, setManualMethod] = useState<PayMethod>('check');
+  const [manualCheck, setManualCheck] = useState('');
+  const [workerSearch, setWorkerSearch] = useState('');
+  const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  const openManual = () => {
+    setManualWorker('');
+    setManualAmount('');
+    setManualHours('');
+    setManualMethod('check');
+    setManualCheck('');
+    setWorkerSearch('');
+    setManualOpen(true);
+  };
+  const confirmManual = () => {
+    const amt = parseFloat(manualAmount) || 0;
+    if (!manualWorker || amt <= 0) return;
+    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null);
+    setManualOpen(false);
+  };
+
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
   useEffect(() => {
@@ -185,6 +216,7 @@ export function PayrollScreen({
     void AsyncStorage.setItem('amixos.payrollView.v1', v).catch(() => {});
   };
 
+  const insets = useSafeAreaInsets();
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
   const [method, setMethod] = useState<PayMethod>('cash');
   const [checkNumber, setCheckNumber] = useState('');
@@ -265,15 +297,19 @@ export function PayrollScreen({
   // Live total shown big at the top of the sheet: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
 
-  // Coming back from a job opened out of the breakdown: reopen that worker.
-  const [initialDetailDone, setInitialDetailDone] = useState(!initialDetailEmployeeId);
+  // Coming back from a job / arriving from Payment history: open that
+  // worker's breakdown once their row exists (the prop may arrive after the
+  // right period has been applied — only consume on an actual match).
+  const [initialDetailDone, setInitialDetailDone] = useState(false);
   useEffect(() => {
-    if (initialDetailDone || !rows.length) return;
+    if (initialDetailDone || !initialDetailEmployeeId || !rows.length) return;
     const match = rows.find(x => x.employeeId === initialDetailEmployeeId);
-    if (match) setDetailRow(match);
-    setInitialDetailDone(true);
+    if (match) {
+      setDetailRow(match);
+      setInitialDetailDone(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
+  }, [rows, initialDetailEmployeeId]);
 
   // Keep the open sheet in sync after a delete/reload refreshes the rows.
   useEffect(() => {
@@ -346,6 +382,14 @@ export function PayrollScreen({
             <Text className="text-xs text-gray-400">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </Text>
+            <View className="flex-row items-center gap-2">
+            {canManage && allWorkers && allWorkers.length > 0 ? (
+              <Pressable onPress={openManual}
+                className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg active:bg-gray-50">
+                <Banknote size={13} color="#374151" />
+                <Text className="text-xs font-semibold text-gray-700">{t.manualPayBtn}</Text>
+              </Pressable>
+            ) : null}
             <View className="flex-row gap-1 bg-gray-100 p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 <Pressable key={v} onPress={() => changeView(v)}
@@ -353,6 +397,7 @@ export function PayrollScreen({
                   <Icon size={15} color={view === v ? '#111827' : '#9CA3AF'} />
                 </Pressable>
               ))}
+            </View>
             </View>
           </View>
         ) : null}
@@ -458,11 +503,149 @@ export function PayrollScreen({
         )}
       </ScrollView>
 
+      {/* Manual payment sheet */}
+      <RNModal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
+        <Pressable onPress={() => setManualOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" onStartShouldSetResponder={() => true}>
+            <View className="items-center mb-3">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-lg font-bold text-gray-900">{t.manualPayBtn}</Text>
+              <Pressable onPress={() => setManualOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100">
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</Text>
+              <Pressable
+                onPress={() => { setWorkerSearch(''); setManualPickerOpen(true); }}
+                className="mb-4 flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+              >
+                <Text className={`text-base flex-1 ${manualWorker ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                  {(allWorkers ?? []).find(w => w.id === manualWorker)?.name ?? t.manualSelectWorker}
+                </Text>
+                <ChevronDown size={16} color="#9CA3AF" />
+              </Pressable>
+
+              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</Text>
+              <View className="flex-row gap-2 mb-4">
+                {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
+                  const on = manualMethod === m;
+                  return (
+                    <Pressable key={m} onPress={() => setManualMethod(m)}
+                      className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}>
+                      <Icon size={16} color={on ? '#4F46E5' : '#9CA3AF'} />
+                      <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {manualMethod === 'check' ? (
+                <View className="mb-4">
+                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</Text>
+                  <TextInput value={manualCheck} onChangeText={setManualCheck} placeholder={t.checkNumberPlaceholder}
+                    placeholderTextColor="#9CA3AF" keyboardType="number-pad"
+                    className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+                </View>
+              ) : null}
+
+              <View className="mb-4">
+                <Text className="text-sm font-semibold text-gray-700 mb-2">{t.amountLabel}</Text>
+                <TextInput value={manualAmount} onChangeText={v => setManualAmount(v.replace(/[^0-9.]/g, ''))} placeholder="0.00"
+                  placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-semibold text-gray-700 mb-2">{t.hoursCoveredLabel}</Text>
+                <TextInput value={manualHours} onChangeText={v => setManualHours(v.replace(/[^0-9.]/g, ''))} placeholder="0"
+                  placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+              </View>
+
+              <Pressable onPress={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
+                className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+                <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+
+          {/* Worker picker — overlay INSIDE this modal (iOS won't present a
+             second native Modal on top of an open one). Same look as the job
+             form's lead picker. */}
+          {manualPickerOpen ? (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => setManualPickerOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          />
+          <View
+            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            style={{
+              height: '80%',
+              marginBottom: insets.bottom + 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 24,
+              elevation: 24,
+            }}
+          >
+            <View className="items-center mb-2">
+              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            </View>
+            <View className="px-5 mb-3">
+              <Text className="text-base font-semibold text-gray-900">{t.manualWorkerLabel}</Text>
+            </View>
+            <View className="px-5 mb-3">
+              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
+                <Search size={16} color="#9CA3AF" />
+                <TextInput
+                  value={workerSearch}
+                  onChangeText={setWorkerSearch}
+                  placeholder={t.manualSelectWorker}
+                  placeholderTextColor="#9CA3AF"
+                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                />
+              </View>
+            </View>
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              {(allWorkers ?? [])
+                .filter(w => w.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(workerSearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+                .map(w => {
+                  const isSel = w.id === manualWorker;
+                  return (
+                    <Pressable
+                      key={w.id}
+                      onPress={() => { setManualWorker(w.id); setManualPickerOpen(false); }}
+                      className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}
+                    >
+                      <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`} numberOfLines={1}>
+                        {w.name}
+                      </Text>
+                      {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                    </Pressable>
+                  );
+                })}
+            </ScrollView>
+          </View>
+          </View>
+          ) : null}
+        </Pressable>
+      </RNModal>
+
       {/* Payroll settings sheet — frequency / anchor / pay components. */}
       <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={() => setSettingsOpen(false)}>
         <Pressable onPress={() => setSettingsOpen(false)} className="flex-1 bg-black/40 justify-end">
           <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" onStartShouldSetResponder={() => true}>
-            <Text className="text-lg font-bold text-gray-900 mb-4">{t.settingsTitle}</Text>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-lg font-bold text-gray-900">{t.settingsTitle}</Text>
+              <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100">
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
+            </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.freqLabel}</Text>
               <View className="flex-row gap-2 mb-4">
@@ -661,6 +844,9 @@ export function PayrollScreen({
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
             <View className="items-center mb-4">
+              <Pressable onPress={() => setPayRow(null)} hitSlop={10} className="absolute right-0 top-0 p-1 rounded-lg active:bg-gray-100">
+                <X size={20} color="#9CA3AF" />
+              </Pressable>
               <Text className="text-base font-semibold text-gray-900">{payRow?.name}</Text>
               <Text className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</Text>
               <Text className="text-sm text-gray-400 mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
@@ -764,7 +950,7 @@ export function PayrollScreen({
       {/* Worker hours breakdown sheet */}
       <RNModal visible={!!detailRow} transparent animationType="fade" onRequestClose={() => setDetailRow(null)}>
         <Pressable onPress={() => setDetailRow(null)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onStartShouldSetResponder={() => true}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
@@ -774,6 +960,11 @@ export function PayrollScreen({
                 <Text className="text-sm text-gray-500">
                   {fmt(detailRow?.pay ?? 0)} · {Math.round((detailRow?.hours ?? 0) * 100) / 100} h
                 </Text>
+                {detailRow && paidTotal(detailRow) > 0 ? (
+                  <Text className={`text-xs font-semibold mt-0.5 ${isFullyPaid(detailRow) ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {t.paidSoFarLabel}: {fmt(paidTotal(detailRow))}{paidHours(detailRow) > 0 ? ` · ${Math.round(paidHours(detailRow) * 100) / 100} h` : ''}
+                  </Text>
+                ) : null}
               </View>
               <Pressable onPress={() => setDetailRow(null)} hitSlop={10} className="p-1">
                 <X size={20} color="#9CA3AF" />
@@ -826,7 +1017,7 @@ export function PayrollScreen({
             ) : (
               <Text className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</Text>
             )}
-          </Pressable>
+          </View>
         </Pressable>
       </RNModal>
     </View>

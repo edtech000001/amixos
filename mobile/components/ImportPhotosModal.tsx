@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react-native';
@@ -219,6 +220,12 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
     setLimitSkipped(prev => prev + skippedByLimit);
     setPicked([...next]);
     setPhase('done');
+    // Audit trail (migration 137): success = uploaded, skipped = the rest.
+    // Read from `next` — the state var would be a stale closure here.
+    {
+      const up = next.filter(x => x.status === 'uploaded').length;
+      void logImportRun(supabase, businessId, 'photos', `${next.length} fotos`, { success: up, skipped: next.length - up, failedRows: next.filter(x => x.status === 'failed') });
+    }
   };
 
   const uploadedCount = picked.filter(p => p.status === 'uploaded').length;
