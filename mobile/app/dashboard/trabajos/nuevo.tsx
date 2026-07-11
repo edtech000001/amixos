@@ -457,6 +457,10 @@ export default function NuevoTrabajoRoute() {
   // runs for edit or duplicate (those may already carry a location), and never
   // overwrites coords the user typed/pasted while the fix was resolving.
   const coordsTextRef = useRef('');
+  // Client id for the job being CREATED — generated once per form session so
+  // a retry after a mid-save failure re-uses it (duplicate insert = success)
+  // instead of inserting another copy of the job.
+  const draftJobIdRef = useRef(newUuid());
   useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
   useEffect(() => {
     if (editId || duplicate) return;
@@ -1451,8 +1455,9 @@ export default function NuevoTrabajoRoute() {
           jobId = editId;
         } else {
           // Client-generated id so creating a job offline works (and assignments
-          // can reference it before it syncs).
-          jobId = newUuid();
+          // can reference it before it syncs). Stable across retries — see
+          // draftJobIdRef.
+          jobId = draftJobIdRef.current;
           // Stamp the pipeline timestamp(s) for the INITIAL status so the stepper
           // shows a date under each reached step (a job created straight as
           // "scheduled" previously had a blank scheduled_at). Backfill earlier
@@ -1482,6 +1487,7 @@ export default function NuevoTrabajoRoute() {
       // Existing job_items are intentionally preserved; we no longer manage
       // line items from this form (moved to detail page).
       if (!isProposal) {
+        try {
         if (editId) await queuedDelete({ table: 'job_assignments', match: { job_id: jobId }, businessId: business.id, label: 'Asignaciones' });
         // Only honor the lead pick if that employee is actually in the crew —
         // toggleEmployee already clears it, but belt-and-suspenders for save.
@@ -1516,6 +1522,11 @@ export default function NuevoTrabajoRoute() {
         // Per-assignment insert with client ids so an offline retry is idempotent.
         for (const a of assignments) {
           await queuedInsert({ table: 'job_assignments', payload: { id: newUuid(), ...a }, businessId: business.id, label: `Asignación: ${a.worker_name}` });
+        }
+        } catch (assignErr) {
+          // The job row is already saved — a failed assignment write must not
+          // abort the save (retrying duplicated jobs before this guard).
+          console.warn('job_assignments write failed', assignErr);
         }
       }
 
