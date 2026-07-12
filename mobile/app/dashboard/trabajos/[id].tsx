@@ -612,6 +612,23 @@ export default function JobDetailRoute() {
     ]);
   };
 
+  // Autoprice data — MUST run before the early returns below, otherwise the
+  // hook count changes once the job loads (Rules of Hooks / render crash).
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('price_sheet_items')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .eq('business_id', business.id).eq('active', true)
+      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+  useEffect(() => {
+    if (!job?.client_id) { setClientTierId(null); return; }
+    void supabase.from('clients').select('price_tier_id').eq('id', job.client_id).single()
+      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.client_id]);
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
@@ -832,21 +849,6 @@ export default function JobDetailRoute() {
     setSavingItems(false);
     setItemsEditOpen(false);
   };
-  useEffect(() => {
-    if (!business) return;
-    void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
-      .eq('business_id', business.id).eq('active', true)
-      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id]);
-  useEffect(() => {
-    if (!job?.client_id) { setClientTierId(null); return; }
-    void supabase.from('clients').select('price_tier_id').eq('id', job.client_id).single()
-      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.client_id]);
-
   const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
 
   return (
