@@ -7,6 +7,7 @@
 // can.manageBusinessSettings).
 
 import { useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { MapPin, Plus, Trash2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -40,7 +41,7 @@ export function UbicacionesSettings() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm(es ? '¿Archivar esta ubicación? Los trabajos asignados quedan sin ubicación.' : 'Archive this location? Assigned jobs become unassigned.')) return;
+    if (!(await confirm({ message: es ? '¿Archivar esta ubicación? Los trabajos asignados quedan sin ubicación.' : 'Archive this location? Assigned jobs become unassigned.', destructive: true }))) return;
     await archiveLocation(supabase, id);
     await refetchLocations();
   };

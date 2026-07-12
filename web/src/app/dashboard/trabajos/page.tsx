@@ -15,6 +15,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
 
@@ -242,7 +243,7 @@ export default function TrabajosPage() {
           ? async (jobIds) => {
               if (!business) return;
               const msg = full.dashboard.jobs.confirmDeleteBulk.replace('{{count}}', String(jobIds.length));
-              if (!window.confirm(msg)) return;
+              if (!(await confirm({ message: msg, destructive: true }))) return;
               // FK cascades clean job_items / job_assignments / job_photos
               // (whose delete trigger also removes the storage files).
               for (let i = 0; i < jobIds.length; i += 50) {
@@ -257,7 +258,7 @@ export default function TrabajosPage() {
         if (!business) return;
         if (archive) {
           const msg = full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', String(jobIds.length));
-          if (!window.confirm(msg)) return;
+          if (!(await confirm({ message: msg }))) return;
         }
         for (let i = 0; i < jobIds.length; i += 50) {
           await supabase.from('jobs')

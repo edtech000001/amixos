@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
@@ -221,7 +222,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     const { error } = await supabase.from('jobs').update(update).eq('id', id);
     if (error) {
       setUpdatingStatus(false);
-      window.alert(td.statusUpdateError);
+      void alertMessage({ message: td.statusUpdateError, destructive: true });
       return;
     }
     setJob(prev => prev ? { ...prev, ...update } : prev);
@@ -310,13 +311,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       .single();
     if (!inv) return;
     const sentOrPaid = ['sent', 'paid', 'overdue'].includes(inv.status);
-    if (!window.confirm(sentOrPaid ? td.unInvoiceSentWarning : td.unInvoiceConfirm)) return;
+    if (!(await confirm({ message: sentOrPaid ? td.unInvoiceSentWarning : td.unInvoiceConfirm, destructive: true }))) return;
     setUnInvoicing(true);
     const { remaining } = await removeJobFromInvoice(supabase, {
       jobId: job.id,
       invoice: { id: inv.id, line_items: inv.line_items, tax_rate: inv.tax_rate, discount: inv.discount },
     });
-    if (remaining === 0 && window.confirm(td.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number))) {
+    if (remaining === 0 && (await confirm({ message: td.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number), destructive: true }))) {
       await supabase.from('invoices').delete().eq('id', inv.id);
     }
     void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
@@ -394,14 +395,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setDelegating(false);
     setDelegateModal(false);
     if (!result.ok) {
-      alert(tw.delegateError);
+      void alertMessage({ message: tw.delegateError, destructive: true });
       return;
     }
     const targetBiz = businesses.find(b => b.id === targetBusinessId);
-    const switchAndGo = confirm(
-      tw.delegateSuccess.replace('{{name}}', targetBiz?.name ?? '') +
+    const switchAndGo = await confirm({
+      message: tw.delegateSuccess.replace('{{name}}', targetBiz?.name ?? '') +
         '\n\n' + tw.switchToTarget.replace('{{name}}', targetBiz?.name ?? '') + '?',
-    );
+    });
     if (switchAndGo && targetBiz) {
       setActiveBusiness(targetBusinessId);
       window.location.href = `/dashboard/trabajos/${result.newJobId}`;
@@ -812,14 +813,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <div className="flex justify-center gap-3 flex-wrap">
                 {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
                   <Button variant="secondary" size="sm" loading={updatingStatus}
-                    onClick={() => { if (window.confirm(td.cancelJobConfirm)) void updateStatus('cancelled'); }}>
+                    onClick={() => { void confirm({ message: td.cancelJobConfirm, destructive: true }).then(ok => { if (ok) void updateStatus('cancelled'); }); }}>
                     <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
                   </Button>
                 )}
                 {job.status === 'completed' && can.seeAllJobs(currentRole) && (
                   <Button variant="secondary" size="sm" onClick={async () => {
                     const archive = !job.archived_at;
-                    if (archive && !window.confirm(full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'))) return;
+                    if (archive && !(await confirm({ message: full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1') }))) return;
                     const archived_at = archive ? new Date().toISOString() : null;
                     await supabase.from('jobs').update({ archived_at }).eq('id', id);
                     if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', id, { title: job.title });

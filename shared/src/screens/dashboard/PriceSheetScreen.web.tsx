@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, X, Trash2, Pencil, DollarSign, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { confirm } from '../../ui/confirmBus';
 import { usStateName } from '../../lib/usStates';
 import {
   type PriceSheetItem,
@@ -80,7 +81,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     setTiers(prev => prev.map(x => x.id === id ? { ...x, name } : x));
   };
   const removeTier = async (id: string) => {
-    if (!window.confirm(t.deleteTierConfirm)) return;
+    if (!(await confirm({ message: t.deleteTierConfirm, destructive: true }))) return;
     await supabase.from('price_tiers').delete().eq('id', id);
     await Promise.all([loadTiers(), load()]);
   };
@@ -166,7 +167,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     await load();
   };
   const remove = async (i: PriceSheetItem) => {
-    if (!window.confirm(t.deleteConfirm)) return;
+    if (!(await confirm({ message: t.deleteConfirm, destructive: true }))) return;
     await supabase.from('price_sheet_items').delete().eq('id', i.id);
     await load();
   };

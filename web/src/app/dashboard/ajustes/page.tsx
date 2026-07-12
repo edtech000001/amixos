@@ -13,6 +13,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
 import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import {
   CLIENT_FIELD_SECTIONS, CLIENT_FIELDS_ALWAYS_SHOWN, parseClientLayout, clientFieldsInSection,
@@ -634,7 +635,7 @@ export default function AjustesPage() {
   // Remove the logo: delete the storage object (best-effort) then clear logo_url.
   const onRemoveLogo = async () => {
     if (!business?.logo_url) return;
-    if (!window.confirm(t.business.logoRemoveConfirm)) return;
+    if (!(await confirm({ message: t.business.logoRemoveConfirm, destructive: true }))) return;
     setUploadingLogo(true);
     setBizMsg('');
     try {
@@ -1621,8 +1622,8 @@ export default function AjustesPage() {
     setJobTplError(''); setAddJobFieldModal(false);
   };
 
-  const removeJobTemplate = (id: string) => {
-    if (!confirm(t.customFields.confirmDelete)) return;
+  const removeJobTemplate = async (id: string) => {
+    if (!(await confirm({ message: t.customFields.confirmDelete, destructive: true }))) return;
     setJobTemplates(prev => prev.filter(tpl => tpl.id !== id));
     setLocalJobOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
@@ -1909,8 +1910,8 @@ export default function AjustesPage() {
     setTplError(''); setAddFieldModal(false);
   };
 
-  const removeTemplate = (id: string) => {
-    if (!confirm(t.customFields.confirmDelete)) return;
+  const removeTemplate = async (id: string) => {
+    if (!(await confirm({ message: t.customFields.confirmDelete, destructive: true }))) return;
     setTemplates(prev => prev.filter(tpl => tpl.id !== id));
     setLocalClientOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
@@ -1977,8 +1978,8 @@ export default function AjustesPage() {
     setInvoiceTplError(''); setAddInvoiceFieldModal(false);
   };
 
-  const removeInvoiceTemplate = (id: string) => {
-    if (!confirm(t.invoices.confirmDeleteField)) return;
+  const removeInvoiceTemplate = async (id: string) => {
+    if (!(await confirm({ message: t.invoices.confirmDeleteField, destructive: true }))) return;
     setInvoiceTemplates(prev => prev.filter(tpl => tpl.id !== id));
     setLocalInvoiceOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
@@ -2128,8 +2129,8 @@ export default function AjustesPage() {
     setEmpTplError(''); setAddEmpFieldModal(false);
   };
 
-  const removeEmpTemplate = (id: string) => {
-    if (!confirm(t.customFields.confirmDelete)) return;
+  const removeEmpTemplate = async (id: string) => {
+    if (!(await confirm({ message: t.customFields.confirmDelete, destructive: true }))) return;
     setEmpTemplates(prev => prev.filter(tpl => tpl.id !== id));
     setLocalEmpOrder(prev => prev.filter(k => k !== `custom:${id}`));
   };
@@ -2186,7 +2187,7 @@ export default function AjustesPage() {
 
   const anyDirty = clientsDirty || employeesDirty || invoicesDirty || invoiceThemeDirty || trabajosDirty;
 
-  const tryChangeTab = (next: Tab) => {
+  const tryChangeTab = async (next: Tab) => {
     if (next === tab) return;
     const dirtyByTab: Partial<Record<Tab, boolean>> = {
       clientes: clientsDirty,
@@ -2196,7 +2197,7 @@ export default function AjustesPage() {
       trabajos: trabajosDirty,
     };
     if (dirtyByTab[tab]) {
-      if (!confirm(t.unsavedChangesMessage)) return;
+      if (!(await confirm({ message: t.unsavedChangesMessage, destructive: true }))) return;
       if (tab === 'clientes') discardClients();
       else if (tab === 'empleados') discardEmployees();
       else if (tab === 'facturas') discardInvoices();
@@ -4374,9 +4375,10 @@ function GoogleSyncCard() {
       setTemplateMsg({ text: t.templateReapplyEmpty, isError: false });
       return;
     }
-    const ok = window.confirm(
-      `${t.templateReapplyConfirmTitle}\n\n${t.templateReapplyConfirmBody.replace('{{count}}', String(total))}`,
-    );
+    const ok = await confirm({
+      title: t.templateReapplyConfirmTitle,
+      message: t.templateReapplyConfirmBody.replace('{{count}}', String(total)),
+    });
     if (!ok) return;
     syncBanner.runUpdateBatch(clientIds, contactIds);
   };
@@ -4465,7 +4467,7 @@ function GoogleSyncCard() {
     if (!googleClientId) {
       setBusy(false);
       // eslint-disable-next-line no-alert
-      alert('NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in web/.env.local');
+      void alertMessage({ message: 'NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in web/.env.local', destructive: true });
       return;
     }
 

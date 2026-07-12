@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useLang } from '@/i18n/LangProvider';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 
 export function useDirty(values: unknown, ready: boolean): boolean {
   const initial = useRef<string | null>(null);
@@ -48,10 +49,17 @@ export function useUnsavedChanges(dirty: boolean): (proceed: () => void) => void
 
   return useCallback(
     (proceed: () => void) => {
-      if (!dirty || window.confirm(`${s.title}\n\n${s.body}`)) {
+      if (!dirty) {
         bypass.current = true;
         proceed();
+        return;
       }
+      void confirm({ title: s.title, message: s.body, destructive: true }).then(ok => {
+        if (ok) {
+          bypass.current = true;
+          proceed();
+        }
+      });
     },
     [dirty, s.title, s.body],
   );

@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
@@ -127,7 +128,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   // navigate back to the list.
   const deleteClient = async () => {
     if (!client) return;
-    if (!confirm(t.confirmDeleteSingle)) return;
+    if (!(await confirm({ message: t.confirmDeleteSingle, destructive: true }))) return;
     const apiBaseUrl = getApiBaseUrl();
     const jwt = await getJwt();
     if (apiBaseUrl && jwt) {
@@ -379,7 +380,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   };
 
   const removeContact = async (ctId: string) => {
-    if (!confirm(td.contactModal.confirmDelete)) return;
+    if (!(await confirm({ message: td.contactModal.confirmDelete, destructive: true }))) return;
     // Sync delete BEFORE local delete so the API can resolve the contact's
     // google_resource_name.
     const apiBaseUrl = getApiBaseUrl();
@@ -722,12 +723,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             <div className="flex flex-col gap-3">
               <Input label={t.fields.addressLine1} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
               <Input label={t.fields.addressLine2} value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
-              <div className="grid grid-cols-[1fr_100px_110px] gap-3">
+              <div className="grid grid-cols-[1fr_1fr_110px] gap-3">
                 <Input label={t.fields.city} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">{t.fields.state}</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>

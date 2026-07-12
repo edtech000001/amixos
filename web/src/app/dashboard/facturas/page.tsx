@@ -15,6 +15,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
@@ -135,7 +136,7 @@ export default function FacturasPage() {
           ? async (ids) => {
               if (!business) return;
               const msg = full.dashboard.invoices.confirmDeleteBulk.replace('{{count}}', String(ids.length));
-              if (!window.confirm(msg)) return;
+              if (!(await confirm({ message: msg, destructive: true }))) return;
               for (let i = 0; i < ids.length; i += 50) {
                 const chunk = ids.slice(i, i + 50);
                 // Mirror the single-delete: revert linked jobs to Completed

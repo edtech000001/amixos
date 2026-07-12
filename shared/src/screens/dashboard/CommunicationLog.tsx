@@ -9,7 +9,7 @@
 // See migration 048 + shared/lib/clientCommunications.ts.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
 import {
   Phone, MessageSquare, Mail, Users, MessageCircle, FileText,
   Plus, Pencil, Trash2,
@@ -205,15 +205,10 @@ export function CommunicationLog({
       await deleteClientCommunication(supabase, e.id);
       await load();
     };
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-alert
-      if (typeof window !== 'undefined' && window.confirm(t.form.confirmDelete)) doDelete();
-    } else {
-      Alert.alert('', t.form.confirmDelete, [
-        { text: t.form.cancel, style: 'cancel' },
-        { text: t.form.delete, style: 'destructive', onPress: doDelete },
-      ]);
-    }
+    Alert.alert('', t.form.confirmDelete, [
+      { text: t.form.cancel, style: 'cancel' },
+      { text: t.form.delete, style: 'destructive', onPress: doDelete },
+    ]);
   };
 
   const typeOptions = useMemo(

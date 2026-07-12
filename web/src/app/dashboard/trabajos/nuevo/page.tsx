@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2 } from 'lucide-react';
@@ -957,7 +958,7 @@ function NuevoTrabajoContent() {
   const useMyLocation = () => {
     if (gettingLocation) return;
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      alert(t.locationError);
+      void alertMessage({ message: t.locationError, destructive: true });
       return;
     }
     setGettingLocation(true);
@@ -972,7 +973,7 @@ function NuevoTrabajoContent() {
         setGettingLocation(false);
       },
       (err) => {
-        alert(err.code === err.PERMISSION_DENIED ? t.locationDenied : t.locationError);
+        void alertMessage({ message: err.code === err.PERMISSION_DENIED ? t.locationDenied : t.locationError, destructive: true });
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000 },

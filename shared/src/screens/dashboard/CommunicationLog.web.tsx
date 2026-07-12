@@ -12,6 +12,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
 import { formatRelativeLong, formatDateTimeLong } from '../../lib/format';
+import { confirm } from '../../ui/confirmBus';
 import {
   fetchClientCommunications,
   logClientCommunication,
@@ -196,12 +197,11 @@ export function CommunicationLog({
   };
 
   const remove = (e: ClientCommunicationEntry) => {
-    if (typeof window !== 'undefined' && window.confirm(t.form.confirmDelete)) {
-      void (async () => {
-        await deleteClientCommunication(supabase, e.id);
-        await load();
-      })();
-    }
+    void confirm({ message: t.form.confirmDelete, destructive: true }).then(async ok => {
+      if (!ok) return;
+      await deleteClientCommunication(supabase, e.id);
+      await load();
+    });
   };
 
   const outcomeChoices = useMemo(() => outcomesFor(fType), [fType]);

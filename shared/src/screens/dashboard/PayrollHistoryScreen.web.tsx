@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Search, X, Check, Trash2, Calendar, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { confirm } from '../../ui/confirmBus';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
 
@@ -163,7 +164,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
     setSelected(allSelected ? new Set() : new Set(filtered.map(h => h.id)));
   const deleteSelected = async () => {
     if (!onDeleteEntries || selected.size === 0) return;
-    if (!window.confirm(t.historyDeleteConfirm.replace('{{count}}', String(selected.size)))) return;
+    if (!(await confirm({ message: t.historyDeleteConfirm.replace('{{count}}', String(selected.size)), destructive: true }))) return;
     await onDeleteEntries(Array.from(selected));
     exitSelect();
   };

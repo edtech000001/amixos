@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions } from 'react-native';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -236,6 +236,11 @@ export function PayrollScreen({
     setManualOpen(false);
   };
 
+  // Grid layout: 1 card per row on phones (2-up feels cramped), 2-up only once
+  // the screen is wide enough (tablets / large phones in landscape).
+  const { width: screenWidth } = useWindowDimensions();
+  const gridTwoCol = screenWidth >= 700;
+
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
   useEffect(() => {
@@ -398,16 +403,16 @@ export function PayrollScreen({
         {/* Summary */}
         <View className="flex-row gap-3">
           <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400">{t.totalHours}</Text>
-            <Text className="text-lg font-bold text-gray-900">{Math.round(totalHours * 100) / 100}</Text>
+            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalHours}</Text>
+            <Text className="text-lg font-bold text-gray-900" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{Math.round(totalHours * 100) / 100}</Text>
           </View>
           <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400">{t.totalPay}</Text>
-            <Text className="text-lg font-bold text-primary">{fmt(totalPay)}</Text>
+            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalPay}</Text>
+            <Text className="text-lg font-bold text-primary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPay)}</Text>
           </View>
           <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400">{t.totalPending}</Text>
-            <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{fmt(totalPending)}</Text>
+            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalPending}</Text>
+            <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPending)}</Text>
           </View>
         </View>
         {rows.length > 0 ? (
@@ -446,42 +451,49 @@ export function PayrollScreen({
           <Text className="text-sm text-gray-400 text-center py-10">{t.empty}</Text>
         ) : view === 'grid' ? (
           <View className="flex-row flex-wrap justify-between">
-            {sortedRows.map(r => (
-              <View key={r.employeeId} className="w-[48.5%] bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 mb-3">
-                <Pressable onPress={() => setDetailRow(r)} className="active:opacity-60">
-                  <Text className="text-[11px] text-gray-400">
-                    {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
-                  </Text>
-                  <Text className="text-sm font-semibold text-gray-900 mt-0.5" numberOfLines={1}>{r.name}</Text>
+            {sortedRows.map(r => {
+              // The status badge / "Mark paid" action. On single-column cards it
+              // sits on the RIGHT (bigger, more tappable); on 2-up it stacks below.
+              const action = (r.payments?.length ?? 0) > 0 ? (
+                <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage} className="self-start">
+                  <View className={`px-2 py-0.5 rounded-full flex-row items-center gap-1 ${isPartial(r) ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+                    <Check size={11} color={isPartial(r) ? '#B45309' : '#047857'} />
+                    <Text className={`text-[11px] font-semibold ${isPartial(r) ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {isPartial(r)
+                        ? `${t.partialLabel} ${fmt(paidTotal(r))}${paidHours(r) > 0 ? ` · ${Math.round(paidHours(r) * 100) / 100} h` : ''}`
+                        : r.payments!.length === 1 ? paymentBadgeLabel(r.payments![0]) : fmt(paidTotal(r))}
+                    </Text>
+                  </View>
                 </Pressable>
-                {isPartial(r) ? (
-                  <Text className="text-xl font-bold text-amber-600 mt-1">
-                    {fmt(checkBaseOf(r))}
-                    <Text className="text-xs font-semibold text-gray-400"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
-                  </Text>
-                ) : (
-                  <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
-                )}
-                <View className="mt-2">
-                  {(r.payments?.length ?? 0) > 0 ? (
-                    <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage} className="self-start">
-                      <View className={`px-2 py-0.5 rounded-full flex-row items-center gap-1 ${isPartial(r) ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-                        <Check size={11} color={isPartial(r) ? '#B45309' : '#047857'} />
-                        <Text className={`text-[11px] font-semibold ${isPartial(r) ? 'text-amber-700' : 'text-emerald-700'}`}>
-                          {isPartial(r)
-                            ? `${t.partialLabel} ${fmt(paidTotal(r))}${paidHours(r) > 0 ? ` · ${Math.round(paidHours(r) * 100) / 100} h` : ''}`
-                            : r.payments!.length === 1 ? paymentBadgeLabel(r.payments![0]) : fmt(paidTotal(r))}
-                        </Text>
-                      </View>
+              ) : canManage ? (
+                <Pressable onPress={() => openPay(r)} disabled={busy}
+                  className={gridTwoCol ? 'self-start' : 'px-4 py-2.5 rounded-xl bg-primary/10 active:opacity-80'}>
+                  <Text className={`font-semibold text-primary ${gridTwoCol ? 'text-xs' : 'text-sm'}`}>{t.markPaid}</Text>
+                </Pressable>
+              ) : null;
+              return (
+                <View key={r.employeeId} className={`${gridTwoCol ? 'w-[48.5%]' : 'w-full flex-row items-center'} bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 mb-3`}>
+                  <View className={gridTwoCol ? '' : 'flex-1 min-w-0'}>
+                    <Pressable onPress={() => setDetailRow(r)} className="active:opacity-60">
+                      <Text className="text-[11px] text-gray-400">
+                        {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
+                      </Text>
+                      <Text className="text-sm font-semibold text-gray-900 mt-0.5" numberOfLines={1}>{r.name}</Text>
                     </Pressable>
-                  ) : canManage ? (
-                    <Pressable onPress={() => openPay(r)} disabled={busy} className="self-start">
-                      <Text className="text-xs font-semibold text-primary">{t.markPaid}</Text>
-                    </Pressable>
-                  ) : null}
+                    {isPartial(r) ? (
+                      <Text className="text-xl font-bold text-amber-600 mt-1">
+                        {fmt(checkBaseOf(r))}
+                        <Text className="text-xs font-semibold text-gray-400"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                      </Text>
+                    ) : (
+                      <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
+                    )}
+                    {gridTwoCol && action ? <View className="mt-2">{action}</View> : null}
+                  </View>
+                  {!gridTwoCol && action ? <View className="ml-3 shrink-0">{action}</View> : null}
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

@@ -9,6 +9,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -330,7 +331,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   };
 
   const revokeInvite = async (inviteId: string) => {
-    if (!confirm(teamT.confirmRevoke.replace('{{email}}', employee?.email ?? ''))) return;
+    if (!(await confirm({ message: teamT.confirmRevoke.replace('{{email}}', employee?.email ?? ''), destructive: true }))) return;
     setAccessBusy(true); setAccessError('');
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
@@ -367,7 +368,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const removeAccess = async (memberId: string) => {
     const m = members.find(x => x.id === memberId);
     if (!m || !business) return;
-    if (!confirm(teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''))) return;
+    if (!(await confirm({ message: teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''), destructive: true }))) return;
     setAccessBusy(true); setAccessError('');
     await supabase.from('business_members').delete().eq('id', memberId);
     await supabase.from('audit_log').insert({
@@ -415,7 +416,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const deleteEmployee = async () => {
     if (!employee || !business) return;
     const name = `${employee.first_name} ${employee.last_name}`.trim();
-    if (!confirm(t.deleteConfirm.replace('{{name}}', name))) return;
+    if (!(await confirm({ message: t.deleteConfirm.replace('{{name}}', name), destructive: true }))) return;
     setAccessBusy(true); setAccessError('');
     if (selAccess?.kind === 'active' && !selAccess.isYou && selAccess.role !== 'owner') {
       await supabase.from('business_members').delete().eq('id', selAccess.memberId);

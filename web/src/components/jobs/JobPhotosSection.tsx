@@ -5,6 +5,7 @@ import { ImagePlus, X, Trash2, RotateCw, ChevronLeft, ChevronRight } from 'lucid
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
   JOB_PHOTOS_BUCKET,
   MAX_PHOTOS_PER_JOB,
@@ -117,7 +118,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   const removePhoto = async (photo: JobPhoto) => {
-    if (!window.confirm(t.deleteConfirm)) return;
+    if (!(await confirm({ message: t.deleteConfirm, destructive: true }))) return;
     // Deleting the row fires the AFTER DELETE trigger (057, hardened in 073)
     // which removes the storage object. Surface failures instead of swallowing
     // them — a silent error here looked like "delete does nothing" because

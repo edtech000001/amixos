@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -141,7 +142,7 @@ export default function InventoryModule() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm(t.confirmDelete)) return;
+    if (!(await confirm({ message: t.confirmDelete, destructive: true }))) return;
     await supabase.from('inventory_items').delete().eq('id', id);
     setItems(prev => prev.filter(i => i.id !== id));
   };

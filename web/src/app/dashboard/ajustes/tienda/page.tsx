@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { AddonStoreScreen } from '@amixos/shared/screens/dashboard/AddonStoreScreen';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { notifyModulesChanged } from '@amixos/shared/modules/useEnabledModules';
@@ -69,7 +70,7 @@ export default function TiendaPage() {
   // features and the action is reversible — but a tap may have been
   // accidental, so the confirm step prevents data confusion when modules
   // are first built out.
-  const onToggle = (moduleId: string, enable: boolean) => {
+  const onToggle = async (moduleId: string, enable: boolean) => {
     const def = getModuleById(moduleId);
     const entry = def
       ? (modulesDict as unknown as Record<string, { name: string } | undefined>)[def.i18nKey]
@@ -79,10 +80,7 @@ export default function TiendaPage() {
     const title = (enable ? t.enableConfirmTitle : t.disableConfirmTitle).replace('{{name}}', name);
     const body = enable ? t.enableConfirmBody : t.disableConfirmBody;
 
-    // window.confirm has no styling/buttons control but it's universally
-    // available; if/when we add a global Modal/AlertDialog primitive we
-    // can swap this for a styled prompt without touching the screen.
-    const ok = typeof window !== 'undefined' && window.confirm(`${title}\n\n${body}`);
+    const ok = await confirm({ title, message: body, destructive: !enable });
     if (!ok) return;
     void persistToggle(moduleId, enable);
   };

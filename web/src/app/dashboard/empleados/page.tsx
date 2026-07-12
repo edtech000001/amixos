@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter } from 'next/navigation';
 import { Clock, DollarSign, UserX, UserCheck, Pencil, Eye } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -684,7 +685,7 @@ export default function EmpleadosPage() {
   };
 
   const revokeInvite = async (inviteId: string) => {
-    if (!confirm(teamT.confirmRevoke.replace('{{email}}', selEmp?.email ?? ''))) return;
+    if (!(await confirm({ message: teamT.confirmRevoke.replace('{{email}}', selEmp?.email ?? ''), destructive: true }))) return;
     setAccessBusy(true); setAccessError('');
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/v1/invites/${inviteId}`, {
@@ -723,7 +724,7 @@ export default function EmpleadosPage() {
   const removeAccess = async (memberId: string) => {
     const m = members.find(x => x.id === memberId);
     if (!m || !business) return;
-    if (!confirm(teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''))) return;
+    if (!(await confirm({ message: teamT.confirmRemove.replace('{{name}}', m.displayName ?? m.email ?? ''), destructive: true }))) return;
     setAccessBusy(true); setAccessError('');
     await supabase.from('business_members').delete().eq('id', memberId);
     await supabase.from('audit_log').insert({

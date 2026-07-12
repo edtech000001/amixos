@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import {
   InvoiceDetailScreen,
   type InvoiceDetail,
@@ -148,7 +149,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [editRate, setEditRate] = useState('');
 
   const removeManual = async (index: number) => {
-    if (!window.confirm(tInv.jobsSection.removeItemConfirm)) return;
+    if (!(await confirm({ message: tInv.jobsSection.removeItemConfirm, destructive: true }))) return;
     setJobBusy(true);
     await removeLineItemAt(supabase, { invoiceId: id, index });
     await reloadInvoice();
@@ -212,13 +213,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     const inv = await fetchInvoiceRow();
     if (!inv) return;
     const sentOrPaid = ['sent', 'paid', 'overdue'].includes(inv.status);
-    if (!window.confirm(sentOrPaid ? tj.detail.unInvoiceSentWarning : tj.detail.unInvoiceConfirm)) return;
+    if (!(await confirm({ message: sentOrPaid ? tj.detail.unInvoiceSentWarning : tj.detail.unInvoiceConfirm, destructive: true }))) return;
     setJobBusy(true);
     const { remaining } = await removeJobFromInvoice(supabase, {
       jobId,
       invoice: { id: inv.id, line_items: inv.line_items as never, tax_rate: inv.tax_rate, discount: inv.discount },
     });
-    if (remaining === 0 && window.confirm(tj.detail.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number))) {
+    if (remaining === 0 && (await confirm({ message: tj.detail.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number), destructive: true }))) {
       await supabase.from('invoices').delete().eq('id', inv.id);
       setJobBusy(false);
       router.push('/dashboard/facturas');
@@ -605,7 +606,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     const url = `${window.location.origin}/factura/${token}`;
     try {
       await navigator.clipboard.writeText(url);
-      window.alert(tInv.linkCopied);
+      void alertMessage({ message: tInv.linkCopied });
     } catch {
       window.prompt(tInv.linkCopied, url);
     }
@@ -616,7 +617,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const sendInvoice = async () => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
-    if (!email) { window.alert(tInv.sendNoEmail); return; }
+    if (!email) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const token = await ensureShareToken();
     const url = `${window.location.origin}/factura/${token}`;
     // Business's custom templates (Ajustes → Facturas → Email) win; blank

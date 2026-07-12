@@ -7,6 +7,7 @@
 // component is the UI on top.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import {
   Forklift,
   Plus,
@@ -420,7 +421,7 @@ export default function EquipmentModule() {
 
   const onDelete = async () => {
     if (!selected) return;
-    if (!confirm(t.deleteConfirmMsg)) return;
+    if (!(await confirm({ message: t.deleteConfirmMsg, destructive: true }))) return;
     await supabase.from('equipment').delete().eq('id', selected.id);
     // Storage objects under equipment/<business_id>/<selected.id>/ are
     // left in the bucket; the DB rows cascade-delete (the photos table
@@ -490,7 +491,7 @@ export default function EquipmentModule() {
     setPendingPhotos((prev) => prev.filter((_, i) => i !== idx));
 
   const removePhoto = async (photo: EquipmentPhoto) => {
-    if (!confirm(t.photoDeleteConfirm)) return;
+    if (!(await confirm({ message: t.photoDeleteConfirm, destructive: true }))) return;
     // Delete the DB row first; the RLS policy gates writes. Best-effort
     // storage cleanup follows.
     await supabase.from('equipment_photos').delete().eq('id', photo.id);

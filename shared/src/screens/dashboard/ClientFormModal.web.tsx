@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Building2, Phone, Mail, MapPin, X } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { isValidEmail } from '../../lib/validation';
+import { confirm } from '../../ui/confirmBus';
 import { usStateName } from '../../lib/usStates';
 import { parseHiddenFields, isFieldHidden } from '../../lib/fieldLayout';
 import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '../../lib/fieldTemplates';
@@ -149,7 +150,8 @@ export function ClientFormModal({
   }, [dirty]);
   const guardedClose = () => {
     const s = full.common.unsavedChanges;
-    if (!dirty || window.confirm(`${s.title}\n\n${s.body}`)) onClose();
+    if (!dirty) { onClose(); return; }
+    void confirm({ title: s.title, message: s.body, destructive: true }).then(ok => { if (ok) onClose(); });
   };
 
   if (!open) return null;

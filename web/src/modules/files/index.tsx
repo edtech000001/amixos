@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { can } from '@amixos/shared/lib/permissions';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   FILES_BUCKET, FILE_MAX_BYTES,
@@ -137,17 +138,17 @@ export default function FilesModule() {
     });
   };
   const deleteFolderRow = async (f: FileFolder) => {
-    if (!window.confirm(t.deleteFolderConfirm)) return;
+    if (!(await confirm({ message: t.deleteFolderConfirm, destructive: true }))) return;
     await supabase.from('file_folders').delete().eq('id', f.id);
     void load();
   };
   const deleteCategoryRow = async (c: FileCategory) => {
-    if (!window.confirm(t.deleteFolderConfirm)) return;
+    if (!(await confirm({ message: t.deleteFolderConfirm, destructive: true }))) return;
     await supabase.from('file_categories').delete().eq('id', c.id);
     void load();
   };
   const deleteEntry = async (e: FileEntry) => {
-    if (!window.confirm(t.deleteEntryConfirm)) return;
+    if (!(await confirm({ message: t.deleteEntryConfirm, destructive: true }))) return;
     await supabase.from('file_entries').delete().eq('id', e.id);
     void load();
   };

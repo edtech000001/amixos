@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -204,7 +205,7 @@ export default function ClientesPage() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm(t.confirmDeleteSingle)) return;
+    if (!(await confirm({ message: t.confirmDeleteSingle, destructive: true }))) return;
     // Sync to Google BEFORE local delete so the API can read the
     // client's google_resource_name. If Google rejects the delete we
     // still proceed with the local delete — the banner notifies the user
@@ -264,7 +265,7 @@ export default function ClientesPage() {
 
   const bulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)))) return;
+    if (!(await confirm({ message: t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)), destructive: true }))) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
     // Pre-fetch resource_names ONLY for clients that were actually synced

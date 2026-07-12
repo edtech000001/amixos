@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 // full control). Saving a grid that matches the default removes the override.
 
 import { useEffect, useMemo, useState } from 'react';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useRouter } from 'next/navigation';
 import { Check, RotateCcw, Lock } from 'lucide-react';
 import { SettingsNav } from '@/components/dashboard/SettingsNav';
@@ -226,7 +227,7 @@ export default function RolesSettingsPage() {
             </button>
             {customized ? (
               <button
-                onClick={() => { if (confirm(t.resetConfirm)) void reset(); }}
+                onClick={() => { void confirm({ message: t.resetConfirm, destructive: true }).then(ok => { if (ok) void reset(); }); }}
                 disabled={busy}
                 className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-40"
               >

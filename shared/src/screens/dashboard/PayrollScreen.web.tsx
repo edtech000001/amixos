@@ -8,6 +8,7 @@ import { useLang } from '../../i18n';
 // dependency and breaks the Next.js build. This is the only web-reachable
 // screen that pulled the barrel.
 import { DatePicker } from '../../ui/DatePicker';
+import { confirm } from '../../ui/confirmBus';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
 import {
@@ -864,7 +865,7 @@ export function PayrollScreen({
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm(t.clearPaymentsConfirm.replace('{{name}}', payRow.name))) onClearPayments(payRow.employeeId);
+                    void confirm({ message: t.clearPaymentsConfirm.replace('{{name}}', payRow.name), destructive: true }).then(ok => { if (ok) onClearPayments(payRow.employeeId); });
                   }}
                   disabled={busy}
                   className="mt-2 text-xs font-semibold text-red-500 hover:text-red-700 hover:underline"

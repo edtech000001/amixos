@@ -8,6 +8,8 @@ import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner'
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import ConfirmHost from '@/components/ConfirmHost';
+import { confirm as confirmDialog } from '@amixos/shared/ui/confirmBus';
 import {
   GoogleSyncBannerProvider,
   GoogleSyncBanner,
@@ -58,7 +60,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           : info.mode === 'update'
             ? `¿Detener actualización? Los ${remaining} contacto${remaining !== 1 ? 's' : ''} restante${remaining !== 1 ? 's' : ''} no se actualizarán. Los ya actualizados conservan la nueva información.`
             : `¿Detener limpieza? Los ${remaining} contacto${remaining !== 1 ? 's' : ''} restante${remaining !== 1 ? 's' : ''} permanecerá${remaining !== 1 ? 'n' : ''} en Google Contacts. Podrás eliminarlos manualmente desde Google.`;
-      return window.confirm(body);
+      return confirmDialog({ message: body });
     },
     [],
   );
@@ -94,6 +96,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </main>
         {/* "Ami" assistant — fixed-position FAB + slide-over panel */}
         <AssistantWidget />
+        {/* In-app confirm/alert modal host (replaces native window.confirm) */}
+        <ConfirmHost />
       </div>
     </GoogleSyncBannerProvider>
   );
