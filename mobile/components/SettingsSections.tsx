@@ -625,6 +625,15 @@ export function FacturasSection() {
   const taxRateInit = business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '';
   const [taxRate, setTaxRate] = useState(taxRateInit);
   const [dbTaxRate, setDbTaxRate] = useState(taxRateInit);
+  const [qtyField, setQtyField] = useState(business?.invoice_qty_field ?? '');
+  const [dbQtyField, setDbQtyField] = useState(business?.invoice_qty_field ?? '');
+  // Job custom fields — options for the "quantity field" picker.
+  const [jobFields, setJobFields] = useState<{ field_key: string; field_label: string }[]>([]);
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('job_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: { field_key: string; field_label: string }[] | null }) => setJobFields(data ?? []));
+  }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [emailSubject, setEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [dbEmailSubject, setDbEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [emailBody, setEmailBody] = useState(business?.invoice_email_body ?? '');
@@ -701,6 +710,8 @@ export function FacturasSection() {
     setStartNumber(sn); setDbStartNumber(sn);
     const tx = business.invoice_tax_rate ? String(business.invoice_tax_rate) : '';
     setTaxRate(tx); setDbTaxRate(tx);
+    const qf = business.invoice_qty_field ?? '';
+    setQtyField(qf); setDbQtyField(qf);
     const esub = business.invoice_email_subject ?? '';
     setEmailSubject(esub); setDbEmailSubject(esub);
     const ebody = business.invoice_email_body ?? '';
@@ -877,6 +888,7 @@ export function FacturasSection() {
         invoice_due_days: days,
         invoice_start_number: startNum,
         invoice_tax_rate: safeTax,
+        invoice_qty_field: qtyField || null,
         invoice_email_subject: emailSubject.trim() || null,
         invoice_email_body: emailBody.trim() || null,
         invoice_notes_default: notes.trim() || null,
@@ -900,6 +912,7 @@ export function FacturasSection() {
       setStartNumber(String(startNum));
       setDbStartNumber(String(startNum));
       setDbTaxRate(taxRate);
+      setDbQtyField(qtyField);
       setDbEmailSubject(emailSubject);
       setDbEmailBody(emailBody);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
@@ -915,6 +928,7 @@ export function FacturasSection() {
       notes !== dbNotes ||
       startNumber !== dbStartNumber ||
       taxRate !== dbTaxRate ||
+      qtyField !== dbQtyField ||
       emailSubject !== dbEmailSubject ||
       emailBody !== dbEmailBody ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
@@ -922,7 +936,7 @@ export function FacturasSection() {
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
       JSON.stringify(dbHidden) !== JSON.stringify(hidden) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, emailSubject, dbEmailSubject, emailBody, dbEmailBody, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, qtyField, dbQtyField, emailSubject, dbEmailSubject, emailBody, dbEmailBody, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -993,6 +1007,13 @@ export function FacturasSection() {
           keyboardType="decimal-pad"
         />
         <Text className="text-xs text-gray-400 -mt-2">{t.invoices.taxRateHint}</Text>
+        <Select
+          label={t.invoices.qtyFieldLabel}
+          value={qtyField}
+          onValueChange={setQtyField}
+          options={[{ value: '', label: t.invoices.qtyFieldNone }, ...jobFields.map(f => ({ value: f.field_key, label: f.field_label }))]}
+        />
+        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.qtyFieldHint}</Text>
         <Input
           label={t.invoices.startNumberLabel}
           value={startNumber}

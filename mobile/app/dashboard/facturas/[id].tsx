@@ -17,7 +17,9 @@ import { DatePicker, Select } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice } from '@amixos/shared/lib/invoicing';
+import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
@@ -112,6 +114,10 @@ export default function FacturaDetailRoute() {
   };
   const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
+  const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
+  const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [showInvVerify, setShowInvVerify] = useState(false);
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
@@ -200,6 +206,25 @@ export default function FacturaDetailRoute() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, supabase, loadJobs]);
 
+  // Autoprice data + handler (parity with web).
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('price_sheet_items')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .eq('business_id', business.id).eq('active', true)
+      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
+  }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!invClientId) { setClientTierId(null); return; }
+    void supabase.from('clients').select('price_tier_id').eq('id', invClientId).single()
+      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+  }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runAutoprice = async () => {
+    if (!priceItems.length) return;
+    const { matched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    if (matched) { setShowInvVerify(true); await reloadInvoice(); }
+  };
+
   const removeJob = (jobId: string) => {
     void (async () => {
       const inv = await fetchInvoiceRow();
@@ -285,6 +310,7 @@ export default function FacturaDetailRoute() {
           jobIds: Array.from(addPicked),
           itemTypeLabels,
           hideItemTypes: business?.job_item_types_enabled === false,
+          qtyField: business?.invoice_qty_field,
         });
       }
     }
@@ -690,12 +716,14 @@ export default function FacturaDetailRoute() {
         onShareLink={invoice ? shareLink : undefined}
         onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
+        onAutoprice={invoice && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        autopriceVerify={showInvVerify}
         onMoveJob={openMove}
         onRemoveJob={removeJob}
         onAddJob={openAdd}
         onRemoveManualItem={removeManual}
         onEditManualItem={editManual}
-        onJobPress={(jobId) => router.push(`/dashboard/trabajos/${jobId}?from=invoice&invoice=${id}` as never)}
+        onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={sendInvoice}
         payments={payments}
@@ -705,6 +733,13 @@ export default function FacturaDetailRoute() {
         onUndoPaid={undoPaid}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
+      />
+
+      <JobPreviewSheet
+        supabase={supabase}
+        jobId={previewJobId}
+        onClose={() => setPreviewJobId(null)}
+        onOpenFull={(jid) => { setPreviewJobId(null); router.push(`/dashboard/trabajos/${jid}?from=invoice&invoice=${id}` as never); }}
       />
 
       {/* Move-to-another-invoice picker */}

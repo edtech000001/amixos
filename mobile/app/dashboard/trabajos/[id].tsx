@@ -46,7 +46,7 @@ import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
@@ -519,6 +519,18 @@ export default function JobDetailRoute() {
       unit_price: i.unit_price,
       total: i.total,
     }));
+    // No items — or (M&L off) only bare $0 items — bill as ONE placeholder line;
+    // qty from the mapped custom field (invoice_qty_field).
+    const allBare = items.length > 0 && items.every(i => !i.description.trim() && !(i.unit_price > 0));
+    if (lineItems.length === 0 || allBare) {
+      lineItems.length = 0;
+      lineItems.push({
+        description: job.title,
+        quantity: placeholderQtyFor({ custom_fields: job.custom_fields }, business.invoice_qty_field) ?? 1,
+        unit_price: 0,
+        total: 0,
+      });
+    }
 
     const { data: invoice, error } = await supabase
       .from('invoices')
@@ -817,6 +829,8 @@ export default function JobDetailRoute() {
     let matched = 0;
     setEditRows(prev => prev.map(r => {
       if (!r.description.trim()) return r;
+      // Don't override a line that already has a price.
+      if ((parseFloat(r.unit_price) || 0) > 0) return r;
       const hit = suggestPriceItem(`${r.description} ${ctxText}`, priceItems);
       if (!hit) return r;
       const enteredQty = parseFloat(r.quantity);

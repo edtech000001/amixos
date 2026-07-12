@@ -100,6 +100,11 @@ export interface InvoiceDetailScreenProps {
   onEdit?: () => void;
   /** Optional: trigger delete (caller handles confirm). Trash hidden when not provided. */
   onDelete?: () => void;
+  /** Autoprice: fill in unpriced ($0) lines from the price sheet. Button hidden
+   *  when not provided (e.g. no price-sheet items or a sent/paid invoice). */
+  onAutoprice?: () => void;
+  /** Show the amber "please verify pricing" note after an autoprice run. */
+  autopriceVerify?: boolean;
   // Inline job management — Move / Remove on each job-backed line, Add job below.
   onMoveJob?: (jobId: string) => void;
   onRemoveJob?: (jobId: string) => void;
@@ -163,6 +168,8 @@ export function InvoiceDetailScreen({
   onMoveJob,
   onRemoveJob,
   onAddJob,
+  onAutoprice,
+  autopriceVerify,
   onRemoveManualItem,
   onEditManualItem,
   onJobPress,
@@ -246,6 +253,11 @@ export function InvoiceDetailScreen({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {onAutoprice ? (
+            <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-semibold text-primary transition-colors mr-1">
+              <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
+            </button>
+          ) : null}
           {onShareLink ? (
             <button type="button" onClick={onShareLink} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
               <Link2 size={18} className="text-gray-500" />
@@ -420,6 +432,12 @@ export function InvoiceDetailScreen({
             <button onClick={onAddJob} disabled={jobBusy} className="mt-3 text-sm font-semibold text-primary hover:underline disabled:opacity-40">
               + {tInv.jobsSection.addBtn}
             </button>
+          ) : null}
+
+          {autopriceVerify ? (
+            <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700">
+              {ui.dashboard.jobs.detail.autopriceVerify}
+            </div>
           ) : null}
 
           {/* Totals — below the items */}

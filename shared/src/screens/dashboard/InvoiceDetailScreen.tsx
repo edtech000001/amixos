@@ -96,6 +96,11 @@ export interface InvoiceDetailScreenProps {
   onEdit?: () => void;
   /** Optional: trigger delete (caller handles confirm). Trash hidden when not provided. */
   onDelete?: () => void;
+  /** Autoprice: fill in unpriced ($0) lines from the price sheet. Hidden when
+   *  not provided (no price-sheet items or a sent/paid invoice). */
+  onAutoprice?: () => void;
+  /** Show the amber "please verify pricing" note after an autoprice run. */
+  autopriceVerify?: boolean;
   /** Optional content rendered at the bottom of the scroll (e.g. jobs-on-invoice management). */
   footerSlot?: ReactNode;
   // Inline job management — Move / Remove appear on each job-backed line item,
@@ -157,6 +162,8 @@ export function InvoiceDetailScreen({
   onUpdateStatus,
   onPrint,
   onShareLink,
+  onAutoprice,
+  autopriceVerify,
   onEdit,
   onDelete,
   footerSlot,
@@ -249,6 +256,9 @@ export function InvoiceDetailScreen({
           </View>
         </View>
         <View className="flex-row items-center gap-0.5 shrink-0">
+          {onAutoprice ? (
+            <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color="#4F46E5" /></Pressable>
+          ) : null}
           {onShareLink ? (
             <Pressable onPress={onShareLink} className="p-2 rounded-xl active:bg-gray-100"><Link2 size={18} color="#6B7280" /></Pressable>
           ) : null}
@@ -408,6 +418,12 @@ export function InvoiceDetailScreen({
           <Pressable onPress={onAddJob} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
             <Text className="text-sm font-semibold text-primary">+ {tInv.jobsSection.addBtn}</Text>
           </Pressable>
+        ) : null}
+
+        {autopriceVerify ? (
+          <View className="mt-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+            <Text className="text-xs text-amber-700">{ui.dashboard.jobs.detail.autopriceVerify}</Text>
+          </View>
         ) : null}
 
         {/* Totals — below the items */}

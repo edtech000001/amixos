@@ -20,7 +20,9 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice } from '@amixos/shared/lib/invoicing';
+import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 
 const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
@@ -128,6 +130,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   };
   const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; status: string }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
+  // Autoprice: active price-sheet items + the invoice client's tier.
+  const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
+  const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [showInvVerify, setShowInvVerify] = useState(false);
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
@@ -199,6 +206,28 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (data) setInvoice(mapInvoice(data as unknown as RawInvoice, []));
     await loadJobs();
   }, [id, supabase, loadJobs]);
+
+  // Load active price-sheet items (for the Autoprice button).
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('price_sheet_items')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .eq('business_id', business.id).eq('active', true)
+      .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
+  }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The invoice client's price tier (for tier-aware autopricing).
+  useEffect(() => {
+    if (!invClientId) { setClientTierId(null); return; }
+    void supabase.from('clients').select('price_tier_id').eq('id', invClientId).single()
+      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+  }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const runAutoprice = async () => {
+    if (!priceItems.length) return;
+    const { matched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    if (matched) { setShowInvVerify(true); await reloadInvoice(); }
+  };
 
   const fetchInvoiceRow = async () => {
     const { data } = await supabase
@@ -291,6 +320,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           jobIds: Array.from(addPicked),
           itemTypeLabels,
           hideItemTypes: business?.job_item_types_enabled === false,
+          qtyField: business?.invoice_qty_field,
         });
       }
     }
@@ -660,12 +690,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onShareLink={onShareLink}
         onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
+        onAutoprice={invoice && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        autopriceVerify={showInvVerify}
         onMoveJob={openMove}
         onRemoveJob={removeJob}
         onAddJob={openAdd}
         onRemoveManualItem={removeManual}
         onEditManualItem={editManual}
-        onJobPress={(jobId) => router.push(`/dashboard/trabajos/${jobId}?from=invoice&invoice=${id}`)}
+        onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={sendInvoice}
         payments={payments}
@@ -675,6 +707,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onUndoPaid={() => setUndoPaidOpen(true)}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
+      />
+
+      <JobPreviewSheet
+        supabase={supabase}
+        jobId={previewJobId}
+        onClose={() => setPreviewJobId(null)}
+        onOpenFull={(jid) => { setPreviewJobId(null); router.push(`/dashboard/trabajos/${jid}?from=invoice&invoice=${id}`); }}
       />
 
       {/* Move-to-another-invoice picker */}

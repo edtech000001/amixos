@@ -337,24 +337,6 @@ export function InvoicesListScreen({
         })}
       </ScrollView>
 
-    {/* Bulk-delete pill — floating left, like the jobs list. */}
-    {selectMode && onBulkDelete ? (
-      <Pressable
-        onPress={runBulkDelete}
-        disabled={selectedIds.size === 0 || bulkDeleting}
-        className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
-        style={{
-          backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
-          elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-        }}
-      >
-        <Trash2 size={20} color="#FFFFFF" />
-        <Text className="text-white font-semibold">
-          {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
-        </Text>
-      </Pressable>
-    ) : null}
-
       {/* Selection banner — ✕ / count / Todas (clients mobile pattern). */}
       {selectMode ? (
         <View className="flex-row items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-3">
@@ -455,6 +437,24 @@ export function InvoicesListScreen({
         </View>
       )}
     </ScrollView>
+
+    {/* Bulk-delete pill — screen-anchored (bottom-left), aligned with the FAB. */}
+    {selectMode && onBulkDelete ? (
+      <Pressable
+        onPress={runBulkDelete}
+        disabled={selectedIds.size === 0 || bulkDeleting}
+        className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
+        style={{
+          backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
+          elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+        }}
+      >
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text className="text-white font-semibold">
+          {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
+        </Text>
+      </Pressable>
+    ) : null}
 
     {/* Group-by bottom sheet — mirrors the equipment "Agrupar por" menu. */}
     <RNModal

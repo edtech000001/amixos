@@ -220,6 +220,7 @@ export default function TrabajosPage() {
           startNumber: business.invoice_start_number,
           hideItemTypes: business.job_item_types_enabled === false,
           taxRate: business.invoice_tax_rate ?? 0,
+          qtyField: business.invoice_qty_field,
           itemTypeLabels: {
             labor: jt.itemTypeLabor,
             material: jt.itemTypeMaterial,

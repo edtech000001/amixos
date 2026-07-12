@@ -21,7 +21,7 @@ import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
-import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -288,6 +288,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     let matched = 0;
     setEditRows(prev => prev.map(r => {
       if (!r.description.trim()) return r;
+      // Don't override a line that already has a price.
+      if ((parseFloat(r.unit_price) || 0) > 0) return r;
       const hit = suggestPriceItem(`${r.description} ${jobContext}`, priceItems);
       if (!hit) return r;
       const enteredQty = parseFloat(r.quantity);
@@ -356,6 +358,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         job_id: id, // tag so the job can later be moved/removed from this invoice
       };
     });
+    // No items — or (with M&L off) only bare $0 items — bill as ONE placeholder
+    // line (job title) at the mapped quantity custom field (invoice_qty_field).
+    const allBare = items.length > 0 && items.every(i => !i.description.trim() && !(i.unit_price > 0));
+    if (lineItems.length === 0 || allBare) {
+      lineItems.length = 0;
+      lineItems.push({
+        description: job.title,
+        qty: placeholderQtyFor({ custom_fields: job.custom_fields }, business.invoice_qty_field) ?? 1,
+        rate: 0,
+        job_id: id,
+      });
+    }
 
     const { data: invoice, error } = await supabase.from('invoices').insert({
       business_id: business.id,

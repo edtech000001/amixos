@@ -277,6 +277,10 @@ export type DashboardDict = {
       jobsHeading: string;
       removeItemConfirm: string;
       editItemTitle: string;
+      viewProject: string;
+      previewDescription: string;
+      previewNoDescription: string;
+      previewNotes: string;
     };
     deleting: string;
     errorDelete: string;
@@ -1477,6 +1481,9 @@ export type DashboardDict = {
       dueDaysHint: string;
       taxRateLabel: string;
       taxRateHint: string;
+      qtyFieldLabel: string;
+      qtyFieldHint: string;
+      qtyFieldNone: string;
       startNumberLabel: string;
       startNumberHint: string;
       notesLabel: string;
@@ -2727,6 +2734,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobsHeading: 'Trabajos completados',
         removeItemConfirm: '¿Quitar este concepto de la factura?',
         editItemTitle: 'Editar concepto',
+        viewProject: 'Ir al trabajo',
+        previewDescription: 'Descripción',
+        previewNoDescription: 'Sin descripción',
+        previewNotes: 'Notas',
       },
       deleteTitle: 'Eliminar factura',
       deleteConfirm: '¿Eliminar la factura <strong>{{number}}</strong>? Esta acción no se puede deshacer.',
@@ -3228,7 +3239,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         publicBadge: 'Pública',
         issueDateLabel: 'Fecha de emisión',
         expiryDateLabel: 'Válida hasta',
-        projectStartLabel: 'Inicio del proyecto',
+        projectStartLabel: 'Inicio del trabajo',
         statusLabel: 'Estado',
         priorityLabel: 'Prioridad',
         descriptionLabel: 'Descripción',
@@ -3908,6 +3919,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Déjalo vacío para no usar un valor por defecto.',
         taxRateLabel: 'Impuesto por defecto (%)',
         taxRateHint: 'Se aplica a las facturas nuevas; puedes ajustarlo en cada factura. Déjalo vacío o en 0 para no cobrar impuesto. No cambia las facturas ya creadas.',
+        qtyFieldLabel: 'Campo para la cantidad',
+        qtyFieldHint: 'Cuando un trabajo no tiene materiales y mano de obra, usa el valor de este campo personalizado (ej. "Total pies") como la cantidad de la línea. Déjalo en "Ninguno" para usar 1.',
+        qtyFieldNone: 'Ninguno (cantidad 1)',
         startNumberLabel: 'Número inicial de factura',
         startNumberHint: 'La primera factura usará este número y las siguientes se numeran en orden (FAC-1000, FAC-1001…). No cambia las facturas ya creadas.',
         notesLabel: 'Notas / términos por defecto',
@@ -5166,6 +5180,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobsHeading: 'Completed jobs',
         removeItemConfirm: 'Remove this item from the invoice?',
         editItemTitle: 'Edit item',
+        viewProject: 'Go to job',
+        previewDescription: 'Description',
+        previewNoDescription: 'No description',
+        previewNotes: 'Notes',
       },
       deleteTitle: 'Delete invoice',
       deleteConfirm: 'Delete invoice <strong>{{number}}</strong>? This cannot be undone.',
@@ -5667,7 +5685,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         publicBadge: 'Public',
         issueDateLabel: 'Issue date',
         expiryDateLabel: 'Valid until',
-        projectStartLabel: 'Project start',
+        projectStartLabel: 'Job start',
         statusLabel: 'Status',
         priorityLabel: 'Priority',
         descriptionLabel: 'Description',
@@ -6347,6 +6365,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty for no default.',
         taxRateLabel: 'Default tax rate (%)',
         taxRateHint: 'Applied to new invoices; adjustable per invoice. Leave empty or 0 for no tax. Existing invoices are unchanged.',
+        qtyFieldLabel: 'Quantity field',
+        qtyFieldHint: 'When a job has no Materials & Labor, use this custom field\'s value (e.g. "Total ft") as the line quantity. Set to "None" to use 1.',
+        qtyFieldNone: 'None (quantity 1)',
         startNumberLabel: 'Starting invoice number',
         startNumberHint: 'Your first invoice uses this number and the rest are numbered in order (INV-1000, INV-1001…). Existing invoices are unchanged.',
         notesLabel: 'Default notes / terms',

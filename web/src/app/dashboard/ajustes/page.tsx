@@ -307,6 +307,7 @@ export default function AjustesPage() {
   const [invoiceTaxRate, setInvoiceTaxRate] = useState(
     business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '',
   );
+  const [invoiceQtyField, setInvoiceQtyField] = useState(business?.invoice_qty_field ?? '');
   const [invoiceEmailSubject, setInvoiceEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [invoiceEmailBody, setInvoiceEmailBody] = useState(business?.invoice_email_body ?? '');
   // Clickable {{token}} chips insert at the cursor. Selection is tracked via
@@ -520,6 +521,7 @@ export default function AjustesPage() {
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
       setInvoiceStartNumber(String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
       setInvoiceTaxRate(business.invoice_tax_rate ? String(business.invoice_tax_rate) : '');
+      setInvoiceQtyField(business.invoice_qty_field ?? '');
       setInvoiceEmailSubject(business.invoice_email_subject ?? '');
       setInvoiceEmailBody(business.invoice_email_body ?? '');
       setInvoiceTheme(normalizeBundle(business.invoice_template));
@@ -716,6 +718,7 @@ export default function AjustesPage() {
       invoice_start_number: startNum,
       invoice_notes_default: bizInvoiceNotes.trim() || null,
       invoice_tax_rate: Math.round(taxNum * 100) / 100,
+      invoice_qty_field: invoiceQtyField || null,
       invoice_email_subject: invoiceEmailSubject.trim() || null,
       invoice_email_body: invoiceEmailBody.trim() || null,
     }).eq('id', business.id);
@@ -2063,10 +2066,11 @@ export default function AjustesPage() {
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
       String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
       (business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '') !== invoiceTaxRate ||
+      (business?.invoice_qty_field ?? '') !== invoiceQtyField ||
       (business?.invoice_email_subject ?? '') !== invoiceEmailSubject ||
       (business?.invoice_email_body ?? '') !== invoiceEmailBody ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceEmailSubject, invoiceEmailBody, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceQtyField, invoiceEmailSubject, invoiceEmailBody, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -2083,6 +2087,7 @@ export default function AjustesPage() {
     setInvoiceDueDays(business?.invoice_due_days != null ? String(business.invoice_due_days) : '');
     setInvoiceStartNumber(String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
     setInvoiceTaxRate(business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '');
+    setInvoiceQtyField(business?.invoice_qty_field ?? '');
     setInvoiceEmailSubject(business?.invoice_email_subject ?? '');
     setInvoiceEmailBody(business?.invoice_email_body ?? '');
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
@@ -3288,6 +3293,18 @@ export default function AjustesPage() {
                       onChange={e => setInvoiceTaxRate(e.target.value)}
                     />
                     <p className="text-xs text-gray-400 mt-1.5">{t.invoices.taxRateHint}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.invoices.qtyFieldLabel}</label>
+                    <select
+                      value={invoiceQtyField}
+                      onChange={e => setInvoiceQtyField(e.target.value)}
+                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="">{t.invoices.qtyFieldNone}</option>
+                      {jobTemplates.map(tpl => <option key={tpl.id} value={tpl.field_key}>{tpl.field_label}</option>)}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.qtyFieldHint}</p>
                   </div>
                   <div>
                     <Input

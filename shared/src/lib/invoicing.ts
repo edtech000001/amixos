@@ -12,6 +12,7 @@
 // the same PostgREST query builder, so one implementation serves both.
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
+import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine } from './priceSheet';
 
 // Minimal shape of the Supabase client we rely on (web + mobile both satisfy it).
 type Supa = { from: (table: string) => any };
@@ -53,15 +54,17 @@ export function lineItemsForJob(
   /** When the business has item-type categories turned off
    *  (businesses.job_item_types_enabled = false), drop the "Tipo:" prefix so
    *  lines read as plain "descripción" instead of "Mano de obra: descripción". */
-  opts?: { hideTypes?: boolean },
+  opts?: { hideTypes?: boolean; placeholderQty?: number },
 ): InvoiceLineItem[] {
   const own = jobItems.filter(i => i.job_id === jobId);
-  // A job with no logged items still gets ONE placeholder line — its title at
-  // qty 1 × $0 — so the attached job is visible on the invoice instead of
-  // linking silently (it shows "Facturado" but nothing on the bill otherwise).
-  // The amount fills in once items are added to the job.
-  if (own.length === 0) {
-    return [{ description: jobTitle, qty: 1, rate: 0, job_id: jobId }];
+  const placeholderQ = Number.isFinite(opts?.placeholderQty) && (opts!.placeholderQty as number) > 0 ? (opts!.placeholderQty as number) : 1;
+  // A job with no logged items — OR, with Materials & Labor disabled, only
+  // "bare" items (no description, $0) — bills as ONE placeholder line: its
+  // title at the mapped qty (invoice_qty_field, e.g. "Total ft") × $0. This is
+  // the common case with M&L off; the amount fills in once Autoprice runs.
+  const allBare = own.length > 0 && own.every(i => !(i.description ?? '').trim() && !(Number(i.unit_price) > 0));
+  if (own.length === 0 || (opts?.hideTypes && allBare)) {
+    return [{ description: jobTitle, qty: placeholderQ, rate: 0, job_id: jobId }];
   }
   return own.map(i => {
     const desc = (i.description ?? '').trim();
@@ -111,6 +114,17 @@ export type CreateInvoicesResult =
 
 /** Create ONE draft invoice from one or more completed jobs of the SAME client,
  *  attaching each job (status → invoiced, invoice_id, invoiced_at). */
+/** The placeholder line quantity for a job with no items — a mapped custom
+ *  field (businesses.invoice_qty_field, e.g. "Total ft") when set + numeric,
+ *  else undefined (falls back to 1). */
+export function placeholderQtyFor(job: { custom_fields?: Record<string, unknown> | null }, qtyField?: string | null): number | undefined {
+  if (!qtyField) return undefined;
+  const raw = (job.custom_fields ?? {})[qtyField];
+  if (raw == null || raw === '') return undefined;
+  const n = parseFloat(String(raw).replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export async function createInvoiceFromJobs(
   supabase: Supa,
   opts: {
@@ -126,13 +140,15 @@ export async function createInvoiceFromJobs(
     hideItemTypes?: boolean;
     /** Tax percentage for the new invoice (businesses.invoice_tax_rate). */
     taxRate?: number;
+    /** Job custom-field key to use as the qty for no-items lines (invoice_qty_field). */
+    qtyField?: string | null;
   },
 ): Promise<CreateInvoiceResult> {
   if (!opts.jobIds.length) return { ok: false, error: 'no_jobs' };
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id')
+    .select('id, title, client_id, custom_fields')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -150,7 +166,7 @@ export async function createInvoiceFromJobs(
   const orderedJobs: any[] = opts.jobIds.map(id => byId.get(id)).filter(Boolean);
   const lineItems: InvoiceLineItem[] = [];
   for (const j of orderedJobs) {
-    lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
+    lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
   }
 
   const taxRate = opts.taxRate ?? 0;
@@ -215,13 +231,15 @@ export async function createInvoicesFromJobs(
     startNumber?: number;
     hideItemTypes?: boolean;
     taxRate?: number;
+    /** Job custom-field key to use as the qty for no-items lines (invoice_qty_field). */
+    qtyField?: string | null;
   },
 ): Promise<CreateInvoicesResult> {
   if (!opts.jobIds.length) return { ok: false, error: 'no_jobs' };
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id')
+    .select('id, title, client_id, custom_fields')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -258,7 +276,7 @@ export async function createInvoicesFromJobs(
     const clientId = key === ' ' ? null : key;
     const lineItems: InvoiceLineItem[] = [];
     for (const j of groupJobs) {
-      lineItems.push(...lineItemsForJob(j.id, j.title ?? '', allItems, opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
+      lineItems.push(...lineItemsForJob(j.id, j.title ?? '', allItems, opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
     }
     const { subtotal, tax, total } = computeTotals(lineItems, taxRate, discount);
     const invoiceNumber = nextInvoiceNumber(lang, opts.startNumber, seq);
@@ -512,21 +530,24 @@ export async function addJobsToInvoice(
     jobIds: string[];
     itemTypeLabels: Record<string, string>;
     hideItemTypes?: boolean;
+    /** Job custom-field key to use as the qty for no-items lines (invoice_qty_field). */
+    qtyField?: string | null;
   },
 ): Promise<{ ok: boolean }> {
   if (!opts.jobIds.length) return { ok: true };
 
-  const { data: jobs } = await supabase.from('jobs').select('id, client_id, title').in('id', opts.jobIds);
+  const { data: jobs } = await supabase.from('jobs').select('id, client_id, title, custom_fields').in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false };
   if (jobs.some((j: any) => (j.client_id ?? null) !== (opts.invoice.client_id ?? null))) {
     return { ok: false };
   }
   const titleById = new Map<string, string>(jobs.map((j: any) => [j.id, j.title ?? '']));
+  const jobById = new Map<string, any>(jobs.map((j: any) => [j.id, j]));
 
   const { data: jobItems } = await supabase.from('job_items').select('*').in('job_id', opts.jobIds);
   const added: InvoiceLineItem[] = [];
   for (const jid of opts.jobIds) {
-    added.push(...lineItemsForJob(jid, titleById.get(jid) ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
+    added.push(...lineItemsForJob(jid, titleById.get(jid) ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(jobById.get(jid) ?? {}, opts.qtyField) }));
   }
   const next = [...((opts.invoice.line_items ?? []) as InvoiceLineItem[]), ...added];
   const { subtotal, tax, total } = computeTotals(next, opts.invoice.tax_rate ?? 0, opts.invoice.discount ?? 0);
@@ -545,4 +566,63 @@ export async function addJobsToInvoice(
     .in('id', opts.jobIds);
 
   return { ok: true };
+}
+
+/**
+ * Autoprice an invoice's UNPRICED lines from the price sheet. For each line whose
+ * rate is 0, match its description to a price item and apply the state/tier-aware
+ * rate; lines that ALREADY have a price are left untouched (never overridden).
+ * Works regardless of whether Materials & Labor is enabled — it prices whatever
+ * line descriptions exist (job titles, imported names, manual items). Returns
+ * how many lines were priced. Best-effort — the UI warns the user to verify.
+ */
+export async function autopriceInvoice(
+  supabase: Supa,
+  opts: { invoiceId: string; items: PriceSheetItem[]; tierId?: string | null; qtyField?: string | null },
+): Promise<{ matched: number }> {
+  if (!opts.items.length) return { matched: 0 };
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('id, line_items, tax_rate, discount')
+    .eq('id', opts.invoiceId)
+    .single();
+  if (!inv) return { matched: 0 };
+  const lines = (inv.line_items ?? []) as InvoiceLineItem[];
+
+  // Per-line state pricing + qty-from-custom-field: resolve each linked job's
+  // state and custom fields in one query.
+  const jobIds = Array.from(new Set(lines.map(l => l.job_id).filter(Boolean))) as string[];
+  const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null }>();
+  if (jobIds.length) {
+    const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields').in('id', jobIds);
+    for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null }[]) {
+      jobById.set(j.id, { job_state: j.job_state ?? null, custom_fields: j.custom_fields ?? null });
+    }
+  }
+
+  let matched = 0;
+  const next = lines.map(li => {
+    // Don't override a line that already has a price.
+    if ((Number(li.rate) || 0) > 0) return li;
+    const hit = suggestPriceItem(li.description ?? '', opts.items);
+    if (!hit) return li;
+    const j = li.job_id ? jobById.get(li.job_id) : undefined;
+    const qty = Number(li.qty) || 0;
+    // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
+    // qty, then a number pulled from the description.
+    const fromField = placeholderQtyFor({ custom_fields: j?.custom_fields ?? null }, opts.qtyField);
+    const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
+    const state = j?.job_state ?? null;
+    const priced = autopriceLine(hit.item, measured, { state, tierId: opts.tierId });
+    matched++;
+    return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
+  });
+  if (!matched) return { matched: 0 };
+
+  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
+  await supabase
+    .from('invoices')
+    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
+    .eq('id', opts.invoiceId);
+  return { matched };
 }
