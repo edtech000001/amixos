@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { MODULE_REGISTRY, type ModuleDef, type ModuleCategory } from '../../modules/registry';
 import { can, type Role } from '../../lib/permissions';
 
@@ -33,7 +34,7 @@ export function AddonStoreScreen({
   const modulesDict = full.dashboard.modules.list;
   const canManage = can.manageBusinessSettings(currentRole);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.moduleStore');
   const [category, setCategory] = useState<CategoryFilter>('all');
 
   const labelFor = (m: ModuleDef): { name: string; description: string } => {

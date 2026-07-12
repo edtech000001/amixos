@@ -564,6 +564,10 @@ export type DashboardDict = {
       creating: string;
       selectedCount: string;
       sameClientHint: string;
+      multiClientHint: string;
+      createdMultiple: string;
+      multiConfirmTitle: string;
+      multiConfirmCreate: string;
       selectAll: string;
       deselectAll: string;
     };
@@ -578,14 +582,17 @@ export type DashboardDict = {
         recent: string;
         status: string;
         startDate: string;
+        client: string;
         lead: string;
       };
       group: {
         none: string;
+        client: string;
         lead: string;
         company: string;
         state: string;
       };
+      noClient: string;
       noLead: string;
       noCompany: string;
       noState: string;
@@ -1284,7 +1291,12 @@ export type DashboardDict = {
       stateRatesLabel: string;
       stateRatesHint: string;
       addStateRate: string;
+      addAllStates: string;
       statePlaceholder: string;
+      selectStatePlaceholder: string;
+      searchPlaceholder: string;
+      unitHint: string;
+      noResults: string;
       inactiveBadge: string;
       deactivate: string;
       activate: string;
@@ -3002,6 +3014,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         creating: 'Creando...',
         selectedCount: '{{count}} seleccionado(s)',
         sameClientHint: 'Solo trabajos del mismo cliente',
+        multiClientHint: 'Se crearán {{count}} facturas (una por cliente)',
+        createdMultiple: 'Se crearon {{count}} facturas, una por cliente.',
+        multiConfirmTitle: 'Crear varias facturas',
+        multiConfirmCreate: 'Crear {{count}} facturas',
         selectAll: 'Seleccionar todo',
         deselectAll: 'Quitar todo',
       },
@@ -3014,14 +3030,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
           recent: 'Más recientes',
           status: 'Estado del trabajo',
           startDate: 'Fecha de inicio',
+          client: 'Cliente',
           lead: 'Líder de equipo',
         },
         group: {
           none: 'Sin agrupar',
+          client: 'Cliente',
           lead: 'Líder de equipo',
           company: 'Empresa',
           state: 'Estado (ubicación)',
         },
+        noClient: 'Sin cliente',
         noLead: 'Sin líder',
         noCompany: 'Sin empresa',
         noState: 'Sin estado',
@@ -3703,7 +3722,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateRatesLabel: 'Precios por estado',
         stateRatesHint: 'Opcional. Si el trabajo es en ese estado, se usa este precio.',
         addStateRate: 'Agregar estado',
+        addAllStates: 'Agregar todos los estados',
         statePlaceholder: 'Estado (ej. NE)',
+        selectStatePlaceholder: 'Selecciona un estado',
+        searchPlaceholder: 'Buscar precios...',
+        unitHint: 'Opcional. Déjalo vacío para un precio fijo (no por unidad).',
+        noResults: 'Sin resultados.',
         inactiveBadge: 'Inactivo',
         deactivate: 'Desactivar',
         activate: 'Activar',
@@ -4748,7 +4772,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       customRange: 'Personalizado',
       kpis: {
-        revenueCollected: 'Ingresos cobrados',
+        revenueCollected: 'Facturado y pagado',
         pendingToCollect: 'Pendiente de cobro',
         avgJobValue: 'Valor promedio/trabajo',
         hoursLogged: 'Horas registradas',
@@ -4808,7 +4832,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         totalAccumulated: '{{count}} total acumulado',
       },
       financial: {
-        revenueCollected: 'Ingresos cobrados',
+        revenueCollected: 'Facturado y pagado',
         pending: 'Por cobrar',
         overdue: 'Vencido',
         estPayroll: 'Nómina estimada',
@@ -5429,6 +5453,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         creating: 'Creating...',
         selectedCount: '{{count}} selected',
         sameClientHint: 'Same-client jobs only',
+        multiClientHint: 'Will create {{count}} invoices (one per client)',
+        createdMultiple: 'Created {{count}} invoices, one per client.',
+        multiConfirmTitle: 'Create multiple invoices',
+        multiConfirmCreate: 'Create {{count}} invoices',
         selectAll: 'Select all',
         deselectAll: 'Deselect all',
       },
@@ -5441,14 +5469,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
           recent: 'Newest',
           status: 'Job status',
           startDate: 'Start date',
+          client: 'Client',
           lead: 'Crew lead',
         },
         group: {
           none: 'No grouping',
+          client: 'Client',
           lead: 'Crew lead',
           company: 'Company',
           state: 'State (location)',
         },
+        noClient: 'No client',
         noLead: 'No lead',
         noCompany: 'No company',
         noState: 'No state',
@@ -6130,7 +6161,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateRatesLabel: 'Prices by state',
         stateRatesHint: 'Optional. Used when the job is in that state.',
         addStateRate: 'Add state',
+        addAllStates: 'Add all states',
         statePlaceholder: 'State (e.g. NE)',
+        selectStatePlaceholder: 'Select a state',
+        searchPlaceholder: 'Search prices...',
+        unitHint: 'Optional. Leave empty for a flat price (not per unit).',
+        noResults: 'No results.',
         inactiveBadge: 'Inactive',
         deactivate: 'Deactivate',
         activate: 'Activate',
@@ -7175,7 +7211,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       customRange: 'Custom',
       kpis: {
-        revenueCollected: 'Revenue collected',
+        revenueCollected: 'Billed & paid',
         pendingToCollect: 'Pending to collect',
         avgJobValue: 'Avg. job value',
         hoursLogged: 'Hours logged',
@@ -7235,7 +7271,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         totalAccumulated: '{{count}} total accumulated',
       },
       financial: {
-        revenueCollected: 'Revenue collected',
+        revenueCollected: 'Billed & paid',
         pending: 'Outstanding',
         overdue: 'Overdue',
         estPayroll: 'Estimated payroll',

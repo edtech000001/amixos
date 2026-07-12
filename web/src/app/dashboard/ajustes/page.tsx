@@ -75,7 +75,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
 import ImportModal from '@/components/dashboard/ImportModal';
-import { PriceSheetScreen } from '@amixos/shared/screens/dashboard/PriceSheetScreen';
 import { formulaComponentTemplates } from '@amixos/shared/lib/importRunners';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { ImportPhotosModal } from '@/components/dashboard/ImportPhotosModal';
@@ -136,11 +135,11 @@ function buildFieldConfig(form: {
   };
 }
 
-type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'precios' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
+type Tab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
 
 // Tabs that change business config — admin-only. The rest ('cuenta','soporte')
 // are personal and visible to every member.
-const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'precios', 'facturas', 'facturatema', 'conexiones', 'importar'];
+const CONFIG_TABS: Tab[] = ['negocio', 'trabajos', 'clientes', 'empleados', 'facturas', 'facturatema', 'conexiones', 'importar'];
 
 const PIPELINE_STEP_KEYS = ['proposal', 'sent', 'accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'] as const;
 
@@ -2825,11 +2824,6 @@ export default function AjustesPage() {
                 </Button>
               </div>
             </div>
-          )}
-
-          {/* ══ PRECIOS ═════════════════════════════════════════════════ */}
-          {tab === 'precios' && business && (
-            <PriceSheetScreen supabase={supabase} businessId={business.id} canManage={can.manageBusinessSettings(currentRole)} />
           )}
 
           {/* ══ EMPLEADOS ═══════════════════════════════════════════════ */}

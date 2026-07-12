@@ -1003,7 +1003,7 @@ export default function ClienteDetailRoute() {
               return (
                 <Pressable
                   key={inv.id}
-                  onPress={() => router.push(`/dashboard/facturas/${inv.id}` as never)}
+                  onPress={() => router.push(`/dashboard/facturas/${inv.id}?from=client&clientId=${client.id}` as never)}
                   className={`flex-row items-center justify-between px-4 py-3 active:bg-gray-50 ${
                     idx < invoices.length - 1 ? 'border-b border-gray-50' : ''
                   }`}

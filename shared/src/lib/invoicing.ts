@@ -105,6 +105,10 @@ export type CreateInvoiceResult =
   | { ok: true; invoice: any }
   | { ok: false; error: 'no_jobs' | 'multiple_clients' | 'insert_failed' };
 
+export type CreateInvoicesResult =
+  | { ok: true; invoices: any[] }
+  | { ok: false; error: 'no_jobs' | 'insert_failed' };
+
 /** Create ONE draft invoice from one or more completed jobs of the SAME client,
  *  attaching each job (status → invoiced, invoice_id, invoiced_at). */
 export async function createInvoiceFromJobs(
@@ -191,6 +195,109 @@ export async function createInvoiceFromJobs(
     .in('id', opts.jobIds);
 
   return { ok: true, invoice };
+}
+
+/**
+ * Create draft invoices from completed jobs that may span MULTIPLE clients —
+ * one invoice per distinct client. Jobs with no client are grouped together.
+ * Efficient: one jobs fetch, one job_items fetch, one invoice-count read, then
+ * a sequential insert per client group so invoice numbers stay unique. Each
+ * group's jobs are attached (status → invoiced) to that group's invoice.
+ */
+export async function createInvoicesFromJobs(
+  supabase: Supa,
+  opts: {
+    businessId: string;
+    jobIds: string[];
+    invoiceTemplate: unknown;
+    itemTypeLabels: Record<string, string>;
+    notesLabel: string;
+    startNumber?: number;
+    hideItemTypes?: boolean;
+    taxRate?: number;
+  },
+): Promise<CreateInvoicesResult> {
+  if (!opts.jobIds.length) return { ok: false, error: 'no_jobs' };
+
+  const { data: jobs } = await supabase
+    .from('jobs')
+    .select('id, title, client_id')
+    .in('id', opts.jobIds);
+  if (!jobs?.length) return { ok: false, error: 'no_jobs' };
+
+  const { data: jobItems } = await supabase
+    .from('job_items')
+    .select('*')
+    .in('job_id', opts.jobIds);
+  const allItems = (jobItems ?? []) as JobItemRow[];
+
+  // Group jobs by client, preserving the caller's job order within each group
+  // and the order clients first appear.
+  const byId = new Map<string, any>((jobs as any[]).map(j => [j.id, j]));
+  const groups = new Map<string, any[]>();
+  for (const id of opts.jobIds) {
+    const j = byId.get(id);
+    if (!j) continue;
+    const key = j.client_id ?? ' '; // null client → shared "no client" bucket
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(j);
+  }
+
+  const lang = invoiceDefaultLanguage(opts.invoiceTemplate);
+  const { count } = await supabase
+    .from('invoices')
+    .select('*', { count: 'exact', head: true })
+    .eq('business_id', opts.businessId);
+  let seq = count ?? 0;
+
+  const taxRate = opts.taxRate ?? 0;
+  const discount = 0;
+  const nowIso = new Date().toISOString();
+  const created: any[] = [];
+
+  for (const [key, groupJobs] of Array.from(groups.entries())) {
+    const clientId = key === ' ' ? null : key;
+    const lineItems: InvoiceLineItem[] = [];
+    for (const j of groupJobs) {
+      lineItems.push(...lineItemsForJob(j.id, j.title ?? '', allItems, opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
+    }
+    const { subtotal, tax, total } = computeTotals(lineItems, taxRate, discount);
+    const invoiceNumber = nextInvoiceNumber(lang, opts.startNumber, seq);
+    seq += 1;
+
+    const { data: invoice, error } = await supabase
+      .from('invoices')
+      .insert({
+        business_id: opts.businessId,
+        client_id: clientId,
+        invoice_number: invoiceNumber,
+        status: 'draft',
+        language: lang,
+        issue_date: today(),
+        due_date: plusDays(30),
+        line_items: lineItems,
+        subtotal_amount: subtotal,
+        tax_rate: taxRate,
+        tax_amount: tax,
+        discount,
+        total_amount: total,
+        notes: null,
+      })
+      .select()
+      .single();
+
+    // Partial failure: keep the invoices already created (visible in the list),
+    // surface the error so the caller can tell the user.
+    if (error || !invoice) return created.length ? { ok: true, invoices: created } : { ok: false, error: 'insert_failed' };
+
+    await supabase
+      .from('jobs')
+      .update({ status: 'invoiced', invoice_id: invoice.id, invoiced_at: nowIso })
+      .in('id', groupJobs.map(j => j.id));
+
+    created.push(invoice);
+  }
+
+  return { ok: true, invoices: created };
 }
 
 /** Re-derive a DRAFT invoice's line items from its currently-attached jobs'

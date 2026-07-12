@@ -1,12 +1,16 @@
-// Price sheet editor (Ajustes → Precios) — mobile. Self-contained CRUD over
-// price_sheet_items; the caller mounts it with a supabase client + businessId.
-// Add/edit uses the correct bottom-sheet pattern (absolute backdrop BEHIND a
-// plain-View card) so the sheet scrolls — see CLAUDE.md.
+// Price sheet editor (reached from the Facturas header) — mobile. Self-contained
+// CRUD over price_sheet_items; the caller mounts it with a supabase client +
+// businessId. A price has an optional unit (blank = flat price) and optional
+// per-state / per-tier overrides. Add/edit uses the correct bottom-sheet pattern
+// (absolute backdrop BEHIND a plain-View card) so the sheet scrolls — see
+// CLAUDE.md.
 
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal } from 'react-native';
-import { Plus, X, Trash2, Pencil, DollarSign } from 'lucide-react-native';
+import { Plus, X, Trash2, Pencil, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { usStateName } from '../../lib/usStates';
 import {
   type PriceSheetItem,
   type PriceSheetRow,
@@ -24,13 +28,18 @@ export interface PriceSheetScreenProps {
   canManage: boolean;
 }
 
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY',
+  'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH',
+  'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+];
+
 interface DraftState { state: string; rate: string }
 interface Draft {
   id: string | null;
   name: string;
   category: string;
   pricingMode: PricingMode;
-  unitLabel: string;
   rate: string;
   stateRates: DraftState[];
   tierRates: Record<string, string>;
@@ -40,11 +49,11 @@ interface Draft {
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
+  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
   const [items, setItems] = useState<PriceSheetItem[]>([]);
@@ -53,6 +62,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
   const [saving, setSaving] = useState(false);
   const [tiers, setTiers] = useState<PriceTier[]>([]);
   const [newTier, setNewTier] = useState('');
+  const [search, setSearch] = usePersistedSearch(businessId ? `search.priceSheet.${businessId}` : null);
+  // In-sheet state picker (an absolute overlay, NOT a second RNModal — see
+  // CLAUDE.md). Holds the stateRates row index being edited.
+  const [statePickerFor, setStatePickerFor] = useState<number | null>(null);
+  const [stateQuery, setStateQuery] = useState('');
 
   const loadTiers = async () => {
     const { data } = await supabase.from('price_tiers').select('id, name').eq('business_id', businessId).order('sort_order');
@@ -88,21 +102,29 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
   };
   useEffect(() => { void load(); void loadTiers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
 
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(i =>
+      i.name.toLowerCase().includes(q) ||
+      (i.category ?? '').toLowerCase().includes(q) ||
+      i.matchTerms.some(m => m.includes(q)));
+  }, [items, search]);
+
   const groups = useMemo(() => {
     const by = new Map<string, PriceSheetItem[]>();
-    items.forEach(i => {
+    visibleItems.forEach(i => {
       const key = (i.category ?? '').trim() || '￿';
       (by.get(key) ?? by.set(key, []).get(key)!).push(i);
     });
     return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [items]);
+  }, [visibleItems]);
 
   const openEdit = (i: PriceSheetItem) => setDraft({
     id: i.id,
     name: i.name,
     category: i.category ?? '',
     pricingMode: i.pricingMode,
-    unitLabel: i.unitLabel ?? '',
     rate: String(i.rate),
     stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
@@ -123,7 +145,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       name: draft.name.trim(),
       category: draft.category.trim() || null,
       pricing_mode: draft.pricingMode,
-      unit_label: draft.pricingMode === 'per_unit' ? (draft.unitLabel.trim() || null) : null,
+      unit_label: null,
       rate: parseFloat(draft.rate) || 0,
       state_rates: Object.keys(stateRates).length ? stateRates : null,
       tier_rates: (() => {
@@ -153,6 +175,29 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
 
   const setDraftKey = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft(d => (d ? { ...d, [k]: v } : d));
 
+  const addAllStates = () => {
+    if (!draft) return;
+    const have = new Set(draft.stateRates.map(sr => sr.state.trim().toUpperCase()).filter(Boolean));
+    const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: draft.rate }));
+    setDraftKey('stateRates', [...draft.stateRates, ...additions]);
+  };
+
+  const setRowState = (index: number, stateAbbr: string) => {
+    setDraft(d => {
+      if (!d) return d;
+      const next = [...d.stateRates];
+      next[index] = { ...next[index], state: stateAbbr };
+      return { ...d, stateRates: next };
+    });
+    setStatePickerFor(null);
+  };
+
+  const filteredStates = useMemo(() => {
+    const q = stateQuery.trim().toLowerCase();
+    if (!q) return US_STATES;
+    return US_STATES.filter(s => s.toLowerCase().includes(q) || usStateName(s, locale).toLowerCase().includes(q));
+  }, [stateQuery, locale]);
+
   return (
     <View className="flex-1">
       <View className="flex-row items-start justify-between gap-3 mb-4">
@@ -166,6 +211,14 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
             <Text className="text-sm font-semibold text-white">{t.addBtn}</Text>
           </Pressable>
         ) : null}
+      </View>
+
+      {/* Search */}
+      <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-3 mb-4">
+        <Search size={16} color="#9CA3AF" />
+        <TextInput value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} placeholderTextColor="#9CA3AF"
+          autoCapitalize="none" autoCorrect={false} className="flex-1 py-2.5 pl-2 text-sm text-gray-900" />
+        {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color="#9CA3AF" /></Pressable> : null}
       </View>
 
       {canManage ? (
@@ -198,6 +251,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
           <View className="w-12 h-12 rounded-2xl bg-primary/10 items-center justify-center mb-3"><DollarSign size={20} color="#4F46E5" /></View>
           <Text className="text-sm text-gray-400 text-center px-8">{t.empty}</Text>
         </View>
+      ) : groups.length === 0 ? (
+        <View className="items-center py-16"><Text className="text-sm text-gray-400">{t.noResults}</Text></View>
       ) : (
         <View className="gap-5">
           {groups.map(([key, list]) => (
@@ -207,12 +262,12 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
               </Text>
               <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {list.map((i, idx) => (
-                  <View key={i.id} className={`px-4 py-3 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+                  <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
                     <View className="flex-1 min-w-0">
                       <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{i.name}</Text>
-                      <Text className="text-xs text-gray-500">
+                      <Text className="text-xs text-gray-500 mt-1">
                         {priceItemLabel(i, t.flatWord)}
-                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${st} $${r}`).join(' · ')}` : ''}
+                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </Text>
                     </View>
                     {canManage ? (
@@ -261,22 +316,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                   ))}
                 </View>
 
-                <View className="flex-row gap-3 mb-3">
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</Text>
-                    <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                      <Text className="text-gray-400">$</Text>
-                      <TextInput value={draft.rate} onChangeText={v => setDraftKey('rate', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#9CA3AF"
-                        className="flex-1 py-2.5 pl-1 text-base text-gray-900" />
-                    </View>
-                  </View>
-                  {draft.pricingMode === 'per_unit' ? (
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-700 mb-1">{t.unitLabel}</Text>
-                      <TextInput value={draft.unitLabel} onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder} placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
-                    </View>
-                  ) : null}
+                <Text className="text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</Text>
+                <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3 mb-4">
+                  <Text className="text-gray-400">$</Text>
+                  <TextInput value={draft.rate} onChangeText={v => setDraftKey('rate', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#9CA3AF"
+                    className="flex-1 py-2.5 pl-1 text-base text-gray-900" />
                 </View>
 
                 {tiers.length > 0 ? (
@@ -305,16 +349,23 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 <View className="mb-4">
                   <View className="flex-row items-center justify-between mb-1">
                     <Text className="text-sm font-semibold text-gray-700">{t.stateRatesLabel}</Text>
-                    <Pressable onPress={() => setDraftKey('stateRates', [...draft.stateRates, { state: '', rate: '' }])}>
-                      <Text className="text-xs font-semibold text-primary">+ {t.addStateRate}</Text>
-                    </Pressable>
+                    <View className="flex-row items-center gap-4">
+                      <Pressable onPress={addAllStates}><Text className="text-xs font-semibold text-primary">{t.addAllStates}</Text></Pressable>
+                      <Pressable onPress={() => setDraftKey('stateRates', [...draft.stateRates, { state: '', rate: '' }])}>
+                        <Text className="text-xs font-semibold text-primary">+ {t.addStateRate}</Text>
+                      </Pressable>
+                    </View>
                   </View>
                   <Text className="text-[11px] text-gray-400 mb-2">{t.stateRatesHint}</Text>
                   {draft.stateRates.map((sr, i) => (
                     <View key={i} className="flex-row items-center gap-2 mb-2">
-                      <TextInput value={sr.state} onChangeText={v => { const next = [...draft.stateRates]; next[i] = { ...sr, state: v.toUpperCase().slice(0, 2) }; setDraftKey('stateRates', next); }}
-                        placeholder={t.statePlaceholder} placeholderTextColor="#9CA3AF" autoCapitalize="characters"
-                        className="w-20 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                      <Pressable onPress={() => { setStateQuery(''); setStatePickerFor(i); }}
+                        className="w-40 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                        <Text className={`text-base flex-1 ${sr.state ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                          {sr.state ? usStateName(sr.state, locale) : t.selectStatePlaceholder}
+                        </Text>
+                        <ChevronDown size={16} color="#9CA3AF" />
+                      </Pressable>
                       <View className="flex-1 flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
                         <Text className="text-gray-400">$</Text>
                         <TextInput value={sr.rate} onChangeText={v => { const next = [...draft.stateRates]; next[i] = { ...sr, rate: v.replace(/[^0-9.]/g, '') }; setDraftKey('stateRates', next); }}
@@ -330,6 +381,34 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                   <Text className="text-sm font-semibold text-white">{t.saveBtn}</Text>
                 </Pressable>
               </ScrollView>
+            ) : null}
+
+            {/* State picker — absolute overlay inside the sheet card (NOT a
+                second RNModal, which iOS would refuse to present). */}
+            {statePickerFor !== null ? (
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="bg-white rounded-t-3xl px-5 pt-5">
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-lg font-bold text-gray-900">{t.selectStatePlaceholder}</Text>
+                  <Pressable onPress={() => setStatePickerFor(null)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100"><X size={20} color="#9CA3AF" /></Pressable>
+                </View>
+                <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-3 mb-3">
+                  <Search size={16} color="#9CA3AF" />
+                  <TextInput value={stateQuery} onChangeText={setStateQuery} placeholder={t.searchPlaceholder} placeholderTextColor="#9CA3AF"
+                    autoFocus autoCorrect={false} autoCapitalize="none" className="flex-1 py-2.5 pl-2 text-base text-gray-900" />
+                </View>
+                <ScrollView keyboardShouldPersistTaps="handled" className="mb-4">
+                  {filteredStates.map(s => {
+                    const isSel = draft.stateRates[statePickerFor!]?.state === s;
+                    return (
+                      <Pressable key={s} onPress={() => setRowState(statePickerFor!, s)}
+                        className={`flex-row items-center justify-between px-2 py-3.5 rounded-xl active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}>
+                        <Text className={`text-base flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{usStateName(s, locale)}</Text>
+                        {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             ) : null}
           </View>
         </View>

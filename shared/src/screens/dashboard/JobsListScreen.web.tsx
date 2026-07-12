@@ -18,6 +18,7 @@ import {
   X,
   FileText,
   Users,
+  User,
   ArrowRight,
   Send,
   ChevronDown,
@@ -37,6 +38,7 @@ import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
+import { jobRefLabel } from '../../lib/jobRef';
 import {
   matchJobAlert,
   isJobOverdue,
@@ -124,10 +126,12 @@ const SORT_ICON: Record<JobSortKey, typeof List> = {
   recent: Clock,
   status: ListChecks,
   startDate: Calendar,
+  client: User,
   lead: Users,
 };
 const GROUP_ICON: Record<JobGroupKey, typeof List> = {
   none: List,
+  client: User,
   lead: Users,
   company: Building2,
   state: MapPin,
@@ -344,6 +348,7 @@ export function JobsListScreen({
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+      client: t.sort.noClient,
       lead: t.sort.noLead,
       company: t.sort.noCompany,
       state: t.sort.noState,
@@ -465,6 +470,9 @@ export function JobsListScreen({
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  // Confirm modal shown only when the selection spans multiple clients (so the
+  // user knows several invoices will be created, one each).
+  const [multiConfirm, setMultiConfirm] = useState(false);
   const isInvoiceable = (j: JobListItem) => j.status === 'completed' && !j.invoiceId;
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => {
@@ -496,8 +504,9 @@ export function JobsListScreen({
     toggleSelect(id);
   };
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
-  // All picked jobs must share a client to land on one invoice.
-  const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
+  // Jobs may span clients — one invoice is created per distinct client. This
+  // counts how many invoices the current selection would produce.
+  const invoiceClientCount = new Set(selectedJobs.filter(j => isInvoiceable(j)).map(j => j.clientId ?? '∅')).size;
   const visibleInvoiceable = sections.flatMap(s => s.jobs).filter(isInvoiceable);
   // With delete available, EVERY visible row is selectable (delete applies to
   // any job); otherwise selection stays restricted to invoiceable rows.
@@ -518,12 +527,18 @@ export function JobsListScreen({
   // Invoicing needs every picked job invoiceable (selection may now include
   // non-invoiceable rows picked for deletion).
   const allInvoiceable = selectedJobs.every(isInvoiceable);
-  const runCreateInvoice = async () => {
-    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || !allInvoiceable || creatingInvoice) return;
+  const doCreateInvoice = async () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !allInvoiceable || creatingInvoice) return;
     setCreatingInvoice(true);
     await onCreateInvoice(selectedJobs.map(j => j.id));
     setCreatingInvoice(false);
     exitSelect();
+  };
+  const runCreateInvoice = () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !allInvoiceable || creatingInvoice) return;
+    // Multiple clients → confirm first (several invoices will be created).
+    if (invoiceClientCount > 1) { setMultiConfirm(true); return; }
+    void doCreateInvoice();
   };
   // Archive: on the Archivados tab the button restores instead. Only
   // completed jobs archive (that's the "never invoicing this" case).
@@ -919,12 +934,11 @@ export function JobsListScreen({
                       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
                     )}
 
-                    {/* Title + client */}
+                    {/* Title + client. The reference code sits on its own line
+                       above the title so it never eats the title's width. */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {job.estimateNumber ? <span className="text-xs font-mono text-gray-400 shrink-0">{job.estimateNumber}</span> : null}
-                        <span className="text-sm font-bold text-gray-900 truncate">{job.title}</span>
-                      </div>
+                      <span className="block text-xs font-mono text-gray-400 truncate">{jobRefLabel({ estimateNumber: job.estimateNumber, externalRef: job.externalRef, id: job.id })}</span>
+                      <span className="block text-sm font-bold text-gray-900 truncate">{job.title}</span>
                       {job.clientName ? (
                         <p className="text-xs text-gray-500 mt-0.5 truncate">
                           {job.clientName}
@@ -1045,8 +1059,8 @@ export function JobsListScreen({
                 {allSelected ? t.batchInvoice.deselectAll : t.batchInvoice.selectAll}
               </button>
             ) : null}
-            {!sameClient ? (
-              <span className="text-xs font-medium text-amber-600">{t.batchInvoice.sameClientHint}</span>
+            {allInvoiceable && invoiceClientCount > 1 ? (
+              <span className="text-xs font-medium text-primary">{t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount))}</span>
             ) : null}
             <div className="flex-1" />
             <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
@@ -1073,11 +1087,33 @@ export function JobsListScreen({
             ) : null}
             <button
               onClick={runCreateInvoice}
-              disabled={selectedJobs.length === 0 || !sameClient || !allInvoiceable || creatingInvoice}
+              disabled={selectedJobs.length === 0 || !allInvoiceable || creatingInvoice}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-40"
             >
               <FileText size={15} /> {creatingInvoice ? t.batchInvoice.creating : t.batchInvoice.createButton}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Multi-client confirm — only when the selection spans >1 client. */}
+      {multiConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setMultiConfirm(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+              <FileText size={20} className="text-primary" />
+            </div>
+            <p className="text-lg font-bold text-gray-900">{t.batchInvoice.multiConfirmTitle}</p>
+            <p className="text-sm text-gray-500 mt-1">{t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount))}</p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setMultiConfirm(false)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+                {t.batchInvoice.cancel}
+              </button>
+              <button onClick={() => { setMultiConfirm(false); void doCreateInvoice(); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90">
+                <FileText size={15} /> {t.batchInvoice.multiConfirmCreate.replace('{{count}}', String(invoiceClientCount))}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

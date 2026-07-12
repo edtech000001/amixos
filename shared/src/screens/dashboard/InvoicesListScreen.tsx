@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X } from 'lucide-react-native';
+import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 
 export interface InvoiceListItem {
   id: string;
@@ -30,6 +31,8 @@ export interface InvoicesListScreenProps {
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
   onNewInvoicePress: () => void;
+  /** Opens the price sheet (autopricing catalog). Shows a header button. */
+  onPriceSheetPress?: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
   /** Bulk delete for selection mode. Pass ONLY when the role can delete
    *  invoices — its presence shows the Select tool. Caller owns the confirm
@@ -68,6 +71,7 @@ export function InvoicesListScreen({
   invoices,
   onInvoicePress,
   onNewInvoicePress,
+  onPriceSheetPress,
   onUpdateStatus,
   onBulkDelete,
   businessId,
@@ -83,7 +87,7 @@ export function InvoicesListScreen({
   const statusSet = useMemo(() => new Set<string>(statuses), [statuses]);
   const toggleStatus = (k: StatusKey) =>
     setStatuses(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
   // Issue-date range filter.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
@@ -232,6 +236,15 @@ export function InvoicesListScreen({
           </Text>
         </View>
         <View className="flex-row items-center gap-2 ml-2">
+          {onPriceSheetPress ? (
+            <Pressable
+              onPress={onPriceSheetPress}
+              accessibilityLabel={full.dashboard.settings.priceSheet.title}
+              className="w-11 h-11 rounded-xl border border-gray-200 bg-white items-center justify-center active:opacity-80"
+            >
+              <DollarSign size={16} color="#6B7280" />
+            </Pressable>
+          ) : null}
           {dateActive ? (
             <Pressable
               onPress={clearDate}

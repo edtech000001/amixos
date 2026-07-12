@@ -105,6 +105,7 @@ export default function FacturasTab() {
         invoices={invoices}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
         onNewInvoicePress={() => router.push('/dashboard/facturas/nueva' as never)}
+        onPriceSheetPress={() => router.push('/dashboard/facturas/precios' as never)}
         onUpdateStatus={updateStatus}
         businessId={business?.id}
         onBulkDelete={

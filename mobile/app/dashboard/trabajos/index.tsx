@@ -15,7 +15,7 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
+import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 
 interface RawJob {
@@ -187,7 +187,7 @@ export default function TrabajosTab() {
         onCreateInvoice={async (jobIds) => {
           if (!business) return;
           const jt = full.dashboard.jobs.new;
-          const res = await createInvoiceFromJobs(supabase, {
+          const res = await createInvoicesFromJobs(supabase, {
             businessId: business.id,
             jobIds,
             invoiceTemplate: business.invoice_template,
@@ -203,11 +203,13 @@ export default function TrabajosTab() {
             notesLabel: full.dashboard.sidebar.trabajos,
           });
           if (res.ok) {
-            router.push(`/dashboard/facturas/${res.invoice.id}`);
-            return;
-          }
-          if ('error' in res && res.error === 'multiple_clients') {
-            Alert.alert('', full.dashboard.jobs.batchInvoice.sameClientHint);
+            // Multiple invoices are confirmed upfront in the list screen, so
+            // just route: to the invoice (single) or the list (per-client).
+            if (res.invoices.length === 1) {
+              router.push(`/dashboard/facturas/${res.invoices[0].id}` as never);
+            } else {
+              router.push('/dashboard/facturas' as never);
+            }
           }
         }}
         onBulkDelete={

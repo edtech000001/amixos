@@ -9,6 +9,7 @@ import {
   TrendingUp,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
 
@@ -50,7 +51,7 @@ export function InventoryScreen({
   const { t: full } = useLang();
   const t = full.dashboard.inventory;
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.inventory');
   const [filter, setFilter] = useState<Filter>('todos');
 
   const filtered = useMemo(() => {

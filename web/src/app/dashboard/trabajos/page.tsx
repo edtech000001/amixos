@@ -14,7 +14,7 @@ import {
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { createInvoiceFromJobs } from '@amixos/shared/lib/invoicing';
+import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
 
@@ -212,7 +212,7 @@ export default function TrabajosPage() {
       onCreateInvoice={async (jobIds) => {
         if (!business) return;
         const jt = full.dashboard.jobs.new;
-        const res = await createInvoiceFromJobs(supabase, {
+        const res = await createInvoicesFromJobs(supabase, {
           businessId: business.id,
           jobIds,
           invoiceTemplate: business.invoice_template,
@@ -228,11 +228,13 @@ export default function TrabajosPage() {
           notesLabel: full.dashboard.sidebar.trabajos,
         });
         if (res.ok) {
-          router.push(`/dashboard/facturas/${res.invoice.id}`);
-          return;
-        }
-        if ('error' in res && res.error === 'multiple_clients') {
-          window.alert(full.dashboard.jobs.batchInvoice.sameClientHint);
+          // One client → open the invoice; multiple → land on the list (one
+          // invoice was created per client; the user already confirmed).
+          if (res.invoices.length === 1) {
+            router.push(`/dashboard/facturas/${res.invoices[0].id}`);
+          } else {
+            router.push('/dashboard/facturas');
+          }
         }
       }}
       onBulkDelete={

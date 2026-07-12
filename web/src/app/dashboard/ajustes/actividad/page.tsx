@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 
@@ -94,7 +95,7 @@ export default function ActividadPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reachedEnd, setReachedEnd] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.activity');
 
   const load = useCallback(async (before?: string) => {
     if (!business) return;

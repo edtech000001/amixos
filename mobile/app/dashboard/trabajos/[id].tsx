@@ -44,6 +44,7 @@ import { queuedUpdate } from '@/lib/offline/mutate';
 import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
+import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
@@ -926,8 +927,10 @@ export default function JobDetailRoute() {
             <Text className="text-xs font-mono text-gray-400 mb-1">{job.estimate_number}</Text>
           ) : null}
           <Text className="text-2xl font-bold text-gray-900">{job.title}</Text>
-          {job.external_ref ? (
-            <Text className="text-xs font-mono text-gray-400 mt-0.5">{job.external_ref}</Text>
+          {/* Non-proposals show a reference so every job has an ID: imported
+             project id, else a stable short code for old/manual jobs. */}
+          {!isProposal ? (
+            <Text className="text-xs font-mono text-gray-400 mt-0.5">{job.external_ref?.trim() || jobShortCode(job.id)}</Text>
           ) : null}
           {clientName ? (
             <Pressable
@@ -1045,40 +1048,46 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {canCancel ? (
-            <Pressable
-              onPress={confirmCancelJob}
-              disabled={updatingStatus}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-red-50"
-            >
-              <XCircle size={16} color="#EF4444" />
-              <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
-            </Pressable>
-          ) : null}
+          {/* Cancel + Archive share one row (side by side) to avoid stacked
+             dead space. Both are confirmed / reversible. */}
+          {canCancel || (job.status === 'completed' && can.seeAllJobs(currentRole)) ? (
+            <View className="flex-row gap-2">
+              {canCancel ? (
+                <Pressable
+                  onPress={confirmCancelJob}
+                  disabled={updatingStatus}
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-red-50"
+                >
+                  <XCircle size={16} color="#EF4444" />
+                  <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
+                </Pressable>
+              ) : null}
 
-          {/* Archive — the exit for completed work that will never be
-             invoiced (internal hours etc). Reversible. */}
-          {job.status === 'completed' && can.seeAllJobs(currentRole) ? (
-            <Pressable
-              onPress={() => {
-                const archive = !job.archived_at;
-                const doIt = async () => {
-                  const archived_at = archive ? new Date().toISOString() : null;
-                  await supabase.from('jobs').update({ archived_at }).eq('id', job.id);
-                  if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', job.id, { title: job.title });
-                  setJob(prev => (prev ? { ...prev, archived_at } : prev));
-                };
-                if (!archive) { void doIt(); return; }
-                Alert.alert('', full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'), [
-                  { text: tc.buttons.cancel, style: 'cancel' },
-                  { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
-                ]);
-              }}
-              className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 active:bg-gray-200"
-            >
-              <Archive size={16} color="#6B7280" />
-              <Text className="text-sm font-semibold text-gray-600">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
-            </Pressable>
+              {/* Archive — the exit for completed work that will never be
+                 invoiced (internal hours etc). Reversible. */}
+              {job.status === 'completed' && can.seeAllJobs(currentRole) ? (
+                <Pressable
+                  onPress={() => {
+                    const archive = !job.archived_at;
+                    const doIt = async () => {
+                      const archived_at = archive ? new Date().toISOString() : null;
+                      await supabase.from('jobs').update({ archived_at }).eq('id', job.id);
+                      if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', job.id, { title: job.title });
+                      setJob(prev => (prev ? { ...prev, archived_at } : prev));
+                    };
+                    if (!archive) { void doIt(); return; }
+                    Alert.alert('', full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'), [
+                      { text: tc.buttons.cancel, style: 'cancel' },
+                      { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
+                    ]);
+                  }}
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+                >
+                  <Archive size={16} color="#6B7280" />
+                  <Text className="text-sm font-semibold text-gray-600">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
 

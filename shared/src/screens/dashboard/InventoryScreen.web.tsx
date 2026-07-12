@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 
 export interface InventoryItem {
   id: string;
@@ -55,7 +56,7 @@ export function InventoryScreen({
   const { t: full } = useLang();
   const t = full.dashboard.inventory;
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.inventory');
   const [filter, setFilter] = useState<Filter>('todos');
 
   const filtered = useMemo(() => {

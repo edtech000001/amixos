@@ -13,6 +13,7 @@ import {
   UserCheck,
   DollarSign, Search, X, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { ROLE_LABELS } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
@@ -103,7 +104,7 @@ export function EmployeesScreen({
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const dateLocale = full.dashboard.dateLocale;
   const [tab, setTab] = useState<Tab>('empleados');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.employees');
   const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // Column-value filters (AppSheet-style): pick a field, then check the
   // values you want. Values come from the data itself, so custom fields and

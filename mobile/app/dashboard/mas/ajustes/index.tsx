@@ -13,7 +13,7 @@ import {
   LifeBuoy,
   LayoutGrid,
   Upload,
-  type LucideIcon, DollarSign } from 'lucide-react-native';
+  type LucideIcon } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -92,13 +92,6 @@ export default function AjustesIndex() {
         description: t.employeesSection.subtitle,
         icon: Briefcase,
         path: '/dashboard/mas/ajustes/empleados',
-      },
-      {
-        key: 'precios',
-        label: t.tabs.precios,
-        description: t.priceSheet.subtitle,
-        icon: DollarSign,
-        path: '/dashboard/mas/ajustes/precios',
       },
       {
         key: 'facturas',

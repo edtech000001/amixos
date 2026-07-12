@@ -74,15 +74,18 @@ interface InvoiceFieldTemplate {
 }
 
 export default function FacturaDetailRoute() {
-  const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
   const id = String(params.id);
   const router = useRouter();
-  // ?from=job&jobId=… → back returns to that job (not the invoice list). We
-  // navigate explicitly because facturas/[id] and trabajos/[id] share the same
-  // Tabs navigator, where back() can land on the wrong tab.
+  // ?from=job&jobId=… or ?from=client&clientId=… → back returns to that
+  // job/client (not the invoice list). We navigate explicitly because
+  // facturas/[id] and trabajos/[id] share the same Tabs navigator, where
+  // back() can land on the wrong tab.
   const goBack = () => {
     if (params.from === 'job' && params.jobId) {
       router.replace(`/dashboard/trabajos/${params.jobId}` as never);
+    } else if (params.from === 'client' && params.clientId) {
+      router.replace(`/dashboard/clientes/${params.clientId}` as never);
     } else {
       router.replace('/dashboard/facturas' as never);
     }

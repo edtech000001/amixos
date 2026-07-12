@@ -1,13 +1,16 @@
 'use client';
 
-// Price sheet editor (Ajustes → Precios). Self-contained CRUD over
-// price_sheet_items — the caller just mounts it with a supabase client +
-// businessId. Items group by category; each has a pricing mode, rate, and
-// optional per-state overrides that autoprice reads via applicableRate().
+// Price sheet editor (reached from the Facturas header → "Lista de precios").
+// Self-contained CRUD over price_sheet_items — the caller just mounts it with a
+// supabase client + businessId. Items group by category; each has a price, an
+// optional unit (blank = flat price), and optional per-state / per-tier
+// overrides that autoprice reads via applicableRate().
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X, Trash2, Pencil, DollarSign } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, DollarSign, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { usStateName } from '../../lib/usStates';
 import {
   type PriceSheetItem,
   type PriceSheetRow,
@@ -25,13 +28,19 @@ export interface PriceSheetScreenProps {
   canManage: boolean;
 }
 
+// 50 states + DC, USPS order — full names come from usStateName(abbr).
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY',
+  'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH',
+  'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+];
+
 interface DraftState { state: string; rate: string }
 interface Draft {
   id: string | null;
   name: string;
   category: string;
   pricingMode: PricingMode;
-  unitLabel: string;
   rate: string;
   stateRates: DraftState[];
   tierRates: Record<string, string>;
@@ -41,11 +50,11 @@ interface Draft {
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
+  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
   const [items, setItems] = useState<PriceSheetItem[]>([]);
@@ -54,6 +63,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
   const [saving, setSaving] = useState(false);
   const [tiers, setTiers] = useState<PriceTier[]>([]);
   const [newTier, setNewTier] = useState('');
+  const [search, setSearch] = usePersistedSearch(businessId ? `search.priceSheet.${businessId}` : null);
 
   const loadTiers = async () => {
     const { data } = await supabase.from('price_tiers').select('id, name').eq('business_id', businessId).order('sort_order');
@@ -88,15 +98,25 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
   };
   useEffect(() => { void load(); void loadTiers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
 
+  // Search filter across name, category, and match terms.
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(i =>
+      i.name.toLowerCase().includes(q) ||
+      (i.category ?? '').toLowerCase().includes(q) ||
+      i.matchTerms.some(m => m.includes(q)));
+  }, [items, search]);
+
   // Group by category, "uncategorized" last.
   const groups = useMemo(() => {
     const by = new Map<string, PriceSheetItem[]>();
-    items.forEach(i => {
+    visibleItems.forEach(i => {
       const key = (i.category ?? '').trim() || '￿';
       (by.get(key) ?? by.set(key, []).get(key)!).push(i);
     });
     return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [items]);
+  }, [visibleItems]);
 
   const openNew = () => setDraft(emptyDraft());
   const openEdit = (i: PriceSheetItem) => setDraft({
@@ -104,7 +124,6 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     name: i.name,
     category: i.category ?? '',
     pricingMode: i.pricingMode,
-    unitLabel: i.unitLabel ?? '',
     rate: String(i.rate),
     stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
@@ -125,7 +144,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       name: draft.name.trim(),
       category: draft.category.trim() || null,
       pricing_mode: draft.pricingMode,
-      unit_label: draft.pricingMode === 'per_unit' ? (draft.unitLabel.trim() || null) : null,
+      unit_label: null,
       rate: parseFloat(draft.rate) || 0,
       state_rates: Object.keys(stateRates).length ? stateRates : null,
       tier_rates: (() => {
@@ -152,24 +171,45 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     await load();
   };
 
+  // "Add all states" — append a row for every state not already present, each
+  // pre-filled with the base rate so they're editable/meaningful right away.
+  const addAllStates = () => {
+    if (!draft) return;
+    const have = new Set(draft.stateRates.map(sr => sr.state.trim().toUpperCase()).filter(Boolean));
+    const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: draft.rate }));
+    setDraft({ ...draft, stateRates: [...draft.stateRates, ...additions] });
+  };
+
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="p-6 lg:p-8 flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">{t.title}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{t.subtitle}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
         </div>
         {canManage ? (
           <button type="button" onClick={openNew}
-            className="flex items-center gap-1.5 bg-primary px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 shrink-0">
-            <Plus size={15} /> {t.addBtn}
+            className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 shrink-0">
+            <Plus size={16} /> {t.addBtn}
           </button>
+        ) : null}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchPlaceholder}
+          autoCapitalize="none" autoCorrect="off"
+          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        {search ? (
+          <button type="button" onClick={() => setSearch('')} aria-label="×"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={16} /></button>
         ) : null}
       </div>
 
       {/* Tiers manager — pricing models assigned to clients. */}
       {canManage ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 max-w-2xl">
           <p className="text-sm font-semibold text-gray-900">{t.tiersTitle}</p>
           <p className="text-[11px] text-gray-400 mt-0.5 mb-2">{t.tiersHint}</p>
           <div className="flex flex-col gap-2">
@@ -199,6 +239,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
           <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3"><DollarSign size={20} className="text-primary" /></div>
           <p className="text-sm text-gray-400 max-w-xs">{t.empty}</p>
         </div>
+      ) : groups.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <p className="text-sm text-gray-400">{t.noResults}</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([key, list]) => (
@@ -208,15 +252,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
               </p>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {list.map((i, idx) => (
-                  <div key={i.id} className={`px-4 py-3 flex items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+                  <div key={i.id} className={`px-4 py-4 flex items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900 truncate">{i.name}</p>
                         {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{t.inactiveBadge}</span> : null}
                       </div>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 mt-1">
                         {priceItemLabel(i, t.flatWord)}
-                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${st} $${r}`).join(' · ')}` : ''}
+                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </p>
                     </div>
                     {canManage ? (
@@ -265,22 +309,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
               ))}
             </div>
 
-            <div className="flex gap-3 mb-3">
-              <label className="flex-1 text-sm font-semibold text-gray-700">
-                {t.rateLabel}
-                <div className="mt-1 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
-                  <span className="text-gray-400 text-sm">$</span>
-                  <input value={draft.rate} onChange={e => setDraft({ ...draft, rate: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" placeholder="0.00"
-                    className="w-full py-2 pl-1 text-sm focus:outline-none" />
-                </div>
-              </label>
-              {draft.pricingMode === 'per_unit' ? (
-                <label className="flex-1 text-sm font-semibold text-gray-700">
-                  {t.unitLabel}
-                  <input value={draft.unitLabel} onChange={e => setDraft({ ...draft, unitLabel: e.target.value })} placeholder={t.unitPlaceholder}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                </label>
-              ) : null}
+            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</label>
+            <div className="mb-4 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
+              <span className="text-gray-400 text-sm">$</span>
+              <input value={draft.rate} onChange={e => setDraft({ ...draft, rate: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" placeholder="0.00"
+                className="w-full py-2 pl-1 text-sm focus:outline-none" />
             </div>
 
             {tiers.length > 0 ? (
@@ -309,14 +342,20 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-semibold text-gray-700">{t.stateRatesLabel}</label>
-                <button type="button" onClick={() => setDraft({ ...draft, stateRates: [...draft.stateRates, { state: '', rate: '' }] })}
-                  className="text-xs font-semibold text-primary hover:underline">+ {t.addStateRate}</button>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={addAllStates} className="text-xs font-semibold text-primary hover:underline">{t.addAllStates}</button>
+                  <button type="button" onClick={() => setDraft({ ...draft, stateRates: [...draft.stateRates, { state: '', rate: '' }] })}
+                    className="text-xs font-semibold text-primary hover:underline">+ {t.addStateRate}</button>
+                </div>
               </div>
               <p className="text-[11px] text-gray-400 mb-2">{t.stateRatesHint}</p>
               {draft.stateRates.map((sr, i) => (
                 <div key={i} className="flex items-center gap-2 mb-2">
-                  <input value={sr.state} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, state: e.target.value.toUpperCase().slice(0, 2) }; setDraft({ ...draft, stateRates: next }); }}
-                    placeholder={t.statePlaceholder} className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <select value={sr.state} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, state: e.target.value }; setDraft({ ...draft, stateRates: next }); }}
+                    className="w-40 rounded-xl border border-gray-200 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">{t.selectStatePlaceholder}</option>
+                    {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
+                  </select>
                   <div className="flex-1 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
                     <span className="text-gray-400 text-sm">$</span>
                     <input value={sr.rate} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, rate: e.target.value.replace(/[^0-9.]/g, '') }; setDraft({ ...draft, stateRates: next }); }}

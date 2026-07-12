@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal, Alert } from 'react-native';
 import {
   Search,
   ClipboardList,
@@ -12,6 +12,7 @@ import {
   FileText,
   ListChecks,
   Users,
+  User,
   ArrowRight,
   Send,
   Building2,
@@ -34,6 +35,7 @@ import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
+import { jobRefLabel } from '../../lib/jobRef';
 import {
   matchJobAlert,
   isJobOverdue,
@@ -339,6 +341,7 @@ export function JobsListScreen({
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+      client: t.sort.noClient,
       lead: t.sort.noLead,
       company: t.sort.noCompany,
       state: t.sort.noState,
@@ -352,10 +355,12 @@ export function JobsListScreen({
     recent: Clock,
     status: ListChecks,
     startDate: Calendar,
+    client: User,
     lead: Users,
   };
   const GROUP_ICON: Record<JobGroupKey, typeof Clock> = {
     none: List,
+    client: User,
     lead: Users,
     company: Building2,
     state: MapPin,
@@ -487,7 +492,8 @@ export function JobsListScreen({
       return next;
     });
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
-  const sameClient = new Set(selectedJobs.map(j => j.clientId ?? '∅')).size <= 1;
+  // Jobs may span clients — one invoice is created per distinct client.
+  const invoiceClientCount = new Set(selectedJobs.filter(j => isInvoiceable(j)).map(j => j.clientId ?? '∅')).size;
   const visibleInvoiceable = sections.flatMap(s => s.jobs).filter(isInvoiceable);
   // With delete available, EVERY visible row is selectable (delete applies to
   // any job); otherwise selection stays restricted to invoiceable rows.
@@ -507,14 +513,30 @@ export function JobsListScreen({
   // Invoicing needs every picked job invoiceable (selection may now include
   // non-invoiceable rows picked for deletion).
   const allInvoiceable = selectedJobs.every(isInvoiceable);
-  const canCreateInvoice = selectedJobs.length > 0 && sameClient && allInvoiceable && !creatingInvoice;
+  const canCreateInvoice = selectedJobs.length > 0 && allInvoiceable && !creatingInvoice;
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
-  const runCreateInvoice = async () => {
-    if (!onCreateInvoice || selectedJobs.length === 0 || !sameClient || !allInvoiceable || creatingInvoice) return;
+  const doCreateInvoice = async () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !allInvoiceable || creatingInvoice) return;
     setCreatingInvoice(true);
     await onCreateInvoice(selectedJobs.map(j => j.id));
     setCreatingInvoice(false);
     exitSelect();
+  };
+  const runCreateInvoice = () => {
+    if (!onCreateInvoice || selectedJobs.length === 0 || !allInvoiceable || creatingInvoice) return;
+    // Multiple clients → confirm first (one invoice will be created per client).
+    if (invoiceClientCount > 1) {
+      Alert.alert(
+        t.batchInvoice.multiConfirmTitle,
+        t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount)),
+        [
+          { text: t.batchInvoice.cancel, style: 'cancel' },
+          { text: t.batchInvoice.multiConfirmCreate.replace('{{count}}', String(invoiceClientCount)), onPress: () => void doCreateInvoice() },
+        ],
+      );
+      return;
+    }
+    void doCreateInvoice();
   };
   // Archive: on the Archivados tab the pill restores instead. Only completed
   // jobs archive (that's the "never invoicing this" case).
@@ -817,18 +839,14 @@ export function JobsListScreen({
                   )}
 
                   <View className="flex-1 min-w-0">
-                    {/* Title — full width on its own line so it isn't squeezed
-                       by the status pills. */}
-                    <View className="flex-row items-center gap-2">
-                      {job.estimateNumber ? (
-                        <Text className="text-xs font-mono text-gray-400">
-                          {job.estimateNumber}
-                        </Text>
-                      ) : null}
-                      <Text className="text-sm font-bold text-gray-900 flex-1" numberOfLines={1}>
-                        {job.title}
-                      </Text>
-                    </View>
+                    {/* Reference code on its own line above the title so it
+                       never squeezes the title's width. */}
+                    <Text className="text-xs font-mono text-gray-400" numberOfLines={1}>
+                      {jobRefLabel({ estimateNumber: job.estimateNumber, externalRef: job.externalRef, id: job.id })}
+                    </Text>
+                    <Text className="text-sm font-bold text-gray-900" numberOfLines={1}>
+                      {job.title}
+                    </Text>
                     {job.clientName ? (
                       <Text className="text-xs text-gray-500 mt-0.5">
                         {job.clientName}
@@ -1095,9 +1113,9 @@ export function JobsListScreen({
        isn't hidden behind the floating tab bar. Only in select mode. */}
     {selectMode ? (
       <>
-        {!sameClient && selectedJobs.length > 0 ? (
-          <View className="absolute bottom-48 right-5 bg-amber-50 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
-            <Text className="text-xs font-medium text-amber-700">{t.batchInvoice.sameClientHint}</Text>
+        {allInvoiceable && invoiceClientCount > 1 ? (
+          <View className="absolute bottom-48 right-5 bg-primary/10 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
+            <Text className="text-xs font-medium text-primary">{t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount))}</Text>
           </View>
         ) : null}
         {/* Bulk-archive pill — stacked above delete on the left. */}

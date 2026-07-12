@@ -127,6 +127,7 @@ export default function FacturasPage() {
       invoices={invoices}
       onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
       onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
+      onPriceSheetPress={() => router.push('/dashboard/precios')}
       onUpdateStatus={updateStatus}
       businessId={business?.id}
       onBulkDelete={

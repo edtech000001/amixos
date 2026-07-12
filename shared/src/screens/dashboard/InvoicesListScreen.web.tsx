@@ -5,10 +5,11 @@
 // page wrapper is untouched and the bundler resolves this .web.tsx variant.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2 } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 
 export interface InvoiceListItem {
   id: string;
@@ -31,6 +32,8 @@ export interface InvoicesListScreenProps {
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
   onNewInvoicePress: () => void;
+  /** Opens the price sheet (autopricing catalog). Shows a header button. */
+  onPriceSheetPress?: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
   /** Bulk delete for selection mode. Pass ONLY when the role can delete
    *  invoices — its presence shows the Select tool. Caller owns the confirm
@@ -62,6 +65,7 @@ export function InvoicesListScreen({
   invoices,
   onInvoicePress,
   onNewInvoicePress,
+  onPriceSheetPress,
   onUpdateStatus,
   onBulkDelete,
   businessId,
@@ -76,7 +80,7 @@ export function InvoicesListScreen({
   const statusSet = useMemo(() => new Set<string>(statuses), [statuses]);
   const toggleStatus = (k: StatusKey) =>
     setStatuses(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
@@ -225,7 +229,7 @@ export function InvoicesListScreen({
     .replace('{{count}}', String(selectedIds.size));
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className={`p-6 lg:p-8 ${selectMode ? 'pb-28' : ''}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -234,9 +238,16 @@ export function InvoicesListScreen({
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(invoices.length))}</p>
         </div>
-        <button onClick={onNewInvoicePress} className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
-          <Plus size={16} /> {t.newInvoice}
-        </button>
+        <div className="flex items-center gap-2">
+          {onPriceSheetPress ? (
+            <button onClick={onPriceSheetPress} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 shadow-sm">
+              <DollarSign size={16} /> {full.dashboard.settings.priceSheet.title}
+            </button>
+          ) : null}
+          <button onClick={onNewInvoicePress} className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
+            <Plus size={16} /> {t.newInvoice}
+          </button>
+        </div>
       </div>
 
       {/* Search + filter controls */}
@@ -390,24 +401,29 @@ export function InvoicesListScreen({
         })}
       </div>
 
-      {/* Selection bar — visible while select mode is on (clients pattern). */}
+      {/* Selection bar — fixed to the bottom of the screen (matches the Jobs
+         list) so it doesn't push the list down. */}
       {selectMode ? (
-        <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-4">
-          <button onClick={exitSelect} className="p-1 rounded text-primary hover:bg-primary/10">✕</button>
-          <span className="text-sm font-medium text-primary">{selectedCountText}</span>
-          {visibleOrder.length > 0 ? (
-            <button onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
-              {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">{selectedCountText}</span>
+            {visibleOrder.length > 0 ? (
+              <button onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+                {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
+              </button>
+            ) : null}
+            <div className="flex-1" />
+            <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+              {full.dashboard.jobs.batchInvoice.cancel}
             </button>
-          ) : null}
-          <div className="flex-1" />
-          <button
-            onClick={runBulkDelete}
-            disabled={bulkDeleting || selectedIds.size === 0}
-            className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-          >
-            <Trash2 size={14} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
-          </button>
+            <button
+              onClick={runBulkDelete}
+              disabled={bulkDeleting || selectedIds.size === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+            >
+              <Trash2 size={15} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
+            </button>
+          </div>
         </div>
       ) : null}
 

@@ -8,6 +8,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Search, X, Check, Trash2, Calendar, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
 
@@ -67,7 +68,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
   // Search + date-range filter. Range matches by PERIOD OVERLAP so a period
   // straddling the boundary still counts.
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch('search.payrollHistory');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateOpen, setDateOpen] = useState(false);

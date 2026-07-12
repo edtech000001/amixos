@@ -13,6 +13,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -55,7 +56,7 @@ export default function ClientesTab() {
     Map<string, { name: string; role: string | null }[]>
   >(new Map());
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch(business ? `search.clients.${business.id}` : null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // Custom-field definitions — for the "group by custom field" menu options.

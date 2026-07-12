@@ -80,9 +80,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const { id } = params;
   const router = useRouter();
   const searchParams = useSearchParams();
-  // ?from=job&job=… → back returns to that job instead of the invoice list.
-  const fromJobId = searchParams.get('from') === 'job' ? searchParams.get('job') : null;
-  const goBack = () => router.push(fromJobId ? `/dashboard/trabajos/${fromJobId}` : '/dashboard/facturas');
+  // ?from=job&job=… or ?from=client&client=… → back returns to that job/client
+  // instead of the invoice list.
+  const fromParam = searchParams.get('from');
+  const fromJobId = fromParam === 'job' ? searchParams.get('job') : null;
+  const fromClientId = fromParam === 'client' ? searchParams.get('client') : null;
+  const goBack = () => router.push(
+    fromJobId ? `/dashboard/trabajos/${fromJobId}`
+      : fromClientId ? `/dashboard/clientes/${fromClientId}`
+      : '/dashboard/facturas',
+  );
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const { t: full } = useLang();

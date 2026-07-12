@@ -5,16 +5,17 @@
 // doubles as the default. Sorting is stable, so a group's internal order
 // still follows the selected sort.
 
-export type JobSortKey = 'recent' | 'status' | 'startDate' | 'lead';
-export type JobGroupKey = 'none' | 'lead' | 'company' | 'state';
+export type JobSortKey = 'recent' | 'status' | 'startDate' | 'client' | 'lead';
+export type JobGroupKey = 'none' | 'client' | 'lead' | 'company' | 'state';
 
-export const JOB_SORT_KEYS: JobSortKey[] = ['recent', 'status', 'startDate', 'lead'];
-export const JOB_GROUP_KEYS: JobGroupKey[] = ['none', 'lead', 'company', 'state'];
+export const JOB_SORT_KEYS: JobSortKey[] = ['recent', 'status', 'startDate', 'client', 'lead'];
+export const JOB_GROUP_KEYS: JobGroupKey[] = ['none', 'client', 'lead', 'company', 'state'];
 
 export interface SortableJob {
   status: string;
   scheduledDate: string | null;
   leadName?: string | null;
+  clientName?: string | null;
   clientCompany: string | null;
   jobState: string | null;
 }
@@ -60,6 +61,15 @@ export function sortJobs<T extends SortableJob>(jobs: T[], sortBy: JobSortKey): 
       if (!bl) return -1;
       return al.localeCompare(bl);
     });
+  } else if (sortBy === 'client') {
+    out.sort((a, b) => {
+      const ac = a.clientName ?? null;
+      const bc = b.clientName ?? null;
+      if (!ac && !bc) return 0;
+      if (!ac) return 1;
+      if (!bc) return -1;
+      return ac.localeCompare(bc);
+    });
   }
   return out;
 }
@@ -74,7 +84,7 @@ export function groupJobs<T extends SortableJob>(
   jobs: T[],
   groupBy: JobGroupKey,
   // Localized labels for jobs missing the group field ("Sin líder", …).
-  emptyLabels: { lead: string; company: string; state: string },
+  emptyLabels: { client: string; lead: string; company: string; state: string },
   // Display transform for state section titles ("CO" → "Colorado"). Rows
   // store abbreviations, but headers should spell the state out.
   formatState?: (value: string) => string,
@@ -83,6 +93,7 @@ export function groupJobs<T extends SortableJob>(
 
   const keyOf = (j: T): { label: string; empty: boolean } => {
     const raw =
+      groupBy === 'client' ? j.clientName :
       groupBy === 'lead' ? j.leadName :
       groupBy === 'company' ? j.clientCompany :
       j.jobState;

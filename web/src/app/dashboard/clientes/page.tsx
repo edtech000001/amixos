@@ -14,6 +14,7 @@ import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
+import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { useLang } from '@/i18n/LangProvider';
 import {
@@ -79,7 +80,7 @@ export default function ClientesPage() {
     Map<string, { name: string; role: string | null }[]>
   >(new Map());
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedSearch(business ? `search.clients.${business.id}` : null);
   const [loading, setLoading] = useState(true);
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Client | null>(null);

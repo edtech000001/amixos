@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { delegateJob } from '@amixos/shared/lib/delegation';
+import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
@@ -580,7 +581,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             <h1 className="text-xl font-bold text-gray-900">
               {job.title}
-              {job.external_ref ? <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref}</span> : null}
+              {/* Every non-proposal job shows a reference: imported project id,
+                 else a stable short code so old/manual jobs still have an ID.
+                 Proposals show their estimate number above instead. */}
+              {!isProposal ? (
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref?.trim() || jobShortCode(job.id)}</span>
+              ) : job.external_ref ? (
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref}</span>
+              ) : null}
             </h1>
             {clientName && (
               <Link href={`/dashboard/clientes/${job.client_id}?from=job&job=${job.id}`}
@@ -797,27 +805,30 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
             </div>
 
-            {/* Cancel — separate row, confirmed (no longer a one-tap list action). */}
-            {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
-              <Button variant="secondary" size="sm" loading={updatingStatus}
-                onClick={() => { if (window.confirm(td.cancelJobConfirm)) void updateStatus('cancelled'); }}>
-                <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
-              </Button>
-            )}
-
-            {/* Archive — the exit for completed work that will never be
-               invoiced (internal hours etc). Reversible. */}
-            {job.status === 'completed' && can.seeAllJobs(currentRole) && (
-              <Button variant="secondary" size="sm" onClick={async () => {
-                const archive = !job.archived_at;
-                if (archive && !window.confirm(full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'))) return;
-                const archived_at = archive ? new Date().toISOString() : null;
-                await supabase.from('jobs').update({ archived_at }).eq('id', id);
-                if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', id, { title: job.title });
-                setJob(prev => prev ? { ...prev, archived_at } : prev);
-              }}>
-                <Archive size={14} className="mr-1.5"/> {job.archived_at ? td.unarchiveBtn : td.archiveBtn}
-              </Button>
+            {/* Cancel + Archive share one row (side by side) to avoid stacked
+               dead space. Both are confirmed / reversible. */}
+            {(!['cancelled', 'declined', 'invoiced'].includes(job.status) ||
+              (job.status === 'completed' && can.seeAllJobs(currentRole))) && (
+              <div className="flex justify-center gap-3 flex-wrap">
+                {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
+                  <Button variant="secondary" size="sm" loading={updatingStatus}
+                    onClick={() => { if (window.confirm(td.cancelJobConfirm)) void updateStatus('cancelled'); }}>
+                    <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
+                  </Button>
+                )}
+                {job.status === 'completed' && can.seeAllJobs(currentRole) && (
+                  <Button variant="secondary" size="sm" onClick={async () => {
+                    const archive = !job.archived_at;
+                    if (archive && !window.confirm(full.dashboard.jobs.confirmArchiveBulk.replace('{{count}}', '1'))) return;
+                    const archived_at = archive ? new Date().toISOString() : null;
+                    await supabase.from('jobs').update({ archived_at }).eq('id', id);
+                    if (business) void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', id, { title: job.title });
+                    setJob(prev => prev ? { ...prev, archived_at } : prev);
+                  }}>
+                    <Archive size={14} className="mr-1.5"/> {job.archived_at ? td.unarchiveBtn : td.archiveBtn}
+                  </Button>
+                )}
+              </div>
             )}
 
             {/* Un-invoice — undo an accidental "facturado". */}

@@ -640,7 +640,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                   const statusLabel = tStatus[statusKey] ?? inv.status;
                   const statusColor = STATUS_COLORS[inv.status] ?? 'bg-gray-100 text-gray-500';
                   return (
-                    <Link key={inv.id} href={`/dashboard/facturas/${inv.id}`}
+                    <Link key={inv.id} href={`/dashboard/facturas/${inv.id}?from=client&client=${id}`}
                       className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>

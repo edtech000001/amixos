@@ -10,13 +10,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ClipboardList, Users, Link2, User, Activity, ArrowLeft, FileText, LifeBuoy, Upload, DollarSign } from 'lucide-react';
+import { Building2, ClipboardList, Users, Link2, User, Activity, ArrowLeft, FileText, LifeBuoy, Upload } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 
-export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'precios' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
+export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
 
 interface Props {
   activeTab?: SettingsTab;
@@ -38,7 +38,6 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
     { key: 'trabajos', label: t.tabs.trabajos, icon: ClipboardList, show: isAdmin },
     { key: 'clientes', label: t.tabs.clientes, icon: Users, show: isAdmin },
     { key: 'empleados', label: t.tabs.empleados, icon: Users, show: isAdmin },
-    { key: 'precios', label: t.tabs.precios, icon: DollarSign, show: isAdmin },
     { key: 'facturas', label: t.tabs.facturas, icon: FileText, show: isAdmin },
     { key: 'conexiones', label: t.tabs.conexiones, icon: Link2, show: isAdmin },
     { key: 'importar', label: t.tabs.importar, icon: Upload, show: isAdmin },
