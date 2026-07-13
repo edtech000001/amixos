@@ -729,6 +729,8 @@ export type DashboardDict = {
       colUnitPriceShort: string;
       autopriceBtn: string;
       autopriceVerify: string;
+      autopriceNoMatch: string;
+      autopriceAlreadyPriced: string;
       measuredNote: string;
       tax: string;
       discount: string;
@@ -3179,6 +3181,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         colUnitPriceShort: 'P/u',
         autopriceBtn: 'Autoprecio',
         autopriceVerify: 'Precios calculados automáticamente — por favor verifica cada línea, no siempre es exacto.',
+        autopriceNoMatch: 'Ninguna línea coincidió con un precio. Agrega términos de coincidencia (ej. "torre", "reparación") a los precios en la Lista de precios.',
+        autopriceAlreadyPriced: 'Las líneas que ya tienen un precio no se cambian con Autoprecio. Borra el precio de una línea si quieres recalcularla.',
         measuredNote: 'medido {{qty}}',
         tax: 'Impuesto ({{rate}}%)',
         discount: 'Descuento',
@@ -5625,6 +5629,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         colUnitPriceShort: 'U/p',
         autopriceBtn: 'Autoprice',
         autopriceVerify: 'Prices were auto-calculated — please double-check each line, it is not always exact.',
+        autopriceNoMatch: 'No lines matched a price. Add match terms (e.g. "tower", "repair") to your items in the Price sheet.',
+        autopriceAlreadyPriced: 'Lines that already have a price are left unchanged by Autoprice. Clear a line\'s price if you want it recalculated.',
         measuredNote: 'measured {{qty}}',
         tax: 'Tax ({{rate}}%)',
         discount: 'Discount',

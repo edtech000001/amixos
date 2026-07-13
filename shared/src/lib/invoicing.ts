@@ -13,6 +13,17 @@
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
 import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine } from './priceSheet';
+import { US_STATE_NAME_TO_ABBR } from './usStates';
+
+/** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
+ *  matches how per-state price overrides are keyed. Null/blank → null. */
+function normStateCode(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = s.trim();
+  if (!t) return null;
+  if (t.length === 2) return t.toUpperCase();
+  return US_STATE_NAME_TO_ABBR[t.toLowerCase()] ?? t.toUpperCase();
+}
 
 // Minimal shape of the Supabase client we rely on (web + mobile both satisfy it).
 type Supa = { from: (table: string) => any };
@@ -325,7 +336,7 @@ export async function createInvoicesFromJobs(
  *  actually changed. */
 export async function rebuildInvoiceLineItems(
   supabase: Supa,
-  opts: { invoiceId: string; itemTypeLabels: Record<string, string>; hideItemTypes?: boolean },
+  opts: { invoiceId: string; itemTypeLabels: Record<string, string>; hideItemTypes?: boolean; qtyField?: string | null },
 ): Promise<{ changed: boolean }> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -336,7 +347,7 @@ export async function rebuildInvoiceLineItems(
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title')
+    .select('id, title, custom_fields')
     .eq('invoice_id', opts.invoiceId)
     .order('created_at');
   const jobIds = (jobs ?? []).map((j: any) => j.id);
@@ -352,7 +363,7 @@ export async function rebuildInvoiceLineItems(
   const existing = (inv.line_items ?? []) as InvoiceLineItem[];
   const jobLines: InvoiceLineItem[] = [];
   for (const j of (jobs ?? []) as any[]) {
-    jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes }));
+    jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
   }
   // A job whose lines were hand-edited on the invoice keeps them verbatim —
   // re-deriving would silently undo the user's price/qty override.
@@ -579,32 +590,50 @@ export async function addJobsToInvoice(
 export async function autopriceInvoice(
   supabase: Supa,
   opts: { invoiceId: string; items: PriceSheetItem[]; tierId?: string | null; qtyField?: string | null },
-): Promise<{ matched: number }> {
-  if (!opts.items.length) return { matched: 0 };
+): Promise<{ matched: number; alreadyPriced: number }> {
+  if (!opts.items.length) return { matched: 0, alreadyPriced: 0 };
   const { data: inv } = await supabase
     .from('invoices')
-    .select('id, line_items, tax_rate, discount')
+    .select('id, line_items, tax_rate, discount, client_id')
     .eq('id', opts.invoiceId)
     .single();
-  if (!inv) return { matched: 0 };
+  if (!inv) return { matched: 0, alreadyPriced: 0 };
   const lines = (inv.line_items ?? []) as InvoiceLineItem[];
+
+  // Client's state is the fallback for per-state pricing when a job has no
+  // location state of its own (billed-to client sits in that state).
+  let clientState: string | null = null;
+  if (inv.client_id) {
+    const { data: cl } = await supabase.from('clients').select('state').eq('id', inv.client_id).single();
+    clientState = (cl as { state: string | null } | null)?.state ?? null;
+  }
 
   // Per-line state pricing + qty-from-custom-field: resolve each linked job's
   // state and custom fields in one query.
   const jobIds = Array.from(new Set(lines.map(l => l.job_id).filter(Boolean))) as string[];
-  const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null }>();
+  const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null; context: string }>();
   if (jobIds.length) {
-    const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields').in('id', jobIds);
-    for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null }[]) {
-      jobById.set(j.id, { job_state: j.job_state ?? null, custom_fields: j.custom_fields ?? null });
+    const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields, title, description, worker_notes').in('id', jobIds);
+    for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null; title: string | null; description: string | null; worker_notes: string | null }[]) {
+      const cf = Object.values((j.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ');
+      jobById.set(j.id, {
+        job_state: j.job_state ?? null,
+        custom_fields: j.custom_fields ?? null,
+        // Extra text the matcher can use: title + description + notes + custom
+        // field values (so "Pivot Repair" matches a job whose description says
+        // "reparación", even if the line title is just the job name).
+        context: `${j.title ?? ''} ${j.description ?? ''} ${j.worker_notes ?? ''} ${cf}`,
+      });
     }
   }
 
   let matched = 0;
+  let alreadyPriced = 0;
   const next = lines.map(li => {
     // Don't override a line that already has a price.
-    if ((Number(li.rate) || 0) > 0) return li;
-    const hit = suggestPriceItem(li.description ?? '', opts.items);
+    if ((Number(li.rate) || 0) > 0) { alreadyPriced++; return li; }
+    const ctx = li.job_id ? (jobById.get(li.job_id)?.context ?? '') : '';
+    const hit = suggestPriceItem(`${li.description ?? ''} ${ctx}`, opts.items);
     if (!hit) return li;
     const j = li.job_id ? jobById.get(li.job_id) : undefined;
     const qty = Number(li.qty) || 0;
@@ -612,17 +641,18 @@ export async function autopriceInvoice(
     // qty, then a number pulled from the description.
     const fromField = placeholderQtyFor({ custom_fields: j?.custom_fields ?? null }, opts.qtyField);
     const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
-    const state = j?.job_state ?? null;
+    // Job's own state (normalized), else the client's state.
+    const state = normStateCode(j?.job_state) ?? normStateCode(clientState);
     const priced = autopriceLine(hit.item, measured, { state, tierId: opts.tierId });
     matched++;
     return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
   });
-  if (!matched) return { matched: 0 };
+  if (!matched) return { matched: 0, alreadyPriced };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
   await supabase
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
-  return { matched };
+  return { matched, alreadyPriced };
 }

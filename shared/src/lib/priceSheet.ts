@@ -6,6 +6,8 @@
 //   'per_unit' → amount = quantity × rate  (per foot / per cut / per item)
 //   'flat'     → amount = rate             (corner, loading fee; qty forced 1)
 
+import { US_STATE_NAME_TO_ABBR } from './usStates';
+
 export type PricingMode = 'per_unit' | 'flat';
 
 export interface PriceSheetItem {
@@ -100,7 +102,11 @@ export function applicableRate(item: PriceSheetItem, ctx?: RateContext | string 
     if (Number.isFinite(hit)) return hit;
   }
   if (c.state && item.stateRates) {
-    const hit = item.stateRates[c.state.trim().toUpperCase()];
+    // Overrides are keyed by 2-letter code; tolerate a full state name being
+    // passed ("Kansas" → "KS") so job/client states in either form still match.
+    const t = c.state.trim();
+    const code = t.length === 2 ? t.toUpperCase() : (US_STATE_NAME_TO_ABBR[t.toLowerCase()] ?? t.toUpperCase());
+    const hit = item.stateRates[code];
     if (Number.isFinite(hit)) return hit;
   }
   return item.rate;

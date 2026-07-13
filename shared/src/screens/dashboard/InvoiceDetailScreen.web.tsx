@@ -224,6 +224,9 @@ export function InvoiceDetailScreen({
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
   const isPartial = invoice.status === 'sent' && paidSoFar > 0;
+  // Line items are only editable while the invoice is a Draft. Once sent/paid
+  // the document is frozen — hide Edit/Move/Remove/Add job (Undo sent re-opens it).
+  const editable = invoice.status === 'draft';
 
   const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
 
@@ -376,7 +379,7 @@ export function InvoiceDetailScreen({
               const q = Number(li.qty) || 0;
               const r = Number(li.rate) || 0;
               const jid = li.job_id ?? null;
-              const showActions = !!jid && !!onRemoveJob && !seen.has(jid);
+              const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (
                 <div key={idx} className="flex items-center justify-between gap-3 py-2.5 border-b border-gray-200">
@@ -407,7 +410,7 @@ export function InvoiceDetailScreen({
                           {tInv.jobsSection.removeBtn}
                         </button>
                       </>
-                    ) : !jid && (onEditManualItem || onRemoveManualItem) ? (
+                    ) : editable && !jid && (onEditManualItem || onRemoveManualItem) ? (
                       <>
                         {onEditManualItem ? (
                           <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
@@ -428,7 +431,7 @@ export function InvoiceDetailScreen({
             });
           })()}
 
-          {onAddJob ? (
+          {editable && onAddJob ? (
             <button onClick={onAddJob} disabled={jobBusy} className="mt-3 text-sm font-semibold text-primary hover:underline disabled:opacity-40">
               + {tInv.jobsSection.addBtn}
             </button>

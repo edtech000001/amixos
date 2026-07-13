@@ -151,7 +151,7 @@ export function ClientFormModal({
   const guardedClose = () => {
     const s = full.common.unsavedChanges;
     if (!dirty) { onClose(); return; }
-    void confirm({ title: s.title, message: s.body, destructive: true }).then(ok => { if (ok) onClose(); });
+    void confirm({ title: s.title, message: s.body, destructive: true, confirmText: s.discard, cancelText: s.stay }).then(ok => { if (ok) onClose(); });
   };
 
   if (!open) return null;

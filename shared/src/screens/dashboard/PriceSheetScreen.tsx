@@ -178,7 +178,9 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
   const addAllStates = () => {
     if (!draft) return;
     const have = new Set(draft.stateRates.map(sr => sr.state.trim().toUpperCase()).filter(Boolean));
-    const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: draft.rate }));
+    // Add the state names with BLANK rates so you can fill them in and see at a
+    // glance which are done. Blank rows aren't saved until you enter a price.
+    const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: '' }));
     setDraftKey('stateRates', [...draft.stateRates, ...additions]);
   };
 

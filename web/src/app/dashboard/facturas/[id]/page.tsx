@@ -225,8 +225,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   const runAutoprice = async () => {
     if (!priceItems.length) return;
-    const { matched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    const { matched, alreadyPriced } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
     if (matched) { setShowInvVerify(true); await reloadInvoice(); }
+    else void alertMessage({ message: alreadyPriced > 0 ? tj.detail.autopriceAlreadyPriced : tj.detail.autopriceNoMatch });
   };
 
   const fetchInvoiceRow = async () => {
@@ -397,7 +398,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     void (async () => {
       // Sync a draft invoice's line items with its jobs' current items first,
       // so amounts reflect items added after the invoice was created.
-      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false });
+      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase.from('invoices')
           .select('*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')

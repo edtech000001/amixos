@@ -224,6 +224,8 @@ export function InvoiceDetailScreen({
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
   const isPartial = invoice.status === 'sent' && paidSoFar > 0;
+  // Line items are editable only while Draft; frozen once sent/paid (Undo sent re-opens).
+  const editable = invoice.status === 'draft';
 
   // All invoice dates render as "Mayo 24, 2026" for consistency with the
   // rest of the app. Locale comes from the invoice's printed-language
@@ -362,7 +364,7 @@ export function InvoiceDetailScreen({
             const q = Number(li.qty) || 0;
             const r = Number(li.rate) || 0;
             const jid = li.job_id ?? null;
-            const showActions = !!jid && !!onRemoveJob && !seen.has(jid);
+            const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
             if (jid) seen.add(jid);
             return (
               <View key={idx} className="py-2.5 border-b border-gray-200">
@@ -395,7 +397,7 @@ export function InvoiceDetailScreen({
                       <Text className="text-xs font-semibold text-red-500">{tInv.jobsSection.removeBtn}</Text>
                     </Pressable>
                   </View>
-                ) : !jid && (onEditManualItem || onRemoveManualItem) ? (
+                ) : editable && !jid && (onEditManualItem || onRemoveManualItem) ? (
                   <View className="flex-row justify-end gap-4 mt-1.5">
                     {onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
@@ -414,7 +416,7 @@ export function InvoiceDetailScreen({
           });
         })()}
 
-        {onAddJob ? (
+        {editable && onAddJob ? (
           <Pressable onPress={onAddJob} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
             <Text className="text-sm font-semibold text-primary">+ {tInv.jobsSection.addBtn}</Text>
           </Pressable>

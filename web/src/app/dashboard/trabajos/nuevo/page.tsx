@@ -450,13 +450,22 @@ function NuevoTrabajoContent() {
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
-                <select value={status} onChange={e => setStatus(e.target.value as any)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                  <option value="posible">{tStatuses.posible}</option>
-                  <option value="scheduled">{tStatuses.scheduled}</option>
-                  <option value="in_progress">{tStatuses.in_progress}</option>
-                  <option value="completed">{tStatuses.completed}</option>
-                </select>
+                {/* Statuses the form can't represent (invoiced/sent/accepted/…)
+                   are shown READ-ONLY — editing must not silently downgrade an
+                   invoiced job. Change those from the job detail's pipeline. */}
+                {(!loadedStatus || ['posible', 'scheduled', 'in_progress', 'completed'].includes(loadedStatus)) ? (
+                  <select value={status} onChange={e => setStatus(e.target.value as any)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                    <option value="posible">{tStatuses.posible}</option>
+                    <option value="scheduled">{tStatuses.scheduled}</option>
+                    <option value="in_progress">{tStatuses.in_progress}</option>
+                    <option value="completed">{tStatuses.completed}</option>
+                  </select>
+                ) : (
+                  <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500">
+                    {(tStatuses as Record<string, string>)[loadedStatus] ?? loadedStatus}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
@@ -1237,15 +1246,22 @@ function NuevoTrabajoContent() {
 
         let finalJobId: string;
         if (editId) {
-          // Persist the (possibly changed) status — previously omitted, so
-          // status edits silently didn't apply. Stamp the pipeline timestamp
-          // only on a real transition (mirrors the detail-page stepper / 074).
-          const jobUpdate: any = { ...jobData, status };
-          if (status !== loadedStatus) {
+          // Preserve the ORIGINAL status unless the user actually changed the
+          // dropdown. The form only represents posible/scheduled/in_progress/
+          // completed, so statuses like `invoiced`/`sent`/`accepted` load as
+          // "scheduled" — writing that back would silently downgrade the job.
+          // Compare against the loaded status mapped the same way to tell a real
+          // edit from a no-op, then write the true original when untouched.
+          const mappedLoaded = loadedStatus && ['in_progress', 'posible', 'completed'].includes(loadedStatus)
+            ? loadedStatus : 'scheduled';
+          const userChangedStatus = status !== mappedLoaded;
+          const statusToWrite = userChangedStatus ? status : (loadedStatus ?? status);
+          const jobUpdate: any = { ...jobData, status: statusToWrite };
+          if (userChangedStatus) {
             const nowIso = new Date().toISOString();
-            if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
-            else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
-            else if (status === 'completed') jobUpdate.completed_at = nowIso;
+            if (statusToWrite === 'scheduled') jobUpdate.scheduled_at = nowIso;
+            else if (statusToWrite === 'in_progress') jobUpdate.in_progress_at = nowIso;
+            else if (statusToWrite === 'completed') jobUpdate.completed_at = nowIso;
           }
           const { error: jobErr } = await supabase.from('jobs').update(jobUpdate).eq('id', editId);
           if (jobErr) throw new Error(jobErr.message);

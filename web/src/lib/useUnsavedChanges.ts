@@ -54,7 +54,7 @@ export function useUnsavedChanges(dirty: boolean): (proceed: () => void) => void
         proceed();
         return;
       }
-      void confirm({ title: s.title, message: s.body, destructive: true }).then(ok => {
+      void confirm({ title: s.title, message: s.body, destructive: true, confirmText: s.discard, cancelText: s.stay }).then(ok => {
         if (ok) {
           bypass.current = true;
           proceed();

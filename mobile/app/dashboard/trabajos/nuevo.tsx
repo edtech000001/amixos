@@ -673,17 +673,28 @@ export default function NuevoTrabajoRoute() {
                (no scheduling → no status/priority). */
             <View className="flex-row gap-3 mt-3">
               <View className="flex-1">
-                <Select
-                  label={t.statusLabel}
-                  value={status}
-                  onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress' | 'completed')}
-                  options={[
-                    { value: 'posible', label: tStatuses.posible },
-                    { value: 'scheduled', label: tStatuses.scheduled },
-                    { value: 'in_progress', label: tStatuses.in_progress },
-                    { value: 'completed', label: tStatuses.completed },
-                  ]}
-                />
+                {/* Statuses the form can't represent (invoiced/sent/…) are shown
+                   READ-ONLY so editing can't downgrade an invoiced job. */}
+                {(!loadedStatus || ['posible', 'scheduled', 'in_progress', 'completed'].includes(loadedStatus)) ? (
+                  <Select
+                    label={t.statusLabel}
+                    value={status}
+                    onValueChange={(v) => setStatus(v as 'posible' | 'scheduled' | 'in_progress' | 'completed')}
+                    options={[
+                      { value: 'posible', label: tStatuses.posible },
+                      { value: 'scheduled', label: tStatuses.scheduled },
+                      { value: 'in_progress', label: tStatuses.in_progress },
+                      { value: 'completed', label: tStatuses.completed },
+                    ]}
+                  />
+                ) : (
+                  <>
+                    <Text className="text-sm font-medium text-gray-700 mb-1.5">{t.statusLabel}</Text>
+                    <View className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                      <Text className="text-sm text-gray-500">{(tStatuses as Record<string, string>)[loadedStatus] ?? loadedStatus}</Text>
+                    </View>
+                  </>
+                )}
               </View>
               <View className="flex-1">
                 <Select
@@ -1453,12 +1464,19 @@ export default function NuevoTrabajoRoute() {
           // Persist the (possibly changed) status — previously omitted, so
           // status edits silently didn't apply. Stamp the pipeline timestamp
           // only on a real transition (mirrors the detail stepper / 074).
-          const jobUpdate: Record<string, unknown> = { ...jobData, status };
-          if (status !== loadedStatus) {
+          // Preserve the ORIGINAL status unless the user actually changed the
+          // picker. Statuses the form can't represent (invoiced/sent/accepted/…)
+          // load as "scheduled"; writing that back would downgrade the job.
+          const mappedLoaded = loadedStatus && ['in_progress', 'posible', 'completed'].includes(loadedStatus)
+            ? loadedStatus : 'scheduled';
+          const userChangedStatus = status !== mappedLoaded;
+          const statusToWrite = userChangedStatus ? status : (loadedStatus ?? status);
+          const jobUpdate: Record<string, unknown> = { ...jobData, status: statusToWrite };
+          if (userChangedStatus) {
             const nowIso = new Date().toISOString();
-            if (status === 'scheduled') jobUpdate.scheduled_at = nowIso;
-            else if (status === 'in_progress') jobUpdate.in_progress_at = nowIso;
-            else if (status === 'completed') jobUpdate.completed_at = nowIso;
+            if (statusToWrite === 'scheduled') jobUpdate.scheduled_at = nowIso;
+            else if (statusToWrite === 'in_progress') jobUpdate.in_progress_at = nowIso;
+            else if (statusToWrite === 'completed') jobUpdate.completed_at = nowIso;
           }
           const upRes = await queuedUpdate({ table: 'jobs', match: { id: editId }, payload: jobUpdate, businessId: business.id, label: `Trabajo: ${title.trim()}` });
           jobQueued = upRes.queued;

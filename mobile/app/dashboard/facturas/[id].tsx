@@ -221,8 +221,9 @@ export default function FacturaDetailRoute() {
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
   const runAutoprice = async () => {
     if (!priceItems.length) return;
-    const { matched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    const { matched, alreadyPriced } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
     if (matched) { setShowInvVerify(true); await reloadInvoice(); }
+    else Alert.alert('', alreadyPriced > 0 ? full.dashboard.jobs.detail.autopriceAlreadyPriced : full.dashboard.jobs.detail.autopriceNoMatch);
   };
 
   const removeJob = (jobId: string) => {
@@ -542,7 +543,7 @@ export default function FacturaDetailRoute() {
     if (!business) return;
     void (async () => {
       // Sync a draft invoice's line items with its jobs' current items first.
-      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false });
+      await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field });
       const [{ data }, { data: tpls }] = await Promise.all([
         supabase
           .from('invoices')
