@@ -44,12 +44,13 @@ interface Draft {
   stateRates: DraftState[];
   tierRates: Record<string, string>;
   matchTerms: string;
+  isAddon: boolean;
 }
 
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
+  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
@@ -93,7 +94,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
@@ -129,6 +130,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
+    isAddon: i.isAddon,
   });
 
   const save = async () => {
@@ -154,6 +156,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
         return Object.keys(tr).length ? tr : null;
       })(),
       match_terms: draft.matchTerms.trim() || null,
+      is_addon: draft.isAddon,
     };
     if (draft.id) await supabase.from('price_sheet_items').update(payload).eq('id', draft.id);
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
@@ -266,9 +269,12 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 {list.map((i, idx) => (
                   <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{i.name}</Text>
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-sm font-semibold text-gray-900 flex-shrink" numberOfLines={1}>{i.name}</Text>
+                        {i.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
+                      </View>
                       <Text className="text-xs text-gray-500 mt-1">
-                        {priceItemLabel(i, t.flatWord)}
+                        {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
                         {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </Text>
                     </View>
@@ -317,6 +323,16 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                     </Pressable>
                   ))}
                 </View>
+
+                <Pressable onPress={() => setDraftKey('isAddon', !draft.isAddon)} className="flex-row items-start gap-2.5 mb-4">
+                  <View className={`mt-0.5 w-5 h-5 rounded border items-center justify-center ${draft.isAddon ? 'bg-primary border-primary' : 'bg-white border-gray-300'}`}>
+                    {draft.isAddon ? <Check size={14} color="#fff" /> : null}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-gray-700">{t.addonLabel}</Text>
+                    <Text className="text-[11px] text-gray-400">{t.addonHint}</Text>
+                  </View>
+                </Pressable>
 
                 <Text className="text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</Text>
                 <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3 mb-4">

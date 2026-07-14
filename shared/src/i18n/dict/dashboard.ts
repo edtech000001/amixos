@@ -1317,6 +1317,9 @@ export type DashboardDict = {
       matchTermsLabel: string;
       matchTermsHint: string;
       matchTermsPlaceholder: string;
+      addonLabel: string;
+      addonHint: string;
+      addonBadge: string;
       clientTierLabel: string;
       clientTierNone: string;
     };
@@ -3757,6 +3760,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         matchTermsLabel: 'Términos para autoprecio',
         matchTermsHint: 'Opcional. Otras formas de decirlo, siglas o abreviaturas — ayudan al botón Autoprecio a encontrar este precio.',
         matchTermsPlaceholder: 'torre, tower, pivote nuevo…',
+        addonLabel: 'Es un cargo adicional (add-on)',
+        addonHint: 'Se suma al precio base de cualquier línea cuyo texto contenga sus términos (ej. Boombacks +$0.25/pie). No es un precio base por sí solo.',
+        addonBadge: 'Add-on',
         clientTierLabel: 'Nivel de precio',
         clientTierNone: 'Estándar (base)',
       },
@@ -6205,6 +6211,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         matchTermsLabel: 'Auto-price terms',
         matchTermsHint: 'Optional. Other phrasings, acronyms or abbreviations — help the Auto-price button find this price.',
         matchTermsPlaceholder: 'tower, pivot, new pivot…',
+        addonLabel: 'This is an add-on (surcharge)',
+        addonHint: 'Adds on top of the base price for any line whose text contains its terms (e.g. Boombacks +$0.25/ft). Not a base price on its own.',
+        addonBadge: 'Add-on',
         clientTierLabel: 'Price tier',
         clientTierNone: 'Standard (base)',
       },

@@ -46,12 +46,13 @@ interface Draft {
   stateRates: DraftState[];
   tierRates: Record<string, string>;
   matchTerms: string;
+  isAddon: boolean;
 }
 
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '',
+  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
@@ -90,7 +91,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
@@ -129,6 +130,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
+    isAddon: i.isAddon,
   });
 
   const save = async () => {
@@ -154,6 +156,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
         return Object.keys(tr).length ? tr : null;
       })(),
       match_terms: draft.matchTerms.trim() || null,
+      is_addon: draft.isAddon,
     };
     if (draft.id) await supabase.from('price_sheet_items').update(payload).eq('id', draft.id);
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
@@ -259,10 +262,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900 truncate">{i.name}</p>
+                        {i.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
                         {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{t.inactiveBadge}</span> : null}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        {priceItemLabel(i, t.flatWord)}
+                        {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
                         {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </p>
                     </div>
@@ -311,6 +315,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 </button>
               ))}
             </div>
+
+            <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
+              <input type="checkbox" checked={draft.isAddon} onChange={e => setDraft({ ...draft, isAddon: e.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+              <span>
+                <span className="block text-sm font-semibold text-gray-700">{t.addonLabel}</span>
+                <span className="block text-[11px] text-gray-400">{t.addonHint}</span>
+              </span>
+            </label>
 
             <label className="block text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</label>
             <div className="mb-4 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">

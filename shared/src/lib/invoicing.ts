@@ -12,7 +12,7 @@
 // the same PostgREST query builder, so one implementation serves both.
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
-import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine } from './priceSheet';
+import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine, matchingAddons } from './priceSheet';
 import { US_STATE_NAME_TO_ABBR } from './usStates';
 
 /** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
@@ -633,8 +633,10 @@ export async function autopriceInvoice(
     // Don't override a line that already has a price.
     if ((Number(li.rate) || 0) > 0) { alreadyPriced++; return li; }
     const ctx = li.job_id ? (jobById.get(li.job_id)?.context ?? '') : '';
-    const hit = suggestPriceItem(`${li.description ?? ''} ${ctx}`, opts.items);
+    const matchText = `${li.description ?? ''} ${ctx}`;
+    const hit = suggestPriceItem(matchText, opts.items);
     if (!hit) return li;
+    const addons = matchingAddons(matchText, opts.items);
     const j = li.job_id ? jobById.get(li.job_id) : undefined;
     const qty = Number(li.qty) || 0;
     // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
@@ -643,7 +645,7 @@ export async function autopriceInvoice(
     const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
     // Job's own state (normalized), else the client's state.
     const state = normStateCode(j?.job_state) ?? normStateCode(clientState);
-    const priced = autopriceLine(hit.item, measured, { state, tierId: opts.tierId });
+    const priced = autopriceLine(hit.item, measured, { state, tierId: opts.tierId }, addons);
     matched++;
     return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
   });

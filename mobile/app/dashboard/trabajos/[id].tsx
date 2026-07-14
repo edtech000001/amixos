@@ -49,7 +49,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { can } from '@amixos/shared/lib/permissions';
-import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h } from '@amixos/shared/lib/format';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -629,7 +629,7 @@ export default function JobDetailRoute() {
   useEffect(() => {
     if (!business) return;
     void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -831,11 +831,13 @@ export default function JobDetailRoute() {
       if (!r.description.trim()) return r;
       // Don't override a line that already has a price.
       if ((parseFloat(r.unit_price) || 0) > 0) return r;
-      const hit = suggestPriceItem(`${r.description} ${ctxText}`, priceItems);
+      const matchText = `${r.description} ${ctxText}`;
+      const hit = suggestPriceItem(matchText, priceItems);
       if (!hit) return r;
+      const addons = matchingAddons(matchText, priceItems);
       const enteredQty = parseFloat(r.quantity);
       const measured = enteredQty > 1 ? enteredQty : (extractQuantity(r.description) ?? (enteredQty || 1));
-      const priced = autopriceLine(hit.item, measured, { state: job.job_state, tierId: clientTierId });
+      const priced = autopriceLine(hit.item, measured, { state: job.job_state, tierId: clientTierId }, addons);
       matched++;
       return { ...r, price_item_id: hit.item.id, quantity: String(priced.quantity), unit_price: String(priced.unitPrice), original_quantity: priced.originalQuantity };
     }));

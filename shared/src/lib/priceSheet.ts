@@ -25,6 +25,9 @@ export interface PriceSheetItem {
   tierRates: Record<string, number> | null;
   /** Alternate phrasings/acronyms for text auto-matching (already split). */
   matchTerms: string[];
+  /** true = a surcharge that STACKS on top of the matched base price during
+   *  autoprice (e.g. Boombacks +$0.25/ft), not a base price itself. */
+  isAddon: boolean;
   sortOrder: number;
   active: boolean;
 }
@@ -40,6 +43,7 @@ export interface PriceSheetRow {
   state_rates: Record<string, number> | null;
   tier_rates: Record<string, number> | null;
   match_terms: string | null;
+  is_addon?: boolean | null;
   sort_order: number;
   active: boolean;
 }
@@ -55,6 +59,7 @@ export function rowToPriceSheetItem(r: PriceSheetRow): PriceSheetItem {
     stateRates: normalizeStateRates(r.state_rates),
     tierRates: normalizeStateRates(r.tier_rates),
     matchTerms: splitMatchTerms(r.match_terms),
+    isAddon: r.is_addon === true,
     sortOrder: r.sort_order ?? 0,
     active: r.active !== false,
   };
@@ -129,29 +134,56 @@ export interface AutopricedLine {
  *   per_unit → bill the measured quantity at the state rate.
  *   flat     → bill 1 × rate, and remember the measurement in originalQuantity
  *              (unless it was already 1).
+ *
+ * `addons` are surcharges that STACK on top: per-unit add-ons raise the rate
+ * (base $3.50/ft + Boombacks $0.25/ft = $3.75/ft), flat add-ons add to the
+ * total. The billed rate is blended so quantity × unitPrice still equals amount.
  */
 export function autopriceLine(
   item: PriceSheetItem,
   measuredQty: number,
   ctx?: RateContext | string | null,
+  addons: PriceSheetItem[] = [],
 ): AutopricedLine {
-  const unitPrice = applicableRate(item, ctx);
+  const baseRate = applicableRate(item, ctx);
+  let perUnitAddon = 0;
+  let flatAddon = 0;
+  for (const a of addons) {
+    const r = applicableRate(a, ctx);
+    if (a.pricingMode === 'flat') flatAddon += r; else perUnitAddon += r;
+  }
+
   if (item.pricingMode === 'flat') {
     const measured = Number.isFinite(measuredQty) && measuredQty > 0 ? measuredQty : null;
+    // Flat base: base + flat add-ons, plus any per-unit add-ons × measurement.
+    const amount = round2(baseRate + flatAddon + perUnitAddon * (measured ?? 1));
     return {
       quantity: 1,
-      unitPrice,
+      unitPrice: amount,
       originalQuantity: measured && measured !== 1 ? measured : null,
-      amount: round2(unitPrice),
+      amount,
     };
   }
+
   const qty = Number.isFinite(measuredQty) && measuredQty > 0 ? measuredQty : 1;
-  return {
-    quantity: qty,
-    unitPrice,
-    originalQuantity: null,
-    amount: round2(qty * unitPrice),
-  };
+  const effRate = baseRate + perUnitAddon;
+  const amount = round2(qty * effRate + flatAddon);
+  // Clean rate when there's no flat add-on ($3.75); otherwise blend so the line
+  // total is exact.
+  const unitPrice = flatAddon ? round2(amount / qty) : round2(effRate);
+  return { quantity: qty, unitPrice, originalQuantity: null, amount };
+}
+
+/** All ACTIVE add-on items whose name or a match term appears in `text` — the
+ *  surcharges that stack onto a matched base line during autoprice. */
+export function matchingAddons(text: string, items: PriceSheetItem[]): PriceSheetItem[] {
+  const hay = norm(text);
+  if (!hay.trim()) return [];
+  return items.filter(item => {
+    if (!item.active || !item.isAddon) return false;
+    const terms = [item.name, ...item.matchTerms].map(norm).filter(t => t.length >= 2);
+    return terms.some(t => hay.includes(t));
+  });
 }
 
 /** Human summary for the picker/read view: "$3.50 / ft" or "$3,300 flat". */
@@ -189,7 +221,7 @@ export function suggestPriceItem(text: string, items: PriceSheetItem[]): PriceMa
   let bestLen = 0;
   let tiedAmbiguous = false;
   for (const item of items) {
-    if (!item.active) continue;
+    if (!item.active || item.isAddon) continue; // add-ons stack separately
     const terms = [item.name, ...item.matchTerms].map(norm).filter(Boolean);
     for (const term of terms) {
       if (term.length < 2) continue;
