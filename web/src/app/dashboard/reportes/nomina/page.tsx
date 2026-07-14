@@ -10,6 +10,7 @@ import { useLang } from '@/i18n/LangProvider';
 import {
   PayrollScreen,
   type PayrollScreenRow,
+  type LoanLedgerEntry,
 } from '@amixos/shared/screens/dashboard/PayrollScreen';
 import {
   getPayrollPeriod,
@@ -24,6 +25,7 @@ import {
 } from '@amixos/shared/lib/payroll';
 import type { FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { confirm as confirmDialog, alertMessage } from '@amixos/shared/ui/confirmBus';
 
 interface PaymentRow {
   id: string;
@@ -53,6 +55,8 @@ export default function NominaPage() {
   const [timesheets, setTimesheets] = useState<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }[]>([]);
   const [jobs, setJobs] = useState<PayrollJob[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [loanBalances, setLoanBalances] = useState<Record<string, number>>({});
+  const [loanEntries, setLoanEntries] = useState<Record<string, LoanLedgerEntry[]>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // Worker whose hours breakdown should reopen (back-from-job navigation or
@@ -99,13 +103,15 @@ export default function NominaPage() {
     if (!business) return;
     setLoading(true);
     const bid = business.id;
-    const [empRes, tsRes, jobRes, payRes] = await Promise.all([
+    const [empRes, tsRes, jobRes, payRes, loanRes] = await Promise.all([
       supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, active, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', bid),
       supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', bid)
         .gte('work_date', period.startStr).lte('work_date', period.endStr),
       supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
         .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
       supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at, components').eq('business_id', bid).eq('period_start', period.startStr),
+      // Loan ledger — full history; balance per worker = sum(amount) across ALL periods.
+      supabase.from('employee_loans').select('id, employee_id, amount, note, entry_date').eq('business_id', bid).order('entry_date', { ascending: false }),
     ]);
     setEmployees((empRes.data ?? []) as never);
     setTimesheets((tsRes.data ?? []) as never);
@@ -120,6 +126,20 @@ export default function NominaPage() {
       assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
     })));
     setPayments((payRes.data ?? []) as PaymentRow[]);
+    const balances: Record<string, number> = {};
+    const entries: Record<string, LoanLedgerEntry[]> = {};
+    ((loanRes.data ?? []) as { id: string; employee_id: string | null; amount: number | null; note: string | null; entry_date: string | null }[]).forEach(l => {
+      if (!l.employee_id) return;
+      balances[l.employee_id] = (balances[l.employee_id] ?? 0) + (Number(l.amount) || 0);
+      (entries[l.employee_id] ??= []).push({
+        id: l.id,
+        amount: Number(l.amount) || 0,
+        note: l.note,
+        entryDate: l.entry_date ?? '',
+      });
+    });
+    setLoanBalances(balances);
+    setLoanEntries(entries);
     setLoading(false);
   }, [business, supabase, period.startStr, period.endStr]);
 
@@ -287,6 +307,59 @@ export default function NominaPage() {
     setBusy(false);
   };
 
+  // Loan ledger writes: positive = loan given, negative = repayment/deduction.
+  const onAddLoan = async (employeeId: string, amount: number, note: string, entryDate: string) => {
+    if (!business || !(amount > 0)) return;
+    setBusy(true);
+    const { error } = await supabase.from('employee_loans').insert({
+      business_id: business.id,
+      employee_id: employeeId,
+      amount,
+      note: note || null,
+      entry_date: entryDate || undefined,
+      created_by: user?.id ?? null,
+    });
+    if (error) { setBusy(false); await alertMessage({ message: error.message }); return; }
+    const emp = employees.find(e => e.id === employeeId);
+    void logAudit(supabase, business.id, 'loan.given', 'employee', employeeId, {
+      name: emp ? `${emp.first_name} ${emp.last_name}` : undefined,
+      amount,
+    });
+    await load();
+    setBusy(false);
+  };
+
+  const onDeleteLoan = async (id: string) => {
+    if (!business) return;
+    const ok = await confirmDialog({ message: t.dashboard.reports.payroll.loanDeleteConfirm, destructive: true });
+    if (!ok) return;
+    setBusy(true);
+    await supabase.from('employee_loans').delete().eq('id', id).eq('business_id', business.id);
+    await load();
+    setBusy(false);
+  };
+
+  const onLoanRepayment = async (employeeId: string, amount: number, note?: string, entryDate?: string) => {
+    if (!business || !(amount > 0)) return;
+    setBusy(true);
+    const { error } = await supabase.from('employee_loans').insert({
+      business_id: business.id,
+      employee_id: employeeId,
+      amount: -Math.abs(amount),
+      note: note?.trim() || null,
+      entry_date: entryDate || undefined,
+      created_by: user?.id ?? null,
+    });
+    if (error) { setBusy(false); await alertMessage({ message: error.message }); return; }
+    const emp = employees.find(e => e.id === employeeId);
+    void logAudit(supabase, business.id, 'loan.repaid', 'employee', employeeId, {
+      name: emp ? `${emp.first_name} ${emp.last_name}` : undefined,
+      amount,
+    });
+    await load();
+    setBusy(false);
+  };
+
   return (
     <PayrollScreen
       loading={loading}
@@ -304,6 +377,12 @@ export default function NominaPage() {
       config={config}
       formulaFields={formulaFields}
       allWorkers={employees.filter(e => (e as { active?: boolean | null }).active !== false).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name}` }))}
+      loanBalances={loanBalances}
+      loanEntries={loanEntries}
+      loanWorkers={employees.map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name}` }))}
+      onAddLoan={onAddLoan}
+      onLoanRepayment={onLoanRepayment}
+      onDeleteLoan={onDeleteLoan}
       onHistoryPress={() => router.push('/dashboard/reportes/nomina/historial')}
       onConfigChange={onConfigChange}
       onMarkPaid={onMarkPaid}

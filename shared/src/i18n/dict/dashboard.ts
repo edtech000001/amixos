@@ -2324,6 +2324,28 @@ export type DashboardDict = {
       totalPending: string;
       ofTotal: string;
       bonusLabel: string;
+      loanTitle: string;
+      loanOwed: string;
+      loanDeductLabel: string;
+      loanNetToPay: string;
+      addLoanBtn: string;
+      loanAmountPlaceholder: string;
+      loanNotePlaceholder: string;
+      loanViewBtn: string;
+      loanHistoryTitle: string;
+      loanDateLabel: string;
+      loanGivenLabel: string;
+      loanPaymentLabel: string;
+      loanEmpty: string;
+      loanDeleteConfirm: string;
+      loanNewTitle: string;
+      loanSaveBtn: string;
+      loanSearchPlaceholder: string;
+      loanNoWorkerFound: string;
+      loanPickHint: string;
+      recordPaymentBtn: string;
+      loanPaymentNewTitle: string;
+      loanPickTitle: string;
       otShort: string;
       driveShort: string;
       freqBiweekly: string;
@@ -4749,6 +4771,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         totalPending: 'Pendiente por pagar',
         ofTotal: 'de {{total}}',
         bonusLabel: 'Bono (opcional)',
+        loanTitle: 'Préstamo',
+        loanOwed: 'debe',
+        loanDeductLabel: 'Descontar de este cheque',
+        loanNetToPay: 'Neto a pagar',
+        addLoanBtn: 'Agregar préstamo',
+        loanAmountPlaceholder: 'Monto del préstamo',
+        loanNotePlaceholder: 'Nota (opcional)',
+        loanViewBtn: 'Ver préstamos',
+        loanHistoryTitle: 'Préstamos',
+        loanDateLabel: 'Fecha',
+        loanGivenLabel: 'Préstamo',
+        loanPaymentLabel: 'Abono',
+        loanEmpty: 'Sin registros de préstamos',
+        loanDeleteConfirm: '¿Eliminar este registro?',
+        loanNewTitle: 'Nuevo préstamo',
+        loanSaveBtn: 'Guardar',
+        loanSearchPlaceholder: 'Buscar trabajador…',
+        loanNoWorkerFound: 'No se encontró ningún trabajador',
+        loanPickHint: 'Toca un trabajador para ver o agregar un préstamo',
+        recordPaymentBtn: 'Registrar abono',
+        loanPaymentNewTitle: 'Registrar abono',
+        loanPickTitle: 'Elegir trabajador',
         otShort: 'extra',
         driveShort: 'manejo',
         freqBiweekly: 'Quincenal',
@@ -7200,6 +7244,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         totalPending: 'Pending to pay',
         ofTotal: 'of {{total}}',
         bonusLabel: 'Bonus (optional)',
+        loanTitle: 'Loan',
+        loanOwed: 'owed',
+        loanDeductLabel: 'Deduct from this check',
+        loanNetToPay: 'Net to pay',
+        addLoanBtn: 'Add loan',
+        loanAmountPlaceholder: 'Loan amount',
+        loanNotePlaceholder: 'Note (optional)',
+        loanViewBtn: 'View loans',
+        loanHistoryTitle: 'Loans',
+        loanDateLabel: 'Date',
+        loanGivenLabel: 'Loan',
+        loanPaymentLabel: 'Payment',
+        loanEmpty: 'No loan entries yet',
+        loanDeleteConfirm: 'Delete this entry?',
+        loanNewTitle: 'New loan',
+        loanSaveBtn: 'Save',
+        loanSearchPlaceholder: 'Search worker…',
+        loanNoWorkerFound: 'No worker found',
+        loanPickHint: 'Tap a worker to view or add a loan',
+        recordPaymentBtn: 'Record payment',
+        loanPaymentNewTitle: 'Record payment',
+        loanPickTitle: 'Select worker',
         otShort: 'OT',
         driveShort: 'driving',
         freqBiweekly: 'Biweekly',

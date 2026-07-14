@@ -48,7 +48,10 @@ export type AuditAction =
   // Payroll
   | 'payroll.paid'
   | 'payroll.payment_deleted'
-  | 'payroll.payments_cleared';
+  | 'payroll.payments_cleared'
+  // Worker loans
+  | 'loan.given'
+  | 'loan.repaid';
 
 export type EntityType =
   | 'import'
@@ -59,7 +62,8 @@ export type EntityType =
   | 'member'
   | 'invite'
   | 'business'
-  | 'module';
+  | 'module'
+  | 'employee';
 
 // Accept any Supabase client variant — web and mobile create slightly
 // different generic instantiations and the strict shape pinning was tripping
@@ -130,4 +134,6 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'payroll.paid':        { es: 'Pago de nómina registrado', en: 'Payroll payment recorded' },
   'payroll.payment_deleted': { es: 'Pago de nómina eliminado', en: 'Payroll payment deleted' },
   'payroll.payments_cleared': { es: 'Pagos de nómina eliminados', en: 'Payroll payments deleted' },
+  'loan.given':          { es: 'Préstamo otorgado', en: 'Loan given' },
+  'loan.repaid':         { es: 'Abono a préstamo', en: 'Loan repayment' },
 };

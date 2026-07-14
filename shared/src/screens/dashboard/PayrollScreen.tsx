@@ -53,6 +53,14 @@ export interface PayrollScreenRow {
   breakdown?: PayrollBreakdown;
 }
 
+/** One loan-ledger entry. amount > 0 = loan given, < 0 = repayment/deduction. */
+export interface LoanLedgerEntry {
+  id: string;
+  amount: number;
+  note: string | null;
+  entryDate: string; // YYYY-MM-DD
+}
+
 export interface PayrollScreenProps {
   loading: boolean;
   frequency: PayrollFrequency;
@@ -93,6 +101,20 @@ export interface PayrollScreenProps {
   /** Every employee (active first) — powers the manual "Registrar pago"
    *  sheet for people not on the period's list (owner checks, ex-workers). */
   allWorkers?: { id: string; name: string }[];
+  /** Outstanding loan balance per employee (employeeId → amount owed). */
+  loanBalances?: Record<string, number>;
+  /** Full loan ledger per employee (employeeId → entries), newest first. */
+  loanEntries?: Record<string, LoanLedgerEntry[]>;
+  /** Every employee incl. inactive — powers the loans directory so ex-workers'
+   *  balances stay reachable after they leave. */
+  loanWorkers?: { id: string; name: string }[];
+  /** Give a worker a new loan/advance (increases what they owe). */
+  onAddLoan?: (employeeId: string, amount: number, note: string, entryDate: string) => void;
+  /** Record a repayment/deduction against a worker's loan (decreases it).
+   *  Check-deduction passes amount only; manual cash paydown adds note + date. */
+  onLoanRepayment?: (employeeId: string, amount: number, note?: string, entryDate?: string) => void;
+  /** Delete a single loan-ledger entry (mistaken loan/payment). */
+  onDeleteLoan?: (id: string) => void;
 }
 
 function fmt(n: number) {
@@ -127,6 +149,12 @@ export function PayrollScreen({
   formulaFields,
   onHistoryPress,
   allWorkers,
+  loanBalances,
+  loanEntries,
+  loanWorkers,
+  onAddLoan,
+  onLoanRepayment,
+  onDeleteLoan,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -313,11 +341,56 @@ export function PayrollScreen({
   };
   const componentsText = (c: Record<string, number> | null | undefined) =>
     c ? Object.entries(c).filter(([, v]) => v).map(([l, v]) => `${v} × ${l}`).join(' · ') : '';
+  const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // Loan tracker (pay sheet): deduction toward a loan; the loans overlay adds/
+  // deletes ledger entries and shows full history.
+  const [loanDeduct, setLoanDeduct] = useState('');
+  const [showLoans, setShowLoans] = useState(false);   // loans overlay visible (from pay sheet)
+  const [showAddLoan, setShowAddLoan] = useState(false);     // add-loan form
+  const [showAddPayment, setShowAddPayment] = useState(false); // record-cash-paydown form
+  const [loanAmount, setLoanAmount] = useState('');
+  const [loanNote, setLoanNote] = useState('');
+  const [loanDate, setLoanDate] = useState('');
+  // Header-level loans directory (reaches ex-workers not on this period).
+  const [loansOpen, setLoansOpen] = useState(false);
+  const [loanSearch, setLoanSearch] = useState('');
+  const [loanWorkerId, setLoanWorkerId] = useState<string | null>(null);
+  const [loanPickMode, setLoanPickMode] = useState(false); // picking a worker to start a loan
+  const loanBalanceOf = (employeeId: string) => loanBalances?.[employeeId] ?? 0;
+  const loanEntriesOf = (employeeId: string) => loanEntries?.[employeeId] ?? [];
+  const loanNameOf = (employeeId: string) => (loanWorkers ?? []).find(w => w.id === employeeId)?.name ?? '';
+  // Default directory: only workers who actually have loan activity, highest
+  // balance first.
+  const loanDirectory = useMemo(() => {
+    const q = loanSearch.trim().toLowerCase();
+    return (loanWorkers ?? [])
+      .filter(w => (loanBalanceOf(w.id) !== 0 || loanEntriesOf(w.id).length > 0) && w.name.toLowerCase().includes(q))
+      .sort((a, b) => (loanBalanceOf(b.id) - loanBalanceOf(a.id)) || a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loanWorkers, loanSearch, loanEntries, loanBalances]);
+  // Pick list (from "+ Add loan"): every worker, alphabetical.
+  const loanPickList = useMemo(() => {
+    const q = loanSearch.trim().toLowerCase();
+    return (loanWorkers ?? [])
+      .filter(w => w.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [loanWorkers, loanSearch]);
+
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
     setMethod('cash');
     setCheckNumber('');
     setBonus('');
+    setLoanDeduct('');
+    setShowLoans(false);
+    setShowAddLoan(false);
+    setShowAddPayment(false);
+    setLoanAmount('');
+    setLoanNote('');
+    setLoanDate('');
   };
   const confirmPay = () => {
     if (!payRow) return;
@@ -330,10 +403,48 @@ export function PayrollScreen({
       checkHoursOf(payRow),
       checkComponentsOf(payRow),
     );
+    const deduct = parseFloat(loanDeduct) || 0;
+    if (deduct > 0 && onLoanRepayment) onLoanRepayment(payRow.employeeId, deduct);
     setPayRow(null);
+  };
+  const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
+  const openLoans = () => { resetLoanForms(); setShowLoans(true); };
+  const openLoansGlobal = () => {
+    setLoanSearch('');
+    setLoanWorkerId(null);
+    setLoanPickMode(false);
+    resetLoanForms();
+    setLoansOpen(true);
+  };
+  // Directory tap → view history. Picker tap → open the new-loan form.
+  const selectLoanWorker = (id: string, openLoanForm = false) => {
+    setLoanWorkerId(id);
+    setLoanPickMode(false);
+    resetLoanForms();
+    setShowAddLoan(openLoanForm);
+  };
+  const startAddLoanPicker = () => { setLoanSearch(''); setLoanPickMode(true); };
+  // The worker a new loan/payment applies to: directory selection wins, else
+  // the pay-sheet worker.
+  const loanTargetId = loanWorkerId ?? payRow?.employeeId ?? null;
+  const submitAddLoan = () => {
+    if (!loanTargetId || !onAddLoan) return;
+    const amt = parseFloat(loanAmount) || 0;
+    if (amt <= 0) return;
+    onAddLoan(loanTargetId, amt, loanNote.trim(), loanDate || todayStr());
+    resetLoanForms();
+  };
+  // Manual cash paydown — a repayment NOT tied to a check, with its own date.
+  const submitAddPayment = () => {
+    if (!loanTargetId || !onLoanRepayment) return;
+    const amt = parseFloat(loanAmount) || 0;
+    if (amt <= 0) return;
+    onLoanRepayment(loanTargetId, amt, loanNote.trim(), loanDate || todayStr());
+    resetLoanForms();
   };
   // Live total shown big at the top of the sheet: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
+  const netToPay = modalTotal - (parseFloat(loanDeduct) || 0);
 
   // Coming back from a job / arriving from Payment history: open that
   // worker's breakdown once their row exists (the prop may arrive after the
@@ -415,19 +526,33 @@ export function PayrollScreen({
             <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPending)}</Text>
           </View>
         </View>
+
+        {/* Manual payment + loans — full-width so the list toolbar stays clean;
+           always available (even in an empty period, to reach ex-workers). */}
+        {canManage && ((allWorkers && allWorkers.length > 0) || onAddLoan) ? (
+          <View className="flex-row gap-3">
+            {allWorkers && allWorkers.length > 0 ? (
+              <Pressable onPress={openManual}
+                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white border border-gray-200 py-2.5 rounded-xl active:bg-gray-50">
+                <Banknote size={15} color="#374151" />
+                <Text className="text-sm font-semibold text-gray-700">{t.manualPayBtn}</Text>
+              </Pressable>
+            ) : null}
+            {onAddLoan ? (
+              <Pressable onPress={openLoansGlobal}
+                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white border border-gray-200 py-2.5 rounded-xl active:bg-gray-50">
+                <Landmark size={15} color="#374151" />
+                <Text className="text-sm font-semibold text-gray-700">{t.loanViewBtn}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         {rows.length > 0 ? (
           <View className="flex-row items-center justify-between -mt-1">
             <Text className="text-xs text-gray-400">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </Text>
-            <View className="flex-row items-center gap-2">
-            {canManage && allWorkers && allWorkers.length > 0 ? (
-              <Pressable onPress={openManual}
-                className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg active:bg-gray-50">
-                <Banknote size={13} color="#374151" />
-                <Text className="text-xs font-semibold text-gray-700">{t.manualPayBtn}</Text>
-              </Pressable>
-            ) : null}
             <View className="flex-row gap-1 bg-gray-100 p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 <Pressable key={v} onPress={() => changeView(v)}
@@ -435,7 +560,6 @@ export function PayrollScreen({
                   <Icon size={15} color={view === v ? '#111827' : '#9CA3AF'} />
                 </Pressable>
               ))}
-            </View>
             </View>
           </View>
         ) : null}
@@ -1056,10 +1180,103 @@ export function PayrollScreen({
               />
             </View>
 
+            {/* Loan tracker — outstanding balance + deduct from this check.
+               Full history / add / delete lives in the loans overlay. */}
+            {payRow && onAddLoan ? (
+              <View className="mb-4 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-sm font-semibold text-gray-700">{t.loanTitle}</Text>
+                  <Text className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
+                  </Text>
+                </View>
+                {loanBalanceOf(payRow.employeeId) > 0 ? (
+                  <View className="mt-2">
+                    <Text className="text-xs text-gray-500 mb-1">{t.loanDeductLabel}</Text>
+                    <TextInput value={loanDeduct} onChangeText={v => setLoanDeduct(v.replace(/[^0-9.]/g, ''))}
+                      placeholder="0.00" placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    {(parseFloat(loanDeduct) || 0) > 0 ? (
+                      <Text className="text-xs text-gray-500 mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-gray-900">{fmt(netToPay)}</Text></Text>
+                    ) : null}
+                  </View>
+                ) : null}
+                <Pressable onPress={openLoans} className="mt-2 self-start"><Text className="text-xs font-semibold text-primary">{t.loanViewBtn}</Text></Pressable>
+              </View>
+            ) : null}
+
             <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
             </Pressable>
           </View>
+
+          {/* Loans overlay — in-modal (iOS refuses a 2nd RNModal). History,
+             back-dated add, and per-entry delete for the current worker. */}
+          {payRow && showLoans ? (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end">
+              <Pressable onPress={() => setShowLoans(false)}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+              <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+                <View className="flex-row items-center justify-between mb-3">
+                  <View>
+                    <Text className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</Text>
+                    <Text className={`text-sm font-semibold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setShowLoans(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                </View>
+
+                {/* Add loan */}
+                {showAddLoan ? (
+                  <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <Text className="text-sm font-semibold text-gray-700">{t.loanNewTitle}</Text>
+                    <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
+                      placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor="#9CA3AF"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
+                    <View className="flex-row gap-2 mt-1">
+                      <Pressable onPress={() => setShowAddLoan(false)} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
+                      <Pressable onPress={submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) > 0 ? 'bg-primary active:opacity-90' : 'bg-primary/50'}`}><Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text></Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => { setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); setShowAddLoan(true); }}
+                    className="mb-3 py-2.5 rounded-xl bg-primary/10 items-center active:opacity-80">
+                    <Text className="text-sm font-semibold text-primary">+ {t.addLoanBtn}</Text>
+                  </Pressable>
+                )}
+
+                {/* History */}
+                <ScrollView className="max-h-80">
+                  {loanEntriesOf(payRow.employeeId).length === 0 ? (
+                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</Text>
+                  ) : loanEntriesOf(payRow.employeeId).map(e => {
+                    const isLoan = e.amount >= 0;
+                    return (
+                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-gray-50">
+                        <View className="flex-1 min-w-0">
+                          <Text className="text-sm font-semibold text-gray-900">
+                            <Text className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</Text>
+                            {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
+                          </Text>
+                          <Text className="text-xs text-gray-400">
+                            {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {e.note ? ` · ${e.note}` : ''}
+                          </Text>
+                        </View>
+                        {onDeleteLoan ? (
+                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          ) : null}
         </View>
       </RNModal>
 
@@ -1136,6 +1353,146 @@ export function PayrollScreen({
               </ScrollView>
             ) : (
               <Text className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</Text>
+            )}
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Loans directory — header entry point; reaches every worker incl.
+         ex-workers. Search to find anyone, tap to view/add/delete their loans. */}
+      <RNModal visible={loansOpen} transparent animationType="fade" onRequestClose={() => setLoansOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setLoansOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
+            <View className="items-center mb-3"><View className="w-10 h-1 bg-gray-200 rounded-full" /></View>
+
+            {loanWorkerId ? (
+              <>
+                <View className="flex-row items-center gap-2 mb-3">
+                  <Pressable onPress={() => setLoanWorkerId(null)} hitSlop={10} className="p-1"><ChevronLeft size={22} color="#111827" /></Pressable>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-lg font-bold text-gray-900" numberOfLines={1}>{loanNameOf(loanWorkerId)}</Text>
+                    <Text className={`text-sm font-semibold ${loanBalanceOf(loanWorkerId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {fmt(loanBalanceOf(loanWorkerId))} {t.loanOwed}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                </View>
+
+                {showAddLoan || showAddPayment ? (
+                  <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <Text className="text-sm font-semibold text-gray-700">{showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
+                    <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
+                      placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor="#9CA3AF"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
+                    <View className="flex-row gap-2 mt-1">
+                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
+                      <Pressable onPress={showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
+                        className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) <= 0 ? 'bg-gray-300' : showAddPayment ? 'bg-emerald-600 active:opacity-90' : 'bg-primary active:opacity-90'}`}>
+                        <Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <View className="flex-row gap-2 mb-3">
+                    <Pressable onPress={() => { resetLoanForms(); setShowAddLoan(true); }}
+                      className="flex-1 py-2.5 rounded-xl bg-primary/10 items-center active:opacity-80">
+                      <Text className="text-sm font-semibold text-primary">+ {t.addLoanBtn}</Text>
+                    </Pressable>
+                    {onLoanRepayment ? (
+                      <Pressable onPress={() => { resetLoanForms(); setShowAddPayment(true); }}
+                        className="flex-1 py-2.5 rounded-xl bg-emerald-50 items-center active:opacity-80">
+                        <Text className="text-sm font-semibold text-emerald-700">{t.recordPaymentBtn}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )}
+
+                <ScrollView className="flex-1">
+                  {loanEntriesOf(loanWorkerId).length === 0 ? (
+                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</Text>
+                  ) : loanEntriesOf(loanWorkerId).map(e => {
+                    const isLoan = e.amount >= 0;
+                    return (
+                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-gray-50">
+                        <View className="flex-1 min-w-0">
+                          <Text className="text-sm font-semibold text-gray-900">
+                            <Text className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</Text>
+                            {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
+                          </Text>
+                          <Text className="text-xs text-gray-400">
+                            {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {e.note ? ` · ${e.note}` : ''}
+                          </Text>
+                        </View>
+                        {onDeleteLoan ? (
+                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            ) : loanPickMode ? (
+              <>
+                <View className="flex-row items-center gap-2 mb-3">
+                  <Pressable onPress={() => setLoanPickMode(false)} hitSlop={10} className="p-1"><ChevronLeft size={22} color="#111827" /></Pressable>
+                  <Text className="flex-1 text-lg font-bold text-gray-900">{t.loanPickTitle}</Text>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                </View>
+                <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 mb-3">
+                  <Search size={16} color="#9CA3AF" />
+                  <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor="#9CA3AF"
+                    className="flex-1 text-base text-gray-900 p-0" />
+                </View>
+                <ScrollView className="flex-1">
+                  {loanPickList.length === 0 ? (
+                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanNoWorkerFound}</Text>
+                  ) : loanPickList.map(w => (
+                    <Pressable key={w.id} onPress={() => selectLoanWorker(w.id, true)}
+                      className="flex-row items-center gap-3 py-3 border-b border-gray-50 active:opacity-60">
+                      <Text className="flex-1 min-w-0 text-sm font-semibold text-gray-900" numberOfLines={1}>{w.name}</Text>
+                      {loanBalanceOf(w.id) > 0 ? <Text className="text-xs font-semibold text-amber-600">{fmt(loanBalanceOf(w.id))}</Text> : null}
+                      <ChevronRight size={16} color="#D1D5DB" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            ) : (
+              <>
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</Text>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                </View>
+                <Pressable onPress={startAddLoanPicker} className="mb-3 py-2.5 rounded-xl bg-primary items-center active:opacity-90">
+                  <Text className="text-sm font-semibold text-white">+ {t.addLoanBtn}</Text>
+                </Pressable>
+                {loanDirectory.length > 0 || loanSearch.trim() ? (
+                  <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 mb-3">
+                    <Search size={16} color="#9CA3AF" />
+                    <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor="#9CA3AF"
+                      className="flex-1 text-base text-gray-900 p-0" />
+                  </View>
+                ) : null}
+                <ScrollView className="flex-1">
+                  {loanDirectory.length === 0 ? (
+                    <Text className="text-sm text-gray-400 text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</Text>
+                  ) : loanDirectory.map(w => (
+                    <Pressable key={w.id} onPress={() => selectLoanWorker(w.id)}
+                      className="flex-row items-center gap-3 py-3 border-b border-gray-50 active:opacity-60">
+                      <Text className="flex-1 min-w-0 text-sm font-semibold text-gray-900" numberOfLines={1}>{w.name}</Text>
+                      <Text className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {fmt(loanBalanceOf(w.id))}
+                      </Text>
+                      <ChevronRight size={16} color="#D1D5DB" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
             )}
           </View>
         </View>
