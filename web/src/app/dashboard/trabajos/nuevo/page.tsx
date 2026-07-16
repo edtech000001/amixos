@@ -18,7 +18,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { JobPhotosSection, resizeImage } from '@/components/jobs/JobPhotosSection';
 import { JOB_PHOTOS_BUCKET, MAX_PHOTOS_PER_JOB, jobPhotoPath, jobPhotoFilename } from '@amixos/shared/lib/jobPhotos';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -703,7 +703,7 @@ function NuevoTrabajoContent() {
       // Custom job fields config (bounded per-business table — no pagination).
       const { data: tmpls } = await supabase.from('job_field_templates')
         .select('*').eq('business_id', businessId).order('sort_order');
-      setJobTemplates((tmpls ?? []) as FieldTemplate[]);
+      setJobTemplates(localizeTemplates((tmpls ?? []) as FieldTemplate[], locale));
 
       if (sourceId) {
         const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
@@ -787,7 +787,7 @@ function NuevoTrabajoContent() {
       }
     };
     loadData();
-  }, [business]);
+  }, [business, locale]);
 
   // Auto-add a new row when all existing items have a description
   useEffect(() => {

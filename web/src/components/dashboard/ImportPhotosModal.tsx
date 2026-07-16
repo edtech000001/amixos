@@ -57,7 +57,11 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
 
   const loadPending = useCallback(async () => {
     setLoading(true);
-    // Paginated — a big import can leave >1000 jobs with pending photos.
+    // Load jobs that can receive photos: those with pending CSV names, PLUS
+    // any job carrying a Project ID (external_ref) so filenames like
+    // "Proyecto-0a4f0ca7.Foto 1.jpg" still match by ref on a RE-upload (once
+    // the pending names were cleared by the first upload) or when the jobs CSV
+    // had no photos column at all. Paginated — a business can have >1000 jobs.
     const pageSize = 1000;
     const rows: { id: string; title: string; external_ref: string | null; import_photo_names: string[] | null }[] = [];
     for (let from = 0; ; from += pageSize) {
@@ -65,7 +69,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
         .from('jobs')
         .select('id, title, external_ref, import_photo_names')
         .eq('business_id', businessId)
-        .not('import_photo_names', 'is', null)
+        .or('import_photo_names.not.is.null,external_ref.not.is.null')
         .range(from, from + pageSize - 1);
       if (!data?.length) break;
       rows.push(...(data as typeof rows));
@@ -229,14 +233,16 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
         {phase === 'pick' ? (
           loading ? (
             <p className="text-sm text-gray-400 py-6 text-center">…</p>
-          ) : pendingNameCount === 0 ? (
+          ) : pendingJobs.length === 0 ? (
             <p className="text-sm text-gray-500 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">{t.noPending}</p>
           ) : (
             <>
               <p className="text-sm font-medium text-gray-700">
-                {t.pendingSummary
-                  .replace('{{names}}', String(pendingNameCount))
-                  .replace('{{jobs}}', String(pendingJobs.filter(j => j.names.length > 0).length))}
+                {pendingNameCount > 0
+                  ? t.pendingSummary
+                      .replace('{{names}}', String(pendingNameCount))
+                      .replace('{{jobs}}', String(pendingJobs.filter(j => j.names.length > 0).length))
+                  : t.pendingByRef.replace('{{jobs}}', String(pendingJobs.length))}
               </p>
               <button
                 type="button"

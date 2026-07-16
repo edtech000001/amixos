@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import {
   InvoiceDetailScreen,
@@ -94,7 +95,7 @@ export default function FacturaDetailRoute() {
   };
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const { confirm, confirmSheet } = useConfirmSheet();
@@ -554,11 +555,11 @@ export default function FacturaDetailRoute() {
           .single(),
         supabase
           .from('invoice_field_templates')
-          .select('field_key, field_label, field_type')
+          .select('field_key, field_label, field_label_es, field_label_en, field_type')
           .eq('business_id', business.id)
           .order('sort_order'),
       ]);
-      const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
+      const templateList = localizeTemplates((tpls ?? []) as InvoiceFieldTemplate[], locale);
       if (data) {
         setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
         const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null; client_id: string | null };
@@ -570,7 +571,7 @@ export default function FacturaDetailRoute() {
       }
       setLoading(false);
     })();
-  }, [id, business]);
+  }, [id, business, locale]);
 
   const updateStatus = async (status: 'sent' | 'paid' | 'draft') => {
     setUpdating(true);

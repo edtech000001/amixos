@@ -15,6 +15,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
@@ -59,7 +60,7 @@ type TabKey = typeof TAB_KEYS[number];
 export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,11 +87,11 @@ export default function TrabajosPage() {
   useEffect(() => {
     if (!business) return;
     supabase.from('job_field_templates')
-      .select('field_key, field_label, field_type, field_options')
+      .select('field_key, field_label, field_label_es, field_label_en, field_type, field_options')
       .eq('business_id', business.id)
       .order('sort_order')
-      .then(({ data }: { data: { field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[] | null }) => setJobTemplates(data ?? []));
-  }, [business]);
+      .then(({ data }: { data: { field_key: string; field_label: string; field_label_es?: string | null; field_label_en?: string | null; field_type?: string; field_options?: string[] | null }[] | null }) => setJobTemplates(localizeTemplates(data ?? [], locale)));
+  }, [business, locale]);
 
   // Only the columns the list actually renders/searches — `*` was hauling
   // notes, custom fields, and every timestamp for hundreds of rows.

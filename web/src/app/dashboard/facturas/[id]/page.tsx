@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import {
   InvoiceDetailScreen,
   type InvoiceDetail,
@@ -95,7 +96,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   );
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
@@ -405,11 +406,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           .eq('id', id)
           .single(),
         supabase.from('invoice_field_templates')
-          .select('field_key, field_label, field_type')
+          .select('field_key, field_label, field_label_es, field_label_en, field_type')
           .eq('business_id', business.id)
           .order('sort_order'),
       ]);
-      const templateList = (tpls ?? []) as InvoiceFieldTemplate[];
+      const templateList = localizeTemplates((tpls ?? []) as InvoiceFieldTemplate[], locale);
       if (data) {
         setInvoice(mapInvoice(data as unknown as RawInvoice, templateList));
         const raw = data as unknown as { share_token: string | null; template_config: Record<string, unknown> | null; client_id: string | null };
@@ -421,7 +422,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       }
       setLoading(false);
     })();
-  }, [id, business]);
+  }, [id, business, locale]);
 
   const updateStatus = async (status: 'sent' | 'paid' | 'draft') => {
     setUpdating(true);

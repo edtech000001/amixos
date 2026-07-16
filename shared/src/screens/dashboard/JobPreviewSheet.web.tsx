@@ -10,11 +10,12 @@ import { X, ArrowRight, Calendar, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { jobRefLabel } from '../../lib/jobRef';
 import { formatDateLong, formatTime12h, formatNumberGrouped } from '../../lib/format';
+import { localizeTemplates } from '../../lib/fieldTemplates';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
 
-interface JobFieldTemplate { field_key: string; field_label: string; field_type: string }
+interface JobFieldTemplate { field_key: string; field_label: string; field_label_es?: string | null; field_label_en?: string | null; field_type: string }
 interface JobPreview {
   id: string;
   business_id: string;
@@ -50,7 +51,7 @@ function fmtMoney(n: number) {
 }
 
 export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPreviewSheetProps) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.jobsSection;
   const tNew = full.dashboard.jobs.new;
   const tStatus = full.dashboard.jobs.statuses as Record<string, string>;
@@ -69,13 +70,13 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
       setJob((j as JobPreview) ?? null);
       if (j?.business_id) {
         const { data: tpl } = await supabase.from('job_field_templates')
-          .select('field_key, field_label, field_type')
+          .select('field_key, field_label, field_label_es, field_label_en, field_type')
           .eq('business_id', j.business_id).order('sort_order');
-        setTemplates((tpl ?? []) as JobFieldTemplate[]);
+        setTemplates(localizeTemplates((tpl ?? []) as JobFieldTemplate[], locale));
       }
       setLoading(false);
     })();
-  }, [jobId, supabase]);
+  }, [jobId, supabase, locale]);
 
   if (!jobId) return null;
 

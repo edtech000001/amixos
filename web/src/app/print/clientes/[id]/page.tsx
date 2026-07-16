@@ -14,6 +14,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { buildClientHtml } from '@amixos/shared/lib/clientShare';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 
 interface Client {
   id: string;
@@ -47,7 +48,7 @@ interface FieldTemplate {
 }
 
 export default function ClientPrintPage() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -71,7 +72,7 @@ export default function ClientPrintPage() {
       const [{ data: tpl }, { data: cts }] = await Promise.all([
         supabase
           .from('client_field_templates')
-          .select('field_key, field_label')
+          .select('field_key, field_label, field_label_es, field_label_en')
           .eq('business_id', c.business_id)
           .order('sort_order'),
         supabase
@@ -99,7 +100,7 @@ export default function ClientPrintPage() {
           zip_code: t.fields.zipCode,
           notes: t.fields.notes,
         },
-        ((tpl as FieldTemplate[] | null) ?? []),
+        localizeTemplates((tpl as FieldTemplate[] | null) ?? [], locale),
         {
           includeAll,
           contacts: includeAll ? ((cts as ClientContact[] | null) ?? []) : undefined,
@@ -111,7 +112,7 @@ export default function ClientPrintPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, includeAll, supabase, t]);
+  }, [id, includeAll, supabase, t, locale]);
 
   // Once the HTML is set, give the DOM one tick to render, then fire
   // the print dialog. Users can hit "Save as PDF" or send to a printer.

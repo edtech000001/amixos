@@ -24,6 +24,7 @@ import {
   type PayrollJob,
 } from '@amixos/shared/lib/payroll';
 import type { FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { confirm as confirmDialog, alertMessage } from '@amixos/shared/ui/confirmBus';
 
@@ -43,7 +44,7 @@ export default function NominaPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const canManage = currentRole === 'owner' || currentRole === 'admin';
 
@@ -160,11 +161,11 @@ export default function NominaPage() {
     const bid = business.id;
     (async () => {
       const [empT, jobT] = await Promise.all([
-        supabase.from('employee_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
-        supabase.from('job_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
+        supabase.from('employee_field_templates').select('field_key, field_label, field_label_es, field_label_en, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
+        supabase.from('job_field_templates').select('field_key, field_label, field_label_es, field_label_en, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
       ]);
-      const map = (rows: { field_key: string; field_label: string; field_type: string; field_options: string[] | null }[] | null): FormulaFieldDef[] =>
-        (rows ?? []).map(r => ({
+      const map = (rows: { field_key: string; field_label: string; field_label_es?: string | null; field_label_en?: string | null; field_type: string; field_options: string[] | null }[] | null): FormulaFieldDef[] =>
+        localizeTemplates(rows ?? [], locale).map(r => ({
           key: r.field_key,
           label: r.field_label,
           type: r.field_type as FormulaFieldDef['type'],
@@ -173,7 +174,7 @@ export default function NominaPage() {
       setFormulaFields({ emp: map(empT.data), job: map(jobT.data) });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id]);
+  }, [business?.id, locale]);
 
   // Pay components — hydrated from the business, saved on change.
   const [config, setConfig] = useState<PayrollConfig>(() => normalizePayrollConfig(business?.payroll_config));
@@ -339,6 +340,18 @@ export default function NominaPage() {
     setBusy(false);
   };
 
+  // amount is SIGNED (+ loan, − repayment); the screen preserves the sign.
+  const onEditLoan = async (id: string, amount: number, note: string, entryDate: string) => {
+    if (!business) return;
+    setBusy(true);
+    const { error } = await supabase.from('employee_loans')
+      .update({ amount, note: note?.trim() || null, entry_date: entryDate || undefined })
+      .eq('id', id).eq('business_id', business.id);
+    if (error) { setBusy(false); await alertMessage({ message: error.message }); return; }
+    await load();
+    setBusy(false);
+  };
+
   const onLoanRepayment = async (employeeId: string, amount: number, note?: string, entryDate?: string) => {
     if (!business || !(amount > 0)) return;
     setBusy(true);
@@ -383,6 +396,7 @@ export default function NominaPage() {
       onAddLoan={onAddLoan}
       onLoanRepayment={onLoanRepayment}
       onDeleteLoan={onDeleteLoan}
+      onEditLoan={onEditLoan}
       onHistoryPress={() => router.push('/dashboard/reportes/nomina/historial')}
       onConfigChange={onConfigChange}
       onMarkPaid={onMarkPaid}

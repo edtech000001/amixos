@@ -15,7 +15,7 @@ import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/in
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   INVOICE_FIELD_SECTIONS,
   INVOICE_FIELDS_ALWAYS_SHOWN,
@@ -133,7 +133,7 @@ function NuevaFacturaContent() {
     supabase.from('clients').select('id, first_name, last_name').eq('business_id', business.id)
       .order('first_name').then(({ data }) => setClients(data ?? []));
     supabase.from('invoice_field_templates').select('*').eq('business_id', business.id)
-      .order('sort_order').then(({ data }) => setCustomTemplates(data ?? []));
+      .order('sort_order').then(({ data }) => setCustomTemplates(localizeTemplates(data ?? [], locale)));
     // New invoice: load the count so the auto-number = start + count.
     if (!editId) {
       supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id)
@@ -145,7 +145,7 @@ function NuevaFacturaContent() {
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business]);
+  }, [business, locale]);
 
   // Edit mode: hydrate form from the existing invoice.
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { Alert } from 'react-native';
 import {
   PayrollScreen,
@@ -40,7 +41,7 @@ export default function NominaRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const canManage = currentRole === 'owner' || currentRole === 'admin';
 
@@ -148,11 +149,11 @@ export default function NominaRoute() {
     const bid = business.id;
     (async () => {
       const [empT, jobT] = await Promise.all([
-        supabase.from('employee_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
-        supabase.from('job_field_templates').select('field_key, field_label, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
+        supabase.from('employee_field_templates').select('field_key, field_label, field_label_es, field_label_en, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
+        supabase.from('job_field_templates').select('field_key, field_label, field_label_es, field_label_en, field_type, field_options').eq('business_id', bid).in('field_type', ['number', 'boolean', 'select']).order('sort_order'),
       ]);
       const map = (rows: { field_key: string; field_label: string; field_type: string; field_options: string[] | null }[] | null): FormulaFieldDef[] =>
-        (rows ?? []).map(r => ({
+        localizeTemplates(rows ?? [], locale).map(r => ({
           key: r.field_key,
           label: r.field_label,
           type: r.field_type as FormulaFieldDef['type'],
@@ -161,7 +162,7 @@ export default function NominaRoute() {
       setFormulaFields({ emp: map(empT.data), job: map(jobT.data) });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id]);
+  }, [business?.id, locale]);
 
   const [config, setConfig] = useState<PayrollConfig>(() => normalizePayrollConfig(business?.payroll_config));
   useEffect(() => { setConfig(normalizePayrollConfig(business?.payroll_config)); }, [business?.payroll_config]);
@@ -332,6 +333,18 @@ export default function NominaRoute() {
     ]);
   };
 
+  // amount is SIGNED (+ loan, − repayment); the screen preserves the sign.
+  const onEditLoan = async (id: string, amount: number, note: string, entryDate: string) => {
+    if (!business) return;
+    setBusy(true);
+    const { error } = await supabase.from('employee_loans')
+      .update({ amount, note: note?.trim() || null, entry_date: entryDate || undefined })
+      .eq('id', id).eq('business_id', business.id);
+    if (error) { setBusy(false); Alert.alert('Error', error.message); return; }
+    await load();
+    setBusy(false);
+  };
+
   const onLoanRepayment = async (employeeId: string, amount: number, note?: string, entryDate?: string) => {
     if (!business || !(amount > 0)) return;
     setBusy(true);
@@ -377,6 +390,7 @@ export default function NominaRoute() {
         onAddLoan={onAddLoan}
         onLoanRepayment={onLoanRepayment}
         onDeleteLoan={onDeleteLoan}
+        onEditLoan={onEditLoan}
         onHistoryPress={() => router.push('/dashboard/mas/nomina-historial')}
         initialDetailEmployeeId={periodApplied ? (workerParam ?? null) : null}
         onConfigChange={onConfigChange}

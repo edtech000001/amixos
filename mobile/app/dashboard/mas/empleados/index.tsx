@@ -18,6 +18,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
@@ -144,7 +145,7 @@ export default function EmpleadosRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole, activeLocationId } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
   const tc = full.common;
   const insets = useSafeAreaInsets();
@@ -241,7 +242,7 @@ export default function EmpleadosRoute() {
       .select('*')
       .eq('business_id', business.id)
       .order('sort_order');
-    setTemplates((data ?? []) as FieldTemplate[]);
+    setTemplates(localizeTemplates((data ?? []) as FieldTemplate[], locale));
   };
 
   // Unified people view: employees + app accounts (business_members) + pending
@@ -290,7 +291,7 @@ export default function EmpleadosRoute() {
       void loadTimesheets();
       void loadTemplates();
       if (business) fetchEmployeeLocations(supabase, business.id).then(setEmpLocations).catch(() => setEmpLocations([]));
-    }, [business?.id]),
+    }, [business?.id, locale]),
   );
 
   const empList: EmployeeListItem[] = useMemo(

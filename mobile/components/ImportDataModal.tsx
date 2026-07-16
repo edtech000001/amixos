@@ -18,6 +18,7 @@ import {
   formulaComponentTemplates,
   logImportRun,
 } from '@amixos/shared/lib/importRunners';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -102,10 +103,10 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
         const table = mode === 'jobs' ? 'job_field_templates' : 'employee_field_templates';
         const { data } = await supabase
           .from(table)
-          .select('field_key, field_label, field_type, field_options')
+          .select('field_key, field_label, field_label_es, field_label_en, field_type, field_options')
           .eq('business_id', businessId)
           .order('sort_order');
-        if (!cancelled) setTemplates((data as ImportTemplateField[] | null) ?? []);
+        if (!cancelled) setTemplates(localizeTemplates((data as ImportTemplateField[] | null) ?? [], locale));
       } else {
         setTemplates([]);
       }
@@ -119,7 +120,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, businessId]);
+  }, [open, mode, businessId, locale]);
 
   const useTemplates = importModeUsesTemplates(mode);
   // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).

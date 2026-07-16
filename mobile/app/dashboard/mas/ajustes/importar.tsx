@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { ImportDataModal } from '@/components/ImportDataModal';
@@ -16,7 +17,7 @@ import { ImportPhotosModal } from '@/components/ImportPhotosModal';
 type StepKey = 'clients' | 'employees' | 'jobs' | 'photos' | 'invoices' | 'payroll' | 'equipment' | 'inventory';
 
 export default function ImportarDatosPage() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const { business } = useApp();
   const supabase = createSupabaseClient();
@@ -28,13 +29,13 @@ export default function ImportarDatosPage() {
     if (!business) return;
     supabase
       .from('client_field_templates')
-      .select('field_key, field_label')
+      .select('field_key, field_label, field_label_es, field_label_en')
       .eq('business_id', business.id)
       .order('sort_order')
       .then(({ data }: { data: { field_key: string; field_label: string }[] | null }) =>
-        setClientTemplates(data ?? []),
+        setClientTemplates(localizeTemplates(data ?? [], locale)),
       );
-  }, [business?.id]);
+  }, [business?.id, locale]);
 
   const steps: { key: StepKey; title: string; desc: string }[] = [
     { key: 'clients', title: t.importHub.step1Title, desc: t.importHub.step1Desc },

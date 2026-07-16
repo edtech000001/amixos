@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin } from 'lucide-react-native';
+import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin, Wallet, PiggyBank } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import {
@@ -34,9 +34,11 @@ function fmt(n: number) {
 
 const KPI_BG: Record<string, string> = {
   emerald: 'bg-emerald-50', amber: 'bg-amber-50', indigo: 'bg-indigo-50', purple: 'bg-purple-50',
+  red: 'bg-red-50', blue: 'bg-blue-50',
 };
 const KPI_COLOR: Record<string, string> = {
   emerald: '#059669', amber: '#D97706', indigo: '#4F46E5', purple: '#7C3AED',
+  red: '#DC2626', blue: '#2563EB',
 };
 
 export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll }: ReportsScreenProps) {
@@ -147,6 +149,10 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
           sub={m.paidInvoicesCount === 0 ? t.kpis.noPaidInvoices : (m.paidInvoicesCount === 1 ? t.kpis.paidInvoicesCountSingle : t.kpis.paidInvoicesCountPlural).replace('{{count}}', String(m.paidInvoicesCount))} />
         <Kpi color="amber" icon={<FileText size={16} color={KPI_COLOR.amber} />} label={t.kpis.pendingToCollect} value={fmt(m.pendingRevenue + m.overdueRevenue)}
           sub={m.overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(m.overdueRevenue)) : undefined} />
+        <Kpi color="red" icon={<Wallet size={16} color={KPI_COLOR.red} />} label={t.kpis.payroll} value={fmt(m.totalPayroll)}
+          sub={t.kpis.payrollWorkersSub.replace('{{count}}', String(m.payrollWorkers))} />
+        <Kpi color="blue" icon={<PiggyBank size={16} color={KPI_COLOR.blue} />} label={t.kpis.grossMargin} value={m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}
+          sub={m.totalRevenue > 0 ? t.kpis.grossMarginSub.replace('{{percent}}', String(Math.round(((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100))) : undefined} />
         <Kpi color="indigo" icon={<ClipboardList size={16} color={KPI_COLOR.indigo} />} label={t.kpis.avgJobValue} value={m.avgJobValue > 0 ? fmt(m.avgJobValue) : '—'}
           sub={t.kpis.completedJobsCount.replace('{{count}}', String(m.completedJobsCount))} />
         <Kpi color="purple" icon={<Clock size={16} color={KPI_COLOR.purple} />} label={t.kpis.hoursLogged} value={m.totalHours.toFixed(1)}
@@ -272,21 +278,46 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         </View>
       </Section>
 
-      {/* Financial summary */}
+      {/* Financial summary — gross-margin headline + payroll-vs-margin bar. */}
       <Section title={t.sections.financialSummary}>
-        <View className="gap-0">
-          {[
-            { label: t.financial.revenueCollected, value: fmt(m.totalRevenue), color: 'text-emerald-600' },
-            { label: t.financial.pending, value: fmt(m.pendingRevenue), color: 'text-blue-600' },
-            { label: t.financial.overdue, value: fmt(m.overdueRevenue), color: 'text-red-500' },
-            { label: t.financial.estPayroll, value: fmt(m.totalPayroll), color: 'text-amber-600' },
-            { label: t.financial.grossMarginEst, value: m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—', color: 'text-gray-900' },
-          ].map(row => (
-            <View key={row.label} className="flex-row justify-between items-center py-2 border-b border-gray-50">
-              <Text className="text-xs text-gray-500">{row.label}</Text>
-              <Text className={`text-sm font-bold ${row.color}`}>{row.value}</Text>
+        <View className="gap-4">
+          <View>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-3xl font-black text-gray-900">{m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}</Text>
+              {m.totalRevenue > 0 ? (
+                <View className={`px-1.5 py-0.5 rounded-md ${(m.totalRevenue - m.totalPayroll) >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <Text className={`text-xs font-bold ${(m.totalRevenue - m.totalPayroll) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {Math.round(((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100)}%
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          ))}
+            <Text className="text-xs text-gray-500 mt-0.5">{t.financial.grossMarginEst}</Text>
+          </View>
+
+          {m.totalRevenue > 0 ? (
+            <View className="flex-row h-2.5 rounded-full overflow-hidden bg-gray-100">
+              <View className="bg-amber-400 h-full" style={{ width: `${Math.min(100, Math.max(0, (m.totalPayroll / m.totalRevenue) * 100))}%` }} />
+              <View className="bg-emerald-500 h-full" style={{ width: `${Math.min(100, Math.max(0, ((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100))}%` }} />
+            </View>
+          ) : null}
+
+          <View className="gap-2.5">
+            {[
+              { label: t.financial.revenueCollected, value: fmt(m.totalRevenue), dot: 'bg-emerald-500' },
+              { label: t.financial.estPayroll, value: fmt(m.totalPayroll), dot: 'bg-amber-400' },
+              { label: t.financial.pending, value: fmt(m.pendingRevenue), dot: 'bg-blue-500' },
+              { label: t.financial.overdue, value: fmt(m.overdueRevenue), dot: 'bg-red-500' },
+            ].map(row => (
+              <View key={row.label} className="flex-row justify-between items-center">
+                <View className="flex-row items-center gap-2">
+                  <View className={`w-2 h-2 rounded-full ${row.dot}`} />
+                  <Text className="text-xs text-gray-500">{row.label}</Text>
+                </View>
+                <Text className="text-sm font-bold text-gray-900">{row.value}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </Section>
 

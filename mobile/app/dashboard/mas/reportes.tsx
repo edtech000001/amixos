@@ -46,8 +46,8 @@ export default function ReportesRoute() {
   }, [business?.id, inventoryEnabled]);
 
   const metrics = useMemo(
-    () => (loading ? null : computeReports(data, range, dateLocale, manualWorker, { from: customFrom, to: customTo }, unassignedLocation)),
-    [data, range, dateLocale, manualWorker, loading, customFrom, customTo, unassignedLocation],
+    () => (loading ? null : computeReports(data, range, dateLocale, manualWorker, { from: customFrom, to: customTo }, unassignedLocation, business?.payroll_config)),
+    [data, range, dateLocale, manualWorker, loading, customFrom, customTo, unassignedLocation, business?.payroll_config],
   );
 
   return (

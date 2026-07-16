@@ -16,6 +16,7 @@ import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSectio
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { useLang } from '@/i18n/LangProvider';
 import {
@@ -68,7 +69,7 @@ const FIELD_LABEL_KEYS: (keyof ClientFormValues)[] = [
 ];
 
 export default function ClientesPage() {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const tc = full.common;
   const router = useRouter();
@@ -115,11 +116,11 @@ export default function ClientesPage() {
     }
     setClients(cl);
     setContactsByClient(byClient);
-    setTemplates(tpl ?? []);
+    setTemplates(localizeTemplates(tpl ?? [], locale));
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, locale]);
 
   const openAdd = () => { setSelected(null); setError(''); setFormMode('add'); };
   const openEdit = (c: Client) => { setSelected(c); setError(''); setFormMode('edit'); };

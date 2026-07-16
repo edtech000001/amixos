@@ -43,6 +43,8 @@ export interface ImportFieldDef {
 export interface ImportTemplateField {
   field_key: string;
   field_label: string;
+  field_label_es?: string | null;
+  field_label_en?: string | null;
   field_type?: string;
   field_options?: string[] | null;
 }
@@ -153,6 +155,9 @@ export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
     hintEs: 'Valores: borrador, enviada, pagada. Vacío u otro valor = enviada (no pagada).',
     hintEn: 'Values: draft, sent, paid. Blank or anything else = sent (unpaid).' },
   { key: 'tax_rate',         es: 'Impuesto (%)', en: 'Tax rate (%)' },
+  { key: 'notes',            es: 'Notas de la factura', en: 'Invoice notes',
+    hintEs: 'Texto libre que aparece en la factura. Tomado de la primera fila de la factura.',
+    hintEn: 'Free text shown on the invoice. Taken from the invoice\'s first row.' },
   // Payment record — a payment date implies the invoice is paid even when the
   // status cell is blank. Method is free text (cash, check #, transfer…).
   { key: 'payment_method',   es: 'Método de pago', en: 'Payment method',
@@ -1027,7 +1032,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       tax_amount: tax,
       discount: 0,
       total_amount: total,
-      notes: null,
+      notes: get(first.row, 'notes') || null,
       ...(invCreatedTs ? { created_at: invCreatedTs } : {}),
       ...(invUpdatedTs ? { updated_at: invUpdatedTs } : {}),
     }).select('id').single();
@@ -1395,7 +1400,7 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
   if (mode === 'inventory') {
     return [en ? 'Galvanized wire' : 'Alambre galvanizado', 'ALM-12', '250', en ? 'feet' : 'pies', '0.85', en ? 'Materials' : 'Materiales', '50'];
   }
-  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
+  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Thanks for your business' : 'Gracias por su preferencia', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
 }
 
 /** Extra example rows (beyond exampleRowFor's first). Invoices show TWO
@@ -1404,10 +1409,10 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
  *  fills), so the multi-line structure is obvious in the template. */
 function extraExampleRowsFor(mode: ImportMode, en: boolean): string[][] {
   if (mode !== 'invoices') return [];
-  const blank = Array(16).fill('') as string[];
+  const blank = Array(17).fill('') as string[];
   return [
     ['', 'Proyecto-002', en ? 'Pivot teardown' : 'Desarmar pivote', '1', '850', ...blank],
-    ['257557', 'Proyecto-003', en ? 'Tower repair' : 'Reparar torre', '2', '400', en ? 'Mary Jones' : 'María García', en ? 'ABC Irrigation' : 'Riegos ABC', '', '', '', '', '', '', '6/15/2026', '6/29/2026', en ? 'sent' : 'enviada', '0', '', '', '', ''],
+    ['257557', 'Proyecto-003', en ? 'Tower repair' : 'Reparar torre', '2', '400', en ? 'Mary Jones' : 'María García', en ? 'ABC Irrigation' : 'Riegos ABC', '', '', '', '', '', '', '6/15/2026', '6/29/2026', en ? 'sent' : 'enviada', '0', '', '', '', '', ''],
     ['', 'Proyecto-004', en ? 'Hang tower' : 'Colgar torre', '1', '300', ...blank],
   ];
 }

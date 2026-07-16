@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 // Import DatePicker from its file, NOT the '../../ui' barrel: the barrel also
 // re-exports DateRangeSheet (react-native-safe-area-context), which isn't a web
@@ -118,6 +118,8 @@ export interface PayrollScreenProps {
   onLoanRepayment?: (employeeId: string, amount: number, note?: string, entryDate?: string) => void;
   /** Delete a single loan-ledger entry (mistaken loan/payment). */
   onDeleteLoan?: (id: string) => void;
+  /** Edit a loan-ledger entry. `amount` is SIGNED (+ loan, − repayment). */
+  onEditLoan?: (id: string, amount: number, note: string, entryDate: string) => void;
 }
 
 function fmt(n: number) {
@@ -158,6 +160,7 @@ export function PayrollScreen({
   onAddLoan,
   onLoanRepayment,
   onDeleteLoan,
+  onEditLoan,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -301,6 +304,11 @@ export function PayrollScreen({
   const isFullyPaid = (r: PayrollScreenRow) =>
     (r.payments?.length ?? 0) > 0 && paidTotal(r) + 0.005 >= r.pay + bonusTotal(r);
   const isPartial = (r: PayrollScreenRow) => (r.payments?.length ?? 0) > 0 && !isFullyPaid(r);
+  // Recorded payment exceeds the period's computed pay — e.g. a manual check
+  // for a worker whose rate×hours is $0. The card must show what was actually
+  // PAID, not the misleading computed number.
+  const overpaid = (r: PayrollScreenRow) =>
+    (r.payments?.length ?? 0) > 0 && paidTotal(r) > r.pay + bonusTotal(r) + 0.005;
   const paidCount = rows.filter(isFullyPaid).length;
   // Unpaid first, paid sink to the bottom. Stable sort preserves the pay-desc
   // order the rows already arrive in within each group.
@@ -342,6 +350,7 @@ export function PayrollScreen({
   const [showLoans, setShowLoans] = useState(false);
   const [showAddLoan, setShowAddLoan] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<LoanLedgerEntry | null>(null);
   const [loanAmount, setLoanAmount] = useState('');
   const [loanNote, setLoanNote] = useState('');
   const [loanDate, setLoanDate] = useState('');
@@ -396,7 +405,7 @@ export function PayrollScreen({
     if (deduct > 0 && onLoanRepayment) onLoanRepayment(payRow.employeeId, deduct);
     setPayRow(null);
   };
-  const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
+  const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
   const openLoans = () => { resetLoanForms(); setShowLoans(true); };
   const openLoansGlobal = () => {
     setLoanSearch('');
@@ -429,6 +438,25 @@ export function PayrollScreen({
     onLoanRepayment(loanTargetId, amt, loanNote.trim(), loanDate || todayStr());
     resetLoanForms();
   };
+  // Edit an existing ledger entry — reuses the amount/note/date form, keeps the
+  // original sign (loan vs repayment).
+  const startEditEntry = (e: LoanLedgerEntry) => {
+    setShowAddLoan(false);
+    setShowAddPayment(false);
+    setEditingEntry(e);
+    setLoanAmount(String(Math.abs(e.amount)));
+    setLoanNote(e.note ?? '');
+    setLoanDate(e.entryDate || todayStr());
+  };
+  const submitEditLoan = () => {
+    if (!editingEntry || !onEditLoan) return;
+    const amt = parseFloat(loanAmount) || 0;
+    if (amt <= 0) return;
+    const signed = editingEntry.amount < 0 ? -Math.abs(amt) : Math.abs(amt);
+    onEditLoan(editingEntry.id, signed, loanNote.trim(), loanDate || todayStr());
+    resetLoanForms();
+  };
+  const loanFormOpen = showAddLoan || showAddPayment || !!editingEntry;
   // Live total shown big at the top of the modal: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
   const netToPay = modalTotal - (parseFloat(loanDeduct) || 0);
@@ -570,6 +598,11 @@ export function PayrollScreen({
                     {fmt(checkBaseOf(r))}
                     <span className="text-xs font-semibold text-gray-400 ml-1.5">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
                   </p>
+                ) : overpaid(r) ? (
+                  <p className="text-2xl font-bold text-amber-600" title={t.paidDiffersNote}>
+                    {fmt(paidTotal(r))}
+                    <span className="text-xs font-semibold text-gray-400 ml-1.5">{t.paidTag}</span>
+                  </p>
                 ) : (
                   <p className="text-2xl font-bold text-primary">{fmt(r.pay)}</p>
                 )}
@@ -619,6 +652,11 @@ export function PayrollScreen({
                     <span className="text-right">
                       <span className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</span>
                       <span className="block text-[11px] text-gray-400">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
+                    </span>
+                  ) : overpaid(r) ? (
+                    <span className="text-right" title={t.paidDiffersNote}>
+                      <span className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</span>
+                      <span className="block text-[11px] text-gray-400">{t.paidTag}</span>
                     </span>
                   ) : (
                     <span className="text-sm font-bold text-gray-900">{fmt(r.pay)}</span>
@@ -1073,17 +1111,17 @@ export function PayrollScreen({
                   <button type="button" onClick={() => setShowLoans(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
                 </div>
 
-                {showAddLoan ? (
+                {showAddLoan || editingEntry ? (
                   <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-700">{t.loanNewTitle}</p>
+                    <p className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</p>
                     <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
                       className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
                       className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <div className="flex gap-2 mt-1">
-                      <button type="button" onClick={() => setShowAddLoan(false)} className="flex-1 py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-600 hover:bg-gray-200">{full.common.buttons.cancel}</button>
-                      <button type="button" onClick={submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className="flex-1 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">{t.loanSaveBtn}</button>
+                      <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-600 hover:bg-gray-200">{full.common.buttons.cancel}</button>
+                      <button type="button" onClick={editingEntry ? submitEditLoan : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className="flex-1 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">{t.loanSaveBtn}</button>
                     </div>
                   </div>
                 ) : (
@@ -1109,6 +1147,9 @@ export function PayrollScreen({
                               {e.note ? ` · ${e.note}` : ''}
                             </p>
                           </div>
+                          {onEditLoan ? (
+                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Pencil size={15} /></button>
+                          ) : null}
                           {onDeleteLoan ? (
                             <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={16} /></button>
                           ) : null}
@@ -1205,9 +1246,9 @@ export function PayrollScreen({
                   <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
                 </div>
 
-                {showAddLoan || showAddPayment ? (
+                {loanFormOpen ? (
                   <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-700">{showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</p>
+                    <p className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</p>
                     <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
                       className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
@@ -1215,7 +1256,7 @@ export function PayrollScreen({
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <div className="flex gap-2 mt-1">
                       <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-600 hover:bg-gray-200">{full.common.buttons.cancel}</button>
-                      <button type="button" onClick={showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
+                      <button type="button" onClick={editingEntry ? submitEditLoan : showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
                         className={`flex-1 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 ${showAddPayment ? 'bg-emerald-600' : 'bg-primary'}`}>{t.loanSaveBtn}</button>
                     </div>
                   </div>
@@ -1249,6 +1290,9 @@ export function PayrollScreen({
                               {e.note ? ` · ${e.note}` : ''}
                             </p>
                           </div>
+                          {onEditLoan ? (
+                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Pencil size={15} /></button>
+                          ) : null}
                           {onDeleteLoan ? (
                             <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={16} /></button>
                           ) : null}

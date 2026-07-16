@@ -38,6 +38,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
 import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
@@ -166,7 +167,7 @@ export default function ClienteDetailRoute() {
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
   const syncBanner = useGoogleSyncBanner();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const td = t.detail;
   const tc = full.common;
@@ -237,7 +238,7 @@ export default function ClienteDetailRoute() {
     } catch { /* offline */ }
     setClient(clientRes.data ?? null);
     setInvoices(invData);
-    setTemplates(tplData);
+    setTemplates(localizeTemplates(tplData, locale));
     setContacts(contactsRes.data ?? []);
     setLoading(false);
 
@@ -268,7 +269,7 @@ export default function ClienteDetailRoute() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [id, business?.id]),
+    }, [id, business?.id, locale]),
   );
 
   const stats = useMemo(() => {

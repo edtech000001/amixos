@@ -26,7 +26,7 @@ import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   CLIENT_FIELD_SECTIONS,
   CLIENT_FIELDS_ALWAYS_SHOWN,
@@ -113,7 +113,7 @@ export default function NuevoClienteRoute() {
         .eq('business_id', business.id)
         .order('sort_order');
       if (cancelled) return;
-      setTemplates((tpl as FieldTemplate[] | null) ?? []);
+      setTemplates(localizeTemplates((tpl as FieldTemplate[] | null) ?? [], locale));
 
       if (editId) {
         const { data: c } = await supabase.from('clients').select('*').eq('id', editId).single();
@@ -142,7 +142,7 @@ export default function NuevoClienteRoute() {
     return () => {
       cancelled = true;
     };
-  }, [business?.id, editId]);
+  }, [business?.id, editId, locale]);
 
   useEffect(() => {
     if (!business) return;

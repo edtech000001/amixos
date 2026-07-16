@@ -95,7 +95,7 @@ import {
   type JobAlertColor,
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
-import { moveTemplate, parseFieldConfig } from '@amixos/shared/lib/fieldTemplates';
+import { moveTemplate, parseFieldConfig, primaryFieldLabel, localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
 import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
@@ -114,6 +114,8 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
+  field_label_es: string | null;
+  field_label_en: string | null;
   field_type: 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
   field_options: string[] | null;
   required: boolean;
@@ -370,7 +372,7 @@ export default function AjustesPage() {
   const [addInvoiceFieldModal, setAddInvoiceFieldModal] = useState(false);
   const [editInvoiceFieldModal, setEditInvoiceFieldModal] = useState(false);
   const [editingInvoiceTpl, setEditingInvoiceTpl] = useState<FieldTemplate | null>(null);
-  const [invoiceTplForm, setInvoiceTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+  const [invoiceTplForm, setInvoiceTplForm] = useState({ field_label_es: '', field_label_en: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingInvoiceTpl, setSavingInvoiceTpl] = useState(false);
   const [invoiceTplError, setInvoiceTplError] = useState('');
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(
@@ -467,7 +469,7 @@ export default function AjustesPage() {
   const [addFieldModal, setAddFieldModal] = useState(false);
   const [editFieldModal, setEditFieldModal] = useState(false);
   const [editingTpl, setEditingTpl] = useState<FieldTemplate | null>(null);
-  const [tplForm, setTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+  const [tplForm, setTplForm] = useState({ field_label_es: '', field_label_en: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingTpl, setSavingTpl] = useState(false);
   const [tplError, setTplError] = useState('');
 
@@ -477,7 +479,7 @@ export default function AjustesPage() {
   const [addEmpFieldModal, setAddEmpFieldModal] = useState(false);
   const [editEmpFieldModal, setEditEmpFieldModal] = useState(false);
   const [editingEmpTpl, setEditingEmpTpl] = useState<FieldTemplate | null>(null);
-  const [empTplForm, setEmpTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+  const [empTplForm, setEmpTplForm] = useState({ field_label_es: '', field_label_en: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingEmpTpl, setSavingEmpTpl] = useState(false);
   const [empTplError, setEmpTplError] = useState('');
 
@@ -812,6 +814,8 @@ export default function AjustesPage() {
           business_id: business.id,
           field_key: tpl.field_key,
           field_label: tpl.field_label,
+          field_label_es: tpl.field_label_es,
+          field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -991,6 +995,8 @@ export default function AjustesPage() {
             business_id: business.id,
             field_key: tpl.field_key,
             field_label: tpl.field_label,
+            field_label_es: tpl.field_label_es,
+            field_label_en: tpl.field_label_en,
             field_type: tpl.field_type,
             field_options: tpl.field_options,
             required: tpl.required,
@@ -1255,6 +1261,8 @@ export default function AjustesPage() {
           business_id: business.id,
           field_key: tpl.field_key,
           field_label: tpl.field_label,
+          field_label_es: tpl.field_label_es,
+          field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -1432,7 +1440,7 @@ export default function AjustesPage() {
   const [addJobFieldModal, setAddJobFieldModal] = useState(false);
   const [editJobFieldModal, setEditJobFieldModal] = useState(false);
   const [editingJobTpl, setEditingJobTpl] = useState<FieldTemplate | null>(null);
-  const [jobTplForm, setJobTplForm] = useState({ field_label: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+  const [jobTplForm, setJobTplForm] = useState({ field_label_es: '', field_label_en: '', field_type: 'text' as FieldTemplate['field_type'], required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
   const [savingJobTpl, setSavingJobTpl] = useState(false);
   const [jobTplError, setJobTplError] = useState('');
 
@@ -1530,6 +1538,8 @@ export default function AjustesPage() {
           business_id: business.id,
           field_key: tpl.field_key,
           field_label: tpl.field_label,
+          field_label_es: tpl.field_label_es,
+          field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -1604,15 +1614,15 @@ export default function AjustesPage() {
 
   // Job template CRUD — local-only mutations (saved by saveJobRequired).
   const addJobTemplate = () => {
-    if (!jobTplForm.field_label.trim()) { setJobTplError(t.customFields.errorNameRequired); return; }
-    const key = toKey(jobTplForm.field_label);
+    if (!hasLabel(jobTplForm)) { setJobTplError(t.customFields.errorNameRequired); return; }
+    const key = labelKey(jobTplForm);
     if (jobTemplates.some(tpl => tpl.field_key === key)) { setJobTplError(t.customFields.errorDuplicate); return; }
     const options = jobTplForm.field_type === 'select'
       ? jobTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     const newTpl: FieldTemplate = {
       id: newTempId(),
       field_key: key,
-      field_label: jobTplForm.field_label.trim(),
+      ...labelCols(jobTplForm),
       field_type: jobTplForm.field_type,
       field_options: options,
       required: jobTplForm.required,
@@ -1621,7 +1631,7 @@ export default function AjustesPage() {
     };
     setJobTemplates(prev => [...prev, newTpl]);
     setLocalJobOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+    setJobTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setJobTplError(''); setAddJobFieldModal(false);
   };
 
@@ -1634,7 +1644,7 @@ export default function AjustesPage() {
   const openEditJobTemplate = (tpl: FieldTemplate) => {
     setEditingJobTpl(tpl);
     setJobTplForm({
-      field_label: tpl.field_label, field_type: tpl.field_type,
+      ...labelForm(tpl), field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
       integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
       thousands: !!parseFieldConfig(tpl.field_config).thousands,
@@ -1645,12 +1655,12 @@ export default function AjustesPage() {
   };
 
   const updateJobTemplate = () => {
-    if (!editingJobTpl || !jobTplForm.field_label.trim()) { setJobTplError(t.customFields.errorNameRequired); return; }
+    if (!editingJobTpl || !hasLabel(jobTplForm)) { setJobTplError(t.customFields.errorNameRequired); return; }
     const options = jobTplForm.field_type === 'select'
       ? jobTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     setJobTemplates(prev => prev.map(tpl => tpl.id === editingJobTpl.id ? {
       ...tpl,
-      field_label: jobTplForm.field_label.trim(),
+      ...labelCols(jobTplForm),
       field_type: jobTplForm.field_type,
       field_options: options,
       required: jobTplForm.required,
@@ -1891,16 +1901,33 @@ export default function AjustesPage() {
   const toKey = (label: string) =>
     label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
+  // ── Bilingual label helpers (shared by all 4 field editors) ──
+  type LabelForm = { field_label_es: string; field_label_en: string };
+  const hasLabel = (f: LabelForm) => !!(f.field_label_es.trim() || f.field_label_en.trim());
+  const labelKey = (f: LabelForm) => toKey(primaryFieldLabel(f.field_label_es, f.field_label_en));
+  // The three label columns from the two inputs (Spanish-first fallback).
+  const labelCols = (f: LabelForm) => ({
+    field_label: primaryFieldLabel(f.field_label_es, f.field_label_en),
+    field_label_es: f.field_label_es.trim() || null,
+    field_label_en: f.field_label_en.trim() || null,
+  });
+  // Seed the two inputs when editing; legacy fields (no override yet) put the
+  // existing single label into the current-locale box.
+  const labelForm = (tpl: FieldTemplate) => ({
+    field_label_es: tpl.field_label_es ?? (locale === 'es' ? tpl.field_label : ''),
+    field_label_en: tpl.field_label_en ?? (locale === 'en' ? tpl.field_label : ''),
+  });
+
   const addTemplate = () => {
-    if (!tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
-    const key = toKey(tplForm.field_label);
+    if (!hasLabel(tplForm)) { setTplError(t.customFields.errorNameRequired); return; }
+    const key = labelKey(tplForm);
     if (templates.some(tpl => tpl.field_key === key)) { setTplError(t.customFields.errorDuplicate); return; }
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     const newTpl: FieldTemplate = {
       id: newTempId(),
       field_key: key,
-      field_label: tplForm.field_label.trim(),
+      ...labelCols(tplForm),
       field_type: tplForm.field_type,
       field_options: options,
       required: tplForm.required,
@@ -1909,7 +1936,7 @@ export default function AjustesPage() {
     };
     setTemplates(prev => [...prev, newTpl]);
     setLocalClientOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+    setTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setTplError(''); setAddFieldModal(false);
   };
 
@@ -1922,7 +1949,7 @@ export default function AjustesPage() {
   const openEditTemplate = (tpl: FieldTemplate) => {
     setEditingTpl(tpl);
     setTplForm({
-      field_label: tpl.field_label, field_type: tpl.field_type,
+      ...labelForm(tpl), field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
       integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
       thousands: !!parseFieldConfig(tpl.field_config).thousands,
@@ -1933,12 +1960,12 @@ export default function AjustesPage() {
   };
 
   const updateTemplate = () => {
-    if (!editingTpl || !tplForm.field_label.trim()) { setTplError(t.customFields.errorNameRequired); return; }
+    if (!editingTpl || !hasLabel(tplForm)) { setTplError(t.customFields.errorNameRequired); return; }
     const options = tplForm.field_type === 'select'
       ? tplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     setTemplates(prev => prev.map(tpl => tpl.id === editingTpl.id ? {
       ...tpl,
-      field_label: tplForm.field_label.trim(),
+      ...labelCols(tplForm),
       field_type: tplForm.field_type,
       field_options: options,
       required: tplForm.required,
@@ -1960,15 +1987,15 @@ export default function AjustesPage() {
   useEffect(() => { loadInvoiceTemplates(); }, [loadInvoiceTemplates]);
 
   const addInvoiceTemplate = () => {
-    if (!invoiceTplForm.field_label.trim()) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
-    const key = toKey(invoiceTplForm.field_label);
+    if (!hasLabel(invoiceTplForm)) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
+    const key = labelKey(invoiceTplForm);
     if (invoiceTemplates.some(tpl => tpl.field_key === key)) { setInvoiceTplError(t.customFields.errorDuplicate); return; }
     const options = invoiceTplForm.field_type === 'select'
       ? invoiceTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     const newTpl: FieldTemplate = {
       id: newTempId(),
       field_key: key,
-      field_label: invoiceTplForm.field_label.trim(),
+      ...labelCols(invoiceTplForm),
       field_type: invoiceTplForm.field_type,
       field_options: options,
       required: invoiceTplForm.required,
@@ -1977,7 +2004,7 @@ export default function AjustesPage() {
     };
     setInvoiceTemplates(prev => [...prev, newTpl]);
     setLocalInvoiceOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+    setInvoiceTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setInvoiceTplError(''); setAddInvoiceFieldModal(false);
   };
 
@@ -1990,7 +2017,7 @@ export default function AjustesPage() {
   const openEditInvoiceTemplate = (tpl: FieldTemplate) => {
     setEditingInvoiceTpl(tpl);
     setInvoiceTplForm({
-      field_label: tpl.field_label, field_type: tpl.field_type,
+      ...labelForm(tpl), field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
       integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
       thousands: !!parseFieldConfig(tpl.field_config).thousands,
@@ -2001,12 +2028,12 @@ export default function AjustesPage() {
   };
 
   const updateInvoiceTemplate = () => {
-    if (!editingInvoiceTpl || !invoiceTplForm.field_label.trim()) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
+    if (!editingInvoiceTpl || !hasLabel(invoiceTplForm)) { setInvoiceTplError(t.customFields.errorNameRequired); return; }
     const options = invoiceTplForm.field_type === 'select'
       ? invoiceTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     setInvoiceTemplates(prev => prev.map(tpl => tpl.id === editingInvoiceTpl.id ? {
       ...tpl,
-      field_label: invoiceTplForm.field_label.trim(),
+      ...labelCols(invoiceTplForm),
       field_type: invoiceTplForm.field_type,
       field_options: options,
       required: invoiceTplForm.required,
@@ -2113,15 +2140,15 @@ export default function AjustesPage() {
   useEffect(() => { loadEmpTemplates(); }, [loadEmpTemplates]);
 
   const addEmpTemplate = () => {
-    if (!empTplForm.field_label.trim()) { setEmpTplError(t.customFields.errorNameRequired); return; }
-    const key = toKey(empTplForm.field_label);
+    if (!hasLabel(empTplForm)) { setEmpTplError(t.customFields.errorNameRequired); return; }
+    const key = labelKey(empTplForm);
     if (empTemplates.some(tpl => tpl.field_key === key)) { setEmpTplError(t.customFields.errorDuplicate); return; }
     const options = empTplForm.field_type === 'select'
       ? empTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     const newTpl: FieldTemplate = {
       id: newTempId(),
       field_key: key,
-      field_label: empTplForm.field_label.trim(),
+      ...labelCols(empTplForm),
       field_type: empTplForm.field_type,
       field_options: options,
       required: empTplForm.required,
@@ -2130,7 +2157,7 @@ export default function AjustesPage() {
     };
     setEmpTemplates(prev => [...prev, newTpl]);
     setLocalEmpOrder(prev => prev.includes(`custom:${newTpl.id}`) ? prev : [...prev, `custom:${newTpl.id}`]);
-    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+    setEmpTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
     setEmpTplError(''); setAddEmpFieldModal(false);
   };
 
@@ -2143,7 +2170,7 @@ export default function AjustesPage() {
   const openEditEmpTemplate = (tpl: FieldTemplate) => {
     setEditingEmpTpl(tpl);
     setEmpTplForm({
-      field_label: tpl.field_label, field_type: tpl.field_type,
+      ...labelForm(tpl), field_type: tpl.field_type,
       required: tpl.required, options_raw: tpl.field_options?.join('\n') ?? '',
       integer_only: !!parseFieldConfig(tpl.field_config).integerOnly,
       thousands: !!parseFieldConfig(tpl.field_config).thousands,
@@ -2154,12 +2181,12 @@ export default function AjustesPage() {
   };
 
   const updateEmpTemplate = () => {
-    if (!editingEmpTpl || !empTplForm.field_label.trim()) { setEmpTplError(t.customFields.errorNameRequired); return; }
+    if (!editingEmpTpl || !hasLabel(empTplForm)) { setEmpTplError(t.customFields.errorNameRequired); return; }
     const options = empTplForm.field_type === 'select'
       ? empTplForm.options_raw.split('\n').map(s => s.trim()).filter(Boolean) : null;
     setEmpTemplates(prev => prev.map(tpl => tpl.id === editingEmpTpl.id ? {
       ...tpl,
-      field_label: empTplForm.field_label.trim(),
+      ...labelCols(empTplForm),
       field_type: empTplForm.field_type,
       field_options: options,
       required: empTplForm.required,
@@ -2413,7 +2440,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.jobsSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setJobTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+                    setJobTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setJobTplError(''); setAddJobFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -2708,7 +2735,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.requiredFields.heading}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+                    setTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setTplError(''); setAddFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -2856,7 +2883,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.employeesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setEmpTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+                    setEmpTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setEmpTplError(''); setAddEmpFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -3412,7 +3439,7 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-semibold text-gray-900">{t.invoicesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
-                    setInvoiceTplForm({ field_label: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
+                    setInvoiceTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setInvoiceTplError(''); setAddInvoiceFieldModal(true);
                   }}>
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
@@ -3665,12 +3692,16 @@ export default function AjustesPage() {
       {/* ── Add field modal ─────────────────────────────────────── */}
       <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={tplForm.field_label}
-            onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {tplForm.field_label && (
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={tplForm.field_label_es}
+            onChange={e => setTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={tplForm.field_label_en}
+            onChange={e => setTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          {hasLabel(tplForm) && (
             <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(tplForm.field_label)}</code>
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(tplForm.field_label_es, tplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
@@ -3734,9 +3765,13 @@ export default function AjustesPage() {
       {/* ── Edit field modal ────────────────────────────────────── */}
       <Modal open={editFieldModal} onClose={() => setEditFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={tplForm.field_label}
-            onChange={e => setTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={tplForm.field_label_es}
+            onChange={e => setTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={tplForm.field_label_en}
+            onChange={e => setTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={tplForm.field_type}
@@ -3798,12 +3833,16 @@ export default function AjustesPage() {
       {/* ── Add EMPLOYEE field modal ───────────────────────────── */}
       <Modal open={addEmpFieldModal} onClose={() => setAddEmpFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={empTplForm.field_label}
-            onChange={e => setEmpTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {empTplForm.field_label && (
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={empTplForm.field_label_es}
+            onChange={e => setEmpTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={empTplForm.field_label_en}
+            onChange={e => setEmpTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          {hasLabel(empTplForm) && (
             <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(empTplForm.field_label)}</code>
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(empTplForm.field_label_es, empTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
@@ -3867,9 +3906,13 @@ export default function AjustesPage() {
       {/* ── Edit EMPLOYEE field modal ──────────────────────────── */}
       <Modal open={editEmpFieldModal} onClose={() => setEditEmpFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={empTplForm.field_label}
-            onChange={e => setEmpTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={empTplForm.field_label_es}
+            onChange={e => setEmpTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={empTplForm.field_label_en}
+            onChange={e => setEmpTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={empTplForm.field_type}
@@ -3931,12 +3974,16 @@ export default function AjustesPage() {
       {/* ── Add JOB field modal ─────────────────────────────────── */}
       <Modal open={addJobFieldModal} onClose={() => setAddJobFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={jobTplForm.field_label}
-            onChange={e => setJobTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {jobTplForm.field_label && (
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={jobTplForm.field_label_es}
+            onChange={e => setJobTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={jobTplForm.field_label_en}
+            onChange={e => setJobTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          {hasLabel(jobTplForm) && (
             <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(jobTplForm.field_label)}</code>
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(jobTplForm.field_label_es, jobTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
@@ -4000,9 +4047,13 @@ export default function AjustesPage() {
       {/* ── Edit JOB field modal ────────────────────────────────── */}
       <Modal open={editJobFieldModal} onClose={() => setEditJobFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={jobTplForm.field_label}
-            onChange={e => setJobTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={jobTplForm.field_label_es}
+            onChange={e => setJobTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={jobTplForm.field_label_en}
+            onChange={e => setJobTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={jobTplForm.field_type}
@@ -4064,12 +4115,16 @@ export default function AjustesPage() {
       {/* ── Add INVOICE field modal ─────────────────────────────── */}
       <Modal open={addInvoiceFieldModal} onClose={() => setAddInvoiceFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={invoiceTplForm.field_label}
-            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label: e.target.value }))}/>
-          {invoiceTplForm.field_label && (
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label_es}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label_en}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          {hasLabel(invoiceTplForm) && (
             <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(invoiceTplForm.field_label)}</code>
+              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(invoiceTplForm.field_label_es, invoiceTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
@@ -4133,9 +4188,13 @@ export default function AjustesPage() {
       {/* ── Edit INVOICE field modal ────────────────────────────── */}
       <Modal open={editInvoiceFieldModal} onClose={() => setEditInvoiceFieldModal(false)} title={t.customFields.editModalTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <Input label={t.customFields.fieldNameLabel} placeholder={t.customFields.fieldNamePlaceholder}
-            value={invoiceTplForm.field_label}
-            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label_es}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_es: e.target.value }))}/>
+          <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
+            value={invoiceTplForm.field_label_en}
+            onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
+          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
             <select value={invoiceTplForm.field_type}

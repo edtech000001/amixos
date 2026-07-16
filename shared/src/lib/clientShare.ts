@@ -9,6 +9,8 @@
  *     client's people.
  */
 
+import { resolveFieldLabel } from './fieldTemplates';
+
 export interface ClientShareData {
   first_name: string;
   last_name: string;
@@ -36,6 +38,8 @@ export interface ClientShareContact {
 export interface ClientFieldTemplateLite {
   field_key: string;
   field_label: string;
+  field_label_es?: string | null;
+  field_label_en?: string | null;
 }
 
 // Field labels used in CSV headers and PDF table rows. Keys match the
@@ -68,6 +72,7 @@ export function buildClientCsv(
   client: ClientShareData,
   labels: ClientFieldLabels,
   customTemplates: ClientFieldTemplateLite[],
+  locale?: string,
 ): string {
   const headers: string[] = [];
   const values: string[] = [];
@@ -92,7 +97,7 @@ export function buildClientCsv(
 
   const custom = client.custom_fields ?? {};
   for (const tpl of customTemplates) {
-    add(tpl.field_label, custom[tpl.field_key]);
+    add(locale ? resolveFieldLabel(tpl, locale) : tpl.field_label, custom[tpl.field_key]);
   }
 
   // Trailing newline keeps Excel happy.
@@ -122,6 +127,7 @@ export function buildClientHtml(
   labels: ClientFieldLabels,
   customTemplates: ClientFieldTemplateLite[],
   options: BuildClientHtmlOptions,
+  locale?: string,
 ): string {
   const fullName = [client.first_name, client.last_name].filter(Boolean).join(' ').trim();
   const fullAddress = [
@@ -154,7 +160,7 @@ export function buildClientHtml(
   if (options.includeAll) {
     extraRows = [
       row(labels.notes, client.notes),
-      ...customTemplates.map(tpl => row(tpl.field_label, client.custom_fields?.[tpl.field_key])),
+      ...customTemplates.map(tpl => row(locale ? resolveFieldLabel(tpl, locale) : tpl.field_label, client.custom_fields?.[tpl.field_key])),
     ].join('');
   }
 

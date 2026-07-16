@@ -1244,6 +1244,7 @@ export type DashboardDict = {
         title: string;
         intro: string;
         pendingSummary: string;
+        pendingByRef: string;
         noPending: string;
         chooseBtn: string;
         dropHint: string;
@@ -1586,6 +1587,9 @@ export type DashboardDict = {
       editModalTitle: string;
       fieldNameLabel: string;
       fieldNamePlaceholder: string;
+      fieldNameLabelEs: string;
+      fieldNameLabelEn: string;
+      translationHint: string;
       keyLabel: string;
       fieldTypeLabel: string;
       optionsLabel: string;
@@ -2315,6 +2319,8 @@ export type DashboardDict = {
       hoursCoveredLabel: string;
       alreadyPaidLabel: string;
       paidSoFarLabel: string;
+      paidTag: string;
+      paidDiffersNote: string;
       manualPayBtn: string;
       manualWorkerLabel: string;
       manualSelectWorker: string;
@@ -2339,6 +2345,7 @@ export type DashboardDict = {
       loanEmpty: string;
       loanDeleteConfirm: string;
       loanNewTitle: string;
+      loanEditTitle: string;
       loanSaveBtn: string;
       loanSearchPlaceholder: string;
       loanNoWorkerFound: string;
@@ -2404,6 +2411,10 @@ export type DashboardDict = {
       overdueSuffix: string;
       completedJobsCount: string;
       estPayrollSub: string;
+      payroll: string;
+      payrollWorkersSub: string;
+      grossMargin: string;
+      grossMarginSub: string;
     };
     sections: {
       revenueByMonth: string;
@@ -3709,6 +3720,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           title: 'Subir fotos de proyectos',
           intro: 'Selecciona todas las fotos de una vez. Cada archivo se asigna a su proyecto según la columna "Fotos (nombres de archivo)" del CSV de trabajos (o si el nombre contiene el Project ID). Las fotos sin coincidencia NO se suben ni ocupan almacenamiento.',
           pendingSummary: '{{names}} fotos esperadas en {{jobs}} proyectos.',
+          pendingByRef: '{{jobs}} proyectos con Project ID. Empareja por el ID en el nombre del archivo (p. ej. "Proyecto-0a4f0ca7.Foto 1.jpg").',
           noPending: 'No hay fotos pendientes. Importa trabajos con la columna "Fotos (nombres de archivo)" primero.',
           chooseBtn: 'Elegir fotos',
           dropHint: 'o arrastra los archivos aquí',
@@ -4060,6 +4072,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         editModalTitle: 'Editar campo personalizado',
         fieldNameLabel: 'Nombre del campo *',
         fieldNamePlaceholder: 'ej. Número de contrato',
+        fieldNameLabelEs: 'Nombre (Español)',
+        fieldNameLabelEn: 'Nombre (English)',
+        translationHint: 'Completa al menos uno. Cada usuario ve el nombre en su idioma; si falta, se usa el otro.',
         keyLabel: 'Clave',
         fieldTypeLabel: 'Tipo de campo',
         optionsLabel: 'Opciones',
@@ -4762,6 +4777,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         hoursCoveredLabel: 'Horas que cubre este pago',
         alreadyPaidLabel: 'Pagos anteriores',
         paidSoFarLabel: 'Pagado',
+        paidTag: 'pagado',
+        paidDiffersNote: 'El monto pagado no coincide con el cálculo del período.',
         manualPayBtn: 'Registrar pago',
         manualWorkerLabel: 'Trabajador',
         manualSelectWorker: 'Elegir trabajador…',
@@ -4786,6 +4803,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanEmpty: 'Sin registros de préstamos',
         loanDeleteConfirm: '¿Eliminar este registro?',
         loanNewTitle: 'Nuevo préstamo',
+        loanEditTitle: 'Editar registro',
         loanSaveBtn: 'Guardar',
         loanSearchPlaceholder: 'Buscar trabajador…',
         loanNoWorkerFound: 'No se encontró ningún trabajador',
@@ -4850,6 +4868,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         overdueSuffix: '{{amount}} vencido',
         completedJobsCount: '{{count}} trabajos completados',
         estPayrollSub: 'Est. nómina: {{amount}}',
+        payroll: 'Nómina estimada',
+        payrollWorkersSub: '{{count}} trabajadores',
+        grossMargin: 'Margen bruto est.',
+        grossMarginSub: '{{percent}}% de margen',
       },
       sections: {
         revenueByMonth: 'Ingresos por mes',
@@ -6182,6 +6204,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           title: 'Upload project photos',
           intro: 'Select all your photos at once. Each file is matched to its project using the jobs CSV\'s "Photos (file names)" column (or a file name containing the Project ID). Unmatched photos are NOT uploaded and use no storage.',
           pendingSummary: '{{names}} photos expected across {{jobs}} projects.',
+          pendingByRef: '{{jobs}} projects with a Project ID. Matched by the ID in the file name (e.g. "Proyecto-0a4f0ca7.Foto 1.jpg").',
           noPending: 'No pending photos. Import jobs with the "Photos (file names)" column first.',
           chooseBtn: 'Choose photos',
           dropHint: 'or drag the files here',
@@ -6533,6 +6556,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         editModalTitle: 'Edit custom field',
         fieldNameLabel: 'Field name *',
         fieldNamePlaceholder: 'e.g. Contract number',
+        fieldNameLabelEs: 'Name (Español)',
+        fieldNameLabelEn: 'Name (English)',
+        translationHint: 'Fill at least one. Each user sees the name in their language; if missing, the other is used.',
         keyLabel: 'Key',
         fieldTypeLabel: 'Field type',
         optionsLabel: 'Options',
@@ -7235,6 +7261,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         hoursCoveredLabel: 'Hours this payment covers',
         alreadyPaidLabel: 'Previous payments',
         paidSoFarLabel: 'Paid',
+        paidTag: 'paid',
+        paidDiffersNote: 'The amount paid does not match this period\'s calculation.',
         manualPayBtn: 'Record payment',
         manualWorkerLabel: 'Worker',
         manualSelectWorker: 'Choose worker…',
@@ -7259,6 +7287,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanEmpty: 'No loan entries yet',
         loanDeleteConfirm: 'Delete this entry?',
         loanNewTitle: 'New loan',
+        loanEditTitle: 'Edit entry',
         loanSaveBtn: 'Save',
         loanSearchPlaceholder: 'Search worker…',
         loanNoWorkerFound: 'No worker found',
@@ -7323,6 +7352,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         overdueSuffix: '{{amount}} overdue',
         completedJobsCount: '{{count}} completed jobs',
         estPayrollSub: 'Est. payroll: {{amount}}',
+        payroll: 'Estimated payroll',
+        payrollWorkersSub: '{{count}} workers',
+        grossMargin: 'Gross margin est.',
+        grossMarginSub: '{{percent}}% margin',
       },
       sections: {
         revenueByMonth: 'Revenue by month',

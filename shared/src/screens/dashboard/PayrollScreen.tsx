@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions } from 'react-native';
-import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Search, ChevronDown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '../../i18n';
@@ -115,6 +115,9 @@ export interface PayrollScreenProps {
   onLoanRepayment?: (employeeId: string, amount: number, note?: string, entryDate?: string) => void;
   /** Delete a single loan-ledger entry (mistaken loan/payment). */
   onDeleteLoan?: (id: string) => void;
+  /** Edit a loan-ledger entry. `amount` is SIGNED (sign preserved by the caller
+   *  from the original entry: + loan, − repayment). */
+  onEditLoan?: (id: string, amount: number, note: string, entryDate: string) => void;
 }
 
 function fmt(n: number) {
@@ -155,6 +158,7 @@ export function PayrollScreen({
   onAddLoan,
   onLoanRepayment,
   onDeleteLoan,
+  onEditLoan,
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
@@ -311,6 +315,10 @@ export function PayrollScreen({
   const isFullyPaid = (r: PayrollScreenRow) =>
     (r.payments?.length ?? 0) > 0 && paidTotal(r) + 0.005 >= r.pay + bonusTotal(r);
   const isPartial = (r: PayrollScreenRow) => (r.payments?.length ?? 0) > 0 && !isFullyPaid(r);
+  // Recorded payment exceeds the period's computed pay (e.g. a manual check for
+  // a $0-rate worker) — show what was actually PAID, not the computed number.
+  const overpaid = (r: PayrollScreenRow) =>
+    (r.payments?.length ?? 0) > 0 && paidTotal(r) > r.pay + bonusTotal(r) + 0.005;
   const paidCount = rows.filter(isFullyPaid).length;
   // Unpaid first, paid sink to the bottom (stable — keeps pay-desc within group).
   const sortedRows = [...rows].sort((a, b) => (isFullyPaid(a) ? 1 : 0) - (isFullyPaid(b) ? 1 : 0));
@@ -351,6 +359,7 @@ export function PayrollScreen({
   const [showLoans, setShowLoans] = useState(false);   // loans overlay visible (from pay sheet)
   const [showAddLoan, setShowAddLoan] = useState(false);     // add-loan form
   const [showAddPayment, setShowAddPayment] = useState(false); // record-cash-paydown form
+  const [editingEntry, setEditingEntry] = useState<LoanLedgerEntry | null>(null); // edit existing entry
   const [loanAmount, setLoanAmount] = useState('');
   const [loanNote, setLoanNote] = useState('');
   const [loanDate, setLoanDate] = useState('');
@@ -407,7 +416,7 @@ export function PayrollScreen({
     if (deduct > 0 && onLoanRepayment) onLoanRepayment(payRow.employeeId, deduct);
     setPayRow(null);
   };
-  const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
+  const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
   const openLoans = () => { resetLoanForms(); setShowLoans(true); };
   const openLoansGlobal = () => {
     setLoanSearch('');
@@ -442,6 +451,25 @@ export function PayrollScreen({
     onLoanRepayment(loanTargetId, amt, loanNote.trim(), loanDate || todayStr());
     resetLoanForms();
   };
+  // Edit an existing ledger entry — reuses the amount/note/date form, keeps the
+  // original sign (loan vs repayment).
+  const startEditEntry = (e: LoanLedgerEntry) => {
+    setShowAddLoan(false);
+    setShowAddPayment(false);
+    setEditingEntry(e);
+    setLoanAmount(String(Math.abs(e.amount)));
+    setLoanNote(e.note ?? '');
+    setLoanDate(e.entryDate || todayStr());
+  };
+  const submitEditLoan = () => {
+    if (!editingEntry || !onEditLoan) return;
+    const amt = parseFloat(loanAmount) || 0;
+    if (amt <= 0) return;
+    const signed = editingEntry.amount < 0 ? -Math.abs(amt) : Math.abs(amt);
+    onEditLoan(editingEntry.id, signed, loanNote.trim(), loanDate || todayStr());
+    resetLoanForms();
+  };
+  const loanFormOpen = showAddLoan || showAddPayment || !!editingEntry;
   // Live total shown big at the top of the sheet: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
   const netToPay = modalTotal - (parseFloat(loanDeduct) || 0);
@@ -609,6 +637,11 @@ export function PayrollScreen({
                         {fmt(checkBaseOf(r))}
                         <Text className="text-xs font-semibold text-gray-400"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
                       </Text>
+                    ) : overpaid(r) ? (
+                      <Text className="text-xl font-bold text-amber-600 mt-1">
+                        {fmt(paidTotal(r))}
+                        <Text className="text-xs font-semibold text-gray-400"> {t.paidTag}</Text>
+                      </Text>
                     ) : (
                       <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
                     )}
@@ -643,6 +676,11 @@ export function PayrollScreen({
                     <View className="items-end">
                       <Text className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</Text>
                       <Text className="text-[11px] text-gray-400">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                    </View>
+                  ) : overpaid(r) ? (
+                    <View className="items-end">
+                      <Text className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</Text>
+                      <Text className="text-[11px] text-gray-400">{t.paidTag}</Text>
                     </View>
                   ) : (
                     <Text className="text-sm font-bold text-gray-900">{fmt(r.pay)}</Text>
@@ -1227,10 +1265,10 @@ export function PayrollScreen({
                   <Pressable onPress={() => setShowLoans(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
                 </View>
 
-                {/* Add loan */}
-                {showAddLoan ? (
+                {/* Add / edit loan */}
+                {showAddLoan || editingEntry ? (
                   <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <Text className="text-sm font-semibold text-gray-700">{t.loanNewTitle}</Text>
+                    <Text className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</Text>
                     <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
                       className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
@@ -1238,8 +1276,8 @@ export function PayrollScreen({
                       className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
-                      <Pressable onPress={() => setShowAddLoan(false)} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
-                      <Pressable onPress={submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) > 0 ? 'bg-primary active:opacity-90' : 'bg-primary/50'}`}><Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text></Pressable>
+                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
+                      <Pressable onPress={editingEntry ? submitEditLoan : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) > 0 ? 'bg-primary active:opacity-90' : 'bg-primary/50'}`}><Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text></Pressable>
                     </View>
                   </View>
                 ) : (
@@ -1267,6 +1305,9 @@ export function PayrollScreen({
                             {e.note ? ` · ${e.note}` : ''}
                           </Text>
                         </View>
+                        {onEditLoan ? (
+                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color="#6B7280" /></Pressable>
+                        ) : null}
                         {onDeleteLoan ? (
                           <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
                         ) : null}
@@ -1380,9 +1421,9 @@ export function PayrollScreen({
                   <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
                 </View>
 
-                {showAddLoan || showAddPayment ? (
+                {loanFormOpen ? (
                   <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <Text className="text-sm font-semibold text-gray-700">{showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
+                    <Text className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
                     <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
                       className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
@@ -1391,7 +1432,7 @@ export function PayrollScreen({
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
                       <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
-                      <Pressable onPress={showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
+                      <Pressable onPress={editingEntry ? submitEditLoan : showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
                         className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) <= 0 ? 'bg-gray-300' : showAddPayment ? 'bg-emerald-600 active:opacity-90' : 'bg-primary active:opacity-90'}`}>
                         <Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text>
                       </Pressable>
@@ -1429,6 +1470,9 @@ export function PayrollScreen({
                             {e.note ? ` · ${e.note}` : ''}
                           </Text>
                         </View>
+                        {onEditLoan ? (
+                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color="#6B7280" /></Pressable>
+                        ) : null}
                         {onDeleteLoan ? (
                           <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
                         ) : null}

@@ -27,6 +27,7 @@ import { Plus, Trash2, ChevronDown, ChevronLeft, Check, Search, X, Eye, EyeOff }
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { createSupabaseClient } from '@/lib/supabase';
 import {
   PIN_COLORS,
@@ -103,7 +104,7 @@ export function MapSettingsSheet({
 }) {
   const { business, refetchBusiness } = useApp();
   const supabase = createSupabaseClient();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.modules.map;
 
   const [config, setConfig] = useState<Required<MapPinConfig>>({
@@ -236,9 +237,9 @@ export function MapSettingsSheet({
       };
       type Custom = { field_key: string; field_label: string };
       const [cl, jb, em] = await Promise.all([
-        supabase.from('client_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
-        supabase.from('job_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
-        supabase.from('employee_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order'),
+        supabase.from('client_field_templates').select('field_key, field_label, field_label_es, field_label_en').eq('business_id', business.id).order('sort_order'),
+        supabase.from('job_field_templates').select('field_key, field_label, field_label_es, field_label_en').eq('business_id', business.id).order('sort_order'),
+        supabase.from('employee_field_templates').select('field_key, field_label, field_label_es, field_label_en').eq('business_id', business.id).order('sort_order'),
       ]);
       if (cancelled) return;
       const build = (layer: Layer, customs: Custom[]): FieldOption[] => {
@@ -246,16 +247,16 @@ export function MapSettingsSheet({
         return [...std, ...customs.map(c => ({ key: c.field_key, label: c.field_label }))];
       };
       setFieldOptionsByLayer({
-        clients:   build('clients',   (cl.data ?? []) as Custom[]),
-        jobs:      build('jobs',      (jb.data ?? []) as Custom[]),
-        employees: build('employees', (em.data ?? []) as Custom[]),
+        clients:   build('clients',   localizeTemplates((cl.data ?? []) as Custom[], locale)),
+        jobs:      build('jobs',      localizeTemplates((jb.data ?? []) as Custom[], locale)),
+        employees: build('employees', localizeTemplates((em.data ?? []) as Custom[], locale)),
         // Weather has no per-business custom fields — just the standard
         // alert columns from NOAA.
         weather:   build('weather', []),
       });
     })();
     return () => { cancelled = true; };
-  }, [open, business?.id]);
+  }, [open, business?.id, locale]);
 
   // Debounced per-rule match counts. Runs DIRECT Supabase queries —
   // RLS already scopes to the business so no server round-trip needed.

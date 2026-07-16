@@ -32,7 +32,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
 import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   EMPLOYEE_FIELD_SECTIONS,
   EMPLOYEE_FIELDS_ALWAYS_SHOWN,
@@ -197,7 +197,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
       setAccessRole(e.intended_access_role as Role);
     }
-    setTemplates((tplRes.data ?? []) as FieldTemplate[]);
+    setTemplates(localizeTemplates((tplRes.data ?? []) as FieldTemplate[], locale));
     setMembers(((rawMembers as Array<{ id: string; user_id: string; email: string | null; display_name: string | null; role: string }> | null) ?? []).map(m => ({
       id: m.id, userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role as Role, isYou: m.user_id === user.id,
     })));
@@ -219,7 +219,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business, params.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [business, params.id, locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lend / un-lend this worker to another branch (never their home branch).
   const toggleShare = async (locationId: string) => {

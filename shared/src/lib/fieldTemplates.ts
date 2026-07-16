@@ -72,6 +72,51 @@ export function toggleMultiOption(value: string, option: string): string {
   return next.join(MULTI_SEPARATOR);
 }
 
+// ── Bilingual labels ────────────────────────────────────────────────────────
+
+/**
+ * A field template carrying optional per-locale label overrides. `field_label`
+ * is always present and acts as the fallback shown when a locale has no
+ * override. Overrides are stored in `field_label_es` / `field_label_en`.
+ */
+export interface LocalizedFieldLabel {
+  field_label: string;
+  field_label_es?: string | null;
+  field_label_en?: string | null;
+}
+
+/**
+ * Resolve a custom-field label for the given locale. A non-empty per-locale
+ * override wins; otherwise the primary `field_label` (the always-present
+ * fallback) is returned — so existing single-language fields keep working.
+ */
+export function resolveFieldLabel(tpl: LocalizedFieldLabel, locale: string | null | undefined): string {
+  const alt = locale === 'en' ? tpl.field_label_en : tpl.field_label_es;
+  return (alt && alt.trim()) || tpl.field_label;
+}
+
+/**
+ * Overwrite each row's `field_label` with the locale-resolved label so every
+ * downstream `tpl.field_label` read (forms, detail pages, exports, validation)
+ * shows the translation with no per-site changes. Rows must have been selected
+ * WITH the `field_label_es, field_label_en` columns for overrides to apply;
+ * otherwise this is a harmless identity map.
+ */
+export function localizeTemplates<T extends { field_label: string }>(
+  rows: T[] | null | undefined,
+  locale: string | null | undefined,
+): T[] {
+  return (rows ?? []).map((r) => ({ ...r, field_label: resolveFieldLabel(r, locale) }));
+}
+
+/**
+ * Derive the fallback `field_label` from the two locale inputs (Spanish wins
+ * as the app is Spanish-first). Used by the field editors on save.
+ */
+export function primaryFieldLabel(labelEs: string, labelEn: string): string {
+  return labelEs.trim() || labelEn.trim();
+}
+
 /**
  * Tables that follow the field-template shape with a `sort_order` column.
  * Centralised here so both clients and employees reorder via the same code.

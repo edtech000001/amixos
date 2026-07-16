@@ -36,6 +36,7 @@ import {
   Sparkles,
   type LucideIcon, Archive, DollarSign } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
@@ -316,12 +317,12 @@ export default function JobDetailRoute() {
     void loadCached(`job_field_templates_${business.id}`, async () => {
       const { data, error } = await supabase
         .from('job_field_templates')
-        .select('id, field_key, field_label, field_type')
+        .select('id, field_key, field_label, field_label_es, field_label_en, field_type')
         .eq('business_id', business.id)
         .order('sort_order');
       if (error) throw error;
       return data ?? [];
-    }).then(res => setTemplates((res.data as typeof templates) ?? []));
+    }).then(res => setTemplates(localizeTemplates((res.data as typeof templates) ?? [], locale)));
     // Set null (not "leave as-is") when the row is gone — otherwise a deleted
     // job id reuses this screen's previous job, showing the wrong record
     // instead of the not-found state. (Offline with no cache also lands here.)
@@ -339,7 +340,7 @@ export default function JobDetailRoute() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [id, business?.id]),
+    }, [id, business?.id, locale]),
   );
 
   // Generate (or reuse) the public share token + open the iOS/Android share

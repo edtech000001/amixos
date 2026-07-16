@@ -6,6 +6,7 @@
 // PostgREST's 1000-row default cap.
 
 import { fetchAll } from './supabaseFetch';
+import { computePayrollRows, normalizePayrollConfig, type PayrollConfig } from './payroll';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -19,11 +20,21 @@ export interface ReportInvoice {
 export interface ReportJob {
   id: string; status: string; total_amount: number; created_at: string; client_id: string | null;
   location_id: string | null;
+  // Payroll-estimate inputs — hours are logged on the job (not always in the
+  // timesheets table), so the estimate reads them from here too.
+  scheduled_date?: string | null; total_hours?: number | null;
+  driver_employee_ids?: string[] | null; driver_hours?: number | null;
+  custom_fields?: Record<string, unknown> | null;
+  job_assignments?: { employee_id: string | null }[];
 }
 export interface ReportLocation { id: string; name: string; }
 export interface ReportClient { id: string; created_at: string; }
 export interface ReportTimesheet { id: string; hours_worked: number; work_date: string; employee_id: string | null; worker_name: string | null; }
-export interface ReportEmployee { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string; }
+export interface ReportEmployee {
+  id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string;
+  overtime_eligible?: boolean | null; overtime_threshold?: number | null;
+  overtime_multiplier?: number | null; custom_fields?: Record<string, unknown> | null;
+}
 export interface ReportInventoryItem { id: string; quantity: number; unit_cost: number; }
 
 export interface ReportsData {
@@ -83,13 +94,13 @@ export async function fetchReportsData(
     fetchAll<ReportInvoice>((from, to) =>
       supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportJob>((from, to) =>
-      supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id').eq('business_id', businessId).range(from, to)),
+      supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportClient>((from, to) =>
       supabase.from('clients').select('id, created_at').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportTimesheet>((from, to) =>
       supabase.from('timesheets').select('id, hours_worked, work_date, employee_id, worker_name').eq('business_id', businessId).range(from, to)),
     fetchAll<ReportEmployee>((from, to) =>
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type').eq('business_id', businessId).range(from, to)),
+      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', businessId).range(from, to)),
     inventoryEnabled
       ? fetchAll<ReportInventoryItem>((from, to) =>
           supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId).range(from, to))
@@ -109,6 +120,8 @@ export interface ReportsMetrics {
   paidInvoicesCount: number;
   totalHours: number;
   totalPayroll: number;
+  /** Number of workers with any pay this range (for the payroll KPI sub). */
+  payrollWorkers: number;
   inventoryValue: number;
   /** Monthly series; `name` is a locale-aware short month label. */
   monthlyRevenue: { name: string; revenue: number; jobs: number }[];
@@ -143,6 +156,9 @@ export function computeReports(
   custom?: { from: string | null; to: string | null },
   // Label for jobs with no branch in the per-location breakdown.
   unassignedLocationLabel = 'Sin ubicación',
+  // Pay components (overtime / driver / formula) so the estimate matches the
+  // Payroll page. Omitted = legacy hours×rate.
+  payrollConfig?: unknown,
 ): ReportsMetrics {
   const customActive = !!(custom && (custom.from || custom.to));
   const parseLocal = (s: string) => {
@@ -173,7 +189,6 @@ export function computeReports(
   const filteredInvoices = data.invoices.filter(i => inRange(i.issue_date || i.created_at));
   const filteredJobs = data.jobs.filter(j => inRange(j.created_at));
   const filteredClients = data.clients.filter(c => inRange(c.created_at));
-  const filteredSheets = data.timesheets.filter(ts => inRange(ts.work_date));
 
   const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
   // Raw sums; rounding to cents happens once at display (see the fmt helpers).
@@ -203,7 +218,6 @@ export function computeReports(
         ? filteredInvoices.reduce((s, i) => s + i.total_amount, 0) / filteredInvoices.length
         : 0;
 
-  const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
   const inventoryValue = data.inventory.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
 
   // Monthly revenue + job-count series.
@@ -252,26 +266,33 @@ export function computeReports(
     .map(s => ({ status: s.status, value: jobCounts[s.status], color: s.color }))
     .filter(d => d.value > 0);
 
-  // Employee hours + estimated pay (top 8).
-  const empMap: Record<string, { name: string; hours: number; payRate: number; payType: string }> = {};
-  filteredSheets.forEach(ts => {
-    const key = ts.employee_id ?? ts.worker_name ?? manualWorkerLabel;
-    const emp = data.employees.find(e => e.id === ts.employee_id);
-    const name = emp ? `${emp.first_name} ${emp.last_name}` : ts.worker_name ?? manualWorkerLabel;
-    if (!empMap[key]) empMap[key] = { name, hours: 0, payRate: emp?.pay_rate ?? 0, payType: emp?.pay_type ?? 'hourly' };
-    empMap[key].hours += ts.hours_worked ?? 0;
+  // Employee hours + estimated pay — same engine as the Payroll page so hours
+  // logged on JOBS (total_hours + driver hours via crew assignments) count too,
+  // not just the timesheets table. Filtered to the range by work date.
+  const toYMD = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const payrollRows = computePayrollRows({
+    employees: data.employees,
+    timesheets: data.timesheets.map(ts => ({ employee_id: ts.employee_id, hours_worked: ts.hours_worked, work_date: ts.work_date })),
+    jobs: data.jobs.map(j => ({
+      id: j.id,
+      scheduled_date: j.scheduled_date ?? null,
+      total_hours: j.total_hours ?? null,
+      driver_employee_ids: j.driver_employee_ids ?? null,
+      driver_hours: j.driver_hours ?? null,
+      custom_fields: j.custom_fields ?? null,
+      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+    })),
+    period: { startStr: rangeStart ? toYMD(rangeStart) : '1900-01-01', endStr: toYMD(rangeEnd) },
+    includeZero: false,
+    config: normalizePayrollConfig(payrollConfig) as PayrollConfig,
   });
-  const employeeHours = Object.values(empMap)
-    .map(e => ({
-      name: e.name,
-      hours: e.hours,
-      pay: e.payType === 'hourly' ? e.hours * e.payRate
-        : e.payType === 'daily' ? Math.ceil(e.hours / 8) * e.payRate
-        : e.payRate,
-    }))
+  const totalHours = payrollRows.reduce((s, r) => s + r.hours, 0);
+  const employeeHours = [...payrollRows]
+    .map(r => ({ name: r.name, hours: r.hours, pay: r.pay }))
     .sort((a, b) => b.hours - a.hours)
     .slice(0, 8);
-  const totalPayroll = employeeHours.reduce((s, e) => s + e.pay, 0);
+  const totalPayroll = payrollRows.reduce((s, r) => s + r.pay, 0);
 
   // Per-branch breakdown — only when the business runs multiple locations.
   // jobCount = jobs created in range; revenue = total_amount of completed /
@@ -303,7 +324,7 @@ export function computeReports(
     totalRevenue, pendingRevenue, overdueRevenue,
     avgJobValue, completedJobsCount: completedJobs.length,
     paidInvoicesCount: paidInvoices.length,
-    totalHours, totalPayroll, inventoryValue,
+    totalHours, totalPayroll, payrollWorkers: payrollRows.length, inventoryValue,
     monthlyRevenue,
     invoiceStatus, invoicesTotal: filteredInvoices.length,
     jobStatus, jobsTotal: filteredJobs.length,

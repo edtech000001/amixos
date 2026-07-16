@@ -29,7 +29,7 @@ import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   INVOICE_FIELD_SECTIONS,
   INVOICE_FIELDS_ALWAYS_SHOWN,
@@ -179,7 +179,7 @@ export default function NuevaFacturaRoute() {
       ]);
       if (cancelled) return;
       setClients((cl ?? []) as Client[]);
-      setTemplates((tpls ?? []) as FieldTemplate[]);
+      setTemplates(localizeTemplates((tpls ?? []) as FieldTemplate[], locale));
 
       // New invoice: load the count so the auto-number = start + count.
       if (!editId) {
@@ -224,7 +224,7 @@ export default function NuevaFacturaRoute() {
     return () => {
       cancelled = true;
     };
-  }, [business?.id, editId]);
+  }, [business?.id, editId, locale]);
 
   // Auto-append a blank line when the last row has a description.
   useEffect(() => {

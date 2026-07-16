@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/shared/lib/googleSync';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
@@ -255,7 +256,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       setCustomVals(c.custom_fields ?? {});
     }
     setInvoices(inv ?? []);
-    setTemplates(tpl ?? []);
+    setTemplates(localizeTemplates(tpl ?? [], locale));
     setContacts(cts ?? []);
     setLoading(false);
 
@@ -276,7 +277,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setRoleSuggestions(unique);
   };
 
-  useEffect(() => { load(); }, [id, business]);
+  useEffect(() => { load(); }, [id, business, locale]);
   useEffect(() => {
     if (!business) return;
     supabase.from('price_tiers').select('id, name').eq('business_id', business.id).order('sort_order')

@@ -15,6 +15,7 @@ import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
@@ -77,7 +78,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
   const td = t.detail;
   const tc = full.common;
@@ -175,9 +176,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name, user_id)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
-      supabase.from('job_field_templates').select('id, field_key, field_label, field_type').eq('business_id', business.id).order('sort_order'),
+      supabase.from('job_field_templates').select('id, field_key, field_label, field_label_es, field_label_en, field_type').eq('business_id', business.id).order('sort_order'),
     ]);
-    setTemplates((tpl ?? []) as JobFieldTemplate[]);
+    setTemplates(localizeTemplates((tpl ?? []) as JobFieldTemplate[], locale));
     if (j) {
       setJob(j as Job);
       if (j.client_id) {
@@ -198,7 +199,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [id, business]);
+  useEffect(() => { load(); }, [id, business, locale]);
 
   const updateStatus = async (newStatus: string) => {
     if (!job || !business) return;

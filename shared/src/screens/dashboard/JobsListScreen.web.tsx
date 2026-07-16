@@ -313,36 +313,46 @@ export function JobsListScreen({
     delegated: tw.delegatedFilterTab,
   };
 
+  const searching = search.trim().length > 0;
+
+  // Whether a job belongs to a single status tab (archived jobs live only under
+  // the Archived tab). Shared by the tab filter and the per-tab counts.
+  const jobInTab = (j: JobListItem, tk: StatusTabKey): boolean =>
+    tk === 'archived'
+      ? !!j.archivedAt
+      : j.archivedAt
+        ? false
+        : tk === 'propuestas'
+          ? PROPOSAL_STATUSES.includes(j.status)
+          : tk === 'delegated'
+            ? !!j.delegatedToBusinessName
+            : j.status === tk;
+
   // Multi-select: a job matches if it satisfies ANY selected tab. With no tabs
   // (the default "active" view) we hide closed work — invoiced + cancelled —
-  // so the working list stays clean. Those are one tap away via their tab.
+  // so the working list stays clean. BUT while a search is active we span EVERY
+  // status (incl. closed + archived) so a targeted match always surfaces.
   const matchesTab = (j: JobListItem) => {
-    // Archived jobs only surface under their own tab.
-    if (tabs.length === 0) return !CLOSED_DEFAULT_HIDDEN.includes(j.status) && !j.archivedAt;
-    return tabs.some(tk =>
-      tk === 'archived'
-        ? !!j.archivedAt
-        : j.archivedAt
-          ? false
-          : tk === 'propuestas'
-            ? PROPOSAL_STATUSES.includes(j.status)
-            : tk === 'delegated'
-              ? !!j.delegatedToBusinessName
-              : j.status === tk,
-    );
+    if (tabs.length === 0) {
+      if (searching) return true;
+      return !CLOSED_DEFAULT_HIDDEN.includes(j.status) && !j.archivedAt;
+    }
+    return tabs.some((tk) => jobInTab(j, tk));
   };
 
+  // Search + date-range gate, independent of the status tabs — powers both the
+  // visible list and the per-tab counts (so a search shows WHERE matches are).
+  const passesSearchDate = (j: JobListItem) =>
+    searchMatches(
+      [j.title, j.estimateNumber, j.externalRef, j.clientName, j.clientCompany, j.jobCity, j.jobState,
+       j.leadName, ...j.workerNames]
+        .filter(Boolean)
+        .join(' '),
+      search,
+    ) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
+
   const filtered = useMemo(() => {
-    return jobs.filter((j) => {
-      const matchSearch = searchMatches(
-        [j.title, j.estimateNumber, j.externalRef, j.clientName, j.clientCompany, j.jobCity, j.jobState,
-         j.leadName, ...j.workerNames]
-          .filter(Boolean)
-          .join(' '),
-        search,
-      );
-      return matchSearch && matchesTab(j) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
-    });
+    return jobs.filter((j) => passesSearchDate(j) && matchesTab(j));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, search, tabs, dateFrom, dateTo]);
 
@@ -357,18 +367,17 @@ export function JobsListScreen({
   );
   const sortActive = sortBy !== 'recent' || groupBy !== 'none';
 
-  const counts = useMemo(
-    () =>
-      TAB_KEYS.reduce((acc, k) => {
-        if (k === 'all') acc[k] = jobs.length;
-        else if (k === 'propuestas') acc[k] = jobs.filter((j) => PROPOSAL_STATUSES.includes(j.status)).length;
-        else if (k === 'delegated') acc[k] = jobs.filter((j) => !!j.delegatedToBusinessName).length;
-        else if (k === 'archived') acc[k] = jobs.filter((j) => !!j.archivedAt).length;
-        else acc[k] = jobs.filter((j) => j.status === k && !j.archivedAt).length;
-        return acc;
-      }, {} as Record<TabKey, number>),
-    [jobs],
-  );
+  // Counts reflect the active search + date range so the badges tell the user
+  // WHERE matches are (e.g. "Invoiced 1"). With no search this is every job,
+  // i.e. the plain totals.
+  const counts = useMemo(() => {
+    const pool = jobs.filter(passesSearchDate);
+    return TAB_KEYS.reduce((acc, k) => {
+      acc[k] = k === 'all' ? pool.length : pool.filter((j) => jobInTab(j, k as StatusTabKey)).length;
+      return acc;
+    }, {} as Record<TabKey, number>);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, search, dateFrom, dateTo]);
 
   const pendingValue = jobs
     .filter((j) => j.status === 'sent' && !isExpired(j))

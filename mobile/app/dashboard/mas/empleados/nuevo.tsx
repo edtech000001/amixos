@@ -27,7 +27,7 @@ import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
   EMPLOYEE_FIELD_SECTIONS,
   EMPLOYEE_FIELDS_ALWAYS_SHOWN,
@@ -362,9 +362,9 @@ export default function NuevoEmpleadoRoute() {
         .select('*')
         .eq('business_id', business.id)
         .order('sort_order');
-      setTemplates((data ?? []) as FieldTemplate[]);
+      setTemplates(localizeTemplates((data ?? []) as FieldTemplate[], locale));
     })();
-  }, [business?.id]);
+  }, [business?.id, locale]);
 
   // Default the home branch once locations load (active branch, else default).
   useEffect(() => {

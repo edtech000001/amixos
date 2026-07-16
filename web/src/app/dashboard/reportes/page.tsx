@@ -10,11 +10,13 @@ import {
 import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
-  FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin, Calendar, XCircle } from 'lucide-react';
+  FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin, Calendar, XCircle,
+  Wallet, PiggyBank } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { computePayrollRows, normalizePayrollConfig } from '@amixos/shared/lib/payroll';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,10 +28,20 @@ interface Invoice {
 interface Job {
   id: string; status: string; total_amount: number; created_at: string;
   client_id: string | null; location_id: string | null;
+  // Payroll-estimate inputs: hours are logged on the job (not always in the
+  // timesheets table), so the estimate must read them from here too.
+  scheduled_date: string | null; total_hours: number | null;
+  driver_employee_ids: string[] | null; driver_hours: number | null;
+  custom_fields: Record<string, unknown> | null;
+  job_assignments?: { employee_id: string | null }[];
 }
 interface Client { id: string; created_at: string; }
 interface Timesheet { id: string; hours_worked: number; work_date: string; employee_id: string | null; worker_name: string | null; }
-interface Employee { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string; }
+interface Employee {
+  id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string;
+  overtime_eligible?: boolean | null; overtime_threshold?: number | null;
+  overtime_multiplier?: number | null; custom_fields?: Record<string, unknown> | null;
+}
 interface InventoryItem { id: string; quantity: number; unit_cost: number; }
 
 type Range = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'last_year' | 'all';
@@ -167,7 +179,7 @@ export default function ReportesPage() {
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Job>((from, to) =>
         supabase.from('jobs')
-          .select('id, status, total_amount, created_at, client_id, location_id')
+          .select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Client>((from, to) =>
         supabase.from('clients')
@@ -179,7 +191,7 @@ export default function ReportesPage() {
           .eq('business_id', businessId).range(from, to)),
       fetchAll<Employee>((from, to) =>
         supabase.from('employees')
-          .select('id, first_name, last_name, pay_rate, pay_type')
+          .select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields')
           .eq('business_id', businessId).range(from, to)),
       inventoryEnabled
         ? fetchAll<InventoryItem>((from, to) =>
@@ -355,28 +367,48 @@ export default function ReportesPage() {
     ].filter(d => d.value > 0);
   }, [filteredJobs, full.dashboard.jobs.tabs]);
 
-  // ── Employee hours table ──────────────────────────────────────────────────
-  const employeeHours = useMemo(() => {
-    const map: Record<string, { name: string; hours: number; payRate: number; payType: string }> = {};
-    filteredSheets.forEach(ts => {
-      const key = ts.employee_id ?? ts.worker_name ?? t.employees.manualWorker;
-      const emp = employees.find(e => e.id === ts.employee_id);
-      const name = emp ? `${emp.first_name} ${emp.last_name}` : ts.worker_name ?? t.employees.manualWorker;
-      if (!map[key]) map[key] = { name, hours: 0, payRate: emp?.pay_rate ?? 0, payType: emp?.pay_type ?? 'hourly' };
-      map[key].hours += ts.hours_worked ?? 0;
+  // ── Employee hours + payroll estimate ─────────────────────────────────────
+  // Hours come from BOTH the timesheets table AND hours logged on jobs
+  // (total_hours + driver hours via crew assignments). Uses the SAME engine as
+  // the Payroll page so the estimate matches — a business that logs hours only
+  // on jobs no longer shows $0. Filtered by the selected range (by work date).
+  const payrollRows = useMemo(() => {
+    const toYMD = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const startStr = rangeStart ? toYMD(rangeStart) : '1900-01-01';
+    const endStr = toYMD(rangeEnd ?? new Date());
+    const pjobs = jobs.map(j => ({
+      id: j.id,
+      scheduled_date: j.scheduled_date,
+      total_hours: j.total_hours,
+      driver_employee_ids: j.driver_employee_ids,
+      driver_hours: j.driver_hours,
+      custom_fields: j.custom_fields ?? null,
+      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+    }));
+    return computePayrollRows({
+      employees,
+      timesheets: timesheets.map(ts => ({ employee_id: ts.employee_id, hours_worked: ts.hours_worked, work_date: ts.work_date })),
+      jobs: pjobs,
+      period: { startStr, endStr },
+      includeZero: false,
+      config: normalizePayrollConfig(business?.payroll_config),
     });
-    return Object.values(map)
-      .map(e => ({
-        ...e,
-        pay: e.payType === 'hourly' ? e.hours * e.payRate
-           : e.payType === 'daily' ? Math.ceil(e.hours / 8) * e.payRate
-           : e.payRate,
-      }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 8);
-  }, [filteredSheets, employees, t.employees.manualWorker]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, timesheets, employees, rangeStart, rangeEnd, business?.payroll_config]);
 
-  const totalPayroll = employeeHours.reduce((s, e) => s + e.pay, 0);
+  const employeeHours = useMemo(
+    () => [...payrollRows]
+      .map(r => ({ name: r.name, hours: r.hours, payRate: r.payRate, payType: r.payType, pay: r.pay }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 8),
+    [payrollRows],
+  );
+
+  const totalPayroll = payrollRows.reduce((s, r) => s + r.pay, 0);
+  const payrollWorkers = payrollRows.length;
+  const grossMargin = totalRevenue - totalPayroll;
+  const marginPct = totalRevenue > 0 ? Math.round((grossMargin / totalRevenue) * 100) : 0;
 
   // ── Top clients by invoice revenue ───────────────────────────────────────
   const topClients = useMemo(() => {
@@ -516,11 +548,15 @@ export default function ReportesPage() {
       </Link>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <KpiCard icon={<DollarSign size={16}/>} label={t.kpis.revenueCollected} value={fmt(totalRevenue)} color="emerald"
           sub={paidSubLabel}/>
         <KpiCard icon={<FileText size={16}/>} label={t.kpis.pendingToCollect} value={fmt(pendingRevenue + overdueRevenue)} color="amber"
           sub={overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(overdueRevenue)) : undefined}/>
+        <KpiCard icon={<Wallet size={16}/>} label={t.kpis.payroll} value={fmt(totalPayroll)} color="red"
+          sub={t.kpis.payrollWorkersSub.replace('{{count}}', String(payrollWorkers))}/>
+        <KpiCard icon={<PiggyBank size={16}/>} label={t.kpis.grossMargin} value={totalRevenue > 0 ? fmt(grossMargin) : '—'} color="blue"
+          sub={totalRevenue > 0 ? t.kpis.grossMarginSub.replace('{{percent}}', String(marginPct)) : undefined}/>
         <KpiCard icon={<ClipboardList size={16}/>} label={t.kpis.avgJobValue} value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
           sub={t.kpis.completedJobsCount.replace('{{count}}', String(completedJobs.length))}/>
         <KpiCard icon={<Clock size={16}/>} label={t.kpis.hoursLogged} value={totalHours.toFixed(1)} color="purple"
@@ -672,21 +708,43 @@ export default function ReportesPage() {
           </div>
         </Section>
 
-        {/* Invoice conversion */}
+        {/* Financial summary — gross-margin headline + a payroll-vs-margin bar
+            over collected revenue, then the breakdown. */}
         <Section title={t.sections.financialSummary}>
-          <div className="flex flex-col gap-3">
-            {[
-              { label: t.financial.revenueCollected, value: fmt(totalRevenue), color: 'text-emerald-600' },
-              { label: t.financial.pending, value: fmt(pendingRevenue), color: 'text-blue-600' },
-              { label: t.financial.overdue, value: fmt(overdueRevenue), color: 'text-red-500' },
-              { label: t.financial.estPayroll, value: fmt(totalPayroll), color: 'text-amber-600' },
-              { label: t.financial.grossMarginEst, value: totalRevenue > 0 ? fmt(totalRevenue - totalPayroll) : '—', color: 'text-gray-900' },
-            ].map(row => (
-              <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-gray-50 last:border-0">
-                <span className="text-xs text-gray-500">{row.label}</span>
-                <span className={`text-sm font-bold ${row.color}`}>{row.value}</span>
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <p className="text-3xl font-black text-gray-900">{totalRevenue > 0 ? fmt(grossMargin) : '—'}</p>
+                {totalRevenue > 0 ? (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${marginPct >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{marginPct}%</span>
+                ) : null}
               </div>
-            ))}
+              <p className="text-xs text-gray-500 mt-0.5">{t.financial.grossMarginEst}</p>
+            </div>
+
+            {totalRevenue > 0 ? (
+              <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                <div className="bg-amber-400" style={{ width: `${Math.min(100, Math.max(0, (totalPayroll / totalRevenue) * 100))}%` }} />
+                <div className="bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, (grossMargin / totalRevenue) * 100))}%` }} />
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2.5">
+              {[
+                { label: t.financial.revenueCollected, value: fmt(totalRevenue), dot: 'bg-emerald-500' },
+                { label: t.financial.estPayroll, value: fmt(totalPayroll), dot: 'bg-amber-400' },
+                { label: t.financial.pending, value: fmt(pendingRevenue), dot: 'bg-blue-500' },
+                { label: t.financial.overdue, value: fmt(overdueRevenue), dot: 'bg-red-500' },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className={`w-2 h-2 rounded-full ${row.dot}`} />
+                    {row.label}
+                  </span>
+                  <span className="text-sm font-bold text-gray-900">{row.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Section>
 

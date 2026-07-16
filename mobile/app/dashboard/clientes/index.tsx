@@ -10,6 +10,7 @@ import {
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
@@ -48,7 +49,7 @@ export default function ClientesTab() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const syncBanner = useGoogleSyncBanner();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -91,13 +92,13 @@ export default function ClientesTab() {
     try {
       const tplRes = await supabase
         .from('client_field_templates')
-        .select('field_key, field_label')
+        .select('field_key, field_label, field_label_es, field_label_en')
         .eq('business_id', businessId)
         .order('sort_order');
       tplData = (tplRes.data as { field_key: string; field_label: string }[] | null) ?? [];
     } catch { /* offline — no templates */ }
 
-    setTemplates(tplData);
+    setTemplates(localizeTemplates(tplData, locale));
     const byClient = new Map<string, { name: string; role: string | null }[]>();
     for (const ct of contactRows) {
       const arr = byClient.get(ct.client_id);
@@ -115,7 +116,7 @@ export default function ClientesTab() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [business]),
+    }, [business, locale]),
   );
 
   const items: ClientListItem[] = useMemo(

@@ -50,7 +50,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
 import { UserPlus } from 'lucide-react-native';
@@ -329,7 +329,7 @@ export default function NuevoTrabajoRoute() {
       setClients(cl);
       // Roster flag (migration 128): office members opt out of crew pickers.
       setEmployees(emp.filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
-      setTemplates((tpl ?? []) as FieldTemplate[]);
+      setTemplates(localizeTemplates((tpl ?? []) as FieldTemplate[], locale));
 
       if (sourceId) {
         const [{ data: job }, { data: assigns }] = await Promise.all([
@@ -411,7 +411,7 @@ export default function NuevoTrabajoRoute() {
     return () => {
       cancelled = true;
     };
-  }, [business?.id, sourceId]);
+  }, [business?.id, sourceId, locale]);
 
   // Parse pasted coordinates ("lat, lng") and store as numeric lat/lng.
   const onCoordsChange = (text: string) => {

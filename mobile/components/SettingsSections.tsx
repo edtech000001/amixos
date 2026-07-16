@@ -56,7 +56,7 @@ import {
 } from '@amixos/shared/lib/subscription';
 import { PLANS } from '@amixos/shared/lib/plans';
 import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
-import { moveTemplate, parseFieldConfig } from '@amixos/shared/lib/fieldTemplates';
+import { moveTemplate, parseFieldConfig, primaryFieldLabel, localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import {
   JOB_ALERT_COLORS,
@@ -140,6 +140,8 @@ interface FieldTemplate {
   id: string;
   field_key: string;
   field_label: string;
+  field_label_es: string | null;
+  field_label_en: string | null;
   field_type: FieldType;
   field_options: string[] | null;
   required: boolean;
@@ -631,9 +633,9 @@ export function FacturasSection() {
   const [jobFields, setJobFields] = useState<{ field_key: string; field_label: string }[]>([]);
   useEffect(() => {
     if (!business) return;
-    void supabase.from('job_field_templates').select('field_key, field_label').eq('business_id', business.id).order('sort_order')
-      .then(({ data }: { data: { field_key: string; field_label: string }[] | null }) => setJobFields(data ?? []));
-  }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    void supabase.from('job_field_templates').select('field_key, field_label, field_label_es, field_label_en').eq('business_id', business.id).order('sort_order')
+      .then(({ data }: { data: { field_key: string; field_label: string }[] | null }) => setJobFields(localizeTemplates(data ?? [], locale)));
+  }, [business?.id, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [emailSubject, setEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [dbEmailSubject, setDbEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [emailBody, setEmailBody] = useState(business?.invoice_email_body ?? '');
@@ -775,6 +777,8 @@ export function FacturasSection() {
   // Local-only template insert/update from the modal.
   const onTemplateSubmit = (data: {
     field_label: string;
+    field_label_es: string | null;
+    field_label_en: string | null;
     field_type: FieldType;
     field_options: string[] | null;
     required: boolean;
@@ -785,7 +789,7 @@ export function FacturasSection() {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
+            ? { ...tpl, field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -793,7 +797,7 @@ export function FacturasSection() {
       const newTpl: FieldTemplate = {
         id: newTempId(),
         field_key: data.field_key,
-        field_label: data.field_label,
+        field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en,
         field_type: data.field_type,
         field_options: data.field_options,
         required: data.required,
@@ -833,7 +837,7 @@ export function FacturasSection() {
         const rows = ops.inserts.map((tpl, i) => ({
           business_id: business.id,
           field_key: tpl.field_key,
-          field_label: tpl.field_label,
+          field_label: tpl.field_label, field_label_es: tpl.field_label_es, field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -1411,7 +1415,7 @@ export function TrabajosFieldsSection() {
         const rows = ops.inserts.map((tpl, i) => ({
           business_id: business.id,
           field_key: tpl.field_key,
-          field_label: tpl.field_label,
+          field_label: tpl.field_label, field_label_es: tpl.field_label_es, field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -1544,6 +1548,8 @@ export function TrabajosFieldsSection() {
 
   const onTemplateSubmit = (data: {
     field_label: string;
+    field_label_es: string | null;
+    field_label_en: string | null;
     field_type: FieldType;
     field_options: string[] | null;
     required: boolean;
@@ -1554,7 +1560,7 @@ export function TrabajosFieldsSection() {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
+            ? { ...tpl, field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -1562,7 +1568,7 @@ export function TrabajosFieldsSection() {
       const newTpl: FieldTemplate = {
         id: newTempId(),
         field_key: data.field_key,
-        field_label: data.field_label,
+        field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en,
         field_type: data.field_type,
         field_options: data.field_options,
         required: data.required,
@@ -2232,7 +2238,7 @@ export function ClientesSection() {
         const rows = ops.inserts.map((tpl, i) => ({
           business_id: business.id,
           field_key: tpl.field_key,
-          field_label: tpl.field_label,
+          field_label: tpl.field_label, field_label_es: tpl.field_label_es, field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -2379,6 +2385,8 @@ export function ClientesSection() {
   // Local-only insert/update from the modal's onSubmit callback.
   const onTemplateSubmit = (data: {
     field_label: string;
+    field_label_es: string | null;
+    field_label_en: string | null;
     field_type: FieldType;
     field_options: string[] | null;
     required: boolean;
@@ -2391,7 +2399,7 @@ export function ClientesSection() {
           tpl.id === editing.id
             ? {
                 ...tpl,
-                field_label: data.field_label,
+                field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en,
                 field_type: data.field_type,
                 field_options: data.field_options,
                 required: data.required,
@@ -2404,7 +2412,7 @@ export function ClientesSection() {
       const newTpl: FieldTemplate = {
         id: newTempId(),
         field_key: data.field_key,
-        field_label: data.field_label,
+        field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en,
         field_type: data.field_type,
         field_options: data.field_options,
         required: data.required,
@@ -2689,7 +2697,7 @@ export function EmpleadosSection() {
         const rows = ops.inserts.map((tpl, i) => ({
           business_id: business.id,
           field_key: tpl.field_key,
-          field_label: tpl.field_label,
+          field_label: tpl.field_label, field_label_es: tpl.field_label_es, field_label_en: tpl.field_label_en,
           field_type: tpl.field_type,
           field_options: tpl.field_options,
           required: tpl.required,
@@ -2828,6 +2836,8 @@ export function EmpleadosSection() {
 
   const onTemplateSubmit = (data: {
     field_label: string;
+    field_label_es: string | null;
+    field_label_en: string | null;
     field_type: FieldType;
     field_options: string[] | null;
     required: boolean;
@@ -2838,7 +2848,7 @@ export function EmpleadosSection() {
       setTemplates((prev) =>
         prev.map((tpl) =>
           tpl.id === editing.id
-            ? { ...tpl, field_label: data.field_label, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
+            ? { ...tpl, field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en, field_type: data.field_type, field_options: data.field_options, required: data.required, field_config: data.field_config }
             : tpl,
         ),
       );
@@ -2846,7 +2856,7 @@ export function EmpleadosSection() {
       const newTpl: FieldTemplate = {
         id: newTempId(),
         field_key: data.field_key,
-        field_label: data.field_label,
+        field_label: data.field_label, field_label_es: data.field_label_es, field_label_en: data.field_label_en,
         field_type: data.field_type,
         field_options: data.field_options,
         required: data.required,
@@ -2986,6 +2996,8 @@ function FieldTemplateModal({
   templates: FieldTemplate[];
   onSubmit: (data: {
     field_label: string;
+    field_label_es: string | null;
+    field_label_en: string | null;
     field_type: FieldType;
     field_options: string[] | null;
     required: boolean;
@@ -2993,10 +3005,11 @@ function FieldTemplateModal({
     field_config: { integerOnly?: boolean; multi?: boolean; thousands?: boolean };
   }) => void;
 }) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
 
-  const [label, setLabel] = useState('');
+  const [labelEs, setLabelEs] = useState('');
+  const [labelEn, setLabelEn] = useState('');
   const [type, setType] = useState<FieldType>('text');
   const [optionsRaw, setOptionsRaw] = useState('');
   const [required, setRequired] = useState(false);
@@ -3007,7 +3020,9 @@ function FieldTemplateModal({
 
   useEffect(() => {
     if (editing) {
-      setLabel(editing.field_label);
+      // Legacy fields (no override yet) seed the current-locale box.
+      setLabelEs(editing.field_label_es ?? (locale === 'es' ? editing.field_label : ''));
+      setLabelEn(editing.field_label_en ?? (locale === 'en' ? editing.field_label : ''));
       setType(editing.field_type);
       setRequired(editing.required);
       setOptionsRaw(editing.field_options?.join('\n') ?? '');
@@ -3016,7 +3031,8 @@ function FieldTemplateModal({
       setThousands(cfg.thousands === true);
       setMulti(cfg.multi === true);
     } else {
-      setLabel('');
+      setLabelEs('');
+      setLabelEn('');
       setType('text');
       setRequired(false);
       setOptionsRaw('');
@@ -3025,7 +3041,7 @@ function FieldTemplateModal({
       setMulti(false);
     }
     setError('');
-  }, [editing, open]);
+  }, [editing, open, locale]);
 
   const FIELD_TYPE_OPTIONS = [
     { value: 'text', label: t.fieldTypes.text },
@@ -3037,11 +3053,12 @@ function FieldTemplateModal({
   ];
 
   const onSave = () => {
-    if (!label.trim()) {
+    if (!labelEs.trim() && !labelEn.trim()) {
       setError(t.customFields.errorNameRequired);
       return;
     }
-    const key = toKey(label);
+    const primary = primaryFieldLabel(labelEs, labelEn);
+    const key = toKey(primary);
     if (!editing && templates.some((tpl) => tpl.field_key === key)) {
       setError(t.customFields.errorDuplicate);
       return;
@@ -3055,7 +3072,9 @@ function FieldTemplateModal({
     if (type === 'number' && thousands) field_config.thousands = true;
     if (type === 'select' && multi) field_config.multi = true;
     onSubmit({
-      field_label: label.trim(),
+      field_label: primary,
+      field_label_es: labelEs.trim() || null,
+      field_label_en: labelEn.trim() || null,
       field_type: type,
       field_options: options,
       required,
@@ -3072,12 +3091,20 @@ function FieldTemplateModal({
     >
       <View className="gap-4">
         <Input
-          label={t.customFields.fieldNameLabel}
+          label={t.customFields.fieldNameLabelEs}
           placeholder={t.customFields.fieldNamePlaceholder}
-          value={label}
-          onChangeText={setLabel}
+          value={labelEs}
+          onChangeText={setLabelEs}
           autoCapitalize="sentences"
         />
+        <Input
+          label={t.customFields.fieldNameLabelEn}
+          placeholder={t.customFields.fieldNamePlaceholder}
+          value={labelEn}
+          onChangeText={setLabelEn}
+          autoCapitalize="sentences"
+        />
+        <Text className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</Text>
 
         <Select
           label={t.customFields.fieldTypeLabel}
