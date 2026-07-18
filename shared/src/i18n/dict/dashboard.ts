@@ -1307,6 +1307,8 @@ export type DashboardDict = {
       inactiveBadge: string;
       deactivate: string;
       activate: string;
+      duplicate: string;
+      copySuffix: string;
       deleteConfirm: string;
       saveBtn: string;
       tiersTitle: string;
@@ -1323,6 +1325,29 @@ export type DashboardDict = {
       addonBadge: string;
       clientTierLabel: string;
       clientTierNone: string;
+      generateBtn: string;
+      generateTitle: string;
+      forClient: string;
+      forState: string;
+      selectClientPlaceholder: string;
+      preparedFor: string;
+      sheetTitle: string;
+      additionalCharges: string;
+      printBtn: string;
+      generatedOn: string;
+      allStatesLabel: string;
+      genericSheet: string;
+      customizeBtn: string;
+      customizeTitle: string;
+      accentColorLabel: string;
+      designLabel: string;
+      designClassic: string;
+      designCards: string;
+      designBold: string;
+      designElegant: string;
+      designMinimal: string;
+      sectionOrderLabel: string;
+      sectionOrderHint: string;
     };
     navigation: {
       subtitle: string;
@@ -3783,6 +3808,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         inactiveBadge: 'Inactivo',
         deactivate: 'Desactivar',
         activate: 'Activar',
+        duplicate: 'Duplicar',
+        copySuffix: '(copia)',
         deleteConfirm: '¿Eliminar este precio?',
         saveBtn: 'Guardar',
         tiersTitle: 'Niveles de precio',
@@ -3799,6 +3826,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addonBadge: 'Add-on',
         clientTierLabel: 'Nivel de precio',
         clientTierNone: 'Estándar (base)',
+        generateBtn: 'Generar hoja',
+        generateTitle: 'Generar hoja de precios',
+        forClient: 'Cliente',
+        forState: 'Estado',
+        selectClientPlaceholder: 'Elegir cliente…',
+        preparedFor: 'Preparado para',
+        sheetTitle: 'Hoja de precios',
+        additionalCharges: 'Cargos adicionales',
+        printBtn: 'Imprimir / Guardar PDF',
+        generatedOn: 'Generado el',
+        allStatesLabel: 'Todos los estados',
+        genericSheet: 'Precios generales',
+        customizeBtn: 'Personalizar',
+        customizeTitle: 'Personalizar hoja de precios',
+        accentColorLabel: 'Color principal',
+        designLabel: 'Diseño',
+        designClassic: 'Clásico',
+        designCards: 'Tarjetas',
+        designBold: 'Intenso',
+        designElegant: 'Elegante',
+        designMinimal: 'Minimalista',
+        sectionOrderLabel: 'Orden de secciones',
+        sectionOrderHint: 'Arrastra con las flechas para reordenar las categorías.',
       },
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
@@ -6267,6 +6317,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         inactiveBadge: 'Inactive',
         deactivate: 'Deactivate',
         activate: 'Activate',
+        duplicate: 'Duplicate',
+        copySuffix: '(copy)',
         deleteConfirm: 'Delete this price?',
         saveBtn: 'Save',
         tiersTitle: 'Price tiers',
@@ -6283,6 +6335,29 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addonBadge: 'Add-on',
         clientTierLabel: 'Price tier',
         clientTierNone: 'Standard (base)',
+        generateBtn: 'Generate sheet',
+        generateTitle: 'Generate price sheet',
+        forClient: 'Client',
+        forState: 'State',
+        selectClientPlaceholder: 'Choose a client…',
+        preparedFor: 'Prepared for',
+        sheetTitle: 'Price Sheet',
+        additionalCharges: 'Additional charges',
+        printBtn: 'Print / Save as PDF',
+        generatedOn: 'Generated on',
+        allStatesLabel: 'All states',
+        genericSheet: 'General pricing',
+        customizeBtn: 'Customize',
+        customizeTitle: 'Customize price sheet',
+        accentColorLabel: 'Accent color',
+        designLabel: 'Design',
+        designClassic: 'Classic',
+        designCards: 'Cards',
+        designBold: 'Bold',
+        designElegant: 'Elegant',
+        designMinimal: 'Minimal',
+        sectionOrderLabel: 'Section order',
+        sectionOrderHint: 'Use the arrows to reorder the categories.',
       },
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',

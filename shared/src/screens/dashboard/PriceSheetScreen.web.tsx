@@ -7,7 +7,7 @@
 // overrides that autoprice reads via applicableRate().
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X, Trash2, Pencil, DollarSign, Search } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { confirm } from '../../ui/confirmBus';
@@ -27,6 +27,9 @@ export interface PriceSheetScreenProps {
   supabase: SupabaseLike;
   businessId: string;
   canManage: boolean;
+  /** When provided, shows a "Generate sheet" header button (client-facing
+   *  price-sheet PDF). Web-only for now. */
+  onGenerate?: () => void;
 }
 
 // 50 states + DC, USPS order — full names come from usStateName(abbr).
@@ -42,6 +45,7 @@ interface Draft {
   name: string;
   category: string;
   pricingMode: PricingMode;
+  unitLabel: string;
   rate: string;
   stateRates: DraftState[];
   tierRates: Record<string, string>;
@@ -52,10 +56,10 @@ interface Draft {
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
+  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }: PriceSheetScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
@@ -87,8 +91,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     await Promise.all([loadTiers(), load()]);
   };
 
-  const load = async () => {
-    setLoading(true);
+  // silent = refetch WITHOUT the spinner, so a post-save reload doesn't swap the
+  // list for a loader (which collapses the page height and resets scroll to top).
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
       .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
@@ -96,7 +102,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       .order('sort_order')
       .order('name');
     setItems(((data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { void load(); void loadTiers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
 
@@ -120,18 +126,33 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleItems]);
 
-  const openNew = () => setDraft(emptyDraft());
-  const openEdit = (i: PriceSheetItem) => setDraft({
-    id: i.id,
-    name: i.name,
+  // Keep the per-state rows alphabetical by state name; blank (unchosen) rows
+  // sink to the bottom so a freshly-added row stays put until you pick a state.
+  const sortStateRates = (rows: DraftState[]): DraftState[] =>
+    [...rows].sort((a, b) => {
+      if (!a.state && !b.state) return 0;
+      if (!a.state) return 1;
+      if (!b.state) return -1;
+      return usStateName(a.state, locale).localeCompare(usStateName(b.state, locale));
+    });
+
+  const draftFromItem = (i: PriceSheetItem, id: string | null): Draft => ({
+    id,
+    name: id ? i.name : `${i.name} ${t.copySuffix}`,
     category: i.category ?? '',
     pricingMode: i.pricingMode,
+    unitLabel: i.unitLabel ?? '',
     rate: String(i.rate),
-    stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
+    stateRates: sortStateRates(Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) }))),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
     isAddon: i.isAddon,
   });
+
+  const openNew = () => setDraft(emptyDraft());
+  const openEdit = (i: PriceSheetItem) => setDraft(draftFromItem(i, i.id));
+  // Duplicate → open a NEW draft (id null) prefilled from the item, name "(copy)".
+  const duplicate = (i: PriceSheetItem) => setDraft(draftFromItem(i, null));
 
   const save = async () => {
     if (!draft || !draft.name.trim()) return;
@@ -147,7 +168,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       name: draft.name.trim(),
       category: draft.category.trim() || null,
       pricing_mode: draft.pricingMode,
-      unit_label: null,
+      unit_label: draft.pricingMode === 'per_unit' ? (draft.unitLabel.trim() || null) : null,
       rate: parseFloat(draft.rate) || 0,
       state_rates: Object.keys(stateRates).length ? stateRates : null,
       tier_rates: (() => {
@@ -162,17 +183,17 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
     setDraft(null);
     setSaving(false);
-    await load();
+    await load(true);
   };
 
   const toggleActive = async (i: PriceSheetItem) => {
     await supabase.from('price_sheet_items').update({ active: !i.active }).eq('id', i.id);
-    await load();
+    await load(true);
   };
   const remove = async (i: PriceSheetItem) => {
     if (!(await confirm({ message: t.deleteConfirm, destructive: true }))) return;
     await supabase.from('price_sheet_items').delete().eq('id', i.id);
-    await load();
+    await load(true);
   };
 
   // "Add all states" — append a row for every state not already present, each
@@ -183,7 +204,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     // Add the state names with BLANK rates so you can fill them in and see at a
     // glance which are done. Blank rows aren't saved until you enter a price.
     const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: '' }));
-    setDraft({ ...draft, stateRates: [...draft.stateRates, ...additions] });
+    setDraft({ ...draft, stateRates: sortStateRates([...draft.stateRates, ...additions]) });
   };
 
   return (
@@ -193,12 +214,20 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
           <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
         </div>
-        {canManage ? (
-          <button type="button" onClick={openNew}
-            className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 shrink-0">
-            <Plus size={16} /> {t.addBtn}
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2 shrink-0">
+          {onGenerate ? (
+            <button type="button" onClick={onGenerate}
+              className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <FileText size={16} /> {t.generateBtn}
+            </button>
+          ) : null}
+          {canManage ? (
+            <button type="button" onClick={openNew}
+              className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90">
+              <Plus size={16} /> {t.addBtn}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Search */}
@@ -276,6 +305,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                           {i.active ? t.deactivate : t.activate}
                         </button>
                         <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
+                        <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
                         <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
                       </div>
                     ) : null}
@@ -315,6 +345,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 </button>
               ))}
             </div>
+
+            {draft.pricingMode === 'per_unit' ? (
+              <>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">{t.unitLabel}</label>
+                <input value={draft.unitLabel} onChange={e => setDraft({ ...draft, unitLabel: e.target.value })} placeholder={t.unitPlaceholder}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <p className="text-[11px] text-gray-400 mt-1 mb-3">{t.unitHint}</p>
+              </>
+            ) : null}
 
             <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
               <input type="checkbox" checked={draft.isAddon} onChange={e => setDraft({ ...draft, isAddon: e.target.checked })}
@@ -367,7 +406,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
               <p className="text-[11px] text-gray-400 mb-2">{t.stateRatesHint}</p>
               {draft.stateRates.map((sr, i) => (
                 <div key={i} className="flex items-center gap-2 mb-2">
-                  <select value={sr.state} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, state: e.target.value }; setDraft({ ...draft, stateRates: next }); }}
+                  <select value={sr.state} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, state: e.target.value }; setDraft({ ...draft, stateRates: sortStateRates(next) }); }}
                     className="w-40 rounded-xl border border-gray-200 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
                     <option value="">{t.selectStatePlaceholder}</option>
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}

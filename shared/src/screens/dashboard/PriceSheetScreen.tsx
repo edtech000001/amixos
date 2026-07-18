@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal } from 'react-native';
-import { Plus, X, Trash2, Pencil, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { usStateName } from '../../lib/usStates';
@@ -26,6 +26,8 @@ export interface PriceSheetScreenProps {
   supabase: SupabaseLike;
   businessId: string;
   canManage: boolean;
+  /** Web-only "Generate sheet" action; ignored on mobile for now. */
+  onGenerate?: () => void;
 }
 
 const US_STATES = [
@@ -40,6 +42,7 @@ interface Draft {
   name: string;
   category: string;
   pricingMode: PricingMode;
+  unitLabel: string;
   rate: string;
   stateRates: DraftState[];
   tierRates: Record<string, string>;
@@ -50,7 +53,7 @@ interface Draft {
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
+  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
@@ -90,8 +93,9 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     ]);
   };
 
-  const load = async () => {
-    setLoading(true);
+  // silent = refetch without the spinner so a post-save reload keeps scroll.
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
       .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
@@ -99,7 +103,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       .order('sort_order')
       .order('name');
     setItems(((data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { void load(); void loadTiers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
 
@@ -121,17 +125,30 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleItems]);
 
-  const openEdit = (i: PriceSheetItem) => setDraft({
-    id: i.id,
-    name: i.name,
+  // Keep the per-state rows alphabetical by state name; blank rows sink last.
+  const sortStateRates = (rows: DraftState[]): DraftState[] =>
+    [...rows].sort((a, b) => {
+      if (!a.state && !b.state) return 0;
+      if (!a.state) return 1;
+      if (!b.state) return -1;
+      return usStateName(a.state, locale).localeCompare(usStateName(b.state, locale));
+    });
+
+  const draftFromItem = (i: PriceSheetItem, id: string | null): Draft => ({
+    id,
+    name: id ? i.name : `${i.name} ${t.copySuffix}`,
     category: i.category ?? '',
     pricingMode: i.pricingMode,
+    unitLabel: i.unitLabel ?? '',
     rate: String(i.rate),
-    stateRates: Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) })),
+    stateRates: sortStateRates(Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) }))),
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
     isAddon: i.isAddon,
   });
+
+  const openEdit = (i: PriceSheetItem) => setDraft(draftFromItem(i, i.id));
+  const duplicate = (i: PriceSheetItem) => setDraft(draftFromItem(i, null));
 
   const save = async () => {
     if (!draft || !draft.name.trim()) return;
@@ -147,7 +164,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       name: draft.name.trim(),
       category: draft.category.trim() || null,
       pricing_mode: draft.pricingMode,
-      unit_label: null,
+      unit_label: draft.pricingMode === 'per_unit' ? (draft.unitLabel.trim() || null) : null,
       rate: parseFloat(draft.rate) || 0,
       state_rates: Object.keys(stateRates).length ? stateRates : null,
       tier_rates: (() => {
@@ -162,17 +179,17 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
     setDraft(null);
     setSaving(false);
-    await load();
+    await load(true);
   };
 
   const toggleActive = async (i: PriceSheetItem) => {
     await supabase.from('price_sheet_items').update({ active: !i.active }).eq('id', i.id);
-    await load();
+    await load(true);
   };
   const remove = (i: PriceSheetItem) => {
     Alert.alert('', t.deleteConfirm, [
       { text: full.common.buttons.cancel, style: 'cancel' },
-      { text: t.deactivate, style: 'destructive', onPress: async () => { await supabase.from('price_sheet_items').delete().eq('id', i.id); await load(); } },
+      { text: t.deactivate, style: 'destructive', onPress: async () => { await supabase.from('price_sheet_items').delete().eq('id', i.id); await load(true); } },
     ]);
   };
 
@@ -184,7 +201,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     // Add the state names with BLANK rates so you can fill them in and see at a
     // glance which are done. Blank rows aren't saved until you enter a price.
     const additions = US_STATES.filter(s => !have.has(s)).map(s => ({ state: s, rate: '' }));
-    setDraftKey('stateRates', [...draft.stateRates, ...additions]);
+    setDraftKey('stateRates', sortStateRates([...draft.stateRates, ...additions]));
   };
 
   const setRowState = (index: number, stateAbbr: string) => {
@@ -192,7 +209,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       if (!d) return d;
       const next = [...d.stateRates];
       next[index] = { ...next[index], state: stateAbbr };
-      return { ...d, stateRates: next };
+      return { ...d, stateRates: sortStateRates(next) };
     });
     setStatePickerFor(null);
   };
@@ -284,6 +301,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                           <Text className="text-xs font-semibold text-gray-500">{i.active ? t.deactivate : t.activate}</Text>
                         </Pressable>
                         <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color="#9CA3AF" /></Pressable>
+                        <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color="#9CA3AF" /></Pressable>
                         <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-50"><Trash2 size={14} color="#F87171" /></Pressable>
                       </View>
                     ) : null}
@@ -323,6 +341,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                     </Pressable>
                   ))}
                 </View>
+
+                {draft.pricingMode === 'per_unit' ? (
+                  <>
+                    <Text className="text-sm font-semibold text-gray-700 mb-1">{t.unitLabel}</Text>
+                    <TextInput value={draft.unitLabel} onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder} placeholderTextColor="#9CA3AF"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                    <Text className="text-[11px] text-gray-400 mt-1 mb-3">{t.unitHint}</Text>
+                  </>
+                ) : null}
 
                 <Pressable onPress={() => setDraftKey('isAddon', !draft.isAddon)} className="flex-row items-start gap-2.5 mb-4">
                   <View className={`mt-0.5 w-5 h-5 rounded border items-center justify-center ${draft.isAddon ? 'bg-primary border-primary' : 'bg-white border-gray-300'}`}>

@@ -223,7 +223,9 @@ export function InvoiceDetailScreen({
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
-  const isPartial = invoice.status === 'sent' && paidSoFar > 0;
+  // Overdue = a sent invoice past due; keep the Mark paid / Undo actions + partial UI.
+  const sentLike = invoice.status === 'sent' || invoice.status === 'overdue';
+  const isPartial = sentLike && paidSoFar > 0;
   // Line items are editable only while Draft; frozen once sent/paid (Undo sent re-opens).
   const editable = invoice.status === 'draft';
 
@@ -509,7 +511,7 @@ export function InvoiceDetailScreen({
           </Pressable>
         </View>
       ) : null}
-      {invoice.status === 'sent' ? (
+      {sentLike ? (
         <View className="gap-2.5 mb-4">
           <Pressable onPress={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
             <CheckCircle size={16} color="#FFFFFF" />

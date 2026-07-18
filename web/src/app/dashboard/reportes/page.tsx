@@ -693,21 +693,6 @@ export default function ReportesPage() {
           )}
         </Section>
 
-      </div>
-
-      {/* ── Bottom row ───────────────────────────────────────────────────────── */}
-      <div className="grid md:grid-cols-3 gap-5">
-        {/* Nuevos clientes */}
-        <Section title={t.sections.newClients}>
-          <div className="text-center py-6">
-            <p className="text-5xl font-black text-primary">{filteredClients.length}</p>
-            <p className="text-sm text-gray-500 mt-1">{t.newClientsBlock.newCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(clients.length))}
-            </p>
-          </div>
-        </Section>
-
         {/* Financial summary — gross-margin headline + a payroll-vs-margin bar
             over collected revenue, then the breakdown. */}
         <Section title={t.sections.financialSummary}>
@@ -745,6 +730,20 @@ export default function ReportesPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </Section>
+      </div>
+
+      {/* ── Bottom row ───────────────────────────────────────────────────────── */}
+      <div className="grid md:grid-cols-2 gap-5">
+        {/* Nuevos clientes */}
+        <Section title={t.sections.newClients}>
+          <div className="text-center py-6">
+            <p className="text-5xl font-black text-primary">{filteredClients.length}</p>
+            <p className="text-sm text-gray-500 mt-1">{t.newClientsBlock.newCount}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(clients.length))}
+            </p>
           </div>
         </Section>
 

@@ -209,33 +209,44 @@ export interface PriceMatch {
 
 /**
  * Best-effort: pick the price item whose name OR one of its match terms
- * appears in `text`. The LONGEST matching term wins (so "corner repair" beats
- * "repair"). Returns null when nothing matches or the top two are tied in
- * length but different items (ambiguous → let the user pick). NOT reliable —
- * callers must warn the user to verify.
+ * appears in `text`. Ranking, in order:
+ *   1. LONGEST single matching term wins (so "corner repair" beats "repair",
+ *      and "zimmatic" beats the shared word "corner").
+ *   2. Tie on longest term → the item that matches MORE of its terms wins
+ *      (so a job whose text has "corner" + "valley" picks the Valley item over
+ *      one that only matches "corner"). This lets notes disambiguate two items
+ *      that share a generic word of the same length.
+ * Returns null when nothing matches, or the top two items are tied on BOTH
+ * (length and match count) but are different items (genuinely ambiguous → let
+ * the user pick). NOT reliable — callers must warn the user to verify.
  */
 export function suggestPriceItem(text: string, items: PriceSheetItem[]): PriceMatch | null {
   const hay = norm(text);
   if (!hay.trim()) return null;
-  let best: PriceMatch | null = null;
-  let bestLen = 0;
-  let tiedAmbiguous = false;
+  let best: { item: PriceSheetItem; term: string; len: number; count: number } | null = null;
+  let ambiguous = false;
   for (const item of items) {
     if (!item.active || item.isAddon) continue; // add-ons stack separately
-    const terms = [item.name, ...item.matchTerms].map(norm).filter(Boolean);
+    const terms = [item.name, ...item.matchTerms].map(norm).filter(t => t.length >= 2);
+    // This item's longest matching term + how many DISTINCT terms it matched.
+    let maxLen = 0;
+    let longest = '';
+    const matchedTerms = new Set<string>();
     for (const term of terms) {
-      if (term.length < 2) continue;
       if (!hay.includes(term)) continue;
-      if (term.length > bestLen) {
-        best = { item, term };
-        bestLen = term.length;
-        tiedAmbiguous = false;
-      } else if (term.length === bestLen && best && best.item.id !== item.id) {
-        tiedAmbiguous = true;
-      }
+      matchedTerms.add(term);
+      if (term.length > maxLen) { maxLen = term.length; longest = term; }
+    }
+    if (maxLen === 0) continue; // no match on this item
+    const count = matchedTerms.size;
+    if (!best || maxLen > best.len || (maxLen === best.len && count > best.count)) {
+      best = { item, term: longest, len: maxLen, count };
+      ambiguous = false;
+    } else if (maxLen === best.len && count === best.count && best.item.id !== item.id) {
+      ambiguous = true;
     }
   }
-  return tiedAmbiguous ? null : best;
+  return ambiguous || !best ? null : { item: best.item, term: best.term };
 }
 
 /** Pull a measured quantity out of free text ("1200 ft", "6-180ft", "205'").

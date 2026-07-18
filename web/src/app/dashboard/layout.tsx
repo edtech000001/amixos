@@ -74,17 +74,21 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       businessKey={business?.id ?? null}
       onCancelImport={onCancelImport}
     >
-      <div className="flex min-h-screen bg-surface">
-        <Sidebar />
+      <div className="flex min-h-screen bg-surface print:min-h-0 print:bg-white">
+        {/* App chrome hidden when printing (e.g. the price-sheet PDF).
+            `contents` keeps the flex layout unchanged on screen. */}
+        <div className="contents print:hidden">
+          <Sidebar />
+        </div>
         {/* Mobile top padding */}
-        <main className="flex-1 min-w-0 pt-14 md:pt-0">
+        <main className="flex-1 min-w-0 pt-14 md:pt-0 print:pt-0">
           {/* Sticky banner — survives navigation; provider above keeps
               the loop alive while the user moves between pages. */}
-          <div className="sticky top-0 z-30">
+          <div className="sticky top-0 z-30 print:hidden">
             <ImpersonationBanner />
             <GoogleSyncBanner />
           </div>
-          <TrialBanner />
+          <div className="contents print:hidden"><TrialBanner /></div>
           {/* Keyed by identity: entering/leaving "Ver como" (or its auto-expiry)
               remounts every page so no in-progress form state leaks across the
               role switch — e.g. a half-filled "nuevo trabajo" started as the
@@ -95,7 +99,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <BillingGate />
         </main>
         {/* "Ami" assistant — fixed-position FAB + slide-over panel */}
-        <AssistantWidget />
+        <div className="contents print:hidden"><AssistantWidget /></div>
         {/* In-app confirm/alert modal host (replaces native window.confirm) */}
         <ConfirmHost />
       </div>

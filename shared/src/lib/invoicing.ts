@@ -613,16 +613,16 @@ export async function autopriceInvoice(
   const jobIds = Array.from(new Set(lines.map(l => l.job_id).filter(Boolean))) as string[];
   const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null; context: string }>();
   if (jobIds.length) {
-    const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields, title, description, worker_notes').in('id', jobIds);
-    for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null; title: string | null; description: string | null; worker_notes: string | null }[]) {
+    const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields, title, description, worker_notes, internal_notes').in('id', jobIds);
+    for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null; title: string | null; description: string | null; worker_notes: string | null; internal_notes: string | null }[]) {
       const cf = Object.values((j.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ');
       jobById.set(j.id, {
         job_state: j.job_state ?? null,
         custom_fields: j.custom_fields ?? null,
-        // Extra text the matcher can use: title + description + notes + custom
-        // field values (so "Pivot Repair" matches a job whose description says
-        // "reparación", even if the line title is just the job name).
-        context: `${j.title ?? ''} ${j.description ?? ''} ${j.worker_notes ?? ''} ${cf}`,
+        // Extra text the matcher can use: title + description + BOTH note fields
+        // + custom field values — so a note like "Zimmatic" disambiguates two
+        // "Corner" items even when the line title is just the job name.
+        context: `${j.title ?? ''} ${j.description ?? ''} ${j.worker_notes ?? ''} ${j.internal_notes ?? ''} ${cf}`,
       });
     }
   }

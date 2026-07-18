@@ -826,7 +826,7 @@ export default function JobDetailRoute() {
   // Autoprice — best-effort text match → state/tier-aware rate (see web).
   const autopriceRows = () => {
     if (!priceItems.length || !job) return;
-    const ctxText = `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}`;
+    const ctxText = `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${job.internal_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}`;
     let matched = 0;
     setEditRows(prev => prev.map(r => {
       if (!r.description.trim()) return r;

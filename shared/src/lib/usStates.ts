@@ -138,10 +138,17 @@ function stateTermRegex(term: string): RegExp {
  * (\bne\b) so a "Nebraska" query doesn't accidentally match "Stone",
  * "Larned", "Sanderson", etc. via the bare "ne" substring.
  */
+/** Lowercase + strip accents so search is accent-insensitive — typing "Jose"
+ *  finds "José", "Mejia" finds "Mejía". State names/abbrevs are ASCII, so this
+ *  never affects the state-expansion matching below. */
+export function foldSearchText(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 export function searchMatches(haystack: string, query: string): boolean {
-  const q = query.trim().toLowerCase();
+  const q = foldSearchText(query.trim());
   if (!q) return true;
-  const hay = haystack.toLowerCase();
+  const hay = foldSearchText(haystack);
   if (hay.includes(q)) return true;
   for (const term of expandStateQuery(q)) {
     if (term.length === 2) {

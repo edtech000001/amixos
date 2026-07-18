@@ -283,7 +283,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   // Autoprice — best-effort: for each row, match a price item from its text
   // (+ job context) and apply the state/tier-aware rate. Rows with no match
   // are left untouched. NOT reliable → banner tells the user to verify.
-  const jobContext = job ? `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}` : '';
+  const jobContext = job ? `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${job.internal_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}` : '';
   const autopriceRows = () => {
     if (!priceItems.length) return;
     let matched = 0;

@@ -223,7 +223,10 @@ export function InvoiceDetailScreen({
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
-  const isPartial = invoice.status === 'sent' && paidSoFar > 0;
+  // Overdue is just a sent invoice past its due date — it still needs the
+  // Mark paid / Undo actions and the partial-payment UI.
+  const sentLike = invoice.status === 'sent' || invoice.status === 'overdue';
+  const isPartial = sentLike && paidSoFar > 0;
   // Line items are only editable while the invoice is a Draft. Once sent/paid
   // the document is frozen — hide Edit/Move/Remove/Add job (Undo sent re-opens it).
   const editable = invoice.status === 'draft';
@@ -530,7 +533,7 @@ export function InvoiceDetailScreen({
             </button>
           </div>
         ) : null}
-        {invoice.status === 'sent' ? (
+        {sentLike ? (
           <div className="flex flex-col gap-2">
             <button onClick={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
               <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
