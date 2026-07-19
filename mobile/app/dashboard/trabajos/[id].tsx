@@ -658,7 +658,12 @@ export default function JobDetailRoute() {
         <RNModal visible transparent animationType="fade" onRequestClose={goBack}>
           <Pressable onPress={goBack} className="flex-1 bg-black/40 justify-end">
             <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
-              <Text className="text-xl font-bold text-gray-900">{t.notFound}</Text>
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-xl font-bold text-gray-900">{t.notFound}</Text>
+                <Pressable onPress={goBack} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                  <X size={22} color="#9CA3AF" />
+                </Pressable>
+              </View>
               <Pressable
                 onPress={goBack}
                 className="mt-5 py-3.5 rounded-2xl items-center bg-primary active:opacity-80"
@@ -1448,9 +1453,14 @@ export default function JobDetailRoute() {
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
-            <Text className="text-base font-semibold text-gray-900 px-3">
-              {tw.delegateModalTitle}
-            </Text>
+            <View className="flex-row items-center justify-between px-3">
+              <Text className="text-base font-semibold text-gray-900">
+                {tw.delegateModalTitle}
+              </Text>
+              <Pressable onPress={() => setDelegateOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
             <Text className="text-xs text-gray-500 px-3 mt-1 mb-4">
               {tw.delegateChooseTarget}
             </Text>

@@ -201,7 +201,7 @@ export default function FilesModule() {
       {/* Storage usage meter */}
       {business && (
         limitBytes === null ? (
-          <p className="text-xs text-gray-400 mb-4">{es ? 'Almacenamiento ilimitado' : 'Unlimited storage'}</p>
+          <p className="text-xs text-faint mb-4">{es ? 'Almacenamiento ilimitado' : 'Unlimited storage'}</p>
         ) : (
           (() => {
             const used = usedBytes ?? 0;
@@ -209,14 +209,14 @@ export default function FilesModule() {
             const full100 = used >= limitBytes;
             const barColor = full100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-primary';
             return (
-              <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 mb-4">
+              <div className="rounded-xl border border-border-soft bg-card px-4 py-3 mb-4">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-gray-700">{es ? 'Almacenamiento' : 'Storage'}</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-sm font-medium text-ink">{es ? 'Almacenamiento' : 'Storage'}</span>
+                  <span className="text-xs text-muted">
                     {formatBytes(used)} {es ? 'de' : 'of'} {formatBytes(limitBytes)}
                   </span>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-1.5 w-full rounded-full bg-border-soft overflow-hidden">
                   <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
                 {full100 && (
@@ -237,8 +237,8 @@ export default function FilesModule() {
             <FolderOpen size={22} className="text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-            <p className="text-sm text-gray-500">{t.subtitle}</p>
+            <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+            <p className="text-sm text-muted">{t.subtitle}</p>
           </div>
         </div>
         {canManage && (
@@ -268,11 +268,11 @@ export default function FilesModule() {
           const last = i === stack.length - 1;
           return (
             <div key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight size={14} className="text-gray-300" />}
+              {i > 0 && <ChevronRight size={14} className="text-faint" />}
               <button
                 onClick={() => goToCrumb(i)}
                 disabled={last}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${last ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:text-primary hover:bg-primary/5'}`}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${last ? 'text-ink font-semibold' : 'text-muted hover:text-primary hover:bg-primary/5'}`}
               >
                 {i === 0 ? <><Home size={13} /> {t.title}</> : c.label}
               </button>
@@ -300,10 +300,10 @@ export default function FilesModule() {
           {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
         </div>
       ) : isEmpty ? (
-        <div className="text-center py-20 rounded-2xl border border-dashed border-gray-200 bg-gray-50">
-          <FolderOpen size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-600">{atHome ? t.empty : t.emptyFolder}</p>
-          {!canManage && atHome && <p className="text-xs text-gray-400 mt-1">{t.emptyHint}</p>}
+        <div className="text-center py-20 rounded-2xl border border-dashed border-border bg-surface">
+          <FolderOpen size={32} className="text-faint mx-auto mb-3" />
+          <p className="text-sm font-medium text-muted">{atHome ? t.empty : t.emptyFolder}</p>
+          {!canManage && atHome && <p className="text-xs text-faint mt-1">{t.emptyHint}</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -411,9 +411,9 @@ function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, s
   const selectable = canManage && !!onToggleSelect;
   const inSelect = selectable && !!selectionMode;
   return (
-    <div className={`flex items-center gap-3 px-3 py-3 rounded-xl border bg-white ${selected ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}>
+    <div className={`flex items-center gap-3 px-3 py-3 rounded-xl border bg-card ${selected ? 'border-primary bg-primary/5' : 'border-border-soft hover:border-border'}`}>
       {inSelect && (
-        <button onClick={() => onToggleSelect?.()} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}`}>
+        <button onClick={() => onToggleSelect?.()} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-border hover:border-primary'}`}>
           {selected && <Check size={12} className="text-white" />}
         </button>
       )}
@@ -426,23 +426,23 @@ function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, s
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900 truncate">{name}</span>
+            <span className="font-medium text-ink truncate">{name}</span>
             {badge && (
-              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${badge.team ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${badge.team ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700'}`}>
                 {badge.team ? <Users size={10} /> : <Lock size={10} />}{badge.label}
               </span>
             )}
           </div>
-          {countLabel && <p className="text-xs text-gray-400 mt-0.5">{countLabel}</p>}
+          {countLabel && <p className="text-xs text-faint mt-0.5">{countLabel}</p>}
         </div>
       </button>
       {!inSelect && canManage && (
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onEdit} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
-          <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+          <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
+          <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10"><Trash2 size={14} /></button>
         </div>
       )}
-      {!inSelect && <ChevronRight size={16} className="text-gray-300 shrink-0" />}
+      {!inSelect && <ChevronRight size={16} className="text-faint shrink-0" />}
     </div>
   );
 }
@@ -454,32 +454,32 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
 }) {
   const inSelect = canManage && selectionMode;
   return (
-    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-white ${selected ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}>
+    <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card ${selected ? 'border-primary bg-primary/5' : 'border-border-soft hover:border-border'}`}>
       {inSelect && (
-        <button onClick={onToggleSelect} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}`}>
+        <button onClick={onToggleSelect} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-primary border-primary' : 'border-border hover:border-primary'}`}>
           {selected && <Check size={12} className="text-white" />}
         </button>
       )}
-      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
-        {entry.kind === 'link' ? <Link2 size={15} className="text-gray-500" /> : <FileText size={15} className="text-gray-500" />}
+      <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center shrink-0">
+        {entry.kind === 'link' ? <Link2 size={15} className="text-muted" /> : <FileText size={15} className="text-muted" />}
       </div>
       <button
         onClick={() => (inSelect ? onToggleSelect() : onOpen())}
         className="flex-1 min-w-0 text-left select-none"
       >
         <div className="flex items-center gap-1.5">
-          <p className="text-sm font-medium text-gray-900 truncate">{entry.title}</p>
+          <p className="text-sm font-medium text-ink truncate">{entry.title}</p>
           {officeOnly && <Lock size={11} className="text-amber-500 shrink-0" />}
         </div>
-        <p className="text-xs text-gray-400">{metaLabel}</p>
+        <p className="text-xs text-faint">{metaLabel}</p>
       </button>
       {!inSelect && (
         <>
-          <button onClick={onOpen} className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
+          <button onClick={onOpen} className="p-2 rounded-lg text-faint hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
           {canManage && (
             <>
-              <button onClick={onEdit} className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
-              <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-50 shrink-0"><Trash2 size={14} /></button>
+              <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
+              <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 shrink-0"><Trash2 size={14} /></button>
             </>
           )}
         </>
@@ -523,10 +523,10 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
       <div className="flex flex-col gap-4">
         <Input label={t.folderNameLabel} placeholder={t.folderNamePlaceholder} value={name} onChange={e => setName(e.target.value)} autoFocus />
         {isCategory && (
-          <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
             <div className="pr-3">
-              <p className="text-sm font-medium text-gray-700">{t.crewVisibleLabel}</p>
-              <p className="text-xs text-gray-400">{t.crewVisibleHint}</p>
+              <p className="text-sm font-medium text-ink">{t.crewVisibleLabel}</p>
+              <p className="text-xs text-faint">{t.crewVisibleHint}</p>
             </div>
             <Toggle checked={crewVisible} onChange={setCrewVisible} />
           </div>
@@ -627,9 +627,9 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
     <Modal open onClose={onClose} title={editing ? tc.buttons.edit : t.addEntry}>
       <div className="flex flex-col gap-4">
         {!editing && (
-          <div className="flex p-1 rounded-xl bg-gray-100">
+          <div className="flex p-1 rounded-xl bg-border-soft">
             {(['file', 'link'] as const).map(k => (
-              <button key={k} onClick={() => setKind(k)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold ${kind === k ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}>
+              <button key={k} onClick={() => setKind(k)} className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold ${kind === k ? 'bg-primary text-white shadow-sm' : 'text-muted'}`}>
                 {k === 'file' ? <Upload size={14} /> : <Link2 size={14} />}{k === 'file' ? t.kindFile : t.kindLink}
               </button>
             ))}
@@ -639,9 +639,9 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
         {!editing && kind === 'file' ? (
           <div>
             <input ref={fileInput} type="file" className="hidden" onChange={e => onPickFile(e.target.files?.[0] ?? null)} />
-            <button onClick={() => fileInput.current?.click()} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-gray-300 hover:border-primary text-left">
-              <Upload size={18} className="text-gray-400" />
-              <span className="text-sm text-gray-600 truncate">{file ? file.name : t.chooseFile}</span>
+            <button onClick={() => fileInput.current?.click()} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border hover:border-primary text-left">
+              <Upload size={18} className="text-faint" />
+              <span className="text-sm text-muted truncate">{file ? file.name : t.chooseFile}</span>
             </button>
           </div>
         ) : (editing?.kind === 'link' || (!editing && kind === 'link')) ? (
@@ -650,10 +650,10 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
 
         {/* Per-file visibility override */}
         <div>
-          <label className="text-sm font-medium text-gray-700">{t.visibilityLabel}</label>
-          <div className="flex p-1 rounded-xl bg-gray-100 mt-1.5">
+          <label className="text-sm font-medium text-ink">{t.visibilityLabel}</label>
+          <div className="flex p-1 rounded-xl bg-border-soft mt-1.5">
             {VIS.map(v => (
-              <button key={v.key} onClick={() => setVis(v.key)} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${vis === v.key ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}>
+              <button key={v.key} onClick={() => setVis(v.key)} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${vis === v.key ? 'bg-primary text-white shadow-sm' : 'text-muted'}`}>
                 {v.label}
               </button>
             ))}
@@ -715,34 +715,34 @@ function MoveModal({ categories, folders, count, selectedFolderIds, startCategor
   return (
     <Modal open onClose={onClose} title={t.moveTitle}>
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-gray-400 -mt-1">{t.moveHint}</p>
+        <p className="text-xs text-faint -mt-1">{t.moveHint}</p>
         {/* Current location + up control */}
         <div className="flex items-center gap-2">
           {!atHome && (
-            <button onClick={goUp} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-gray-700" /></button>
+            <button onClick={goUp} className="w-8 h-8 rounded-lg bg-border-soft hover:bg-border flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-ink" /></button>
           )}
           <Folder size={15} className="text-primary shrink-0" />
-          <span className="text-sm font-semibold text-gray-900 truncate">{atHome ? t.title : crumb.label}</span>
+          <span className="text-sm font-semibold text-ink truncate">{atHome ? t.title : crumb.label}</span>
         </div>
         <div className="flex flex-col gap-1.5 max-h-[45vh] overflow-y-auto">
           {atHome
             ? categories.map(c => (
-                <div key={c.id} className="flex items-center rounded-xl border border-gray-100 hover:border-gray-200">
+                <div key={c.id} className="flex items-center rounded-xl border border-border-soft hover:border-border">
                   <button onClick={() => onMove({ categoryId: c.id, folderId: null })} className="flex items-center gap-2 px-3 py-2.5 flex-1 min-w-0 text-left">
-                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-gray-900 truncate">{c.name}</span>
+                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-ink truncate">{c.name}</span>
                   </button>
-                  <button onClick={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} className="px-3 py-2.5 border-l border-gray-100 text-gray-400 hover:text-primary"><ChevronRight size={16} /></button>
+                  <button onClick={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} className="px-3 py-2.5 border-l border-border-soft text-faint hover:text-primary"><ChevronRight size={16} /></button>
                 </div>
               ))
             : subFolders.map(f => (
-                <div key={f.id} className="flex items-center rounded-xl border border-gray-100 hover:border-gray-200">
+                <div key={f.id} className="flex items-center rounded-xl border border-border-soft hover:border-border">
                   <button onClick={() => onMove({ categoryId: f.category_id, folderId: f.id })} className="flex items-center gap-2 px-3 py-2.5 flex-1 min-w-0 text-left">
-                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-gray-900 truncate">{f.name}</span>
+                    <Folder size={15} className="text-primary shrink-0" /><span className="text-sm text-ink truncate">{f.name}</span>
                   </button>
-                  <button onClick={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} className="px-3 py-2.5 border-l border-gray-100 text-gray-400 hover:text-primary"><ChevronRight size={16} /></button>
+                  <button onClick={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} className="px-3 py-2.5 border-l border-border-soft text-faint hover:text-primary"><ChevronRight size={16} /></button>
                 </div>
               ))}
-          {!atHome && subFolders.length === 0 && <p className="text-xs text-gray-400 px-1 py-2">{t.emptyFolder}</p>}
+          {!atHome && subFolders.length === 0 && <p className="text-xs text-faint px-1 py-2">{t.emptyFolder}</p>}
         </div>
         <div className="flex gap-3 pt-1">
           <Button variant="secondary" onClick={onClose} fullWidth>{tc.buttons.cancel}</Button>

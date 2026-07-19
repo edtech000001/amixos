@@ -18,8 +18,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2',
           {
             'bg-primary text-white hover:bg-primary-dark focus:ring-primary': variant === 'primary',
-            'bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-gray-300': variant === 'secondary',
-            'text-gray-600 hover:bg-gray-100 focus:ring-gray-200': variant === 'ghost',
+            'bg-border-soft text-ink hover:bg-border focus:ring-border': variant === 'secondary',
+            'text-muted hover:bg-border-soft focus:ring-border': variant === 'ghost',
             'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400': variant === 'danger',
             'px-3 py-1.5 text-sm': size === 'sm',
             'px-4 py-2.5 text-sm': size === 'md',

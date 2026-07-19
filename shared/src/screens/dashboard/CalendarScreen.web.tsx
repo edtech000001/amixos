@@ -87,12 +87,12 @@ const TYPE_BAR: Record<CalEventType, string> = {
   reminder: 'bg-amber-500', follow_up: 'bg-violet-500', other: 'bg-gray-400',
 };
 const TYPE_CHIP_BG: Record<CalEventType, string> = {
-  job: 'bg-primary/10', meeting: 'bg-blue-50', delivery: 'bg-orange-50',
-  reminder: 'bg-amber-50', follow_up: 'bg-violet-50', other: 'bg-gray-100',
+  job: 'bg-primary/10', meeting: 'bg-blue-500/10', delivery: 'bg-orange-500/10',
+  reminder: 'bg-amber-500/10', follow_up: 'bg-violet-500/10', other: 'bg-border-soft',
 };
 const TYPE_CHIP_TEXT: Record<CalEventType, string> = {
   job: 'text-primary', meeting: 'text-blue-600', delivery: 'text-orange-600',
-  reminder: 'text-amber-600', follow_up: 'text-violet-600', other: 'text-gray-600',
+  reminder: 'text-amber-600', follow_up: 'text-violet-600', other: 'text-muted',
 };
 const TYPE_HEX: Record<CalEventType, string> = {
   job: '#4F46E5', meeting: '#3B82F6', delivery: '#F97316',
@@ -104,11 +104,11 @@ const TYPE_ICON: Record<CalEventType, typeof Briefcase> = {
 };
 const JOB_STATUS_BG: Record<string, string> = {
   posible: 'bg-teal-100', scheduled: 'bg-blue-100', in_progress: 'bg-amber-100',
-  completed: 'bg-emerald-100', invoiced: 'bg-purple-100', cancelled: 'bg-gray-100',
+  completed: 'bg-emerald-100', invoiced: 'bg-purple-100', cancelled: 'bg-border-soft',
 };
 const JOB_STATUS_TEXT: Record<string, string> = {
   posible: 'text-teal-700', scheduled: 'text-blue-700', in_progress: 'text-amber-700',
-  completed: 'text-emerald-700', invoiced: 'text-purple-700', cancelled: 'text-gray-500',
+  completed: 'text-emerald-700', invoiced: 'text-purple-700', cancelled: 'text-muted',
 };
 
 function pad(n: number): string { return n < 10 ? `0${n}` : String(n); }
@@ -138,10 +138,10 @@ function WebModal({ open, onClose, title, size = 'md', children }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-xl w-full ${w} max-h-[90vh] overflow-y-auto`}>
-        <div className="sticky top-0 bg-white flex items-center justify-between px-5 py-4 border-b border-gray-100 z-10">
-          <h3 className="font-semibold text-gray-900 capitalize">{title}</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+      <div className={`relative bg-card rounded-2xl shadow-xl w-full ${w} max-h-[90vh] overflow-y-auto`}>
+        <div className="sticky top-0 bg-card flex items-center justify-between px-5 py-4 border-b border-border-soft z-10">
+          <h3 className="font-semibold text-ink capitalize">{title}</h3>
+          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -152,10 +152,10 @@ function WebModal({ open, onClose, title, size = 'md', children }: {
 function TextField({ label, value, onChange, placeholder, multiline }: {
   label?: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
 }) {
-  const cls = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary';
+  const cls = 'rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary';
   return (
     <div className="flex flex-col gap-1.5">
-      {label ? <label className="text-sm font-medium text-gray-700">{label}</label> : null}
+      {label ? <label className="text-sm font-medium text-ink">{label}</label> : null}
       {multiline ? (
         <textarea rows={3} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} className={`${cls} resize-y`} />
       ) : (
@@ -170,9 +170,9 @@ function SelectField({ label, value, onChange, options }: {
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {label ? <label className="text-sm font-medium text-gray-700">{label}</label> : null}
+      {label ? <label className="text-sm font-medium text-ink">{label}</label> : null}
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
+        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -182,10 +182,10 @@ function SelectField({ label, value, onChange, options }: {
 function ToggleField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="text-sm font-medium text-ink">{label}</span>
       <button type="button" onClick={() => onChange(!value)}
-        className={`w-11 h-6 rounded-full transition-colors relative ${value ? 'bg-primary' : 'bg-gray-200'}`}>
-        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${value ? 'left-5' : 'left-0.5'}`} />
+        className={`w-11 h-6 rounded-full transition-colors relative ${value ? 'bg-primary' : 'bg-border'}`}>
+        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-all ${value ? 'left-5' : 'left-0.5'}`} />
       </button>
     </div>
   );
@@ -196,8 +196,8 @@ function Btn({ variant = 'primary', onClick, disabled, loading, children, classN
 }) {
   const base = 'flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50';
   const v = variant === 'primary' ? 'bg-primary text-white hover:opacity-90'
-    : variant === 'danger' ? 'bg-red-50 text-red-600 hover:bg-red-100'
-    : 'border border-gray-200 text-gray-700 hover:bg-gray-50';
+    : variant === 'danger' ? 'bg-red-500/10 text-red-600 hover:bg-red-100'
+    : 'border border-border text-ink hover:bg-surface';
   return (
     <button type="button" onClick={onClick} disabled={disabled || loading} className={`${base} ${v} ${className}`}>
       {children}
@@ -362,12 +362,12 @@ export function CalendarScreen({
       <div className="px-5 pt-6 pb-12 lg:px-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <div className="text-2xl font-bold text-gray-900">{t.title}</div>
+          <div className="text-2xl font-bold text-ink">{t.title}</div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={openAvailability}
-              className="flex items-center gap-1.5 border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50">
+              className="flex items-center gap-1.5 border border-border px-3 py-2 rounded-xl hover:bg-surface">
               <Users size={15} color="#4B5563" />
-              <span className="text-sm font-semibold text-gray-600">{t.availability.button}</span>
+              <span className="text-sm font-semibold text-muted">{t.availability.button}</span>
             </button>
             <button type="button" onClick={() => openNew(agendaDay)}
               className="flex items-center gap-1.5 bg-primary px-3.5 py-2 rounded-xl hover:opacity-90">
@@ -379,26 +379,26 @@ export function CalendarScreen({
 
         {/* View switcher + Today */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex bg-gray-100 rounded-xl p-1">
+          <div className="flex bg-border-soft rounded-xl p-1">
             {(['month', 'week', 'day'] as CalView[]).map(v => {
               const active = view === v;
               return (
-                <button key={v} type="button" onClick={() => switchView(v)} className={`px-3.5 py-1.5 rounded-lg ${active ? 'bg-white shadow-sm' : ''}`}>
-                  <span className={`text-xs font-semibold ${active ? 'text-gray-900' : 'text-gray-500'}`}>{t.views[v]}</span>
+                <button key={v} type="button" onClick={() => switchView(v)} className={`px-3.5 py-1.5 rounded-lg ${active ? 'bg-card shadow-sm' : ''}`}>
+                  <span className={`text-xs font-semibold ${active ? 'text-ink' : 'text-muted'}`}>{t.views[v]}</span>
                 </button>
               );
             })}
           </div>
-          <button type="button" onClick={goToday} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
-            <span className="text-xs font-semibold text-gray-600">{t.today}</span>
+          <button type="button" onClick={goToday} className="px-3 py-1.5 rounded-lg border border-border hover:bg-surface">
+            <span className="text-xs font-semibold text-muted">{t.today}</span>
           </button>
         </div>
 
         {/* Nav row */}
         <div className="flex items-center justify-between mb-4">
-          <button type="button" onClick={() => shift(-1)} className="p-2 rounded-xl hover:bg-gray-100"><ChevronLeft size={18} color="#4B5563" /></button>
-          <div className="text-base font-semibold text-gray-900 capitalize">{navLabel}</div>
-          <button type="button" onClick={() => shift(1)} className="p-2 rounded-xl hover:bg-gray-100"><ChevronRight size={18} color="#4B5563" /></button>
+          <button type="button" onClick={() => shift(-1)} className="p-2 rounded-xl hover:bg-border-soft"><ChevronLeft size={18} color="#4B5563" /></button>
+          <div className="text-base font-semibold text-ink capitalize">{navLabel}</div>
+          <button type="button" onClick={() => shift(1)} className="p-2 rounded-xl hover:bg-border-soft"><ChevronRight size={18} color="#4B5563" /></button>
         </div>
 
         {/* View body */}
@@ -425,7 +425,7 @@ export function CalendarScreen({
                   className="flex items-center gap-1.5 py-0.5 hover:opacity-70 transition-opacity"
                 >
                   <span className={`w-2.5 h-2.5 rounded-full ${active ? TYPE_BAR[key] : 'bg-gray-300'}`} />
-                  <span className={`text-xs ${active ? 'text-gray-500' : 'text-gray-300 line-through'}`}>
+                  <span className={`text-xs ${active ? 'text-muted' : 'text-faint line-through'}`}>
                     {t.eventTypes[key]}
                   </span>
                 </button>
@@ -437,16 +437,16 @@ export function CalendarScreen({
         {/* Agenda */}
         <div className="mt-6">
           <div className="flex items-baseline justify-between mb-3">
-            <div className="text-base font-bold text-gray-900 capitalize">
+            <div className="text-base font-bold text-ink capitalize">
               {agendaDay.toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            {agendaItems.length > 0 ? <div className="text-xs text-gray-400">{t.agenda.count.replace('{{count}}', String(agendaItems.length))}</div> : null}
+            {agendaItems.length > 0 ? <div className="text-xs text-faint">{t.agenda.count.replace('{{count}}', String(agendaItems.length))}</div> : null}
           </div>
           {agendaItems.length === 0 ? (
             <button type="button" onClick={() => openNew(agendaDay)}
-              className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-gray-200 bg-white/50 hover:bg-gray-50">
+              className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 hover:bg-surface">
               <CalendarDays size={26} color="#D1D5DB" />
-              <span className="text-sm text-gray-400 mt-2">{t.agenda.empty}</span>
+              <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
               <span className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</span>
             </button>
           ) : (
@@ -465,36 +465,36 @@ export function CalendarScreen({
       <WebModal open={availOpen} onClose={() => setAvailOpen(false)} title={t.availability.title} size="lg">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setAvailWeek(addDays(availWeek, -7))} className="p-2 rounded-xl hover:bg-gray-100"><ChevronLeft size={16} color="#4B5563" /></button>
-            <div className="text-sm font-semibold text-gray-900 capitalize">
+            <button type="button" onClick={() => setAvailWeek(addDays(availWeek, -7))} className="p-2 rounded-xl hover:bg-border-soft"><ChevronLeft size={16} color="#4B5563" /></button>
+            <div className="text-sm font-semibold text-ink capitalize">
               {`${availDays[0].toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })} – ${availDays[6].toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}`}
             </div>
-            <button type="button" onClick={() => setAvailWeek(addDays(availWeek, 7))} className="p-2 rounded-xl hover:bg-gray-100"><ChevronRight size={16} color="#4B5563" /></button>
+            <button type="button" onClick={() => setAvailWeek(addDays(availWeek, 7))} className="p-2 rounded-xl hover:bg-border-soft"><ChevronRight size={16} color="#4B5563" /></button>
           </div>
-          <div className="text-xs text-gray-400">{t.availability.hint}</div>
+          <div className="text-xs text-faint">{t.availability.hint}</div>
           {leads.length === 0 ? (
-            <div className="text-sm text-gray-400 py-6 text-center">{t.availability.noTeam}</div>
+            <div className="text-sm text-faint py-6 text-center">{t.availability.noTeam}</div>
           ) : (
             <div>
-              <div className="flex items-end pb-2 border-b border-gray-100">
+              <div className="flex items-end pb-2 border-b border-border-soft">
                 <div className="w-24 shrink-0" />
                 {availDays.map(d => {
                   const isToday = sameDay(d, today);
                   return (
                     <div key={d.getTime()} className="flex-1 flex flex-col items-center">
-                      <span className={`text-[10px] uppercase ${isToday ? 'text-primary font-bold' : 'text-gray-400'}`}>{d.toLocaleDateString(dateLocale, { weekday: 'narrow' })}</span>
-                      <span className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-gray-600'}`}>{d.getDate()}</span>
+                      <span className={`text-[10px] uppercase ${isToday ? 'text-primary font-bold' : 'text-faint'}`}>{d.toLocaleDateString(dateLocale, { weekday: 'narrow' })}</span>
+                      <span className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-muted'}`}>{d.getDate()}</span>
                     </div>
                   );
                 })}
               </div>
               {availGrid.map(({ lead, days }) => (
-                <div key={lead.id} className="flex items-center py-2 border-b border-gray-50">
+                <div key={lead.id} className="flex items-center py-2 border-b border-border-soft">
                   <div className="w-24 shrink-0 flex items-center gap-1.5 pr-1 min-w-0">
                     <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <span className="text-primary text-[10px] font-bold">{lead.name.charAt(0).toUpperCase()}</span>
                     </div>
-                    <span className="text-xs font-medium text-gray-700 truncate">{lead.name}</span>
+                    <span className="text-xs font-medium text-ink truncate">{lead.name}</span>
                   </div>
                   {days.map((jobs, i) => (
                     <div key={i} className="flex-1 flex items-center justify-center">
@@ -503,15 +503,15 @@ export function CalendarScreen({
                           <span className="text-[11px] font-bold text-amber-700">{jobs.length}</span>
                         </div>
                       ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-border" />
                       )}
                     </div>
                   ))}
                 </div>
               ))}
               <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded bg-amber-100" /><span className="text-xs text-gray-500">{t.availability.busy}</span></div>
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-gray-200" /><span className="text-xs text-gray-500">{t.availability.available}</span></div>
+                <div className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded bg-amber-100" /><span className="text-xs text-muted">{t.availability.busy}</span></div>
+                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-border" /><span className="text-xs text-muted">{t.availability.available}</span></div>
               </div>
             </div>
           )}
@@ -526,10 +526,10 @@ export function CalendarScreen({
             <div className={`self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full ${TYPE_CHIP_BG[detailItem.eventType]}`}>
               <span className={`text-xs font-semibold ${TYPE_CHIP_TEXT[detailItem.eventType]}`}>{t.eventTypes[detailItem.eventType]}</span>
             </div>
-            {detailItem.description ? <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detailItem.description}</div> : null}
+            {detailItem.description ? <div className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{detailItem.description}</div> : null}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2"><Clock size={14} color="#9CA3AF" /><span className="text-sm text-gray-600">{whenLabel(detailItem, dateLocale, t)}</span></div>
-              {detailItem.location ? <div className="flex items-center gap-2"><MapPin size={14} color="#9CA3AF" /><span className="text-sm text-gray-600">{detailItem.location}</span></div> : null}
+              <div className="flex items-center gap-2"><Clock size={14} color="#9CA3AF" /><span className="text-sm text-muted">{whenLabel(detailItem, dateLocale, t)}</span></div>
+              {detailItem.location ? <div className="flex items-center gap-2"><MapPin size={14} color="#9CA3AF" /><span className="text-sm text-muted">{detailItem.location}</span></div> : null}
             </div>
             <div className="flex gap-2 pt-1">
               <Btn variant="secondary" onClick={() => openEdit(detailItem)} className="flex-1"><Pencil size={14} color="#4B5563" />{tc.buttons.edit}</Btn>
@@ -577,7 +577,7 @@ function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: Cal
   const subtitle = [item.clientName, item.location].filter(Boolean).join(' · ');
   return (
     <button type="button" onClick={onPress}
-      className="w-full flex items-stretch bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:bg-gray-50 text-left">
+      className="w-full flex items-stretch bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden hover:bg-surface text-left">
       <div className={`w-1.5 shrink-0 ${TYPE_BAR[item.eventType]}`} />
       <div className="flex-1 flex items-center gap-3 px-3.5 py-3 min-w-0">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${TYPE_CHIP_BG[item.eventType]}`}>
@@ -585,22 +585,22 @@ function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: Cal
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-900 flex-1 truncate">{item.title}</span>
+            <span className="text-sm font-semibold text-ink flex-1 truncate">{item.title}</span>
             {item.kind === 'job' && item.status ? (
-              <span className={`px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_BG[item.status] ?? 'bg-gray-100'}`}>
-                <span className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-gray-500'}`}>{jobStatusLabel}</span>
+              <span className={`px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
+                <span className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>{jobStatusLabel}</span>
               </span>
             ) : null}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5 truncate">
+          <div className="text-xs text-muted mt-0.5 truncate">
             {item.allDay ? t.agenda.allDay : formatTime12h(item.start)}
             {!item.allDay && item.end ? ` – ${formatTime12h(item.end)}` : ''}
             {subtitle ? `  ·  ${subtitle}` : ''}
           </div>
           {item.kind === 'job' && item.leadName ? (
-            <div className="inline-flex items-center gap-1 mt-1 bg-gray-100 rounded-full pl-1 pr-2 py-0.5 max-w-full">
+            <div className="inline-flex items-center gap-1 mt-1 bg-border-soft rounded-full pl-1 pr-2 py-0.5 max-w-full">
               <span className="w-4 h-4 rounded-full bg-primary/15 flex items-center justify-center shrink-0"><UserRound size={9} color="#4F46E5" /></span>
-              <span className="text-[11px] font-medium text-gray-600 truncate">{item.leadName}</span>
+              <span className="text-[11px] font-medium text-muted truncate">{item.leadName}</span>
             </div>
           ) : null}
         </div>
@@ -659,10 +659,10 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
     [dateLocale],
   );
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex border-b border-gray-100">
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+      <div className="flex border-b border-border-soft">
         {dayHeaders.map((d, i) => (
-          <div key={i} className="flex-1 py-2 flex justify-center"><span className="text-xs font-semibold text-gray-400 capitalize">{d}</span></div>
+          <div key={i} className="flex-1 py-2 flex justify-center"><span className="text-xs font-semibold text-faint capitalize">{d}</span></div>
         ))}
       </div>
       {weeks.map((week, wIdx) => {
@@ -676,10 +676,10 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
                 const isSelected = sameDay(day, selectedDay);
                 return (
                   <button key={col} type="button" onClick={() => onDayPress(day)}
-                    className={`flex-1 flex flex-col items-start border-b border-r border-gray-50 hover:bg-gray-50 ${col === 6 ? 'border-r-0' : ''} ${!inMonth ? 'bg-gray-50/40' : isSelected ? 'bg-primary/5' : ''}`}>
+                    className={`flex-1 flex flex-col items-start border-b border-r border-border-soft hover:bg-surface ${col === 6 ? 'border-r-0' : ''} ${!inMonth ? 'bg-surface/50' : isSelected ? 'bg-primary/5' : ''}`}>
                     <div className="p-1">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isToday ? 'bg-primary' : isSelected ? 'bg-primary/15' : ''}`}>
-                        <span className={`text-xs font-semibold ${isToday ? 'text-white' : !inMonth ? 'text-gray-300' : isSelected ? 'text-primary' : 'text-gray-700'}`}>{day.getDate()}</span>
+                        <span className={`text-xs font-semibold ${isToday ? 'text-white' : !inMonth ? 'text-faint' : isSelected ? 'text-primary' : 'text-ink'}`}>{day.getDate()}</span>
                       </div>
                     </div>
                   </button>
@@ -710,7 +710,7 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
               n > 0 ? (
                 <button key={`o${col}`} type="button" onClick={() => onDayPress(week[col])}
                   style={{ position: 'absolute', left: `${(col / 7) * 100}%`, width: `${(1 / 7) * 100}%`, top: DAY_HEADER_H + MAX_LANES * LANE_H }}>
-                  <span className="block text-[10px] text-gray-400 text-center truncate">{moreLabel.replace('{{count}}', String(n))}</span>
+                  <span className="block text-[10px] text-faint text-center truncate">{moreLabel.replace('{{count}}', String(n))}</span>
                 </button>
               ) : null,
             )}
@@ -734,13 +734,13 @@ function WeekStrip({ cursor, items, today, selectedDay, dateLocale, onDayPress }
         const count = countForDay(items, day);
         return (
           <button key={day.getTime()} type="button" onClick={() => onDayPress(day)}
-            className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl border hover:opacity-90 ${isSelected ? 'bg-primary border-primary' : 'bg-white border-gray-100'}`}>
-            <span className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>{day.toLocaleDateString(dateLocale, { weekday: 'short' })}</span>
+            className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl border hover:opacity-90 ${isSelected ? 'bg-primary border-primary' : 'bg-card border-border-soft'}`}>
+            <span className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-white/80' : 'text-faint'}`}>{day.toLocaleDateString(dateLocale, { weekday: 'short' })}</span>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center mt-1 ${isToday && !isSelected ? 'bg-primary/15' : ''}`}>
-              <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-primary' : 'text-gray-800'}`}>{day.getDate()}</span>
+              <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-primary' : 'text-ink'}`}>{day.getDate()}</span>
             </div>
             <div className="h-2 mt-1 flex items-center justify-center">
-              {count > 0 ? <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-primary'}`} /> : null}
+              {count > 0 ? <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-card' : 'bg-primary'}`} /> : null}
             </div>
           </button>
         );

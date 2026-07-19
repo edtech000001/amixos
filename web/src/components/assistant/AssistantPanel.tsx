@@ -95,23 +95,23 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
       <div
         role="dialog"
         aria-label={t.title}
-        className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-gray-100 bg-white shadow-2xl sm:w-[420px]"
+        className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border-soft bg-card shadow-2xl sm:w-[420px]"
       >
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-border-soft px-4 py-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             <BotMessageSquare className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-gray-900">{t.title}</p>
-            <p className="truncate text-xs text-gray-500">{t.subtitle}</p>
+            <p className="text-sm font-semibold text-ink">{t.title}</p>
+            <p className="truncate text-xs text-muted">{t.subtitle}</p>
           </div>
           <button
             type="button"
             onClick={reset}
             aria-label={t.newChat}
             title={t.newChat}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+            className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
           >
             <RotateCcw className="h-4 w-4" />
           </button>
@@ -119,7 +119,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             type="button"
             onClick={onClose}
             aria-label={full.common.buttons.close}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+            className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -139,7 +139,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
         {/* Input — swapped for the call bar during a call so the transcript
            above stays readable while you talk (your words stream into the
            bar, then land as bubbles like a normal chat). */}
-        <div className="border-t border-gray-100 px-3 py-3">
+        <div className="border-t border-border-soft px-3 py-3">
           {call.active ? (
             <div
               role={call.status === 'speaking' ? 'button' : undefined}
@@ -163,8 +163,8 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
                 </div>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-900">{callStatusLabel}</p>
-                <p className="truncate text-xs text-gray-500">
+                <p className="text-sm font-semibold text-ink">{callStatusLabel}</p>
+                <p className="truncate text-xs text-muted">
                   {call.status === 'speaking'
                     ? t.callInterrupt
                     : call.status === 'thinking'
@@ -199,7 +199,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
               }}
               rows={Math.min(3, Math.max(1, input.split('\n').length))}
               placeholder={listening ? t.listening : t.placeholder}
-              className="min-w-0 flex-1 resize-none rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-primary focus:outline-none"
+              className="min-w-0 flex-1 resize-none rounded-2xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:border-primary focus:outline-none"
             />
             {supported && (
               <button
@@ -210,7 +210,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
                 className={`shrink-0 rounded-full p-2.5 transition-colors ${
                   listening
                     ? 'animate-pulse bg-red-100 text-red-600'
-                    : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                    : 'text-faint hover:bg-surface hover:text-muted'
                 }`}
               >
                 <Mic className="h-5 w-5" />
@@ -222,7 +222,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
                 onClick={call.start}
                 aria-label={t.callButton}
                 title={t.callButton}
-                className="shrink-0 rounded-full p-2.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+                className="shrink-0 rounded-full p-2.5 text-faint transition-colors hover:bg-surface hover:text-muted"
               >
                 <AudioLines className="h-5 w-5" />
               </button>

@@ -126,7 +126,7 @@ export function useContactOutcomePrompt({
               </button>
               <button
                 onClick={() => writeOutcome(promptArgs, 'no_answer')}
-                className="w-full rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-200 transition-colors"
+                className="w-full rounded-xl bg-border-soft px-4 py-3 text-sm font-medium text-ink hover:bg-border transition-colors"
               >
                 {t.noAnswer}
               </button>
@@ -141,7 +141,7 @@ export function useContactOutcomePrompt({
           )}
           <button
             onClick={() => setPromptArgs(null)}
-            className="w-full rounded-xl px-4 py-3 text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+            className="w-full rounded-xl px-4 py-3 text-sm font-medium text-muted hover:bg-surface transition-colors"
           >
             {t.dontLog}
           </button>

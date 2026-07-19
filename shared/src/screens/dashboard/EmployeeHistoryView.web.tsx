@@ -82,7 +82,7 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
   if (entries.length === 0) {
     return (
       <div className="py-8 flex items-center justify-center">
-        <p className="text-sm text-gray-400">{th.empty}</p>
+        <p className="text-sm text-faint">{th.empty}</p>
       </div>
     );
   }
@@ -104,12 +104,12 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-900">{label}</span>
-                <span className="text-xs text-gray-400 shrink-0">
+                <span className="text-sm font-semibold text-ink">{label}</span>
+                <span className="text-xs text-faint shrink-0">
                   {formatDateLong(e.effective_date, locale)}
                 </span>
               </div>
-              {summary ? <p className="text-sm text-gray-600 mt-0.5">{summary}</p> : null}
+              {summary ? <p className="text-sm text-muted mt-0.5">{summary}</p> : null}
             </div>
           </div>
         );

@@ -685,9 +685,9 @@ export default function MapModule() {
   if (!apiKey) {
     return (
       <div className="p-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center max-w-md mx-auto">
+        <div className="bg-card rounded-2xl border border-border-soft p-8 text-center max-w-md mx-auto">
           <p className="text-sm font-semibold text-red-600 mb-1">Missing API key</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted">
             Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to <code>web/.env.local</code> and restart the dev server.
           </p>
         </div>
@@ -740,61 +740,61 @@ export default function MapModule() {
           {weatherEnabled ? (
             <button
               onClick={() => setStormFocus(v => !v)}
-              className={`p-2 rounded-lg border ${stormFocus ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              className={`p-2 rounded-lg border ${stormFocus ? 'border-red-200 bg-red-500/10' : 'border-border bg-card hover:bg-surface'}`}
               aria-label={stormFocus ? t.weather.focusModeOff : t.weather.focusModeOn}
               title={stormFocus ? t.weather.focusModeOff : t.weather.focusModeOn}
             >
-              <Crosshair size={18} className={stormFocus ? 'text-red-600' : 'text-gray-700'} />
+              <Crosshair size={18} className={stormFocus ? 'text-red-600' : 'text-ink'} />
             </button>
           ) : null}
           {weatherEnabled ? (
             <button
               onClick={() => setWeatherDateOpen(v => !v)}
-              className={`p-2 rounded-lg border ${weatherDateActive ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              className={`p-2 rounded-lg border ${weatherDateActive ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-surface'}`}
               aria-label={tdate.button}
               title={tdate.button}
             >
-              <Calendar size={18} className={weatherDateActive ? 'text-primary' : 'text-gray-700'} />
+              <Calendar size={18} className={weatherDateActive ? 'text-primary' : 'text-ink'} />
             </button>
           ) : null}
           <button
             onClick={() => setOutreach(v => !v)}
-            className={`p-2 rounded-lg border ${outreach ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+            className={`p-2 rounded-lg border ${outreach ? 'border-emerald-200 bg-emerald-500/10' : 'border-border bg-card hover:bg-surface'}`}
             aria-label={outreach ? t.outreachModeOff : t.outreachModeOn}
             title={outreach ? t.outreachModeOff : t.outreachModeOn}
           >
-            <CircleCheckBig size={18} className={outreach ? 'text-emerald-600' : 'text-gray-700'} />
+            <CircleCheckBig size={18} className={outreach ? 'text-emerald-600' : 'text-ink'} />
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+            className="p-2 rounded-lg border border-border bg-card hover:bg-surface text-ink"
             aria-label={t.settingsTitle}
           >
             <SettingsIcon size={18} />
           </button>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1 ml-1">{t.layerToggleHint}</p>
+        <p className="text-[10px] text-faint mt-1 ml-1">{t.layerToggleHint}</p>
       </div>
 
       {/* Search — filters pins across all text fields. Map auto-fits to results. */}
       <div className="px-4 pb-3">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white">
-          <SearchIcon size={14} className="text-gray-400 shrink-0" />
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card">
+          <SearchIcon size={14} className="text-faint shrink-0" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="flex-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent"
+            className="flex-1 text-sm text-ink placeholder-faint focus:outline-none bg-transparent"
             autoCorrect="off"
             autoCapitalize="none"
           />
           {search && (
             <>
-              <span className="text-[10px] text-gray-500 whitespace-nowrap">
+              <span className="text-[10px] text-muted whitespace-nowrap">
                 {t.searchResultsCount.replace('{{count}}', String(visiblePins.length))}
               </span>
               <button onClick={() => setSearch('')} aria-label="Clear">
-                <X size={14} className="text-gray-400" />
+                <X size={14} className="text-faint" />
               </button>
             </>
           )}
@@ -819,7 +819,7 @@ export default function MapModule() {
                     type="button"
                     onClick={() => { setWeatherDateFrom(p.from); setWeatherDateTo(p.to); }}
                     className={`px-3.5 py-1.5 rounded-full border text-sm font-semibold transition-colors ${
-                      selected ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      selected ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted hover:border-border'
                     }`}
                   >
                     {p.label}
@@ -829,21 +829,21 @@ export default function MapModule() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{tdate.from}</label>
+                <label className="block text-xs text-muted mb-1">{tdate.from}</label>
                 <input
                   type="date"
                   value={weatherDateFrom ?? ''}
                   onChange={e => setWeatherDateFrom(e.target.value || null)}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{tdate.to}</label>
+                <label className="block text-xs text-muted mb-1">{tdate.to}</label>
                 <input
                   type="date"
                   value={weatherDateTo ?? ''}
                   onChange={e => setWeatherDateTo(e.target.value || null)}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-lg border border-border px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
@@ -852,7 +852,7 @@ export default function MapModule() {
                 type="button"
                 onClick={() => { setWeatherDateFrom(null); setWeatherDateTo(null); }}
                 disabled={!weatherDateActive}
-                className={`text-sm font-semibold ${weatherDateActive ? 'text-red-500 hover:text-red-600' : 'text-gray-300 cursor-default'}`}
+                className={`text-sm font-semibold ${weatherDateActive ? 'text-red-500 hover:text-red-600' : 'text-faint cursor-default'}`}
               >
                 {tdate.clear}
               </button>
@@ -869,7 +869,7 @@ export default function MapModule() {
         {/* Storm-focus active banner — under the search bar so the
            "what's being filtered" context lives next to the filter inputs. */}
         {stormFocus && weatherEnabled ? (
-          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-100">
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-100">
             <Crosshair size={12} className="text-red-600 shrink-0" />
             <span className="text-[11px] font-semibold text-red-700 flex-1">
               {t.weather.focusModeBadge}
@@ -881,7 +881,7 @@ export default function MapModule() {
         ) : null}
         {/* Outreach-mode active banner — contacted clients are dimmed + ✓. */}
         {outreach ? (
-          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-100">
             <CircleCheckBig size={12} className="text-emerald-600 shrink-0" />
             <span className="text-[11px] font-semibold text-emerald-700 flex-1">
               {t.outreachModeBadge.replace('{{days}}', String(deviceSettings.outreachDays))}
@@ -894,9 +894,9 @@ export default function MapModule() {
       </div>
 
       {/* The map itself — fills the rest of the viewport. */}
-      <div className="relative flex-1 mx-4 mb-4 rounded-2xl overflow-hidden border border-gray-100">
+      <div className="relative flex-1 mx-4 mb-4 rounded-2xl overflow-hidden border border-border-soft">
         {!isLoaded || loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+          <div className="absolute inset-0 flex items-center justify-center bg-surface">
             <div className="flex gap-1">
               {[0, 1, 2].map(i => (
                 <div
@@ -942,7 +942,7 @@ export default function MapModule() {
         {isLoaded && !loading ? (
           <button
             onClick={resetView}
-            className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50"
+            className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-card shadow-md border border-border flex items-center justify-center text-muted hover:bg-surface"
             aria-label={t.resetView}
             title={t.resetView}
           >
@@ -957,13 +957,13 @@ export default function MapModule() {
           <button
             onClick={() => setUnresolvedOpen(true)}
             disabled={geocoding}
-            className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-md rounded-2xl bg-white border border-gray-200 shadow-md px-4 py-3 flex items-center gap-3 hover:bg-gray-50 disabled:opacity-60"
+            className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-md rounded-2xl bg-card border border-border shadow-md px-4 py-3 flex items-center gap-3 hover:bg-surface disabled:opacity-60"
           >
             <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center shrink-0">
               <Users size={16} className="text-sky-500" />
             </div>
             <div className="flex-1 text-left">
-              <span className="block text-sm text-gray-900">
+              <span className="block text-sm text-ink">
                 {geocoding && geocodeProgress
                   ? t.geocodeProgress
                       .replace('{{done}}', String(geocodeProgress.done))
@@ -973,7 +973,7 @@ export default function MapModule() {
                     : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
               </span>
               {!geocoding && pins.geocodeBreakdown ? (
-                <span className="block text-xs text-gray-500 mt-0.5">
+                <span className="block text-xs text-muted mt-0.5">
                   {t.geocodeBreakdown
                     .replace('{{noAddr}}', String(pins.geocodeBreakdown.noAddress))
                     .replace('{{unresolved}}', String(pins.geocodeBreakdown.unresolved))
@@ -996,7 +996,7 @@ export default function MapModule() {
                   setBannerDismissed(true);
                 }
               }}
-              className="ml-auto p-1.5 -mr-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+              className="ml-auto p-1.5 -mr-1 rounded-lg text-faint hover:text-ink hover:bg-border-soft cursor-pointer"
               aria-label="Dismiss"
             >
               <X size={16} />
@@ -1141,9 +1141,9 @@ function WeatherPinCard({
   if (addedTime) rows.push([labels.pinPopupAdded, addedTime]);
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl flex flex-col" style={{ maxHeight: '85%' }}>
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-card rounded-2xl border border-border-soft shadow-xl flex flex-col" style={{ maxHeight: '85%' }}>
       {/* Header */}
-      <div className="flex items-start gap-3 p-4 pb-3 border-b border-gray-100 shrink-0">
+      <div className="flex items-start gap-3 p-4 pb-3 border-b border-border-soft shrink-0">
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: `${color}15` }}
@@ -1151,14 +1151,14 @@ function WeatherPinCard({
           <CloudLightning size={22} color={color} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-base font-semibold text-gray-900 line-clamp-2">{current.event}</p>
+          <p className="text-base font-semibold text-ink line-clamp-2">{current.event}</p>
           {current.severity ? (
             <p className="text-[10px] uppercase tracking-wide font-semibold mt-0.5" style={{ color }}>
               {current.severity}
             </p>
           ) : null}
         </div>
-        <button onClick={onClose} className="p-1 -mr-1 text-gray-500 hover:text-gray-900">
+        <button onClick={onClose} className="p-1 -mr-1 text-muted hover:text-ink">
           <X size={18} />
         </button>
       </div>
@@ -1168,19 +1168,19 @@ function WeatherPinCard({
         <dl className="divide-y divide-gray-50">
           {rows.map(([label, value]) => (
             <div key={label} className="flex py-1.5">
-              <dt className="w-[42%] text-[10px] font-semibold uppercase tracking-wide text-gray-400 pt-0.5">
+              <dt className="w-[42%] text-[10px] font-semibold uppercase tracking-wide text-faint pt-0.5">
                 {label}
               </dt>
-              <dd className="flex-1 text-xs text-gray-800">{value}</dd>
+              <dd className="flex-1 text-xs text-ink">{value}</dd>
             </div>
           ))}
         </dl>
         {current.description ? (
           <div className="mt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-1">
               {labels.pinPopupDescription}
             </p>
-            <p className="text-xs text-gray-700 whitespace-pre-line leading-5">
+            <p className="text-xs text-ink whitespace-pre-line leading-5">
               {current.description}
             </p>
           </div>
@@ -1189,7 +1189,7 @@ function WeatherPinCard({
         {/* Other alerts at this same county — tap to swap detail view */}
         {otherAlerts.length > 0 ? (
           <div className="mt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-2">
               {labels.pinPopupOtherAlerts}
             </p>
             <div className="space-y-1">
@@ -1201,12 +1201,12 @@ function WeatherPinCard({
                     key={alt.id}
                     type="button"
                     onClick={() => setCurrent(alt)}
-                    className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 text-left"
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-border-soft text-left"
                   >
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: altColor }} />
                     <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-semibold text-gray-800 truncate">{alt.event}</span>
-                      <span className="block text-[10px] text-gray-500 truncate">
+                      <span className="block text-xs font-semibold text-ink truncate">{alt.event}</span>
+                      <span className="block text-[10px] text-muted truncate">
                         {alt.severity ? `${alt.severity} · ` : ''}{altWhen}
                       </span>
                     </span>
@@ -1219,7 +1219,7 @@ function WeatherPinCard({
       </div>
 
       {nwsUrl ? (
-        <div className="p-4 pt-3 border-t border-gray-100 shrink-0">
+        <div className="p-4 pt-3 border-t border-border-soft shrink-0">
           <a
             href={nwsUrl}
             target="_blank"
@@ -1336,16 +1336,16 @@ function UnresolvedClientsModal({
     const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
     const addr = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
     return (
-      <div key={r.id} className="flex items-start border-b border-gray-100">
+      <div key={r.id} className="flex items-start border-b border-border-soft">
         <button
           type="button"
           onClick={() => onOpenClient(r.id)}
-          className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-gray-50"
+          className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-surface"
         >
-          <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
-          {r.company ? <p className="text-xs text-gray-500 mt-0.5 truncate">{r.company}</p> : null}
-          <p className="text-xs text-gray-400 mt-1 truncate">{addr || '—'}</p>
-          {hint ? <p className="text-[10px] text-gray-400 italic mt-1">{hint}</p> : null}
+          <p className="text-sm font-semibold text-ink truncate">{name}</p>
+          {r.company ? <p className="text-xs text-muted mt-0.5 truncate">{r.company}</p> : null}
+          <p className="text-xs text-faint mt-1 truncate">{addr || '—'}</p>
+          {hint ? <p className="text-[10px] text-faint italic mt-1">{hint}</p> : null}
         </button>
         {/* Per-row "permanently ignore" — sets clients.geocoding_ignored=true
            so this client stops counting against the banner. Reversible
@@ -1356,7 +1356,7 @@ function UnresolvedClientsModal({
           aria-label={t.geocodeIgnoreBtn}
           className="py-3 pr-4 pl-2 hover:opacity-60"
         >
-          <EyeOff size={16} className="text-gray-400" />
+          <EyeOff size={16} className="text-faint" />
         </button>
       </div>
     );
@@ -1379,14 +1379,14 @@ function UnresolvedClientsModal({
               </div>
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-gray-400 italic text-center py-8">
+            <p className="text-xs text-faint italic text-center py-8">
               {t.geocodeListEmpty}
             </p>
           ) : (
             <>
               {groups.pending.length > 0 ? (
                 <div>
-                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                     {t.geocodeListSectionPending} ({groups.pending.length})
                   </p>
                   {groups.pending.map((r) => renderRow(r))}
@@ -1394,7 +1394,7 @@ function UnresolvedClientsModal({
               ) : null}
               {groups.notFound.length > 0 ? (
                 <div>
-                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                     {t.geocodeListSectionUnresolved} ({groups.notFound.length})
                   </p>
                   {groups.notFound.map((r) => renderRow(r, t.geocodeListUnresolvedHint))}
@@ -1402,7 +1402,7 @@ function UnresolvedClientsModal({
               ) : null}
               {groups.noAddress.length > 0 ? (
                 <div>
-                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                     {t.geocodeListSectionNoAddress} ({groups.noAddress.length})
                   </p>
                   {groups.noAddress.map((r) => renderRow(r, t.geocodeListNoAddressHint))}
@@ -1412,7 +1412,7 @@ function UnresolvedClientsModal({
           )}
         </div>
         {groups.pending.length > 0 ? (
-          <div className="p-4 border-t border-gray-100">
+          <div className="p-4 border-t border-border-soft">
             <button
               type="button"
               onClick={onRetry}
@@ -1460,8 +1460,8 @@ function fmtPhone(raw: string): string {
 function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <span className="shrink-0 text-gray-500">{icon}</span>
-      <span className="text-sm text-gray-700 truncate">{text}</span>
+      <span className="shrink-0 text-muted">{icon}</span>
+      <span className="text-sm text-ink truncate">{text}</span>
     </div>
   );
 }
@@ -1531,7 +1531,7 @@ function SelectedPinCard({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5"
+        className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -1549,10 +1549,10 @@ function SelectedPinCard({
             )}
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
-            <p className="text-base font-bold text-gray-900 truncate">{displayName}</p>
-            {subtitle ? <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{subtitle}</p> : null}
+            <p className="text-base font-bold text-ink truncate">{displayName}</p>
+            {subtitle ? <p className="text-xs text-muted mt-0.5 line-clamp-2">{subtitle}</p> : null}
           </div>
-          <button onClick={onClose} className="p-1 -mr-1 -mt-1 text-gray-400 hover:text-gray-700">
+          <button onClick={onClose} className="p-1 -mr-1 -mt-1 text-faint hover:text-ink">
             <X size={20} />
           </button>
         </div>
@@ -1590,7 +1590,7 @@ function SelectedPinCard({
               contactMethod: email,
               clientId: selected.id,
             })}
-            className="flex items-center justify-center gap-2 w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-primary hover:bg-gray-50 mb-3"
+            className="flex items-center justify-center gap-2 w-full rounded-xl border border-border py-2.5 text-sm font-semibold text-primary hover:bg-surface mb-3"
           >
             <Mail size={16} />
             {emailActionLabel}

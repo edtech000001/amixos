@@ -21,6 +21,7 @@ import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIE
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -28,7 +29,7 @@ import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
 import { Modal } from '@/components/ui/Modal';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
 
-interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; }
+interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; contacts?: { name: string; role: string | null }[]; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
 
 interface FieldTemplate {
@@ -352,56 +353,70 @@ function NuevoTrabajoContent() {
       return (
         <Fragment key={k}>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{jrl('client_id', t.clientLabel)}</label>
+            <label className="text-sm font-medium text-ink">{jrl('client_id', t.clientLabel)}</label>
             <div className="relative" ref={clientDropdownRef}>
               <button type="button" onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
                 {selectedClient ? (
-                  <span className="text-gray-900 truncate">
-                    {selectedClient.first_name} {selectedClient.last_name}
-                    {selectedClient.company && <span className="text-gray-400"> · {selectedClient.company}</span>}
-                  </span>
+                  (() => {
+                    const d = clientPickerDisplay(selectedClient);
+                    return (
+                      <span className="text-ink truncate">
+                        {d.top}
+                        {d.sub && <span className="text-faint"> · {d.sub}</span>}
+                      </span>
+                    );
+                  })()
                 ) : (
-                  <span className="text-gray-400">{t.clientPlaceholder}</span>
+                  <span className="text-faint">{t.clientPlaceholder}</span>
                 )}
-                <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                <ChevronDown size={14} className="text-faint shrink-0 ml-2"/>
               </button>
               {clientDropdownOpen && (
-                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                  <div className="p-2 border-b border-gray-100">
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                  <div className="p-2 border-b border-border-soft">
                     <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
                       <input autoFocus type="text" placeholder={t.clientSearchPlaceholder}
                         value={clientSearch} onChange={e => setClientSearch(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                        className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
                     </div>
                   </div>
                   <div className="max-h-60 overflow-y-auto">
                     <button type="button" onClick={() => handleClientChange('')}
-                      className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors ${!clientId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                      className={`w-full text-left px-4 py-3 text-base hover:bg-surface transition-colors ${!clientId ? 'text-primary font-medium' : 'text-muted'}`}>
                       {t.clientNone}
                     </button>
-                    {filteredClients.map(c => (
-                      <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
-                        className={`w-full text-left px-4 py-3 text-base hover:bg-gray-50 transition-colors truncate ${clientId === c.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
-                        {c.first_name} {c.last_name}
-                        {c.company && <span className="text-gray-400 ml-1 text-sm">· {c.company}</span>}
-                      </button>
-                    ))}
+                    {filteredClients.map(c => {
+                      const ct = matchedContactOf(c);
+                      const { top, sub } = clientPickerDisplay(c);
+                      return (
+                        <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
+                          className={`w-full text-left px-4 py-3 hover:bg-surface transition-colors ${clientId === c.id ? 'bg-primary/5' : ''}`}>
+                          <span className={`block text-base truncate ${clientId === c.id ? 'text-primary font-medium' : 'text-ink'}`}>
+                            {top}
+                            {sub && <span className="text-faint ml-1 text-sm">· {sub}</span>}
+                          </span>
+                          {ct && (
+                            <span className="block text-xs text-primary truncate mt-0.5">{ct.name}{ct.role ? `  ·  ${ct.role}` : ''}</span>
+                          )}
+                        </button>
+                      );
+                    })}
                     {filteredClients.length === 0 && (
-                      <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.clientNoResults}</p>
+                      <p className="px-4 py-3 text-xs text-faint text-center">{t.clientNoResults}</p>
                     )}
                   </div>
                   <button type="button" onClick={openQuickClient}
-                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-gray-100">
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-border-soft">
                     {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
                   </button>
                 </div>
               )}
               {clientId && (
                 <button type="button" onClick={() => handleClientChange('')}
-                  className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors">
-                  <X size={12} className="text-gray-400"/>
+                  className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-border-soft transition-colors">
+                  <X size={12} className="text-faint"/>
                 </button>
               )}
             </div>
@@ -411,9 +426,9 @@ function NuevoTrabajoContent() {
              crew: their job auto-uses their own branch. */}
           {locations.length >= 2 && !restrictedCreator && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
+              <label className="text-sm font-medium text-ink">{locale === 'es' ? 'Ubicación' : 'Location'}</label>
               <select value={locationId} onChange={e => setLocationId(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                 <option value="">{locale === 'es' ? 'Sin ubicación' : 'No location'}</option>
                 {locations.map(l => (
                   <option key={l.id} value={l.id}>{l.name}</option>
@@ -439,7 +454,7 @@ function NuevoTrabajoContent() {
                 <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
               </div>
               {totalTimeText && (
-                <p className="text-xs text-gray-500 text-right">
+                <p className="text-xs text-muted text-right">
                   {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
                 </p>
               )}
@@ -449,28 +464,28 @@ function NuevoTrabajoContent() {
                only log completed work (no scheduling → no status/priority). */
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700">{t.statusLabel}</label>
+                <label className="text-sm font-medium text-ink">{t.statusLabel}</label>
                 {/* Statuses the form can't represent (invoiced/sent/accepted/…)
                    are shown READ-ONLY — editing must not silently downgrade an
                    invoiced job. Change those from the job detail's pipeline. */}
                 {(!loadedStatus || ['posible', 'scheduled', 'in_progress', 'completed'].includes(loadedStatus)) ? (
                   <select value={status} onChange={e => setStatus(e.target.value as any)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="posible">{tStatuses.posible}</option>
                     <option value="scheduled">{tStatuses.scheduled}</option>
                     <option value="in_progress">{tStatuses.in_progress}</option>
                     <option value="completed">{tStatuses.completed}</option>
                   </select>
                 ) : (
-                  <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500">
+                  <div className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-muted">
                     {(tStatuses as Record<string, string>)[loadedStatus] ?? loadedStatus}
                   </div>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700">{t.priorityLabel}</label>
+                <label className="text-sm font-medium text-ink">{t.priorityLabel}</label>
                 <select value={priority} onChange={e => setPriority(e.target.value as any)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                   <option value="low">{tPriorities.low}</option>
                   <option value="normal">{tPriorities.normal}</option>
                   <option value="high">{tPriorities.high}</option>
@@ -486,10 +501,10 @@ function NuevoTrabajoContent() {
       if (fHidden('description')) return null;
       return (
         <div key={k} className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">{jrl('description', t.descriptionLabel)}</label>
+          <label className="text-sm font-medium text-ink">{jrl('description', t.descriptionLabel)}</label>
           <textarea rows={5} placeholder={t.descriptionPlaceholder}
             value={description} onChange={e => setDescription(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
         </div>
       );
     }
@@ -510,12 +525,12 @@ function NuevoTrabajoContent() {
 
           {/* Map link paste */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-              <Link2 size={13} className="text-gray-400"/> {jrl('coordinates', t.mapLinkLabel)}
+            <label className="text-sm font-medium text-ink flex items-center gap-1.5">
+              <Link2 size={13} className="text-faint"/> {jrl('coordinates', t.mapLinkLabel)}
             </label>
             <input type="url" placeholder={t.mapLinkPlaceholder}
               value={mapLink} onChange={e => parseMapLink(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+              className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary"/>
             {mapLink && !mapLink.includes('google') && !mapLink.includes('apple') && !mapLink.includes('goo.gl') && (
               <p className="text-xs text-amber-500">{t.mapLinkHint}</p>
             )}
@@ -524,17 +539,17 @@ function NuevoTrabajoContent() {
           {/* Coordinates — lat, lng (editable; also auto-filled by the map
               link paste and "Use my location"). */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-              <Navigation size={13} className="text-gray-400"/> {t.coordinatesLabel}
+            <label className="text-sm font-medium text-ink flex items-center gap-1.5">
+              <Navigation size={13} className="text-faint"/> {t.coordinatesLabel}
             </label>
             <input type="text" inputMode="decimal" placeholder={t.coordinatesPlaceholder}
               value={coordsText} onChange={e => onCoordsChange(e.target.value)}
-              className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary ${coordsInvalid ? 'border-red-300' : 'border-gray-200'}`}/>
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary ${coordsInvalid ? 'border-red-300' : 'border-border'}`}/>
             {coordsInvalid && (
               <p className="text-xs text-red-500">{t.coordinatesInvalid}</p>
             )}
           </div>
-          <div className="border-t border-gray-100 pt-3"/>
+          <div className="border-t border-border-soft pt-3"/>
         </Fragment>
       );
     }
@@ -560,9 +575,9 @@ function NuevoTrabajoContent() {
           )}
           {!fHidden('job_state') && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{jrl('job_state', t.stateLabel)}</label>
+            <label className="text-sm font-medium text-ink">{jrl('job_state', t.stateLabel)}</label>
             <select value={state} onChange={e => setState(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{t.stateNone}</option>
               {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
             </select>
@@ -591,7 +606,7 @@ function NuevoTrabajoContent() {
       return (
         <Fragment key={k}>
           <div className="flex items-center justify-between mt-4">
-            <label className="text-sm font-medium text-gray-700">{t.allDayLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.allDayLabel}</label>
             <Toggle checked={allDay} onChange={setAllDay} aria-label={t.allDayLabel}/>
           </div>
           {!allDay && (
@@ -611,11 +626,11 @@ function NuevoTrabajoContent() {
       if (fHidden('total_hours')) return null;
       return (
         <div key={k} className="mt-3">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
+          <label className="block text-sm font-medium text-ink mb-2">{jrl('total_hours', t.totalHoursLabel)}</label>
           {bothTimesSet ? (
-            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-border-soft px-4 py-3 text-muted">
               <span>{computedHours != null ? `${computedHours} h` : '—'}</span>
-              <span className="text-xs text-gray-400">{t.totalHoursAutoHint}</span>
+              <span className="text-xs text-faint">{t.totalHoursAutoHint}</span>
             </div>
           ) : (
             <Input
@@ -626,7 +641,7 @@ function NuevoTrabajoContent() {
               placeholder="0"
             />
           )}
-          <p className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</p>
+          <p className="text-xs text-faint mt-1.5">{t.totalHoursHint}</p>
         </div>
       );
     }
@@ -636,12 +651,12 @@ function NuevoTrabajoContent() {
       if (!isEditProposal && fHidden('internal_notes')) return null;
       return (
         <div key={k} className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">
+          <label className="text-sm font-medium text-ink">
             {isEditProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
           </label>
           <textarea rows={4} placeholder={isEditProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
             value={internalNotes} onChange={e => setInternalNotes(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
         </div>
       );
     }
@@ -688,15 +703,24 @@ function NuevoTrabajoContent() {
 
     const loadData = async () => {
       const businessId = business.id;
-      const [cl, emp] = await Promise.all([
+      const [cl, emp, contactRows] = await Promise.all([
         fetchAll<Client>((from, to) =>
           supabase.from('clients').select('id, first_name, last_name, company, address, city, state')
             .eq('business_id', businessId).order('first_name').range(from, to)),
         fetchAll<Employee>((from, to) =>
           supabase.from('employees').select('id, first_name, last_name, role, show_in_roster')
             .eq('business_id', businessId).eq('active', true).order('first_name').range(from, to)),
+        // Client contacts — so the picker can find an account by a contact's name.
+        fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+          supabase.from('client_contacts').select('client_id, name, role')
+            .eq('business_id', businessId).order('is_primary', { ascending: false }).range(from, to))
+          .catch(() => [] as { client_id: string; name: string; role: string | null }[]),
       ]);
-      setClients(cl);
+      const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
+      for (const ct of contactRows) {
+        (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!).push({ name: ct.name, role: ct.role });
+      }
+      setClients(cl.map(c => ({ ...c, contacts: contactsByClient.get(c.id) })));
       // Roster flag (migration 128): office members opt out of crew pickers.
       setEmployees(emp.filter(e => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
 
@@ -889,9 +913,22 @@ function NuevoTrabajoContent() {
   const filteredClients = clientSearch
     ? clients.filter(c => {
         const q = clientSearch.toLowerCase();
-        return [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase().includes(q);
+        const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+        if (own.includes(q)) return true;
+        // Also match on the client's contacts — search a contact, find the account.
+        return (c.contacts ?? []).some(ct => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q));
       })
     : clients;
+
+  // The contact that matched (when matched via a contact, not the client's own
+  // name) — shown under the client so you know who you searched for.
+  const matchedContactOf = (c: Client) => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return null;
+    const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+    if (own.includes(q)) return null;
+    return (c.contacts ?? []).find(ct => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q)) ?? null;
+  };
 
   const selectedClient = clients.find(c => c.id === clientId);
 
@@ -1373,21 +1410,21 @@ function NuevoTrabajoContent() {
         <Link
           href={sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos'}
           onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos')); }}
-          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-xl hover:bg-border-soft transition-colors"
         >
-          <ArrowLeft size={18} className="text-gray-500"/>
+          <ArrowLeft size={18} className="text-muted"/>
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{heading}</h1>
-          <p className="text-xs text-gray-400">{subtitle}</p>
+          <h1 className="text-xl font-bold text-ink">{heading}</h1>
+          <p className="text-xs text-faint">{subtitle}</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-5">
 
         {/* ── Información general */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">{t.generalInfo}</p>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-4">{t.generalInfo}</p>
           <div className="flex flex-col gap-3">
             <Input label={isEditProposal ? t.titleLabelProposal : t.titleLabelJob}
               placeholder={t.titlePlaceholder}
@@ -1400,10 +1437,10 @@ function NuevoTrabajoContent() {
         {/* ── Ubicación — shown for jobs AND estimates (the work has a place
             even at quote time). proposalData persists it for estimates. */}
         {(secVisible('location') || customFieldsFor('location').length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <MapPin size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.locationHeading}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.locationHeading}</p>
             </div>
             <div className="flex flex-col gap-3">
               {/* Standard + custom fields, interleaved in saved layout order. */}
@@ -1414,10 +1451,10 @@ function NuevoTrabajoContent() {
 
         {/* ── Horario (job mode only) */}
         {!isEditProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.scheduleHeading}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.scheduleHeading}</p>
             </div>
             {/* Standard + custom fields, interleaved in saved layout order.
                 Customs get an mt-3 wrapper — this card body isn't a gap
@@ -1435,7 +1472,7 @@ function NuevoTrabajoContent() {
             )}
 
             {totalTimeText && (
-              <p className="text-xs text-gray-500 text-right mt-3">
+              <p className="text-xs text-muted text-right mt-3">
                 {t.totalTimeLabel}: <span className="font-semibold text-primary">{totalTimeText}</span>
               </p>
             )}
@@ -1444,11 +1481,11 @@ function NuevoTrabajoContent() {
 
         {/* ── Empleados (job mode only) */}
         {!isEditProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center justify-between gap-2 mb-4">
               <div className="flex items-center gap-2">
                 <Users size={15} className="text-primary"/>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.workersHeading}</p>
+                <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.workersHeading}</p>
               </div>
               {employees.length > 0 && !restrictedCreator && (
                 <button type="button" onClick={() => setCrewFinderOpen(true)}
@@ -1471,42 +1508,42 @@ function NuevoTrabajoContent() {
                    logging the job IS the lead. */}
                 {business?.job_crew_mode !== false && !restrictedCreator && (
                   <div className="flex flex-col gap-1.5 mb-4 max-w-xs">
-                    <label className="text-sm font-medium text-gray-700">{t.leadLabel}</label>
+                    <label className="text-sm font-medium text-ink">{t.leadLabel}</label>
                     <div className="relative" ref={leadDropdownRef}>
                       <button type="button" onClick={() => setLeadDropdownOpen(o => !o)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                        className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
                         {leadEmployee ? (
-                          <span className="text-gray-900 truncate">{leadEmployee.first_name} {leadEmployee.last_name}</span>
+                          <span className="text-ink truncate">{leadEmployee.first_name} {leadEmployee.last_name}</span>
                         ) : (
-                          <span className="text-gray-400">{t.leadNone}</span>
+                          <span className="text-faint">{t.leadNone}</span>
                         )}
-                        <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                        <ChevronDown size={14} className="text-faint shrink-0 ml-2"/>
                       </button>
                       {leadDropdownOpen && (
-                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                          <div className="p-2 border-b border-gray-100">
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                          <div className="p-2 border-b border-border-soft">
                             <div className="relative">
-                              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
                               <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
                                 value={leadSearch} onChange={e => setLeadSearch(e.target.value)}
-                                className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                                className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
                             </div>
                           </div>
                           <div className="max-h-60 overflow-y-auto">
                             <button type="button"
                               onClick={() => { setLead(''); setLeadDropdownOpen(false); setLeadSearch(''); }}
-                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${!leadEmployeeId ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors ${!leadEmployeeId ? 'text-primary font-medium' : 'text-muted'}`}>
                               {t.leadNone}
                             </button>
                             {filteredLeadEmployees.map(emp => (
                               <button type="button" key={emp.id}
                                 onClick={() => { setLead(emp.id); setLeadDropdownOpen(false); setLeadSearch(''); }}
-                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate ${leadEmployeeId === emp.id ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors truncate ${leadEmployeeId === emp.id ? 'text-primary font-medium bg-primary/5' : 'text-ink'}`}>
                                 {emp.first_name} {emp.last_name}
                               </button>
                             ))}
                             {filteredLeadEmployees.length === 0 && (
-                              <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                              <p className="px-4 py-3 text-xs text-faint text-center">{t.workerNoResults}</p>
                             )}
                           </div>
                         </div>
@@ -1519,28 +1556,28 @@ function NuevoTrabajoContent() {
                    all-at-once grid so larger teams aren't overwhelming. */}
                 <div className="flex flex-col gap-1.5 mb-3 max-w-xs">
                   {business?.job_crew_mode !== false && (
-                    <label className="text-sm font-medium text-gray-700">{t.crewLabel}</label>
+                    <label className="text-sm font-medium text-ink">{t.crewLabel}</label>
                   )}
                   <div className="relative" ref={crewDropdownRef}>
                     <button type="button" onClick={() => setCrewDropdownOpen(o => !o)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                      className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
                       {assignedEmployees.length > 0 ? (
-                        <span className="text-gray-900 truncate">
+                        <span className="text-ink truncate">
                           {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
                         </span>
                       ) : (
-                        <span className="text-gray-400">{t.crewPlaceholder}</span>
+                        <span className="text-faint">{t.crewPlaceholder}</span>
                       )}
-                      <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                      <ChevronDown size={14} className="text-faint shrink-0 ml-2"/>
                     </button>
                     {crewDropdownOpen && (
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                        <div className="p-2 border-b border-gray-100">
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                        <div className="p-2 border-b border-border-soft">
                           <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
                             <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
                               value={crewSearch} onChange={e => setCrewSearch(e.target.value)}
-                              className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                              className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
                           </div>
                         </div>
                         <div className="max-h-60 overflow-y-auto">
@@ -1548,17 +1585,17 @@ function NuevoTrabajoContent() {
                             const on = assignedEmployees.includes(emp.id);
                             return (
                               <button type="button" key={emp.id} onClick={() => toggleEmployee(emp.id)}
-                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-ink'}`}>
                                 <span className="truncate">{emp.first_name} {emp.last_name}</span>
                                 {on && <span className="text-xs text-primary ml-2">✓</span>}
                               </button>
                             );
                           })}
                           {filteredCrewEmployees.length === 0 && (
-                            <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                            <p className="px-4 py-3 text-xs text-faint text-center">{t.workerNoResults}</p>
                           )}
                         </div>
-                        <div className="p-2 border-t border-gray-100">
+                        <div className="p-2 border-t border-border-soft">
                           <button type="button" onClick={() => { setCrewDropdownOpen(false); setCrewSearch(''); }}
                             className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
                             {t.crewDoneBtn}
@@ -1587,27 +1624,27 @@ function NuevoTrabajoContent() {
                 without picking up the work hours. */}
             {employees.length > 0 && (
               <div className="flex flex-col gap-1.5 max-w-xs">
-                <label className="text-sm font-medium text-gray-700">{t.driverLabel}</label>
+                <label className="text-sm font-medium text-ink">{t.driverLabel}</label>
                 <div className="relative" ref={driverDropdownRef}>
                   <button type="button" onClick={() => setDriverDropdownOpen(o => !o)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
                     {driverEmployeeIds.length > 0 ? (
-                      <span className="text-gray-900 truncate">
+                      <span className="text-ink truncate">
                         {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
                       </span>
                     ) : (
-                      <span className="text-gray-400">{t.driverNone}</span>
+                      <span className="text-faint">{t.driverNone}</span>
                     )}
-                    <ChevronDown size={14} className="text-gray-400 shrink-0 ml-2"/>
+                    <ChevronDown size={14} className="text-faint shrink-0 ml-2"/>
                   </button>
                   {driverDropdownOpen && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                      <div className="p-2 border-b border-gray-100">
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                      <div className="p-2 border-b border-border-soft">
                         <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
                           <input autoFocus type="text" placeholder={t.workerSearchPlaceholder}
                             value={driverSearch} onChange={e => setDriverSearch(e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+                            className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
                         </div>
                       </div>
                       <div className="max-h-60 overflow-y-auto">
@@ -1615,17 +1652,17 @@ function NuevoTrabajoContent() {
                           const on = driverEmployeeIds.includes(emp.id);
                           return (
                             <button type="button" key={emp.id} onClick={() => toggleDriver(emp.id)}
-                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-gray-900'}`}>
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-ink'}`}>
                               <span className="truncate">{emp.first_name} {emp.last_name}</span>
                               {on && <span className="text-xs text-primary ml-2">✓</span>}
                             </button>
                           );
                         })}
                         {filteredDriverPool.length === 0 && (
-                          <p className="px-4 py-3 text-xs text-gray-400 text-center">{t.workerNoResults}</p>
+                          <p className="px-4 py-3 text-xs text-faint text-center">{t.workerNoResults}</p>
                         )}
                       </div>
-                      <div className="p-2 border-t border-gray-100">
+                      <div className="p-2 border-t border-border-soft">
                         <button type="button" onClick={() => { setDriverDropdownOpen(false); setDriverSearch(''); }}
                           className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
                           {t.crewDoneBtn}
@@ -1655,7 +1692,7 @@ function NuevoTrabajoContent() {
                       onChange={e => setDriverHours(e.target.value.replace(/[^0-9.]/g, ''))}
                       placeholder="0"
                     />
-                    <p className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</p>
+                    <p className="text-xs text-faint mt-1.5">{t.driverHoursHint}</p>
                   </div>
                 )}
               </div>
@@ -1667,10 +1704,10 @@ function NuevoTrabajoContent() {
 
         {/* ── Líneas de trabajo / Ítems */}
         {showMaterials && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={15} className="text-primary"/>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide">
               {isEditProposal ? t.itemsHeadingProposal : t.itemsHeadingJob}
             </p>
           </div>
@@ -1678,26 +1715,26 @@ function NuevoTrabajoContent() {
             {isEditProposal ? (
               /* Proposal: simpler grid without item_type */
               <>
-                <div className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1">
+                <div className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1">
                   <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
                   <div key={item.id} className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 items-center">
                     <input type="text" placeholder={t.itemDescriptionPlaceholderProposal}
                       value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="rounded-xl border border-border px-3 py-2 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.5" value={item.quantity || ''}
                       onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                      className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-center focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="rounded-xl border border-border px-2 py-2 text-sm text-ink text-center focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.01" value={item.unit_price || ''}
                       onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
-                    <p className="text-sm font-semibold text-gray-900 text-right pr-1">
+                      className="rounded-xl border border-border px-2 py-2 text-sm text-ink text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
+                    <p className="text-sm font-semibold text-ink text-right pr-1">
                       ${fmtMoney(item.quantity * item.unit_price)}
                     </p>
                     <button onClick={() => items.length > 1 && removeItem(item.id)}
                       disabled={items.length === 1}
-                      className="p-1 rounded-lg hover:bg-red-50 transition-colors">
+                      className="p-1 rounded-lg hover:bg-red-500/10 transition-colors">
                       <Trash2 size={13} className={items.length === 1 ? 'text-gray-200' : 'text-red-400'}/>
                     </button>
                   </div>
@@ -1706,7 +1743,7 @@ function NuevoTrabajoContent() {
             ) : (
               /* Job: full grid with item_type (type column hidden when off) */
               <>
-                <div className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide pb-1`}>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1`}>
                   {showItemTypes ? <span>{t.colType}</span> : null}<span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
@@ -1714,24 +1751,24 @@ function NuevoTrabajoContent() {
                     {showItemTypes ? (
                     <select value={item.item_type}
                       onChange={e => updateItem(item.id, 'item_type', e.target.value)}
-                      className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                      className="rounded-xl border border-border bg-card px-2 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                     ) : null}
                     <input type="text" placeholder={t.itemDescriptionPlaceholderJob} value={item.description}
                       onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="rounded-xl border border-border px-3 py-2 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.5" value={item.quantity || ''}
                       onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                      className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-center focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="rounded-xl border border-border px-2 py-2 text-sm text-ink text-center focus:outline-none focus:ring-2 focus:ring-primary"/>
                     <input type="number" min="0" step="0.01" value={item.unit_price || ''}
                       onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="rounded-xl border border-gray-200 px-2 py-2 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
-                    <p className="text-sm font-semibold text-gray-900 text-right pr-1">
+                      className="rounded-xl border border-border px-2 py-2 text-sm text-ink text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
+                    <p className="text-sm font-semibold text-ink text-right pr-1">
                       ${fmtMoney(item.quantity * item.unit_price)}
                     </p>
                     <button onClick={() => items.length > 1 && removeItem(item.id)}
-                      className="p-1 rounded-lg hover:bg-red-50 transition-colors"
+                      className="p-1 rounded-lg hover:bg-red-500/10 transition-colors"
                       disabled={items.length === 1}>
                       <Trash2 size={13} className={items.length === 1 ? 'text-gray-200' : 'text-red-400'}/>
                     </button>
@@ -1741,34 +1778,34 @@ function NuevoTrabajoContent() {
             )}
 
             {/* Totals */}
-            <div className="border-t border-gray-100 mt-2 pt-3 flex justify-end">
+            <div className="border-t border-border-soft mt-2 pt-3 flex justify-end">
               {isEditProposal ? (
                 <div className="w-52 flex flex-col gap-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{t.subtotal}</span>
+                    <span className="text-muted">{t.subtotal}</span>
                     <span className="font-medium">${fmtMoney(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-gray-500 whitespace-nowrap">{t.taxPercent}</span>
+                    <span className="text-muted whitespace-nowrap">{t.taxPercent}</span>
                     <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
                       placeholder="0" onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                      className="w-20 rounded-xl border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="w-20 rounded-xl border border-border px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                   </div>
                   <div className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-gray-500">{t.discountAmount}</span>
+                    <span className="text-muted">{t.discountAmount}</span>
                     <input type="number" min="0" step="0.01" value={discount || ''}
                       placeholder="0" onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-                      className="w-20 rounded-xl border border-gray-200 px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
+                      className="w-20 rounded-xl border border-border px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"/>
                   </div>
-                  <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
+                  <div className="flex justify-between text-base font-bold pt-2 border-t border-border-soft">
                     <span>{t.total}</span>
                     <span className="text-primary">${fmtMoney(total)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">{t.totalEstimated}</p>
-                  <p className="text-lg font-bold text-gray-900">${fmtMoney(subtotal)}</p>
+                  <p className="text-xs text-faint">{t.totalEstimated}</p>
+                  <p className="text-lg font-bold text-ink">${fmtMoney(subtotal)}</p>
                 </div>
               )}
             </div>
@@ -1783,13 +1820,13 @@ function NuevoTrabajoContent() {
         {editId && business ? (
           <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <ImagePlus size={15} className="text-primary"/>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{full.dashboard.jobs.detail.photos.heading}</p>
+                <p className="text-xs font-semibold text-faint uppercase tracking-wide">{full.dashboard.jobs.detail.photos.heading}</p>
               </div>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-faint">
                 {full.dashboard.jobs.detail.photos.countLabel
                   .replace('{{count}}', String(pendingPhotos.length))
                   .replace('{{max}}', String(MAX_PHOTOS_PER_JOB))}
@@ -1797,7 +1834,7 @@ function NuevoTrabajoContent() {
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
               {pendingPhotos.map(p => (
-                <div key={p.url} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                <div key={p.url} className="relative aspect-square rounded-xl overflow-hidden bg-border-soft">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.url} alt="" className="w-full h-full object-cover" />
                   <button
@@ -1813,7 +1850,7 @@ function NuevoTrabajoContent() {
                 <button
                   type="button"
                   onClick={() => pendingPhotoInputRef.current?.click()}
-                  className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                  className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-faint hover:border-primary hover:text-primary transition-colors"
                 >
                   <ImagePlus size={22} />
                   <span className="text-[11px] mt-1.5 font-medium">{full.dashboard.jobs.detail.photos.addBtn}</span>
@@ -1821,7 +1858,7 @@ function NuevoTrabajoContent() {
               )}
             </div>
             {pendingPhotos.length > 0 && (
-              <p className="text-xs text-gray-400 mt-2">{full.dashboard.jobs.detail.photos.pendingHint}</p>
+              <p className="text-xs text-faint mt-2">{full.dashboard.jobs.detail.photos.pendingHint}</p>
             )}
             <input
               ref={pendingPhotoInputRef}
@@ -1836,18 +1873,18 @@ function NuevoTrabajoContent() {
 
         {/* ── Notas (section hideable in job mode) */}
         {(isEditProposal || !fHidden('internal_notes') || customFieldsFor('notes').length > 0) && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={15} className="text-primary"/>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.notesHeading}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.notesHeading}</p>
           </div>
           <div className="flex flex-col gap-3">
             {isEditProposal && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-gray-700">{t.clientNoteLabel}</label>
+                <label className="text-sm font-medium text-ink">{t.clientNoteLabel}</label>
                 <textarea rows={4} placeholder={t.clientNotePlaceholder}
                   value={clientNotes} onChange={e => setClientNotes(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
               </div>
             )}
             {/* Standard + custom fields, interleaved in saved layout order. */}
@@ -1859,8 +1896,8 @@ function NuevoTrabajoContent() {
         {/* ── Detalles adicionales — home for custom fields assigned to the
             'additional' section. Only rendered when at least one exists. */}
         {customFieldsFor('additional').length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-4">
               {locale === 'es' ? 'Detalles adicionales' : 'Additional details'}
             </p>
             <div className="flex flex-col gap-3">
@@ -1874,18 +1911,18 @@ function NuevoTrabajoContent() {
             field crew: their job is auto-published so they (and any assigned
             crew) can see it. iOS-style segmented control. */}
         {!restrictedCreator && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
               <Eye size={15} className="text-primary"/>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.publishedToCrewLabel}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.publishedToCrewLabel}</p>
             </div>
-            <p className="text-xs text-gray-500 mb-3">{t.publishedToCrewHint}</p>
-            <div className="flex p-1 rounded-2xl bg-gray-100">
+            <p className="text-xs text-muted mb-3">{t.publishedToCrewHint}</p>
+            <div className="flex p-1 rounded-2xl bg-border-soft">
               <button type="button" onClick={() => setPublishedToCrew(false)}
                 className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
                   !publishedToCrew
-                    ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-primary/15 text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                    : 'text-muted hover:text-ink'
                 }`}>
                 <Lock size={13} />
                 {t.privateBadge}
@@ -1893,8 +1930,8 @@ function NuevoTrabajoContent() {
               <button type="button" onClick={() => setPublishedToCrew(true)}
                 className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-all ${
                   publishedToCrew
-                    ? 'bg-white text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-primary/15 text-primary shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
+                    : 'text-muted hover:text-ink'
                 }`}>
                 <Eye size={13} />
                 {t.publicBadge}
@@ -1903,7 +1940,7 @@ function NuevoTrabajoContent() {
           </div>
         )}
 
-        {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
+        {error && <p className="text-sm text-red-500 bg-red-500/10 px-4 py-3 rounded-xl">{error}</p>}
 
         {/* Actions */}
         <div className="flex gap-3 pb-6">
@@ -1996,10 +2033,10 @@ function CustomFieldInput({
     // Long free text — multiline.
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <textarea rows={4}
           value={value} onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+          className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
       </div>
     );
   }
@@ -2010,14 +2047,14 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
         <div className="flex gap-2">
           <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.yes}
           </button>
           <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.no}
           </button>
         </div>
@@ -2031,13 +2068,13 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <label className="text-sm font-medium text-ink">{label}</label>
           <div className="flex flex-wrap gap-2">
             {template.field_options.map(o => {
               const on = selected.includes(o);
               return (
                 <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted hover:border-border'}`}>
                   {o}
                 </button>
               );
@@ -2048,11 +2085,11 @@ function CustomFieldInput({
     }
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}

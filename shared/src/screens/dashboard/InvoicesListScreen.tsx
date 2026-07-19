@@ -468,7 +468,12 @@ export function InvoicesListScreen({
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-gray-200 rounded-full" />
           </View>
-          <Text className="text-lg font-bold text-gray-900 px-1 mb-3">{tg.title}</Text>
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-lg font-bold text-gray-900 px-1">{tg.title}</Text>
+            <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+              <X size={22} color="#9CA3AF" />
+            </Pressable>
+          </View>
           <View className="gap-1">
             {groupOptions.map(o => {
               const active = groupBy === o.key;

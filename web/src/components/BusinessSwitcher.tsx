@@ -59,13 +59,13 @@ export function BusinessSwitcher() {
       <button
         ref={btnRef}
         onClick={() => setOpen((v) => !v)}
-        className="max-w-full flex items-center gap-2 border border-gray-200 bg-white rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-gray-50 transition-colors"
+        className="max-w-full flex items-center gap-2 border border-border bg-elevated rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-surface transition-colors"
         aria-label={tw.switcherLabel}
       >
         <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
           <Building2 size={12} className="text-primary" />
         </span>
-        <span className="text-sm font-semibold text-gray-900 truncate min-w-0">
+        <span className="text-sm font-semibold text-ink truncate min-w-0">
           {business.name}
         </span>
         <ChevronDown size={14} className="text-primary shrink-0" />
@@ -76,9 +76,9 @@ export function BusinessSwitcher() {
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="w-72 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
+          className="w-72 bg-elevated rounded-2xl border border-border-soft shadow-xl overflow-hidden"
         >
-          <div className="px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+          <div className="px-4 py-2 text-[10px] font-semibold text-faint uppercase tracking-wider">
             {tw.switcherLabel}
           </div>
           {businesses.map((b, i) => {
@@ -95,17 +95,17 @@ export function BusinessSwitcher() {
                   // showing stale/out-of-context data. Only on a real switch.
                   if (switching) router.push('/dashboard');
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${
-                  i < businesses.length - 1 ? 'border-b border-gray-50' : ''
+                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-surface transition-colors text-left ${
+                  i < businesses.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
               >
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Building2 size={16} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 break-words">{b.name}</p>
+                  <p className="text-sm font-semibold text-ink break-words">{b.name}</p>
                   {b.city ? (
-                    <p className="text-xs text-gray-500 break-words">
+                    <p className="text-xs text-muted break-words">
                       {b.city}
                       {b.state ? `, ${b.state}` : ''}
                     </p>
@@ -120,7 +120,7 @@ export function BusinessSwitcher() {
               setOpen(false);
               router.push('/onboarding');
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 border-t border-gray-100 hover:bg-gray-50 transition-colors text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 border-t border-border-soft hover:bg-surface transition-colors text-left"
           >
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
               <Plus size={16} className="text-primary" />

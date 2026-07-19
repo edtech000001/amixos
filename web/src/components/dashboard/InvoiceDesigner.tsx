@@ -72,10 +72,10 @@ function Seg<T extends string>({ value, options, onChange }: {
   value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex self-start rounded-xl border border-gray-200 overflow-hidden">
+    <div className="inline-flex self-start rounded-xl border border-border overflow-hidden">
       {options.map(o => (
         <button key={o.value} type="button" onClick={() => onChange(o.value)}
-          className={`px-3 py-1.5 text-sm ${value === o.value ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+          className={`px-3 py-1.5 text-sm ${value === o.value ? 'bg-primary text-white' : 'bg-card text-muted hover:bg-surface'}`}>
           {o.label}
         </button>
       ))}
@@ -120,10 +120,10 @@ function ThemesModal({ open, onClose, currentId, onSelect, value, branding, samp
   const ids = INVOICE_PRESET_IDS.slice(safePage * THEMES_PER_PAGE, safePage * THEMES_PER_PAGE + THEMES_PER_PAGE);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">{t.themesTitle}</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+      <div className="bg-card rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
+          <h3 className="font-semibold text-ink">{t.themesTitle}</h3>
+          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
         </div>
         <div className="p-5 overflow-y-auto">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">
@@ -132,19 +132,19 @@ function ThemesModal({ open, onClose, currentId, onSelect, value, branding, samp
               const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
               return (
                 <button key={id} type="button" onClick={() => onSelect(id)}
-                  className={`rounded-xl border p-2 transition ${active ? 'border-primary ring-1 ring-primary' : 'border-gray-200 hover:border-gray-300'}`}>
+                  className={`rounded-xl border p-2 transition ${active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'}`}>
                   <PresetPreview vm={pvm} />
-                  <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.presets[id]}{active ? ` · ${t.currentTheme}` : ''}</span>
+                  <span className="block mt-1.5 text-xs font-medium text-ink text-center">{t.presets[id]}{active ? ` · ${t.currentTheme}` : ''}</span>
                 </button>
               );
             })}
           </div>
         </div>
         {pages > 1 ? (
-          <div className="flex items-center justify-center gap-4 px-5 py-3 border-t border-gray-100">
-            <button type="button" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-30 hover:bg-gray-50"><ChevronLeft size={18} /></button>
-            <span className="text-sm text-gray-500">{safePage + 1} / {pages}</span>
-            <button type="button" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-30 hover:bg-gray-50"><ChevronRight size={18} /></button>
+          <div className="flex items-center justify-center gap-4 px-5 py-3 border-t border-border-soft">
+            <button type="button" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} className="p-1.5 rounded-lg border border-border text-muted disabled:opacity-30 hover:bg-surface"><ChevronLeft size={18} /></button>
+            <span className="text-sm text-muted">{safePage + 1} / {pages}</span>
+            <button type="button" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} className="p-1.5 rounded-lg border border-border text-muted disabled:opacity-30 hover:bg-surface"><ChevronRight size={18} /></button>
           </div>
         ) : null}
       </div>
@@ -167,23 +167,23 @@ function CopyThemeModal({ open, onClose, onPick, value, branding, sample, t }: {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">{t.copyThemeTitle}</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+      <div className="bg-card rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
+          <h3 className="font-semibold text-ink">{t.copyThemeTitle}</h3>
+          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
         </div>
         <div className="p-5 overflow-y-auto">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">
             <button type="button" onClick={() => onPick('blank')}
-              className="rounded-xl border border-dashed border-gray-300 p-2 transition hover:border-gray-400">
+              className="rounded-xl border border-dashed border-border p-2 transition hover:border-gray-400">
               <PresetPreview vm={buildInvoiceViewModel(blankFreeform(value), sample, branding)} />
-              <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.blankTheme}</span>
+              <span className="block mt-1.5 text-xs font-medium text-ink text-center">{t.blankTheme}</span>
             </button>
             {INVOICE_PRESET_IDS.map(id => (
               <button key={id} type="button" onClick={() => onPick(id)}
-                className="rounded-xl border border-gray-200 p-2 transition hover:border-gray-300">
+                className="rounded-xl border border-border p-2 transition hover:border-border">
                 <PresetPreview vm={buildInvoiceViewModel(freeformFromPreset(id, value), sample, branding)} />
-                <span className="block mt-1.5 text-xs font-medium text-gray-700 text-center">{t.presets[id]}</span>
+                <span className="block mt-1.5 text-xs font-medium text-ink text-center">{t.presets[id]}</span>
               </button>
             ))}
           </div>
@@ -198,7 +198,7 @@ function FontSelect({ value, onChange, t, inheritLabel }: {
 }) {
   return (
     <select value={value ?? ''} onChange={e => onChange(e.target.value ? (e.target.value as InvoiceFont) : undefined)}
-      className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700">
+      className="rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-ink">
       {inheritLabel ? <option value="">{inheritLabel}</option> : null}
       {ALL_FONTS.map(f => <option key={f} value={f} style={{ fontFamily: cssFontFamily(f) }}>{t.fonts[f]}</option>)}
     </select>
@@ -208,7 +208,7 @@ function FontSelect({ value, onChange, t, inheritLabel }: {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="text-sm font-medium text-ink">{label}</span>
       {children}
     </div>
   );
@@ -383,31 +383,31 @@ function IconMenu({ label, onPick, categories, searchPlaceholder, noResults }: {
   const filtered = query ? ALL_PIN_ICONS.filter(k => k.includes(query)) : null;
   const iconBtn = (n: string) => (
     <button key={n} type="button" title={n} onClick={() => { onPick(n); close(); }}
-      className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-700">
+      className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-border-soft text-ink">
       <IconGlyphSvg icon={n} />
     </button>
   );
   return (
     <div className="relative">
       <button type="button" onClick={() => (open ? close() : setOpen(true))}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm text-ink hover:bg-surface">
         <Sparkles size={15} /> {label}
       </button>
       {open ? (
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
-          <div className="absolute z-20 mt-1 w-80 bg-white rounded-xl border border-gray-200 shadow-lg p-3">
+          <div className="absolute z-20 mt-1 w-80 bg-card rounded-xl border border-border shadow-lg p-3">
             <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={searchPlaceholder}
-              className="w-full mb-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+              className="w-full mb-2 rounded-lg border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
             <div className="max-h-72 overflow-y-auto">
               {filtered ? (
                 filtered.length ? (
                   <div className="grid grid-cols-7 gap-1">{filtered.map(iconBtn)}</div>
-                ) : <p className="text-xs text-gray-400 py-4 text-center">{noResults}</p>
+                ) : <p className="text-xs text-faint py-4 text-center">{noResults}</p>
               ) : (
                 PIN_ICON_CATEGORIES.map(cat => (
                   <div key={cat.i18nKey} className="mb-2">
-                    <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1 px-0.5">{categories[cat.i18nKey]}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-faint font-semibold mb-1 px-0.5">{categories[cat.i18nKey]}</div>
                     <div className="grid grid-cols-7 gap-1">{cat.icons.map(iconBtn)}</div>
                   </div>
                 ))
@@ -437,7 +437,7 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
     : el.kind === 'customField' ? `◆ ${el.customLabel ?? ''}`
     : t.fields[el.field as InvoiceFieldKey];
   const opacityCtl = (
-    <label className="flex items-center gap-1.5 text-sm text-gray-600">
+    <label className="flex items-center gap-1.5 text-sm text-muted">
       {t.elements.opacity}
       <input type="range" min={0.1} max={1} step={0.05} value={st.opacity ?? 1}
         onChange={e => setStyle({ opacity: Number(e.target.value) })} />
@@ -445,9 +445,9 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
   );
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-3">
+    <div className="rounded-xl border border-border bg-surface p-3 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-700">{name}</span>
+        <span className="text-sm font-semibold text-ink">{name}</span>
         <button type="button" onClick={() => { onChange(removeElement(value, el.id)); onDeselect(); }}
           className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600">
           <Trash2 size={14} /> {t.elements.deleteEl}
@@ -457,24 +457,24 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
       {el.kind === 'text' ? (
         <textarea rows={2} value={el.text ?? ''} onChange={e => onChange(updateElement(value, el.id, { text: e.target.value }))}
           placeholder={t.elements.textContent}
-          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y" />
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y" />
       ) : null}
 
       {isText ? (
         <div className="flex items-center gap-3 flex-wrap">
           <FontSelect value={st.font} onChange={f => setStyle({ font: f })} t={t} inheritLabel={`${t.elementFont} —`} />
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+          <label className="flex items-center gap-1.5 text-sm text-muted">
             {t.elements.fontSize}
             <input type="number" min={6} max={72} value={st.fontSize ?? ''} placeholder="—"
               onChange={e => setStyle({ fontSize: e.target.value ? Number(e.target.value) : undefined })}
-              className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm" />
+              className="w-16 rounded-lg border border-border px-2 py-1 text-sm" />
           </label>
           <button type="button" onClick={() => setStyle({ bold: !st.bold })}
-            className={`px-2.5 py-1 rounded-lg border text-sm font-bold ${st.bold ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600'}`}>B</button>
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+            className={`px-2.5 py-1 rounded-lg border text-sm font-bold ${st.bold ? 'bg-primary text-white border-primary' : 'border-border text-muted'}`}>B</button>
+          <label className="flex items-center gap-1.5 text-sm text-muted">
             {t.elements.color}
             <input type="color" value={st.color ?? '#1f2937'} onChange={e => setStyle({ color: e.target.value })}
-              className="w-7 h-7 rounded border border-gray-200 cursor-pointer" />
+              className="w-7 h-7 rounded border border-border cursor-pointer" />
           </label>
           <Seg<'left' | 'center' | 'right'>
             value={st.align ?? 'left'}
@@ -490,17 +490,17 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
 
       {el.kind === 'shape' ? (
         <div className="flex items-center gap-3 flex-wrap">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+          <label className="flex items-center gap-1.5 text-sm text-muted">
             {t.elements.fillColor}
             <input type="color" value={st.fill ?? value.accentColor} onChange={e => setStyle({ fill: e.target.value })}
-              className="w-7 h-7 rounded border border-gray-200 cursor-pointer" />
+              className="w-7 h-7 rounded border border-border cursor-pointer" />
           </label>
           {el.shape === 'rectangle' ? (
-            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+            <label className="flex items-center gap-1.5 text-sm text-muted">
               {t.elements.cornerRadius}
               <input type="number" min={0} max={80} value={st.radius ?? 0}
                 onChange={e => setStyle({ radius: Number(e.target.value) || 0 })}
-                className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm" />
+                className="w-16 rounded-lg border border-border px-2 py-1 text-sm" />
             </label>
           ) : null}
           {opacityCtl}
@@ -509,10 +509,10 @@ function StylePanel({ value, onChange, el, t, onDeselect }: {
 
       {el.kind === 'icon' ? (
         <div className="flex items-center gap-3 flex-wrap">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+          <label className="flex items-center gap-1.5 text-sm text-muted">
             {t.elements.color}
             <input type="color" value={st.color ?? value.accentColor} onChange={e => setStyle({ color: e.target.value })}
-              className="w-7 h-7 rounded border border-gray-200 cursor-pointer" />
+              className="w-7 h-7 rounded border border-border cursor-pointer" />
           </label>
           {opacityCtl}
         </div>
@@ -623,7 +623,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
             style={{ background: c }} />
         ))}
         <input type="color" value={value.accentColor} onChange={e => change(setAccent(value, e.target.value))}
-          className="w-7 h-7 rounded cursor-pointer border border-gray-200" />
+          className="w-7 h-7 rounded cursor-pointer border border-border" />
       </div>
     </Field>
   );
@@ -644,7 +644,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
         {(['qty', 'rate', 'total'] as (keyof InvoiceColumns)[]).map(col => (
           <label key={col} className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={value.columns[col]} onChange={e => change(setColumn(value, col, e.target.checked))} />
-            <span className="text-sm text-gray-600">{t.columnNames[col]}</span>
+            <span className="text-sm text-muted">{t.columnNames[col]}</span>
           </label>
         ))}
       </div>
@@ -654,7 +654,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
     <Field label={t.pageTint}>
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={!!value.pageTint} onChange={e => change(setPageTint(value, e.target.checked))} />
-        <span className="text-sm text-gray-600">{t.pageTint}</span>
+        <span className="text-sm text-muted">{t.pageTint}</span>
       </label>
     </Field>
   );
@@ -663,9 +663,9 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
       <div className="flex flex-col gap-3">
         {([['headerNote', t.headerNote], ['paymentInstructions', t.paymentInstructionsField], ['footer', t.footerField]] as [keyof InvoiceTextBlocks, string][]).map(([key, label]) => (
           <div key={key} className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">{label}</label>
+            <label className="text-xs text-muted">{label}</label>
             <textarea rows={2} value={value.text[key] ?? ''} onChange={e => change(setText(value, key, e.target.value))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y" />
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y" />
           </div>
         ))}
       </div>
@@ -675,11 +675,11 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
   const undoRedo = (
     <>
       <button type="button" onClick={undo} disabled={past.current.length === 0}
-        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border text-sm text-muted hover:bg-surface disabled:opacity-40">
         <Undo2 size={15} /> {t.undo}
       </button>
       <button type="button" onClick={redo} disabled={future.current.length === 0}
-        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border text-sm text-muted hover:bg-surface disabled:opacity-40">
         <Redo2 size={15} /> {t.redo}
       </button>
     </>
@@ -697,7 +697,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           onChange={l => change(setDefaultLanguage(value, l))}
           options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]}
         />
-        <p className="text-xs text-gray-400">{t.defaultLanguageHint}</p>
+        <p className="text-xs text-faint">{t.defaultLanguageHint}</p>
       </Field>
 
       <Field label={t.layout}>
@@ -706,14 +706,14 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           onChange={m => { setSelectedId(null); if (onSwitchMode) onSwitchMode(m); else change(setLayoutMode(value, m)); }}
           options={[{ value: 'flow', label: t.layoutModes.structured }, { value: 'freeform', label: t.layoutModes.freeform }]}
         />
-        {freeform ? <p className="text-xs text-gray-400">{t.builderHint}</p> : null}
+        {freeform ? <p className="text-xs text-faint">{t.builderHint}</p> : null}
       </Field>
 
       {freeform ? (
         // ── FREEFORM: element canvas ──────────────────────────────────────
         <div className="flex flex-col gap-4">
           <button type="button" onClick={() => setCopyOpen(true)}
-            className="self-start flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            className="self-start flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-ink hover:bg-surface">
             <LayoutTemplate size={15} /> {t.copyTheme}
           </button>
           <div className="flex flex-wrap gap-5">
@@ -726,7 +726,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
 
           {/* Element toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={addTextEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+            <button type="button" onClick={addTextEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm text-ink hover:bg-surface">
               <Type size={15} /> {t.elements.addText}
             </button>
             <select value="" onChange={e => {
@@ -739,7 +739,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
                   addFieldEl(v as InvoiceFieldKey);
                 }
               }}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+              className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink">
               <option value="">＋ {t.elements.addField}</option>
               {FREEFORM_FIELD_KEYS.map(k => <option key={k} value={k}>{t.fields[k]}</option>)}
               {customFields.length ? (
@@ -749,7 +749,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
               ) : null}
             </select>
             <select value="" onChange={e => { const v = e.target.value; if (v) addShapeEl(v as InvoiceShapeKind); }}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+              className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink">
               <option value="">◻ {t.elements.addShape}</option>
               {INVOICE_SHAPE_KINDS.map(s => <option key={s} value={s}>{t.elements.shapeKinds[s]}</option>)}
             </select>
@@ -760,13 +760,13 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
               searchPlaceholder={full.dashboard.modules.map.iconSearchPlaceholder}
               noResults={full.dashboard.modules.map.iconSearchNoResults}
             />
-            <button type="button" onClick={addLogoEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+            <button type="button" onClick={addLogoEl} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm text-ink hover:bg-surface">
               <ImageIcon size={15} /> {t.elements.addLogo}
             </button>
             <div className="ml-auto flex items-center gap-2">{undoRedo}</div>
           </div>
 
-          {!selectedEl ? <p className="text-xs text-gray-400">{t.elements.empty}</p> : null}
+          {!selectedEl ? <p className="text-xs text-faint">{t.elements.empty}</p> : null}
 
           <BuilderCanvas
             value={value}
@@ -780,7 +780,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
 
           {/* Text blocks live OUTSIDE the canvas — a separate card so it's clear
               they're document content, not draggable elements. */}
-          <div className="mt-1 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-1 rounded-xl border border-border bg-surface p-4">
             {textBlocksControl}
           </div>
         </div>
@@ -790,12 +790,12 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           <div className="flex-1 flex flex-col gap-5 min-w-0">
             <Field label={t.preset}>
               <button type="button" onClick={() => setThemesOpen(true)}
-                className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:border-gray-300 w-full max-w-sm text-left">
+                className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 hover:border-border w-full max-w-sm text-left">
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</div>
+                  <div className="text-sm font-semibold text-ink">{t.presets[value.presetId]}</div>
                   <div className="text-xs text-primary mt-1">{t.browseThemes}</div>
                 </div>
-                <ChevronRight className="text-gray-400" size={20} />
+                <ChevronRight className="text-faint" size={20} />
               </button>
             </Field>
 
@@ -810,7 +810,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
               <div className="flex items-center gap-4 flex-wrap">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={value.showLogo} onChange={e => change(setShowLogo(value, e.target.checked))} />
-                  <span className="text-sm text-gray-600">{t.showLogo}</span>
+                  <span className="text-sm text-muted">{t.showLogo}</span>
                 </label>
                 {value.showLogo ? (
                   <Seg<InvoiceLogoSize> value={value.logoSize} onChange={v => change(setLogoSize(value, v))}
@@ -823,17 +823,17 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
 
             <div className="flex flex-col gap-2">
               <button type="button" onClick={() => setSecOpen(o => !o)} className="flex items-center justify-between text-left">
-                <span className="text-sm font-medium text-gray-700">{t.sections}</span>
-                {secOpen ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
+                <span className="text-sm font-medium text-ink">{t.sections}</span>
+                {secOpen ? <ChevronUp size={18} className="text-muted" /> : <ChevronDown size={18} className="text-muted" />}
               </button>
               {secOpen ? (
                 <div className="flex flex-col gap-1.5">
                   {value.sections.map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
+                    <div key={s.id} className="flex items-center gap-2 rounded-lg border border-border-soft px-3 py-1.5">
                       <input type="checkbox" checked={s.show} onChange={() => change(toggleSection(value, s.id))} />
-                      <span className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</span>
-                      <button type="button" disabled={i === 0} onClick={() => change(reorderSections(value, i, i - 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronUp size={16} /></button>
-                      <button type="button" disabled={i === value.sections.length - 1} onClick={() => change(reorderSections(value, i, i + 1))} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronDown size={16} /></button>
+                      <span className="text-sm text-ink flex-1">{t.sectionNames[s.id]}</span>
+                      <button type="button" disabled={i === 0} onClick={() => change(reorderSections(value, i, i - 1))} className="p-1 text-faint hover:text-ink disabled:opacity-30"><ChevronUp size={16} /></button>
+                      <button type="button" disabled={i === value.sections.length - 1} onClick={() => change(reorderSections(value, i, i + 1))} className="p-1 text-faint hover:text-ink disabled:opacity-30"><ChevronDown size={16} /></button>
                     </div>
                   ))}
                 </div>
@@ -844,9 +844,9 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           </div>
 
           <div className="lg:w-[420px] shrink-0 lg:sticky lg:top-4 lg:self-start">
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.preview}</p>
-            <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50 p-3">
-              <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.preview}</p>
+            <div className="rounded-xl border border-border overflow-hidden bg-surface p-3">
+              <div className="bg-card rounded-lg border border-border-soft overflow-hidden">
                 <ScaledPreview><InvoiceDocument vm={vm} /></ScaledPreview>
               </div>
             </div>

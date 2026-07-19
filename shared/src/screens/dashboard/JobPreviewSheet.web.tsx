@@ -100,21 +100,21 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div>
-      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-      <p className="text-sm text-gray-700 whitespace-pre-wrap">{value}</p>
+      <p className="text-xs text-faint mb-0.5">{label}</p>
+      <p className="text-sm text-ink whitespace-pre-wrap">{value}</p>
     </div>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            {job ? <p className="text-xs font-mono text-gray-400">{jobRefLabel({ estimateNumber: job.estimate_number, externalRef: job.external_ref, id: job.id })}</p> : null}
-            <p className="text-lg font-bold text-gray-900">{job?.title ?? '—'}</p>
+            {job ? <p className="text-xs font-mono text-faint">{jobRefLabel({ estimateNumber: job.estimate_number, externalRef: job.external_ref, id: job.id })}</p> : null}
+            <p className="text-lg font-bold text-ink">{job?.title ?? '—'}</p>
             {clientName ? <p className="text-sm font-semibold text-primary">{clientName}{job?.clients?.company ? ` · ${job.clients.company}` : ''}</p> : null}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 shrink-0"><X size={18} className="text-gray-400" /></button>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft shrink-0"><X size={18} className="text-faint" /></button>
         </div>
 
         {loading ? (
@@ -122,9 +122,9 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
         ) : job ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">{tStatus[job.status] ?? job.status}</span>
-              {dates ? <span className="flex items-center gap-1 text-xs text-gray-500"><Calendar size={12} /> {dates}</span> : null}
-              {times ? <span className="flex items-center gap-1 text-xs text-gray-500"><Clock size={12} /> {times}</span> : null}
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-border-soft text-muted font-semibold">{tStatus[job.status] ?? job.status}</span>
+              {dates ? <span className="flex items-center gap-1 text-xs text-muted"><Calendar size={12} /> {dates}</span> : null}
+              {times ? <span className="flex items-center gap-1 text-xs text-muted"><Clock size={12} /> {times}</span> : null}
             </div>
 
             {(job.total_hours ?? 0) > 0 ? <Row label={tNew.totalHoursLabel} value={`${formatNumberGrouped(job.total_hours)} h`} /> : null}
@@ -132,8 +132,8 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
             {place ? <Row label={tNew.addressLabel} value={place} /> : null}
 
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">{tNew.descriptionLabel}</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description?.trim() || <span className="text-gray-400">{t.previewNoDescription}</span>}</p>
+              <p className="text-xs text-faint mb-0.5">{tNew.descriptionLabel}</p>
+              <p className="text-sm text-ink whitespace-pre-wrap">{job.description?.trim() || <span className="text-faint">{t.previewNoDescription}</span>}</p>
             </div>
 
             {job.worker_notes?.trim() ? <Row label={t.previewNotes} value={job.worker_notes} /> : null}
@@ -144,9 +144,9 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
             })}
 
             {(job.total_amount ?? 0) > 0 ? (
-              <div className="flex justify-between pt-2 border-t border-gray-100">
-                <span className="text-sm font-semibold text-gray-500">Total</span>
-                <span className="text-sm font-bold text-gray-900">{fmtMoney(job.total_amount ?? 0)}</span>
+              <div className="flex justify-between pt-2 border-t border-border-soft">
+                <span className="text-sm font-semibold text-muted">Total</span>
+                <span className="text-sm font-bold text-ink">{fmtMoney(job.total_amount ?? 0)}</span>
               </div>
             ) : null}
 
@@ -156,7 +156,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
             </button>
           </div>
         ) : (
-          <p className="text-sm text-gray-400 py-8 text-center">{full.dashboard.jobs.notFound}</p>
+          <p className="text-sm text-faint py-8 text-center">{full.dashboard.jobs.notFound}</p>
         )}
       </div>
     </div>

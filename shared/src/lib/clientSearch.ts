@@ -50,6 +50,26 @@ export function clientMatchesSearch(c: ClientSearchable, search: string): boolea
   return searchMatches(clientSearchHaystack(c), search);
 }
 
+// The two-line display for a client in a picker list: a person name on top,
+// the company below. When a client has no distinct person name (e.g. it was
+// imported as a company, so first_name == company), the company becomes the
+// top line and is NOT repeated below — otherwise the picker shows the business
+// name twice.
+export function clientPickerDisplay(c: {
+  first_name?: string | null;
+  last_name?: string | null;
+  company?: string | null;
+}): { top: string; sub: string | null } {
+  const person = [c.first_name, c.last_name]
+    .map((s) => (s ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+  const company = (c.company ?? '').trim();
+  const top = person || company;
+  const sub = company && company !== top ? company : null;
+  return { top, sub };
+}
+
 // Contacts whose name or role matches the active query. Empty when the
 // search is blank — the list only surfaces a contact line to explain *why*
 // a client showed up, so there's nothing to show without a query.

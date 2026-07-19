@@ -88,9 +88,9 @@ export interface ClientFormModalProps {
 }
 
 const INPUT_CLS =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary';
+  'w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary';
 const INPUT_WITH_ICON_CLS =
-  'w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary';
+  'w-full rounded-xl border border-border bg-card pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary';
 
 export function ClientFormModal({
   open,
@@ -216,7 +216,7 @@ export function ClientFormModal({
                 return (
                   <button key={o} type="button"
                     onClick={() => setCustom(tpl.field_key, toggleMultiOption(value, o))}
-                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted hover:border-border'}`}>
                     {o}
                   </button>
                 );
@@ -246,12 +246,12 @@ export function ClientFormModal({
           <div className="flex gap-2">
             <button type="button"
               onClick={() => setCustom(tpl.field_key, yesActive ? '' : 'true')}
-              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
               {tc.states.yes}
             </button>
             <button type="button"
               onClick={() => setCustom(tpl.field_key, noActive ? '' : 'false')}
-              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
               {tc.states.no}
             </button>
           </div>
@@ -308,7 +308,7 @@ export function ClientFormModal({
         return (
           <Field key={key} label={rLabel('company', t.fields.company)}>
             <div className="relative">
-              <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
               <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.company}
                 value={form.company} onChange={e => set('company', e.target.value)} />
             </div>
@@ -318,7 +318,7 @@ export function ClientFormModal({
         return (
           <Field key={key} label={rLabel('phone_cell', t.fields.phoneCell)}>
             <div className="relative">
-              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
               <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.phone}
                 value={fmtPhoneInput(form.phone_cell)}
                 onChange={e => set('phone_cell', fmtPhoneInput(e.target.value))} inputMode="tel" />
@@ -329,7 +329,7 @@ export function ClientFormModal({
         return (
           <Field key={key} label={rLabel('phone_office', t.fields.phoneOffice)}>
             <div className="relative">
-              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
               <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.phone}
                 value={fmtPhoneInput(form.phone_office)}
                 onChange={e => set('phone_office', fmtPhoneInput(e.target.value))} inputMode="tel" />
@@ -340,7 +340,7 @@ export function ClientFormModal({
         return (
           <Field key={key} label={rLabel('email_office', t.fields.emailOffice)}>
             <div className="relative">
-              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
               <input className={INPUT_WITH_ICON_CLS} type="email" autoCapitalize="none"
                 placeholder={t.fields.placeholders.emailOffice}
                 value={form.email_office} onChange={e => set('email_office', e.target.value)} />
@@ -351,7 +351,7 @@ export function ClientFormModal({
         return (
           <Field key={key} label={rLabel('email_home', t.fields.emailHome)}>
             <div className="relative">
-              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
               <input className={INPUT_WITH_ICON_CLS} type="email" autoCapitalize="none"
                 placeholder={t.fields.placeholders.emailHome}
                 value={form.email_home} onChange={e => set('email_home', e.target.value)} />
@@ -364,7 +364,7 @@ export function ClientFormModal({
           <div key={key} className="flex flex-col gap-3">
             <Field label={rLabel('address', t.fields.addressLine1)}>
               <div className="relative">
-                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
                 <input className={INPUT_WITH_ICON_CLS} placeholder={t.fields.placeholders.address}
                   value={form.address} onChange={e => set('address', e.target.value)} />
               </div>
@@ -406,7 +406,7 @@ export function ClientFormModal({
           <div key={key} className="flex flex-col gap-1.5">
             <textarea rows={3} placeholder={t.fields.placeholders.notes}
               value={form.notes} onChange={e => set('notes', e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
           </div>
         );
       default:
@@ -417,18 +417,18 @@ export function ClientFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={guardedClose} />
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-card rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-semibold text-gray-900">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-soft shrink-0">
+          <h2 className="text-base font-semibold text-ink">
             {mode === 'add' ? t.modal.addTitle : t.modal.editTitle}
           </h2>
           <button
             type="button"
             onClick={guardedClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
           >
-            <X size={16} className="text-gray-500" />
+            <X size={16} className="text-muted" />
           </button>
         </div>
 
@@ -440,8 +440,8 @@ export function ClientFormModal({
               .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
             if (visibleKeys.length === 0) return null;
             return (
-              <section key={section} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase mb-3">{sectionLabel(section)}</p>
+              <section key={section} className="bg-card rounded-2xl border border-border-soft shadow-sm p-4">
+                <p className="text-xs font-semibold text-faint uppercase mb-3">{sectionLabel(section)}</p>
                 <div className="flex flex-col gap-3">
                   {visibleKeys.map(k => {
                     if (k.startsWith('custom:')) {
@@ -461,7 +461,7 @@ export function ClientFormModal({
             <button
               type="button"
               onClick={guardedClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-border bg-card text-sm font-semibold text-ink hover:bg-surface transition-colors"
             >
               {tc.buttons.cancel}
             </button>
@@ -483,7 +483,7 @@ export function ClientFormModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label className="text-sm font-medium text-ink">{label}</label>
       {children}
     </div>
   );

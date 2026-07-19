@@ -156,8 +156,8 @@ export function ClientsListScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+          <p className="text-sm text-muted mt-0.5">
             {search.trim()
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(clients.length))}
@@ -165,7 +165,7 @@ export function ClientsListScreen({
         </div>
         <div className="flex gap-2">
           {onImportPress ? (
-            <button onClick={onImportPress} className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+            <button onClick={onImportPress} className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
               <Upload size={15} /> {t.importBtn}
             </button>
           ) : null}
@@ -178,21 +178,21 @@ export function ClientsListScreen({
       {/* Search + view controls (jobs-layout pattern: controls beside the bar) */}
       <div className="flex items-start gap-2 mb-4">
       <div className="relative flex-1">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
         <input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t.searchPlaceholder}
           autoCapitalize="none"
           autoCorrect="off"
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full rounded-2xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
         {search ? (
           <button
             type="button"
             onClick={() => onSearchChange('')}
             aria-label="Limpiar búsqueda"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"
           >
             <X size={16} />
           </button>
@@ -203,7 +203,7 @@ export function ClientsListScreen({
             <button
               onClick={() => setGroupMenuOpen(o => !o)}
               className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                groupBy !== 'name' ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                groupBy !== 'name' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
               }`}
             >
               <Layers size={15} /> {t.group.button}
@@ -211,8 +211,8 @@ export function ClientsListScreen({
             {groupMenuOpen ? (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 z-20 bg-white rounded-2xl border border-gray-100 shadow-lg p-3 w-64">
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{t.group.title}</p>
+                <div className="absolute right-0 mt-2 z-20 bg-card rounded-2xl border border-border-soft shadow-lg p-3 w-64">
+                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{t.group.title}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {groupOptions.map(o => {
                       const selected = groupBy === o.key;
@@ -221,7 +221,7 @@ export function ClientsListScreen({
                           key={o.key}
                           onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                            selected ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                            selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                           }`}
                         >
                           {selected ? <Check size={12} /> : null}
@@ -238,7 +238,7 @@ export function ClientsListScreen({
             onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             title={t.selectButton}
             className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
-              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
             }`}
           >
             <ListChecks size={15} /> {t.selectButton}
@@ -273,19 +273,19 @@ export function ClientsListScreen({
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
-          <User size={40} className="text-gray-300" />
-          <p className="text-sm text-gray-400 mt-3">{search ? t.emptyNoMatch : t.emptyAll}</p>
+          <User size={40} className="text-faint" />
+          <p className="text-sm text-faint mt-3">{search ? t.emptyNoMatch : t.emptyAll}</p>
           {!search ? (
             <button onClick={onNewClientPress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.addFirst}</button>
           ) : null}
         </div>
       ) : (
-        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
+        <div className={`bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
           {sections.map((s) => (
             <Fragment key={s.title || 'results'}>
               {s.title ? (
                 // top-14 clears the fixed mobile top bar; desktop sticks at 0.
-                <div className="sticky top-14 md:top-0 z-10 bg-gray-50 px-5 py-1 border-b border-gray-200 text-xs font-bold text-gray-500">
+                <div className="sticky top-14 md:top-0 z-10 bg-surface px-5 py-1 border-b border-border text-xs font-bold text-muted">
                   {s.title}
                 </div>
               ) : null}
@@ -336,11 +336,11 @@ const ClientRow = memo(function ClientRow({
   return (
     // content-visibility skips layout/paint for offscreen rows — keeps huge
     // client lists cheap. Intrinsic size ≈ row height so scrolling stays smooth.
-    <div className={`[content-visibility:auto] [contain-intrinsic-size:auto_76px] group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-gray-50'}`}>
+    <div className={`[content-visibility:auto] [contain-intrinsic-size:auto_76px] group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-surface'}`}>
       {/* Checkbox only exists while selection mode is on (jobs-list pattern). */}
       {selectMode ? (
         <span
-          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'}`}
+          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? 'border-primary bg-primary' : 'border-border bg-card'}`}
         >
           {isChecked ? <span className="text-white text-[10px] font-bold">✓</span> : null}
         </span>
@@ -355,15 +355,15 @@ const ClientRow = memo(function ClientRow({
           </span>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-gray-900 truncate">
+          <span className="block text-sm font-semibold text-ink truncate">
             {c.firstName} {c.lastName}
-            {c.company ? <span className="text-gray-400 font-normal"> · {c.company}</span> : null}
+            {c.company ? <span className="text-faint font-normal"> · {c.company}</span> : null}
           </span>
           {/* Compact meta under the name only when the columns are hidden. */}
           <span className="md:hidden flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-            {c.phoneDisplay ? <span className="flex items-center gap-1 text-xs text-gray-400"><Phone size={11} /> {c.phoneDisplay}</span> : null}
+            {c.phoneDisplay ? <span className="flex items-center gap-1 text-xs text-faint"><Phone size={11} /> {c.phoneDisplay}</span> : null}
             {c.emailDisplay ? (
-              <span className="flex items-center gap-1 text-xs text-gray-400 min-w-0">
+              <span className="flex items-center gap-1 text-xs text-faint min-w-0">
                 <Mail size={11} className="shrink-0" /> <span className="truncate">{c.emailDisplay}</span>
               </span>
             ) : null}
@@ -381,22 +381,22 @@ const ClientRow = memo(function ClientRow({
         {/* Aligned columns across the row's width: phone | email | location.
            Fixed widths keep every row lined up; they drop off as the window
            narrows (xl → lg → md). */}
-        <span className="hidden md:flex w-44 shrink-0 items-center gap-1 text-xs text-gray-400">
+        <span className="hidden md:flex w-44 shrink-0 items-center gap-1 text-xs text-faint">
           {c.phoneDisplay ? (<><Phone size={11} className="shrink-0" /> {c.phoneDisplay}</>) : null}
         </span>
-        <span className="hidden lg:flex w-64 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
+        <span className="hidden lg:flex w-64 shrink-0 items-center gap-1 text-xs text-faint min-w-0">
           {c.emailDisplay ? (<><Mail size={11} className="shrink-0" /> <span className="truncate">{c.emailDisplay}</span></>) : null}
         </span>
-        <span className="hidden xl:flex w-44 shrink-0 items-center gap-1 text-xs text-gray-400 min-w-0">
+        <span className="hidden xl:flex w-44 shrink-0 items-center gap-1 text-xs text-faint min-w-0">
           {c.city ? (<><MapPin size={11} className="shrink-0" /> <span className="truncate">{c.city}{c.state ? `, ${c.state}` : ''}</span></>) : null}
         </span>
       </button>
       {/* Hover actions — web idiom; hidden while selecting. */}
       <div className={`flex items-center gap-1 opacity-0 transition-opacity shrink-0 ${selectMode ? '' : 'group-hover:opacity-100'}`}>
-        <button onClick={() => onEditPress(c.id)} className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100" aria-label="Edit">
+        <button onClick={() => onEditPress(c.id)} className="p-2 rounded-lg text-faint hover:text-ink hover:bg-border-soft" aria-label="Edit">
           <Pencil size={15} />
         </button>
-        <button onClick={() => onDeletePress(c.id)} className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" aria-label="Delete">
+        <button onClick={() => onDeletePress(c.id)} className="p-2 rounded-lg text-faint hover:text-red-600 hover:bg-red-500/10" aria-label="Delete">
           <Trash2 size={15} />
         </button>
       </div>

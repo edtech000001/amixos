@@ -62,11 +62,11 @@ interface Invoice {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  draft:    'bg-gray-100 text-gray-500',
+  draft:    'bg-border-soft text-muted',
   sent:     'bg-blue-100 text-blue-600',
   paid:     'bg-emerald-100 text-emerald-700',
   overdue:  'bg-red-100 text-red-600',
-  cancelled:'bg-gray-100 text-gray-400',
+  cancelled:'bg-border-soft text-faint',
 };
 
 const US_STATES = [
@@ -98,10 +98,10 @@ function fmtPhoneInput(raw: string): string {
 function ContactRow({ icon, label, value, href, onActivate }: { icon: React.ReactNode; label: string; value: string; href?: string; onActivate?: () => void }) {
   const content = (
     <div className="flex items-start gap-2.5">
-      <span className="text-gray-400 mt-0.5 shrink-0">{icon}</span>
+      <span className="text-faint mt-0.5 shrink-0">{icon}</span>
       <div>
-        <p className="text-xs text-gray-400">{label}</p>
-        <p className="text-sm text-gray-900 font-medium">{value}</p>
+        <p className="text-xs text-faint">{label}</p>
+        <p className="text-sm text-ink font-medium">{value}</p>
       </div>
     </div>
   );
@@ -398,7 +398,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
     </div>
   );
-  if (!client) return <div className="p-6 text-gray-400">{t.notFound}</div>;
+  if (!client) return <div className="p-6 text-faint">{t.notFound}</div>;
 
   const totalSpent = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
   const pendingTotal = invoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
@@ -440,8 +440,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href={backHref} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-            <ArrowLeft size={18} className="text-gray-500"/>
+          <Link href={backHref} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <ArrowLeft size={18} className="text-muted"/>
           </Link>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -450,10 +450,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               </span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{client.first_name} {client.last_name}</h1>
+              <h1 className="text-xl font-bold text-ink">{client.first_name} {client.last_name}</h1>
               {client.company && (
-                <p className="text-sm text-gray-500 flex items-center gap-1">
-                  <Building2 size={13} className="text-gray-400"/> {client.company}
+                <p className="text-sm text-muted flex items-center gap-1">
+                  <Building2 size={13} className="text-faint"/> {client.company}
                 </p>
               )}
             </div>
@@ -461,7 +461,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={deleteClient}
-            className="text-red-600 hover:bg-red-50 hover:text-red-700">
+            className="text-red-600 hover:bg-red-500/10 hover:text-red-700">
             <Trash2 size={14} className="mr-1.5"/> {tc.buttons.delete}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setShareDialog(true)}>
@@ -487,8 +487,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         <div className="lg:col-span-2 flex flex-col gap-4">
 
           {/* Contact card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.contact}</h2>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.contact}</h2>
             <div className="flex flex-col gap-3">
               {primaryPhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneCell} value={fmtPhone(primaryPhone)} onActivate={() => fireContact({ type: 'call', target: `tel:${primaryPhone}`, contactMethod: primaryPhone, clientId: client.id })}/>}
               {officePhone && <ContactRow icon={<Phone size={15}/>} label={t.fields.phoneOffice} value={fmtPhone(officePhone)} onActivate={() => fireContact({ type: 'call', target: `tel:${officePhone}`, contactMethod: officePhone, clientId: client.id })}/>}
@@ -498,22 +498,22 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                 <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress} href={clientMapsUrl || undefined}/>
               )}
               {!primaryPhone && !primaryEmail && !fullAddress && (
-                <p className="text-xs text-gray-400">{td.noContactInfo}</p>
+                <p className="text-xs text-faint">{td.noContactInfo}</p>
               )}
             </div>
           </div>
 
           {/* Contacts (people) card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{td.contactPeople}</h2>
-              <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
-                <UserPlus size={14} className="text-gray-400"/>
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide">{td.contactPeople}</h2>
+              <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-border-soft transition-colors">
+                <UserPlus size={14} className="text-faint"/>
               </button>
             </div>
             {contacts.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-xs text-gray-400">{td.noContacts}</p>
+                <p className="text-xs text-faint">{td.noContacts}</p>
                 <button onClick={openAddContact} className="text-xs text-primary font-medium hover:underline mt-1">
                   {td.addContact}
                 </button>
@@ -525,10 +525,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{ct.name}</p>
+                          <p className="text-sm font-semibold text-ink truncate">{ct.name}</p>
                           {ct.is_primary && <Star size={11} className="text-amber-400 fill-amber-400 shrink-0"/>}
                         </div>
-                        {ct.role && <p className="text-xs text-gray-400">{ct.role}</p>}
+                        {ct.role && <p className="text-xs text-faint">{ct.role}</p>}
                         {ct.phone && (
                           <button type="button" onClick={() => fireContact({ type: 'call', target: `tel:${ct.phone}`, contactMethod: ct.phone ?? undefined, clientId: client.id, clientContactId: ct.id })} className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
                             <Phone size={11}/> {fmtPhone(ct.phone)}
@@ -539,13 +539,13 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                             <Mail size={11}/> {ct.email}
                           </button>
                         )}
-                        {ct.notes && <p className="text-xs text-gray-400 mt-1 italic">{ct.notes}</p>}
+                        {ct.notes && <p className="text-xs text-faint mt-1 italic">{ct.notes}</p>}
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <button onClick={() => openEditContact(ct)} className="p-1 rounded-lg hover:bg-blue-50 transition-colors">
+                        <button onClick={() => openEditContact(ct)} className="p-1 rounded-lg hover:bg-blue-500/10 transition-colors">
                           <Pencil size={12} className="text-blue-400"/>
                         </button>
-                        <button onClick={() => removeContact(ct.id)} className="p-1 rounded-lg hover:bg-red-50 transition-colors">
+                        <button onClick={() => removeContact(ct.id)} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors">
                           <Trash2 size={12} className="text-red-400"/>
                         </button>
                       </div>
@@ -559,16 +559,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           {/* Custom fields — hidden entirely when no field would render
              (only rows with a value, or required ones, are shown). */}
           {templates.some(tpl => client.custom_fields?.[tpl.field_key] || tpl.required) && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</h2>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.customFields}</h2>
               <div className="flex flex-col gap-2.5">
                 {templates.map(tpl => {
                   const val = client.custom_fields?.[tpl.field_key];
                   if (!val && !tpl.required) return null;
                   return (
                     <div key={tpl.field_key}>
-                      <p className="text-xs text-gray-400">{tpl.field_label}</p>
-                      <p className="text-sm text-gray-900 font-medium">
+                      <p className="text-xs text-faint">{tpl.field_label}</p>
+                      <p className="text-sm text-ink font-medium">
                         {tpl.field_type === 'boolean'
                           ? (val === 'true' ? tc.states.yes : tc.states.no)
                           : tpl.field_type === 'number' && val
@@ -584,36 +584,36 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
           {/* Notes */}
           {client.notes && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.sections.notes}</h2>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{client.notes}</p>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.sections.notes}</h2>
+              <p className="text-sm text-muted whitespace-pre-wrap">{client.notes}</p>
             </div>
           )}
 
           {/* Stats */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.summary}</h2>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.summary}</h2>
             <div className="flex flex-col gap-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">{td.totalPaid}</span>
+                <span className="text-muted">{td.totalPaid}</span>
                 <span className="font-semibold text-emerald-600">{fmt(totalSpent)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">{td.pending}</span>
+                <span className="text-muted">{td.pending}</span>
                 <span className="font-semibold text-blue-600">{fmt(pendingTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">{td.invoicesCount}</span>
-                <span className="font-semibold text-gray-900">{invoices.length}</span>
+                <span className="text-muted">{td.invoicesCount}</span>
+                <span className="font-semibold text-ink">{invoices.length}</span>
               </div>
-              <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
-                <span className="text-gray-400 text-xs">{td.addedAt}</span>
-                <span className="text-xs text-gray-500">{formatDateTimeLong(client.created_at, dateLoc)}</span>
+              <div className="flex justify-between text-sm pt-1 border-t border-border-soft">
+                <span className="text-faint text-xs">{td.addedAt}</span>
+                <span className="text-xs text-muted">{formatDateTimeLong(client.created_at, dateLoc)}</span>
               </div>
               {client.updated_at && client.updated_at !== client.created_at && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400 text-xs">{td.modifiedAt}</span>
-                  <span className="text-xs text-gray-500">{formatDateTimeLong(client.updated_at, dateLoc)}</span>
+                  <span className="text-faint text-xs">{td.modifiedAt}</span>
+                  <span className="text-xs text-muted">{formatDateTimeLong(client.updated_at, dateLoc)}</span>
                 </div>
               )}
             </div>
@@ -622,15 +622,15 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
         {/* Right — Invoices */}
         <div className="lg:col-span-3">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">{td.invoicesTitle}</h2>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">{td.invoicesTitle}</h2>
               <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
                 <Plus size={13}/> {td.newInvoiceShort}
               </Link>
             </div>
             {invoices.length === 0 ? (
-              <div className="px-5 py-12 text-center text-gray-400">
+              <div className="px-5 py-12 text-center text-faint">
                 <FileText size={32} className="mx-auto mb-3 opacity-30"/>
                 <p className="text-sm">{td.noInvoices}</p>
                 <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">{td.createFirstInvoice}</Link>
@@ -640,20 +640,20 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                 {invoices.map(inv => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
-                  const statusColor = STATUS_COLORS[inv.status] ?? 'bg-gray-100 text-gray-500';
+                  const statusColor = STATUS_COLORS[inv.status] ?? 'bg-border-soft text-muted';
                   return (
                     <Link key={inv.id} href={`/dashboard/facturas/${inv.id}?from=client&client=${id}`}
-                      className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                      className="flex items-center justify-between px-5 py-3.5 hover:bg-surface transition-colors">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-sm font-medium text-ink">{inv.invoice_number}</p>
+                        <p className="text-xs text-faint">
                           {formatDateTimeLong(inv.created_at, dateLoc)}
                           {inv.due_date && ` · ${td.dueShort.replace('{{date}}', formatDateLong(inv.due_date, dateLoc))}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
-                        <span className="text-sm font-bold text-gray-900">{fmt(inv.total_amount)}</span>
+                        <span className="text-sm font-bold text-ink">{fmt(inv.total_amount)}</span>
                       </div>
                     </Link>
                   );
@@ -693,7 +693,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         <div className="flex flex-col gap-5 max-h-[70vh] overflow-y-auto pr-1">
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.basicInfo}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.basicInfo}</p>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <Input label={`${t.fields.firstName} *`} value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}/>
@@ -704,7 +704,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.phones}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.phones}</p>
             <div className="grid grid-cols-2 gap-3">
               <Input label={t.fields.phoneCell} value={fmtPhoneInput(form.phone_cell)} onChange={e => setForm(f => ({ ...f, phone_cell: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder={t.fields.placeholders.phone}/>
               <Input label={t.fields.phoneOffice} value={fmtPhoneInput(form.phone_office)} onChange={e => setForm(f => ({ ...f, phone_office: fmtPhoneInput(e.target.value) }))} leftIcon={<Phone size={15}/>} placeholder={t.fields.placeholders.phone}/>
@@ -712,7 +712,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.emails}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.emails}</p>
             <div className="grid grid-cols-2 gap-3">
               <Input label={t.fields.emailOffice} type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
               <Input label={t.fields.emailHome} type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
@@ -720,16 +720,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </section>
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.address}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.address}</p>
             <div className="flex flex-col gap-3">
               <Input label={t.fields.addressLine1} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} leftIcon={<MapPin size={15}/>}/>
               <Input label={t.fields.addressLine2} value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))}/>
               <div className="grid grid-cols-[1fr_1fr_110px] gap-3">
                 <Input label={t.fields.city} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.fields.state}</label>
+                  <label className="text-sm font-medium text-ink">{t.fields.state}</label>
                   <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                     <option value="">—</option>
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
@@ -741,15 +741,15 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
           {templates.length > 0 && (
             <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.customFields}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.customFields}</p>
               <div className="grid grid-cols-2 gap-3">
                 {templates.map(tpl => (
                   <div key={tpl.field_key} className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-gray-700">{tpl.field_label}</label>
+                    <label className="text-sm font-medium text-ink">{tpl.field_label}</label>
                     {tpl.field_type === 'select' && tpl.field_options ? (
                       <select value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                        className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                         <option value="">—</option>
                         {tpl.field_options.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -764,12 +764,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                           <div className="flex gap-2">
                             <button type="button"
                               onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: yesActive ? '' : 'true' }))}
-                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
                               {tc.states.yes}
                             </button>
                             <button type="button"
                               onClick={() => setCustomVals(v => ({ ...v, [tpl.field_key]: noActive ? '' : 'false' }))}
-                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                              className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
                               {tc.states.no}
                             </button>
                           </div>
@@ -779,7 +779,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                       <input type={tpl.field_type === 'number' ? 'number' : tpl.field_type === 'date' ? 'date' : 'text'}
                         value={customVals[tpl.field_key] ?? ''}
                         onChange={e => setCustomVals(v => ({ ...v, [tpl.field_key]: e.target.value }))}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent"/>
+                        className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent"/>
                     )}
                   </div>
                 ))}
@@ -789,9 +789,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
           {priceTiers.length > 0 ? (
             <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{full.dashboard.settings.priceSheet.clientTierLabel}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{full.dashboard.settings.priceSheet.clientTierLabel}</p>
               <select value={form.price_tier_id} onChange={e => setForm(f => ({ ...f, price_tier_id: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
                 <option value="">{full.dashboard.settings.priceSheet.clientTierNone}</option>
                 {priceTiers.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
               </select>
@@ -799,9 +799,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           ) : null}
 
           <section>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{t.sections.notes}</p>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.notes}</p>
             <textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
+              className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent resize-none"/>
           </section>
 
           {editError && <p className="text-xs text-red-500">{editError}</p>}
@@ -839,15 +839,15 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               leftIcon={<Mail size={15}/>}/>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{td.contactModal.notesLabel}</label>
+            <label className="text-sm font-medium text-ink">{td.contactModal.notesLabel}</label>
             <textarea rows={3} placeholder={td.contactModal.notesPlaceholder}
               value={contactForm.notes}
               onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+              className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
           </div>
           <div className="flex items-center gap-3">
             <Toggle checked={contactForm.is_primary} onChange={(v) => setContactForm(f => ({ ...f, is_primary: v }))} />
-            <span className="text-sm text-gray-700 select-none">{td.contactModal.primaryLabel} <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
+            <span className="text-sm text-ink select-none">{td.contactModal.primaryLabel} <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
           </div>
           {contactError && <p className="text-xs text-red-500">{contactError}</p>}
           <div className="flex gap-3 pt-1">

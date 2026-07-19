@@ -67,7 +67,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
       <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
       {h.businessLines.map((l, i) => (
-        <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+        <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
       ))}
     </div>
   );
@@ -75,7 +75,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     <div style={{ textAlign: align }}>
       <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
       <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-      <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+      <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
       {metaLines()}
     </div>
   );
@@ -139,10 +139,10 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
             <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
             {h.businessLines.map((l, i) => (
-              <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+              <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
             ))}
             <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.12em', fontSize: st.fontPx + 8, marginTop: 12 }}>{h.invoiceTitle}</div>
-            <div className="font-semibold text-gray-600" style={{ fontSize: small, marginTop: 2 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+            <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 2 }}>{h.invoiceNumber} · {h.statusLabel}</div>
             <div className="flex justify-center gap-4" style={{ marginTop: 2 }}>{metaLines()}</div>
           </div>
         );
@@ -153,13 +153,13 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} maxWidth={160} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
-                <div key={i} className="text-gray-600" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+                <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
               ))}
             </div>
             <div className="flex-1" style={{ paddingTop: 4 }}>
               <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -168,12 +168,12 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         return (
           <div className="pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
             <div className="flex justify-between items-center">
-              <div className="uppercase text-gray-500 font-semibold" style={{ fontSize: small, letterSpacing: '0.12em' }}>{h.businessName}</div>
+              <div className="uppercase text-muted font-semibold" style={{ fontSize: small, letterSpacing: '0.12em' }}>{h.businessName}</div>
               {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={Math.round(st.logoPx * 0.7)} maxWidth={160} /> : null}
             </div>
             <div style={{ width: 32, height: 3, background: accent, borderRadius: 2, margin: '14px 0 8px' }} />
             <div style={{ fontWeight: 300, fontSize: st.fontPx + 16, color: '#111827', letterSpacing: '0.02em' }}>{h.invoiceTitle}</div>
-            <div className="text-gray-500" style={{ fontSize: small, marginTop: 6 }}>
+            <div className="text-muted" style={{ fontSize: small, marginTop: 6 }}>
               {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </div>
           </div>
@@ -185,7 +185,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="text-right">
               <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.01em', fontSize: st.fontPx + 30, lineHeight: 1 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 6 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -198,7 +198,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.06em', fontSize: st.fontPx + 16 }}>{h.invoiceTitle}</div>
             </div>
             <div style={{ height: 2, background: '#e5e7eb', margin: '12px 0 8px' }} />
-            <div className="flex justify-between gap-4 text-gray-500" style={{ fontSize: small }}>
+            <div className="flex justify-between gap-4 text-muted" style={{ fontSize: small }}>
               <span>{h.invoiceNumber} · {h.statusLabel}</span>
               <span>{h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}</span>
             </div>
@@ -227,15 +227,15 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="flex justify-between gap-6 items-center pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
             <div>
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.16em', fontWeight: 400, fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</div>
-              <div className="text-gray-500" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
-              <div className="text-gray-400" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
+              <div className="text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              <div className="text-faint" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
             </div>
             <div style={{ width: 122, height: 122, borderRadius: '50%', background: tint, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', flex: '0 0 auto' }}>
               {h.showLogo && h.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={h.logoUrl} alt="" style={{ maxHeight: 44, maxWidth: 80, objectFit: 'contain', marginBottom: 4 }} />
               ) : null}
-              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.1em', padding: '0 10px' }}>{h.businessName}</div>
+              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.1em', padding: '0 10px' }}>{h.businessName}</div>
             </div>
           </div>
         );
@@ -244,14 +244,14 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="flex justify-between gap-6 items-start">
             <div>
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, fontSize: st.fontPx + 14, color: accent }}>{h.invoiceTitle}</div>
-              <div className="font-semibold text-gray-600" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
               {metaLines()}
             </div>
             <div className="text-right">
               {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center={false} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
-                <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+                <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
               ))}
             </div>
           </div>
@@ -261,7 +261,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="text-center">
             {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
             <div style={{ background: accent, color: onAcc, textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700, fontSize: st.fontPx + 6, padding: '10px 0', margin: '8px 0' }}>{h.invoiceTitle}</div>
-            <div className="text-gray-500" style={{ fontSize: small }}>
+            <div className="text-muted" style={{ fontSize: small }}>
               {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </div>
           </div>
@@ -273,13 +273,13 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
-                <div key={i} className="text-gray-500" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+                <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
               ))}
             </div>
             <div className="text-right">
               <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-gray-500" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
+              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -310,7 +310,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div key={i} className={i > 0 ? 'mt-1.5' : ''}>
             <div className="font-semibold">{c.name}</div>
             {c.lines.map((l, j) => (
-              <div key={j} className="text-gray-500" style={{ fontSize: small }}>{l}</div>
+              <div key={j} className="text-muted" style={{ fontSize: small }}>{l}</div>
             ))}
           </div>
         ))}
@@ -332,10 +332,10 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <tbody style={{ textTransform: 'none' }}>
             {vm.items.map((it, i) => (
               <tr key={i} style={{ breakInside: 'avoid' }}>
-                <td className="text-left py-2 border-b border-gray-50 align-top">{it.description}</td>
-                {cols.qty ? <td className="text-center py-2 border-b border-gray-50 text-gray-500">{it.qty}</td> : null}
-                {cols.rate ? <td className="text-right py-2 border-b border-gray-50 text-gray-500">{it.rate}</td> : null}
-                {cols.total ? <td className="text-right py-2 border-b border-gray-50 font-semibold text-gray-900">{it.total}</td> : null}
+                <td className="text-left py-2 border-b border-border-soft align-top">{it.description}</td>
+                {cols.qty ? <td className="text-center py-2 border-b border-border-soft text-muted">{it.qty}</td> : null}
+                {cols.rate ? <td className="text-right py-2 border-b border-border-soft text-muted">{it.rate}</td> : null}
+                {cols.total ? <td className="text-right py-2 border-b border-border-soft font-semibold text-ink">{it.total}</td> : null}
               </tr>
             ))}
           </tbody>
@@ -358,7 +358,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       <div className="flex flex-col items-end gap-1.5" style={{ breakInside: 'avoid' }}>
         <Row label={vm.labels.subtotal} value={vm.totals.subtotal} />
         {vm.totals.taxLabel ? <Row label={vm.totals.taxLabel} value={vm.totals.taxValue ?? ''} /> : null}
-        <div className="flex gap-12 border-t-2 border-gray-200 pt-2 mt-0.5">
+        <div className="flex gap-12 border-t-2 border-border pt-2 mt-0.5">
           <span className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{vm.labels.total}</span>
           <span className="font-bold text-right" style={{ fontSize: st.fontPx + 4, minWidth: 110, color: accent }}>
             {vm.totals.total}
@@ -371,8 +371,8 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         <SectLabel st={st}>{vm.labels.customFields}</SectLabel>
         {vm.customFields.map((f, i) => (
           <div key={i} className="flex justify-between gap-4 py-0.5" style={{ fontSize: small }}>
-            <span className="text-gray-500">{f.label}</span>
-            <span className="font-medium text-gray-900">{f.value}</span>
+            <span className="text-muted">{f.label}</span>
+            <span className="font-medium text-ink">{f.value}</span>
           </div>
         ))}
       </div>
@@ -380,17 +380,17 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     notes: () => (
       <div style={{ breakInside: 'avoid' }}>
         <SectLabel st={st}>{vm.labels.notes}</SectLabel>
-        <div className="text-gray-600 whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{vm.notes}</div>
+        <div className="text-muted whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{vm.notes}</div>
       </div>
     ),
     paymentInstructions: () => (
       <div style={{ breakInside: 'avoid' }}>
         <SectLabel st={st}>{vm.lang === 'es' ? 'Instrucciones de pago' : 'Payment instructions'}</SectLabel>
-        <div className="text-gray-600 whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{vm.paymentInstructions}</div>
+        <div className="text-muted whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{vm.paymentInstructions}</div>
       </div>
     ),
     footer: () => (
-      <div className="border-t border-gray-200 pt-2.5 text-center text-gray-400 whitespace-pre-wrap" style={{ fontSize: small }}>
+      <div className="border-t border-border pt-2.5 text-center text-faint whitespace-pre-wrap" style={{ fontSize: small }}>
         {vm.footer}
       </div>
     ),
@@ -416,7 +416,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
     };
     return (
-      <div className="text-gray-800" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
+      <div className="text-ink" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
         <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11', overflow: 'hidden' }}>
           {ffDeco.full ? <DecoSvg spec={ffDeco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
           {ffDeco.topBand ? <DecoSvg spec={ffDeco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: ffDeco.topBand.height }} /> : null}
@@ -435,7 +435,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
   return (
     <div
-      className="text-gray-800"
+      className="text-ink"
       style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
     >
       {deco.full ? <DecoSvg spec={deco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
@@ -477,7 +477,7 @@ function DecoSvg({ spec, style }: { spec: DecoSpec; style: CSSProperties }) {
 function SectLabel({ children, st }: { children: ReactNode; st: InvoiceViewModel['style'] }) {
   return (
     <div
-      className="uppercase text-gray-400 font-semibold mb-1.5"
+      className="uppercase text-faint font-semibold mb-1.5"
       style={{ fontSize: st.fontPx - 3, letterSpacing: '0.05em' }}
     >
       {children}
@@ -487,7 +487,7 @@ function SectLabel({ children, st }: { children: ReactNode; st: InvoiceViewModel
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-12 text-gray-700">
+    <div className="flex gap-12 text-ink">
       <span>{label}</span>
       <span className="text-right" style={{ minWidth: 110 }}>{value}</span>
     </div>

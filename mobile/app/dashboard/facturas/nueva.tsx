@@ -30,6 +30,7 @@ import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import {
   INVOICE_FIELD_SECTIONS,
   INVOICE_FIELDS_ALWAYS_SHOWN,
@@ -43,6 +44,10 @@ interface Client {
   id: string;
   first_name: string;
   last_name: string;
+  company: string | null;
+  /** People at this client — searchable so you can find the account by a
+   *  contact's name (primary contact first). */
+  contacts?: { name: string; role: string | null }[];
 }
 
 interface FieldTemplate {
@@ -165,10 +170,10 @@ export default function NuevaFacturaRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const [{ data: cl }, { data: tpls }] = await Promise.all([
+      const [{ data: cl }, { data: tpls }, contactRes] = await Promise.all([
         supabase
           .from('clients')
-          .select('id, first_name, last_name')
+          .select('id, first_name, last_name, company')
           .eq('business_id', business.id)
           .order('first_name'),
         supabase
@@ -176,9 +181,22 @@ export default function NuevaFacturaRoute() {
           .select('*')
           .eq('business_id', business.id)
           .order('sort_order'),
+        // Client contacts — so the picker can find an account by a contact's
+        // name (primary contact first), same as the job form.
+        supabase
+          .from('client_contacts')
+          .select('client_id, name, role')
+          .eq('business_id', business.id)
+          .order('is_primary', { ascending: false })
+          .then((r) => r, () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
       ]);
       if (cancelled) return;
-      setClients((cl ?? []) as Client[]);
+      const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
+      for (const ct of (contactRes.data ?? []) as { client_id: string; name: string; role: string | null }[]) {
+        (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
+          .push({ name: ct.name, role: ct.role });
+      }
+      setClients(((cl ?? []) as Client[]).map((c) => ({ ...c, contacts: contactsByClient.get(c.id) })));
       setTemplates(localizeTemplates((tpls ?? []) as FieldTemplate[], locale));
 
       // New invoice: load the count so the auto-number = start + count.
@@ -236,10 +254,24 @@ export default function NuevaFacturaRoute() {
 
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
-    return q
-      ? clients.filter((c) => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q))
-      : clients;
+    if (!q) return clients;
+    return clients.filter((c) => {
+      const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+      if (own.includes(q)) return true;
+      // Also match on the client's contacts — search a contact, find the account.
+      return (c.contacts ?? []).some((ct) => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q));
+    });
   }, [clients, clientSearch]);
+
+  // The contact that matched (when the account matched via a contact, not its
+  // own name) — shown under the client so you know who you searched.
+  const matchedContactOf = (c: Client) => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return null;
+    const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+    if (own.includes(q)) return null;
+    return (c.contacts ?? []).find((ct) => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q)) ?? null;
+  };
 
   // Per-field show/hide (Ajustes → Facturas eye toggles). invoice_number +
   // client can never be hidden.
@@ -398,7 +430,7 @@ export default function NuevaFacturaRoute() {
                       className="flex-row items-center gap-1.5 bg-gray-100 rounded-lg px-2.5 py-1.5"
                     >
                       <Text className="text-xs font-medium text-gray-700">
-                        {c.first_name} {c.last_name}
+                        {clientPickerDisplay(c).top}
                       </Text>
                       <Pressable
                         onPress={() => setClientIds((prev) => prev.filter((id) => id !== cid))}
@@ -817,8 +849,11 @@ export default function NuevaFacturaRoute() {
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
-            <View className="px-5 mb-3">
+            <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.clientsLabel}</Text>
+              <Pressable onPress={() => setClientPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
@@ -836,22 +871,38 @@ export default function NuevaFacturaRoute() {
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
               {filteredClients
                 .filter((c) => !clientIds.includes(c.id))
-                .map((c) => (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => {
-                      setClientIds((prev) => [...prev, c.id]);
-                      setClientPickerOpen(false);
-                      setClientSearch('');
-                    }}
-                    className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
-                  >
-                    <Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>
-                      {c.first_name} {c.last_name}
-                    </Text>
-                    <Check size={16} color="transparent" />
-                  </Pressable>
-                ))}
+                .map((c) => {
+                  const { top, sub } = clientPickerDisplay(c);
+                  const ct = matchedContactOf(c);
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => {
+                        setClientIds((prev) => [...prev, c.id]);
+                        setClientPickerOpen(false);
+                        setClientSearch('');
+                      }}
+                      className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
+                    >
+                      <View className="flex-1">
+                        <Text className="text-base text-gray-900" numberOfLines={1}>
+                          {top}
+                        </Text>
+                        {sub ? (
+                          <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>
+                            {sub}
+                          </Text>
+                        ) : null}
+                        {ct ? (
+                          <Text className="text-xs text-primary mt-0.5" numberOfLines={1}>
+                            {ct.name}{ct.role ? `  ·  ${ct.role}` : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Check size={16} color="transparent" />
+                    </Pressable>
+                  );
+                })}
               {filteredClients.filter((c) => !clientIds.includes(c.id)).length === 0 ? (
                 <View className="px-5 py-8 items-center">
                   <Text className="text-sm text-gray-400">—</Text>

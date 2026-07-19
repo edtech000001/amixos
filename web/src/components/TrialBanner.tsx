@@ -45,7 +45,7 @@ export function TrialBanner() {
       className={clsx(
         'block px-4 py-2 text-center text-sm font-semibold transition-colors',
         attention
-          ? 'bg-amber-50 text-amber-800 hover:bg-amber-100 border-b border-amber-200'
+          ? 'bg-amber-500/10 text-amber-800 hover:bg-amber-100 border-b border-amber-200'
           : 'bg-primary/10 text-primary hover:bg-primary/15 border-b border-primary/20',
       )}
     >

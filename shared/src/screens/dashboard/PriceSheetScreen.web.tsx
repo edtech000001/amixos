@@ -211,13 +211,13 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     <div className="p-6 lg:p-8 flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
+          <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+          <p className="text-sm text-muted mt-0.5">{t.subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {onGenerate ? (
             <button type="button" onClick={onGenerate}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
               <FileText size={16} /> {t.generateBtn}
             </button>
           ) : null}
@@ -232,33 +232,33 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
 
       {/* Search */}
       <div className="relative">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchPlaceholder}
           autoCapitalize="none" autoCorrect="off"
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          className="w-full rounded-2xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         {search ? (
           <button type="button" onClick={() => setSearch('')} aria-label="×"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={16} /></button>
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"><X size={16} /></button>
         ) : null}
       </div>
 
       {/* Tiers manager — pricing models assigned to clients. */}
       {canManage ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 max-w-2xl">
-          <p className="text-sm font-semibold text-gray-900">{t.tiersTitle}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5 mb-2">{t.tiersHint}</p>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 max-w-2xl">
+          <p className="text-sm font-semibold text-ink">{t.tiersTitle}</p>
+          <p className="text-[11px] text-faint mt-0.5 mb-2">{t.tiersHint}</p>
           <div className="flex flex-col gap-2">
             {tiers.map(tier => (
               <div key={tier.id} className="flex items-center gap-2">
                 <input value={tier.name} onChange={e => renameTier(tier.id, e.target.value)}
-                  className="flex-1 rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                <button type="button" onClick={() => removeTier(tier.id)} className="p-1.5 rounded-lg text-gray-300 hover:text-red-500"><X size={14} /></button>
+                  className="flex-1 rounded-xl border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <button type="button" onClick={() => removeTier(tier.id)} className="p-1.5 rounded-lg text-faint hover:text-red-500"><X size={14} /></button>
               </div>
             ))}
             <div className="flex items-center gap-2">
               <input value={newTier} onChange={e => setNewTier(e.target.value)} placeholder={t.tierNamePlaceholder}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addTier(); } }}
-                className="flex-1 rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="flex-1 rounded-xl border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               <button type="button" onClick={addTier} disabled={!newTier.trim()} className="px-3 py-1.5 rounded-xl text-xs font-semibold text-primary hover:bg-primary/5 disabled:opacity-40">+ {t.addTier}</button>
             </div>
           </div>
@@ -272,41 +272,41 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3"><DollarSign size={20} className="text-primary" /></div>
-          <p className="text-sm text-gray-400 max-w-xs">{t.empty}</p>
+          <p className="text-sm text-faint max-w-xs">{t.empty}</p>
         </div>
       ) : groups.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
-          <p className="text-sm text-gray-400">{t.noResults}</p>
+          <p className="text-sm text-faint">{t.noResults}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([key, list]) => (
             <div key={key}>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">
                 {key === '￿' ? t.uncategorized : key}
               </p>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
                 {list.map((i, idx) => (
-                  <div key={i.id} className={`px-4 py-4 flex items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+                  <div key={i.id} className={`px-4 py-4 flex items-center gap-3 ${idx < list.length - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{i.name}</p>
+                        <p className="text-sm font-semibold text-ink truncate">{i.name}</p>
                         {i.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
-                        {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{t.inactiveBadge}</span> : null}
+                        {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-border-soft text-faint">{t.inactiveBadge}</span> : null}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted mt-1">
                         {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
                         {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </p>
                     </div>
                     {canManage ? (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button type="button" onClick={() => toggleActive(i)} className="px-2 py-1 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100">
+                        <button type="button" onClick={() => toggleActive(i)} className="px-2 py-1 rounded-lg text-xs font-semibold text-muted hover:bg-border-soft">
                           {i.active ? t.deactivate : t.activate}
                         </button>
-                        <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
-                        <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
-                        <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
+                        <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
+                        <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
+                        <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10"><Trash2 size={14} /></button>
                       </div>
                     ) : null}
                   </div>
@@ -320,27 +320,27 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       {/* Add/edit modal */}
       {draft ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDraft(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
-              <p className="text-lg font-bold text-gray-900">{t.title}</p>
-              <button type="button" onClick={() => setDraft(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} className="text-gray-400" /></button>
+              <p className="text-lg font-bold text-ink">{t.title}</p>
+              <button type="button" onClick={() => setDraft(null)} className="p-1.5 rounded-lg hover:bg-border-soft"><X size={18} className="text-faint" /></button>
             </div>
 
-            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.nameLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-1">{t.nameLabel}</label>
             <input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder={t.namePlaceholder}
-              className="w-full mb-3 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full mb-3 rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
 
-            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.categoryLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-1">{t.categoryLabel}</label>
             <input value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} placeholder={t.categoryPlaceholder}
               list="price-categories"
-              className="w-full mb-3 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full mb-3 rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             <datalist id="price-categories">{Array.from(new Set(items.map(i => i.category).filter(Boolean))).map(c => <option key={c} value={c!} />)}</datalist>
 
-            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.modeLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-1">{t.modeLabel}</label>
             <div className="flex gap-2 mb-3">
               {(['per_unit', 'flat'] as PricingMode[]).map(m => (
                 <button key={m} type="button" onClick={() => setDraft({ ...draft, pricingMode: m })}
-                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${draft.pricingMode === m ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${draft.pricingMode === m ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}>
                   {m === 'per_unit' ? t.modePerUnit : t.modeFlat}
                 </button>
               ))}
@@ -348,37 +348,37 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
 
             {draft.pricingMode === 'per_unit' ? (
               <>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">{t.unitLabel}</label>
+                <label className="block text-sm font-semibold text-ink mb-1">{t.unitLabel}</label>
                 <input value={draft.unitLabel} onChange={e => setDraft({ ...draft, unitLabel: e.target.value })} placeholder={t.unitPlaceholder}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                <p className="text-[11px] text-gray-400 mt-1 mb-3">{t.unitHint}</p>
+                  className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <p className="text-[11px] text-faint mt-1 mb-3">{t.unitHint}</p>
               </>
             ) : null}
 
             <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
               <input type="checkbox" checked={draft.isAddon} onChange={e => setDraft({ ...draft, isAddon: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary" />
               <span>
-                <span className="block text-sm font-semibold text-gray-700">{t.addonLabel}</span>
-                <span className="block text-[11px] text-gray-400">{t.addonHint}</span>
+                <span className="block text-sm font-semibold text-ink">{t.addonLabel}</span>
+                <span className="block text-[11px] text-faint">{t.addonHint}</span>
               </span>
             </label>
 
-            <label className="block text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</label>
-            <div className="mb-4 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
-              <span className="text-gray-400 text-sm">$</span>
+            <label className="block text-sm font-semibold text-ink mb-1">{t.rateLabel}</label>
+            <div className="mb-4 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
+              <span className="text-faint text-sm">$</span>
               <input value={draft.rate} onChange={e => setDraft({ ...draft, rate: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" placeholder="0.00"
                 className="w-full py-2 pl-1 text-sm focus:outline-none" />
             </div>
 
             {tiers.length > 0 ? (
               <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.tierRatesLabel}</label>
+                <label className="block text-sm font-semibold text-ink mb-2">{t.tierRatesLabel}</label>
                 {tiers.map(tier => (
                   <div key={tier.id} className="flex items-center gap-2 mb-2">
-                    <span className="w-28 text-sm text-gray-600 truncate">{tier.name}</span>
-                    <div className="flex-1 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
-                      <span className="text-gray-400 text-sm">$</span>
+                    <span className="w-28 text-sm text-muted truncate">{tier.name}</span>
+                    <div className="flex-1 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
+                      <span className="text-faint text-sm">$</span>
                       <input value={draft.tierRates[tier.id] ?? ''} onChange={e => setDraft({ ...draft, tierRates: { ...draft.tierRates, [tier.id]: e.target.value.replace(/[^0-9.]/g, '') } })}
                         inputMode="decimal" placeholder={String(draft.rate || '0.00')} className="w-full py-2 pl-1 text-sm focus:outline-none" />
                     </div>
@@ -388,35 +388,35 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
             ) : null}
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">{t.matchTermsLabel}</label>
-              <p className="text-[11px] text-gray-400 mb-1.5">{t.matchTermsHint}</p>
+              <label className="block text-sm font-semibold text-ink mb-1">{t.matchTermsLabel}</label>
+              <p className="text-[11px] text-faint mb-1.5">{t.matchTermsHint}</p>
               <textarea value={draft.matchTerms} onChange={e => setDraft({ ...draft, matchTerms: e.target.value })} placeholder={t.matchTermsPlaceholder} rows={2}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
 
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-semibold text-gray-700">{t.stateRatesLabel}</label>
+                <label className="text-sm font-semibold text-ink">{t.stateRatesLabel}</label>
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={addAllStates} className="text-xs font-semibold text-primary hover:underline">{t.addAllStates}</button>
                   <button type="button" onClick={() => setDraft({ ...draft, stateRates: [...draft.stateRates, { state: '', rate: '' }] })}
                     className="text-xs font-semibold text-primary hover:underline">+ {t.addStateRate}</button>
                 </div>
               </div>
-              <p className="text-[11px] text-gray-400 mb-2">{t.stateRatesHint}</p>
+              <p className="text-[11px] text-faint mb-2">{t.stateRatesHint}</p>
               {draft.stateRates.map((sr, i) => (
                 <div key={i} className="flex items-center gap-2 mb-2">
                   <select value={sr.state} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, state: e.target.value }; setDraft({ ...draft, stateRates: sortStateRates(next) }); }}
-                    className="w-40 rounded-xl border border-gray-200 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                    className="w-40 rounded-xl border border-border px-2 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary">
                     <option value="">{t.selectStatePlaceholder}</option>
                     {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
                   </select>
-                  <div className="flex-1 flex items-center rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-primary">
-                    <span className="text-gray-400 text-sm">$</span>
+                  <div className="flex-1 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
+                    <span className="text-faint text-sm">$</span>
                     <input value={sr.rate} onChange={e => { const next = [...draft.stateRates]; next[i] = { ...sr, rate: e.target.value.replace(/[^0-9.]/g, '') }; setDraft({ ...draft, stateRates: next }); }}
                       inputMode="decimal" placeholder="0.00" className="w-full py-2 pl-1 text-sm focus:outline-none" />
                   </div>
-                  <button type="button" onClick={() => setDraft({ ...draft, stateRates: draft.stateRates.filter((_, j) => j !== i) })} className="p-1.5 rounded-lg text-gray-300 hover:text-red-500"><X size={14} /></button>
+                  <button type="button" onClick={() => setDraft({ ...draft, stateRates: draft.stateRates.filter((_, j) => j !== i) })} className="p-1.5 rounded-lg text-faint hover:text-red-500"><X size={14} /></button>
                 </div>
               ))}
             </div>

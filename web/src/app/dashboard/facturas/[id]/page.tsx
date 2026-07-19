@@ -721,12 +721,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       {/* Move-to-another-invoice picker */}
       <Modal open={moveJobId !== null} onClose={() => setMoveJobId(null)} title={tInv.jobsSection.moveTitle} size="sm">
         {moveTargets.length === 0 ? (
-          <p className="text-sm text-gray-400">{tInv.jobsSection.moveEmpty}</p>
+          <p className="text-sm text-faint">{tInv.jobsSection.moveEmpty}</p>
         ) : (
           <div className="flex flex-col gap-1">
             {moveTargets.map(inv => (
-              <button key={inv.id} onClick={() => doMove(inv.id)} disabled={jobBusy} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 text-sm text-gray-800 disabled:opacity-40">
-                <span className="font-mono text-gray-500">{inv.invoice_number}</span>
+              <button key={inv.id} onClick={() => doMove(inv.id)} disabled={jobBusy} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-surface text-sm text-ink disabled:opacity-40">
+                <span className="font-mono text-muted">{inv.invoice_number}</span>
               </button>
             ))}
           </div>
@@ -738,13 +738,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         <div className="flex flex-col gap-5">
           {/* Manual line item */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{tInv.jobsSection.manualHeading}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{tInv.jobsSection.manualHeading}</p>
             <div className="flex flex-col gap-2">
               <input
                 value={manualDesc}
                 onChange={e => setManualDesc(e.target.value)}
                 placeholder={tInv.jobsSection.manualDescPlaceholder}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
               <div className="flex gap-2">
                 <input
@@ -752,16 +752,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                   inputMode="decimal"
                   onChange={e => setManualQty(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder={tj.new.colQty}
-                  className="w-20 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                  className="w-20 rounded-xl border border-border bg-card px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                 />
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
                   <input
                     value={manualRate}
                     inputMode="decimal"
                     onChange={e => setManualRate(cleanAmount(e.target.value))}
                     placeholder={tj.detail.colUnitPriceShort}
-                    className="w-full rounded-xl border border-gray-200 bg-white pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                    className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                   />
                 </div>
               </div>
@@ -770,9 +770,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
           {/* Completed jobs */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{tInv.jobsSection.jobsHeading}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{tInv.jobsSection.jobsHeading}</p>
             {addCandidates.length === 0 ? (
-              <p className="text-sm text-gray-400">{tInv.jobsSection.addEmpty}</p>
+              <p className="text-sm text-faint">{tInv.jobsSection.addEmpty}</p>
             ) : (
               <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
                 {addCandidates.map(j => {
@@ -781,15 +781,15 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     <button
                       key={j.id}
                       onClick={() => setAddPicked(prev => { const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n; })}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left ${picked ? 'bg-primary/10' : 'hover:bg-gray-50'}`}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left ${picked ? 'bg-primary/10' : 'hover:bg-surface'}`}
                     >
-                      <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${picked ? 'bg-primary border-primary text-white' : 'border-gray-300'}`}>
+                      <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${picked ? 'bg-primary border-primary text-white' : 'border-border'}`}>
                         {picked ? '✓' : ''}
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block truncate text-gray-800">{j.title}</span>
+                        <span className="block truncate text-ink">{j.title}</span>
                         {j.scheduled_date ? (
-                          <span className="block text-xs text-gray-400">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</span>
+                          <span className="block text-xs text-faint">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</span>
                         ) : null}
                       </span>
                     </button>
@@ -810,7 +810,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             value={editDesc}
             onChange={e => setEditDesc(e.target.value)}
             placeholder={tInv.jobsSection.manualDescPlaceholder}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
           />
           <div className="flex gap-2">
             <input
@@ -818,16 +818,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               inputMode="decimal"
               onChange={e => setEditQty(e.target.value.replace(/[^0-9.]/g, ''))}
               placeholder={tj.new.colQty}
-              className="w-20 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="w-20 rounded-xl border border-border bg-card px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             />
             <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
               <input
                 value={editRate}
                 inputMode="decimal"
                 onChange={e => setEditRate(cleanAmount(e.target.value))}
                 placeholder={tj.detail.colUnitPriceShort}
-                className="w-full rounded-xl border border-gray-200 bg-white pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
             </div>
           </div>
@@ -839,14 +839,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title={payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle} size="sm">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{tInv.payments.amountLabel}</label>
+            <label className="text-sm font-medium text-ink">{tInv.payments.amountLabel}</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
               <input
                 value={payAmount}
                 inputMode="decimal"
                 onChange={e => setPayAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                className="w-full rounded-xl border border-gray-200 bg-white pl-6 pr-32 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                className="w-full rounded-xl border border-border bg-card pl-6 pr-32 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
               <button
                 type="button"
@@ -865,11 +865,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             ) : null}
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{tInv.payments.methodLabel}</label>
+            <label className="text-sm font-medium text-ink">{tInv.payments.methodLabel}</label>
             <select
               value={payMethodKey}
               onChange={e => setPayMethodKey(e.target.value as PayMethodKey)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             >
               {PAY_METHODS.map(k => (
                 <option key={k} value={k}>{tInv.payments.methods[k]}</option>
@@ -880,17 +880,17 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 value={payMethodOther}
                 onChange={e => setPayMethodOther(e.target.value)}
                 placeholder={tInv.payments.otherPlaceholder}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
             ) : null}
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{tInv.payments.dateLabel}</label>
+            <label className="text-sm font-medium text-ink">{tInv.payments.dateLabel}</label>
             <input
               type="date"
               value={payDate}
               onChange={e => setPayDate(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             />
           </div>
           <Button onClick={submitPayment} loading={payBusy} disabled={!parseFloat(payAmount)} fullWidth>
@@ -902,7 +902,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       {/* Delete a recorded payment */}
       <Modal open={delPayment !== null} onClose={() => setDelPayment(null)} title={tInv.payments.title} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-600">{tInv.payments.deleteConfirm}</p>
+          <p className="text-sm text-muted">{tInv.payments.deleteConfirm}</p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setDelPayment(null)} fullWidth>
               {tc.buttons.cancel}
@@ -921,7 +921,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       {/* Undo paid — reverts to sent and clears recorded payments */}
       <Modal open={undoPaidOpen} onClose={() => setUndoPaidOpen(false)} title={tInv.payments.undoPaid} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-600">{tInv.payments.undoPaidConfirm}</p>
+          <p className="text-sm text-muted">{tInv.payments.undoPaidConfirm}</p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setUndoPaidOpen(false)} fullWidth>
               {tc.buttons.cancel}
@@ -941,7 +941,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title={tInv.deleteTitle} size="sm">
         <div className="flex flex-col gap-4">
           <p
-            className="text-sm text-gray-600"
+            className="text-sm text-muted"
             dangerouslySetInnerHTML={{
               __html: tInv.deleteConfirm.replace('{{number}}', escapeHtml(invoice?.invoiceNumber ?? '')),
             }}

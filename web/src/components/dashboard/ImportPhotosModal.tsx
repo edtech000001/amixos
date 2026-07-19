@@ -228,16 +228,16 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   return (
     <Modal open={open} onClose={phase === 'uploading' ? () => {} : onClose} title={t.title} size="lg">
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-gray-500">{t.intro}</p>
+        <p className="text-xs text-muted">{t.intro}</p>
 
         {phase === 'pick' ? (
           loading ? (
-            <p className="text-sm text-gray-400 py-6 text-center">…</p>
+            <p className="text-sm text-faint py-6 text-center">…</p>
           ) : pendingJobs.length === 0 ? (
-            <p className="text-sm text-gray-500 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">{t.noPending}</p>
+            <p className="text-sm text-muted bg-amber-500/10 border border-amber-100 rounded-xl px-4 py-3">{t.noPending}</p>
           ) : (
             <>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-ink">
                 {pendingNameCount > 0
                   ? t.pendingSummary
                       .replace('{{names}}', String(pendingNameCount))
@@ -252,7 +252,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                   e.preventDefault();
                   onFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
                 }}
-                className="flex flex-col items-center gap-2 py-10 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                className="flex flex-col items-center gap-2 py-10 rounded-2xl border-2 border-dashed border-border text-faint hover:border-primary hover:text-primary transition-colors"
               >
                 <ImagePlus size={28} />
                 <span className="text-sm font-semibold">{t.chooseBtn}</span>
@@ -266,7 +266,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
           <>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-              <span className="font-medium text-gray-800">
+              <span className="font-medium text-ink">
                 {t.matchedSummary
                   .replace('{{files}}', String(matched.length))
                   .replace('{{jobs}}', String(matchedJobIds.length))}
@@ -274,11 +274,11 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
             </div>
 
             {skipped.length > 0 ? (
-              <p className="text-xs text-gray-500">{t.alreadyMsg.replace('{{count}}', String(skipped.length))}</p>
+              <p className="text-xs text-muted">{t.alreadyMsg.replace('{{count}}', String(skipped.length))}</p>
             ) : null}
 
             {unmatched.length > 0 ? (
-              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+              <div className="bg-amber-500/10 border border-amber-100 rounded-xl px-4 py-3">
                 <p className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
                   <AlertTriangle size={14} /> {t.unmatchedTitle.replace('{{count}}', String(unmatched.length))}
                 </p>
@@ -295,8 +295,8 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
               <div className="max-h-48 overflow-y-auto flex flex-col gap-1">
                 {matched.map((p, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="font-mono text-gray-600 truncate">{p.file.name}</span>
-                    <span className="text-gray-400 truncate shrink-0 max-w-[45%]">→ {p.match!.jobTitle}</span>
+                    <span className="font-mono text-muted truncate">{p.file.name}</span>
+                    <span className="text-faint truncate shrink-0 max-w-[45%]">→ {p.match!.jobTitle}</span>
                   </div>
                 ))}
               </div>
@@ -304,10 +304,10 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
 
             {phase === 'uploading' ? (
               <div>
-                <p className="text-sm text-gray-600 mb-2">
+                <p className="text-sm text-muted mb-2">
                   {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))}
                 </p>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-2 rounded-full bg-border-soft overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all"
                     style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}

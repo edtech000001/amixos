@@ -2,8 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { Trash2, ArrowLeft, X } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -16,6 +16,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import {
   INVOICE_FIELD_SECTIONS,
   INVOICE_FIELDS_ALWAYS_SHOWN,
@@ -29,7 +30,7 @@ import {
 // Move/Remove on the detail screen breaks. qtyText/rateText hold the raw
 // input while typing so "12." isn't collapsed by parseFloat (stripped on save).
 interface LineItem { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; qtyText?: string; rateText?: string; }
-interface Client { id: string; first_name: string; last_name: string; }
+interface Client { id: string; first_name: string; last_name: string; company: string | null; contacts?: { name: string; role: string | null }[]; }
 interface FieldTemplate {
   id: string;
   field_key: string;
@@ -74,6 +75,9 @@ function NuevaFacturaContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
   // Auto-filled with the next sequential number once the invoice count loads.
   const [invoiceNumber, setInvoiceNumber] = useState('');
   // Once the user types their own number, stop auto-deriving it.
@@ -130,8 +134,21 @@ function NuevaFacturaContent() {
 
   useEffect(() => {
     if (!business) return;
-    supabase.from('clients').select('id, first_name, last_name').eq('business_id', business.id)
-      .order('first_name').then(({ data }) => setClients(data ?? []));
+    (async () => {
+      const [{ data: cl }, contactRes] = await Promise.all([
+        supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id)
+          .order('first_name'),
+        // Client contacts — so the picker can find an account by a contact's
+        // name (primary contact first), same as the job form.
+        supabase.from('client_contacts').select('client_id, name, role').eq('business_id', business.id)
+          .order('is_primary', { ascending: false }).then(r => r, () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
+      ]);
+      const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
+      for (const ct of (contactRes.data ?? []) as { client_id: string; name: string; role: string | null }[]) {
+        (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!).push({ name: ct.name, role: ct.role });
+      }
+      setClients(((cl ?? []) as Client[]).map(c => ({ ...c, contacts: contactsByClient.get(c.id) })));
+    })();
     supabase.from('invoice_field_templates').select('*').eq('business_id', business.id)
       .order('sort_order').then(({ data }) => setCustomTemplates(localizeTemplates(data ?? [], locale)));
     // New invoice: load the count so the auto-number = start + count.
@@ -146,6 +163,42 @@ function NuevaFacturaContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business, locale]);
+
+  // Reuse the job form's search strings so the invoice picker reads identically.
+  const jt = full.dashboard.jobs.new;
+
+  // Client search — matches own fields AND contact people, same as the job
+  // form, so typing a contact's name surfaces the account they belong to.
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c => {
+      const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+      if (own.includes(q)) return true;
+      return (c.contacts ?? []).some(ct => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q));
+    });
+  }, [clients, clientSearch]);
+
+  // The contact that matched (when the account matched via a contact, not its
+  // own name) — shown under the client so you know who you searched.
+  const matchedContactOf = (c: Client) => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return null;
+    const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+    if (own.includes(q)) return null;
+    return (c.contacts ?? []).find(ct => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q)) ?? null;
+  };
+
+  // Close client dropdown on outside click.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Edit mode: hydrate form from the existing invoice.
   useEffect(() => {
@@ -234,15 +287,15 @@ function NuevaFacturaContent() {
   // section (always shown). Spans the full grid width.
   const clientPicker = (
     <div key="client" className="flex flex-col gap-1.5 md:col-span-2">
-      <label className="text-sm font-medium text-gray-700">{t.clientsLabel}</label>
+      <label className="text-sm font-medium text-ink">{t.clientsLabel}</label>
       {clientIds.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {clientIds.map(cid => {
             const c = clients.find(cl => cl.id === cid);
             if (!c) return null;
             return (
-              <span key={cid} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
-                {c.first_name} {c.last_name}
+              <span key={cid} className="inline-flex items-center gap-1 bg-border-soft text-ink text-xs font-medium px-2.5 py-1.5 rounded-lg">
+                {clientPickerDisplay(c).top}
                 <button type="button" onClick={() => setClientIds(prev => prev.filter(id => id !== cid))} className="hover:text-red-500 transition-colors">
                   <X size={12} />
                 </button>
@@ -251,19 +304,47 @@ function NuevaFacturaContent() {
           })}
         </div>
       )}
-      <select
-        value=""
-        onChange={e => {
-          const val = e.target.value;
-          if (val && !clientIds.includes(val)) setClientIds(prev => [...prev, val]);
-        }}
-        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
-      >
-        <option value="">{clientIds.length === 0 ? t.selectClient : t.addAnotherClient}</option>
-        {clients.filter(c => !clientIds.includes(c.id)).map(c => (
-          <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
-        ))}
-      </select>
+      <div className="relative" ref={clientDropdownRef}>
+        <button type="button" onClick={() => setClientDropdownOpen(o => !o)}
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-left text-faint flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+          <span>{clientIds.length === 0 ? t.selectClient : t.addAnotherClient}</span>
+          <ChevronDown size={14} className="text-faint shrink-0 ml-2"/>
+        </button>
+        {clientDropdownOpen && (
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+            <div className="p-2 border-b border-border-soft">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
+                <input autoFocus type="text" placeholder={jt.clientSearchPlaceholder}
+                  value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                  className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"/>
+              </div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {filteredClients.filter(c => !clientIds.includes(c.id)).map(c => {
+                const ct = matchedContactOf(c);
+                const { top, sub } = clientPickerDisplay(c);
+                return (
+                  <button type="button" key={c.id}
+                    onClick={() => { setClientIds(prev => [...prev, c.id]); setClientSearch(''); setClientDropdownOpen(false); }}
+                    className="w-full text-left px-4 py-3 hover:bg-surface transition-colors">
+                    <span className="block text-base text-ink truncate">
+                      {top}
+                      {sub && <span className="text-faint ml-1 text-sm">· {sub}</span>}
+                    </span>
+                    {ct && (
+                      <span className="block text-xs text-primary truncate mt-0.5">{ct.name}{ct.role ? `  ·  ${ct.role}` : ''}</span>
+                    )}
+                  </button>
+                );
+              })}
+              {filteredClients.filter(c => !clientIds.includes(c.id)).length === 0 && (
+                <p className="px-4 py-3 text-xs text-faint text-center">{jt.clientNoResults}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -372,7 +453,7 @@ function NuevaFacturaContent() {
   if (loadingEdit) {
     return (
       <div className="p-6 max-w-4xl">
-        <p className="text-sm text-gray-400">…</p>
+        <p className="text-sm text-faint">…</p>
       </div>
     );
   }
@@ -384,15 +465,15 @@ function NuevaFacturaContent() {
         <Link
           href={editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'}
           onClick={e => { e.preventDefault(); confirmDiscard(() => { window.location.href = editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'; }); }}
-          className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-xl hover:bg-border-soft transition-colors"
         >
-          <ArrowLeft size={18} className="text-gray-500" />
+          <ArrowLeft size={18} className="text-muted" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-ink">
             {editId ? t.headingEdit : t.heading}
           </h1>
-          <p className="text-sm text-gray-400">{invoiceNumber}</p>
+          <p className="text-sm text-faint">{invoiceNumber}</p>
         </div>
       </div>
 
@@ -400,8 +481,8 @@ function NuevaFacturaContent() {
         {/* General section — invoice_number, client, issue_date, due_date +
             general customs rendered in saved layout order. Language selector
             is structural and stays after them in the grid. */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
-          <h2 className="text-sm font-semibold text-gray-700">{sectionLabel('general')}</h2>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-ink">{sectionLabel('general')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {invoiceFieldsInSection(invLayout, 'general')
               .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)))
@@ -413,11 +494,11 @@ function NuevaFacturaContent() {
                 return renderInvField(k);
               })}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.languageLabel}</label>
+              <label className="text-sm font-medium text-ink">{t.languageLabel}</label>
               <select
                 value={language}
                 onChange={e => setLanguage(e.target.value as InvoiceLang)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
               >
                 <option value="es">Español</option>
                 <option value="en">English</option>
@@ -427,10 +508,10 @@ function NuevaFacturaContent() {
         </div>
 
         {/* Line items */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">{t.itemsHeading}</h2>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-ink mb-4">{t.itemsHeading}</h2>
           <div className="flex flex-col gap-2">
-            <div className="hidden md:grid grid-cols-[1fr_80px_100px_32px] gap-2 text-xs font-medium text-gray-400 px-1">
+            <div className="hidden md:grid grid-cols-[1fr_80px_100px_32px] gap-2 text-xs font-medium text-faint px-1">
               <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colRate}</span><span/>
             </div>
             {lines.map((line, i) => (
@@ -440,7 +521,7 @@ function NuevaFacturaContent() {
                   placeholder={t.itemPlaceholder}
                   value={line.description}
                   onChange={e => updateLine(i, 'description', e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <input
                   type="text"
@@ -451,7 +532,7 @@ function NuevaFacturaContent() {
                     updateLine(i, 'qtyText', clean);
                     updateLine(i, 'qty', parseFloat(clean) || 0);
                   }}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-center text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <input
                   type="text"
@@ -463,9 +544,9 @@ function NuevaFacturaContent() {
                     updateLine(i, 'rateText', clean);
                     updateLine(i, 'rate', parseFloat(clean) || 0);
                   }}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-right text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-right text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
-                <button onClick={() => removeLine(i)} disabled={lines.length === 1} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-20">
+                <button onClick={() => removeLine(i)} disabled={lines.length === 1} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-20">
                   <Trash2 size={14} className="text-red-400" />
                 </button>
               </div>
@@ -473,13 +554,13 @@ function NuevaFacturaContent() {
           </div>
 
           {/* Totals */}
-          <div className="mt-5 border-t border-gray-50 pt-4 flex flex-col items-end gap-1">
+          <div className="mt-5 border-t border-border-soft pt-4 flex flex-col items-end gap-1">
             <div className="flex items-center gap-8 text-sm">
-              <span className="text-gray-500">{t.subtotal}</span>
-              <span className="font-medium text-gray-900 w-24 text-right">{fmt(subtotal)}</span>
+              <span className="text-muted">{t.subtotal}</span>
+              <span className="font-medium text-ink w-24 text-right">{fmt(subtotal)}</span>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <span className="text-gray-500">{t.taxPercent}</span>
+              <span className="text-muted">{t.taxPercent}</span>
               <input
                 type="text" inputMode="decimal"
                 value={taxRateText ?? (taxRate ? String(taxRate) : '')}
@@ -489,12 +570,12 @@ function NuevaFacturaContent() {
                   setTaxRateText(clean);
                   setTaxRate(parseFloat(clean) || 0);
                 }}
-                className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-16 rounded-lg border border-border px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <span className="font-medium text-gray-900 w-24 text-right">{fmt(taxAmount)}</span>
+              <span className="font-medium text-ink w-24 text-right">{fmt(taxAmount)}</span>
             </div>
-            <div className="flex items-center gap-8 text-base font-bold border-t border-gray-100 pt-2 mt-1">
-              <span className="text-gray-900">{t.total}</span>
+            <div className="flex items-center gap-8 text-base font-bold border-t border-border-soft pt-2 mt-1">
+              <span className="text-ink">{t.total}</span>
               <span className="text-primary w-24 text-right">{fmt(total)}</span>
             </div>
           </div>
@@ -506,8 +587,8 @@ function NuevaFacturaContent() {
             .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
           if (visibleKeys.length === 0) return null;
           return (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-gray-700">{sectionLabel('notes')}</h2>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-ink">{sectionLabel('notes')}</h2>
               {visibleKeys.map(k => {
                 if (k.startsWith('custom:')) {
                   const tpl = customTemplates.find(tp => `custom:${tp.id}` === k);
@@ -521,7 +602,7 @@ function NuevaFacturaContent() {
                       placeholder={t.notesPlaceholder}
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+                      className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
                     />
                   );
                 }
@@ -533,8 +614,8 @@ function NuevaFacturaContent() {
 
         {/* Additional custom fields */}
         {customsInSection('additional').length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">{additionalLabel}</h2>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-ink mb-4">{additionalLabel}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {customsInSection('additional').map(tpl => (
                 <CustomFieldInput
@@ -590,12 +671,12 @@ function CustomFieldInput({
     // Long free text — multiline.
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <textarea
           rows={4}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
         />
       </div>
     );
@@ -607,14 +688,14 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
         <div className="flex gap-2">
           <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.yes}
           </button>
           <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.no}
           </button>
         </div>
@@ -628,13 +709,13 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <label className="text-sm font-medium text-ink">{label}</label>
           <div className="flex flex-wrap gap-2">
             {template.field_options.map(o => {
               const on = selected.includes(o);
               return (
                 <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted hover:border-border'}`}>
                   {o}
                 </button>
               );
@@ -645,11 +726,11 @@ function CustomFieldInput({
     }
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}

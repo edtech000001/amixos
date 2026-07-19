@@ -274,16 +274,16 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
                   if (file) handleFileSelect(file);
                 }}
                 className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
-                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary hover:bg-primary/5'
+                  dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary hover:bg-primary/5'
                 }`}>
-                <Upload size={32} className={`mx-auto mb-3 transition-colors ${dragOver ? 'text-primary' : 'text-gray-300'}`}/>
-                <p className="text-sm font-semibold text-gray-700">{t.importModal.uploadPrimary}</p>
-                <p className="text-xs text-gray-400 mt-1">{t.importModal.uploadSecondary}</p>
+                <Upload size={32} className={`mx-auto mb-3 transition-colors ${dragOver ? 'text-primary' : 'text-faint'}`}/>
+                <p className="text-sm font-semibold text-ink">{t.importModal.uploadPrimary}</p>
+                <p className="text-xs text-faint mt-1">{t.importModal.uploadSecondary}</p>
               </div>
-              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-700">{t.importModal.templatePromptTitle}</p>
-                  <p className="text-xs text-gray-400">{t.importModal.templatePromptSub}</p>
+                  <p className="text-xs font-semibold text-ink">{t.importModal.templatePromptTitle}</p>
+                  <p className="text-xs text-faint">{t.importModal.templatePromptSub}</p>
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
                   <Download size={14}/> {t.importModal.templateBtn}
@@ -294,25 +294,25 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
 
           {importStep === 'map' && (
             <>
-              <p className="text-xs text-gray-500">
-                <span className="font-medium text-gray-900">{t.importModal.mapDetected.replace('{{count}}', String(csvRows.length))}</span>. {t.importModal.mapInstruction}
+              <p className="text-xs text-muted">
+                <span className="font-medium text-ink">{t.importModal.mapDetected.replace('{{count}}', String(csvRows.length))}</span>. {t.importModal.mapInstruction}
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
                 {allImportFields.map(field => {
                   const unmapped = !colMap[field.key];
                   return (
                     <div key={field.key} className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <label className="text-xs font-medium text-muted flex items-center gap-1">
                         {field.label}
                         {field.required && <span className="text-red-400">*</span>}
                         {field.isCustom && <span className="text-blue-400 text-[10px]">{t.importModal.customLabel}</span>}
                       </label>
-                      {field.hint ? <p className="text-[10px] leading-snug text-gray-400 -mt-0.5">{field.hint}</p> : null}
+                      {field.hint ? <p className="text-[10px] leading-snug text-faint -mt-0.5">{field.hint}</p> : null}
                       <select
                         value={colMap[field.key] ?? ''}
                         onChange={e => setColMap(m => ({ ...m, [field.key]: e.target.value }))}
-                        className={`w-full rounded-xl border px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
-                          unmapped ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'
+                        className={`w-full rounded-xl border px-3 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
+                          unmapped ? 'border-amber-400 bg-amber-500/10' : 'border-border bg-card'
                         }`}>
                         <option value="">{t.importModal.noImport}</option>
                         {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
@@ -332,26 +332,26 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
 
           {importStep === 'preview' && (
             <>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 {t.importModal.previewSummary
                   .replace('{{shown}}', String(Math.min(5, csvRows.length)))
                   .replace('{{total}}', String(csvRows.length))}
               </p>
-              <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <div className="overflow-x-auto rounded-xl border border-border-soft">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-surface">
                     <tr>
                       {allImportFields.filter(f => colMap[f.key]).map(f => (
-                        <th key={f.key} className="text-left px-3 py-2 font-semibold text-gray-500 whitespace-nowrap">{f.label}</th>
+                        <th key={f.key} className="text-left px-3 py-2 font-semibold text-muted whitespace-nowrap">{f.label}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {csvRows.slice(0, 5).map((row, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
+                      <tr key={i} className="hover:bg-surface">
                         {allImportFields.filter(f => colMap[f.key]).map(f => (
-                          <td key={f.key} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[120px] truncate">
-                            {row[colMap[f.key]] || <span className="text-gray-300">—</span>}
+                          <td key={f.key} className="px-3 py-2 text-ink whitespace-nowrap max-w-[120px] truncate">
+                            {row[colMap[f.key]] || <span className="text-faint">—</span>}
                           </td>
                         ))}
                       </tr>
@@ -363,10 +363,10 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
                 <Button variant="secondary" onClick={() => setImportStep('map')} fullWidth>{tc.buttons.back}</Button>
                 {importing && progress ? (
                   <div className="mb-2">
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-border-soft rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-1 text-center">{progress.done} / {progress.total}</p>
+                    <p className="text-[11px] text-faint mt-1 text-center">{progress.done} / {progress.total}</p>
                   </div>
                 ) : null}
                 <Button onClick={runImport} loading={importing} fullWidth>
@@ -382,13 +382,13 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
                 <CheckCircle2 size={32} className="text-emerald-500"/>
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900">{t.importModal.importDone}</p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-lg font-bold text-ink">{t.importModal.importDone}</p>
+                <p className="text-sm text-muted mt-1">
                   <span className="text-emerald-600 font-semibold">{t.importModal.importedCount.replace('{{count}}', String(importResult.success))}</span>
                   {importResult.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.failedRows.length))}</span>}
                 </p>
                 {importResult.failedRows.length > 0 && (
-                  <p className="text-xs text-gray-400 mt-1">{t.importModal.errorsExplanation}</p>
+                  <p className="text-xs text-faint mt-1">{t.importModal.errorsExplanation}</p>
                 )}
               </div>
               {importResult.failedRows.length > 0 && (
@@ -401,15 +401,15 @@ export default function ImportClientsModal({ open, businessId, templates, onClos
                     {showImportErrorDetails ? 'Ocultar detalles ▴' : 'Ver detalles ▾'}
                   </button>
                   {showImportErrorDetails && (
-                    <div className="mt-2 max-h-64 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
+                    <div className="mt-2 max-h-64 overflow-y-auto bg-red-500/10 border border-red-100 rounded-xl text-left">
                       {importResult.failedRows.slice(0, 50).map((f, i) => (
                         <div key={i} className="px-4 py-2 border-b border-red-100/60 last:border-b-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
+                          <p className="text-sm font-medium text-ink truncate">{f.label}</p>
                           <p className="text-xs text-red-700 truncate">{f.reason}</p>
                         </div>
                       ))}
                       {importResult.failedRows.length > 50 && (
-                        <div className="px-4 py-2 text-xs text-gray-600 text-center bg-red-100/40">
+                        <div className="px-4 py-2 text-xs text-muted text-center bg-red-100/40">
                           + {importResult.failedRows.length - 50} más
                         </div>
                       )}

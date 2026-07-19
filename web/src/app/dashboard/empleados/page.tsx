@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
@@ -119,7 +119,7 @@ const EMPTY_EMP = {
   emergency_contact_phone: '',
   custom_fields: {} as Record<string, string>,
 };
-const EMPTY_TS  = { employee_id: '', worker_name: '', work_date: new Date().toISOString().split('T')[0], hours_worked: 8, job_description: '' };
+const EMPTY_TS  = { employee_id: '', worker_name: '', work_date: todayLocalISO(), hours_worked: 8, job_description: '' };
 
 export default function EmpleadosPage() {
   const router = useRouter();
@@ -242,8 +242,8 @@ export default function EmpleadosPage() {
       case 'pay_type':
         return (
           <div key={key} className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
-            <select value={empForm.pay_type} onChange={e => setEmpForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <label className="text-sm font-medium text-ink">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
+            <select value={empForm.pay_type} onChange={e => setEmpForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(PAY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -269,7 +269,7 @@ export default function EmpleadosPage() {
             {empForm.pay_type === 'hourly' ? (
               <>
                 <label className="flex items-center justify-between gap-3 cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</span>
+                  <span className="text-sm font-medium text-ink">{t.modal.overtimeLabel}</span>
                   <input
                     type="checkbox"
                     checked={empForm.overtime_eligible}
@@ -279,24 +279,24 @@ export default function EmpleadosPage() {
                 </label>
                 {empForm.overtime_eligible ? (
                   <div className="flex gap-3">
-                    <label className="flex-1 text-xs text-gray-500">
+                    <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeThresholdLabel}
                       <input
                         type="number" min="0"
                         value={empForm.overtime_threshold}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         onChange={e => setEmpForm(f => ({ ...f, overtime_threshold: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
-                    <label className="flex-1 text-xs text-gray-500">
+                    <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeMultiplierLabel}
                       <input
                         type="number" min="1" step="0.1"
                         value={empForm.overtime_multiplier}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         onChange={e => setEmpForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
                   </div>
@@ -312,8 +312,8 @@ export default function EmpleadosPage() {
       case 'state':
         return (
           <div key={key} className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
-            <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <label className="text-sm font-medium text-ink">{rLabel('state', t.modal.stateLabel)}</label>
+            <select value={empForm.state} onChange={e => setEmpForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{t.modal.stateNone}</option>
               {US_STATES.map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
             </select>
@@ -798,17 +798,17 @@ export default function EmpleadosPage() {
               <button
                 type="button"
                 onClick={() => setEmpModal('edit')}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
               >
-                <Pencil size={16} className="text-gray-500" />
+                <Pencil size={16} className="text-muted" />
               </button>
               <button
                 type="button"
                 onClick={() => toggleActive(selEmp.id)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
               >
                 {selEmp.active ? (
-                  <UserX size={16} className="text-gray-500" />
+                  <UserX size={16} className="text-muted" />
                 ) : (
                   <UserCheck size={16} className="text-emerald-500" />
                 )}
@@ -824,25 +824,25 @@ export default function EmpleadosPage() {
             <div className="flex flex-col gap-4">
               {/* Avatar + active badge */}
               <div className="flex flex-col items-center gap-2 py-2">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${selEmp.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-                  <span className={`text-2xl font-bold ${selEmp.active ? 'text-primary' : 'text-gray-400'}`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${selEmp.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
+                  <span className={`text-2xl font-bold ${selEmp.active ? 'text-primary' : 'text-faint'}`}>
                     {selEmp.first_name.charAt(0)}{selEmp.last_name.charAt(0)}
                   </span>
                 </div>
                 {!selEmp.active ? (
-                  <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">{t.inactiveBadge}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-border-soft text-xs text-faint">{t.inactiveBadge}</span>
                 ) : null}
               </div>
 
               {(selEmp.phone || selEmp.email) ? (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
+                  <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.modal.basicInfoHeading}</p>
                   <ViewRow label={t.modal.phoneLabel} value={selEmp.phone} />
                   <ViewRow label={t.modal.emailLabel} value={selEmp.email} />
                 </>
               ) : null}
 
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.employmentHeading}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.modal.employmentHeading}</p>
               <ViewRow label={t.modal.hireDateLabel} value={selEmp.hire_date} />
               <ViewRow label={t.modal.payTypeLabel} value={PAY_TYPES[selEmp.pay_type] ?? selEmp.pay_type} />
               {selEmp.pay_rate ? (
@@ -854,7 +854,7 @@ export default function EmpleadosPage() {
 
               {(selEmp.birthday || selEmp.address || selEmp.city || selEmp.state || selEmp.zip_code) ? (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
+                  <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.modal.personalHeading}</p>
                   <ViewRow label={t.modal.birthdayLabel} value={selEmp.birthday} />
                   <ViewRow label={t.modal.addressLabel} value={selEmp.address} />
                   {(selEmp.city || selEmp.state || selEmp.zip_code) ? (
@@ -868,7 +868,7 @@ export default function EmpleadosPage() {
 
               {(selEmp.emergency_contact_name || selEmp.emergency_contact_phone) ? (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
+                  <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.modal.emergencyContactHeading}</p>
                   <ViewRow label={t.modal.emergencyNameLabel} value={selEmp.emergency_contact_name} />
                   <ViewRow label={t.modal.emergencyPhoneLabel} value={selEmp.emergency_contact_phone} />
                 </>
@@ -876,7 +876,7 @@ export default function EmpleadosPage() {
 
               {templates.length > 0 && selEmp.custom_fields && Object.keys(selEmp.custom_fields).length > 0 ? (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</p>
+                  <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.modal.customFieldsHeading}</p>
                   {templates.map(tpl => (
                     <ViewRow key={tpl.id} label={tpl.field_label} value={selEmp.custom_fields?.[tpl.field_key]} />
                   ))}
@@ -894,8 +894,8 @@ export default function EmpleadosPage() {
               .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
             if (visibleKeys.length === 0) return null;
             return (
-              <div key={section} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{empSectionLabel(section)}</p>
+              <div key={section} className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-4">
+                <p className="text-xs font-semibold text-faint uppercase tracking-wide">{empSectionLabel(section)}</p>
                 {visibleKeys.map(k => {
                   if (k.startsWith('custom:')) {
                     const tpl = templates.find(tp => `custom:${tp.id}` === k);
@@ -910,14 +910,14 @@ export default function EmpleadosPage() {
           {/* Home branch — set here so you don't visit Ajustes per hire. Only
               shown when the business runs multiple locations. */}
           {locations.length >= 2 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-2">
+              <label className="text-sm font-medium text-ink">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
               <select value={empHomeLocation} onChange={e => setEmpHomeLocation(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 <option value="">{lang === 'en' ? 'No location' : 'Sin ubicación'}</option>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              <p className="text-xs text-gray-400">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
+              <p className="text-xs text-faint">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
             </div>
           )}
 
@@ -928,15 +928,15 @@ export default function EmpleadosPage() {
           {/* App access — invite / change role / revoke, straight from the
               person record. Visible in view AND edit modes. */}
           {(empModal === 'edit' || empModal === 'view') && selEmp ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</p>
+            <div className="flex flex-col gap-2 rounded-xl border border-border-soft bg-surface p-3">
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.modal.appAccessHeading}</p>
 
               {selAccess?.kind === 'active' ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</span>
-                    {selAccess.isYou ? <span className="text-xs text-gray-400">{teamT.youSuffix}</span> : null}
-                    {selAccess.role === 'owner' ? <span className="text-xs text-gray-400">{teamT.ownerSuffix}</span> : null}
+                    {selAccess.isYou ? <span className="text-xs text-faint">{teamT.youSuffix}</span> : null}
+                    {selAccess.role === 'owner' ? <span className="text-xs text-faint">{teamT.ownerSuffix}</span> : null}
                   </div>
                   {canManageAccess && !selAccess.isYou && selAccess.role !== 'owner' ? (
                     <div className="flex items-center gap-2">
@@ -944,7 +944,7 @@ export default function EmpleadosPage() {
                         value={selAccess.role}
                         disabled={accessBusy}
                         onChange={e => changeAccessRole(selAccess.memberId, e.target.value as Role)}
-                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+                        className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                       >
                         {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
                       </select>
@@ -952,7 +952,7 @@ export default function EmpleadosPage() {
                         type="button"
                         disabled={accessBusy}
                         onClick={() => removeAccess(selAccess.memberId)}
-                        className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                       >
                         {teamT.removeBtn}
                       </button>
@@ -963,7 +963,7 @@ export default function EmpleadosPage() {
                       type="button"
                       disabled={accessBusy}
                       onClick={() => verComoMember(selAccess.memberId)}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-sm font-semibold text-ink hover:bg-surface transition-colors disabled:opacity-50"
                     >
                       <Eye size={14} /> {teamT.verComoBtn}
                     </button>
@@ -972,7 +972,7 @@ export default function EmpleadosPage() {
               ) : selAccess?.kind === 'invited' ? (
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
-                  <span className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</span>
+                  <span className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</span>
                   {canManageAccess ? (
                     <div className="ml-auto flex items-center gap-1">
                       {invites.find(i => i.id === selAccess!.inviteId)?.acceptUrl ? (
@@ -988,7 +988,7 @@ export default function EmpleadosPage() {
                         type="button"
                         disabled={accessBusy}
                         onClick={() => revokeInvite(selAccess!.inviteId)}
-                        className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                       >
                         {teamT.revokeBtn}
                       </button>
@@ -997,13 +997,13 @@ export default function EmpleadosPage() {
                 </div>
               ) : canManageAccess ? (
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</p>
+                  <p className="text-xs text-muted">{t.modal.appAccessNoneHint}</p>
                   <div className="flex items-center gap-2">
                     <select
                       value={accessRole}
                       disabled={accessBusy}
                       onChange={e => setAccessRole(e.target.value as Role)}
-                      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+                      className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                     >
                       {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
                     </select>
@@ -1019,7 +1019,7 @@ export default function EmpleadosPage() {
                   {!empForm.email.trim() ? <p className="text-xs text-amber-600">{t.modal.appAccessEmailRequired}</p> : null}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400">{t.modal.appAccessNoManage}</p>
+                <p className="text-xs text-faint">{t.modal.appAccessNoManage}</p>
               )}
 
               {accessError ? <p className="text-xs text-red-500">{accessError}</p> : null}
@@ -1031,7 +1031,7 @@ export default function EmpleadosPage() {
             <button
               type="button"
               onClick={() => setHistoryOpen(true)}
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface hover:bg-border-soft transition-colors"
             >
               <Clock size={15} className="text-primary"/>
               <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
@@ -1059,8 +1059,8 @@ export default function EmpleadosPage() {
       <Modal open={tsModal} onClose={() => setTsModal(false)} title={t.timesheetModal.title}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.timesheetModal.employeeLabel}</label>
-            <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <label className="text-sm font-medium text-ink">{t.timesheetModal.employeeLabel}</label>
+            <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{t.timesheetModal.selectEmployee}</option>
               {employees.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
             </select>
@@ -1121,12 +1121,12 @@ function CustomFieldInput({
     // Long free text — multiline.
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <textarea
           rows={4}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
         />
       </div>
     );
@@ -1139,14 +1139,14 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
         <div className="flex gap-2">
           <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.yes}
           </button>
           <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.no}
           </button>
         </div>
@@ -1160,13 +1160,13 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <label className="text-sm font-medium text-ink">{label}</label>
           <div className="flex flex-wrap gap-2">
             {template.field_options.map(o => {
               const on = selected.includes(o);
               return (
                 <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted hover:border-border'}`}>
                   {o}
                 </button>
               );
@@ -1177,11 +1177,11 @@ function CustomFieldInput({
     }
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1221,8 +1221,8 @@ function ViewRow({ label, value }: { label: string; value: string | null | undef
   if (!value) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm text-gray-900">{value}</p>
+      <p className="text-xs text-faint">{label}</p>
+      <p className="text-sm text-ink">{value}</p>
     </div>
   );
 }

@@ -18,8 +18,8 @@ interface JobDraftCardProps {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 text-sm">
-      <span className="shrink-0 font-medium text-gray-500">{label}:</span>
-      <span className="min-w-0 text-gray-900">{children}</span>
+      <span className="shrink-0 font-medium text-muted">{label}:</span>
+      <span className="min-w-0 text-ink">{children}</span>
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function JobDraftCard({ draft, active, createdJobId, onConfirm, confirmin
       className={`mt-2 rounded-2xl border border-primary/20 bg-primary/5 p-4 ${stale ? 'opacity-60' : ''}`}
     >
       <p className="text-xs font-bold uppercase tracking-wide text-primary">{t.draftTitle}</p>
-      <p className="mt-0.5 text-sm font-semibold text-gray-900">{draft.title}</p>
+      <p className="mt-0.5 text-sm font-semibold text-ink">{draft.title}</p>
 
       <div className="mt-3 space-y-1.5">
         {draft.client_name && (
@@ -67,7 +67,7 @@ export function JobDraftCard({ draft, active, createdJobId, onConfirm, confirmin
               {draft.crew.map((m, i) => (
                 <span
                   key={`${m.worker_name}-${i}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-700 border border-gray-100"
+                  className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-medium text-ink border border-border-soft"
                 >
                   {m.worker_name}
                   {m.is_lead && (

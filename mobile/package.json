@@ -39,6 +39,7 @@
     "expo-linking": "~6.3.1",
     "expo-local-authentication": "~14.0.1",
     "expo-location": "~17.0.1",
+    "expo-mail-composer": "~13.0.1",
     "expo-print": "~13.0.1",
     "expo-router": "~3.5.0",
     "expo-secure-store": "~13.0.0",

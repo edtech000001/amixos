@@ -85,15 +85,15 @@ function KpiCard({ icon, label, value, sub, trend, color = 'indigo' }: {
   icon: React.ReactNode; label: string; value: string; sub?: string; trend?: number; color?: string;
 }) {
   const colorMap: Record<string, string> = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-    red: 'bg-red-50 text-red-600',
-    blue: 'bg-blue-50 text-blue-600',
+    indigo: 'bg-indigo-500/10 text-indigo-600',
+    emerald: 'bg-emerald-500/10 text-emerald-600',
+    amber: 'bg-amber-500/10 text-amber-600',
+    purple: 'bg-purple-500/10 text-purple-600',
+    red: 'bg-red-500/10 text-red-600',
+    blue: 'bg-blue-500/10 text-blue-600',
   };
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
       <div className="flex items-start justify-between mb-3">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colorMap[color] ?? colorMap.indigo}`}>
           {icon}
@@ -105,9 +105,9 @@ function KpiCard({ icon, label, value, sub, trend, color = 'indigo' }: {
           </div>
         )}
       </div>
-      <p className="text-2xl font-black text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      <p className="text-2xl font-black text-ink">{value}</p>
+      <p className="text-xs text-muted mt-0.5">{label}</p>
+      {sub && <p className="text-xs text-faint mt-1">{sub}</p>}
     </div>
   );
 }
@@ -115,8 +115,8 @@ function KpiCard({ icon, label, value, sub, trend, color = 'indigo' }: {
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h2 className="text-sm font-bold text-gray-900 mb-5">{title}</h2>
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+      <h2 className="text-sm font-bold text-ink mb-5">{title}</h2>
       {children}
     </div>
   );
@@ -126,8 +126,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-lg px-3 py-2">
-      <p className="text-xs font-semibold text-gray-600 mb-1">{label}</p>
+    <div className="bg-card border border-border-soft rounded-xl shadow-lg px-3 py-2">
+      <p className="text-xs font-semibold text-muted mb-1">{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} className="text-xs" style={{ color: p.color }}>
           {p.name}: <span className="font-bold">{typeof p.value === 'number' && p.value > 100 ? fmt(p.value) : p.value}</span>
@@ -440,18 +440,18 @@ export default function ReportesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
+          <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+          <p className="text-sm text-muted mt-0.5">{t.subtitle}</p>
         </div>
         {/* Range selector + custom date range */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
+          <div className="flex gap-1 bg-border-soft p-1 rounded-xl flex-wrap">
             {RANGE_KEYS.map(r => {
               const on = range === r && !customActive;
               return (
                 <button key={r} onClick={() => { setRange(r); setCustomFrom(''); setCustomTo(''); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                    on ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    on ? 'bg-primary/15 text-primary shadow-sm' : 'text-muted hover:text-ink'
                   }`}>
                   {t.ranges[r]}
                 </button>
@@ -466,7 +466,7 @@ export default function ReportesPage() {
               onClick={() => { setCustomFrom(''); setCustomTo(''); }}
               title={tdate.clear}
               aria-label={tdate.clear}
-              className="shrink-0 flex items-center justify-center p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+              className="shrink-0 flex items-center justify-center p-2.5 rounded-xl border border-red-200 bg-red-500/10 text-red-600 hover:bg-red-100 transition-colors"
             >
               <XCircle size={16} />
             </button>
@@ -477,7 +477,7 @@ export default function ReportesPage() {
               title={tdate.button}
               aria-label={tdate.button}
               className={`flex items-center justify-center p-2.5 rounded-xl border transition-colors ${
-                customActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                customActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
               }`}
             >
               <Calendar size={16} />
@@ -485,8 +485,8 @@ export default function ReportesPage() {
             {dateOpen ? (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
-                <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
+                <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
+                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{tdate.title}</p>
                   {/* One-click previous years — no manual from/to typing. */}
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(y => {
@@ -496,7 +496,7 @@ export default function ReportesPage() {
                           key={y}
                           onClick={() => { setCustomFrom(`${y}-01-01`); setCustomTo(`${y}-12-31`); }}
                           className={`px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
-                            on ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                            on ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                           }`}
                         >
                           {y}
@@ -504,24 +504,24 @@ export default function ReportesPage() {
                       );
                     })}
                   </div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.from}</label>
+                  <label className="block text-xs font-medium text-muted mb-1">{tdate.from}</label>
                   <input
                     type="date"
                     value={customFrom}
                     onChange={e => setCustomFrom(e.target.value)}
-                    className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full mb-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.to}</label>
+                  <label className="block text-xs font-medium text-muted mb-1">{tdate.to}</label>
                   <input
                     type="date"
                     value={customTo}
                     onChange={e => setCustomTo(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   {customActive ? (
                     <button
                       onClick={() => { setCustomFrom(''); setCustomTo(''); }}
-                      className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                      className="mt-3 w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border"
                     >
                       {tdate.clear}
                     </button>
@@ -536,15 +536,15 @@ export default function ReportesPage() {
       {/* Payroll page entry */}
       <Link
         href="/dashboard/reportes/nomina"
-        className="inline-flex items-center justify-between gap-6 bg-white rounded-2xl border border-gray-100 shadow-sm pl-4 pr-3 py-3 mb-6 hover:bg-gray-50 transition-colors"
+        className="inline-flex items-center justify-between gap-6 bg-card rounded-2xl border border-border-soft shadow-sm pl-4 pr-3 py-3 mb-6 hover:bg-surface transition-colors"
       >
         <span className="flex items-center gap-3">
           <span className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
             <DollarSign size={16} className="text-primary" />
           </span>
-          <span className="text-sm font-semibold text-gray-900">{t.payroll.entry}</span>
+          <span className="text-sm font-semibold text-ink">{t.payroll.entry}</span>
         </span>
-        <ChevronRight size={18} className="text-gray-400" />
+        <ChevronRight size={18} className="text-faint" />
       </Link>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
@@ -571,12 +571,12 @@ export default function ReportesPage() {
               {byLocation.map(loc => (
                 <div key={loc.locationId ?? 'none'} className="flex items-center justify-between py-2.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <MapPin size={14} className="text-gray-400 shrink-0"/>
-                    <span className="text-sm font-medium text-gray-900 truncate">{loc.name}</span>
+                    <MapPin size={14} className="text-faint shrink-0"/>
+                    <span className="text-sm font-medium text-ink truncate">{loc.name}</span>
                   </div>
                   <div className="flex items-center gap-6 shrink-0">
-                    <span className="text-xs text-gray-400">{loc.jobCount} {locale === 'es' ? 'trabajos' : 'jobs'}</span>
-                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{fmt(loc.revenue)}</span>
+                    <span className="text-xs text-faint">{loc.jobCount} {locale === 'es' ? 'trabajos' : 'jobs'}</span>
+                    <span className="text-sm font-semibold text-ink tabular-nums">{fmt(loc.revenue)}</span>
                   </div>
                 </div>
               ))}
@@ -589,7 +589,7 @@ export default function ReportesPage() {
         {/* ── Revenue chart ─────────────────────────────────────────────── */}
         <Section title={t.sections.revenueByMonth}>
           {monthlyRevenue.every(m => m[t.chart.revenueSeries] === 0) ? (
-            <div className="flex items-center justify-center h-48 text-gray-400">
+            <div className="flex items-center justify-center h-48 text-faint">
               <div className="text-center">
                 <BarChart3 size={32} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{t.empty.revenue}</p>
@@ -612,7 +612,7 @@ export default function ReportesPage() {
         {/* ── Invoice status breakdown ───────────────────────────────────── */}
         <Section title={t.sections.invoiceStatus}>
           {invoiceStatusData.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400">
+            <div className="flex items-center justify-center h-48 text-faint">
               <div className="text-center">
                 <FileText size={32} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{t.empty.invoices}</p>
@@ -637,13 +637,13 @@ export default function ReportesPage() {
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ background: PIE_COLORS[d.status as keyof typeof PIE_COLORS] ?? '#9CA3AF' }}/>
-                      <span className="text-gray-600 text-xs">{d.name}</span>
+                      <span className="text-muted text-xs">{d.name}</span>
                     </div>
-                    <span className="font-bold text-gray-900">{d.value}</span>
+                    <span className="font-bold text-ink">{d.value}</span>
                   </div>
                 ))}
-                <div className="border-t border-gray-100 pt-2 flex justify-between text-xs font-bold">
-                  <span className="text-gray-500">{t.invoicePie.total}</span>
+                <div className="border-t border-border-soft pt-2 flex justify-between text-xs font-bold">
+                  <span className="text-muted">{t.invoicePie.total}</span>
                   <span>{filteredInvoices.length}</span>
                 </div>
               </div>
@@ -656,7 +656,7 @@ export default function ReportesPage() {
         {/* ── Jobs breakdown ─────────────────────────────────────────────── */}
         <Section title={t.sections.jobsByStatus}>
           {filteredJobs.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400">
+            <div className="flex items-center justify-center h-48 text-faint">
               <div className="text-center">
                 <ClipboardList size={32} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{t.empty.jobs}</p>
@@ -675,10 +675,10 @@ export default function ReportesPage() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-50">
+              <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-border-soft">
                 <div className="text-center">
-                  <p className="text-xl font-black text-gray-900">{filteredJobs.length}</p>
-                  <p className="text-xs text-gray-400">{t.jobsBreakdown.totalJobs}</p>
+                  <p className="text-xl font-black text-ink">{filteredJobs.length}</p>
+                  <p className="text-xs text-faint">{t.jobsBreakdown.totalJobs}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xl font-black text-emerald-600">
@@ -686,7 +686,7 @@ export default function ReportesPage() {
                       ? Math.round((completedJobs.length / filteredJobs.length) * 100)
                       : 0}%
                   </p>
-                  <p className="text-xs text-gray-400">{t.jobsBreakdown.completionRate}</p>
+                  <p className="text-xs text-faint">{t.jobsBreakdown.completionRate}</p>
                 </div>
               </div>
             </>
@@ -699,16 +699,16 @@ export default function ReportesPage() {
           <div className="flex flex-col gap-4">
             <div>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-black text-gray-900">{totalRevenue > 0 ? fmt(grossMargin) : '—'}</p>
+                <p className="text-3xl font-black text-ink">{totalRevenue > 0 ? fmt(grossMargin) : '—'}</p>
                 {totalRevenue > 0 ? (
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${marginPct >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{marginPct}%</span>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${marginPct >= 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-500'}`}>{marginPct}%</span>
                 ) : null}
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">{t.financial.grossMarginEst}</p>
+              <p className="text-xs text-muted mt-0.5">{t.financial.grossMarginEst}</p>
             </div>
 
             {totalRevenue > 0 ? (
-              <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+              <div className="flex h-2.5 rounded-full overflow-hidden bg-border-soft">
                 <div className="bg-amber-400" style={{ width: `${Math.min(100, Math.max(0, (totalPayroll / totalRevenue) * 100))}%` }} />
                 <div className="bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, (grossMargin / totalRevenue) * 100))}%` }} />
               </div>
@@ -722,11 +722,11 @@ export default function ReportesPage() {
                 { label: t.financial.overdue, value: fmt(overdueRevenue), dot: 'bg-red-500' },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center">
-                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="flex items-center gap-2 text-xs text-muted">
                     <span className={`w-2 h-2 rounded-full ${row.dot}`} />
                     {row.label}
                   </span>
-                  <span className="text-sm font-bold text-gray-900">{row.value}</span>
+                  <span className="text-sm font-bold text-ink">{row.value}</span>
                 </div>
               ))}
             </div>
@@ -740,8 +740,8 @@ export default function ReportesPage() {
         <Section title={t.sections.newClients}>
           <div className="text-center py-6">
             <p className="text-5xl font-black text-primary">{filteredClients.length}</p>
-            <p className="text-sm text-gray-500 mt-1">{t.newClientsBlock.newCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-sm text-muted mt-1">{t.newClientsBlock.newCount}</p>
+            <p className="text-xs text-faint mt-0.5">
               {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(clients.length))}
             </p>
           </div>
@@ -752,23 +752,23 @@ export default function ReportesPage() {
           <Section title={t.sections.inventory}>
             <div className="flex flex-col gap-4">
               <div className="text-center py-2">
-                <p className="text-3xl font-black text-gray-900">{fmt(inventoryValue)}</p>
-                <p className="text-sm text-gray-500 mt-1">{t.inventoryBlock.totalValueLabel}</p>
+                <p className="text-3xl font-black text-ink">{fmt(inventoryValue)}</p>
+                <p className="text-sm text-muted mt-1">{t.inventoryBlock.totalValueLabel}</p>
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">{t.inventoryBlock.totalItems}</span>
+                  <span className="text-muted">{t.inventoryBlock.totalItems}</span>
                   <span className="font-bold">{inventory.length}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">{t.inventoryBlock.lowStock}</span>
-                  <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
+                  <span className="text-muted">{t.inventoryBlock.lowStock}</span>
+                  <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-ink'}`}>
                     {inventory.filter(i => i.quantity <= 5).length}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">{t.inventoryBlock.outOfStock}</span>
-                  <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                  <span className="text-muted">{t.inventoryBlock.outOfStock}</span>
+                  <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-ink'}`}>
                     {inventory.filter(i => i.quantity === 0).length}
                   </span>
                 </div>

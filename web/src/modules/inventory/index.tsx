@@ -172,9 +172,9 @@ export default function InventoryModule() {
           {/* Branch — only when the business runs multiple locations. */}
           {locations.length >= 2 && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{locale === 'en' ? 'Location' : 'Ubicación'}</label>
+              <label className="text-sm font-medium text-ink">{locale === 'en' ? 'Location' : 'Ubicación'}</label>
               <select value={form.location_id ?? ''} onChange={e => setForm(f => ({ ...f, location_id: e.target.value || null }))}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 <option value="">{locale === 'en' ? 'No location' : 'Sin ubicación'}</option>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
@@ -183,9 +183,9 @@ export default function InventoryModule() {
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.modal.quantityLabel} type="number" min="0" value={form.quantity || ''} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.modal.unitLabel}</label>
+              <label className="text-sm font-medium text-ink">{t.modal.unitLabel}</label>
               <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 {UNIT_KEYS.map(k => <option key={k} value={UNIT_DB_VALUES[k]}>{t.units[k]}</option>)}
               </select>
             </div>
@@ -204,12 +204,12 @@ export default function InventoryModule() {
 
       <Modal open={modal === 'adjust'} onClose={() => setModal(null)} title={t.adjustModal.title.replace('{{name}}', selected?.name ?? '')} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-500">{t.adjustModal.currentStock} <span className="font-bold text-gray-900">{selected?.quantity} {selected ? unitLabel(selected.unit) : ''}</span></p>
+          <p className="text-sm text-muted">{t.adjustModal.currentStock} <span className="font-bold text-ink">{selected?.quantity} {selected ? unitLabel(selected.unit) : ''}</span></p>
           <div className="flex gap-2">
-            <button onClick={() => setAdjustType('add')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'add' ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-gray-200 text-gray-500'}`}>
+            <button onClick={() => setAdjustType('add')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'add' ? 'border-emerald-500 text-emerald-600 bg-emerald-500/10' : 'border-border text-muted'}`}>
               <TrendingUp size={15}/> {t.adjustModal.addOption}
             </button>
-            <button onClick={() => setAdjustType('remove')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'remove' ? 'border-red-400 text-red-500 bg-red-50' : 'border-gray-200 text-gray-500'}`}>
+            <button onClick={() => setAdjustType('remove')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${adjustType === 'remove' ? 'border-red-400 text-red-500 bg-red-500/10' : 'border-border text-muted'}`}>
               <TrendingDown size={15}/> {t.adjustModal.removeOption}
             </button>
           </div>

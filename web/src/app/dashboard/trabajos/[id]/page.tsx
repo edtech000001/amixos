@@ -85,7 +85,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const dateLoc = full.dashboard.dateLocale;
 
   const PROPOSAL_PIPELINE = [
-    { key: 'proposal',    label: t.statuses.proposal,    icon: Clock,         color: 'text-gray-600',    bg: 'bg-gray-100' },
+    { key: 'proposal',    label: t.statuses.proposal,    icon: Clock,         color: 'text-muted',    bg: 'bg-border-soft' },
     { key: 'sent',        label: t.statuses.sent,        icon: Send,          color: 'text-blue-600',    bg: 'bg-blue-100' },
     { key: 'accepted',    label: t.statuses.accepted,    icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-100' },
     { key: 'scheduled',   label: t.statuses.scheduled,   icon: Clock,         color: 'text-blue-600',    bg: 'bg-blue-100' },
@@ -154,8 +154,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (value === null) return null;
     return (
       <div key={tpl.id}>
-        <p className="text-xs text-gray-400 mb-1">{tpl.field_label}</p>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{value}</p>
+        <p className="text-xs text-faint mb-1">{tpl.field_label}</p>
+        <p className="text-sm text-ink whitespace-pre-wrap">{value}</p>
       </div>
     );
   };
@@ -530,7 +530,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
     </div>
   );
-  if (!job) return <div className="p-6 text-gray-400">{t.notFound}</div>;
+  if (!job) return <div className="p-6 text-faint">{t.notFound}</div>;
 
   const isProposal = !!job.estimate_number;
   // Hide the whole Materials & Labor column for plain jobs when the toggle is
@@ -587,25 +587,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-start gap-3">
-          <Link href={backHref} className="p-2 rounded-xl hover:bg-gray-100 transition-colors mt-0.5">
-            <ArrowLeft size={18} className="text-gray-500"/>
+          <Link href={backHref} className="p-2 rounded-xl hover:bg-border-soft transition-colors mt-0.5">
+            <ArrowLeft size={18} className="text-muted"/>
           </Link>
           <div>
             {isProposal && (
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-mono text-gray-400">{job.estimate_number}</span>
+                <span className="text-xs font-mono text-faint">{job.estimate_number}</span>
                 {isExpired && <span className="text-xs text-orange-500 font-medium">{t.expired}</span>}
               </div>
             )}
-            <h1 className="text-xl font-bold text-gray-900">
+            <h1 className="text-xl font-bold text-ink">
               {job.title}
               {/* Every non-proposal job shows a reference: imported project id,
                  else a stable short code so old/manual jobs still have an ID.
                  Proposals show their estimate number above instead. */}
               {!isProposal ? (
-                <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref?.trim() || jobShortCode(job.id)}</span>
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint">{job.external_ref?.trim() || jobShortCode(job.id)}</span>
               ) : job.external_ref ? (
-                <span className="ml-2 align-middle text-xs font-mono font-normal text-gray-400">{job.external_ref}</span>
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint">{job.external_ref}</span>
               ) : null}
             </h1>
             {clientName && (
@@ -640,7 +640,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   )}
                 </button>
                 <button onClick={openPrintView}
-                  className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-primary/5 transition-colors"
+                  className="p-2 rounded-xl text-faint hover:text-primary hover:bg-primary/5 transition-colors"
                   title={td.printTooltip}>
                   <Download size={16}/>
                 </button>
@@ -648,7 +648,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             {job.status !== 'cancelled' && job.status !== 'declined' && can.seeAllJobs(currentRole) && (
               <button onClick={shareJobToCrew}
-                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors relative"
+                className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors relative"
                 title={td.sendToCrew}>
                 <MessageSquare size={16}/>
                 {copiedKey === 'crew' && (
@@ -669,21 +669,21 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {can.createJob(currentRole) && (
               <div className="relative">
                 <button type="button" onClick={() => setDupMenuOpen(o => !o)}
-                  className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                  className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors"
                   title={td.duplicateTooltip}>
                   <Copy size={16}/>
                 </button>
                 {dupMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setDupMenuOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-white rounded-xl border border-gray-100 shadow-lg py-1">
-                      <p className="px-4 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{td.duplicateAskTitle}</p>
+                    <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-card rounded-xl border border-border-soft shadow-lg py-1">
+                      <p className="px-4 py-1.5 text-[11px] font-semibold text-faint uppercase tracking-wide">{td.duplicateAskTitle}</p>
                       <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}`}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        className="block px-4 py-2 text-sm text-ink hover:bg-surface">
                         {td.duplicateFullOption}
                       </Link>
                       <Link href={`/dashboard/trabajos/nuevo?duplicate=${job.id}&copy=team`}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        className="block px-4 py-2 text-sm text-ink hover:bg-surface">
                         {td.duplicateTeamOption}
                       </Link>
                     </div>
@@ -693,7 +693,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             {can.editJobMetadata(currentRole) && (
               <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
-                className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors"
                 title={td.editTooltip}>
                 <Pencil size={16}/>
               </Link>
@@ -701,14 +701,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {can.deleteJob(currentRole) && (
               <button
                 onClick={() => setDeleteModal(true)}
-                className="p-2 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="p-2 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10 transition-colors"
                 title={td.deleteTooltip}
               >
                 <Trash2 size={16}/>
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          <div className="flex items-center gap-1.5 text-xs text-faint">
             <Clock size={11}/>
             <span>{td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}</span>
           </div>
@@ -717,7 +717,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
       {/* Status pipeline */}
       {job.status !== 'cancelled' && job.status !== 'declined' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 mb-5">
           <div className="flex items-center justify-between">
             {pipeline.map((s, i) => {
               const Icon = s.icon;
@@ -731,24 +731,24 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   }`}>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
                       isCurrent ? `${s.bg} ring-2 ring-offset-2 ring-current ${s.color}` :
-                      isPast ? 'bg-gray-100' : 'bg-gray-50'
+                      isPast ? 'bg-border-soft' : 'bg-surface'
                     }`}>
-                      <Icon size={18} className={isCurrent ? s.color : isPast ? 'text-gray-400' : 'text-gray-300'}/>
+                      <Icon size={18} className={isCurrent ? s.color : isPast ? 'text-faint' : 'text-faint'}/>
                     </div>
-                    <span className={`text-xs font-semibold ${isCurrent ? s.color : isPast ? 'text-gray-400' : 'text-gray-300'}`}>
+                    <span className={`text-xs font-semibold ${isCurrent ? s.color : isPast ? 'text-faint' : 'text-faint'}`}>
                       {s.label}
                     </span>
                     {(isPast || isCurrent) && stepTimestamp[s.key] ? (() => {
                       const { date, time } = formatStamp(stepTimestamp[s.key], dateLoc);
                       return (
-                        <span className="text-[10px] text-gray-400 text-center leading-tight">
+                        <span className="text-[10px] text-faint text-center leading-tight">
                           {date}{time ? <><br />{time}</> : null}
                         </span>
                       );
                     })() : null}
                   </div>
                   {i < pipeline.length - 1 && (
-                    <div className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < pipelineIdx ? 'bg-gray-300' : 'bg-gray-100'}`}/>
+                    <div className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < pipelineIdx ? 'bg-gray-300' : 'bg-border-soft'}`}/>
                   )}
                 </div>
               );
@@ -758,7 +758,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {/* Next action buttons — back on the LEFT, forward (→) on the RIGHT
              so the pipeline reads left→right (matches mobile). Cancel sits on
              its own row below, away from the advance buttons. */}
-          <div className="mt-4 pt-4 border-t border-gray-50 flex flex-col items-center gap-3">
+          <div className="mt-4 pt-4 border-t border-border-soft flex flex-col items-center gap-3">
             <div className="flex justify-center gap-3 flex-wrap">
               {/* One-step back — left */}
               {prevStep && (
@@ -876,7 +876,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   {tw.delegatedBadge.replace('{{name}}', target?.name ?? '—')}
                 </p>
                 {job.delegated_at && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     {formatDateTimeLong(job.delegated_at, dateLoc)}
                   </p>
                 )}
@@ -897,14 +897,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Cancelled / Declined banner */}
       {(job.status === 'cancelled' || job.status === 'declined') && (
         <div className={`rounded-2xl p-4 mb-5 border flex items-center justify-between ${
-          job.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-100'
+          job.status === 'cancelled' ? 'bg-surface border-border' : 'bg-red-500/10 border-red-100'
         }`}>
           <div>
-            <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-gray-500' : 'text-red-600'}`}>
+            <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-muted' : 'text-red-600'}`}>
               {job.status === 'cancelled' ? td.cancelledBanner : td.declinedBanner}
             </p>
             {job.status === 'cancelled' && job.cancelled_at && (
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-faint mt-0.5">
                 {td.cancelledOn.replace('{{date}}', formatDateTimeLong(job.cancelled_at, dateLoc))}
               </p>
             )}
@@ -923,15 +923,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Proposal details card */}
           {isProposal && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.proposalHeading}</h2>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.proposalHeading}</h2>
               <div className="flex flex-col gap-2.5">
                 {job.issue_date && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Calendar size={14} className="text-gray-400 shrink-0"/>
+                    <Calendar size={14} className="text-faint shrink-0"/>
                     <div>
-                      <p className="text-xs text-gray-400">{td.issuedAt}</p>
-                      <p className="font-medium text-gray-900">
+                      <p className="text-xs text-faint">{td.issuedAt}</p>
+                      <p className="font-medium text-ink">
                         {formatDateLong(job.issue_date, dateLoc)}
                       </p>
                     </div>
@@ -939,10 +939,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 )}
                 {job.expiry_date && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Calendar size={14} className={`shrink-0 ${isExpired ? 'text-orange-400' : 'text-gray-400'}`}/>
+                    <Calendar size={14} className={`shrink-0 ${isExpired ? 'text-orange-400' : 'text-faint'}`}/>
                     <div>
-                      <p className="text-xs text-gray-400">{td.validUntil}</p>
-                      <p className={`font-medium ${isExpired ? 'text-orange-600' : 'text-gray-900'}`}>
+                      <p className="text-xs text-faint">{td.validUntil}</p>
+                      <p className={`font-medium ${isExpired ? 'text-orange-600' : 'text-ink'}`}>
                         {formatDateLong(job.expiry_date, dateLoc)}
                         {isExpired && ` ${t.expired}`}
                       </p>
@@ -954,8 +954,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           )}
 
           {/* Details card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.detailsHeading}</h2>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.detailsHeading}</h2>
             <div className="flex flex-col gap-3">
               {job.scheduled_date && (() => {
                 const totalTimeText = formatProjectDuration(
@@ -970,20 +970,20 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 );
                 return (
                   <div className="flex items-start gap-2.5">
-                    <Calendar size={15} className="text-gray-400 mt-0.5 shrink-0"/>
+                    <Calendar size={15} className="text-faint mt-0.5 shrink-0"/>
                     <div>
-                      <p className="text-xs text-gray-400">{td.scheduledDate}</p>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-xs text-faint">{td.scheduledDate}</p>
+                      <p className="text-sm font-medium text-ink">
                         {formatDateLong(job.scheduled_date, dateLoc)}
                         {job.end_date ? ` — ${formatDateLong(job.end_date, dateLoc)}` : ''}
                       </p>
                       {(job.time_start || job.time_end) && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-faint">
                           {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
                         </p>
                       )}
                       {totalTimeText && (
-                        <p className="text-xs text-gray-400">{t.new.totalTimeLabel}: {totalTimeText}</p>
+                        <p className="text-xs text-faint">{t.new.totalTimeLabel}: {totalTimeText}</p>
                       )}
                     </div>
                   </div>
@@ -991,16 +991,16 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               })()}
               {((job.total_hours ?? 0) > 0 || (job.driver_hours ?? 0) > 0 || (job.driver_names?.length ?? 0) > 0) && (
                 <div className="flex items-start gap-2.5">
-                  <Clock size={15} className="text-gray-400 mt-0.5 shrink-0"/>
+                  <Clock size={15} className="text-faint mt-0.5 shrink-0"/>
                   <div>
                     {(job.total_hours ?? 0) > 0 ? (
                       <>
-                        <p className="text-xs text-gray-400">{t.new.totalHoursLabel}</p>
-                        <p className="text-sm font-medium text-gray-900">{job.total_hours} h</p>
+                        <p className="text-xs text-faint">{t.new.totalHoursLabel}</p>
+                        <p className="text-sm font-medium text-ink">{job.total_hours} h</p>
                       </>
                     ) : null}
                     {((job.driver_names?.length ?? 0) > 0 || (job.driver_hours ?? 0) > 0) ? (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-faint mt-0.5">
                         {t.new.driverLabel}: {job.driver_names?.length ? job.driver_names.join(', ') : '—'}
                         {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
                       </p>
@@ -1010,15 +1010,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
               {(job.job_address || job.job_city || job.job_lat != null || job.job_map_link) && (
                 <div className="flex items-start gap-2.5">
-                  <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0"/>
+                  <MapPin size={15} className="text-faint mt-0.5 shrink-0"/>
                   <div>
-                    <p className="text-xs text-gray-400">{td.location}</p>
-                    {job.job_address && <p className="text-sm font-medium text-gray-900">{job.job_address}</p>}
+                    <p className="text-xs text-faint">{td.location}</p>
+                    {job.job_address && <p className="text-sm font-medium text-ink">{job.job_address}</p>}
                     {(job.job_city || job.job_state) && (
-                      <p className="text-sm text-gray-600">{[job.job_city, job.job_state].filter(Boolean).join(', ')}</p>
+                      <p className="text-sm text-muted">{[job.job_city, job.job_state].filter(Boolean).join(', ')}</p>
                     )}
                     {job.job_lat != null && job.job_lng != null && (
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{job.job_lat}, {job.job_lng}</p>
+                      <p className="text-xs text-faint font-mono mt-0.5">{job.job_lat}, {job.job_lng}</p>
                     )}
                     <div className="flex items-center gap-3 mt-1.5">
                       <a href={buildMapsUrl()} target="_blank" rel="noopener noreferrer"
@@ -1035,8 +1035,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
               {job.description && (
                 <div>
-                  <p className="text-xs text-gray-400 mb-1">{td.description}</p>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{job.description}</p>
+                  <p className="text-xs text-faint mb-1">{td.description}</p>
+                  <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{job.description}</p>
                 </div>
               )}
               {/* Custom fields assigned to real sections — in the saved
@@ -1047,15 +1047,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Client-facing notes */}
           {job.notes && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{td.clientNote}</h2>
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{job.notes}</p>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{td.clientNote}</h2>
+              <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{job.notes}</p>
             </div>
           )}
 
           {/* Internal notes */}
           {job.internal_notes && (
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+            <div className="bg-amber-500/10 border border-amber-100 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-xs text-amber-800 whitespace-pre-wrap">{job.internal_notes}</p>
             </div>
@@ -1063,17 +1063,17 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Crew notes — visible to workers (mobile parity) */}
           {job.worker_notes && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.new.workerNoteLabel}</h2>
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{job.worker_notes}</p>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.new.workerNoteLabel}</h2>
+              <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{job.worker_notes}</p>
             </div>
           )}
 
           {/* Additional details — ONLY custom fields assigned to the
              'additional' section get their own card (form parity). */}
           {additionalCustoms.some(tpl => customValue(tpl) !== null) && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">
                 {dateLoc === 'es' ? 'Detalles adicionales' : 'Additional details'}
               </h2>
               <div className="flex flex-col gap-2.5">
@@ -1084,8 +1084,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Workers card */}
           {assignments.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{td.workersHeading}</h2>
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.workersHeading}</h2>
               <div className="flex flex-col gap-2">
                 {assignments.map(a => {
                   const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
@@ -1094,7 +1094,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <span className="text-primary text-xs font-bold">{name.charAt(0)}</span>
                       </div>
-                      <span className="text-sm text-gray-900 font-medium">{name}</span>
+                      <span className="text-sm text-ink font-medium">{name}</span>
                       {a.is_lead && (
                         <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
                           {full.dashboard.jobs.new.leadBadge}
@@ -1111,12 +1111,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         {/* Right — Line items */}
         {showMaterials && (
         <div className="md:col-span-2">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-gray-900">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-ink">
                 {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
               </h2>
-              <span className="text-sm font-bold text-gray-900">
+              <span className="text-sm font-bold text-ink">
                 {fmt(canEditItems ? editSubtotal : hasFinancials ? job.total_amount : itemSubtotal)}
               </span>
             </div>
@@ -1124,27 +1124,27 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {canEditItems ? (
               /* Inline editor — rows are editable in place; Save appears only when dirty. */
               <div className="p-5 flex flex-col gap-2">
-                <div className={`grid ${showItemTypes ? 'grid-cols-[96px_1fr_52px_84px_22px]' : 'grid-cols-[1fr_52px_84px_22px]'} gap-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-0.5`}>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[96px_1fr_52px_84px_22px]' : 'grid-cols-[1fr_52px_84px_22px]'} gap-2 text-[11px] font-semibold text-faint uppercase tracking-wide px-0.5`}>
                   {showItemTypes ? <span>{t.new.colType}</span> : null}<span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span/>
                 </div>
                 {editRows.map(r => (
                   <div key={r.id} className={`grid ${showItemTypes ? 'grid-cols-[96px_1fr_52px_84px_22px]' : 'grid-cols-[1fr_52px_84px_22px]'} gap-2 items-center`}>
                     {showItemTypes ? (
                     <select value={r.item_type} onChange={e => updateRow(r.id, 'item_type', e.target.value)}
-                      className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                      className="rounded-lg border border-border bg-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                       {ITEM_TYPES.map(k => <option key={k} value={k}>{ITEM_TYPE_LABELS[k] ?? k}</option>)}
                     </select>
                     ) : null}
                     <input value={r.description} onChange={e => updateRow(r.id, 'description', e.target.value)} placeholder={t.new.colDescription}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                      className="rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
                     <input value={r.quantity} inputMode="decimal" onChange={e => updateRow(r.id, 'quantity', e.target.value.replace(/[^0-9.]/g, ''))}
-                      className="rounded-lg border border-gray-200 bg-white px-1.5 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                      className="rounded-lg border border-border bg-card px-1.5 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
                     <div className="relative">
-                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
                       <input value={r.unit_price} inputMode="decimal" onChange={e => updateRow(r.id, 'unit_price', e.target.value.replace(/[^0-9.]/g, ''))}
-                        className="w-full rounded-lg border border-gray-200 bg-white pl-4 pr-1.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
+                        className="w-full rounded-lg border border-border bg-card pl-4 pr-1.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"/>
                     </div>
-                    <button onClick={() => removeRow(r.id)} className="text-gray-300 hover:text-red-500" aria-label="Remove"><XCircle size={16}/></button>
+                    <button onClick={() => removeRow(r.id)} className="text-faint hover:text-red-500" aria-label="Remove"><XCircle size={16}/></button>
                   </div>
                 ))}
                 <div className="flex items-center justify-between mt-1">
@@ -1156,69 +1156,69 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   ) : null}
                 </div>
                 {showPriceVerify ? (
-                  <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700">{td.autopriceVerify}</div>
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2 text-xs text-amber-700">{td.autopriceVerify}</div>
                 ) : null}
                 {itemsDirty ? (
-                  <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-gray-100">
+                  <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-border-soft">
                     <Button variant="secondary" size="sm" onClick={discardItems}>{tc.buttons.cancel}</Button>
                     <Button size="sm" onClick={saveItems} loading={savingItems}>{tc.buttons.save}</Button>
                   </div>
                 ) : null}
               </div>
             ) : items.length === 0 ? (
-              <div className="px-5 py-10 text-center text-gray-400">
+              <div className="px-5 py-10 text-center text-faint">
                 <DollarSign size={28} className="mx-auto mb-2 opacity-30"/>
                 <p className="text-sm">{td.noItems}</p>
               </div>
             ) : (
               <>
-                <div className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} text-xs font-semibold text-gray-400 uppercase tracking-wide px-5 py-2 border-b border-gray-50`}>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} text-xs font-semibold text-faint uppercase tracking-wide px-5 py-2 border-b border-border-soft`}>
                   {showItemTypes ? <span>{t.new.colType}</span> : null}<span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span className="text-right">{t.new.colTotal}</span>
                 </div>
                 <div className="divide-y divide-gray-50">
                   {items.map(item => (
-                    <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} items-center px-5 py-3 hover:bg-gray-50 transition-colors`}>
-                      {showItemTypes ? <span className="text-xs text-gray-400">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span> : null}
-                      <span className="text-sm text-gray-900 truncate pr-2">
+                    <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} items-center px-5 py-3 hover:bg-surface transition-colors`}>
+                      {showItemTypes ? <span className="text-xs text-faint">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span> : null}
+                      <span className="text-sm text-ink truncate pr-2">
                         {item.description}
-                        {(item as { original_quantity?: number | null }).original_quantity ? <span className="text-xs text-gray-400"> · {td.measuredNote.replace('{{qty}}', String((item as { original_quantity?: number | null }).original_quantity))}</span> : null}
+                        {(item as { original_quantity?: number | null }).original_quantity ? <span className="text-xs text-faint"> · {td.measuredNote.replace('{{qty}}', String((item as { original_quantity?: number | null }).original_quantity))}</span> : null}
                       </span>
-                      <span className="text-sm text-center text-gray-600">{item.quantity}</span>
-                      <span className="text-sm text-right text-gray-600">${item.unit_price.toFixed(2)}</span>
-                      <span className="text-sm text-right font-semibold text-gray-900">${item.total.toFixed(2)}</span>
+                      <span className="text-sm text-center text-muted">{item.quantity}</span>
+                      <span className="text-sm text-right text-muted">${item.unit_price.toFixed(2)}</span>
+                      <span className="text-sm text-right font-semibold text-ink">${item.total.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* Totals */}
-                <div className="px-5 py-4 border-t border-gray-100 flex justify-end">
+                <div className="px-5 py-4 border-t border-border-soft flex justify-end">
                   {hasFinancials ? (
                     <div className="w-52 flex flex-col gap-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">{t.new.subtotal}</span>
+                        <span className="text-muted">{t.new.subtotal}</span>
                         <span>{fmt(job.subtotal_amount)}</span>
                       </div>
                       {job.tax_rate > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
+                          <span className="text-muted">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
                           <span>{fmt(job.tax_amount)}</span>
                         </div>
                       )}
                       {job.discount > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">{td.discount}</span>
+                          <span className="text-muted">{td.discount}</span>
                           <span className="text-emerald-600">-{fmt(job.discount)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
+                      <div className="flex justify-between text-base font-bold pt-2 border-t border-border-soft">
                         <span>{t.new.total}</span>
                         <span className="text-primary">{fmt(job.total_amount)}</span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex justify-between items-center w-full">
-                      <span className="text-sm text-gray-500">{td.totalEstimated}</span>
-                      <span className="text-base font-bold text-gray-900">{fmt(itemSubtotal)}</span>
+                      <span className="text-sm text-muted">{td.totalEstimated}</span>
+                      <span className="text-base font-bold text-ink">{fmt(itemSubtotal)}</span>
                     </div>
                   )}
                 </div>
@@ -1241,7 +1241,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
       {/* Last edited — bottom of the page, mirrors the mobile layout */}
       {job.updated_at && job.updated_at !== job.created_at ? (
-        <p className="mt-5 px-1 text-xs text-gray-400">
+        <p className="mt-5 px-1 text-xs text-faint">
           {td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}
         </p>
       ) : null}
@@ -1249,23 +1249,23 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Generate Invoice Modal */}
       <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-2">{td.summary}</p>
-            <p className="text-sm font-semibold text-gray-900 mb-1">{job.title}</p>
-            {job.estimate_number && <p className="text-xs text-gray-400 mb-1">{job.estimate_number}</p>}
-            {clientName && <p className="text-xs text-gray-500">{td.clientPrefix.replace('{{name}}', clientName)}</p>}
-            <p className="text-xs text-gray-500">
+          <div className="bg-surface rounded-xl p-4">
+            <p className="text-xs text-muted mb-2">{td.summary}</p>
+            <p className="text-sm font-semibold text-ink mb-1">{job.title}</p>
+            {job.estimate_number && <p className="text-xs text-faint mb-1">{job.estimate_number}</p>}
+            {clientName && <p className="text-xs text-muted">{td.clientPrefix.replace('{{name}}', clientName)}</p>}
+            <p className="text-xs text-muted">
               {(items.length === 1 ? td.itemsCountSingle : td.itemsCountPlural).replace('{{count}}', String(items.length))}
             </p>
           </div>
 
           {!hasFinancials && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.new.taxPercent}</label>
+              <label className="text-sm font-medium text-ink">{t.new.taxPercent}</label>
               <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
                 placeholder="0"
                 onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"/>
             </div>
           )}
 
@@ -1273,18 +1273,18 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             {hasFinancials ? (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">{t.new.subtotal}</span>
+                  <span className="text-muted">{t.new.subtotal}</span>
                   <span className="font-medium">{fmt(job.subtotal_amount)}</span>
                 </div>
                 {job.tax_rate > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
+                    <span className="text-muted">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
                     <span className="font-medium">{fmt(job.tax_amount)}</span>
                   </div>
                 )}
                 {job.discount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{td.discount}</span>
+                    <span className="text-muted">{td.discount}</span>
                     <span className="font-medium text-emerald-600">-{fmt(job.discount)}</span>
                   </div>
                 )}
@@ -1296,12 +1296,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             ) : (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">{t.new.subtotal}</span>
+                  <span className="text-muted">{t.new.subtotal}</span>
                   <span className="font-medium">{fmt(itemSubtotal)}</span>
                 </div>
                 {taxRate > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{td.tax.replace('{{rate}}', String(taxRate))}</span>
+                    <span className="text-muted">{td.tax.replace('{{rate}}', String(taxRate))}</span>
                     <span className="font-medium">{fmt(itemSubtotal * taxRate / 100)}</span>
                   </div>
                 )}
@@ -1313,7 +1313,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          <p className="text-xs text-gray-400" dangerouslySetInnerHTML={{ __html: td.draftStatusNote }} />
+          <p className="text-xs text-faint" dangerouslySetInnerHTML={{ __html: td.draftStatusNote }} />
 
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setInvoiceModal(false)} fullWidth>{tc.buttons.cancel}</Button>
@@ -1327,7 +1327,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Delegate Modal */}
       <Modal open={delegateModal} onClose={() => setDelegateModal(false)} title={tw.delegateModalTitle} size="sm">
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-gray-500">{tw.delegateChooseTarget}</p>
+          <p className="text-sm text-muted">{tw.delegateChooseTarget}</p>
           <div className="flex flex-col gap-2">
             {businesses
               .filter(b => b.id !== job.business_id)
@@ -1336,20 +1336,20 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   key={b.id}
                   onClick={() => runDelegate(b.id)}
                   disabled={delegating}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors text-left disabled:opacity-50"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border-soft hover:bg-surface transition-colors text-left disabled:opacity-50"
                 >
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                     <Building2 size={18} className="text-primary"/>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
+                    <p className="text-sm font-semibold text-ink truncate">{b.name}</p>
                     {b.city && (
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-muted truncate">
                         {b.city}{b.state ? `, ${b.state}` : ''}
                       </p>
                     )}
                   </div>
-                  <ArrowRight size={16} className="text-gray-300 shrink-0"/>
+                  <ArrowRight size={16} className="text-faint shrink-0"/>
                 </button>
               ))}
           </div>
@@ -1362,9 +1362,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Delete Confirmation Modal */}
       <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title={td.deleteJobTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-600">{td.deleteJobConfirm}</p>
+          <p className="text-sm text-muted">{td.deleteJobConfirm}</p>
           {job.invoice_id && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            <p className="text-xs text-amber-700 bg-amber-500/10 border border-amber-100 rounded-lg px-3 py-2">
               {td.deleteInvoiceWarning}
             </p>
           )}

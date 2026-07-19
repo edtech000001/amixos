@@ -74,7 +74,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       businessKey={business?.id ?? null}
       onCancelImport={onCancelImport}
     >
-      <div className="flex min-h-screen bg-surface print:min-h-0 print:bg-white">
+      <div className="flex min-h-screen bg-surface print:min-h-0 print:bg-card">
         {/* App chrome hidden when printing (e.g. the price-sheet PDF).
             `contents` keeps the flex layout unchanged on screen. */}
         <div className="contents print:hidden">

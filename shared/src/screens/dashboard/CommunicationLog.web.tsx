@@ -82,9 +82,9 @@ function toLocalInput(iso: string): string {
 
 type CommLogT = ReturnType<typeof useLang>['t']['dashboard']['clients']['detail']['commLog'];
 
-const fieldLabel = 'block text-xs font-medium text-gray-600 mb-1';
+const fieldLabel = 'block text-xs font-medium text-muted mb-1';
 const fieldInput =
-  'w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/40';
+  'w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/40';
 
 export function CommunicationLog({
   supabase,
@@ -218,14 +218,14 @@ export function CommunicationLog({
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.heading}</h2>
+        <h2 className="text-xs font-semibold text-muted uppercase tracking-wide">{t.heading}</h2>
         {canWrite ? (
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-border-soft transition-colors"
             aria-label={t.add}
           >
             <Plus size={15} className="text-primary" />
@@ -244,7 +244,7 @@ export function CommunicationLog({
         </div>
       ) : entries.length === 0 ? (
         <div className="py-6 flex justify-center">
-          <span className="text-sm text-gray-400">{t.empty}</span>
+          <span className="text-sm text-faint">{t.empty}</span>
         </div>
       ) : (
         <>
@@ -262,7 +262,7 @@ export function CommunicationLog({
                     onClick={() => toggleType(ty)}
                     aria-pressed={active}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
-                      active ? 'border-transparent' : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50'
+                      active ? 'border-transparent' : 'border-border bg-card text-faint hover:bg-surface'
                     }`}
                     style={active ? { backgroundColor: `${color}1A`, color } : undefined}
                   >
@@ -276,7 +276,7 @@ export function CommunicationLog({
 
           {visibleEntries.length === 0 ? (
             <div className="py-6 flex justify-center">
-              <span className="text-sm text-gray-400">{t.emptyFiltered}</span>
+              <span className="text-sm text-faint">{t.emptyFiltered}</span>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -302,10 +302,10 @@ export function CommunicationLog({
           onClick={() => setFormOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto"
+            className="bg-card rounded-2xl shadow-xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto"
             onClick={ev => ev.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-gray-900 mb-4">
+            <h3 className="text-base font-bold text-ink mb-4">
               {editing ? t.form.editTitle : t.form.addTitle}
             </h3>
             <div className="flex flex-col gap-4">
@@ -364,7 +364,7 @@ export function CommunicationLog({
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white text-gray-700 font-semibold py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                  className="flex-1 rounded-xl border border-border bg-card text-ink font-semibold py-2.5 text-sm hover:bg-surface transition-colors"
                 >
                   {t.form.cancel}
                 </button>
@@ -422,20 +422,20 @@ function CommRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-gray-900">{label}</p>
-          <span className="text-xs text-gray-400 shrink-0" title={formatDateTimeLong(entry.occurred_at, locale)}>
+          <p className="text-sm font-semibold text-ink">{label}</p>
+          <span className="text-xs text-faint shrink-0" title={formatDateTimeLong(entry.occurred_at, locale)}>
             {rel}
           </span>
         </div>
-        {meta ? <p className="text-xs text-gray-500 mt-0.5">{meta}</p> : null}
-        {entry.note ? <p className="text-sm text-gray-600 mt-0.5 whitespace-pre-wrap">{entry.note}</p> : null}
+        {meta ? <p className="text-xs text-muted mt-0.5">{meta}</p> : null}
+        {entry.note ? <p className="text-sm text-muted mt-0.5 whitespace-pre-wrap">{entry.note}</p> : null}
       </div>
       {canWrite ? (
         <div className="flex gap-1 shrink-0">
-          <button type="button" onClick={onEdit} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label={t.form.edit}>
-            <Pencil size={14} className="text-gray-400" />
+          <button type="button" onClick={onEdit} className="p-1.5 rounded-lg hover:bg-border-soft transition-colors" aria-label={t.form.edit}>
+            <Pencil size={14} className="text-faint" />
           </button>
-          <button type="button" onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" aria-label={t.form.delete}>
+          <button type="button" onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors" aria-label={t.form.delete}>
             <Trash2 size={14} className="text-red-500" />
           </button>
         </div>

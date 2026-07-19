@@ -88,8 +88,8 @@ export function InventoryScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+          <p className="text-sm text-muted mt-0.5">
             {summaryText}
             {lowStockCount > 0 ? (
               <span className="text-orange-500 font-medium"> · {summaryLowStockText}</span>
@@ -108,7 +108,7 @@ export function InventoryScreen({
 
       {/* Low stock banner */}
       {lowStockCount > 0 ? (
-        <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
+        <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
           <AlertTriangle size={18} className="text-orange-500 shrink-0" />
           <p className="text-sm text-orange-700 flex-1">
             <span className="font-semibold">{lowStockBannerText}</span> {t.lowStockBannerSuffix}
@@ -125,14 +125,14 @@ export function InventoryScreen({
 
       {/* Filter + Search */}
       <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="inline-flex gap-1 bg-gray-100 p-1 rounded-xl">
+        <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl">
           {(['todos', 'bajo_stock'] as const).map(f => (
             <button
               type="button"
               key={f}
               onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                filter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                filter === f ? 'bg-primary/15 text-primary shadow-sm' : 'text-muted hover:text-ink'
               }`}
             >
               {f === 'todos' ? t.filters.all : t.filters.lowStock}
@@ -140,19 +140,19 @@ export function InventoryScreen({
           ))}
         </div>
         <div className="flex-1 min-w-[200px] relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             placeholder={t.searchPlaceholder}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
           />
           {search ? (
             <button
               type="button"
               onClick={() => setSearch('')}
               aria-label="Limpiar búsqueda"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"
             >
               <X size={16} />
             </button>
@@ -171,8 +171,8 @@ export function InventoryScreen({
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
-          <Package size={40} className="text-gray-300" />
-          <p className="text-sm text-gray-400 mt-3">
+          <Package size={40} className="text-faint" />
+          <p className="text-sm text-faint mt-3">
             {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
           </p>
           {!search && filter === 'todos' ? (
@@ -182,37 +182,37 @@ export function InventoryScreen({
           ) : null}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex px-5 py-3 border-b border-gray-50">
-            <span className="flex-1 text-xs font-semibold text-gray-400 uppercase">{t.cols.item}</span>
-            <span className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">{t.cols.stock}</span>
-            <span className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">{t.cols.unit}</span>
-            <span className="w-24 text-xs font-semibold text-gray-400 uppercase text-right">{t.cols.unitCost}</span>
-            <span className="w-28 text-xs font-semibold text-gray-400 uppercase text-right">{t.cols.actions}</span>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+          <div className="flex px-5 py-3 border-b border-border-soft">
+            <span className="flex-1 text-xs font-semibold text-faint uppercase">{t.cols.item}</span>
+            <span className="w-16 text-xs font-semibold text-faint uppercase text-center">{t.cols.stock}</span>
+            <span className="w-16 text-xs font-semibold text-faint uppercase text-center">{t.cols.unit}</span>
+            <span className="w-24 text-xs font-semibold text-faint uppercase text-right">{t.cols.unitCost}</span>
+            <span className="w-28 text-xs font-semibold text-faint uppercase text-right">{t.cols.actions}</span>
           </div>
           {filtered.map((item, i) => {
             const low = item.quantity <= item.lowStockThreshold;
             return (
               <div
                 key={item.id}
-                className={`flex items-center px-5 py-3.5 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}
+                className={`flex items-center px-5 py-3.5 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-900 truncate">{item.name}</span>
+                    <span className="text-sm font-semibold text-ink truncate">{item.name}</span>
                     {low ? <AlertTriangle size={13} className="text-orange-400 shrink-0" /> : null}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                  <p className="text-xs text-faint mt-0.5 truncate">
                     {item.category ? item.category : ''}
                     {item.sku ? ` · ${t.itemMeta.skuPrefix.replace('{{sku}}', item.sku)}` : ''}
                     {` · ${t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}`}
                   </p>
                 </div>
-                <span className={`w-16 text-center text-sm font-bold ${low ? 'text-orange-500' : 'text-gray-900'}`}>
+                <span className={`w-16 text-center text-sm font-bold ${low ? 'text-orange-500' : 'text-ink'}`}>
                   {item.quantity}
                 </span>
-                <span className="w-16 text-center text-xs text-gray-500">{unitLabel(item.unit)}</span>
-                <span className="w-24 text-right text-sm text-gray-700">${item.unitCost.toFixed(2)}</span>
+                <span className="w-16 text-center text-xs text-muted">{unitLabel(item.unit)}</span>
+                <span className="w-24 text-right text-sm text-ink">${item.unitCost.toFixed(2)}</span>
                 <div className="w-28 flex items-center justify-end gap-1">
                   <button
                     type="button"
@@ -224,14 +224,14 @@ export function InventoryScreen({
                   <button
                     type="button"
                     onClick={() => onEditItem(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
                   >
-                    <Pencil size={14} className="text-gray-400" />
+                    <Pencil size={14} className="text-faint" />
                   </button>
                   <button
                     type="button"
                     onClick={() => onDeleteItem(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                   >
                     <Trash2 size={14} className="text-red-400" />
                   </button>

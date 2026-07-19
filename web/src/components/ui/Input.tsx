@@ -17,23 +17,23 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
-          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <label className="text-sm font-medium text-ink">{label}</label>
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-faint">
               {leftIcon}
             </div>
           )}
           <input
             ref={ref}
             className={clsx(
-              'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400',
+              'w-full rounded-xl border bg-card px-4 py-2.5 text-sm text-ink placeholder-faint',
               'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent',
               'transition duration-150',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
-              error ? 'border-red-400' : 'border-gray-200',
+              error ? 'border-red-400' : 'border-border',
               className
             )}
             {...props}
@@ -45,7 +45,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
-        {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
+        {hint && !error && <p className="text-xs text-faint">{hint}</p>}
       </div>
     );
   }

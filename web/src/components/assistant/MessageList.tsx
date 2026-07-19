@@ -43,8 +43,8 @@ export function MessageList({
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
           <BotMessageSquare size={30} className="text-primary" />
         </div>
-        <p className="text-lg font-bold text-gray-900">{t.emptyTitle}</p>
-        <p className="mb-6 mt-1 text-center text-sm text-gray-500">{t.emptyState}</p>
+        <p className="text-lg font-bold text-ink">{t.emptyTitle}</p>
+        <p className="mb-6 mt-1 text-center text-sm text-muted">{t.emptyState}</p>
         {/* Tappable examples — one click sends the question. */}
         <div className="flex w-full flex-col gap-2.5">
           {[t.suggestion1, t.suggestion2, t.suggestion3].map(s => (
@@ -75,7 +75,7 @@ export function MessageList({
             </div>
           ) : (
             <div key={b.id} className="self-start max-w-[85%]">
-              <div className="whitespace-pre-wrap rounded-2xl rounded-bl-md bg-gray-100 px-4 py-2.5 text-sm text-gray-900">
+              <div className="whitespace-pre-wrap rounded-2xl rounded-bl-md bg-border-soft px-4 py-2.5 text-sm text-ink">
                 {b.content}
               </div>
               {b.draft && (
@@ -94,7 +94,7 @@ export function MessageList({
         {sending && (
           <div
             aria-label={t.thinking}
-            className="self-start flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-gray-100 px-4 py-3"
+            className="self-start flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-border-soft px-4 py-3"
           >
             {[0, 1, 2].map(i => (
               <span

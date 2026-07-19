@@ -93,6 +93,15 @@ function toDate(input: string | Date | null | undefined): Date | null {
  * Format a date as "Mayo 24, 2026" (ES) or "May 24, 2026" (EN).
  * Used everywhere a date is shown without a time.
  */
+/** Today's date as YYYY-MM-DD in the *local* timezone. Prefer this over
+ *  `new Date().toISOString().split('T')[0]` for date-input defaults: ISO uses
+ *  UTC, which rolls over to tomorrow during US evenings — so "log hours today"
+ *  would default to a future date. */
+export function todayLocalISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function formatDateLong(
   input: string | Date | null | undefined,
   locale?: string,

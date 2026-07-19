@@ -2,6 +2,9 @@ import type { Config } from 'tailwindcss';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharedPreset = require('../shared/tailwind-preset.js');
 
+// darkMode + semantic color tokens now live in the shared preset so web and
+// mobile stay in sync. The CSS variables they reference are defined in
+// src/app/globals.css (:root / .dark).
 const config: Config = {
   content: [
     // Scan ALL of src — not just app/components/pages. `src/modules/**`

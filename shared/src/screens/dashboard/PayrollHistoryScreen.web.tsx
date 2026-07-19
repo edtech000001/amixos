@@ -173,26 +173,26 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
     <div className={`px-6 lg:px-8 pt-6 ${selectMode ? 'pb-28' : 'pb-12'}`}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-          <ChevronLeft size={18} className="text-gray-500" />
+        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+          <ChevronLeft size={18} className="text-muted" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">{t.historyTitle}</h1>
+        <h1 className="text-xl font-bold text-ink">{t.historyTitle}</h1>
       </div>
 
       {/* Search + date range + select */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="relative flex-1 min-w-[240px]">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t.historySearchPlaceholder}
             autoCapitalize="none"
             autoCorrect="off"
-            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-2xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           {search ? (
-            <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted">
               <X size={16} />
             </button>
           ) : null}
@@ -204,7 +204,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             onClick={() => setDateOpen(o => !o)}
             title={fullDate.title}
             className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
-              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
             <Calendar size={16} />
@@ -212,8 +212,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
           {dateOpen ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{fullDate.title}</p>
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{fullDate.title}</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {presets.map(pr => {
                     const on = dateFrom === pr.from && dateTo === pr.to;
@@ -223,7 +223,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         type="button"
                         onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); }}
                         className={`px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors ${
-                          on ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          on ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                         }`}
                       >
                         {pr.label}
@@ -231,25 +231,25 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                     );
                   })}
                 </div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{fullDate.from}</label>
+                <label className="block text-xs font-medium text-muted mb-1">{fullDate.from}</label>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={e => setDateFrom(e.target.value)}
-                  className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full mb-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <label className="block text-xs font-medium text-gray-600 mb-1">{fullDate.to}</label>
+                <label className="block text-xs font-medium text-muted mb-1">{fullDate.to}</label>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={e => setDateTo(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {dateActive ? (
                   <button
                     type="button"
                     onClick={() => { setDateFrom(''); setDateTo(''); }}
-                    className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                    className="mt-3 w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border"
                   >
                     {fullDate.clear}
                   </button>
@@ -263,7 +263,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             type="button"
             onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             className={`px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
             {selectMode ? t.historyCancelSelect : t.historySelect}
@@ -272,8 +272,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       </div>
 
       {/* Shown-total summary — reflects the current search + date range. */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 mb-4">
-        <p className="text-xs text-gray-500">
+      <div className="flex items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-4 py-3 mb-4">
+        <p className="text-xs text-muted">
           {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
         </p>
         <p className="text-base font-bold text-primary">{fmt(shownTotal)}</p>
@@ -288,36 +288,36 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
           </div>
         </div>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-16">{search ? t.historyNoResults : t.historyEmpty}</p>
+        <p className="text-sm text-faint text-center py-16">{search ? t.historyNoResults : t.historyEmpty}</p>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([periodStart, list]) => (
             <div key={periodStart}>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-sm font-semibold text-gray-600">
+                <p className="text-sm font-semibold text-muted">
                   {fmtDay(periodStart)} – {fmtDay(list[0].periodEnd)}
                 </p>
-                <p className="text-sm font-bold text-gray-800">
+                <p className="text-sm font-bold text-ink">
                   {fmt(list.reduce((sum, e) => sum + e.grossPay, 0))}
                 </p>
               </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
                 {list.map((h, i) => (
                   <div
                     key={h.id}
                     onClick={selectMode
                       ? (e) => handleSelectClick(h.id, e.shiftKey)
                       : (h.breakdown || (onLoadBreakdown && h.employeeId)) ? () => openDetail(h) : undefined}
-                    className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'cursor-pointer hover:bg-gray-50 select-none' : ''} ${!selectMode && (h.breakdown || (onLoadBreakdown && h.employeeId)) ? 'cursor-pointer hover:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
+                    className={`px-5 py-3 flex items-center gap-3 ${i < list.length - 1 ? 'border-b border-border-soft' : ''} ${selectMode ? 'cursor-pointer hover:bg-surface select-none' : ''} ${!selectMode && (h.breakdown || (onLoadBreakdown && h.employeeId)) ? 'cursor-pointer hover:bg-surface' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
                   >
                     {selectMode ? (
-                      <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                      <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
                         {selected.has(h.id) ? <Check size={13} className="text-white" /> : null}
                       </span>
                     ) : null}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{h.name}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-sm font-semibold text-ink truncate">{h.name}</p>
+                      <p className="text-xs text-faint">
                         {Math.round(h.hours * 100) / 100} h
                         {h.driverHours > 0 ? ` · ${Math.round(h.driverHours * 100) / 100} h ${t.driveShort}` : ''}
                         {h.bonus ? ` · ${t.historyBonus} ${fmt(h.bonus)}` : ''}
@@ -327,7 +327,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {componentsText(h.components) ? ` · ${componentsText(h.components)}` : ''}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-gray-900 shrink-0">{fmt(h.grossPay)}</span>
+                    <span className="text-sm font-bold text-ink shrink-0">{fmt(h.grossPay)}</span>
                   </div>
                 ))}
               </div>
@@ -339,23 +339,23 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       {/* In-place record detail — mirrors the live Payroll breakdown. */}
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="text-lg font-bold text-gray-900">{detail.entry.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-lg font-bold text-ink">{detail.entry.name}</p>
+                <p className="text-sm text-muted">
                   {fmt(detail.entry.grossPay)} · {Math.round(detail.entry.hours * 100) / 100} h
                   {' · '}
                   {detail.entry.method === 'check' && detail.entry.checkNumber ? `${t.checkPrefix}${detail.entry.checkNumber}` : (methodLabel[detail.entry.method] ?? detail.entry.method)}
                   {detail.entry.paidAt ? ` · ${fmtDay(detail.entry.paidAt)}` : ''}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-faint mt-0.5">
                   {fmtDay(detail.entry.periodStart)} – {fmtDay(detail.entry.periodEnd)}
                   {componentsText(detail.entry.components) ? ` · ${componentsText(detail.entry.components)}` : ''}
                 </p>
               </div>
-              <button type="button" onClick={() => setDetail(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-400" />
+              <button type="button" onClick={() => setDetail(null)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-faint" />
               </button>
             </div>
 
@@ -371,34 +371,34 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
               <>
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {([[Wrench, t.hoursWorked, detail.breakdown.workedHours], [Truck, t.hoursDriven, detail.breakdown.drivenHours], [Clock, t.hoursLogged, detail.breakdown.loggedHours]] as const).map(([Icon, label, val], i) => (
-                    <div key={i} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
-                      <Icon size={15} className="text-gray-400 mx-auto mb-1" />
-                      <p className="text-base font-bold text-gray-900">{val}</p>
-                      <p className="text-[11px] text-gray-400">{label}</p>
+                    <div key={i} className="rounded-2xl border border-border-soft bg-surface p-3 text-center">
+                      <Icon size={15} className="text-faint mx-auto mb-1" />
+                      <p className="text-base font-bold text-ink">{val}</p>
+                      <p className="text-[11px] text-faint">{label}</p>
                     </div>
                   ))}
                 </div>
                 {detail.breakdown.jobs.length > 0 ? (
                   <>
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</p>
+                    <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {detail.breakdown.jobs.map((j, i) => (
-                        <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                        <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
                           <button
                             type="button"
                             disabled={!j.jobId || !onJobPress}
                             onClick={() => { if (j.jobId && onJobPress) onJobPress(j.jobId); }}
                             className="flex-1 min-w-0 text-left group disabled:cursor-default"
                           >
-                            <p className={`text-sm font-semibold text-gray-900 truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
-                            {j.date && <p className="text-[11px] text-gray-400">{fmtDay(j.date)}</p>}
+                            <p className={`text-sm font-semibold text-ink truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
+                            {j.date && <p className="text-[11px] text-faint">{fmtDay(j.date)}</p>}
                           </button>
                           <div className="text-right shrink-0">
                             {j.workedHours > 0 && (
-                              <p className="text-xs text-gray-600"><Wrench size={11} className="inline mr-1 text-gray-400" />{j.workedHours} h</p>
+                              <p className="text-xs text-muted"><Wrench size={11} className="inline mr-1 text-faint" />{j.workedHours} h</p>
                             )}
                             {j.drivenHours > 0 && (
-                              <p className="text-xs text-gray-600"><Truck size={11} className="inline mr-1 text-gray-400" />{j.drivenHours} h</p>
+                              <p className="text-xs text-muted"><Truck size={11} className="inline mr-1 text-faint" />{j.drivenHours} h</p>
                             )}
                           </div>
                         </div>
@@ -408,7 +408,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                 ) : null}
               </>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-8">{t.historyNoResults}</p>
+              <p className="text-sm text-faint text-center py-8">{t.historyNoResults}</p>
             )}
           </div>
         </div>
@@ -416,9 +416,9 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
       {/* Sticky bulk-delete bar — same layout as the jobs list. */}
       {selectMode ? (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted">
               {tSel.selectedCount.replace('{{count}}', String(selected.size))}
             </span>
             {filtered.length > 0 ? (
@@ -427,7 +427,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
               </button>
             ) : null}
             <div className="flex-1" />
-            <button type="button" onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+            <button type="button" onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-border-soft">
               {tSel.cancel}
             </button>
             <button

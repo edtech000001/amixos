@@ -87,7 +87,7 @@ export default function TiendaPage() {
 
   return (
     <div className="p-6">
-      <div className="bg-white rounded-2xl border border-gray-100">
+      <div className="bg-card rounded-2xl border border-border-soft">
         <AddonStoreScreen
           enabledIds={enabledIds}
           currentRole={currentRole}

@@ -13,10 +13,13 @@ import {
   LifeBuoy,
   LayoutGrid,
   Upload,
+  Moon,
+  Sun,
   type LucideIcon } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useTheme, useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
@@ -43,9 +46,12 @@ interface SettingsItem {
 
 export default function AjustesIndex() {
   const router = useRouter();
-  const { t: full } = useLang();
+  const { resolved, toggle } = useTheme();
+  const c = useThemeColors();
+  const { t: full, locale } = useLang();
   const { currentRole, user, business } = useApp();
   const t = full.dashboard.settings;
+  const es = locale === 'es';
 
   const contactSupport = async () => {
     const url = buildSupportMailto({
@@ -153,34 +159,55 @@ export default function AjustesIndex() {
          dock. To go back the user taps the Más tab (same pattern as
          Empleados / Calendario / Inventario / Tienda). */}
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
-        <Text className="text-2xl font-bold text-gray-900 mb-5">{t.title}</Text>
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <Text className="text-2xl font-bold text-ink mb-5">{t.title}</Text>
+
+        {/* Appearance — dark mode toggle */}
+        <Pressable
+          onPress={toggle}
+          className="flex-row items-center gap-3 px-4 py-4 mb-4 rounded-2xl border border-border-soft bg-card active:opacity-90"
+        >
+          <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+            {resolved === 'dark' ? <Moon size={18} color={c.primary} /> : <Sun size={18} color={c.primary} />}
+          </View>
+          <View className="flex-1">
+            <Text className="text-base font-semibold text-ink">{es ? 'Apariencia' : 'Appearance'}</Text>
+            <Text className="text-xs text-muted mt-0.5">
+              {resolved === 'dark' ? (es ? 'Modo oscuro' : 'Dark mode') : (es ? 'Modo claro' : 'Light mode')}
+            </Text>
+          </View>
+          {/* Pill switch */}
+          <View className={`w-12 h-7 rounded-full p-0.5 ${resolved === 'dark' ? 'bg-primary' : 'bg-border'}`}>
+            <View className={`w-6 h-6 rounded-full bg-white ${resolved === 'dark' ? 'ml-auto' : ''}`} />
+          </View>
+        </Pressable>
+
+        <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
           {items.map((item, i) => {
             const Icon = item.icon;
             return (
               <Pressable
                 key={item.key}
                 onPress={() => (item.action ? item.action() : router.push(item.path as never))}
-                className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
-                  i < items.length - 1 ? 'border-b border-gray-50' : ''
+                className={`flex-row items-center gap-3 px-4 py-4 active:bg-surface ${
+                  i < items.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
               >
                 <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-                  <Icon size={18} color="#4F46E5" />
+                  <Icon size={18} color={c.primary} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-base font-semibold text-gray-900">{item.label}</Text>
-                  <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
+                  <Text className="text-base font-semibold text-ink">{item.label}</Text>
+                  <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>
                     {item.description}
                   </Text>
                 </View>
-                <ChevronRight size={18} color="#9CA3AF" />
+                <ChevronRight size={18} color={c.faint} />
               </Pressable>
             );
           })}
         </View>
         {APP_VERSION ? (
-          <Text className="text-center text-[11px] text-gray-300 mt-6">{APP_VERSION}</Text>
+          <Text className="text-center text-[11px] text-faint mt-6">{APP_VERSION}</Text>
         ) : null}
       </ScrollView>
     </SafeAreaView>

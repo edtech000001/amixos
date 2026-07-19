@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil } from 'lucide-react-native';
+import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil, Minus, Plus, Search } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
@@ -20,7 +20,8 @@ import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
+import { foldSearchText } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import {
   EmployeesScreen,
@@ -136,7 +137,7 @@ const EMPTY_EMP: EmpForm = {
 const EMPTY_TS = (): TsForm => ({
   employee_id: '',
   worker_name: '',
-  work_date: new Date().toISOString().split('T')[0],
+  work_date: todayLocalISO(),
   hours_worked: 8,
   job_description: '',
 });
@@ -181,7 +182,17 @@ export default function EmpleadosRoute() {
   const [empForm, setEmpForm] = useState<EmpForm>(EMPTY_EMP);
   const [tsModalOpen, setTsModalOpen] = useState(false);
   const [tsForm, setTsForm] = useState<TsForm>(EMPTY_TS);
+  // Raw text mirror of hours_worked so typing "8." / "8.5" survives (a numeric
+  // value would drop the trailing dot on each re-render). The stepper and reset
+  // keep this in sync; parseFloat drives the saved number.
+  const [hoursText, setHoursText] = useState('8');
+  const setHours = (n: number) => {
+    const v = Math.max(0, Math.round(n * 100) / 100);
+    setTsForm((f) => ({ ...f, hours_worked: v }));
+    setHoursText(String(v));
+  };
   const [empPickerOpen, setEmpPickerOpen] = useState(false);
+  const [empSearch, setEmpSearch] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -505,6 +516,7 @@ export default function EmpleadosRoute() {
 
   const openLogHours = () => {
     setTsForm(EMPTY_TS());
+    setHoursText('8');
     setError('');
     setTsModalOpen(true);
   };
@@ -663,7 +675,7 @@ export default function EmpleadosRoute() {
                     {t.timesheetModal.employeeLabel}
                   </Text>
                   <Pressable
-                    onPress={() => setEmpPickerOpen(true)}
+                    onPress={() => { setEmpSearch(''); setEmpPickerOpen(true); }}
                     className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
                   >
                     <Text
@@ -689,19 +701,38 @@ export default function EmpleadosRoute() {
                     />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-700 mb-2">
+                    <Text className="text-sm font-medium text-gray-700 mb-1.5">
                       {t.timesheetModal.hoursLabel}
                     </Text>
-                    <TextInput
-                      value={tsForm.hours_worked ? String(tsForm.hours_worked) : ''}
-                      onChangeText={(v) =>
-                        setTsForm((f) => ({ ...f, hours_worked: parseFloat(v) || 0 }))
-                      }
-                      keyboardType="decimal-pad"
-                      placeholder={t.timesheetModal.hoursPlaceholder}
-                      placeholderTextColor="#9CA3AF"
-                      className="rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-base text-gray-900"
-                    />
+                    <View className="flex-row items-center rounded-xl border border-gray-200 bg-white overflow-hidden">
+                      <Pressable
+                        onPress={() => setHours((tsForm.hours_worked || 0) - 1)}
+                        hitSlop={6}
+                        className="h-[42px] w-11 items-center justify-center active:bg-gray-50 border-r border-gray-100"
+                      >
+                        <Minus size={16} color="#4F46E5" />
+                      </Pressable>
+                      <TextInput
+                        value={hoursText}
+                        onChangeText={(v) => {
+                          // Allow digits + a single decimal point while typing.
+                          const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                          setHoursText(clean);
+                          setTsForm((f) => ({ ...f, hours_worked: parseFloat(clean) || 0 }));
+                        }}
+                        keyboardType="decimal-pad"
+                        placeholder={t.timesheetModal.hoursPlaceholder}
+                        placeholderTextColor="#9CA3AF"
+                        className="flex-1 text-center text-base font-semibold text-gray-900 py-2.5"
+                      />
+                      <Pressable
+                        onPress={() => setHours((tsForm.hours_worked || 0) + 1)}
+                        hitSlop={6}
+                        className="h-[42px] w-11 items-center justify-center active:bg-gray-50 border-l border-gray-100"
+                      >
+                        <Plus size={16} color="#4F46E5" />
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
 
@@ -748,13 +779,32 @@ export default function EmpleadosRoute() {
                   <View className="items-center mb-2">
                     <View className="w-10 h-1 bg-gray-200 rounded-full" />
                   </View>
-                  <View className="px-5 mb-3">
+                  <View className="flex-row items-center justify-between px-5 mb-3">
                     <Text className="text-base font-semibold text-gray-900">
                       {t.timesheetModal.employeeLabel}
                     </Text>
+                    <Pressable onPress={() => setEmpPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                      <X size={22} color="#9CA3AF" />
+                    </Pressable>
+                  </View>
+                  <View className="px-5 mb-3">
+                    <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
+                      <Search size={16} color="#9CA3AF" />
+                      <TextInput
+                        value={empSearch}
+                        onChangeText={setEmpSearch}
+                        placeholder={t.timesheetModal.selectEmployee}
+                        placeholderTextColor="#9CA3AF"
+                        className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                      />
+                    </View>
                   </View>
                   <ScrollView keyboardShouldPersistTaps="handled">
-                    {activeEmployees.map((e) => {
+                    {activeEmployees
+                      .filter((e) =>
+                        foldSearchText(`${e.first_name} ${e.last_name}`).includes(foldSearchText(empSearch.trim())),
+                      )
+                      .map((e) => {
                       const isSel = tsForm.employee_id === e.id;
                       return (
                         <Pressable

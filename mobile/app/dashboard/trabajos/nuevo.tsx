@@ -48,6 +48,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
@@ -68,6 +69,9 @@ interface Client {
   company: string | null;
   city: string | null;
   state: string | null;
+  /** People at this client (contacts) — searchable so you can find the account
+   *  by a contact's name; primary contact first. */
+  contacts?: { name: string; role: string | null }[];
 }
 
 interface Employee {
@@ -303,7 +307,7 @@ export default function NuevoTrabajoRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const [cl, emp, { data: tpl }] = await Promise.all([
+      const [cl, emp, { data: tpl }, contactRows] = await Promise.all([
         fetchAll<Client>((from, to) =>
           supabase
             .from('clients')
@@ -324,9 +328,23 @@ export default function NuevoTrabajoRoute() {
           .select('*')
           .eq('business_id', business.id)
           .order('sort_order'),
+        // Client contacts — so the picker can find an account by a contact's
+        // name (primary contact first).
+        fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+          supabase
+            .from('client_contacts')
+            .select('client_id, name, role')
+            .eq('business_id', business.id)
+            .order('is_primary', { ascending: false })
+            .range(from, to)).catch(() => []),
       ]);
       if (cancelled) return;
-      setClients(cl);
+      const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
+      for (const ct of contactRows) {
+        (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
+          .push({ name: ct.name, role: ct.role });
+      }
+      setClients(cl.map((c) => ({ ...c, contacts: contactsByClient.get(c.id) })));
       // Roster flag (migration 128): office members opt out of crew pickers.
       setEmployees(emp.filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
       setTemplates(localizeTemplates((tpl ?? []) as FieldTemplate[], locale));
@@ -599,8 +617,10 @@ export default function NuevoTrabajoRoute() {
             >
               {selectedClient ? (
                 <Text className="text-base text-gray-900 flex-1" numberOfLines={1}>
-                  {selectedClient.first_name} {selectedClient.last_name}
-                  {selectedClient.company ? ` · ${selectedClient.company}` : ''}
+                  {(() => {
+                    const d = clientPickerDisplay(selectedClient);
+                    return d.sub ? `${d.top} · ${d.sub}` : d.top;
+                  })()}
                 </Text>
               ) : (
                 <Text className="text-base text-gray-400 flex-1">{t.clientPlaceholder}</Text>
@@ -1109,10 +1129,23 @@ export default function NuevoTrabajoRoute() {
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
     const q = clientSearch.toLowerCase();
-    return clients.filter((c) =>
-      [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase().includes(q),
-    );
+    return clients.filter((c) => {
+      const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+      if (own.includes(q)) return true;
+      // Also match on the client's contacts — search a contact, find the account.
+      return (c.contacts ?? []).some((ct) => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q));
+    });
   }, [clients, clientSearch]);
+
+  // The contact that matched the query (when the account matched via a contact,
+  // not its own name) — shown under the client so you know who you searched.
+  const matchedContactOf = (c: Client) => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return null;
+    const own = [c.first_name, c.last_name, c.company].filter(Boolean).join(' ').toLowerCase();
+    if (own.includes(q)) return null;
+    return (c.contacts ?? []).find((ct) => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q)) ?? null;
+  };
 
   const filterEmployees = (list: Employee[], query: string) => {
     const q = query.trim().toLowerCase();
@@ -1934,8 +1967,11 @@ export default function NuevoTrabajoRoute() {
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
-            <View className="px-5 mb-3">
+            <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.clientLabel}</Text>
+              <Pressable onPress={() => setClientPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
@@ -1961,6 +1997,7 @@ export default function NuevoTrabajoRoute() {
               </Pressable>
               {filteredClients.map((c) => {
                 const isSel = c.id === clientId;
+                const { top, sub } = clientPickerDisplay(c);
                 return (
                   <Pressable
                     key={c.id}
@@ -1976,13 +2013,21 @@ export default function NuevoTrabajoRoute() {
                         }`}
                         numberOfLines={1}
                       >
-                        {c.first_name} {c.last_name}
+                        {top}
                       </Text>
-                      {c.company ? (
+                      {sub ? (
                         <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>
-                          {c.company}
+                          {sub}
                         </Text>
                       ) : null}
+                      {(() => {
+                        const ct = matchedContactOf(c);
+                        return ct ? (
+                          <Text className="text-xs text-primary mt-0.5" numberOfLines={1}>
+                            {ct.name}{ct.role ? `  ·  ${ct.role}` : ''}
+                          </Text>
+                        ) : null;
+                      })()}
                     </View>
                     {isSel ? <Check size={16} color="#4F46E5" /> : null}
                   </Pressable>
@@ -2119,8 +2164,11 @@ export default function NuevoTrabajoRoute() {
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
-            <View className="px-5 mb-3">
+            <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.leadLabel}</Text>
+              <Pressable onPress={() => setLeadPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
@@ -2204,9 +2252,14 @@ export default function NuevoTrabajoRoute() {
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.crewLabel}</Text>
-              <Text className="text-xs text-gray-400">
-                {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
-              </Text>
+              <View className="flex-row items-center gap-3">
+                <Text className="text-xs text-gray-400">
+                  {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
+                </Text>
+                <Pressable onPress={() => setCrewPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                  <X size={22} color="#9CA3AF" />
+                </Pressable>
+              </View>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
@@ -2288,9 +2341,14 @@ export default function NuevoTrabajoRoute() {
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.driverLabel}</Text>
-              <Text className="text-xs text-gray-400">
-                {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
-              </Text>
+              <View className="flex-row items-center gap-3">
+                <Text className="text-xs text-gray-400">
+                  {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
+                </Text>
+                <Pressable onPress={() => setDriverPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                  <X size={22} color="#9CA3AF" />
+                </Pressable>
+              </View>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">

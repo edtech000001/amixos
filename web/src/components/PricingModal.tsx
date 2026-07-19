@@ -90,14 +90,14 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
         <>
           {/* Monthly / annual toggle */}
           <div className="flex flex-col items-center gap-2.5">
-            <div className="inline-flex items-center rounded-xl bg-gray-100 p-1">
+            <div className="inline-flex items-center rounded-xl bg-border-soft p-1">
               {(['monthly', 'annual'] as BillingPeriod[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
                   className={clsx(
                     'flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors',
-                    period === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    period === p ? 'bg-primary/15 text-primary shadow-sm' : 'text-muted hover:text-ink'
                   )}
                 >
                   {p === 'monthly' ? (es ? 'Mensual' : 'Monthly') : es ? 'Anual' : 'Annual'}
@@ -110,7 +110,7 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
               ))}
             </div>
             {/* Always-on incentive — advertise the annual deal even on monthly. */}
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-500/10 border border-green-200 rounded-full px-3 py-1">
               🎁 {es ? '2 meses gratis al pagar por año' : '2 months free when you pay yearly'}
             </span>
           </div>
@@ -128,8 +128,8 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                 <div
                   key={plan.key}
                   className={clsx(
-                    'relative flex flex-col rounded-2xl border p-5 shadow-sm bg-white',
-                    highlighted ? 'border-primary ring-2 ring-primary/30' : 'border-gray-100'
+                    'relative flex flex-col rounded-2xl border p-5 shadow-sm bg-card',
+                    highlighted ? 'border-primary ring-2 ring-primary/30' : 'border-border-soft'
                   )}
                 >
                   {highlighted && (
@@ -139,25 +139,25 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                     </span>
                   )}
 
-                  <h3 className="text-lg font-bold text-gray-900">{copy.name}</h3>
-                  <p className="mt-0.5 text-xs text-gray-500">{copy.tagline}</p>
+                  <h3 className="text-lg font-bold text-ink">{copy.name}</h3>
+                  <p className="mt-0.5 text-xs text-muted">{copy.tagline}</p>
 
                   <div className="mt-4">
                     {isCustom ? (
                       <div className="flex items-baseline">
-                        <span className="text-2xl font-bold text-gray-900">
+                        <span className="text-2xl font-bold text-ink">
                           {es ? 'Precio personalizado' : 'Custom pricing'}
                         </span>
                       </div>
                     ) : (
                       <>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-bold text-gray-900">${perMonth}</span>
-                          <span className="text-sm text-gray-500">{es ? '/mes' : '/mo'}</span>
+                          <span className="text-3xl font-bold text-ink">${perMonth}</span>
+                          <span className="text-sm text-muted">{es ? '/mes' : '/mo'}</span>
                         </div>
                         {period === 'annual' && (
                           <div className="mt-1 space-y-0.5">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted">
                               {es
                                 ? `facturado anualmente · $${plan.annualTotal}/año`
                                 : `billed annually · $${plan.annualTotal}/yr`}
@@ -173,7 +173,7 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
 
                   <ul className="mt-4 space-y-2 flex-1">
                     {copy.features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                      <li key={i} className="flex items-start gap-2 text-sm text-ink">
                         <Check size={16} className="mt-0.5 shrink-0 text-primary" />
                         <span>{feature}</span>
                       </li>
@@ -215,7 +215,7 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
             <p className="mt-4 text-center text-sm text-red-500">{subscribeError}</p>
           )}
 
-          <p className="mt-6 text-center text-xs text-gray-500">
+          <p className="mt-6 text-center text-xs text-muted">
             {es
               ? '14 días gratis · sin tarjeta de crédito'
               : '14-day free trial · no credit card'}
@@ -279,7 +279,7 @@ function ContactForm({ es, user, business, onBack, onClose }: ContactFormProps) 
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
           <Check size={28} className="text-green-600" />
         </div>
-        <p className="text-lg font-semibold text-gray-900">
+        <p className="text-lg font-semibold text-ink">
           {es ? '¡Gracias! Te contactaremos pronto.' : "Thanks! We'll be in touch soon."}
         </p>
         <Button variant="primary" onClick={onClose}>
@@ -294,13 +294,13 @@ function ContactForm({ es, user, business, onBack, onClose }: ContactFormProps) 
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1 self-start text-sm font-medium text-gray-500 hover:text-gray-700"
+        className="inline-flex items-center gap-1 self-start text-sm font-medium text-muted hover:text-ink"
       >
         <ChevronLeft size={16} />
         {es ? 'Volver a los planes' : 'Back to plans'}
       </button>
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted">
         {es
           ? 'Cuéntanos sobre tu equipo y te prepararemos un plan a tu medida.'
           : 'Tell us about your team and we’ll put together a plan that fits.'}
@@ -337,7 +337,7 @@ function ContactForm({ es, user, business, onBack, onClose }: ContactFormProps) 
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">
+        <label className="text-sm font-medium text-ink">
           {es ? 'Mensaje' : 'Message'}
         </label>
         <textarea
@@ -345,7 +345,7 @@ function ContactForm({ es, user, business, onBack, onClose }: ContactFormProps) 
           onChange={(e) => setMessage(e.target.value)}
           rows={4}
           className={clsx(
-            'w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400',
+            'w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder-faint',
             'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary focus:border-transparent',
             'transition duration-150'
           )}
@@ -354,7 +354,7 @@ function ContactForm({ es, user, business, onBack, onClose }: ContactFormProps) 
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-faint">
         {es
           ? 'Incluye al menos un correo o teléfono para que podamos contactarte.'
           : 'Include at least an email or phone so we can reach you.'}

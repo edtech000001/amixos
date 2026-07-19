@@ -490,79 +490,79 @@ export function PayrollScreen({
     <div className="px-6 lg:px-8 pt-6 pb-12">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-          <ChevronLeft size={18} className="text-gray-500" />
+        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+          <ChevronLeft size={18} className="text-muted" />
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-xs text-gray-400">{t.subtitle}</p>
+          <h1 className="text-xl font-bold text-ink">{t.title}</h1>
+          <p className="text-xs text-faint">{t.subtitle}</p>
         </div>
         {onHistoryPress ? (
           <button
             type="button"
             onClick={onHistoryPress}
-            className="flex items-center gap-1.5 bg-white border border-gray-200 px-3.5 py-2 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 bg-card border border-border px-3.5 py-2 rounded-xl text-sm font-semibold text-ink hover:bg-surface transition-colors"
           >
-            <History size={15} className="text-gray-700" />
+            <History size={15} className="text-ink" />
             {t.historyTitle}
           </button>
         ) : null}
         {canManage && (
-          <button type="button" onClick={openSettings} title={t.settingsTitle} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-            <Settings size={18} className="text-gray-500" />
+          <button type="button" onClick={openSettings} title={t.settingsTitle} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <Settings size={18} className="text-muted" />
           </button>
         )}
       </div>
 
       <div className="flex flex-col gap-4">
         {/* Period navigator */}
-        <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-2 py-2">
-          <button type="button" onClick={onPrevPeriod} className="p-2 rounded-xl hover:bg-gray-100">
-            <ChevronLeft size={18} className="text-gray-500" />
+        <div className="flex items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
+          <button type="button" onClick={onPrevPeriod} className="p-2 rounded-xl hover:bg-border-soft">
+            <ChevronLeft size={18} className="text-muted" />
           </button>
-          <span className="text-sm font-semibold text-gray-900">{periodLabel}</span>
-          <button type="button" onClick={onNextPeriod} className="p-2 rounded-xl hover:bg-gray-100">
-            <ChevronRight size={18} className="text-gray-500" />
+          <span className="text-sm font-semibold text-ink">{periodLabel}</span>
+          <button type="button" onClick={onNextPeriod} className="p-2 rounded-xl hover:bg-border-soft">
+            <ChevronRight size={18} className="text-muted" />
           </button>
         </div>
 
         {/* Summary */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <p className="text-[11px] text-gray-400">{t.totalHours}</p>
-            <p className="text-lg font-bold text-gray-900">{Math.round(totalHours * 100) / 100}</p>
+          <div className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <p className="text-[11px] text-faint">{t.totalHours}</p>
+            <p className="text-lg font-bold text-ink">{Math.round(totalHours * 100) / 100}</p>
           </div>
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <p className="text-[11px] text-gray-400">{t.totalPay}</p>
+          <div className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <p className="text-[11px] text-faint">{t.totalPay}</p>
             <p className="text-lg font-bold text-primary">{fmt(totalPay)}</p>
           </div>
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <p className="text-[11px] text-gray-400">{t.totalPending}</p>
+          <div className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <p className="text-[11px] text-faint">{t.totalPending}</p>
             <p className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{fmt(totalPending)}</p>
           </div>
         </div>
         {rows.length > 0 && (
           <div className="flex items-center justify-between -mt-1">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-faint">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </p>
             <div className="flex items-center gap-2">
             {canManage && allWorkers && allWorkers.length > 0 ? (
               <button type="button" onClick={openManual}
-                className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-lg text-xs font-semibold text-ink hover:bg-surface transition-colors">
                 <Banknote size={13} /> {t.manualPayBtn}
               </button>
             ) : null}
             {canManage && onAddLoan ? (
               <button type="button" onClick={openLoansGlobal}
-                className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-lg text-xs font-semibold text-ink hover:bg-surface transition-colors">
                 <Landmark size={13} /> {t.loanViewBtn}
               </button>
             ) : null}
-            <div className="inline-flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <div className="inline-flex gap-1 bg-border-soft p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 <button key={v} type="button" onClick={() => changeView(v)}
-                  className={`p-1.5 rounded-md transition-colors ${view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+                  className={`p-1.5 rounded-md transition-colors ${view === v ? 'bg-primary/15 text-primary shadow-sm' : 'text-faint hover:text-muted'}`}>
                   <Icon size={15} />
                 </button>
               ))}
@@ -581,27 +581,27 @@ export function PayrollScreen({
             </div>
           </div>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-12">{t.empty}</p>
+          <p className="text-sm text-faint text-center py-12">{t.empty}</p>
         ) : view === 'grid' ? (
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
             {sortedRows.map(r => (
-              <div key={r.employeeId} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-1.5">
+              <div key={r.employeeId} className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5">
                 <button type="button" onClick={() => setDetailRow(r)} className="text-left group">
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-faint">
                     {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
                     {(r.overtimeHours ?? 0) > 0 ? ` · ${Math.round((r.overtimeHours ?? 0) * 100) / 100} h ${t.otShort}` : ''}
                   </p>
-                  <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-primary mt-0.5">{r.name}</p>
+                  <p className="text-sm font-semibold text-ink truncate group-hover:text-primary mt-0.5">{r.name}</p>
                 </button>
                 {isPartial(r) ? (
                   <p className="text-2xl font-bold text-amber-600">
                     {fmt(checkBaseOf(r))}
-                    <span className="text-xs font-semibold text-gray-400 ml-1.5">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
+                    <span className="text-xs font-semibold text-faint ml-1.5">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
                   </p>
                 ) : overpaid(r) ? (
                   <p className="text-2xl font-bold text-amber-600" title={t.paidDiffersNote}>
                     {fmt(paidTotal(r))}
-                    <span className="text-xs font-semibold text-gray-400 ml-1.5">{t.paidTag}</span>
+                    <span className="text-xs font-semibold text-faint ml-1.5">{t.paidTag}</span>
                   </p>
                 ) : (
                   <p className="text-2xl font-bold text-primary">{fmt(r.pay)}</p>
@@ -632,34 +632,34 @@ export function PayrollScreen({
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
             {sortedRows.map((r, i) => (
-              <div key={r.employeeId} className={`px-5 py-3.5 flex items-center gap-4 ${i < sortedRows.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div key={r.employeeId} className={`px-5 py-3.5 flex items-center gap-4 ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}>
                 {/* Name/hours area opens the hours breakdown. */}
                 <button type="button" onClick={() => setDetailRow(r)} className="flex-1 min-w-0 flex items-center gap-2 text-left group">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-primary">{r.name}</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-sm font-semibold text-ink truncate group-hover:text-primary">{r.name}</p>
+                    <p className="text-xs text-faint">
                       {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
                       {(r.overtimeHours ?? 0) > 0 ? ` · ${Math.round((r.overtimeHours ?? 0) * 100) / 100} h ${t.otShort}` : ''}
                       {(r.driverPay ?? 0) > 0 ? ` · ${fmt(r.driverPay ?? 0)} ${t.driveShort}` : ''}
                     </p>
                   </div>
-                  <Chevron size={14} className="text-gray-300 group-hover:text-primary shrink-0" />
+                  <Chevron size={14} className="text-faint group-hover:text-primary shrink-0" />
                 </button>
                 <div className="flex items-center gap-3 shrink-0">
                   {isPartial(r) ? (
                     <span className="text-right">
                       <span className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</span>
-                      <span className="block text-[11px] text-gray-400">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
+                      <span className="block text-[11px] text-faint">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
                     </span>
                   ) : overpaid(r) ? (
                     <span className="text-right" title={t.paidDiffersNote}>
                       <span className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</span>
-                      <span className="block text-[11px] text-gray-400">{t.paidTag}</span>
+                      <span className="block text-[11px] text-faint">{t.paidTag}</span>
                     </span>
                   ) : (
-                    <span className="text-sm font-bold text-gray-900">{fmt(r.pay)}</span>
+                    <span className="text-sm font-bold text-ink">{fmt(r.pay)}</span>
                   )}
                   {(r.payments?.length ?? 0) > 0 ? (
                     <button
@@ -691,40 +691,40 @@ export function PayrollScreen({
       {/* Manual payment dialog */}
       {manualOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setManualOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
-              <p className="text-lg font-bold text-gray-900">{t.manualPayBtn}</p>
-              <button type="button" onClick={() => setManualOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-400" />
+              <p className="text-lg font-bold text-ink">{t.manualPayBtn}</p>
+              <button type="button" onClick={() => setManualOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-faint" />
               </button>
             </div>
 
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.manualPeriodLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-2">{t.manualPeriodLabel}</label>
             <select
               value={manualPeriod}
               onChange={e => setManualPeriod(e.target.value)}
-              className="w-full mb-4 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full mb-4 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             >
               {manualPeriods.map(pr => <option key={pr.start} value={pr.start}>{pr.label}</option>)}
             </select>
 
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-2">{t.manualWorkerLabel}</label>
             <select
               value={manualWorker}
               onChange={e => setManualWorker(e.target.value)}
-              className="w-full mb-4 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full mb-4 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">{t.manualSelectWorker}</option>
               {(allWorkers ?? []).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</p>
             <div className="flex gap-2 mb-4">
               {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                 const on = manualMethod === m;
                 return (
                   <button key={m} type="button" onClick={() => setManualMethod(m)}
-                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}>
                     <Icon size={16} />
                     <span className="text-xs font-semibold">{label}</span>
                   </button>
@@ -734,22 +734,22 @@ export function PayrollScreen({
 
             {manualMethod === 'check' && (
               <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</label>
+                <label className="block text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</label>
                 <input value={manualCheck} onChange={e => setManualCheck(e.target.value)} placeholder={t.checkNumberPlaceholder} inputMode="numeric"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               </div>
             )}
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">{t.amountLabel}</label>
+              <label className="block text-sm font-semibold text-ink mb-2">{t.amountLabel}</label>
               <input value={manualAmount} onChange={e => setManualAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
-                className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">{t.hoursCoveredLabel}</label>
+              <label className="block text-sm font-semibold text-ink mb-2">{t.hoursCoveredLabel}</label>
               <input value={manualHours} onChange={e => setManualHours(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" inputMode="decimal"
-                className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
 
             <button type="button" onClick={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
@@ -763,21 +763,21 @@ export function PayrollScreen({
       {/* Payroll settings modal — frequency / anchor / pay components. */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
-              <p className="text-lg font-bold text-gray-900">{t.settingsTitle}</p>
-              <button type="button" onClick={() => setSettingsOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-400" />
+              <p className="text-lg font-bold text-ink">{t.settingsTitle}</p>
+              <button type="button" onClick={() => setSettingsOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-faint" />
               </button>
             </div>
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.freqLabel}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.freqLabel}</p>
             <div className="flex gap-2 mb-4">
               {FREQS.map(f => {
                 const on = f === draftFreq;
                 return (
                   <button key={f} type="button" onClick={() => setDraftFreq(f)}
-                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}>
                     {freqLabel[f]}
                   </button>
                 );
@@ -785,37 +785,37 @@ export function PayrollScreen({
             </div>
 
             {draftFreq === 'custom' ? (
-              <label className="block text-xs text-gray-500 mb-4">
+              <label className="block text-xs text-muted mb-4">
                 {t.customDaysLabel}
                 <input
                   type="number" min="1" max="90"
                   value={draftCustomDays}
                   onChange={e => setDraftCustomDays(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </label>
             ) : null}
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.anchorLabel}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.anchorLabel}</p>
             <DatePicker value={draftAnchor} onChange={setDraftAnchor} />
-            <p className="text-[11px] text-gray-400 mt-1.5 mb-4">{t.anchorHint}</p>
+            <p className="text-[11px] text-faint mt-1.5 mb-4">{t.anchorHint}</p>
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.componentsHeading}</p>
-            <div className="rounded-2xl border border-gray-100 p-4 flex flex-col gap-3 mb-5">
-              <p className="text-sm font-medium text-gray-700">{t.driverHeading}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.componentsHeading}</p>
+            <div className="rounded-2xl border border-border-soft p-4 flex flex-col gap-3 mb-5">
+              <p className="text-sm font-medium text-ink">{t.driverHeading}</p>
               <div className="flex gap-2">
                 {([['same', t.driverSame], ['rate', t.driverRate], ['flat', t.driverFlat]] as [DriverPayMode, string][]).map(([m, label]) => (
                   <button key={m} type="button"
                     onClick={() => setDraftConfig({ ...draftConfig, driver: { ...draftConfig.driver, mode: m } })}
                     className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${
-                      draftConfig.driver.mode === m ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      draftConfig.driver.mode === m ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
                     }`}>
                     {label}
                   </button>
                 ))}
               </div>
               {draftConfig.driver.mode !== 'same' ? (
-                <label className="text-xs text-gray-500">
+                <label className="text-xs text-muted">
                   {draftConfig.driver.mode === 'rate' ? t.driverRateLabel : t.driverFlatLabel}
                   <input
                     type="number" min="0" step="0.01"
@@ -827,20 +827,20 @@ export function PayrollScreen({
                         driver: { ...draftConfig.driver, ...(draftConfig.driver.mode === 'rate' ? { rate: v } : { flat: v }) },
                       });
                     }}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </label>
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-gray-100 p-4 flex flex-col gap-3 mb-5">
+            <div className="rounded-2xl border border-border-soft p-4 flex flex-col gap-3 mb-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-700">{t.formulaHeading}</p>
+                <p className="text-sm font-medium text-ink">{t.formulaHeading}</p>
                 {draftConfig.formula ? (
                   <button
                     type="button"
                     onClick={() => setDraftConfig(c => ({ ...c, formula: null }))}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                    className="px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-muted hover:bg-surface hover:border-border transition-colors"
                   >
                     {t.formulaRemove}
                   </button>
@@ -848,20 +848,20 @@ export function PayrollScreen({
               </div>
               {!draftConfig.formula ? (
                 <>
-                  <p className="text-xs text-gray-400">{t.formulaStandardHint}</p>
+                  <p className="text-xs text-faint">{t.formulaStandardHint}</p>
                   <button
                     type="button"
                     onClick={() => setDraftConfig(c => ({ ...c, formula: [] }))}
-                    className="w-full py-2 rounded-xl border border-dashed border-gray-300 text-sm font-semibold text-gray-500 hover:border-primary hover:text-primary transition-colors"
+                    className="w-full py-2 rounded-xl border border-dashed border-border text-sm font-semibold text-muted hover:border-primary hover:text-primary transition-colors"
                   >
                     {t.formulaCreate}
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="min-h-[52px] rounded-xl bg-gray-50 border border-gray-100 p-2 flex flex-wrap items-center gap-1.5">
+                  <div className="min-h-[52px] rounded-xl bg-surface border border-border-soft p-2 flex flex-wrap items-center gap-1.5">
                     {draftConfig.formula.length === 0 ? (
-                      <p className="text-xs text-gray-400 px-1">{t.formulaEmpty}</p>
+                      <p className="text-xs text-faint px-1">{t.formulaEmpty}</p>
                     ) : (
                       draftConfig.formula.map((tok, i) => (
                         <button
@@ -871,9 +871,9 @@ export function PayrollScreen({
                           title={t.formulaBuildHint}
                           className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors hover:border-red-300 hover:text-red-500 ${
                             tok.t === 'op' || tok.t === 'lp' || tok.t === 'rp'
-                              ? 'bg-white border-gray-200 text-gray-700'
+                              ? 'bg-card border-border text-ink'
                               : tok.t === 'num'
-                                ? 'bg-white border-gray-200 text-gray-900'
+                                ? 'bg-card border-border text-ink'
                                 : 'bg-primary/10 border-primary/30 text-primary'
                           }`}
                         >
@@ -883,33 +883,33 @@ export function PayrollScreen({
                     )}
                   </div>
                   {formulaError ? <p className="text-xs text-red-500">{t.formulaInvalid}</p> : (
-                    <p className="text-[11px] text-gray-400">{t.formulaBuildHint}</p>
+                    <p className="text-[11px] text-faint">{t.formulaBuildHint}</p>
                   )}
 
                   <div className="flex flex-wrap gap-1.5">
                     {(['+', '-', '*', '/'] as const).map(op => (
                       <button key={op} type="button" onClick={() => pushTok({ t: 'op', v: op })}
-                        className="w-9 h-8 rounded-lg border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                        className="w-9 h-8 rounded-lg border border-border text-sm font-bold text-ink hover:bg-surface">
                         {OP_SYMBOLS[op]}
                       </button>
                     ))}
-                    <button type="button" onClick={() => pushTok({ t: 'lp' })} className="w-9 h-8 rounded-lg border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50">(</button>
-                    <button type="button" onClick={() => pushTok({ t: 'rp' })} className="w-9 h-8 rounded-lg border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50">)</button>
+                    <button type="button" onClick={() => pushTok({ t: 'lp' })} className="w-9 h-8 rounded-lg border border-border text-sm font-bold text-ink hover:bg-surface">(</button>
+                    <button type="button" onClick={() => pushTok({ t: 'rp' })} className="w-9 h-8 rounded-lg border border-border text-sm font-bold text-ink hover:bg-surface">)</button>
                     <input
                       type="number"
                       value={numEntry}
                       onChange={e => setNumEntry(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNumEntry(); } }}
                       placeholder={t.formulaNumberPlaceholder}
-                      className="w-24 h-8 rounded-lg border border-gray-200 px-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-24 h-8 rounded-lg border border-border px-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                     <button type="button" onClick={addNumEntry} disabled={!numEntry}
-                      className="h-8 px-3 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                      className="h-8 px-3 rounded-lg border border-border text-xs font-semibold text-ink hover:bg-surface disabled:opacity-40">
                       {t.formulaAddNumber}
                     </button>
                   </div>
 
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaVarsHeading}</p>
+                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaVarsHeading}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {FORMULA_VARS.map(k => (
                       <button key={k} type="button" onClick={() => pushTok({ t: 'var', k: k as FormulaVar })}
@@ -921,13 +921,13 @@ export function PayrollScreen({
                   </div>
                   {formulaFields && formulaFields.emp.length > 0 ? (
                     <>
-                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaEmpFieldsHeading}</p>
+                      <p className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaEmpFieldsHeading}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {fieldChips(formulaFields.emp).map(c => (
                           <button key={`${c.key}=${c.eq ?? ''}`} type="button"
                             onClick={() => pushTok({ t: 'ecf', k: c.key, label: c.label, ...(c.eq !== undefined ? { eq: c.eq } : {}) })}
                             title={c.eq !== undefined ? t.formulaEcfMatchDesc : t.formulaEcfDesc}
-                            className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-700 hover:bg-amber-100">
+                            className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-200 text-xs font-semibold text-amber-700 hover:bg-amber-100">
                             {c.label}
                           </button>
                         ))}
@@ -936,23 +936,23 @@ export function PayrollScreen({
                   ) : null}
                   {formulaFields && formulaFields.job.length > 0 ? (
                     <>
-                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaJobFieldsHeading}</p>
+                      <p className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaJobFieldsHeading}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {fieldChips(formulaFields.job).map(c => (
                           <button key={`${c.key}=${c.eq ?? ''}`} type="button"
                             onClick={() => pushTok({ t: 'jcf', k: c.key, label: c.label, ...(c.eq !== undefined ? { eq: c.eq } : {}) })}
                             title={c.eq !== undefined ? t.formulaJcfCountDesc : t.formulaJcfDesc}
-                            className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                            className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
                             {c.label}
                           </button>
                         ))}
                       </div>
-                      <p className="text-[11px] text-gray-400">{t.formulaJobFieldHint}</p>
+                      <p className="text-[11px] text-faint">{t.formulaJobFieldHint}</p>
                     </>
                   ) : null}
                   {draftConfig.formula.length > 0 ? (
                     <button type="button" onClick={() => setDraftConfig(c => ({ ...c, formula: [] }))}
-                      className="self-start text-xs font-semibold text-gray-400 hover:text-red-500">
+                      className="self-start text-xs font-semibold text-faint hover:text-red-500">
                       {t.formulaClear}
                     </button>
                   ) : null}
@@ -970,30 +970,30 @@ export function PayrollScreen({
       {/* Mark-paid modal */}
       {payRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setPayRow(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
             <div className="relative mb-4">
-              <button type="button" onClick={() => setPayRow(null)} className="absolute right-0 top-0 p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-400" />
+              <button type="button" onClick={() => setPayRow(null)} className="absolute right-0 top-0 p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-faint" />
               </button>
               <div className="text-center pt-1">
-                <p className="text-base font-semibold text-gray-900">{payRow.name}</p>
+                <p className="text-base font-semibold text-ink">{payRow.name}</p>
                 <p className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</p>
-                <p className="text-sm text-gray-400 mt-0.5">{checkHoursOf(payRow)} h</p>
+                <p className="text-sm text-faint mt-0.5">{checkHoursOf(payRow)} h</p>
                 {componentsText(checkComponentsOf(payRow)) ? (
-                  <p className="text-xs text-gray-400 mt-0.5">{componentsText(checkComponentsOf(payRow))}</p>
+                  <p className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</p>
                 ) : null}
               </div>
             </div>
 
             {(payRow.payments ?? []).length > 0 && (
               <div className="mb-4">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.alreadyPaidLabel}</p>
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.alreadyPaidLabel}</p>
+                <div className="rounded-xl border border-border-soft overflow-hidden">
                   {(payRow.payments ?? []).map((pmt, i) => (
-                    <div key={pmt.id} className={`px-3 py-2 flex items-center gap-2 ${i < (payRow.payments?.length ?? 0) - 1 ? 'border-b border-gray-50' : ''}`}>
+                    <div key={pmt.id} className={`px-3 py-2 flex items-center gap-2 ${i < (payRow.payments?.length ?? 0) - 1 ? 'border-b border-border-soft' : ''}`}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{fmt(pmt.grossPay)}</p>
-                        <p className="text-[11px] text-gray-400">
+                        <p className="text-sm font-semibold text-ink">{fmt(pmt.grossPay)}</p>
+                        <p className="text-[11px] text-faint">
                           {pmt.hours ? `${Math.round(pmt.hours * 100) / 100} h · ` : ''}
                           {paymentBadgeLabel(pmt)}
                           {pmt.paidAt ? ` · ${fmtDay(pmt.paidAt)}` : ''}
@@ -1005,7 +1005,7 @@ export function PayrollScreen({
                         onClick={() => onDeletePayment(pmt.id)}
                         disabled={busy}
                         title={t.removePayment}
-                        className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"
+                        className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -1025,7 +1025,7 @@ export function PayrollScreen({
               </div>
             )}
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</p>
             <div className="flex gap-2 mb-4">
               {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                 const on = method === m;
@@ -1034,7 +1034,7 @@ export function PayrollScreen({
                     key={m}
                     type="button"
                     onClick={() => setMethod(m)}
-                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 border transition-colors ${on ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}
                   >
                     <Icon size={16} />
                     <span className="text-xs font-semibold">{label}</span>
@@ -1045,46 +1045,46 @@ export function PayrollScreen({
 
             {method === 'check' && (
               <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</label>
+                <label className="block text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</label>
                 <input
                   value={checkNumber}
                   onChange={e => setCheckNumber(e.target.value)}
                   placeholder={t.checkNumberPlaceholder}
                   inputMode="numeric"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             )}
 
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">{t.bonusLabel}</label>
+              <label className="block text-sm font-semibold text-ink mb-2">{t.bonusLabel}</label>
               <input
                 value={bonus}
                 onChange={e => setBonus(e.target.value.replace(/[^0-9.]/g, ''))}
                 placeholder="0.00"
                 inputMode="decimal"
-                className="w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             {/* Loan tracker — balance + deduct from this check. Full history /
                add / delete lives in the loans dialog. */}
             {payRow && onAddLoan ? (
-              <div className="mb-4 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <div className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">{t.loanTitle}</span>
-                  <span className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                  <span className="text-sm font-semibold text-ink">{t.loanTitle}</span>
+                  <span className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                     {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
                   </span>
                 </div>
                 {loanBalanceOf(payRow.employeeId) > 0 ? (
                   <div className="mt-2">
-                    <label className="block text-xs text-gray-500 mb-1">{t.loanDeductLabel}</label>
+                    <label className="block text-xs text-muted mb-1">{t.loanDeductLabel}</label>
                     <input value={loanDeduct} onChange={e => setLoanDeduct(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
-                      <p className="text-xs text-gray-500 mt-1.5">{t.loanNetToPay}: <span className="font-bold text-gray-900">{fmt(netToPay)}</span></p>
+                      <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink">{fmt(netToPay)}</span></p>
                     ) : null}
                   </div>
                 ) : null}
@@ -1100,27 +1100,27 @@ export function PayrollScreen({
           {/* Loans dialog — history, back-dated add, per-entry delete. */}
           {payRow && showLoans ? (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4" onClick={e => { e.stopPropagation(); setShowLoans(false); }}>
-              <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-card rounded-2xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</p>
-                    <p className={`text-sm font-semibold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    <p className="text-lg font-bold text-ink">{t.loanHistoryTitle}</p>
+                    <p className={`text-sm font-semibold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                       {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
                     </p>
                   </div>
-                  <button type="button" onClick={() => setShowLoans(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+                  <button type="button" onClick={() => setShowLoans(false)} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} /></button>
                 </div>
 
                 {showAddLoan || editingEntry ? (
-                  <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</p>
+                  <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-border-soft bg-surface p-3">
+                    <p className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</p>
                     <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <div className="flex gap-2 mt-1">
-                      <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-600 hover:bg-gray-200">{full.common.buttons.cancel}</button>
+                      <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-border-soft text-sm font-semibold text-muted hover:bg-border">{full.common.buttons.cancel}</button>
                       <button type="button" onClick={editingEntry ? submitEditLoan : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className="flex-1 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">{t.loanSaveBtn}</button>
                     </div>
                   </div>
@@ -1130,7 +1130,7 @@ export function PayrollScreen({
                 )}
 
                 {loanEntriesOf(payRow.employeeId).length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</p>
+                  <p className="text-sm text-faint text-center py-6">{t.loanEmpty}</p>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {loanEntriesOf(payRow.employeeId).map(e => {
@@ -1138,20 +1138,20 @@ export function PayrollScreen({
                       return (
                         <div key={e.id} className="flex items-center gap-3 py-2.5">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold text-ink">
                               <span className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</span>
                               {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
                             </p>
-                            <p className="text-xs text-gray-400 truncate">
+                            <p className="text-xs text-faint truncate">
                               {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
                               {e.note ? ` · ${e.note}` : ''}
                             </p>
                           </div>
                           {onEditLoan ? (
-                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Pencil size={15} /></button>
+                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-border-soft text-muted"><Pencil size={15} /></button>
                           ) : null}
                           {onDeleteLoan ? (
-                            <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={16} /></button>
+                            <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400"><Trash2 size={16} /></button>
                           ) : null}
                         </div>
                       );
@@ -1167,11 +1167,11 @@ export function PayrollScreen({
       {/* Worker hours breakdown */}
       {detailRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetailRow(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="text-lg font-bold text-gray-900">{detailRow.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-lg font-bold text-ink">{detailRow.name}</p>
+                <p className="text-sm text-muted">
                   {fmt(detailRow.pay)} · {Math.round(detailRow.hours * 100) / 100} h
                 </p>
                 {paidTotal(detailRow) > 0 ? (
@@ -1180,49 +1180,49 @@ export function PayrollScreen({
                   </p>
                 ) : null}
               </div>
-              <button type="button" onClick={() => setDetailRow(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-400" />
+              <button type="button" onClick={() => setDetailRow(null)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-faint" />
               </button>
             </div>
 
             {/* Worked vs driven vs logged stat cards */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               {([[Wrench, t.hoursWorked, detailRow.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, detailRow.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, detailRow.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
-                <div key={i} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
-                  <Icon size={15} className="text-gray-400 mx-auto mb-1" />
-                  <p className="text-base font-bold text-gray-900">{val}</p>
-                  <p className="text-[11px] text-gray-400">{label}</p>
+                <div key={i} className="rounded-2xl border border-border-soft bg-surface p-3 text-center">
+                  <Icon size={15} className="text-faint mx-auto mb-1" />
+                  <p className="text-base font-bold text-ink">{val}</p>
+                  <p className="text-[11px] text-faint">{label}</p>
                 </div>
               ))}
             </div>
 
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</p>
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</p>
             {detailRow.breakdown && detailRow.breakdown.jobs.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {detailRow.breakdown.jobs.map((j, i) => (
-                  <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                  <div key={j.jobId ?? i} className="flex items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
                     <button
                       type="button"
                       disabled={!j.jobId || !onJobPress}
                       onClick={() => { if (j.jobId && onJobPress) { setDetailRow(null); onJobPress(j.jobId, detailRow.employeeId); } }}
                       className="flex-1 min-w-0 text-left group disabled:cursor-default"
                     >
-                      <p className={`text-sm font-semibold text-gray-900 truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
-                      {j.date && <p className="text-[11px] text-gray-400">{fmtDay(j.date)}</p>}
+                      <p className={`text-sm font-semibold text-ink truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
+                      {j.date && <p className="text-[11px] text-faint">{fmtDay(j.date)}</p>}
                     </button>
                     <div className="text-right shrink-0">
                       {j.workedHours > 0 && (
-                        <p className="text-xs text-gray-600"><Wrench size={11} className="inline mr-1 text-gray-400" />{j.workedHours} h</p>
+                        <p className="text-xs text-muted"><Wrench size={11} className="inline mr-1 text-faint" />{j.workedHours} h</p>
                       )}
                       {j.drivenHours > 0 && (
-                        <p className="text-xs text-gray-600"><Truck size={11} className="inline mr-1 text-gray-400" />{j.drivenHours} h</p>
+                        <p className="text-xs text-muted"><Truck size={11} className="inline mr-1 text-faint" />{j.drivenHours} h</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</p>
+              <p className="text-sm text-faint py-4 text-center">{t.noBreakdown}</p>
             )}
           </div>
         </div>
@@ -1232,30 +1232,30 @@ export function PayrollScreen({
          ex-workers. Search to find anyone, click to view/add/delete their loans. */}
       {loansOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setLoansOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-md p-6 h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {loanWorkerId ? (
               <>
                 <div className="flex items-center gap-2 mb-4">
-                  <button type="button" onClick={() => setLoanWorkerId(null)} className="p-1 rounded-lg hover:bg-gray-100"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setLoanWorkerId(null)} className="p-1 rounded-lg hover:bg-border-soft"><ChevronLeft size={20} /></button>
                   <div className="flex-1 min-w-0">
-                    <p className="text-lg font-bold text-gray-900 truncate">{loanNameOf(loanWorkerId)}</p>
-                    <p className={`text-sm font-semibold ${loanBalanceOf(loanWorkerId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    <p className="text-lg font-bold text-ink truncate">{loanNameOf(loanWorkerId)}</p>
+                    <p className={`text-sm font-semibold ${loanBalanceOf(loanWorkerId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                       {fmt(loanBalanceOf(loanWorkerId))} {t.loanOwed}
                     </p>
                   </div>
-                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} /></button>
                 </div>
 
                 {loanFormOpen ? (
-                  <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</p>
+                  <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-border-soft bg-surface p-3">
+                    <p className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</p>
                     <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <div className="flex gap-2 mt-1">
-                      <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-600 hover:bg-gray-200">{full.common.buttons.cancel}</button>
+                      <button type="button" onClick={resetLoanForms} className="flex-1 py-2 rounded-xl bg-border-soft text-sm font-semibold text-muted hover:bg-border">{full.common.buttons.cancel}</button>
                       <button type="button" onClick={editingEntry ? submitEditLoan : showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
                         className={`flex-1 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 ${showAddPayment ? 'bg-emerald-600' : 'bg-primary'}`}>{t.loanSaveBtn}</button>
                     </div>
@@ -1266,14 +1266,14 @@ export function PayrollScreen({
                       className="flex-1 py-2.5 rounded-xl bg-primary/10 text-sm font-semibold text-primary hover:bg-primary/20">+ {t.addLoanBtn}</button>
                     {onLoanRepayment ? (
                       <button type="button" onClick={() => { resetLoanForms(); setShowAddPayment(true); }}
-                        className="flex-1 py-2.5 rounded-xl bg-emerald-50 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">{t.recordPaymentBtn}</button>
+                        className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">{t.recordPaymentBtn}</button>
                     ) : null}
                   </div>
                 )}
 
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
                 {loanEntriesOf(loanWorkerId).length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</p>
+                  <p className="text-sm text-faint text-center py-6">{t.loanEmpty}</p>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {loanEntriesOf(loanWorkerId).map(e => {
@@ -1281,20 +1281,20 @@ export function PayrollScreen({
                       return (
                         <div key={e.id} className="flex items-center gap-3 py-2.5">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold text-ink">
                               <span className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</span>
                               {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
                             </p>
-                            <p className="text-xs text-gray-400 truncate">
+                            <p className="text-xs text-faint truncate">
                               {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
                               {e.note ? ` · ${e.note}` : ''}
                             </p>
                           </div>
                           {onEditLoan ? (
-                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><Pencil size={15} /></button>
+                            <button type="button" onClick={() => startEditEntry(e)} className="p-1.5 rounded-lg hover:bg-border-soft text-muted"><Pencil size={15} /></button>
                           ) : null}
                           {onDeleteLoan ? (
-                            <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={16} /></button>
+                            <button type="button" onClick={() => onDeleteLoan(e.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400"><Trash2 size={16} /></button>
                           ) : null}
                         </div>
                       );
@@ -1306,26 +1306,26 @@ export function PayrollScreen({
             ) : loanPickMode ? (
               <>
                 <div className="flex items-center gap-2 mb-4">
-                  <button type="button" onClick={() => setLoanPickMode(false)} className="p-1 rounded-lg hover:bg-gray-100"><ChevronLeft size={20} /></button>
-                  <p className="flex-1 text-lg font-bold text-gray-900">{t.loanPickTitle}</p>
-                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+                  <button type="button" onClick={() => setLoanPickMode(false)} className="p-1 rounded-lg hover:bg-border-soft"><ChevronLeft size={20} /></button>
+                  <p className="flex-1 text-lg font-bold text-ink">{t.loanPickTitle}</p>
+                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} /></button>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 mb-3">
-                  <Search size={16} className="text-gray-400" />
+                <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 mb-3">
+                  <Search size={16} className="text-faint" />
                   <input value={loanSearch} onChange={e => setLoanSearch(e.target.value)} placeholder={t.loanSearchPlaceholder}
                     className="flex-1 text-sm focus:outline-none" />
                 </div>
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
                 {loanPickList.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">{t.loanNoWorkerFound}</p>
+                  <p className="text-sm text-faint text-center py-6">{t.loanNoWorkerFound}</p>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {loanPickList.map(w => (
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id, true)}
-                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-50 rounded-lg px-1">
-                        <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 truncate">{w.name}</span>
+                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">
+                        <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{w.name}</span>
                         {loanBalanceOf(w.id) > 0 ? <span className="text-xs font-semibold text-amber-600">{fmt(loanBalanceOf(w.id))}</span> : null}
-                        <Chevron size={16} className="text-gray-300" />
+                        <Chevron size={16} className="text-faint" />
                       </button>
                     ))}
                   </div>
@@ -1335,29 +1335,29 @@ export function PayrollScreen({
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</p>
-                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+                  <p className="text-lg font-bold text-ink">{t.loanHistoryTitle}</p>
+                  <button type="button" onClick={() => setLoansOpen(false)} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} /></button>
                 </div>
                 <button type="button" onClick={startAddLoanPicker}
                   className="mb-3 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90">+ {t.addLoanBtn}</button>
                 {(loanDirectory.length > 0 || loanSearch.trim()) ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 mb-3">
-                    <Search size={16} className="text-gray-400" />
+                  <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 mb-3">
+                    <Search size={16} className="text-faint" />
                     <input value={loanSearch} onChange={e => setLoanSearch(e.target.value)} placeholder={t.loanSearchPlaceholder}
                       className="flex-1 text-sm focus:outline-none" />
                   </div>
                 ) : null}
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">
                 {loanDirectory.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</p>
+                  <p className="text-sm text-faint text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</p>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {loanDirectory.map(w => (
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id)}
-                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-50 rounded-lg px-1">
-                        <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 truncate">{w.name}</span>
-                        <span className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>{fmt(loanBalanceOf(w.id))}</span>
-                        <Chevron size={16} className="text-gray-300" />
+                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">
+                        <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{w.name}</span>
+                        <span className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-faint'}`}>{fmt(loanBalanceOf(w.id))}</span>
+                        <Chevron size={16} className="text-faint" />
                       </button>
                     ))}
                   </div>

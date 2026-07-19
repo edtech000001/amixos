@@ -432,15 +432,15 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
 
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
-    return <div className="p-6 text-sm text-gray-400">{tc.states.loading}...</div>;
+    return <div className="p-6 text-sm text-faint">{tc.states.loading}...</div>;
   }
   if (notFound || !employee) {
     return (
       <div className="p-6">
-        <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-4">
+        <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink mb-4">
           <ArrowLeft size={16} /> {tc.buttons.back}
         </Link>
-        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-sm text-gray-500">
+        <div className="bg-card rounded-2xl border border-border-soft p-8 text-center text-sm text-muted">
           {/* Generic "not found" fallback — kept inline since common.states
              only carries loading/saving today. */}
           —
@@ -457,14 +457,14 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
          delete lives top-right like mobile. Deactivate moved under App Access. */}
       <div className="flex items-center justify-between mb-6">
         {isView ? (
-          <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
+          <Link href="/dashboard/empleados" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink">
             <ArrowLeft size={16} /> {tc.buttons.back}
           </Link>
         ) : (
           <button
             type="button"
             onClick={() => { setMode('view'); setError(''); load(); }}
-            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900"
+            className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink"
           >
             <ArrowLeft size={16} /> {tc.buttons.back}
           </button>
@@ -475,16 +475,16 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
               <button
                 type="button"
                 onClick={() => setMode('edit')}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-2 rounded-lg hover:bg-border-soft transition-colors"
               >
-                <Pencil size={16} className="text-gray-500" />
+                <Pencil size={16} className="text-muted" />
               </button>
               {canDeleteEmployee ? (
                 <button
                   type="button"
                   onClick={deleteEmployee}
                   disabled={accessBusy}
-                  className="p-2 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                  className="p-2 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                 >
                   <Trash2 size={16} className="text-red-500" />
                 </button>
@@ -501,16 +501,16 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           <div className="flex flex-col gap-5">
         {/* Avatar + name — floats above the section cards (matches mobile) */}
         <div className="flex flex-col items-center gap-2 py-2">
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-            <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
+            <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-faint'}`}>
               {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
             </span>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold text-ink">
             {employee.first_name} {employee.last_name}
           </h1>
           {!employee.active ? (
-            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">{t.inactiveBadge}</span>
+            <span className="px-2 py-0.5 rounded-full bg-border-soft text-xs text-faint">{t.inactiveBadge}</span>
           ) : null}
         </div>
 
@@ -518,28 +518,28 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             (so they show in that branch's team list too). View mode only;
             the home branch itself is changed via the edit form. */}
         {isView && locations.length >= 2 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <MapPin size={15} className="text-primary" />
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{lang === 'en' ? 'Locations' : 'Ubicaciones'}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide">{lang === 'en' ? 'Locations' : 'Ubicaciones'}</p>
             </div>
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-ink">
               {lang === 'en' ? 'Home branch: ' : 'Sucursal principal: '}
               <span className="font-semibold">{locations.find(l => l.id === homeLocation)?.name ?? (lang === 'en' ? 'None' : 'Ninguna')}</span>
             </p>
-            <p className="text-xs text-gray-400">{lang === 'en' ? 'Share with other branches (they appear in that team list too):' : 'Compartir con otras sucursales (aparecen también en esa lista de equipo):'}</p>
+            <p className="text-xs text-faint">{lang === 'en' ? 'Share with other branches (they appear in that team list too):' : 'Compartir con otras sucursales (aparecen también en esa lista de equipo):'}</p>
             <div className="flex flex-wrap gap-2">
               {locations.filter(l => l.id !== homeLocation).map(l => {
                 const shared = sharedLocations.includes(l.id);
                 return (
                   <button key={l.id} type="button" onClick={() => toggleShare(l.id)}
-                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${shared ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${shared ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted hover:bg-surface'}`}>
                     {shared && <Check size={12} />} {l.name}
                   </button>
                 );
               })}
               {locations.filter(l => l.id !== homeLocation).length === 0 ? (
-                <p className="text-xs text-gray-400">{lang === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</p>
+                <p className="text-xs text-faint">{lang === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</p>
               ) : null}
             </div>
           </div>
@@ -563,13 +563,13 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
               type="button"
               onClick={toggleActive}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
-                employee.active ? 'bg-gray-50 hover:bg-gray-100' : 'bg-emerald-50 hover:bg-emerald-100'
+                employee.active ? 'bg-surface hover:bg-border-soft' : 'bg-emerald-500/10 hover:bg-emerald-100'
               }`}
             >
               {employee.active ? (
                 <>
-                  <UserX size={15} className="text-gray-500" />
-                  <span className="text-sm font-semibold text-gray-600">{t.deactivateBtn}</span>
+                  <UserX size={15} className="text-muted" />
+                  <span className="text-sm font-semibold text-muted">{t.deactivateBtn}</span>
                 </>
               ) : (
                 <>
@@ -585,13 +585,13 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
               onClick={toggleRoster}
               title={t.rosterHint}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
-                (employee.show_in_roster ?? true) ? 'bg-gray-50 hover:bg-gray-100' : 'bg-amber-50 hover:bg-amber-100'
+                (employee.show_in_roster ?? true) ? 'bg-surface hover:bg-border-soft' : 'bg-amber-500/10 hover:bg-amber-100'
               }`}
             >
               {(employee.show_in_roster ?? true) ? (
                 <>
-                  <UserX size={15} className="text-gray-500" />
-                  <span className="text-sm font-semibold text-gray-600">{t.rosterRemoveBtn}</span>
+                  <UserX size={15} className="text-muted" />
+                  <span className="text-sm font-semibold text-muted">{t.rosterRemoveBtn}</span>
                 </>
               ) : (
                 <>
@@ -605,7 +605,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface hover:bg-border-soft transition-colors"
           >
             <Clock size={15} className="text-primary" />
             <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
@@ -622,29 +622,29 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           <div className="flex flex-col gap-5">
         {/* Avatar + name — floats above the section cards (matches mobile) */}
         <div className="flex flex-col items-center gap-2 py-2">
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-            <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
+            <span className={`text-2xl font-bold ${employee.active ? 'text-primary' : 'text-faint'}`}>
               {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
             </span>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold text-ink">
             {employee.first_name} {employee.last_name}
           </h1>
           {!employee.active ? (
-            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-400">{t.inactiveBadge}</span>
+            <span className="px-2 py-0.5 rounded-full bg-border-soft text-xs text-faint">{t.inactiveBadge}</span>
           ) : null}
         </div>
 
         {/* Home branch — editable in edit mode (multi-location businesses only). */}
         {!isView && locations.length >= 2 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-700">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-2">
+            <label className="text-sm font-medium text-ink">{lang === 'en' ? 'Home location' : 'Ubicación principal'}</label>
             <select value={homeLocation} onChange={e => setHomeLocation(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{lang === 'en' ? 'No location' : 'Sin ubicación'}</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
-            <p className="text-xs text-gray-400">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
+            <p className="text-xs text-faint">{lang === 'en' ? 'Lend them to other branches in Settings → Locations.' : 'Préstalos a otras sucursales en Ajustes → Ubicaciones.'}</p>
           </div>
         ) : null}
 
@@ -760,8 +760,8 @@ function ViewBody({ emp, templates, t, payTypes, payUnit, lang }: {
 // InfoCard so the layout matches across platforms).
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-3">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</p>
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6 flex flex-col gap-3">
+      <p className="text-xs font-semibold text-faint uppercase tracking-wide">{title}</p>
       {children}
     </div>
   );
@@ -835,8 +835,8 @@ function EditForm({
       case 'pay_type':
         return (
           <div key={key} className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
-            <select value={form.pay_type} onChange={e => setForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <label className="text-sm font-medium text-ink">{rLabel('pay_type', t.modal.payTypeLabel)}</label>
+            <select value={form.pay_type} onChange={e => setForm(f => ({ ...f, pay_type: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(payTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -849,7 +849,7 @@ function EditForm({
             {form.pay_type === 'hourly' ? (
               <>
                 <label className="flex items-center justify-between gap-3 cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</span>
+                  <span className="text-sm font-medium text-ink">{t.modal.overtimeLabel}</span>
                   <input
                     type="checkbox"
                     checked={form.overtime_eligible}
@@ -859,24 +859,24 @@ function EditForm({
                 </label>
                 {form.overtime_eligible ? (
                   <div className="flex gap-3">
-                    <label className="flex-1 text-xs text-gray-500">
+                    <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeThresholdLabel}
                       <input
                         type="number" min="0"
                         value={form.overtime_threshold}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         onChange={e => setForm(f => ({ ...f, overtime_threshold: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
-                    <label className="flex-1 text-xs text-gray-500">
+                    <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeMultiplierLabel}
                       <input
                         type="number" min="1" step="0.1"
                         value={form.overtime_multiplier}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         onChange={e => setForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
                   </div>
@@ -892,8 +892,8 @@ function EditForm({
       case 'state':
         return (
           <div key={key} className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{rLabel('state', t.modal.stateLabel)}</label>
-            <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <label className="text-sm font-medium text-ink">{rLabel('state', t.modal.stateLabel)}</label>
+            <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               <option value="">{t.modal.stateNone}</option>
               {usStates.map(s => <option key={s} value={s}>{usStateName(s, lang)}</option>)}
             </select>
@@ -917,8 +917,8 @@ function EditForm({
           .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
         if (visibleKeys.length === 0) return null;
         return (
-          <div key={section} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{sectionLabel(section)}</p>
+          <div key={section} className="bg-card rounded-2xl border border-border-soft shadow-sm p-6 flex flex-col gap-4">
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide">{sectionLabel(section)}</p>
             {visibleKeys.map(k => {
               if (k.startsWith('custom:')) {
                 const tpl = templates.find(tp => `custom:${tp.id}` === k);
@@ -966,27 +966,27 @@ function AccessSection({
     }
   };
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white shadow-sm p-6">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.modal.appAccessHeading}</p>
+    <div className="flex flex-col gap-3 rounded-2xl border border-border-soft bg-card shadow-sm p-6">
+      <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.modal.appAccessHeading}</p>
       {selAccess?.kind === 'active' ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</span>
-            {selAccess.isYou ? <span className="text-xs text-gray-400">{teamT.youSuffix}</span> : null}
-            {selAccess.role === 'owner' ? <span className="text-xs text-gray-400">{teamT.ownerSuffix}</span> : null}
+            {selAccess.isYou ? <span className="text-xs text-faint">{teamT.youSuffix}</span> : null}
+            {selAccess.role === 'owner' ? <span className="text-xs text-faint">{teamT.ownerSuffix}</span> : null}
           </div>
           {canManage && !selAccess.isYou && selAccess.role !== 'owner' ? (
             <div className="flex items-center gap-2">
-              <select value={selAccess.role} disabled={busy} onChange={e => onChangeRole(selAccess.memberId, e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              <select value={selAccess.role} disabled={busy} onChange={e => onChangeRole(selAccess.memberId, e.target.value as Role)} className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
               </select>
-              <button type="button" disabled={busy} onClick={() => onRemove(selAccess.memberId)} className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+              <button type="button" disabled={busy} onClick={() => onRemove(selAccess.memberId)} className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50">
                 {teamT.removeBtn}
               </button>
             </div>
           ) : null}
           {canVerComo && selAccess.kind === 'active' ? (
-            <button type="button" disabled={busy} onClick={() => onVerComo(selAccess.memberId)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => onVerComo(selAccess.memberId)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-sm font-semibold text-ink hover:bg-surface transition-colors disabled:opacity-50">
               <Eye size={14} /> {teamT.verComoBtn}
             </button>
           ) : null}
@@ -994,7 +994,7 @@ function AccessSection({
       ) : selAccess?.kind === 'invited' ? (
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
-          <span className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</span>
+          <span className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</span>
           {canManage ? (
             <div className="ml-auto flex items-center gap-1">
               {selAccess.acceptUrl ? (
@@ -1002,7 +1002,7 @@ function AccessSection({
                   {copied ? teamT.linkCopied : teamT.copyLinkBtn}
                 </button>
               ) : null}
-              <button type="button" disabled={busy} onClick={() => onRevoke(selAccess.inviteId)} className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+              <button type="button" disabled={busy} onClick={() => onRevoke(selAccess.inviteId)} className="px-3 py-1.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50">
                 {teamT.revokeBtn}
               </button>
             </div>
@@ -1010,9 +1010,9 @@ function AccessSection({
         </div>
       ) : canManage ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</p>
+          <p className="text-xs text-muted">{t.modal.appAccessNoneHint}</p>
           <div className="flex items-center gap-2">
-            <select value={role} disabled={busy} onChange={e => setRole(e.target.value as Role)} className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+            <select value={role} disabled={busy} onChange={e => setRole(e.target.value as Role)} className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
             </select>
             <button type="button" disabled={busy || !email} onClick={() => onInvite(email, role)} className="px-3 py-2 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
@@ -1022,7 +1022,7 @@ function AccessSection({
           {!email ? <p className="text-xs text-amber-600">{t.modal.appAccessEmailRequired}</p> : null}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">{t.modal.appAccessNoManage}</p>
+        <p className="text-xs text-faint">{t.modal.appAccessNoManage}</p>
       )}
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
     </div>
@@ -1034,8 +1034,8 @@ function ViewRow({ label, value }: { label: string; value: string | null | undef
   if (!value) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm text-gray-900">{value}</p>
+      <p className="text-xs text-faint">{label}</p>
+      <p className="text-sm text-ink">{value}</p>
     </div>
   );
 }
@@ -1052,12 +1052,12 @@ function CustomFieldInput({ template, value, onChange }: {
     // Long free text — multiline.
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-ink">{label}</label>
         <textarea
           rows={4}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
         />
       </div>
     );
@@ -1070,14 +1070,14 @@ function CustomFieldInput({ template, value, onChange }: {
     const noActive = value === 'false';
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
         <div className="flex gap-2">
           <button type="button" onClick={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${yesActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.yes}
           </button>
           <button type="button" onClick={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold ${noActive ? 'border-primary bg-primary text-white' : 'border-border bg-card text-ink hover:bg-surface'}`}>
             {tc.states.no}
           </button>
         </div>
@@ -1091,13 +1091,13 @@ function CustomFieldInput({ template, value, onChange }: {
       const selected = splitMultiValue(value);
       return (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">{label}</label>
+          <label className="text-sm font-medium text-ink">{label}</label>
           <div className="flex flex-wrap gap-2">
             {template.field_options.map(o => {
               const on = selected.includes(o);
               return (
                 <button key={o} type="button" onClick={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted hover:border-border'}`}>
                   {o}
                 </button>
               );
@@ -1108,8 +1108,8 @@ function CustomFieldInput({ template, value, onChange }: {
     }
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
-        <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+        <label className="text-sm font-medium text-ink">{label}</label>
+        <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
           <option value="">—</option>
           {template.field_options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>

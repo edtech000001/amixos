@@ -20,12 +20,12 @@ export function Toggle({ checked, onChange, disabled, ...rest }: ToggleProps) {
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
-        checked ? 'bg-primary' : 'bg-gray-200'
+        checked ? 'bg-primary' : 'bg-border'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       {...rest}
     >
       <span
-        className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+        className="absolute top-1 left-1 w-4 h-4 rounded-full bg-card transition-transform"
         style={{ transform: checked ? 'translateX(20px)' : 'translateX(0)' }}
       />
     </button>

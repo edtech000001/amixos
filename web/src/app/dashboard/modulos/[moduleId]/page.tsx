@@ -36,12 +36,12 @@ export default function ModulePage({ params }: { params: { moduleId: string } })
   if (!def) {
     return (
       <div className="p-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-4">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink mb-4">
           <ArrowLeft size={16} />
           {full.common.buttons.back}
         </Link>
-        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-          <p className="text-sm text-gray-500">Module not found.</p>
+        <div className="bg-card rounded-2xl border border-border-soft p-8 text-center">
+          <p className="text-sm text-muted">Module not found.</p>
         </div>
       </div>
     );
@@ -60,28 +60,28 @@ export default function ModulePage({ params }: { params: { moduleId: string } })
 
   return (
     <div className="p-6">
-      <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-4">
+      <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink mb-4">
         <ArrowLeft size={16} />
         {full.common.buttons.back}
       </Link>
-      <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center max-w-xl mx-auto">
+      <div className="bg-card rounded-2xl border border-border-soft p-10 text-center max-w-xl mx-auto">
         <div
           className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-5"
           style={{ backgroundColor: `${def.color}15` }}
         >
           <Icon size={32} color={def.color} />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{name}</h1>
+        <h1 className="text-2xl font-bold text-ink mb-2">{name}</h1>
         {description ? (
-          <p className="text-sm text-gray-500 mb-6">{description}</p>
+          <p className="text-sm text-muted mb-6">{description}</p>
         ) : null}
 
-        <div className="flex flex-col items-center gap-2 mt-6 pt-6 border-t border-gray-100">
+        <div className="flex flex-col items-center gap-2 mt-6 pt-6 border-t border-border-soft">
           <Construction size={20} className="text-amber-500" />
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-ink">
             {full.dashboard.modules.placeholder.heading}
           </p>
-          <p className="text-xs text-gray-500 max-w-sm">
+          <p className="text-xs text-muted max-w-sm">
             {full.dashboard.modules.placeholder.body}
           </p>
         </div>

@@ -377,7 +377,7 @@ export function MapSettingsPanel({
         <div className="flex flex-col gap-5">
           {/* Map type */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.mapTypeLabel}</p>
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.mapTypeLabel}</p>
             <div className="flex flex-wrap gap-2">
               {mapTypeOptions.map(opt => {
                 const on = stagedDeviceSettings.mapType === opt.key;
@@ -386,7 +386,7 @@ export function MapSettingsPanel({
                     key={opt.key}
                     onClick={() => setStagedDeviceSettings(prev => ({ ...prev, mapType: opt.key }))}
                     className={`px-3 py-1.5 rounded-xl border text-sm font-medium ${
-                      on ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      on ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-ink hover:border-border'
                     }`}
                   >
                     {opt.label}
@@ -399,16 +399,16 @@ export function MapSettingsPanel({
           {/* Clustering */}
           <div className="flex items-center justify-between">
             <div className="flex-1 pr-3">
-              <p className="text-sm font-semibold text-gray-900">{t.clusteringLabel}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{t.clusteringSubtitle}</p>
+              <p className="text-sm font-semibold text-ink">{t.clusteringLabel}</p>
+              <p className="text-xs text-muted mt-0.5">{t.clusteringSubtitle}</p>
             </div>
             <button
               type="button" role="switch" aria-checked={stagedDeviceSettings.clustering}
               onClick={() => setStagedDeviceSettings(prev => ({ ...prev, clustering: !prev.clustering }))}
-              className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-gray-200'}`}
+              className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-border'}`}
             >
               <span
-                className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                className="absolute top-1 left-1 w-4 h-4 rounded-full bg-card transition-transform"
                 style={{ transform: stagedDeviceSettings.clustering ? 'translateX(20px)' : 'translateX(0)' }}
               />
             </button>
@@ -416,7 +416,7 @@ export function MapSettingsPanel({
 
           {/* Pin size */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.pinSizeLabel}</p>
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.pinSizeLabel}</p>
             <div className="grid grid-cols-3 gap-2">
               {pinSizeOptions.map(opt => {
                 const on = stagedDeviceSettings.pinSize === opt.key;
@@ -425,7 +425,7 @@ export function MapSettingsPanel({
                     key={opt.key}
                     onClick={() => setStagedDeviceSettings(prev => ({ ...prev, pinSize: opt.key }))}
                     className={`px-3 py-2 rounded-xl border text-sm font-medium text-center ${
-                      on ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      on ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-ink hover:border-border'
                     }`}
                   >
                     {opt.label}
@@ -439,27 +439,27 @@ export function MapSettingsPanel({
              with the green ✓ when outreach mode is on. */}
           <div className="flex items-center justify-between">
             <div className="flex-1 pr-3">
-              <p className="text-sm font-semibold text-gray-900">{t.outreachDaysLabel}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{t.outreachDaysSubtitle}</p>
+              <p className="text-sm font-semibold text-ink">{t.outreachDaysLabel}</p>
+              <p className="text-xs text-muted mt-0.5">{t.outreachDaysSubtitle}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.max(1, prev.outreachDays - 1) }))}
                 disabled={stagedDeviceSettings.outreachDays <= 1}
-                className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center justify-center"
+                className="w-8 h-8 rounded-lg border border-border bg-card text-ink hover:bg-surface disabled:opacity-40 flex items-center justify-center"
                 aria-label="-1"
               >
                 −
               </button>
-              <span className="min-w-[3.5rem] text-center text-sm font-semibold text-gray-900">
+              <span className="min-w-[3.5rem] text-center text-sm font-semibold text-ink">
                 {t.outreachDaysValue.replace('{{days}}', String(stagedDeviceSettings.outreachDays))}
               </span>
               <button
                 type="button"
                 onClick={() => setStagedDeviceSettings(prev => ({ ...prev, outreachDays: Math.min(365, prev.outreachDays + 1) }))}
                 disabled={stagedDeviceSettings.outreachDays >= 365}
-                className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center justify-center"
+                className="w-8 h-8 rounded-lg border border-border bg-card text-ink hover:bg-surface disabled:opacity-40 flex items-center justify-center"
                 aria-label="+1"
               >
                 +
@@ -469,8 +469,8 @@ export function MapSettingsPanel({
 
           {/* Layer style cards */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase">{t.pinRulesHeading}</p>
-            <p className="text-xs text-gray-500 mb-3">{t.pinRulesSubtitle}</p>
+            <p className="text-xs font-semibold text-faint uppercase">{t.pinRulesHeading}</p>
+            <p className="text-xs text-muted mb-3">{t.pinRulesSubtitle}</p>
             <div className="flex flex-col gap-2">
               {visibleLayers.map(layer => {
                 const cfg = config[layer];
@@ -480,45 +480,45 @@ export function MapSettingsPanel({
                 // field_key is set (pre-existing rows).
                 const ruleMode: 'none' | 'custom' = (cfg.rules.length > 0 || cfg.field_key) ? 'custom' : 'none';
                 return (
-                  <div key={layer} className="bg-gray-50 rounded-2xl overflow-hidden">
+                  <div key={layer} className="bg-surface rounded-2xl overflow-hidden">
                     <button
                       onClick={() => setOpenLayer(expanded ? null : layer)}
-                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-100/50"
+                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface"
                     >
                       <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={24} />
-                      <span className="flex-1 text-sm font-semibold text-gray-900 text-left">{layerLabel[layer]}</span>
+                      <span className="flex-1 text-sm font-semibold text-ink text-left">{layerLabel[layer]}</span>
                       {ruleMode === 'custom' && (
-                        <span className="text-xs text-gray-500 mr-2">
+                        <span className="text-xs text-muted mr-2">
                           {fieldOpts.find(f => f.key === cfg.field_key)?.label ?? cfg.field_key} · {cfg.rules.length}
                         </span>
                       )}
-                      <ChevronDown size={16} className={`text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={16} className={`text-muted transition-transform ${expanded ? 'rotate-180' : ''}`} />
                     </button>
 
                     {expanded && (
-                      <div className="px-4 pb-4 pt-3 border-t border-gray-100 flex flex-col gap-3">
+                      <div className="px-4 pb-4 pt-3 border-t border-border-soft flex flex-col gap-3">
                         {/* Default style — clickable pin badge. */}
                         <div>
-                          <p className="text-xs text-gray-500 mb-2">{t.defaultStyleLabel}</p>
+                          <p className="text-xs text-muted mb-2">{t.defaultStyleLabel}</p>
                           <button
                             type="button"
                             onClick={() => setPicker({ layer, ruleIdx: 'default' })}
-                            className="self-start flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
+                            className="self-start flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card hover:bg-surface"
                           >
                             <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={26} />
-                            <span className="text-xs text-gray-500">{t.editStylePinHint}</span>
+                            <span className="text-xs text-muted">{t.editStylePinHint}</span>
                           </button>
                         </div>
 
                         {/* Mode toggle */}
                         <div>
-                          <p className="text-xs text-gray-500 mb-2">{t.modeLabel}</p>
+                          <p className="text-xs text-muted mb-2">{t.modeLabel}</p>
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               type="button"
                               onClick={() => updateLayer(layer, { field_key: null, rules: [] })}
                               className={`px-3 py-2 rounded-xl border text-sm font-medium ${
-                                ruleMode === 'none' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 bg-white text-gray-700'
+                                ruleMode === 'none' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-ink'
                               }`}
                             >
                               {t.modeNoRule}
@@ -532,7 +532,7 @@ export function MapSettingsPanel({
                                 if (ruleMode !== 'custom') addRule(layer);
                               }}
                               className={`px-3 py-2 rounded-xl border text-sm font-medium ${
-                                ruleMode === 'custom' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 bg-white text-gray-700'
+                                ruleMode === 'custom' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-ink'
                               }`}
                             >
                               {t.modeCustom}
@@ -542,14 +542,14 @@ export function MapSettingsPanel({
 
                         {ruleMode === 'custom' && (
                           <div className="flex flex-col gap-2">
-                            <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
+                            <div className="flex items-start gap-1.5 bg-amber-500/10 border border-amber-100 rounded-lg px-2.5 py-2">
                               <p className="text-[10px] text-amber-700 leading-4 flex-1">
                                 💡 {t.ruleOrderNote}
                               </p>
                             </div>
-                            <p className="text-xs text-gray-500">{t.applyRuleToLabel}</p>
+                            <p className="text-xs text-muted">{t.applyRuleToLabel}</p>
                             {cfg.rules.length === 0 ? (
-                              <p className="text-xs text-gray-400 italic">{t.rulesEmpty}</p>
+                              <p className="text-xs text-faint italic">{t.rulesEmpty}</p>
                             ) : (
                               cfg.rules.map((rule, idx) => {
                                 const effectiveField = rule.field_key ?? cfg.field_key ?? '';
@@ -564,12 +564,12 @@ export function MapSettingsPanel({
                                     : count === 1 ? t.ruleMatchCountSingle
                                     : t.ruleMatchCount.replace('{{count}}', String(count));
                                 const chipClass = isLoading
-                                  ? 'bg-gray-100 text-gray-400'
+                                  ? 'bg-border-soft text-faint'
                                   : isHide && count && count > 0
-                                    ? 'bg-amber-50 text-amber-700'
+                                    ? 'bg-amber-500/10 text-amber-700'
                                     : count && count > 0
-                                      ? 'bg-emerald-50 text-emerald-700'
-                                      : 'bg-gray-100 text-gray-500';
+                                      ? 'bg-emerald-500/10 text-emerald-700'
+                                      : 'bg-border-soft text-muted';
                                 return (
                                   <div key={idx} className="flex flex-col gap-1">
                                     <div className="flex ml-1">
@@ -580,7 +580,7 @@ export function MapSettingsPanel({
                                     {/* Two-line layout: action row on top
                                        (pin, field, op, eye, trash), value
                                        input full-width on bottom. */}
-                                    <div className="flex flex-col gap-2 bg-white rounded-xl border border-gray-100 p-2">
+                                    <div className="flex flex-col gap-2 bg-card rounded-xl border border-border-soft p-2">
                                       <div className="flex items-center gap-2">
                                         <button
                                           type="button"
@@ -593,7 +593,7 @@ export function MapSettingsPanel({
                                         <select
                                           value={effectiveField}
                                           onChange={(e) => updateRule(layer, idx, { field_key: e.target.value })}
-                                          className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                          className="flex-1 min-w-0 rounded-lg border border-border bg-card px-2 py-1.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                                         >
                                           {!effectiveField && (
                                             <option value="">{t.ruleFieldPlaceholder}</option>
@@ -605,7 +605,7 @@ export function MapSettingsPanel({
                                         <select
                                           value={rule.operator ?? 'equals'}
                                           onChange={(e) => updateRule(layer, idx, { operator: e.target.value as 'equals' | 'not_equals' | 'has_value' | 'contains' | 'gt' | 'gte' | 'lt' | 'lte' })}
-                                          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                          className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                                         >
                                           <option value="equals">= {t.operatorEquals}</option>
                                           <option value="not_equals">≠ {t.operatorNotEquals}</option>
@@ -620,17 +620,17 @@ export function MapSettingsPanel({
                                           type="button"
                                           onClick={() => updateRule(layer, idx, { hide: !rule.hide })}
                                           className={`p-2 rounded-lg ${
-                                            rule.hide ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-100'
+                                            rule.hide ? 'bg-amber-500/10 hover:bg-amber-100' : 'hover:bg-border-soft'
                                           }`}
                                           title={t.ruleHideTooltip}
                                         >
                                           {rule.hide
                                             ? <EyeOff size={14} className="text-amber-700" />
-                                            : <Eye size={14} className="text-gray-500" />}
+                                            : <Eye size={14} className="text-muted" />}
                                         </button>
                                         <button
                                           onClick={() => removeRule(layer, idx)}
-                                          className="p-2 rounded-lg hover:bg-red-50"
+                                          className="p-2 rounded-lg hover:bg-red-500/10"
                                           aria-label="Delete"
                                         >
                                           <Trash2 size={14} className="text-red-500" />
@@ -644,7 +644,7 @@ export function MapSettingsPanel({
                                           value={rule.value}
                                           onChange={(e) => updateRule(layer, idx, { value: e.target.value })}
                                           placeholder={t.ruleValuePlaceholder}
-                                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                                         />
                                       )}
                                     </div>
@@ -654,7 +654,7 @@ export function MapSettingsPanel({
                             )}
                             <button
                               onClick={() => addRule(layer)}
-                              className="flex items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-gray-300 hover:bg-gray-100 text-sm font-semibold text-primary"
+                              className="flex items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-border hover:bg-border-soft text-sm font-semibold text-primary"
                             >
                               <Plus size={14} /> {t.addRuleBtn}
                             </button>
@@ -780,33 +780,33 @@ function IgnoredClientsSection({
       >
         <div className="flex-1 pr-3">
           <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase">{t.ignoredSectionTitle}</p>
-            <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-[10px] font-bold text-gray-600">
+            <p className="text-xs font-semibold text-faint uppercase">{t.ignoredSectionTitle}</p>
+            <span className="px-1.5 py-0.5 rounded-full bg-border-soft text-[10px] font-bold text-muted">
               {rows.length}
             </span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">{t.ignoredSectionSubtitle}</p>
+          <p className="text-xs text-muted mt-1">{t.ignoredSectionSubtitle}</p>
         </div>
-        <ChevronDown size={16} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-faint transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
       {expanded ? (
-        <div className="mt-3 rounded-2xl border border-gray-100 bg-white overflow-hidden">
+        <div className="mt-3 rounded-2xl border border-border-soft bg-card overflow-hidden">
           {rows.map((r, i) => {
             const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
             return (
               <div
                 key={r.id}
-                className={`flex items-center ${i < rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+                className={`flex items-center ${i < rows.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 {/* Whole name area routes to the client detail page so
                    the user can inspect / fix the address before restoring. */}
                 <button
                   type="button"
                   onClick={() => onOpenClient(r.id)}
-                  className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-gray-50"
+                  className="flex-1 min-w-0 text-left px-4 py-3 hover:bg-surface"
                 >
-                  <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
-                  {r.company ? <p className="text-xs text-gray-500 mt-0.5 truncate">{r.company}</p> : null}
+                  <p className="text-sm font-semibold text-ink truncate">{name}</p>
+                  {r.company ? <p className="text-xs text-muted mt-0.5 truncate">{r.company}</p> : null}
                 </button>
                 <button
                   type="button"
@@ -881,14 +881,14 @@ function StylePickerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-          <p className="text-base font-semibold text-gray-900">{t.stylePickerTitle}</p>
+      <div className="bg-card rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border-soft">
+          <p className="text-base font-semibold text-ink">{t.stylePickerTitle}</p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-500 hover:bg-gray-100"
+              className="px-3 py-1.5 rounded-lg text-sm font-semibold text-muted hover:bg-border-soft"
             >
               <X size={16} />
             </button>
@@ -905,13 +905,13 @@ function StylePickerModal({
 
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
           {/* Preview */}
-          <div className="flex items-center justify-center py-4 bg-gray-50 rounded-2xl">
+          <div className="flex items-center justify-center py-4 bg-surface rounded-2xl">
             <PinBadge iconKey={currentIcon} color={currentColor} iconColor={currentIconColor} size={56} />
           </div>
 
           {/* Pin color */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.colorLabel}</p>
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.colorLabel}</p>
             <div className="grid grid-cols-8 gap-2">
               {PIN_COLORS.map(c => (
                 <button
@@ -923,7 +923,7 @@ function StylePickerModal({
                   className={`rounded-xl border-2 ${
                     currentColor.toLowerCase() === c.toLowerCase()
                       ? 'border-gray-900'
-                      : c.toLowerCase() === '#ffffff' ? 'border-gray-200' : 'border-transparent'
+                      : c.toLowerCase() === '#ffffff' ? 'border-border' : 'border-transparent'
                   }`}
                 />
               ))}
@@ -932,7 +932,7 @@ function StylePickerModal({
 
           {/* Icon color — white default. Switch when contrast is poor. */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconColorLabel}</p>
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.iconColorLabel}</p>
             <div className="grid grid-cols-9 gap-2">
               {ICON_COLOR_PALETTE.map(c => (
                 <button
@@ -942,7 +942,7 @@ function StylePickerModal({
                   className={`rounded-xl border-2 ${
                     currentIconColor.toLowerCase() === c.toLowerCase()
                       ? 'border-gray-900'
-                      : c === '#FFFFFF' ? 'border-gray-200' : 'border-transparent'
+                      : c === '#FFFFFF' ? 'border-border' : 'border-transparent'
                   }`}
                 />
               ))}
@@ -951,22 +951,22 @@ function StylePickerModal({
 
           {/* Search + categories + icon grid */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconLabel}</p>
+            <p className="text-xs font-semibold text-faint uppercase mb-2">{t.iconLabel}</p>
             {/* Search box — substring match against the icon key. Typing
                hides the category tabs and shows all matching icons. */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white mb-3">
-              <Search size={14} className="text-gray-400 shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card mb-3">
+              <Search size={14} className="text-faint shrink-0" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t.iconSearchPlaceholder}
-                className="flex-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                className="flex-1 text-sm text-ink placeholder-faint focus:outline-none"
                 autoCorrect="off"
                 autoCapitalize="none"
               />
               {query && (
                 <button onClick={() => setQuery('')} aria-label="Clear">
-                  <X size={14} className="text-gray-400" />
+                  <X size={14} className="text-faint" />
                 </button>
               )}
             </div>
@@ -980,7 +980,7 @@ function StylePickerModal({
                       key={cat.i18nKey}
                       onClick={() => setActiveCategory(cat)}
                       className={`px-3 py-1.5 rounded-full border text-xs whitespace-nowrap ${
-                        on ? 'border-primary bg-primary/5 text-primary font-semibold' : 'border-gray-200 bg-white text-gray-700'
+                        on ? 'border-primary bg-primary/5 text-primary font-semibold' : 'border-border bg-card text-ink'
                       }`}
                     >
                       {categoryLabel(cat.i18nKey)}
@@ -991,7 +991,7 @@ function StylePickerModal({
             )}
 
             {visibleIcons.length === 0 ? (
-              <p className="text-xs text-gray-400 italic mt-3">{t.iconSearchNoResults}</p>
+              <p className="text-xs text-faint italic mt-3">{t.iconSearchNoResults}</p>
             ) : (
               <div className="grid grid-cols-5 gap-2 mt-3">
                 {visibleIcons.map(icon => {
@@ -1001,7 +1001,7 @@ function StylePickerModal({
                       key={icon}
                       onClick={() => onSelectIcon(icon)}
                       className={`flex items-center justify-center aspect-square rounded-xl border ${
-                        on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white hover:border-gray-300'
+                        on ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-border'
                       }`}
                     >
                       <PinIcon iconKey={icon} color={currentColor} size={24} />

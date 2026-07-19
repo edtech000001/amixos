@@ -267,30 +267,30 @@ export default function ImportModal({
         <div className="flex flex-col gap-4">
           {importing && progress ? (
             <div className="flex items-center gap-3 -mt-1">
-              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-border-soft rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
               </div>
-              <p className="text-xs font-semibold text-gray-500 shrink-0">{progress.done} / {progress.total}</p>
+              <p className="text-xs font-semibold text-muted shrink-0">{progress.done} / {progress.total}</p>
             </div>
           ) : null}
           {step === 'upload' && (
             <>
-              <p className="text-xs text-gray-500">{uploadHint}</p>
+              <p className="text-xs text-muted">{uploadHint}</p>
               <div
                 onClick={() => fileRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}
                 className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
-                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary hover:bg-primary/5'}`}>
-                <Upload size={32} className={`mx-auto mb-3 ${dragOver ? 'text-primary' : 'text-gray-300'}`} />
-                <p className="text-sm font-semibold text-gray-700">{tr('Arrastra tu archivo CSV aquí', 'Drag your CSV file here')}</p>
-                <p className="text-xs text-gray-400 mt-1">{tr('o haz clic para seleccionarlo', 'or click to choose it')}</p>
+                  dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary hover:bg-primary/5'}`}>
+                <Upload size={32} className={`mx-auto mb-3 ${dragOver ? 'text-primary' : 'text-faint'}`} />
+                <p className="text-sm font-semibold text-ink">{tr('Arrastra tu archivo CSV aquí', 'Drag your CSV file here')}</p>
+                <p className="text-xs text-faint mt-1">{tr('o haz clic para seleccionarlo', 'or click to choose it')}</p>
               </div>
-              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-700">{tr('¿No sabes qué columnas usar?', 'Not sure which columns to use?')}</p>
-                  <p className="text-xs text-gray-400">{tr('Descarga la plantilla de ejemplo y llénala.', 'Download the example template and fill it in.')}</p>
+                  <p className="text-xs font-semibold text-ink">{tr('¿No sabes qué columnas usar?', 'Not sure which columns to use?')}</p>
+                  <p className="text-xs text-faint">{tr('Descarga la plantilla de ejemplo y llénala.', 'Download the example template and fill it in.')}</p>
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
                   <Download size={14} /> {tr('Descargar plantilla', 'Download template')}
@@ -299,41 +299,41 @@ export default function ImportModal({
 
               {/* Column guide — every column with its accepted values /
                  behavior, readable BEFORE filling in the template. */}
-              <details className="bg-gray-50 rounded-xl px-4 py-3">
-                <summary className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+              <details className="bg-surface rounded-xl px-4 py-3">
+                <summary className="text-xs font-semibold text-ink cursor-pointer select-none">
                   {tr('Guía de columnas (valores aceptados)', 'Column guide (accepted values)')}
                 </summary>
                 <div className="mt-2 flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
-                  <p className="text-[11px] text-gray-400">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</p>
+                  <p className="text-[11px] text-faint">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</p>
                   {fields.map(f => (
                     <p key={f.key} className="text-[11px] leading-snug">
-                      <span className="font-semibold text-gray-700">{f.label}{f.required ? ' *' : ''}</span>
-                      {(en ? f.hintEn : f.hintEs) ? <span className="text-gray-500"> — {en ? f.hintEn : f.hintEs}</span> : null}
+                      <span className="font-semibold text-ink">{f.label}{f.required ? ' *' : ''}</span>
+                      {(en ? f.hintEn : f.hintEs) ? <span className="text-muted"> — {en ? f.hintEn : f.hintEs}</span> : null}
                     </p>
                   ))}
                 </div>
               </details>
 
               {/* Recent runs of this importer — collapsed like the guide. */}
-              <details className="bg-gray-50 rounded-xl px-4 py-3" onToggle={e => { if ((e.target as HTMLDetailsElement).open) loadRecent(); }}>
-                <summary className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+              <details className="bg-surface rounded-xl px-4 py-3" onToggle={e => { if ((e.target as HTMLDetailsElement).open) loadRecent(); }}>
+                <summary className="text-xs font-semibold text-ink cursor-pointer select-none">
                   {tr('Importaciones recientes', 'Recent imports')}
                 </summary>
                 <div className="mt-2 flex flex-col gap-1 max-h-56 overflow-y-auto pr-1">
                   {recentLogs === null ? (
-                    <p className="text-[11px] text-gray-400">…</p>
+                    <p className="text-[11px] text-faint">…</p>
                   ) : recentLogs.length === 0 ? (
-                    <p className="text-[11px] text-gray-400">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</p>
+                    <p className="text-[11px] text-faint">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</p>
                   ) : (
                     recentLogs.map(l => (
-                      <div key={l.id} className="flex items-center justify-between gap-3 py-1 border-b border-gray-100 last:border-0">
+                      <div key={l.id} className="flex items-center justify-between gap-3 py-1 border-b border-border-soft last:border-0">
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{l.file_name || '—'}</p>
-                          <p className="text-[11px] text-gray-400">
+                          <p className="text-xs font-semibold text-ink truncate">{l.file_name || '—'}</p>
+                          <p className="text-[11px] text-faint">
                             {new Date(l.created_at).toLocaleString(en ? 'en-US' : 'es-MX', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                           </p>
                         </div>
-                        <p className="text-[11px] text-gray-500 shrink-0 text-right">
+                        <p className="text-[11px] text-muted shrink-0 text-right">
                           <span className="text-emerald-600 font-semibold">{l.success}</span>
                           {l.updated > 0 ? <> · <span className="text-blue-600">{l.updated}↺</span></> : null}
                           {l.skipped > 0 ? <> · {l.skipped}=</> : null}
@@ -349,29 +349,29 @@ export default function ImportModal({
 
           {step === 'map' && (
             <>
-              <p className="text-xs text-gray-500">
-                <span className="font-medium text-gray-900">{rows.length} {tr('renglones detectados', 'rows detected')}</span>. {tr('Empareja cada campo con la columna de tu archivo.', 'Match each field to a column in your file.')}
+              <p className="text-xs text-muted">
+                <span className="font-medium text-ink">{rows.length} {tr('renglones detectados', 'rows detected')}</span>. {tr('Empareja cada campo con la columna de tu archivo.', 'Match each field to a column in your file.')}
                 {' '}
-                <span className="text-gray-400">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</span>
+                <span className="text-faint">{tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}</span>
               </p>
               <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                 {fields.map(f => {
                   const unmapped = !colMap[f.key];
                   return (
                     <div key={f.key} className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <label className="text-xs font-medium text-muted flex items-center gap-1">
                         {f.label}
                         {f.required && <span className="text-red-400">*</span>}
                         {f.isCustom && <span className="text-blue-400 text-[10px]">{tr('personalizado', 'custom')}</span>}
                       </label>
                       {(en ? f.hintEn : f.hintEs) ? (
-                        <p className="text-[10px] leading-snug text-gray-400 -mt-0.5">{en ? f.hintEn : f.hintEs}</p>
+                        <p className="text-[10px] leading-snug text-faint -mt-0.5">{en ? f.hintEn : f.hintEs}</p>
                       ) : null}
                       <select
                         value={colMap[f.key] ?? ''}
                         onChange={e => setColMap(m => ({ ...m, [f.key]: e.target.value }))}
-                        className={`w-full rounded-xl border px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
-                          unmapped ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+                        className={`w-full rounded-xl border px-3 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none ${
+                          unmapped ? 'border-amber-400 bg-amber-500/10' : 'border-border bg-card'}`}>
                         <option value="">{tr('— No importar —', '— Don\'t import —')}</option>
                         {headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
@@ -388,22 +388,22 @@ export default function ImportModal({
 
           {step === 'preview' && (
             <>
-              <p className="text-xs text-gray-500">{tr('Mostrando', 'Showing')} {Math.min(5, rows.length)} {tr('de', 'of')} {rows.length} {tr('renglones', 'rows')}.</p>
-              <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <p className="text-xs text-muted">{tr('Mostrando', 'Showing')} {Math.min(5, rows.length)} {tr('de', 'of')} {rows.length} {tr('renglones', 'rows')}.</p>
+              <div className="overflow-x-auto rounded-xl border border-border-soft">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-surface">
                     <tr>
                       {fields.filter(f => colMap[f.key]).map(f => (
-                        <th key={f.key} className="text-left px-3 py-2 font-semibold text-gray-500 whitespace-nowrap">{f.label}</th>
+                        <th key={f.key} className="text-left px-3 py-2 font-semibold text-muted whitespace-nowrap">{f.label}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {rows.slice(0, 5).map((row, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
+                      <tr key={i} className="hover:bg-surface">
                         {fields.filter(f => colMap[f.key]).map(f => (
-                          <td key={f.key} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[120px] truncate">
-                            {row[colMap[f.key]] || <span className="text-gray-300">—</span>}
+                          <td key={f.key} className="px-3 py-2 text-ink whitespace-nowrap max-w-[120px] truncate">
+                            {row[colMap[f.key]] || <span className="text-faint">—</span>}
                           </td>
                         ))}
                       </tr>
@@ -430,17 +430,17 @@ export default function ImportModal({
                 <CheckCircle2 size={32} className="text-emerald-500" />
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900">{tr('¡Listo!', 'Done!')}</p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-lg font-bold text-ink">{tr('¡Listo!', 'Done!')}</p>
+                <p className="text-sm text-muted mt-1">
                   <span className="text-emerald-600 font-semibold">{result.success} {noun} {tr('importadas', 'imported')}</span>
-                  {result.skipped > 0 && <span className="text-gray-500 font-semibold ml-2">· {result.skipped} {tr('ya existían', 'already existed')}</span>}
+                  {result.skipped > 0 && <span className="text-muted font-semibold ml-2">· {result.skipped} {tr('ya existían', 'already existed')}</span>}
                   {(result.updated ?? 0) > 0 && <span className="text-blue-600 font-semibold ml-2">· {result.updated} {tr('actualizados', 'updated')}</span>}
                   {result.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {result.failedRows.length} {tr('con error', 'with errors')}</span>}
                 </p>
               </div>
 
               {result.notes.length > 0 && (
-                <div className="w-full bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-left space-y-1">
+                <div className="w-full bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3 text-left space-y-1">
                   {result.notes.map((n, i) => <p key={i} className="text-xs text-blue-800">{n}</p>)}
                 </div>
               )}
@@ -452,12 +452,12 @@ export default function ImportModal({
                     {showErrors ? tr('Ocultar detalles ▴', 'Hide details ▴') : tr('Ver detalles de los errores ▾', 'See error details ▾')}
                   </button>
                   {showErrors && (
-                    <div className="mt-2 max-h-80 overflow-y-auto bg-red-50 border border-red-100 rounded-xl text-left">
+                    <div className="mt-2 max-h-80 overflow-y-auto bg-red-500/10 border border-red-100 rounded-xl text-left">
                       {result.failedRows.slice(0, 50).map((f, i) => (
                         <div key={i} className="px-4 py-2 border-b border-red-100/60 last:border-b-0">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
+                              <p className="text-sm font-medium text-ink truncate">{f.label}</p>
                               <p className="text-xs text-red-700">{f.reason}</p>
                             </div>
                             {f.rowIndex != null && (
@@ -472,15 +472,15 @@ export default function ImportModal({
                           </div>
                           {/* Inline editor — fix the row's values and retry just this row. */}
                           {fixingIndex === i && (
-                            <div className="mt-2 rounded-xl bg-white border border-gray-100 p-3">
+                            <div className="mt-2 rounded-xl bg-card border border-border-soft p-3">
                               <div className="grid grid-cols-2 gap-2">
                                 {mappedFields.map(mf => (
                                   <div key={mf.key} className="flex flex-col gap-0.5">
-                                    <label className="text-[11px] font-medium text-gray-500">{mf.label}{mf.required ? ' *' : ''}</label>
+                                    <label className="text-[11px] font-medium text-muted">{mf.label}{mf.required ? ' *' : ''}</label>
                                     <input
                                       value={fixValues[mf.key] ?? ''}
                                       onChange={e => setFixValues(v => ({ ...v, [mf.key]: e.target.value }))}
-                                      className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                      className="w-full rounded-lg border border-border px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                                     />
                                   </div>
                                 ))}
@@ -495,7 +495,7 @@ export default function ImportModal({
                         </div>
                       ))}
                       {result.failedRows.length > 50 && (
-                        <div className="px-4 py-2 text-xs text-gray-600 text-center bg-red-100/40">+ {result.failedRows.length - 50} {tr('más', 'more')}</div>
+                        <div className="px-4 py-2 text-xs text-muted text-center bg-red-100/40">+ {result.failedRows.length - 50} {tr('más', 'more')}</div>
                       )}
                     </div>
                   )}

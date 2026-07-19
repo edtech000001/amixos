@@ -97,21 +97,21 @@ export default function RolesSettingsPage() {
         disabled={!editable}
         onClick={() => onChange(!checked)}
         className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${
-          checked ? 'bg-primary border-primary' : 'bg-white border-gray-300'
+          checked ? 'bg-primary border-primary' : 'bg-card border-border'
         } ${editable ? 'hover:border-primary' : 'opacity-60 cursor-not-allowed'}`}
       >
         {checked ? <Check size={15} className="text-white" /> : null}
       </button>
     ) : (
-      <span className="text-gray-300">—</span>
+      <span className="text-faint">—</span>
     );
 
   return (
     <div className="md:flex md:min-h-screen">
       <SettingsNav />
       <div className="flex-1 min-w-0 p-6 max-w-4xl">
-        <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-6">{t.subtitle}</p>
+        <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+        <p className="text-sm text-muted mt-1 mb-6">{t.subtitle}</p>
 
         {/* Role selector */}
         <div className="flex flex-wrap gap-2 mb-6">
@@ -120,7 +120,7 @@ export default function RolesSettingsPage() {
               key={r}
               onClick={() => setSelected(r)}
               className={`px-3.5 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                selected === r ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200 hover:border-primary'
+                selected === r ? 'bg-primary text-white border-primary' : 'bg-card text-ink border-border hover:border-primary'
               }`}
             >
               {ROLE_LABELS[r][locale]}
@@ -129,11 +129,11 @@ export default function RolesSettingsPage() {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 mb-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-gray-900">{ROLE_LABELS[selected][locale]}</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</p>
+              <h2 className="text-base font-bold text-ink">{ROLE_LABELS[selected][locale]}</h2>
+              <p className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</p>
             </div>
             {customized && editable ? (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{t.customized}</span>
@@ -141,17 +141,17 @@ export default function RolesSettingsPage() {
           </div>
 
           {!editable ? (
-            <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-xl bg-surface border border-border-soft text-sm text-muted">
               <Lock size={15} /> {t.ownerLocked}
             </div>
           ) : null}
 
           {/* Data access grid */}
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-6 mb-2">{t.sectionData}</h3>
+          <h3 className="text-xs font-semibold text-faint uppercase tracking-wide mt-6 mb-2">{t.sectionData}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-gray-500">
+                <tr className="text-muted">
                   <th className="text-left font-medium pb-2"></th>
                   <th className="font-medium pb-2 px-2">{t.colView}</th>
                   <th className="font-medium pb-2 px-2">{t.colCreate}</th>
@@ -164,18 +164,18 @@ export default function RolesSettingsPage() {
                   const meta = RESOURCE_ACTIONS[r];
                   const rp = draft.resources[r];
                   return (
-                    <tr key={r} className="border-t border-gray-50">
-                      <td className="py-2.5 pr-2 font-medium text-gray-800">{t.resourceNames[r]}</td>
+                    <tr key={r} className="border-t border-border-soft">
+                      <td className="py-2.5 pr-2 font-medium text-ink">{t.resourceNames[r]}</td>
                       <td className="py-2.5 px-2">
                         {meta.assignedView ? (
-                          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                          <div className="inline-flex rounded-lg border border-border overflow-hidden">
                             {(['none', 'assigned', 'all'] as ViewScope[]).map(s => (
                               <button
                                 key={s}
                                 type="button"
                                 disabled={!editable}
                                 onClick={() => setView(r, s)}
-                                className={`px-2.5 py-1 text-xs font-semibold ${rp.view === s ? 'bg-primary text-white' : 'bg-white text-gray-600'} ${editable ? '' : 'opacity-60 cursor-not-allowed'}`}
+                                className={`px-2.5 py-1 text-xs font-semibold ${rp.view === s ? 'bg-primary text-white' : 'bg-card text-muted'} ${editable ? '' : 'opacity-60 cursor-not-allowed'}`}
                               >
                                 {SCOPE_LABEL[s]}
                               </button>
@@ -198,11 +198,11 @@ export default function RolesSettingsPage() {
           </div>
 
           {/* System section */}
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-6 mb-2">{t.sectionSystem}</h3>
+          <h3 className="text-xs font-semibold text-faint uppercase tracking-wide mt-6 mb-2">{t.sectionSystem}</h3>
           <div className="flex flex-col gap-1">
             {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
               <label key={key} className={`flex items-center justify-between py-2 ${editable ? 'cursor-pointer' : ''}`}>
-                <span className="text-sm text-gray-800">{t.capNames[key]}</span>
+                <span className="text-sm text-ink">{t.capNames[key]}</span>
                 <Cell supported checked={draft.caps[key]} onChange={v => setCap(key, v)} />
               </label>
             ))}
@@ -210,10 +210,10 @@ export default function RolesSettingsPage() {
         </div>
 
         {error ? (
-          <div className="mb-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">{t.saveError}</div>
+          <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">{t.saveError}</div>
         ) : null}
         {saved && !dirty ? (
-          <div className="mb-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-sm text-emerald-700">{t.saved}</div>
+          <div className="mb-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-100 text-sm text-emerald-700">{t.saved}</div>
         ) : null}
 
         {editable ? (
@@ -229,7 +229,7 @@ export default function RolesSettingsPage() {
               <button
                 onClick={() => { void confirm({ message: t.resetConfirm, destructive: true }).then(ok => { if (ok) void reset(); }); }}
                 disabled={busy}
-                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-40"
+                className="flex items-center gap-1.5 bg-card border border-border text-ink px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-surface disabled:opacity-40"
               >
                 <RotateCcw size={15} /> {t.reset}
               </button>

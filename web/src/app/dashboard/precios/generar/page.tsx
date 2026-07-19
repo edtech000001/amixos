@@ -155,16 +155,16 @@ export default function GenerarPreciosPage() {
     }
   }, [design]);
 
-  const groupWrapCls = theme.card ? 'break-inside-avoid rounded-xl border border-gray-100 p-4' : 'break-inside-avoid';
-  const rowCls = `flex items-baseline justify-between gap-4 ${theme.rowPad} print:py-0.5 ${theme.rowDivider ? 'border-b border-gray-50 last:border-0' : ''}`;
-  const nameCls = `text-gray-800 ${theme.textSize}`;
+  const groupWrapCls = theme.card ? 'break-inside-avoid rounded-xl border border-border-soft p-4' : 'break-inside-avoid';
+  const rowCls = `flex items-baseline justify-between gap-4 ${theme.rowPad} print:py-0.5 ${theme.rowDivider ? 'border-b border-border-soft last:border-0' : ''}`;
+  const nameCls = `text-ink ${theme.textSize}`;
   const priceBaseCls = `font-semibold whitespace-nowrap ${theme.textSize}`;
 
   // Section header rendered per theme.
   const sectionHeader = (label: string) => {
     if (theme.header === 'bar') return <div className="mb-2 rounded-md px-3 py-1.5" style={{ backgroundColor: accent }}><span className="text-xs font-bold uppercase tracking-wide text-white">{label}</span></div>;
     if (theme.header === 'underline') return <p className="mb-2 pb-1 text-sm font-semibold uppercase tracking-[0.12em] border-b" style={{ color: accent, borderColor: accent }}>{label}</p>;
-    if (theme.header === 'light') return <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>;
+    if (theme.header === 'light') return <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</p>;
     return <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: accent }}>{label}</p>;
   };
 
@@ -215,35 +215,35 @@ export default function GenerarPreciosPage() {
   };
 
   return (
-    <div className="min-h-screen print:min-h-0 bg-gray-50 print:bg-white p-6 lg:p-8 print:p-0">
+    <div className="min-h-screen print:min-h-0 bg-surface print:bg-card p-6 lg:p-8 print:p-0">
       {/* Tight, full-width single page when printing. */}
       <style>{`@media print { @page { size: letter portrait; margin: 0.4in; } html, body { background: #fff; } }`}</style>
       {/* Controls — hidden on print */}
       <div className="max-w-3xl mx-auto mb-5 print:hidden">
-        <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 mb-4">
+        <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink mb-4">
           <ArrowLeft size={16} /> {t.title}
         </button>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col sm:flex-row sm:items-end gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">{t.generateTitle}</label>
+            <label className="block text-xs font-semibold text-muted mb-1.5">{t.generateTitle}</label>
             <div className="flex gap-2">
-              <div className="inline-flex gap-1 bg-gray-100 p-1 rounded-xl">
+              <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl">
                 {(['client', 'state'] as const).map(m => (
                   <button key={m} type="button" onClick={() => setMode(m)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${mode === m ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${mode === m ? 'bg-card shadow-sm text-ink' : 'text-muted'}`}>
                     {m === 'client' ? t.forClient : t.forState}
                   </button>
                 ))}
               </div>
               {mode === 'client' ? (
                 <select value={clientId} onChange={e => setClientId(e.target.value)}
-                  className="flex-1 min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                  className="flex-1 min-w-0 rounded-xl border border-border px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary">
                   <option value="">{t.selectClientPlaceholder}</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{clientName(c)}{c.state ? ` (${c.state})` : ''}</option>)}
                 </select>
               ) : (
                 <select value={stateCode} onChange={e => setStateCode(e.target.value)}
-                  className="flex-1 min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+                  className="flex-1 min-w-0 rounded-xl border border-border px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary">
                   <option value="">{t.allStatesLabel}</option>
                   {STATE_CODES.slice().sort((a, b) => usStateName(a, locale).localeCompare(usStateName(b, locale)))
                     .map(s => <option key={s} value={s}>{usStateName(s, locale)}</option>)}
@@ -253,7 +253,7 @@ export default function GenerarPreciosPage() {
           </div>
           <div className="flex gap-2 shrink-0">
             <button type="button" onClick={openCustomize}
-              className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              className="flex items-center justify-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
               <Sliders size={16} /> {t.customizeBtn}
             </button>
             <button type="button" onClick={() => window.print()}
@@ -265,44 +265,44 @@ export default function GenerarPreciosPage() {
       </div>
 
       {/* Document — the printout */}
-      <div className={`max-w-3xl print:max-w-full mx-auto bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none p-8 print:p-0 ${theme.font}`}>
+      <div className={`max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0 ${theme.font}`}>
         {/* Header — split (default) or centered (elegant) */}
         {theme.centered ? (
-          <div className="text-center pb-5 print:pb-2 border-b border-gray-100">
+          <div className="text-center pb-5 print:pb-2 border-b border-border-soft">
             {business?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={business.logo_url} alt="" className="w-16 h-16 rounded-xl object-contain border border-gray-100 mx-auto mb-2" />
+              <img src={business.logo_url} alt="" className="w-16 h-16 rounded-xl object-contain border border-border-soft mx-auto mb-2" />
             ) : null}
-            <p className="text-2xl font-bold text-gray-900">{business?.name ?? ''}</p>
-            {businessLines.map((l, i) => <p key={i} className="text-xs text-gray-500 leading-relaxed">{l}</p>)}
+            <p className="text-2xl font-bold text-ink">{business?.name ?? ''}</p>
+            {businessLines.map((l, i) => <p key={i} className="text-xs text-muted leading-relaxed">{l}</p>)}
             <p className="text-lg font-semibold mt-3" style={{ color: accent }}>{t.sheetTitle} · {stateLabel}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-faint mt-0.5">
               {t.generatedOn} {todayStr}{preparedFor ? ` · ${t.preparedFor}: ${preparedFor}` : ''}
             </p>
           </div>
         ) : (
-          <div className="flex items-start justify-between gap-6 pb-5 print:pb-2 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-6 pb-5 print:pb-2 border-b border-border-soft">
             <div className="flex items-start gap-3">
               {business?.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={business.logo_url} alt="" className="w-14 h-14 rounded-xl object-contain border border-gray-100" />
+                <img src={business.logo_url} alt="" className="w-14 h-14 rounded-xl object-contain border border-border-soft" />
               ) : null}
               <div>
-                <p className="text-lg font-bold text-gray-900">{business?.name ?? ''}</p>
-                {businessLines.map((l, i) => <p key={i} className="text-xs text-gray-500 leading-relaxed">{l}</p>)}
+                <p className="text-lg font-bold text-ink">{business?.name ?? ''}</p>
+                {businessLines.map((l, i) => <p key={i} className="text-xs text-muted leading-relaxed">{l}</p>)}
               </div>
             </div>
             <div className="text-right shrink-0">
               <p className="text-xl font-bold" style={{ color: accent }}>{t.sheetTitle}</p>
               <p className="text-sm font-semibold mt-0.5" style={{ color: accent }}>{stateLabel}</p>
-              <p className="text-xs text-gray-400 mt-1">{t.generatedOn} {todayStr}</p>
-              {preparedFor ? <p className="text-xs text-gray-500 mt-1">{t.preparedFor}: <span className="font-semibold text-gray-700">{preparedFor}</span></p> : null}
+              <p className="text-xs text-faint mt-1">{t.generatedOn} {todayStr}</p>
+              {preparedFor ? <p className="text-xs text-muted mt-1">{t.preparedFor}: <span className="font-semibold text-ink">{preparedFor}</span></p> : null}
             </div>
           </div>
         )}
 
         {loading ? (
-          <p className="text-sm text-gray-400 text-center py-12">…</p>
+          <p className="text-sm text-faint text-center py-12">…</p>
         ) : (
           <div className={`pt-5 print:pt-3 flex flex-col ${theme.outerGap} print:gap-2`}>
             {orderedSectionKeys.map(key => {
@@ -315,7 +315,7 @@ export default function GenerarPreciosPage() {
                     {secItems.map(item => (
                       <div key={item.id} className={rowCls}>
                         <span className={nameCls}>{item.name}</span>
-                        <span className={`${priceBaseCls} ${isAddon ? 'text-amber-600' : 'text-gray-900'}`}>{priceDisplay(item, isAddon)}</span>
+                        <span className={`${priceBaseCls} ${isAddon ? 'text-amber-600' : 'text-ink'}`}>{priceDisplay(item, isAddon)}</span>
                       </div>
                     ))}
                   </div>
@@ -331,11 +331,11 @@ export default function GenerarPreciosPage() {
         <div className="flex flex-col gap-5">
           {/* Design preset */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.designLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-2">{t.designLabel}</label>
             <div className="grid grid-cols-3 gap-2">
               {PRICE_SHEET_DESIGNS.map(d => (
                 <button key={d} type="button" onClick={() => setDraftDesign(d)}
-                  className={`py-2.5 rounded-xl text-sm font-semibold border transition-colors ${draftDesign === d ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  className={`py-2.5 rounded-xl text-sm font-semibold border transition-colors ${draftDesign === d ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}>
                   {d === 'classic' ? t.designClassic : d === 'cards' ? t.designCards : d === 'bold' ? t.designBold : d === 'elegant' ? t.designElegant : t.designMinimal}
                 </button>
               ))}
@@ -344,29 +344,29 @@ export default function GenerarPreciosPage() {
 
           {/* Accent color */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t.accentColorLabel}</label>
+            <label className="block text-sm font-semibold text-ink mb-2">{t.accentColorLabel}</label>
             <div className="flex items-center gap-3">
               <input type="color" value={draftAccent} onChange={e => setDraftAccent(e.target.value)}
-                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer bg-white" />
+                className="w-10 h-10 rounded-lg border border-border cursor-pointer bg-card" />
               <input value={draftAccent} onChange={e => setDraftAccent(e.target.value)}
-                className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-28 rounded-xl border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
           </div>
 
           {/* Section order */}
           {draftOrder.length > 0 ? (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">{t.sectionOrderLabel}</label>
-              <p className="text-xs text-gray-400 mb-2">{t.sectionOrderHint}</p>
-              <div className="rounded-xl border border-gray-100 max-h-56 overflow-y-auto">
+              <label className="block text-sm font-semibold text-ink mb-1.5">{t.sectionOrderLabel}</label>
+              <p className="text-xs text-faint mb-2">{t.sectionOrderHint}</p>
+              <div className="rounded-xl border border-border-soft max-h-56 overflow-y-auto">
                 {draftOrder.map((cat, i) => (
-                  <div key={cat} className={`flex items-center justify-between gap-2 px-3 py-2 ${i < draftOrder.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                    <span className="text-sm text-gray-800 truncate">{cat === ADDONS ? t.additionalCharges : cat}</span>
+                  <div key={cat} className={`flex items-center justify-between gap-2 px-3 py-2 ${i < draftOrder.length - 1 ? 'border-b border-border-soft' : ''}`}>
+                    <span className="text-sm text-ink truncate">{cat === ADDONS ? t.additionalCharges : cat}</span>
                     <div className="flex items-center gap-1 shrink-0">
                       <button type="button" onClick={() => moveCat(i, -1)} disabled={i === 0}
-                        className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 disabled:opacity-30"><ChevronUp size={16} /></button>
+                        className="p-1 rounded-lg text-faint hover:bg-border-soft disabled:opacity-30"><ChevronUp size={16} /></button>
                       <button type="button" onClick={() => moveCat(i, 1)} disabled={i === draftOrder.length - 1}
-                        className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 disabled:opacity-30"><ChevronDown size={16} /></button>
+                        className="p-1 rounded-lg text-faint hover:bg-border-soft disabled:opacity-30"><ChevronDown size={16} /></button>
                     </div>
                   </div>
                 ))}
@@ -374,7 +374,7 @@ export default function GenerarPreciosPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 -mx-7 px-7 -mb-6 pb-6 pt-3 bg-white">
+          <div className="sticky bottom-0 -mx-7 px-7 -mb-6 pb-6 pt-3 bg-card">
             <button type="button" onClick={saveCustomize} disabled={savingTpl}
               className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">{t.saveBtn}</button>
           </div>

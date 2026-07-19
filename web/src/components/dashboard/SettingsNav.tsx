@@ -15,6 +15,16 @@ import { useLang } from '@/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
+
+// Same build identifier as the global Sidebar footer (app version + short SHA)
+// so the footer reads identically whether or not you're drilled into Settings.
+const APP_VERSION = (() => {
+  const v = process.env.NEXT_PUBLIC_APP_VERSION;
+  if (!v) return '';
+  const sha = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
+  return sha ? `v${v} · ${sha.slice(0, 7)}` : `v${v}`;
+})();
 
 export type SettingsTab = 'negocio' | 'trabajos' | 'clientes' | 'empleados' | 'facturas' | 'facturatema' | 'conexiones' | 'importar' | 'cuenta' | 'soporte';
 
@@ -53,20 +63,20 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
 
   const itemCls = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
-      active ? 'bg-primary text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+      active ? 'bg-primary text-white shadow-sm' : 'text-muted hover:bg-border-soft hover:text-ink'
     }`;
 
   return (
-    <aside className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-gray-100 bg-white md:h-screen md:sticky md:top-0 flex flex-col">
-      <div className="px-6 py-5 border-b border-gray-100">
+    <aside className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-border-soft bg-card md:h-screen md:sticky md:top-0 flex flex-col">
+      <div className="px-6 py-5 border-b border-border-soft">
         <BusinessSwitcher />
       </div>
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
         <Link
           href="/dashboard"
-          className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all"
+          className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl text-sm font-medium text-muted hover:bg-border-soft hover:text-ink transition-all"
         >
-          <ArrowLeft size={18} className="text-gray-400" />
+          <ArrowLeft size={18} className="text-faint" />
           {full.common.buttons.back}
         </Link>
 
@@ -77,14 +87,14 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           if (onTabClick) {
             return (
               <button key={tabItem.key} type="button" onClick={() => onTabClick(tabItem.key)} className={itemCls(active)}>
-                <Icon size={18} className={active ? 'text-white' : 'text-gray-400'} />
+                <Icon size={18} className={active ? 'text-white' : 'text-faint'} />
                 {tabItem.label}
               </button>
             );
           }
           return (
             <Link key={tabItem.key} href={`/dashboard/ajustes?tab=${tabItem.key}`} className={itemCls(false)}>
-              <Icon size={18} className="text-gray-400" />
+              <Icon size={18} className="text-faint" />
               {tabItem.label}
             </Link>
           );
@@ -92,18 +102,24 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
 
         {can.seeAuditLog(currentRole) && (
           <Link href="/dashboard/ajustes/actividad" className={itemCls(onActividad)}>
-            <Activity size={18} className={onActividad ? 'text-white' : 'text-gray-400'} />
+            <Activity size={18} className={onActividad ? 'text-white' : 'text-faint'} />
             {t.tabs.actividad}
           </Link>
         )}
       </nav>
 
-      {/* Platform brand — mirrors the global Sidebar footer so the Amixos
-          mark stays visible while drilled into Settings. */}
-      <div className="px-6 py-3 border-t border-gray-100">
-        <p className="text-[10px] text-gray-400">
-          Powered by <span className="font-semibold text-gray-500">Amixos</span>
-        </p>
+      {/* Platform brand + theme toggle — mirrors the global Sidebar footer so
+          it reads identically while drilled into Settings. */}
+      <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] text-faint">
+            Powered by <span className="font-semibold text-muted">Amixos</span>
+          </p>
+          {APP_VERSION && (
+            <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
+          )}
+        </div>
+        <ThemeToggle />
       </div>
     </aside>
   );

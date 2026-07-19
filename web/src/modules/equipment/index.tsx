@@ -127,8 +127,8 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs font-medium text-gray-400">{label}</p>
-      <p className="text-sm text-gray-900 mt-0.5 whitespace-pre-wrap">{value}</p>
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className="text-sm text-ink mt-0.5 whitespace-pre-wrap">{value}</p>
     </div>
   );
 }
@@ -137,7 +137,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 // card holding a 2-column grid of DetailRows.
 function DetailCard({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/40 px-4 py-3.5 grid grid-cols-2 gap-x-4 gap-y-3">
+    <div className="rounded-2xl border border-border-soft bg-surface px-4 py-3.5 grid grid-cols-2 gap-x-4 gap-y-3">
       {children}
     </div>
   );
@@ -580,8 +580,8 @@ export default function EquipmentModule() {
             <Forklift size={20} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-            <p className="text-xs text-gray-500">
+            <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+            <p className="text-xs text-muted">
               {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
             </p>
           </div>
@@ -594,12 +594,12 @@ export default function EquipmentModule() {
 
       <div className="flex items-center gap-3 mb-5">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
         {/* Group-by dropdown */}
@@ -609,7 +609,7 @@ export default function EquipmentModule() {
             onBlur={() => setTimeout(() => setGroupMenuOpen(false), 150)}
             className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
               groupBy === 'none'
-                ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                ? 'border-border bg-card text-ink hover:bg-surface'
                 : 'border-primary/30 bg-primary/10 text-primary'
             }`}
           >
@@ -617,20 +617,20 @@ export default function EquipmentModule() {
             {groupBy === 'none' ? t.groups.button : groupOptions.find(o => o.key === groupBy)?.label}
           </button>
           {groupMenuOpen ? (
-            <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-gray-100 bg-white shadow-lg p-1.5">
-              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{t.groups.title}</p>
+            <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-border-soft bg-card shadow-lg p-1.5">
+              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">{t.groups.title}</p>
               {groupOptions.map(o => {
                 const active = groupBy === o.key;
                 return (
                   <button
                     key={o.key}
                     onMouseDown={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm ${active ? 'bg-primary/10' : 'hover:bg-gray-50'}`}
+                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
                   >
-                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>
                       <o.Icon size={15} />
                     </span>
-                    <span className={`flex-1 text-left ${active ? 'text-primary font-semibold' : 'text-gray-700'}`}>{o.label}</span>
+                    <span className={`flex-1 text-left ${active ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
                     {active ? <Check size={15} className="text-primary" /> : null}
                   </button>
                 );
@@ -641,18 +641,18 @@ export default function EquipmentModule() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
-          <Forklift size={36} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-700">{t.emptyTitle}</p>
-          <p className="text-xs text-gray-500 mt-1">{t.emptyHint}</p>
+        <div className="bg-card rounded-2xl border border-border-soft p-10 text-center">
+          <Forklift size={36} className="text-faint mx-auto mb-3" />
+          <p className="text-sm font-semibold text-ink">{t.emptyTitle}</p>
+          <p className="text-xs text-muted mt-1">{t.emptyHint}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
           {sections.map(section => (
             <div key={section.title || '__all'}>
               {section.title ? (
-                <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2.5">
-                  {section.title} <span className="text-gray-400">· {section.data.length}</span>
+                <h2 className="text-xs font-bold uppercase tracking-wide text-muted mb-2.5">
+                  {section.title} <span className="text-faint">· {section.data.length}</span>
                 </h2>
               ) : null}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -661,20 +661,20 @@ export default function EquipmentModule() {
             const days = plateExpirationDays(e.plate_expiration);
             const plateBadge =
               days === null ? null
-              : days < 0 ? { text: t.plateExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
-              : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+              : days < 0 ? { text: t.plateExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
+              : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
               : null;
             const assigned = employeeName(e.assigned_employee_id);
             return (
               <button
                 key={e.id}
                 onClick={() => openDetail(e)}
-                className="text-left bg-white rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all overflow-hidden flex flex-col"
+                className="text-left bg-card rounded-2xl border border-border-soft hover:border-border hover:shadow-sm transition-all overflow-hidden flex flex-col"
               >
                 {/* Fixed aspect box; the image is absolutely positioned so it
                    fills the ratio instead of stretching the box to its own
                    height — keeps every card's photo identical in size. */}
-                <div className="relative w-full aspect-video bg-gray-50 overflow-hidden">
+                <div className="relative w-full aspect-video bg-surface overflow-hidden">
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -684,7 +684,7 @@ export default function EquipmentModule() {
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <Truck size={40} className="text-gray-300" />
+                      <Truck size={40} className="text-faint" />
                     </div>
                   )}
                   {plateBadge ? (
@@ -695,19 +695,19 @@ export default function EquipmentModule() {
                 </div>
                 <div className="p-4 flex-1 flex flex-col gap-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{e.name}</p>
+                    <p className="text-sm font-semibold text-ink truncate">{e.name}</p>
                     {e.paid_off ? (
-                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{t.paidOffBadge}</span>
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700">{t.paidOffBadge}</span>
                     ) : e.loan_lender ? (
-                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{t.loanBadge}</span>
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">{t.loanBadge}</span>
                     ) : null}
                   </div>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="text-xs text-muted truncate">
                     {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
                   </p>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                     <User size={12} />
-                    {assigned ?? <span className="text-gray-400">{t.unassignedBadge}</span>}
+                    {assigned ?? <span className="text-faint">{t.unassignedBadge}</span>}
                   </div>
                 </div>
               </button>
@@ -728,17 +728,17 @@ export default function EquipmentModule() {
       >
         <div className="flex flex-col gap-4">
           {/* Basic info — 2-column grid so fields aren't a narrow stack. */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.basicInfoHeading}</p>
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.basicInfoHeading}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
             <div className="sm:col-span-2">
               <Input label={t.nameLabel} placeholder={t.namePlaceholder} value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.typeLabel}</label>
+              <label className="text-sm font-medium text-ink">{t.typeLabel}</label>
               <select value={form.equipment_type}
                 onChange={e => setForm(f => ({ ...f, equipment_type: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 {TYPE_SUGGESTIONS.map(o => <option key={o.value || '__none'} value={o.value}>{o.label}</option>)}
               </select>
             </div>
@@ -761,7 +761,7 @@ export default function EquipmentModule() {
           </div>
 
           {/* Registration */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.registrationHeading}</p>
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.registrationHeading}</p>
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.plateNumberLabel} placeholder={t.plateNumberPlaceholder} value={form.plate_number}
               onChange={e => setForm(f => ({ ...f, plate_number: e.target.value }))} />
@@ -770,7 +770,7 @@ export default function EquipmentModule() {
           </div>
 
           {/* Insurance */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.insuranceHeading}</p>
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.insuranceHeading}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
             <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
               onChange={e => setForm(f => ({ ...f, insurance_carrier: e.target.value }))} />
@@ -788,12 +788,12 @@ export default function EquipmentModule() {
           </div>
 
           {/* Ownership — Value always; lender + loan amount only when not paid off. */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</p>
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.ownershipHeading}</p>
           <Input label={t.valueLabel} placeholder={t.valuePlaceholder} inputMode="numeric"
-            leftIcon={<span className="text-gray-500">$</span>}
+            leftIcon={<span className="text-muted">$</span>}
             value={withCommas(form.value)} onChange={e => setForm(f => ({ ...f, value: sanitizeMoney(e.target.value) }))} />
-          <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-            <span className="text-sm text-gray-900">{t.paidOffLabel}</span>
+          <label className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2.5">
+            <span className="text-sm text-ink">{t.paidOffLabel}</span>
             <Toggle checked={form.paid_off} onChange={v => setForm(f => ({ ...f, paid_off: v }))} />
           </label>
           {!form.paid_off ? (
@@ -801,7 +801,7 @@ export default function EquipmentModule() {
               <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                 onChange={e => setForm(f => ({ ...f, loan_lender: e.target.value }))} />
               <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} inputMode="numeric"
-                leftIcon={<span className="text-gray-500">$</span>}
+                leftIcon={<span className="text-muted">$</span>}
                 value={withCommas(form.loan_amount)} onChange={e => setForm(f => ({ ...f, loan_amount: sanitizeMoney(e.target.value) }))} />
             </div>
           ) : null}
@@ -813,13 +813,13 @@ export default function EquipmentModule() {
           </div>
 
           {/* Assignment */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.assignmentHeading}</p>
+          <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.assignmentHeading}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">{t.assignedToLabel}</label>
+              <label className="text-sm font-medium text-ink">{t.assignedToLabel}</label>
               <select value={form.assigned_employee_id}
                 onChange={e => setForm(f => ({ ...f, assigned_employee_id: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 <option value="">{t.assignedToNone}</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
@@ -832,17 +832,17 @@ export default function EquipmentModule() {
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.notesLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.notesLabel}</label>
             <textarea rows={3} placeholder={t.notesPlaceholder} value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
           </div>
 
           {/* Photos — available while adding (queued locally) and editing
              (uploaded immediately). */}
           {(modal === 'add' || (modal === 'edit' && selected)) ? (
             <>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.photosHeading}</p>
+              <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.photosHeading}</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -853,9 +853,9 @@ export default function EquipmentModule() {
               />
               {(modal === 'add' ? pendingPhotos.length : photos.length) === 0 ? (
                 <button type="button" onClick={onPickFile}
-                  className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors">
-                  <Upload size={20} className="text-gray-400" />
-                  <span className="text-sm text-gray-500">{t.photoEmpty}</span>
+                  className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors">
+                  <Upload size={20} className="text-faint" />
+                  <span className="text-sm text-muted">{t.photoEmpty}</span>
                   <span className="text-xs font-semibold text-primary">{t.photoAddBtn}</span>
                 </button>
               ) : (
@@ -863,13 +863,13 @@ export default function EquipmentModule() {
                   <div className="grid grid-cols-3 gap-2">
                     {modal === 'add'
                       ? pendingPhotos.map((_, idx) => (
-                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group">
+                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-border-soft group">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={pendingUrls[idx]} alt="" className="w-full h-full object-cover" />
                             <button
                               type="button"
                               onClick={() => removePending(idx)}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-white/90 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                              className="absolute top-1 right-1 p-1 rounded-full bg-white/90 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10"
                               aria-label="Remove photo"
                             >
                               <X size={12} className="text-red-500" />
@@ -877,7 +877,7 @@ export default function EquipmentModule() {
                           </div>
                         ))
                       : photos.map(p => (
-                          <div key={p.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group">
+                          <div key={p.id} className="relative aspect-square rounded-lg overflow-hidden bg-border-soft group">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={photoUrls[p.storage_path] ?? undefined}
@@ -887,7 +887,7 @@ export default function EquipmentModule() {
                             <button
                               type="button"
                               onClick={() => removePhoto(p)}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-white/90 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                              className="absolute top-1 right-1 p-1 rounded-full bg-white/90 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10"
                               aria-label="Delete photo"
                             >
                               <X size={12} className="text-red-500" />
@@ -898,14 +898,14 @@ export default function EquipmentModule() {
                       <button
                         type="button"
                         onClick={onPickFile}
-                        className="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
+                        className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
                       >
-                        <Plus size={18} className="text-gray-400" />
+                        <Plus size={18} className="text-faint" />
                       </button>
                     ) : null}
                   </div>
                   {uploadingPhoto ? (
-                    <p className="text-xs text-gray-500">{t.photoUploading}</p>
+                    <p className="text-xs text-muted">{t.photoUploading}</p>
                   ) : null}
                 </>
               )}
@@ -951,7 +951,7 @@ export default function EquipmentModule() {
                     key={p.id}
                     type="button"
                     onClick={() => setViewerIndex(idx)}
-                    className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                    className="relative aspect-square rounded-lg overflow-hidden bg-border-soft"
                   >
                     {/* First photo is the cover/list thumbnail. */}
                     {idx === 0 ? (
@@ -998,8 +998,8 @@ export default function EquipmentModule() {
                   const days = plateExpirationDays(selected.plate_expiration);
                   const badge =
                     days === null ? null
-                    : days < 0 ? { text: t.plateExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : days < 0 ? { text: t.plateExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
                     : null;
                   return badge ? (
                     <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
@@ -1025,8 +1025,8 @@ export default function EquipmentModule() {
                   const days = plateExpirationDays(selected.insurance_expiration);
                   const badge =
                     days === null ? null
-                    : days < 0 ? { text: t.insuranceExpired, cls: 'bg-red-50 text-red-700 border-red-200' }
-                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                    : days < 0 ? { text: t.insuranceExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
+                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
                     : null;
                   return badge ? (
                     <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>

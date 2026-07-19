@@ -21,6 +21,9 @@ interface DatePickerProps {
    * inline use like the operating-hours rows. Default keeps the bordered input.
    */
   variant?: 'default' | 'ghost';
+  /** Latest selectable date, ISO YYYY-MM-DD (date mode). e.g. today, so a
+   *  timesheet can't be logged in the future. */
+  max?: string;
 }
 
 /**
@@ -40,6 +43,7 @@ export function DatePicker({
   mode = 'date',
   containerClassName,
   variant = 'default',
+  max,
 }: DatePickerProps) {
   return (
     <View className={clsx('flex flex-col gap-1.5', containerClassName)}>
@@ -51,6 +55,7 @@ export function DatePicker({
         <input
           type={mode}
           value={value}
+          max={max}
           onChange={(e: any) => onChange(e.target.value)}
           className={clsx(
             'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary',
@@ -58,7 +63,7 @@ export function DatePicker({
           )}
         />
       ) : (
-        <NativePicker value={value} onChange={onChange} mode={mode} label={label} placeholder={placeholder} error={error} variant={variant} />
+        <NativePicker value={value} onChange={onChange} mode={mode} label={label} placeholder={placeholder} error={error} variant={variant} max={max} />
       )}
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
@@ -74,6 +79,7 @@ function NativePicker({
   placeholder,
   error,
   variant = 'default',
+  max,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -82,7 +88,9 @@ function NativePicker({
   placeholder?: string;
   error?: string;
   variant?: 'default' | 'ghost';
+  max?: string;
 }) {
+  const maximumDate = max ? parseValueToDate(max, 'date') : undefined;
   // Dynamic import keeps the native module out of the web bundle.
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const DateTimePickerModule = require('@react-native-community/datetimepicker');
@@ -105,6 +113,7 @@ function NativePicker({
         value: current,
         mode: androidMode,
         is24Hour: false,
+        maximumDate,
         onChange: (event: { type: string }, selectedDate?: Date) => {
           if (event.type === 'set' && selectedDate) {
             // If the field is datetime-local, chain a time picker after the date picker.
@@ -213,6 +222,7 @@ function NativePicker({
                   value={iosDraft ?? new Date()}
                   mode={mode === 'datetime-local' ? 'datetime' : mode}
                   display={iosDisplay}
+                  maximumDate={maximumDate}
                   accentColor="#4F46E5"
                   themeVariant="light"
                   // Force English locale on the time wheel so AM/PM renders

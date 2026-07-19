@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput } from 'react-native';
+import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { X } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -663,7 +664,9 @@ export default function FacturaDetailRoute() {
   };
 
   // Email the invoice: open the mail composer pre-filled with the client's
-  // address + the public link, then mark the invoice sent.
+  // address, subject/body, AND the invoice PDF attached, then mark sent.
+  // Falls back to a mailto link (body only — mailto can't carry attachments)
+  // when the native mail composer isn't available.
   const sendInvoice = async () => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
@@ -691,6 +694,49 @@ export default function FacturaDetailRoute() {
         dueDate: invoice.dueDate ?? '',
       },
     });
+
+    // Preferred path: native mail composer with the PDF attached.
+    // Lazily require expo-mail-composer so a dev client that doesn't have the
+    // native module compiled in doesn't crash this screen at import time — it
+    // just falls back to the mailto link below until the app is rebuilt.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let MailComposer: any = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+      MailComposer = require('expo-mail-composer');
+    } catch {
+      MailComposer = null;
+    }
+    let composerAvailable = false;
+    if (MailComposer) {
+      try {
+        composerAvailable = await MailComposer.isAvailableAsync();
+      } catch {
+        composerAvailable = false;
+      }
+    }
+    if (MailComposer && composerAvailable) {
+      try {
+        // Build the invoice PDF (same renderer as the "Export PDF" action).
+        const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
+        const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+        const result = await MailComposer.composeAsync({
+          recipients: [email],
+          subject,
+          body,
+          attachments: [uri],
+        });
+        // Cancelled → don't flip status (nothing was sent).
+        if (result.status !== MailComposer.MailComposerStatus?.CANCELLED) {
+          await updateStatus('sent');
+        }
+        return;
+      } catch {
+        // Fall through to the mailto fallback below.
+      }
+    }
+
+    // Fallback: mailto link (body carries the public link; no attachment).
     const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     try {
       await Linking.openURL(mailto);
@@ -748,7 +794,12 @@ export default function FacturaDetailRoute() {
       <RNModal visible={moveJobId !== null} transparent animationType="fade" onRequestClose={() => setMoveJobId(null)}>
         <Pressable onPress={() => setMoveJobId(null)} className="flex-1 bg-black/40 justify-end">
           <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
-            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.moveTitle}</Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-gray-900">{jobsT.moveTitle}</Text>
+              <Pressable onPress={() => setMoveJobId(null)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
             {moveTargets.length === 0 ? (
               <Text className="text-sm text-gray-400 pb-4">{jobsT.moveEmpty}</Text>
             ) : (
@@ -764,9 +815,15 @@ export default function FacturaDetailRoute() {
 
       {/* Add-completed-jobs picker */}
       <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setAddOpen(false)} className="flex-1 bg-black/40 justify-end">
           <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
-            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.addTitle}</Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-gray-900">{jobsT.addTitle}</Text>
+              <Pressable onPress={() => setAddOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
 
             {/* Manual line item */}
             <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{jobsT.manualHeading}</Text>
@@ -840,13 +897,20 @@ export default function FacturaDetailRoute() {
             </Pressable>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Edit a manual line item */}
       <RNModal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setEditOpen(false)} className="flex-1 bg-black/40 justify-end">
           <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
-            <Text className="text-lg font-bold text-gray-900 mb-3">{jobsT.editItemTitle}</Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-gray-900">{jobsT.editItemTitle}</Text>
+              <Pressable onPress={() => setEditOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
             <TextInput
               value={editDesc}
               onChangeText={setEditDesc}
@@ -888,13 +952,20 @@ export default function FacturaDetailRoute() {
             </Pressable>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Record payment — amount defaults to the remaining balance */}
       <RNModal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setPayOpen(false)} className="flex-1 bg-black/40 justify-end">
           <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
-            <Text className="text-lg font-bold text-gray-900 mb-3">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-gray-900">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
+              <Pressable onPress={() => setPayOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
 
             <Text className="text-sm font-semibold text-gray-700 mb-1.5">{tInv.payments.amountLabel}</Text>
             <View className="relative justify-center mb-1">
@@ -950,6 +1021,7 @@ export default function FacturaDetailRoute() {
             </Pressable>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {confirmSheet}

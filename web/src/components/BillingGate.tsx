@@ -69,17 +69,17 @@ export function BillingGate() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-        <h1 className="text-xl font-bold text-gray-900">{heading}</h1>
-        {body && <p className="mt-2 text-sm text-gray-600">{body}</p>}
+    <div className="fixed inset-0 z-[100] bg-surface flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-card rounded-2xl border border-border-soft shadow-sm p-8 text-center">
+        <h1 className="text-xl font-bold text-ink">{heading}</h1>
+        {body && <p className="mt-2 text-sm text-muted">{body}</p>}
 
         {canManage ? (
           <Button variant="primary" fullWidth className="mt-6" onClick={() => setOpen(true)}>
             {es ? 'Ver planes' : 'View plans'}
           </Button>
         ) : (
-          <p className="mt-6 text-sm text-gray-500">
+          <p className="mt-6 text-sm text-muted">
             {es
               ? 'Contacta al dueño de tu negocio para renovar el plan.'
               : 'Contact your business owner to renew the plan.'}
@@ -87,8 +87,8 @@ export function BillingGate() {
         )}
 
         {otherActive.length > 0 && (
-          <div className="mt-6 border-t border-gray-100 pt-6 text-left">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <div className="mt-6 border-t border-border-soft pt-6 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wide text-faint">
               {es ? 'Cambiar de negocio' : 'Switch business'}
             </p>
             <div className="mt-3 flex flex-col gap-2">
@@ -96,7 +96,7 @@ export function BillingGate() {
                 <button
                   key={b.id}
                   onClick={() => setActiveBusiness(b.id)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-left text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-surface"
                 >
                   {b.name}
                 </button>
@@ -108,7 +108,7 @@ export function BillingGate() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="mt-6 text-sm font-medium text-gray-400 hover:text-gray-600"
+          className="mt-6 text-sm font-medium text-faint hover:text-muted"
         >
           {es ? 'Cerrar sesión' : 'Sign out'}
         </button>

@@ -138,8 +138,11 @@ export function Select({
                   <View className="w-10 h-1 bg-gray-200 rounded-full" />
                 </View>
                 {label ? (
-                  <View className="px-5 py-3 border-b border-gray-100">
+                  <View className="px-5 py-3 border-b border-gray-100 flex-row items-center justify-between">
                     <Text className="text-base font-semibold text-gray-900">{label}</Text>
+                    <Pressable onPress={() => setOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                      <X size={20} color="#9CA3AF" />
+                    </Pressable>
                   </View>
                 ) : null}
                 {searchable ? (

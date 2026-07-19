@@ -49,11 +49,11 @@ type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
 const STATUS_PILL: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-500',
+  draft: 'bg-border-soft text-muted',
   sent: 'bg-blue-100 text-blue-600',
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-600',
-  cancelled: 'bg-gray-100 text-gray-400',
+  cancelled: 'bg-border-soft text-faint',
 };
 
 function fmt(n: number) {
@@ -233,14 +233,14 @@ export function InvoicesListScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo
+          <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
+          <p className="text-sm text-muted mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(invoices.length))}</p>
         </div>
         <div className="flex items-center gap-2">
           {onPriceSheetPress ? (
-            <button onClick={onPriceSheetPress} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 shadow-sm">
+            <button onClick={onPriceSheetPress} className="flex items-center gap-2 bg-card border border-border text-ink px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-surface shadow-sm">
               <DollarSign size={16} /> {full.dashboard.settings.priceSheet.title}
             </button>
           ) : null}
@@ -253,21 +253,21 @@ export function InvoicesListScreen({
       {/* Search + filter controls */}
       <div className="flex items-center gap-2 mb-4">
         <div className="relative flex-1">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
             autoCapitalize="none"
             autoCorrect="off"
-            className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-10 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-2xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           {search ? (
             <button
               type="button"
               onClick={() => setSearch('')}
               aria-label="Limpiar búsqueda"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"
             >
               <X size={16} />
             </button>
@@ -278,7 +278,7 @@ export function InvoicesListScreen({
             onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             title={t.selectButton}
             className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
             <ListChecks size={15} /> {t.selectButton}
@@ -289,7 +289,7 @@ export function InvoicesListScreen({
             onClick={clearDate}
             title={tdate.clear}
             aria-label={tdate.clear}
-            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-50 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
+            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
           >
             <XCircle size={16} />
           </button>
@@ -301,7 +301,7 @@ export function InvoicesListScreen({
             title={tdate.button}
             aria-label={tdate.button}
             className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
-              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
             <Calendar size={16} />
@@ -309,26 +309,26 @@ export function InvoicesListScreen({
           {dateOpen ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-white rounded-2xl border border-gray-100 shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{tdate.title}</p>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.from}</label>
+              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{tdate.title}</p>
+                <label className="block text-xs font-medium text-muted mb-1">{tdate.from}</label>
                 <input
                   type="date"
                   value={dateFrom ?? ''}
                   onChange={e => setDateFrom(e.target.value || null)}
-                  className="w-full mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full mb-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <label className="block text-xs font-medium text-gray-600 mb-1">{tdate.to}</label>
+                <label className="block text-xs font-medium text-muted mb-1">{tdate.to}</label>
                 <input
                   type="date"
                   value={dateTo ?? ''}
                   onChange={e => setDateTo(e.target.value || null)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {dateActive ? (
                   <button
                     onClick={clearDate}
-                    className="mt-3 w-full py-2 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                    className="mt-3 w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border"
                   >
                     {tdate.clear}
                   </button>
@@ -344,7 +344,7 @@ export function InvoicesListScreen({
             title={tg.button}
             aria-label={tg.button}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
             <Layers size={15} /> {tg.button}
@@ -352,19 +352,19 @@ export function InvoicesListScreen({
           {groupMenuOpen ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-white rounded-2xl border border-gray-100 shadow-lg p-2">
+              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
                 {groupOptions.map(o => {
                   const active = groupBy === o.key;
                   return (
                     <button
                       key={o.key}
                       onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${active ? 'bg-primary/10' : 'hover:bg-gray-50'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
                     >
-                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>
                         <o.Icon size={16} />
                       </span>
-                      <span className={`flex-1 text-sm ${active ? 'text-primary font-semibold' : 'text-gray-900'}`}>{o.label}</span>
+                      <span className={`flex-1 text-sm ${active ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
                       {active ? <Check size={16} className="text-primary" /> : null}
                     </button>
                   );
@@ -380,7 +380,7 @@ export function InvoicesListScreen({
         <button
           onClick={() => setStatuses([])}
           aria-label={t.filters.all}
-          className={`flex items-center justify-center px-2.5 py-1.5 rounded-xl shrink-0 ${statuses.length === 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center justify-center px-2.5 py-1.5 rounded-xl shrink-0 ${statuses.length === 0 ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:text-ink'}`}
         >
           <List size={15} />
         </button>
@@ -390,11 +390,11 @@ export function InvoicesListScreen({
             <button
               key={k}
               onClick={() => toggleStatus(k)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 ${on ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 ${on ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:text-ink'}`}
             >
               {statusLabels[k]}
               {counts[k] > 0 ? (
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>{counts[k]}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-border text-muted'}`}>{counts[k]}</span>
               ) : null}
             </button>
           );
@@ -404,16 +404,16 @@ export function InvoicesListScreen({
       {/* Selection bar — fixed to the bottom of the screen (matches the Jobs
          list) so it doesn't push the list down. */}
       {selectMode ? (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{selectedCountText}</span>
+            <span className="text-sm text-muted">{selectedCountText}</span>
             {visibleOrder.length > 0 ? (
               <button onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
                 {allSelected ? full.dashboard.jobs.batchInvoice.deselectAll : t.selectAll}
               </button>
             ) : null}
             <div className="flex-1" />
-            <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">
+            <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-border-soft">
               {full.dashboard.jobs.batchInvoice.cancel}
             </button>
             <button
@@ -429,8 +429,8 @@ export function InvoicesListScreen({
 
       {/* Summary */}
       {filtered.length > 0 ? (
-        <p className="text-xs text-gray-500 mb-3">
-          {t.summaryTotal}: <span className="text-gray-900 font-bold">{fmt(total)}</span>
+        <p className="text-xs text-muted mb-3">
+          {t.summaryTotal}: <span className="text-ink font-bold">{fmt(total)}</span>
         </p>
       ) : null}
 
@@ -441,8 +441,8 @@ export function InvoicesListScreen({
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
-          <FileText size={40} className="text-gray-300" />
-          <p className="text-sm text-gray-400 mt-3">{t.empty}</p>
+          <FileText size={40} className="text-faint" />
+          <p className="text-sm text-faint mt-3">{t.empty}</p>
           <button onClick={onNewInvoicePress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
         </div>
       ) : (
@@ -450,28 +450,28 @@ export function InvoicesListScreen({
           {sections.map(section => (
             <div key={section.title || '__all'}>
               {section.title ? (
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+                <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-2 px-1">
                   {section.title} · {section.data.length}
                 </p>
               ) : null}
-              <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
+              <div className={`bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden ${selectMode ? 'select-none' : ''}`}>
                 {section.data.map((inv) => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
-                  const pill = STATUS_PILL[inv.status] ?? 'bg-gray-100 text-gray-500';
+                  const pill = STATUS_PILL[inv.status] ?? 'bg-border-soft text-muted';
                   const client = inv.clientNames ?? t.noClient;
                   const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
                   return (
                     <button
                       key={inv.id}
                       onClick={(e) => (selectMode ? handleSelectClick(inv.id, e.shiftKey) : onInvoicePress(inv.id))}
-                      className={`w-full flex items-center gap-4 px-5 py-4 border-b border-gray-50 last:border-b-0 text-left transition-colors ${
-                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'hover:bg-gray-50'
+                      className={`w-full flex items-center gap-4 px-5 py-4 border-b border-border-soft last:border-b-0 text-left transition-colors ${
+                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'hover:bg-surface'
                       }`}
                     >
                       {selectMode ? (
                         <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          selectedIds.has(inv.id) ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
+                          selectedIds.has(inv.id) ? 'border-primary bg-primary' : 'border-border bg-card'
                         }`}>
                           {selectedIds.has(inv.id) ? <span className="text-white text-[10px] font-bold">✓</span> : null}
                         </span>
@@ -480,11 +480,11 @@ export function InvoicesListScreen({
                          Fixed widths keep rows lined up; on narrow windows the
                          columns collapse back under the number. */}
                       <div className="flex-1 md:flex-none md:w-36 min-w-0">
-                        <span className="block text-sm font-semibold text-gray-900 truncate">{inv.invoiceNumber}</span>
+                        <span className="block text-sm font-semibold text-ink truncate">{inv.invoiceNumber}</span>
                         <span className="md:hidden flex items-center gap-2 flex-wrap mt-0.5">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
                         </span>
-                        <span className="md:hidden block text-xs text-gray-400 mt-0.5 truncate">
+                        <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                         </span>
@@ -492,11 +492,11 @@ export function InvoicesListScreen({
                       <span className="hidden md:flex w-28 shrink-0">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
                       </span>
-                      <span className="hidden md:block flex-1 min-w-0 text-sm text-gray-600 truncate">{client}</span>
-                      <span className="hidden lg:block w-48 shrink-0 text-xs text-gray-400 truncate">
+                      <span className="hidden md:block flex-1 min-w-0 text-sm text-muted truncate">{client}</span>
+                      <span className="hidden lg:block w-48 shrink-0 text-xs text-faint truncate">
                         {due ? t.dueShort.replace('{{date}}', due) : ''}
                       </span>
-                      <span className="text-sm font-bold text-gray-900 shrink-0 w-28 text-right">{fmt(inv.totalAmount)}</span>
+                      <span className="text-sm font-bold text-ink shrink-0 w-28 text-right">{fmt(inv.totalAmount)}</span>
                     </button>
                   );
                 })}

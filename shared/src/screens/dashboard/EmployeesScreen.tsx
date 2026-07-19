@@ -4,7 +4,6 @@ import {
   Clock,
   ClipboardList,
   UserCheck,
-  DollarSign,
   Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -80,7 +79,7 @@ export interface EmployeesScreenProps {
   customFieldDefs?: CustomFieldDef[];
 }
 
-type Tab = 'empleados' | 'horas' | 'nomina';
+type Tab = 'empleados' | 'horas';
 
 export function EmployeesScreen({
   employees,
@@ -124,11 +123,6 @@ export function EmployeesScreen({
     hourly: t.payTypes.hourly,
     salary: t.payTypes.salary,
     daily: t.payTypes.daily,
-  };
-  const PAY_UNIT_SHORT: Record<string, string> = {
-    hourly: t.payRateUnitShort.hourly,
-    salary: t.payRateUnitShort.salary,
-    daily: t.payRateUnitShort.daily,
   };
 
   const filterFields = useMemo<FilterField[]>(() => {
@@ -190,31 +184,6 @@ export function EmployeesScreen({
       .reduce((s, ts) => s + (ts.hoursWorked ?? 0), 0);
   }, [timesheets]);
 
-  // Payroll summary
-  const payrollRows = useMemo(() => {
-    const now = new Date();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthSheets = timesheets.filter(ts => new Date(ts.workDate) >= startMonth);
-    const byWorker: Record<string, { hours: number; emp?: EmployeeListItem }> = {};
-    monthSheets.forEach(ts => {
-      const key = ts.workerName ?? t.payroll.unknownWorker;
-      if (!byWorker[key])
-        byWorker[key] = { hours: 0, emp: employees.find(e => e.id === ts.employeeId) };
-      byWorker[key].hours += ts.hoursWorked ?? 0;
-    });
-    return Object.entries(byWorker);
-  }, [timesheets, employees, t.payroll.unknownWorker]);
-
-  const payrollMonth = new Date().toLocaleDateString(dateLocale, {
-    month: 'long',
-    year: 'numeric',
-  });
-  const payrollTotal = payrollRows.reduce((s, [, { hours, emp }]) => {
-    const rate = emp?.payRate ?? 0;
-    const pt = emp?.payType ?? 'hourly';
-    return s + (pt === 'hourly' ? hours * rate : pt === 'daily' ? Math.ceil(hours / 8) * rate : rate);
-  }, 0);
-
   return (
     <View className="flex-1 bg-surface">
     <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
@@ -242,7 +211,7 @@ export function EmployeesScreen({
 
       {/* Tabs */}
       <View className="flex-row gap-1 bg-gray-100 p-1 rounded-xl mb-6 self-start">
-        {(['empleados', 'horas', 'nomina'] as const).map(tabKey => (
+        {(['empleados', 'horas'] as const).map(tabKey => (
           <Pressable
             key={tabKey}
             onPress={() => setTab(tabKey)}
@@ -417,7 +386,7 @@ export function EmployeesScreen({
           </View>
         )}
         </>
-      ) : tab === 'horas' ? (
+      ) : (
         timesheets.length === 0 ? (
           <View className="items-center py-20">
             <ClipboardList size={40} color="#D1D5DB" />
@@ -465,64 +434,6 @@ export function EmployeesScreen({
             ))}
           </View>
         )
-      ) : payrollRows.length === 0 ? (
-        <View className="items-center py-20">
-          <DollarSign size={40} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-3">{t.emptyPayroll}</Text>
-        </View>
-      ) : (
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <View className="px-5 py-3 border-b border-gray-50">
-            <Text className="text-xs font-semibold text-gray-400">
-              {t.payroll.summaryHeading.replace('{{month}}', payrollMonth)}
-            </Text>
-          </View>
-          <View className="flex-row px-5 py-2 border-b border-gray-50">
-            <Text className="flex-1 text-xs font-semibold text-gray-400 uppercase">
-              {t.payroll.colEmployee}
-            </Text>
-            <Text className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">
-              {t.payroll.colHours}
-            </Text>
-            <Text className="w-20 text-xs font-semibold text-gray-400 uppercase text-center">
-              {t.payroll.colRate}
-            </Text>
-            <Text className="w-24 text-xs font-semibold text-gray-400 uppercase text-right">
-              {t.payroll.colTotal}
-            </Text>
-          </View>
-          {payrollRows.map(([name, { hours, emp }], i) => {
-            const rate = emp?.payRate ?? 0;
-            const payType = emp?.payType ?? 'hourly';
-            const pay =
-              payType === 'hourly' ? hours * rate
-              : payType === 'daily' ? Math.ceil(hours / 8) * rate
-              : rate;
-            return (
-              <View
-                key={name}
-                className={`flex-row items-center px-5 py-3.5 ${
-                  i < payrollRows.length - 1 ? 'border-b border-gray-50' : ''
-                }`}
-              >
-                <Text className="flex-1 text-sm font-medium text-gray-900" numberOfLines={1}>
-                  {name}
-                </Text>
-                <Text className="w-16 text-sm text-gray-600 text-center">{hours}</Text>
-                <Text className="w-20 text-xs text-gray-400 text-center">
-                  ${rate.toFixed(2)}/{PAY_UNIT_SHORT[payType]}
-                </Text>
-                <Text className="w-24 text-sm font-bold text-gray-900 text-right">
-                  ${pay.toFixed(2)}
-                </Text>
-              </View>
-            );
-          })}
-          <View className="flex-row justify-between px-5 py-3 border-t border-gray-100">
-            <Text className="text-sm font-bold text-gray-700">{t.payroll.monthlyTotal}</Text>
-            <Text className="text-sm font-bold text-primary">${payrollTotal.toFixed(2)}</Text>
-          </View>
-        </View>
       )}
 
       {modalsSlot}

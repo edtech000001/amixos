@@ -48,33 +48,33 @@ export function UbicacionesSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted">
         {es
           ? 'Crea sucursales para separar trabajos, equipo e inventario por ubicación. Los reportes siguen mostrando el total combinado. La sucursal de cada empleado se define en su perfil.'
           : 'Create branches to split jobs, team and inventory by location. Reports still show the combined total. Each employee’s branch is set on their profile.'}
       </p>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">{es ? 'Sucursales' : 'Branches'}</p>
+      <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+        <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-4">{es ? 'Sucursales' : 'Branches'}</p>
         <div className="flex flex-col gap-2">
           {locations.length === 0 && (
-            <p className="text-sm text-gray-400 py-2">{es ? 'Aún no tienes ubicaciones.' : 'No locations yet.'}</p>
+            <p className="text-sm text-faint py-2">{es ? 'Aún no tienes ubicaciones.' : 'No locations yet.'}</p>
           )}
           {locations.map((l) => (
-            <div key={l.id} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5">
-              <MapPin size={16} className="text-gray-400 shrink-0" />
+            <div key={l.id} className="flex items-center gap-3 rounded-xl border border-border-soft px-3 py-2.5">
+              <MapPin size={16} className="text-faint shrink-0" />
               {editId === l.id ? (
                 <input
                   autoFocus value={editName} onChange={(e) => setEditName(e.target.value)}
                   onBlur={() => saveRename(l.id)} onKeyDown={(e) => { if (e.key === 'Enter') saveRename(l.id); }}
-                  className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               ) : (
-                <button type="button" onClick={() => { setEditId(l.id); setEditName(l.name); }} className="flex-1 text-left text-sm font-medium text-gray-900">
+                <button type="button" onClick={() => { setEditId(l.id); setEditName(l.name); }} className="flex-1 text-left text-sm font-medium text-ink">
                   {l.name}
                 </button>
               )}
-              <button type="button" onClick={() => remove(l.id)} className="text-gray-300 hover:text-red-500" title={es ? 'Archivar' : 'Archive'}>
+              <button type="button" onClick={() => remove(l.id)} className="text-faint hover:text-red-500" title={es ? 'Archivar' : 'Archive'}>
                 <Trash2 size={15} />
               </button>
             </div>
@@ -86,7 +86,7 @@ export function UbicacionesSettings() {
             value={newName} onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addLocation(); }}
             placeholder={es ? 'Nombre de la sucursal (ej. Lexington)' : 'Branch name (e.g. Lexington)'}
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <button type="button" onClick={addLocation} disabled={!newName.trim() || busy}
             className="flex items-center gap-1.5 rounded-xl bg-primary text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-40">

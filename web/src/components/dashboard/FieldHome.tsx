@@ -127,19 +127,19 @@ export function FieldHome() {
   const JobCard = ({ job }: { job: FieldHomeJob }) => {
     const statusKey = job.status as keyof typeof t.jobs.statuses;
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4">
         <button onClick={() => router.push(`/dashboard/trabajos/${job.id}`)} className="w-full text-left">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-900 truncate">{job.title}</p>
+                <p className="text-sm font-semibold text-ink truncate">{job.title}</p>
                 {job.isLead && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{f.lead}</span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{job.clientName ?? f.noClient}</p>
+              <p className="text-xs text-muted mt-0.5 truncate">{job.clientName ?? f.noClient}</p>
               {(job.jobAddress || job.jobCity) && (
-                <p className="text-xs text-gray-400 mt-1 flex items-center gap-1 truncate">
+                <p className="text-xs text-faint mt-1 flex items-center gap-1 truncate">
                   <MapPin size={12} className="shrink-0" />
                   {[job.jobAddress, job.jobCity, job.jobState].filter(Boolean).join(', ')}
                 </p>
@@ -147,7 +147,7 @@ export function FieldHome() {
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg">{fmtDate(job.status === 'completed' ? (job.completedDate ?? job.scheduledDate) : job.scheduledDate)}</span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${JOB_STATUS_PILL[job.status] ?? 'bg-gray-100 text-gray-600'}`}>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${JOB_STATUS_PILL[job.status] ?? 'bg-border-soft text-muted'}`}>
                 {t.jobs.statuses[statusKey] ?? job.status}
               </span>
             </div>
@@ -156,12 +156,12 @@ export function FieldHome() {
         {/* Field worker can advance the status of a job they're on. Hidden in
             read-only "Ver como" preview. */}
         {!readOnly && (job.status === 'scheduled' || job.status === 'accepted') && (
-          <button onClick={() => advance(job, 'in_progress')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-semibold hover:bg-orange-100 transition-colors">
+          <button onClick={() => advance(job, 'in_progress')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-500/10 text-orange-600 text-sm font-semibold hover:bg-orange-100 transition-colors">
             <Play size={15} /> {f.start}
           </button>
         )}
         {!readOnly && job.status === 'in_progress' && (
-          <button onClick={() => advance(job, 'completed')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-sm font-semibold hover:bg-emerald-100 transition-colors">
+          <button onClick={() => advance(job, 'completed')} className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 text-sm font-semibold hover:bg-emerald-100 transition-colors">
             <CheckCircle2 size={15} /> {f.complete}
           </button>
         )}
@@ -173,32 +173,32 @@ export function FieldHome() {
     <div className="p-6 lg:p-8 max-w-6xl">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{f.greeting}{firstName(user?.name) ? ',' : ''}</h1>
+          <h1 className="text-2xl font-bold text-ink">{f.greeting}{firstName(user?.name) ? ',' : ''}</h1>
           {/* Crew don't get the business logo/name header — greet them by name. */}
-          {firstName(user?.name) && <p className="text-lg font-semibold text-gray-800 mt-1">{firstName(user?.name)}</p>}
+          {firstName(user?.name) && <p className="text-lg font-semibold text-ink mt-1">{firstName(user?.name)}</p>}
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">{f.clockError}</div>
+        <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">{f.clockError}</div>
       )}
 
       {/* Clock in/out — opt-in per role. */}
       {showClock && (
-        <div className={`rounded-2xl shadow-sm p-5 mb-6 ${open ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-100'}`}>
+        <div className={`rounded-2xl shadow-sm p-5 mb-6 ${open ? 'bg-emerald-600 text-white' : 'bg-card border border-border-soft'}`}>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${open ? 'bg-white/15' : 'bg-primary/10'}`}>
                 <Clock size={20} className={open ? 'text-white' : 'text-primary'} />
               </div>
-              <p className={`text-sm font-medium truncate ${open ? 'text-white' : 'text-gray-700'}`}>
+              <p className={`text-sm font-medium truncate ${open ? 'text-white' : 'text-ink'}`}>
                 {open ? f.clockedInSince.replace('{{time}}', fmtTime(open.clockIn)) : f.notClockedIn}
               </p>
             </div>
             <button
               onClick={toggleClock}
               disabled={busy || readOnly}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-50 shrink-0 ${open ? 'bg-white text-emerald-700' : 'bg-primary text-white hover:opacity-90'}`}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-50 shrink-0 ${open ? 'bg-card text-emerald-700' : 'bg-primary text-white hover:opacity-90'}`}
             >
               {open ? f.clockOut : f.clockIn}
             </button>
@@ -210,26 +210,26 @@ export function FieldHome() {
           toggles between active (unpaid) / week / month. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {([
-          { label: f.statAssigned, value: String(stats?.assignedActive ?? 0), icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: f.statAssigned, value: String(stats?.assignedActive ?? 0), icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
           { label: f.statCompleted, value: String(stats?.completedMonth ?? 0), icon: CheckCircle2, color: 'text-primary', bg: 'bg-primary/10' },
         ] as { label: string; value: string; icon: LucideIcon; color: string; bg: string }[]).map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div key={label} className="bg-card rounded-2xl border border-border-soft shadow-sm p-4">
             <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-3`}>
               <Icon size={18} className={color} />
             </div>
-            <p className="text-xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+            <p className="text-xl font-bold text-ink">{value}</p>
+            <p className="text-xs text-muted mt-0.5">{label}</p>
           </div>
         ))}
 
         {/* Hours tile — spans the remaining 2 columns on wide screens. */}
-        <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="col-span-2 bg-card rounded-2xl border border-border-soft shadow-sm p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
               <Timer size={18} className="text-orange-500" />
             </div>
             {/* Active / Week / Month segmented toggle. */}
-            <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-semibold">
+            <div className="inline-flex rounded-lg bg-border-soft p-0.5 text-xs font-semibold">
               {([
                 { key: 'active', label: f.hoursToggleActive },
                 { key: 'week', label: f.hoursToggleWeek },
@@ -238,30 +238,30 @@ export function FieldHome() {
                 <button
                   key={key}
                   onClick={() => setHoursView(key)}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${hoursView === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${hoursView === key ? 'bg-primary/15 text-primary shadow-sm' : 'text-muted hover:text-ink'}`}
                 >
                   {label}
                 </button>
               ))}
             </div>
           </div>
-          <p className="text-xl font-bold text-gray-900">
+          <p className="text-xl font-bold text-ink">
             {formatHours(hoursView === 'active' ? (stats?.hoursActive ?? 0) : hoursView === 'week' ? (stats?.hoursWeek ?? 0) : (stats?.hoursMonth ?? 0))}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {hoursView === 'active' ? f.statActiveHours : hoursView === 'week' ? f.statHoursWeek : f.statHoursMonth}
           </p>
         </div>
       </div>
 
       {/* Today */}
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+      <h2 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
         <CalendarDays size={16} className="text-primary" /> {f.todayTitle}
       </h2>
       {todayJobs.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-10 flex flex-col items-center mb-6">
-          <Briefcase size={36} className="text-gray-300" />
-          <p className="text-gray-400 text-sm mt-3">{f.empty}</p>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm py-10 flex flex-col items-center mb-6">
+          <Briefcase size={36} className="text-faint" />
+          <p className="text-faint text-sm mt-3">{f.empty}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
@@ -272,7 +272,7 @@ export function FieldHome() {
       {/* Upcoming */}
       {upcomingJobs.length > 0 && (
         <>
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">{f.upcomingTitle}</h2>
+          <h2 className="text-sm font-semibold text-ink mb-3">{f.upcomingTitle}</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {upcomingJobs.map(job => <JobCard key={job.id} job={job} />)}
           </div>
@@ -282,7 +282,7 @@ export function FieldHome() {
       {/* Recent projects completed — the last 7 days. */}
       {recentCompleted.length > 0 && (
         <>
-          <h2 className="text-sm font-semibold text-gray-900 mb-3 mt-6 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink mb-3 mt-6 flex items-center gap-2">
             <CheckCircle2 size={16} className="text-emerald-600" /> {f.recentCompletedTitle}
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

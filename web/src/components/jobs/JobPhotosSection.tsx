@@ -197,24 +197,24 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-900">{t.heading}</h2>
-        <span className="text-xs text-gray-400">
+        <h2 className="text-sm font-semibold text-ink">{t.heading}</h2>
+        <span className="text-xs text-faint">
           {t.countLabel.replace('{{count}}', String(photos.length)).replace('{{max}}', String(MAX_PHOTOS_PER_JOB))}
         </span>
       </div>
 
       {error ? (
-        <div className="mb-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">
           {error}
         </div>
       ) : null}
 
       {photos.length === 0 && !canWrite ? (
         <div className="py-8 flex flex-col items-center">
-          <ImagePlus size={28} className="text-gray-300" />
-          <p className="text-sm text-gray-400 mt-2">{t.empty}</p>
+          <ImagePlus size={28} className="text-faint" />
+          <p className="text-sm text-faint mt-2">{t.empty}</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
@@ -222,7 +222,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             <button
               key={p.id}
               onClick={() => setViewerIndex(i)}
-              className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 group"
+              className="relative aspect-square rounded-xl overflow-hidden bg-border-soft group"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -246,7 +246,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-primary hover:text-primary transition-colors disabled:opacity-60"
+              className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-faint hover:border-primary hover:text-primary transition-colors disabled:opacity-60"
             >
               {uploading ? (
                 <>

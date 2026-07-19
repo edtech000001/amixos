@@ -2257,15 +2257,15 @@ export default function AjustesPage() {
 
       {/* Content */}
       <div className="flex-1 min-w-0 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t.title}</h1>
+        <h1 className="text-2xl font-bold text-ink mb-6">{t.title}</h1>
 
           {/* ══ NEGOCIO ══════════════════════════════════════════════ */}
           {tab === 'negocio' && (
             <div className="flex flex-col gap-6">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
               <div className="mb-5 max-w-4xl">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.business.heading}</h2>
-                <p className="text-xs text-gray-400">{t.business.subtitle}</p>
+                <h2 className="text-base font-semibold text-ink mb-1">{t.business.heading}</h2>
+                <p className="text-xs text-faint">{t.business.subtitle}</p>
               </div>
 
               {/* Logo — centered over the fields (mirrors mobile). `contain` so
@@ -2274,11 +2274,11 @@ export default function AjustesPage() {
                 {business?.logo_url ? (
                   <button type="button" onClick={() => setLogoViewerOpen(true)} title={t.business.logoLabel}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={business.logo_url} alt="" className="w-36 h-36 rounded-2xl object-contain bg-gray-50 border border-gray-100 cursor-zoom-in hover:opacity-90" />
+                    <img src={business.logo_url} alt="" className="w-36 h-36 rounded-2xl object-contain bg-surface border border-border-soft cursor-zoom-in hover:opacity-90" />
                   </button>
                 ) : (
-                  <div className="w-36 h-36 rounded-2xl bg-gray-100 flex items-center justify-center">
-                    <Building2 size={44} className="text-gray-400" />
+                  <div className="w-36 h-36 rounded-2xl bg-border-soft flex items-center justify-center">
+                    <Building2 size={44} className="text-faint" />
                   </div>
                 )}
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
@@ -2293,7 +2293,7 @@ export default function AjustesPage() {
                   {business?.logo_url && !uploadingLogo && (
                     <button
                       onClick={onRemoveLogo}
-                      className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-50"
+                      className="px-3.5 py-1.5 rounded-xl text-red-500 text-sm font-semibold hover:bg-red-500/10"
                     >
                       {t.business.logoRemoveBtn}
                     </button>
@@ -2310,13 +2310,13 @@ export default function AjustesPage() {
                   {/* Background toggle (dark ⇄ white) for dark logos. */}
                   <button
                     onClick={e => { e.stopPropagation(); setLogoViewerLight(v => !v); }}
-                    className={`absolute top-5 left-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-gray-900' : 'text-white'}`}
+                    className={`absolute top-5 left-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-ink' : 'text-white'}`}
                   >
                     <Contrast size={22} />
                   </button>
                   <button
                     onClick={e => { e.stopPropagation(); setLogoViewerOpen(false); }}
-                    className={`absolute top-5 right-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-gray-900' : 'text-white'}`}
+                    className={`absolute top-5 right-5 p-2 rounded-lg hover:bg-black/10 ${logoViewerLight ? 'text-ink' : 'text-white'}`}
                   >
                     <X size={24} />
                   </button>
@@ -2331,20 +2331,20 @@ export default function AjustesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3.5 max-w-4xl">
                 <div className="sm:col-span-2"><Input label={t.business.nameLabel} value={bizName} onChange={e => setBizName(e.target.value)}/></div>
 
-                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.contactHeading}</p>
+                <p className="sm:col-span-2 text-xs font-semibold text-faint uppercase mt-2">{t.business.contactHeading}</p>
                 <Input label={t.business.emailLabel} type="email" value={bizEmail} onChange={e => setBizEmail(e.target.value)}/>
                 <Input label={t.business.phoneLabel} value={formatPhoneInput(bizPhone)} onChange={e => setBizPhone(formatPhoneInput(e.target.value))}/>
                 <div className="sm:col-span-2"><Input label={t.business.websiteLabel} value={bizWebsite} onChange={e => setBizWebsite(e.target.value)}/></div>
 
-                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.addressHeading}</p>
+                <p className="sm:col-span-2 text-xs font-semibold text-faint uppercase mt-2">{t.business.addressHeading}</p>
                 <div className="sm:col-span-2"><Input label={t.business.addressLabel} value={bizAddress} onChange={e => setBizAddress(e.target.value)}/></div>
                 <Input label={t.business.cityLabel} value={bizCity} onChange={e => setBizCity(e.target.value)}/>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-gray-700">{t.business.stateLabel}</label>
+                  <label className="text-sm font-medium text-ink">{t.business.stateLabel}</label>
                   <select
                     value={bizState}
                     onChange={e => setBizState(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                   >
                     <option value="">—</option>
                     {/* Full state names — the DB keeps the 2-letter code. */}
@@ -2353,42 +2353,42 @@ export default function AjustesPage() {
                 </div>
                 <Input label={t.business.zipLabel} value={bizZip} onChange={e => setBizZip(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} inputMode="numeric"/>
 
-                <p className="sm:col-span-2 text-xs font-semibold text-gray-400 uppercase mt-2">{t.business.legalHeading}</p>
+                <p className="sm:col-span-2 text-xs font-semibold text-faint uppercase mt-2">{t.business.legalHeading}</p>
                 <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>
                 <Input label={t.business.licenseLabel} value={bizLicense} onChange={e => setBizLicense(e.target.value)}/>
               </div>
 
               {/* Operating hours — 2-column grid of days to use the width. */}
-              <p className="text-xs font-semibold text-gray-400 uppercase mt-6">{t.business.operatingHoursHeading}</p>
-              <p className="text-xs text-gray-400 mb-1">{t.business.operatingHoursSub}</p>
+              <p className="text-xs font-semibold text-faint uppercase mt-6">{t.business.operatingHoursHeading}</p>
+              <p className="text-xs text-faint mb-1">{t.business.operatingHoursSub}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 max-w-4xl">
                 {DAY_KEYS.map((dk: DayKey) => {
                   const d = operatingHours[dk];
                   const setDay = (patch: Partial<typeof d>) =>
                     setOperatingHours(prev => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
                   return (
-                    <div key={dk} className="flex items-center py-2.5 border-b border-gray-50">
-                      <span className="w-28 text-sm text-gray-800">{t.business.days[dk]}</span>
+                    <div key={dk} className="flex items-center py-2.5 border-b border-border-soft">
+                      <span className="w-28 text-sm text-ink">{t.business.days[dk]}</span>
                       <Toggle checked={d.enabled} onChange={(v) => setDay({ enabled: v })} />
                       <div className="flex-1" />
                       {d.enabled ? (
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
                           <input
                             type="time"
                             value={d.start}
                             onChange={e => setDay({ start: e.target.value })}
-                            className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                            className="bg-transparent border-0 p-0 text-ink focus:outline-none focus:ring-0"
                           />
-                          <span className="text-gray-400 font-normal">–</span>
+                          <span className="text-faint font-normal">–</span>
                           <input
                             type="time"
                             value={d.end}
                             onChange={e => setDay({ end: e.target.value })}
-                            className="bg-transparent border-0 p-0 text-gray-900 focus:outline-none focus:ring-0"
+                            className="bg-transparent border-0 p-0 text-ink focus:outline-none focus:ring-0"
                           />
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-400">{t.business.closedLabel}</span>
+                        <span className="text-sm text-faint">{t.business.closedLabel}</span>
                       )}
                     </div>
                   );
@@ -2410,18 +2410,18 @@ export default function AjustesPage() {
           {tab === 'trabajos' && (
             <div className="flex flex-col gap-5">
               {/* Pipeline step config */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.pipeline.heading}</h2>
-                <p className="text-xs text-gray-400 mb-5">{t.pipeline.subtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.pipeline.heading}</h2>
+                <p className="text-xs text-faint mb-5">{t.pipeline.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-5">
+                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden mb-5">
                   {ALL_PIPELINE_STEPS.map(step => {
                     const isDisabled = !!pipelineDisabled[step.key];
                     return (
-                      <div key={step.key} className={`flex items-center justify-between px-4 py-3 transition-colors ${isDisabled ? 'bg-gray-50/50' : 'bg-white hover:bg-gray-50/50'}`}>
+                      <div key={step.key} className={`flex items-center justify-between px-4 py-3 transition-colors ${isDisabled ? 'bg-surface' : 'bg-card hover:bg-surface'}`}>
                         <div className="min-w-0">
-                          <span className={`text-sm font-medium ${isDisabled ? 'text-gray-400' : 'text-gray-700'}`}>{step.label}</span>
-                          <p className={`text-xs mt-0.5 ${isDisabled ? 'text-gray-300' : 'text-gray-400'}`}>{step.description}</p>
+                          <span className={`text-sm font-medium ${isDisabled ? 'text-faint' : 'text-ink'}`}>{step.label}</span>
+                          <p className={`text-xs mt-0.5 ${isDisabled ? 'text-faint' : 'text-faint'}`}>{step.description}</p>
                         </div>
                         <Toggle checked={!isDisabled} onChange={() => togglePipelineStep(step.key)} />
                       </div>
@@ -2436,9 +2436,9 @@ export default function AjustesPage() {
               </div>
 
               {/* Unified job-fields list (standard + custom interleaved). */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-semibold text-gray-900">{t.jobsSection.title}</h2>
+                  <h2 className="text-base font-semibold text-ink">{t.jobsSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
                     setJobTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setJobTplError(''); setAddJobFieldModal(true);
@@ -2446,17 +2446,17 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">{t.jobsSection.subtitle}</p>
+                <p className="text-xs text-faint mb-2">{t.jobsSection.subtitle}</p>
 
                 {/* Legend: what the grip + switch on each row mean. */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <GripVertical size={13} className="text-gray-400"/>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
+                    <GripVertical size={13} className="text-faint"/>
                     {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
                     <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
-                      <span className="w-3 h-3 rounded-full bg-white"/>
+                      <span className="w-3 h-3 rounded-full bg-card"/>
                     </span>
                     {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
                   </span>
@@ -2469,8 +2469,8 @@ export default function AjustesPage() {
                     const secLabel = locale === 'en' ? JOB_SECTION_LABELS[section].en : JOB_SECTION_LABELS[section].es;
                     return (
                       <div key={section}>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderJobSection(section, next.map(n => n.id))}
@@ -2482,32 +2482,32 @@ export default function AjustesPage() {
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
-                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 bg-card">
                                 <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
                                   aria-label="Drag to reorder">
                                   <GripVertical size={14} />
                                 </button>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveFieldInSection(key, 'up')} disabled={firstInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
-                                    <ChevronUp size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-muted"/>
                                   </button>
                                   <button onClick={() => moveFieldInSection(key, 'down')} disabled={lastInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
-                                    <ChevronDown size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-muted"/>
                                   </button>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
-                                    <span className="text-sm text-gray-900">{label}</span>
+                                    <span className="text-sm text-ink">{label}</span>
                                     {isCustom && tpl?.required && (
-                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                      <span className="text-[10px] text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
                                     )}
                                   </div>
                                   {isCustom && tpl && (
-                                    <p className="text-xs text-gray-400 mt-0.5">
+                                    <p className="text-xs text-faint mt-0.5">
                                       {FIELD_TYPES[tpl.field_type]}
                                       {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                                     </p>
@@ -2517,9 +2517,9 @@ export default function AjustesPage() {
                                   <>
                                     {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
                                       <button onClick={() => toggleJobFieldHidden(key)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        className="p-1.5 rounded-lg hover:bg-border-soft transition-colors shrink-0"
                                         aria-label={jobHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
-                                        {jobHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                        {jobHidden[key] ? <EyeOff size={15} className="text-faint"/> : <Eye size={15} className="text-muted"/>}
                                       </button>
                                     )}
                                     <Toggle checked={!!jobRequired[key]} onChange={() => toggleJobRequired(key)} />
@@ -2529,7 +2529,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveFieldToSection(key, e.target.value as JobLayoutSection)}
-                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
+                                      className="text-xs border border-border rounded-lg pl-1.5 pr-6 py-1 text-muted bg-card shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {JOB_LAYOUT_SECTIONS.map(s => (
@@ -2537,11 +2537,11 @@ export default function AjustesPage() {
                                       ))}
                                     </select>
                                     <button onClick={() => tpl && openEditJobTemplate(tpl)}
-                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      className="p-1.5 rounded-lg hover:bg-blue-500/10 transition-colors shrink-0" aria-label={tc.buttons.edit}>
                                       <Pencil size={13} className="text-blue-400"/>
                                     </button>
                                     <button onClick={() => tpl && removeJobTemplate(tpl.id)}
-                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors shrink-0" aria-label={tc.buttons.delete}>
                                       <Trash2 size={13} className="text-red-400"/>
                                     </button>
                                   </>
@@ -2565,11 +2565,11 @@ export default function AjustesPage() {
               {/* Upcoming-job alert tiers. When enabled, jobs whose
                  scheduled_date falls inside a tier get a colored left
                  border + chip on the job list card. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4 mb-1">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">{t.jobAlerts.heading}</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">{t.jobAlerts.subtitle}</p>
+                    <h2 className="text-base font-semibold text-ink">{t.jobAlerts.heading}</h2>
+                    <p className="text-xs text-faint mt-0.5">{t.jobAlerts.subtitle}</p>
                   </div>
                   <Toggle checked={jobAlerts.enabled} onChange={toggleJobAlertsEnabled} />
                 </div>
@@ -2577,14 +2577,14 @@ export default function AjustesPage() {
                 {jobAlerts.enabled && (
                   <div className="mt-5">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{t.jobAlerts.levelsHeading}</p>
+                      <p className="text-xs font-semibold text-ink uppercase tracking-wide">{t.jobAlerts.levelsHeading}</p>
                       <Button size="sm" variant="secondary" onClick={addJobAlertLevel}>
                         <Plus size={14} className="mr-1"/> {t.jobAlerts.addLevelBtn}
                       </Button>
                     </div>
 
                     {jobAlerts.levels.length === 0 ? (
-                      <p className="text-xs text-gray-400 italic py-3">{t.jobAlerts.levelsEmpty}</p>
+                      <p className="text-xs text-faint italic py-3">{t.jobAlerts.levelsEmpty}</p>
                     ) : (
                       <div className="flex flex-col gap-2">
                         {jobAlerts.levels.map((level, idx) => {
@@ -2592,7 +2592,7 @@ export default function AjustesPage() {
                           return (
                             <div
                               key={idx}
-                              className={`flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-100 bg-white border-l-4 ${style?.borderClass ?? 'border-l-gray-300'}`}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-xl border border-border-soft bg-card border-l-4 ${style?.borderClass ?? 'border-l-gray-300'}`}
                             >
                               <div className="flex items-center gap-1.5">
                                 <input
@@ -2600,16 +2600,16 @@ export default function AjustesPage() {
                                   min={0}
                                   value={level.days}
                                   onChange={e => updateJobAlertLevel(idx, { days: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                                  className="w-16 px-2 py-1 text-sm rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                  className="w-16 px-2 py-1 text-sm rounded-lg border border-border focus:outline-none focus:border-primary"
                                 />
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-muted">
                                   {level.days === 1 ? t.jobAlerts.daysSuffixOne : t.jobAlerts.daysSuffixMany}
                                 </span>
                               </div>
                               <select
                                 value={level.color}
                                 onChange={e => updateJobAlertLevel(idx, { color: e.target.value as JobAlertColor })}
-                                className="text-sm rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:border-primary"
+                                className="text-sm rounded-lg border border-border px-2 py-1 focus:outline-none focus:border-primary"
                               >
                                 {JOB_ALERT_COLORS.map(c => (
                                   <option key={c} value={c}>{t.jobAlerts.colors[c]}</option>
@@ -2619,7 +2619,7 @@ export default function AjustesPage() {
                               <button
                                 onClick={() => removeJobAlertLevel(idx)}
                                 aria-label={t.jobAlerts.removeLevelLabel}
-                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                               >
                                 <Trash2 size={14} className="text-red-400" />
                               </button>
@@ -2633,10 +2633,10 @@ export default function AjustesPage() {
 
                 {/* Overdue indicator — independent of the upcoming-day tiers
                    above; flags jobs already past their scheduled date. */}
-                <div className="flex items-start justify-between gap-4 mt-5 pt-4 border-t border-gray-100">
+                <div className="flex items-start justify-between gap-4 mt-5 pt-4 border-t border-border-soft">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{t.jobAlerts.overdueHeading}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{t.jobAlerts.overdueSubtitle}</p>
+                    <p className="text-sm font-medium text-ink">{t.jobAlerts.overdueHeading}</p>
+                    <p className="text-xs text-faint mt-0.5">{t.jobAlerts.overdueSubtitle}</p>
                   </div>
                   <Toggle checked={jobAlerts.overdue} onChange={toggleJobAlertsOverdue} />
                 </div>
@@ -2653,11 +2653,11 @@ export default function AjustesPage() {
 
               {/* Item-type categories toggle — grouped with the other toggles
                  near the bottom (matches the mobile section order). */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">{locale === 'en' ? 'Materials & labor' : 'Materiales y mano de obra'}</h2>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <h2 className="text-base font-semibold text-ink">{locale === 'en' ? 'Materials & labor' : 'Materiales y mano de obra'}</h2>
+                    <p className="text-xs text-faint mt-1">
                       {locale === 'en'
                         ? 'Shows the Materials & Labor section (with Labor / Material / Equipment / Other tags) on jobs. Turn off to hide the section entirely — for businesses that don’t itemize. Proposals always keep it.'
                         : 'Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo — para negocios que no detallan líneas. Las propuestas siempre la mantienen.'}
@@ -2669,11 +2669,11 @@ export default function AjustesPage() {
 
               {/* Auto-privatize on invoice — hides billed jobs from crews
                  (DB trigger covers every invoicing path, migration 117). */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">{t.privateOnInvoice.heading}</h2>
-                    <p className="text-xs text-gray-400 mt-1">{t.privateOnInvoice.subtitle}</p>
+                    <h2 className="text-base font-semibold text-ink">{t.privateOnInvoice.heading}</h2>
+                    <p className="text-xs text-faint mt-1">{t.privateOnInvoice.subtitle}</p>
                   </div>
                   <Toggle checked={privateOnInvoice} onChange={() => savePrivateOnInvoice(!privateOnInvoice)} disabled={savingPrivateOnInvoice} />
                 </div>
@@ -2681,11 +2681,11 @@ export default function AjustesPage() {
 
               {/* Crew mode toggle — hides the per-worker fields card + the
                  lead picker on the new-job form when off. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900">{t.crewMode.heading}</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">{t.crewMode.subtitle}</p>
+                    <h2 className="text-base font-semibold text-ink">{t.crewMode.heading}</h2>
+                    <p className="text-xs text-faint mt-0.5">{t.crewMode.subtitle}</p>
                   </div>
                   <Toggle checked={crewMode} onChange={() => { setCrewMode(v => !v); setCrewModeMsg(''); }} />
                 </div>
@@ -2707,33 +2707,33 @@ export default function AjustesPage() {
             <div className="flex flex-col gap-5">
               {/* Contacts summary — total clients + employees so the user can
                  reconcile against their Google Contacts count when sync is on. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-4">{t.contactsStats.heading}</h2>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-4">{t.contactsStats.heading}</h2>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-indigo-50 rounded-xl p-4 flex flex-col items-center">
+                  <div className="bg-indigo-500/10 rounded-xl p-4 flex flex-col items-center">
                     <span className="text-xs text-indigo-600 font-medium">{t.contactsStats.clientsLabel}</span>
                     <span className="text-2xl font-bold text-indigo-700 mt-1">{clientsCount ?? '—'}</span>
                   </div>
-                  <div className="bg-emerald-50 rounded-xl p-4 flex flex-col items-center text-center">
+                  <div className="bg-emerald-500/10 rounded-xl p-4 flex flex-col items-center text-center">
                     <span className="text-xs text-emerald-600 font-medium">{t.contactsStats.contactsLabel}</span>
                     <span className="text-2xl font-bold text-emerald-700 mt-1">{contactsCount ?? '—'}</span>
                   </div>
-                  <div className="bg-gray-100 rounded-xl p-4 flex flex-col items-center">
-                    <span className="text-xs text-gray-600 font-medium">{t.contactsStats.totalLabel}</span>
-                    <span className="text-2xl font-bold text-gray-900 mt-1">
+                  <div className="bg-border-soft rounded-xl p-4 flex flex-col items-center">
+                    <span className="text-xs text-muted font-medium">{t.contactsStats.totalLabel}</span>
+                    <span className="text-2xl font-bold text-ink mt-1">
                       {clientsCount !== null && contactsCount !== null ? clientsCount + contactsCount : '—'}
                     </span>
                   </div>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-3 leading-4">{t.contactsStats.googleHint}</p>
+                <p className="text-[11px] text-muted mt-3 leading-4">{t.contactsStats.googleHint}</p>
               </div>
 
               {/* Unified client-fields list: standard + custom in one order.
                  Custom items are marked with a Sparkles glyph. Use the up/down
                  arrows to interleave them however you like. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-semibold text-gray-900">{t.requiredFields.heading}</h2>
+                  <h2 className="text-base font-semibold text-ink">{t.requiredFields.heading}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
                     setTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setTplError(''); setAddFieldModal(true);
@@ -2741,17 +2741,17 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">{t.requiredFields.subtitle}</p>
+                <p className="text-xs text-faint mb-2">{t.requiredFields.subtitle}</p>
 
                 {/* Legend: what the grip + switch on each row mean. */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <GripVertical size={13} className="text-gray-400"/>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
+                    <GripVertical size={13} className="text-faint"/>
                     {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
                     <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
-                      <span className="w-3 h-3 rounded-full bg-white"/>
+                      <span className="w-3 h-3 rounded-full bg-card"/>
                     </span>
                     {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
                   </span>
@@ -2764,8 +2764,8 @@ export default function AjustesPage() {
                     const secLabel = locale === 'en' ? CLIENT_SECTION_LABELS[section].en : CLIENT_SECTION_LABELS[section].es;
                     return (
                       <div key={section}>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderClientSection(section, next.map(n => n.id))}
@@ -2777,32 +2777,32 @@ export default function AjustesPage() {
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
-                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 bg-card">
                                 <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
                                   aria-label="Drag to reorder">
                                   <GripVertical size={14} />
                                 </button>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveClientFieldInSection(key, 'up')} disabled={firstInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
-                                    <ChevronUp size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-muted"/>
                                   </button>
                                   <button onClick={() => moveClientFieldInSection(key, 'down')} disabled={lastInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
-                                    <ChevronDown size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-muted"/>
                                   </button>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
-                                    <span className="text-sm text-gray-900">{label}</span>
+                                    <span className="text-sm text-ink">{label}</span>
                                     {isCustom && tpl?.required && (
-                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                      <span className="text-[10px] text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
                                     )}
                                   </div>
                                   {isCustom && tpl && (
-                                    <p className="text-xs text-gray-400 mt-0.5">
+                                    <p className="text-xs text-faint mt-0.5">
                                       {FIELD_TYPES[tpl.field_type]}
                                       {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                                     </p>
@@ -2812,9 +2812,9 @@ export default function AjustesPage() {
                                   <>
                                     {!CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && (
                                       <button onClick={() => toggleClientFieldHidden(key)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        className="p-1.5 rounded-lg hover:bg-border-soft transition-colors shrink-0"
                                         aria-label={clientHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
-                                        {clientHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                        {clientHidden[key] ? <EyeOff size={15} className="text-faint"/> : <Eye size={15} className="text-muted"/>}
                                       </button>
                                     )}
                                     <Toggle checked={!!fieldRequired[key]} onChange={() => toggleFieldRequired(key)} />
@@ -2824,7 +2824,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveClientFieldToSection(key, e.target.value as ClientFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
+                                      className="text-xs border border-border rounded-lg pl-1.5 pr-6 py-1 text-muted bg-card shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {CLIENT_FIELD_SECTIONS.map(s => (
@@ -2832,11 +2832,11 @@ export default function AjustesPage() {
                                       ))}
                                     </select>
                                     <button onClick={() => tpl && openEditTemplate(tpl)}
-                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      className="p-1.5 rounded-lg hover:bg-blue-500/10 transition-colors shrink-0" aria-label={tc.buttons.edit}>
                                       <Pencil size={13} className="text-blue-400"/>
                                     </button>
                                     <button onClick={() => tpl && removeTemplate(tpl.id)}
-                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors shrink-0" aria-label={tc.buttons.delete}>
                                       <Trash2 size={13} className="text-red-400"/>
                                     </button>
                                   </>
@@ -2866,22 +2866,22 @@ export default function AjustesPage() {
               {can.manageMembers(currentRole) && (
                 <Link
                   href="/dashboard/ajustes/equipo"
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-3 hover:border-primary transition-colors"
+                  className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex items-center gap-3 hover:border-primary transition-colors"
                 >
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                     <ShieldCheck size={18} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-base font-semibold text-gray-900">{full.dashboard.roles.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{full.dashboard.roles.subtitle}</p>
+                    <p className="text-base font-semibold text-ink">{full.dashboard.roles.title}</p>
+                    <p className="text-xs text-muted mt-0.5">{full.dashboard.roles.subtitle}</p>
                   </div>
-                  <ChevronRight size={18} className="text-gray-400 shrink-0" />
+                  <ChevronRight size={18} className="text-faint shrink-0" />
                 </Link>
               )}
               {/* Unified employee-fields list (standard + custom interleaved). */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-semibold text-gray-900">{t.employeesSection.title}</h2>
+                  <h2 className="text-base font-semibold text-ink">{t.employeesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
                     setEmpTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setEmpTplError(''); setAddEmpFieldModal(true);
@@ -2889,17 +2889,17 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">{t.employeesSection.subtitle}</p>
+                <p className="text-xs text-faint mb-2">{t.employeesSection.subtitle}</p>
 
                 {/* Legend: what the grip + switch on each row mean. */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <GripVertical size={13} className="text-gray-400"/>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
+                    <GripVertical size={13} className="text-faint"/>
                     {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
                     <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
-                      <span className="w-3 h-3 rounded-full bg-white"/>
+                      <span className="w-3 h-3 rounded-full bg-card"/>
                     </span>
                     {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
                   </span>
@@ -2912,8 +2912,8 @@ export default function AjustesPage() {
                     const secLabel = locale === 'en' ? EMPLOYEE_SECTION_LABELS[section].en : EMPLOYEE_SECTION_LABELS[section].es;
                     return (
                       <div key={section}>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderEmpSection(section, next.map(n => n.id))}
@@ -2925,32 +2925,32 @@ export default function AjustesPage() {
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
-                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 bg-card">
                                 <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
                                   aria-label="Drag to reorder">
                                   <GripVertical size={14} />
                                 </button>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveEmpFieldInSection(key, 'up')} disabled={firstInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
-                                    <ChevronUp size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-muted"/>
                                   </button>
                                   <button onClick={() => moveEmpFieldInSection(key, 'down')} disabled={lastInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
-                                    <ChevronDown size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-muted"/>
                                   </button>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
-                                    <span className="text-sm text-gray-900">{label}</span>
+                                    <span className="text-sm text-ink">{label}</span>
                                     {isCustom && tpl?.required && (
-                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                      <span className="text-[10px] text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
                                     )}
                                   </div>
                                   {isCustom && tpl && (
-                                    <p className="text-xs text-gray-400 mt-0.5">
+                                    <p className="text-xs text-faint mt-0.5">
                                       {FIELD_TYPES[tpl.field_type]}
                                       {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                                     </p>
@@ -2960,9 +2960,9 @@ export default function AjustesPage() {
                                   <>
                                     {!EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && (
                                       <button onClick={() => toggleEmpFieldHidden(key)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        className="p-1.5 rounded-lg hover:bg-border-soft transition-colors shrink-0"
                                         aria-label={empHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
-                                        {empHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                        {empHidden[key] ? <EyeOff size={15} className="text-faint"/> : <Eye size={15} className="text-muted"/>}
                                       </button>
                                     )}
                                     <Toggle checked={!!empRequired[key]} onChange={() => toggleEmpRequired(key)} />
@@ -2972,7 +2972,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveEmpFieldToSection(key, e.target.value as EmployeeFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
+                                      className="text-xs border border-border rounded-lg pl-1.5 pr-6 py-1 text-muted bg-card shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {EMPLOYEE_FIELD_SECTIONS.map(s => (
@@ -2980,11 +2980,11 @@ export default function AjustesPage() {
                                       ))}
                                     </select>
                                     <button onClick={() => tpl && openEditEmpTemplate(tpl)}
-                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      className="p-1.5 rounded-lg hover:bg-blue-500/10 transition-colors shrink-0" aria-label={tc.buttons.edit}>
                                       <Pencil size={13} className="text-blue-400"/>
                                     </button>
                                     <button onClick={() => tpl && removeEmpTemplate(tpl.id)}
-                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors shrink-0" aria-label={tc.buttons.delete}>
                                       <Trash2 size={13} className="text-red-400"/>
                                     </button>
                                   </>
@@ -3011,9 +3011,9 @@ export default function AjustesPage() {
           {tab === 'cuenta' && (
             <div className="flex flex-col gap-5">
               {/* Account info */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.heading}</h2>
-                <p className="text-xs text-gray-400 mb-4">{t.account.subtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.account.heading}</h2>
+                <p className="text-xs text-faint mb-4">{t.account.subtitle}</p>
                 <div className="max-w-md grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label={t.account.firstNameLabel} value={firstName} onChange={e => setFirstName(e.target.value)} />
                   <Input label={t.account.lastNameLabel} value={lastName} onChange={e => setLastName(e.target.value)} />
@@ -3024,17 +3024,17 @@ export default function AjustesPage() {
                     <Save size={14} className="mr-1.5"/> {t.account.saveNameBtn}
                   </Button>
                 </div>
-                <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-gray-100">
-                  <p className="text-sm text-gray-500">{t.account.emailLabel}: <span className="font-medium text-gray-900">{user?.email}</span></p>
-                  <p className="text-sm text-gray-500">{t.account.roleLabel}: <span className="font-medium text-gray-900">{currentRole ? ROLE_LABELS[currentRole][locale] : '—'}</span></p>
+                <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-border-soft">
+                  <p className="text-sm text-muted">{t.account.emailLabel}: <span className="font-medium text-ink">{user?.email}</span></p>
+                  <p className="text-sm text-muted">{t.account.roleLabel}: <span className="font-medium text-ink">{currentRole ? ROLE_LABELS[currentRole][locale] : '—'}</span></p>
                 </div>
               </div>
 
               {/* Businesses you belong to — read-only list; switching active
                   business still happens via the header BusinessSwitcher. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-semibold text-gray-900 mb-1">{t.account.businessesHeading}</h2>
+                  <h2 className="text-base font-semibold text-ink mb-1">{t.account.businessesHeading}</h2>
                   <Button
                     variant="secondary"
                     onClick={() => router.push('/onboarding')}
@@ -3044,11 +3044,11 @@ export default function AjustesPage() {
                     {full.dashboard.workspaces.createBusiness}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-4">{t.account.businessesSubtitle}</p>
+                <p className="text-xs text-faint mb-4">{t.account.businessesSubtitle}</p>
                 {businesses.length === 0 ? (
-                  <p className="text-sm text-gray-500">{t.account.businessesEmpty}</p>
+                  <p className="text-sm text-muted">{t.account.businessesEmpty}</p>
                 ) : (
-                  <div className="bg-gray-50 rounded-xl overflow-hidden">
+                  <div className="bg-surface rounded-xl overflow-hidden">
                     {businesses.map((b, i) => {
                       const role = roles[b.id];
                       const isActive = b.id === activeBusinessId;
@@ -3056,13 +3056,13 @@ export default function AjustesPage() {
                         <div
                           key={b.id}
                           className={`flex items-center gap-3 px-4 py-3 ${
-                            i < businesses.length - 1 ? 'border-b border-gray-100' : ''
+                            i < businesses.length - 1 ? 'border-b border-border-soft' : ''
                           }`}
                         >
                           <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <Building2 size={14} className="text-primary" />
                           </span>
-                          <span className="flex-1 text-sm font-semibold text-gray-900 break-words">
+                          <span className="flex-1 text-sm font-semibold text-ink break-words">
                             {b.name}
                             {isActive ? ' •' : ''}
                           </span>
@@ -3128,13 +3128,13 @@ export default function AjustesPage() {
                 }
 
                 return (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center justify-between gap-3">
+                  <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6 flex items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-base font-semibold text-gray-900 mb-1">
+                      <h2 className="text-base font-semibold text-ink mb-1">
                         {es ? 'Suscripción' : 'Subscription'}
                       </h2>
-                      <p className="text-sm text-gray-600">{heading}</p>
-                      {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+                      <p className="text-sm text-muted">{heading}</p>
+                      {subtitle && <p className="text-xs text-faint mt-0.5">{subtitle}</p>}
                       {portalError && (
                         <p className="text-xs text-red-500 mt-2">{portalError}</p>
                       )}
@@ -3168,9 +3168,9 @@ export default function AjustesPage() {
               <LanguageCard />
 
               {/* Password */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.password.heading}</h2>
-                <p className="text-xs text-gray-400 mb-4">{t.password.subtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.password.heading}</h2>
+                <p className="text-xs text-faint mb-4">{t.password.subtitle}</p>
                 <div className="max-w-md flex flex-col gap-3">
                   <Input
                     label={t.password.currentPasswordLabel}
@@ -3183,7 +3183,7 @@ export default function AjustesPage() {
                         type="button"
                         onClick={() => setShowCurrentPw(v => !v)}
                         aria-label={showCurrentPw ? t.password.hidePassword : t.password.showPassword}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        className="p-1.5 rounded-lg text-faint hover:text-muted hover:bg-border-soft transition-colors"
                       >
                         {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -3200,7 +3200,7 @@ export default function AjustesPage() {
                         type="button"
                         onClick={() => setShowNewPw(v => !v)}
                         aria-label={showNewPw ? t.password.hidePassword : t.password.showPassword}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        className="p-1.5 rounded-lg text-faint hover:text-muted hover:bg-border-soft transition-colors"
                       >
                         {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -3220,7 +3220,7 @@ export default function AjustesPage() {
               <button
                 type="button"
                 onClick={() => setLogoutOpen(true)}
-                className="flex items-center justify-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                className="flex items-center justify-center gap-2 bg-card rounded-2xl border border-border-soft shadow-sm p-4 text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors"
               >
                 <LogOut size={16} /> {full.dashboard.sidebar.logout}
               </button>
@@ -3228,13 +3228,13 @@ export default function AjustesPage() {
               {logoutOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                   <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setLogoutOpen(false)} />
-                  <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col items-center text-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center"><LogOut size={22} className="text-red-600" /></div>
-                    <div className="text-lg font-bold text-gray-900">{full.dashboard.sidebar.logout}</div>
-                    <div className="text-sm text-gray-500">{t.account.logoutConfirm}</div>
+                  <div className="relative bg-card rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col items-center text-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center"><LogOut size={22} className="text-red-600" /></div>
+                    <div className="text-lg font-bold text-ink">{full.dashboard.sidebar.logout}</div>
+                    <div className="text-sm text-muted">{t.account.logoutConfirm}</div>
                     <div className="flex gap-3 w-full mt-2">
                       <button type="button" onClick={() => setLogoutOpen(false)}
-                        className="flex-1 py-2.5 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200">
+                        className="flex-1 py-2.5 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border">
                         {full.common.buttons.cancel}
                       </button>
                       <button type="button"
@@ -3256,13 +3256,13 @@ export default function AjustesPage() {
               <button
                 type="button"
                 onClick={() => tryChangeTab('facturas')}
-                className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 self-start"
+                className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink self-start"
               >
                 <ChevronLeft size={16} /> {t.tabs.facturas}
               </button>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.design.title}</h2>
-                <p className="text-xs text-gray-400 mb-4">{t.invoices.design.subtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.invoices.design.title}</h2>
+                <p className="text-xs text-faint mb-4">{t.invoices.design.subtitle}</p>
                 <InvoiceDesigner
                   key={invoiceTheme.active}
                   value={activeBundleConfig(invoiceTheme)}
@@ -3295,9 +3295,9 @@ export default function AjustesPage() {
 
           {tab === 'facturas' && (
             <div className="flex flex-col gap-5">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.heading}</h2>
-                <p className="text-xs text-gray-400 mb-4">{t.invoices.subtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.invoices.heading}</h2>
+                <p className="text-xs text-faint mb-4">{t.invoices.subtitle}</p>
                 <div className="flex flex-col gap-4 max-w-md">
                   <div>
                     <Input
@@ -3307,7 +3307,7 @@ export default function AjustesPage() {
                       value={invoiceDueDays}
                       onChange={e => setInvoiceDueDays(e.target.value)}
                     />
-                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.dueDaysHint}</p>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.dueDaysHint}</p>
                   </div>
                   <div>
                     <Input
@@ -3319,19 +3319,19 @@ export default function AjustesPage() {
                       value={invoiceTaxRate}
                       onChange={e => setInvoiceTaxRate(e.target.value)}
                     />
-                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.taxRateHint}</p>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.taxRateHint}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.invoices.qtyFieldLabel}</label>
+                    <label className="block text-sm font-medium text-ink mb-1.5">{t.invoices.qtyFieldLabel}</label>
                     <select
                       value={invoiceQtyField}
                       onChange={e => setInvoiceQtyField(e.target.value)}
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                      className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                     >
                       <option value="">{t.invoices.qtyFieldNone}</option>
                       {jobTemplates.map(tpl => <option key={tpl.id} value={tpl.field_key}>{tpl.field_label}</option>)}
                     </select>
-                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.qtyFieldHint}</p>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.qtyFieldHint}</p>
                   </div>
                   <div>
                     <Input
@@ -3341,16 +3341,16 @@ export default function AjustesPage() {
                       value={invoiceStartNumber}
                       onChange={e => setInvoiceStartNumber(e.target.value)}
                     />
-                    <p className="text-xs text-gray-400 mt-1.5">{t.invoices.startNumberHint}</p>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.startNumberHint}</p>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-gray-700">{t.invoices.notesLabel}</label>
+                    <label className="text-sm font-medium text-ink">{t.invoices.notesLabel}</label>
                     <textarea
                       rows={3}
                       placeholder={t.invoices.notesPlaceholder}
                       value={bizInvoiceNotes}
                       onChange={e => setBizInvoiceNotes(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+                      className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
                     />
                   </div>
 
@@ -3366,9 +3366,9 @@ export default function AjustesPage() {
               {/* Email al enviar factura — its OWN card: these fields
                  customize the send EMAIL, not the invoice document. Saved by
                  the same handler as the terms card. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-base font-semibold text-gray-900 mb-1">{t.invoices.emailHeading}</h2>
-                <p className="text-xs text-gray-400 mb-4">{t.invoices.emailSubtitle}</p>
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <h2 className="text-base font-semibold text-ink mb-1">{t.invoices.emailHeading}</h2>
+                <p className="text-xs text-faint mb-4">{t.invoices.emailSubtitle}</p>
                 <div className="flex flex-col gap-4 max-w-md">
                   <div className="flex flex-col gap-1.5">
                     <Input
@@ -3397,7 +3397,7 @@ export default function AjustesPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-gray-700">{t.invoices.emailBodyLabel}</label>
+                    <label className="text-sm font-medium text-ink">{t.invoices.emailBodyLabel}</label>
                     <textarea
                       ref={invoiceEmailBodyRef}
                       rows={4}
@@ -3405,7 +3405,7 @@ export default function AjustesPage() {
                       value={invoiceEmailBody}
                       onChange={e => setInvoiceEmailBody(e.target.value)}
                       onSelect={e => { emailSelRef.current.body = { s: e.currentTarget.selectionStart ?? 0, e: e.currentTarget.selectionEnd ?? 0 }; }}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+                      className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
                     />
                     <div className="flex flex-wrap gap-1.5">
                       {INVOICE_EMAIL_TOKENS.map(tok => {
@@ -3423,7 +3423,7 @@ export default function AjustesPage() {
                         );
                       })}
                     </div>
-                    <p className="text-xs text-gray-400">{t.invoices.emailVarsHint}</p>
+                    <p className="text-xs text-faint">{t.invoices.emailVarsHint}</p>
                   </div>
                 </div>
                 <div className="mt-5">
@@ -3435,9 +3435,9 @@ export default function AjustesPage() {
 
               {/* Unified invoice-fields list: standard (required toggle) +
                  custom (edit/delete), reorderable. Same UX as Trabajos. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-semibold text-gray-900">{t.invoicesSection.title}</h2>
+                  <h2 className="text-base font-semibold text-ink">{t.invoicesSection.title}</h2>
                   <Button size="sm" variant="secondary" onClick={() => {
                     setInvoiceTplForm({ field_label_es: '', field_label_en: '', field_type: 'text', required: false, options_raw: '', integer_only: false, thousands: false, multi: false });
                     setInvoiceTplError(''); setAddInvoiceFieldModal(true);
@@ -3445,17 +3445,17 @@ export default function AjustesPage() {
                     <Plus size={14} className="mr-1"/> {t.customFields.addBtn}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">{t.invoicesSection.subtitle}</p>
+                <p className="text-xs text-faint mb-2">{t.invoicesSection.subtitle}</p>
 
                 {/* Legend: what the grip + switch on each row mean. */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <GripVertical size={13} className="text-gray-400"/>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
+                    <GripVertical size={13} className="text-faint"/>
                     {locale === 'en' ? 'Drag to reorder' : 'Arrastra para mover'}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-faint">
                     <span className="inline-flex w-7 h-4 rounded-full bg-primary items-center justify-end px-0.5">
-                      <span className="w-3 h-3 rounded-full bg-white"/>
+                      <span className="w-3 h-3 rounded-full bg-card"/>
                     </span>
                     {locale === 'en' ? 'Switch = required field' : 'El interruptor lo hace obligatorio'}
                   </span>
@@ -3468,8 +3468,8 @@ export default function AjustesPage() {
                     const secLabel = locale === 'en' ? INVOICE_SECTION_LABELS[section].en : INVOICE_SECTION_LABELS[section].es;
                     return (
                       <div key={section}>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
+                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderInvoiceSection(section, next.map(n => n.id))}
@@ -3481,32 +3481,32 @@ export default function AjustesPage() {
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
-                              <div className="flex items-center gap-2 px-4 py-3 bg-white">
+                              <div className="flex items-center gap-2 px-4 py-3 bg-card">
                                 <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors shrink-0"
+                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
                                   aria-label="Drag to reorder">
                                   <GripVertical size={14} />
                                 </button>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveInvoiceFieldInSection(key, 'up')} disabled={firstInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
-                                    <ChevronUp size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
+                                    <ChevronUp size={14} className="text-muted"/>
                                   </button>
                                   <button onClick={() => moveInvoiceFieldInSection(key, 'down')} disabled={lastInSec}
-                                    className="p-0.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
-                                    <ChevronDown size={14} className="text-gray-500"/>
+                                    className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move down">
+                                    <ChevronDown size={14} className="text-muted"/>
                                   </button>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     {isCustom && <Sparkles size={12} className="text-primary shrink-0"/>}
-                                    <span className="text-sm text-gray-900">{label}</span>
+                                    <span className="text-sm text-ink">{label}</span>
                                     {isCustom && tpl?.required && (
-                                      <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
+                                      <span className="text-[10px] text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded-full font-medium">{t.customFields.requiredBadge}</span>
                                     )}
                                   </div>
                                   {isCustom && tpl && (
-                                    <p className="text-xs text-gray-400 mt-0.5">
+                                    <p className="text-xs text-faint mt-0.5">
                                       {FIELD_TYPES[tpl.field_type]}
                                       {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                                     </p>
@@ -3516,9 +3516,9 @@ export default function AjustesPage() {
                                   <>
                                     {!INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && (
                                       <button onClick={() => toggleInvoiceFieldHidden(key)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+                                        className="p-1.5 rounded-lg hover:bg-border-soft transition-colors shrink-0"
                                         aria-label={invoiceHidden[key] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
-                                        {invoiceHidden[key] ? <EyeOff size={15} className="text-gray-400"/> : <Eye size={15} className="text-gray-500"/>}
+                                        {invoiceHidden[key] ? <EyeOff size={15} className="text-faint"/> : <Eye size={15} className="text-muted"/>}
                                       </button>
                                     )}
                                     <Toggle checked={!!invoiceFieldRequired[key]} onChange={() => toggleInvoiceFieldRequired(key)} />
@@ -3528,7 +3528,7 @@ export default function AjustesPage() {
                                     <select
                                       value={section}
                                       onChange={(e) => moveInvoiceFieldToSection(key, e.target.value as InvoiceFieldSection)}
-                                      className="text-xs border border-gray-200 rounded-lg pl-1.5 pr-6 py-1 text-gray-600 bg-white shrink-0 max-w-[160px]"
+                                      className="text-xs border border-border rounded-lg pl-1.5 pr-6 py-1 text-muted bg-card shrink-0 max-w-[160px]"
                                       aria-label={locale === 'en' ? 'Move to section' : 'Mover a sección'}
                                     >
                                       {INVOICE_FIELD_SECTIONS.map(s => (
@@ -3536,11 +3536,11 @@ export default function AjustesPage() {
                                       ))}
                                     </select>
                                     <button onClick={() => tpl && openEditInvoiceTemplate(tpl)}
-                                      className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors shrink-0" aria-label={tc.buttons.edit}>
+                                      className="p-1.5 rounded-lg hover:bg-blue-500/10 transition-colors shrink-0" aria-label={tc.buttons.edit}>
                                       <Pencil size={13} className="text-blue-400"/>
                                     </button>
                                     <button onClick={() => tpl && removeInvoiceTemplate(tpl.id)}
-                                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0" aria-label={tc.buttons.delete}>
+                                      className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors shrink-0" aria-label={tc.buttons.delete}>
                                       <Trash2 size={13} className="text-red-400"/>
                                     </button>
                                   </>
@@ -3565,16 +3565,16 @@ export default function AjustesPage() {
               <button
                 type="button"
                 onClick={() => tryChangeTab('facturatema')}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-3 text-left hover:border-gray-200 transition-colors"
+                className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex items-center gap-3 text-left hover:border-border transition-colors"
               >
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Palette size={18} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">{t.invoices.design.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{t.invoices.design.subtitle}</p>
+                  <p className="text-sm font-semibold text-ink">{t.invoices.design.title}</p>
+                  <p className="text-xs text-faint mt-0.5">{t.invoices.design.subtitle}</p>
                 </div>
-                <ChevronRight size={18} className="text-gray-400 shrink-0" />
+                <ChevronRight size={18} className="text-faint shrink-0" />
               </button>
             </div>
           )}
@@ -3594,11 +3594,11 @@ export default function AjustesPage() {
           {tab === 'importar' && (
             <div className="flex flex-col gap-5 max-w-3xl">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">{t.tabs.importar}</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{t.importHub.subtitle}</p>
+                <h2 className="text-base font-semibold text-ink">{t.tabs.importar}</h2>
+                <p className="text-xs text-faint mt-0.5">{t.importHub.subtitle}</p>
               </div>
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-                <p className="text-xs text-blue-800">{t.importHub.orderHint}</p>
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
+                <p className="text-xs text-blue-800 dark:text-blue-200">{t.importHub.orderHint}</p>
               </div>
               <div className="flex flex-col gap-3">
                 {([
@@ -3617,13 +3617,13 @@ export default function AjustesPage() {
                         {i + 1}
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <p className="text-sm font-semibold text-gray-900">{step.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{step.desc}</p>
+                        <p className="text-sm font-semibold text-ink">{step.title}</p>
+                        <p className="text-xs text-muted mt-0.5">{step.desc}</p>
                       </div>
-                      <span className="text-xl text-gray-400">›</span>
+                      <span className="text-xl text-faint">›</span>
                     </>
                   );
-                  const cls = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors w-full';
+                  const cls = 'bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex items-center gap-3 hover:bg-surface transition-colors w-full';
                   return (
                     <button key={step.key} type="button" onClick={() => setHubImport(step.key)} className={cls}>
                       {inner}
@@ -3668,21 +3668,21 @@ export default function AjustesPage() {
 
           {/* ══ SOPORTE ══════════════════════════════════════════════ */}
           {tab === 'soporte' && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <LifeBuoy size={18} className="text-primary" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-base font-semibold text-gray-900">{t.support.heading}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{t.support.subtitle}</p>
+                  <h2 className="text-base font-semibold text-ink">{t.support.heading}</h2>
+                  <p className="text-xs text-faint mt-0.5">{t.support.subtitle}</p>
                   <a
                     href={buildSupportMailto({ subject: t.support.emailSubject, userEmail: user?.email, businessName: business?.name, platform: 'Web' })}
                     className="inline-flex items-center gap-1.5 mt-4 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
                   >
                     <LifeBuoy size={15} /> {t.support.contactBtn}
                   </a>
-                  <p className="text-xs text-gray-400 mt-2">{SUPPORT_EMAIL}</p>
+                  <p className="text-xs text-faint mt-2">{SUPPORT_EMAIL}</p>
                 </div>
               </div>
             </div>
@@ -3698,61 +3698,61 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={tplForm.field_label_en}
             onChange={e => setTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           {hasLabel(tplForm) && (
-            <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(tplForm.field_label_es, tplForm.field_label_en))}</code>
+            <p className="text-xs text-faint -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-border-soft px-1.5 py-0.5 rounded text-muted">{toKey(primaryFieldLabel(tplForm.field_label_es, tplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {tplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.integer_only} onChange={(v) => setTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {tplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.thousands} onChange={(v) => setTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.multi} onChange={(v) => setTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={tplForm.required} onChange={(v) => setTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -3771,56 +3771,56 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={tplForm.field_label_en}
             onChange={e => setTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={tplForm.field_type}
               onChange={e => setTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={tplForm.options_raw}
                 onChange={e => setTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {tplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.integer_only} onChange={(v) => setTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {tplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.thousands} onChange={(v) => setTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {tplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={tplForm.multi} onChange={(v) => setTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={tplForm.required} onChange={(v) => setTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {tplError && <p className="text-xs text-red-500">{tplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -3839,61 +3839,61 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={empTplForm.field_label_en}
             onChange={e => setEmpTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           {hasLabel(empTplForm) && (
-            <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(empTplForm.field_label_es, empTplForm.field_label_en))}</code>
+            <p className="text-xs text-faint -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-border-soft px-1.5 py-0.5 rounded text-muted">{toKey(primaryFieldLabel(empTplForm.field_label_es, empTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={empTplForm.field_type}
               onChange={e => setEmpTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {empTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={empTplForm.options_raw}
                 onChange={e => setEmpTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {empTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.integer_only} onChange={(v) => setEmpTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {empTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.thousands} onChange={(v) => setEmpTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {empTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.multi} onChange={(v) => setEmpTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={empTplForm.required} onChange={(v) => setEmpTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {empTplError && <p className="text-xs text-red-500">{empTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -3912,56 +3912,56 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={empTplForm.field_label_en}
             onChange={e => setEmpTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={empTplForm.field_type}
               onChange={e => setEmpTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {empTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={empTplForm.options_raw}
                 onChange={e => setEmpTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {empTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.integer_only} onChange={(v) => setEmpTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {empTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.thousands} onChange={(v) => setEmpTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {empTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={empTplForm.multi} onChange={(v) => setEmpTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={empTplForm.required} onChange={(v) => setEmpTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {empTplError && <p className="text-xs text-red-500">{empTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -3980,61 +3980,61 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={jobTplForm.field_label_en}
             onChange={e => setJobTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           {hasLabel(jobTplForm) && (
-            <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(jobTplForm.field_label_es, jobTplForm.field_label_en))}</code>
+            <p className="text-xs text-faint -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-border-soft px-1.5 py-0.5 rounded text-muted">{toKey(primaryFieldLabel(jobTplForm.field_label_es, jobTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={jobTplForm.field_type}
               onChange={e => setJobTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {jobTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={jobTplForm.options_raw}
                 onChange={e => setJobTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {jobTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.integer_only} onChange={(v) => setJobTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {jobTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.thousands} onChange={(v) => setJobTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {jobTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.multi} onChange={(v) => setJobTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={jobTplForm.required} onChange={(v) => setJobTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {jobTplError && <p className="text-xs text-red-500">{jobTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -4053,56 +4053,56 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={jobTplForm.field_label_en}
             onChange={e => setJobTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={jobTplForm.field_type}
               onChange={e => setJobTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {jobTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={jobTplForm.options_raw}
                 onChange={e => setJobTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {jobTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.integer_only} onChange={(v) => setJobTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {jobTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.thousands} onChange={(v) => setJobTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {jobTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={jobTplForm.multi} onChange={(v) => setJobTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={jobTplForm.required} onChange={(v) => setJobTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {jobTplError && <p className="text-xs text-red-500">{jobTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -4121,61 +4121,61 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={invoiceTplForm.field_label_en}
             onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           {hasLabel(invoiceTplForm) && (
-            <p className="text-xs text-gray-400 -mt-2">
-              {t.customFields.keyLabel}: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{toKey(primaryFieldLabel(invoiceTplForm.field_label_es, invoiceTplForm.field_label_en))}</code>
+            <p className="text-xs text-faint -mt-2">
+              {t.customFields.keyLabel}: <code className="bg-border-soft px-1.5 py-0.5 rounded text-muted">{toKey(primaryFieldLabel(invoiceTplForm.field_label_es, invoiceTplForm.field_label_en))}</code>
             </p>
           )}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={invoiceTplForm.field_type}
               onChange={e => setInvoiceTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {invoiceTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={invoiceTplForm.options_raw}
                 onChange={e => setInvoiceTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {invoiceTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.integer_only} onChange={(v) => setInvoiceTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {invoiceTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.thousands} onChange={(v) => setInvoiceTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {invoiceTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.multi} onChange={(v) => setInvoiceTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={invoiceTplForm.required} onChange={(v) => setInvoiceTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {invoiceTplError && <p className="text-xs text-red-500">{invoiceTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -4194,56 +4194,56 @@ export default function AjustesPage() {
           <Input label={t.customFields.fieldNameLabelEn} placeholder={t.customFields.fieldNamePlaceholder}
             value={invoiceTplForm.field_label_en}
             onChange={e => setInvoiceTplForm(f => ({ ...f, field_label_en: e.target.value }))}/>
-          <p className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</p>
+          <p className="text-xs text-faint -mt-2">{t.customFields.translationHint}</p>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">{t.customFields.fieldTypeLabel}</label>
+            <label className="text-sm font-medium text-ink">{t.customFields.fieldTypeLabel}</label>
             <select value={invoiceTplForm.field_type}
               onChange={e => setInvoiceTplForm(f => ({ ...f, field_type: e.target.value as FieldTemplate['field_type'] }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+              className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
               {Object.entries(FIELD_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           {invoiceTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                {t.customFields.optionsLabel} <span className="text-gray-400 font-normal">{t.customFields.optionsHint}</span>
+              <label className="text-sm font-medium text-ink">
+                {t.customFields.optionsLabel} <span className="text-faint font-normal">{t.customFields.optionsHint}</span>
               </label>
               <textarea rows={4} placeholder={t.customFields.optionsPlaceholder}
                 value={invoiceTplForm.options_raw}
                 onChange={e => setInvoiceTplForm(f => ({ ...f, options_raw: e.target.value }))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
+                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-none"/>
             </div>
           )}
           {invoiceTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.integer_only} onChange={(v) => setInvoiceTplForm(f => ({ ...f, integer_only: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.integerOnlyToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.integerOnlyToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.integerOnlyHint}</p>
+              <p className="text-xs text-faint">{t.customFields.integerOnlyHint}</p>
             </div>
           )}
           {invoiceTplForm.field_type === 'number' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.thousands} onChange={(v) => setInvoiceTplForm(f => ({ ...f, thousands: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.thousandsToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.thousandsToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.thousandsHint}</p>
+              <p className="text-xs text-faint">{t.customFields.thousandsHint}</p>
             </div>
           )}
           {invoiceTplForm.field_type === 'select' && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-3">
                 <Toggle checked={invoiceTplForm.multi} onChange={(v) => setInvoiceTplForm(f => ({ ...f, multi: v }))} />
-                <span className="text-sm text-gray-700 select-none">{t.customFields.multiToggleLabel}</span>
+                <span className="text-sm text-ink select-none">{t.customFields.multiToggleLabel}</span>
               </div>
-              <p className="text-xs text-gray-400">{t.customFields.multiHint}</p>
+              <p className="text-xs text-faint">{t.customFields.multiHint}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
             <Toggle checked={invoiceTplForm.required} onChange={(v) => setInvoiceTplForm(f => ({ ...f, required: v }))} />
-            <span className="text-sm text-gray-700 select-none">{t.customFields.requiredToggleLabel}</span>
+            <span className="text-sm text-ink select-none">{t.customFields.requiredToggleLabel}</span>
           </div>
           {invoiceTplError && <p className="text-xs text-red-500">{invoiceTplError}</p>}
           <div className="flex gap-3 pt-1">
@@ -4262,25 +4262,25 @@ function LanguageCard() {
   const t = full.dashboard.settings.language;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
       <div className="flex items-center gap-2 mb-1">
-        <Globe size={16} className="text-gray-500" />
-        <h2 className="text-base font-semibold text-gray-900">{t.heading}</h2>
+        <Globe size={16} className="text-muted" />
+        <h2 className="text-base font-semibold text-ink">{t.heading}</h2>
       </div>
-      <p className="text-xs text-gray-400 mb-4">{t.subtitle}</p>
+      <p className="text-xs text-faint mb-4">{t.subtitle}</p>
       <div className="max-w-xs flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">{t.label}</label>
+        <label className="text-sm font-medium text-ink">{t.label}</label>
         <select
           value={locale}
           onChange={e => setLocale(e.target.value as typeof locale)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
+          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
         >
           {locales.map(l => (
             <option key={l} value={l}>{labels[l]}</option>
           ))}
         </select>
       </div>
-      <p className="text-xs text-gray-400 mt-3">{t.savedNote}</p>
+      <p className="text-xs text-faint mt-3">{t.savedNote}</p>
     </div>
   );
 }
@@ -4641,23 +4641,23 @@ function GoogleSyncCard() {
       ? t.reconnectNeeded
       : t.connected;
   const statusColor = !status.connected
-    ? 'text-gray-500'
+    ? 'text-muted'
     : status.enabled === false
       ? 'text-amber-600'
       : 'text-emerald-600';
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-      <h2 className="text-base font-semibold text-gray-900 mb-1">{t.heading}</h2>
-      <p className="text-xs text-gray-400 mb-1">{t.subtitle}</p>
+    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+      <h2 className="text-base font-semibold text-ink mb-1">{t.heading}</h2>
+      <p className="text-xs text-faint mb-1">{t.subtitle}</p>
       {business?.name ? (
-        <p className="text-xs text-gray-500 font-medium mb-4">
+        <p className="text-xs text-muted font-medium mb-4">
           {t.scopeNote.replace('{{name}}', business.name)}
         </p>
       ) : null}
 
       {statusError ? (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-700">
+        <div className="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-100 text-sm text-amber-700">
           {t.statusCheckError}
         </div>
       ) : null}
@@ -4668,7 +4668,7 @@ function GoogleSyncCard() {
             {loading ? '…' : statusLabel}
           </p>
           {status.lastSyncAt ? (
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-faint mt-0.5">
               {t.lastSyncedAt}: {formatDateTimeLong(status.lastSyncAt, locale)}
             </p>
           ) : null}
@@ -4682,12 +4682,12 @@ function GoogleSyncCard() {
 
       {status.connected && status.enabled !== false ? (
         <div className="max-w-xs flex flex-col gap-1.5 mb-4">
-          <label className="text-sm font-medium text-gray-700">{t.contactGroupLabel}</label>
+          <label className="text-sm font-medium text-ink">{t.contactGroupLabel}</label>
           <select
             value={status.contactGroupId ?? ''}
             onChange={e => onGroupChange(e.target.value)}
             disabled={busy}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
           >
             <option value="">{t.contactGroupNoneOption}</option>
             {groups.map(g => (
@@ -4715,19 +4715,19 @@ function GoogleSyncCard() {
           stuff custom-field values into the Google biography so they
           show on iPhone Contacts (which hides Google's userDefined fields). */}
       {status.connected && status.enabled !== false && templateLoaded ? (
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 flex flex-col gap-2 mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">{t.templateTitle}</h3>
-          <p className="text-xs text-gray-500 leading-5">{t.templateHint}</p>
+        <div className="rounded-2xl border border-border-soft bg-card p-4 flex flex-col gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-ink">{t.templateTitle}</h3>
+          <p className="text-xs text-muted leading-5">{t.templateHint}</p>
           <textarea
             value={notesTemplate}
             onChange={e => setNotesTemplate(e.target.value)}
             placeholder={t.templatePlaceholder}
             rows={5}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
+            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary resize-y"
           />
           {availableFields.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-xs text-gray-500 mr-1">{t.templateAvailable}:</span>
+              <span className="text-xs text-muted mr-1">{t.templateAvailable}:</span>
               {availableFields.map(label => (
                 <button
                   key={label}
@@ -4739,7 +4739,7 @@ function GoogleSyncCard() {
                       : `${label}: {{${label}}}`;
                     return `${prev}${sep}${insertion}`;
                   })}
-                  className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 font-mono"
+                  className="px-2 py-0.5 rounded-md bg-border-soft hover:bg-border text-xs text-ink font-mono"
                 >
                   {`{{${label}}}`}
                 </button>
@@ -4770,8 +4770,8 @@ function GoogleSyncCard() {
 
       <Modal open={disconnectModal} onClose={() => setDisconnectModal(false)} title={t.disconnectTitle} size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-gray-600">{t.disconnectBody}</p>
-          <p className="text-sm text-gray-900 font-medium">
+          <p className="text-sm text-muted">{t.disconnectBody}</p>
+          <p className="text-sm text-ink font-medium">
             {disconnectCount > 0
               ? t.disconnectCountWithNumber.replace('{{count}}', String(disconnectCount))
               : t.disconnectCountGeneric}
@@ -4805,7 +4805,7 @@ function GoogleSyncCard() {
         <div className="flex flex-col gap-4">
           {!backfillResult ? (
             <>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted">
                 {t.backfillBody.replace('{{count}}', String(backfillCount))}
               </p>
               <div className="flex flex-col gap-2">
@@ -4821,8 +4821,8 @@ function GoogleSyncCard() {
             </>
           ) : (
             <>
-              <p className="text-sm text-gray-900 font-semibold">{t.backfillDoneTitle}</p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink font-semibold">{t.backfillDoneTitle}</p>
+              <p className="text-sm text-muted">
                 {t.backfillDoneBody
                   .replace('{{created}}', String(backfillResult.created))
                   .replace('{{linked}}', String(backfillResult.linked))}

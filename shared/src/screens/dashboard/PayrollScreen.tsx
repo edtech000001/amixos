@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -712,6 +712,7 @@ export function PayrollScreen({
 
       {/* Manual payment sheet */}
       <RNModal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <View className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setManualOpen(false)}
@@ -808,8 +809,11 @@ export function PayrollScreen({
                 <View className="items-center mb-2">
                   <View className="w-10 h-1 bg-gray-200 rounded-full" />
                 </View>
-                <View className="px-5 mb-3">
+                <View className="px-5 mb-3 flex-row items-center justify-between">
                   <Text className="text-base font-semibold text-gray-900">{t.manualPeriodLabel}</Text>
+                  <Pressable onPress={() => setManualPeriodPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                    <X size={22} color="#9CA3AF" />
+                  </Pressable>
                 </View>
                 <ScrollView className="flex-1">
                   {manualPeriods.map(pr => {
@@ -854,8 +858,11 @@ export function PayrollScreen({
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-gray-200 rounded-full" />
             </View>
-            <View className="px-5 mb-3">
+            <View className="px-5 mb-3 flex-row items-center justify-between">
               <Text className="text-base font-semibold text-gray-900">{t.manualWorkerLabel}</Text>
+              <Pressable onPress={() => setManualPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
             </View>
             <View className="px-5 mb-3">
               <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
@@ -892,6 +899,7 @@ export function PayrollScreen({
           </View>
           ) : null}
         </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Payroll settings sheet — frequency / anchor / pay components. */}

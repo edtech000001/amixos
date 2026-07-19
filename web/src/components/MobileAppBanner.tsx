@@ -67,7 +67,7 @@ export function MobileAppBanner() {
       </div>
       <a
         href={url}
-        className="bg-white text-primary text-xs font-semibold px-3 py-1.5 rounded-full shrink-0"
+        className="bg-card text-primary text-xs font-semibold px-3 py-1.5 rounded-full shrink-0"
       >
         {t.openBtn}
       </a>

@@ -137,18 +137,18 @@ export interface InvoiceDetailScreenProps {
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
-  draft: 'bg-gray-100',
+  draft: 'bg-border-soft',
   sent: 'bg-blue-100',
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
-  draft: 'text-gray-500',
+  draft: 'text-muted',
   sent: 'text-blue-600',
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
-  cancelled: 'text-gray-400',
+  cancelled: 'text-faint',
 };
 
 function fmt(n: number) {
@@ -202,7 +202,7 @@ export function InvoiceDetailScreen({
   if (!invoice) {
     return (
       <div className="p-6">
-        <p className="text-gray-400">{tInv.notFound}</p>
+        <p className="text-faint">{tInv.notFound}</p>
       </div>
     );
   }
@@ -216,8 +216,8 @@ export function InvoiceDetailScreen({
   const dateLoc = getInvoiceDateLocale(uiLang);
   const statusKey = invoice.status as keyof typeof tStatus;
   const statusLabel = tStatus[statusKey] ?? invoice.status;
-  const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
-  const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
+  const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
+  const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
   // null = auto (expand short lists, collapse 3+); a click pins the choice.
   const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -238,12 +238,12 @@ export function InvoiceDetailScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-            <ArrowLeft size={18} className="text-gray-500" />
+          <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <ArrowLeft size={18} className="text-muted" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900">{invoice.invoiceNumber}</h1>
+              <h1 className="text-xl font-bold text-ink">{invoice.invoiceNumber}</h1>
               <span className={`px-3.5 py-1.5 rounded-full text-sm font-bold ${pillBg} ${pillText}`}>
                 {statusLabel}
               </span>
@@ -253,34 +253,34 @@ export function InvoiceDetailScreen({
                 </span>
               ) : null}
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-faint mt-0.5">
               {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {onAutoprice ? (
-            <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-semibold text-primary transition-colors mr-1">
+            <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
               <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
             </button>
           ) : null}
           {onShareLink ? (
-            <button type="button" onClick={onShareLink} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Link2 size={18} className="text-gray-500" />
+            <button type="button" onClick={onShareLink} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+              <Link2 size={18} className="text-muted" />
             </button>
           ) : null}
           {onPrint ? (
-            <button type="button" onClick={onPrint} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Printer size={18} className="text-gray-500" />
+            <button type="button" onClick={onPrint} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+              <Printer size={18} className="text-muted" />
             </button>
           ) : null}
           {onEdit ? (
-            <button type="button" onClick={onEdit} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Pencil size={18} className="text-gray-500" />
+            <button type="button" onClick={onEdit} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+              <Pencil size={18} className="text-muted" />
             </button>
           ) : null}
           {onDelete ? (
-            <button type="button" onClick={onDelete} className="p-2 rounded-xl hover:bg-red-50 transition-colors">
+            <button type="button" onClick={onDelete} className="p-2 rounded-xl hover:bg-red-500/10 transition-colors">
               <Trash2 size={18} className="text-red-500" />
             </button>
           ) : null}
@@ -292,78 +292,78 @@ export function InvoiceDetailScreen({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         <div className="flex flex-col gap-4">
         {/* Quick total */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <DollarSign size={18} className="text-primary" />
           </div>
           <div>
-            <p className="text-xs text-gray-400 font-medium">{t.total}</p>
-            <p className="text-xl font-bold text-gray-900">{fmt(invoice.totalAmount)}</p>
+            <p className="text-xs text-faint font-medium">{t.total}</p>
+            <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</p>
           </div>
         </div>
 
         {/* Client — name, business, address */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{t.billTo}</p>
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          <p className="text-[11px] text-faint font-semibold uppercase tracking-wide mb-1">{t.billTo}</p>
           {invoice.clients.length ? invoice.clients.map((c, i) => {
             const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zip].filter(Boolean).join(' ');
             const loc = [c.address, cityStateZip].filter(Boolean).join(' · ');
             return (
-              <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-gray-50' : ''}>
+              <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-border-soft' : ''}>
                 {onClientPress && c.id ? (
                   <button type="button" onClick={() => onClientPress(c.id!)} className="text-base font-semibold text-primary hover:underline text-left">
                     {c.firstName} {c.lastName}
                   </button>
                 ) : (
-                  <p className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</p>
+                  <p className="text-base font-semibold text-ink">{c.firstName} {c.lastName}</p>
                 )}
-                {c.company ? <p className="text-sm text-gray-600 mt-0.5">{c.company}</p> : null}
-                {loc ? <p className="text-sm text-gray-500 mt-0.5">{loc}</p> : null}
-                {c.phoneCell ? <p className="text-sm text-gray-500 mt-0.5">{c.phoneCell}</p> : null}
+                {c.company ? <p className="text-sm text-muted mt-0.5">{c.company}</p> : null}
+                {loc ? <p className="text-sm text-muted mt-0.5">{loc}</p> : null}
+                {c.phoneCell ? <p className="text-sm text-muted mt-0.5">{c.phoneCell}</p> : null}
               </div>
             );
-          }) : <p className="text-sm text-gray-400">—</p>}
+          }) : <p className="text-sm text-faint">—</p>}
         </div>
 
         {/* Dates — combined */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
               <Calendar size={18} className="text-blue-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-400 font-medium">{t.issueDate}</p>
-              <p className="text-sm font-semibold text-gray-900">{formatDate(invoice.issueDate)}</p>
+              <p className="text-xs text-faint font-medium">{t.issueDate}</p>
+              <p className="text-sm font-semibold text-ink">{formatDate(invoice.issueDate)}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 pt-3 border-t border-gray-50">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+          <div className="flex items-center gap-3 pt-3 border-t border-border-soft">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <FileText size={18} className="text-amber-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-400 font-medium">{t.dueDate}</p>
-              <p className="text-sm font-semibold text-gray-900">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
+              <p className="text-xs text-faint font-medium">{t.dueDate}</p>
+              <p className="text-sm font-semibold text-ink">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
             </div>
           </div>
         </div>
 
         {/* Notes */}
         {invoice.notes ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">{t.notes}</p>
-            <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <p className="text-[11px] text-faint font-semibold uppercase tracking-wide">{t.notes}</p>
+            <p className="text-sm text-ink mt-1 whitespace-pre-wrap">{invoice.notes}</p>
           </div>
         ) : null}
 
         {/* Custom fields (invoice_field_templates) — read-only. */}
         {invoice.customFields && invoice.customFields.length > 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</p>
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <p className="text-[11px] text-faint font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</p>
             <div className="flex flex-col gap-2">
               {invoice.customFields.map(f => (
                 <div key={f.key ?? f.label} className="flex justify-between gap-3">
-                  <span className="text-xs text-gray-400">{f.label}</span>
-                  <span className="text-sm text-gray-700 text-right">{f.value}</span>
+                  <span className="text-xs text-faint">{f.label}</span>
+                  <span className="text-sm text-ink text-right">{f.value}</span>
                 </div>
               ))}
             </div>
@@ -375,7 +375,7 @@ export function InvoiceDetailScreen({
         <div className="lg:col-span-2 flex flex-col gap-4">
         {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
            document is only built for print / share (PDF). */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           {(() => {
             const seen = new Set<string>();
             return invoice.lineItems.map((li, idx) => {
@@ -385,27 +385,27 @@ export function InvoiceDetailScreen({
               const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (
-                <div key={idx} className="flex items-center justify-between gap-3 py-2.5 border-b border-gray-200">
+                <div key={idx} className="flex items-center justify-between gap-3 py-2.5 border-b border-border">
                   <div className="flex-1 pr-3 min-w-0">
                     {jid && onJobPress ? (
                       <button onClick={() => onJobPress(jid)} className="block text-sm font-medium text-primary hover:underline truncate text-left max-w-full">
                         {(jid && jobTitles?.[jid]) || li.description}
                       </button>
                     ) : (
-                      <p className="text-sm text-gray-900 truncate">{(jid && jobTitles?.[jid]) || li.description}</p>
+                      <p className="text-sm text-ink truncate">{(jid && jobTitles?.[jid]) || li.description}</p>
                     )}
-                    <p className="text-xs text-gray-400 mt-0.5">{q} × {fmt(r)}</p>
+                    <p className="text-xs text-faint mt-0.5">{q} × {fmt(r)}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {showActions ? (
                       <>
                         {onEditManualItem ? (
-                          <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
+                          <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-muted hover:text-primary disabled:opacity-40">
                             {ui.common.buttons.edit}
                           </button>
                         ) : null}
                         {onMoveJob ? (
-                          <button onClick={() => onMoveJob(jid!)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
+                          <button onClick={() => onMoveJob(jid!)} disabled={jobBusy} className="text-xs font-semibold text-muted hover:text-primary disabled:opacity-40">
                             {tInv.jobsSection.moveBtn}
                           </button>
                         ) : null}
@@ -416,7 +416,7 @@ export function InvoiceDetailScreen({
                     ) : editable && !jid && (onEditManualItem || onRemoveManualItem) ? (
                       <>
                         {onEditManualItem ? (
-                          <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-gray-500 hover:text-primary disabled:opacity-40">
+                          <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-muted hover:text-primary disabled:opacity-40">
                             {ui.common.buttons.edit}
                           </button>
                         ) : null}
@@ -427,7 +427,7 @@ export function InvoiceDetailScreen({
                         ) : null}
                       </>
                     ) : null}
-                    <p className="text-sm font-semibold text-gray-900 w-24 text-right">{fmt(q * r)}</p>
+                    <p className="text-sm font-semibold text-ink w-24 text-right">{fmt(q * r)}</p>
                   </div>
                 </div>
               );
@@ -441,31 +441,31 @@ export function InvoiceDetailScreen({
           ) : null}
 
           {autopriceVerify ? (
-            <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700">
+            <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2 text-xs text-amber-700">
               {ui.dashboard.jobs.detail.autopriceVerify}
             </div>
           ) : null}
 
           {/* Totals — below the items */}
-          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
+          <div className="mt-3 pt-3 border-t border-border-soft flex flex-col gap-1.5">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">{t.subtotal}</span>
-              <span className="text-sm text-gray-900">{fmt(invoice.subtotalAmount)}</span>
+              <span className="text-sm text-muted">{t.subtotal}</span>
+              <span className="text-sm text-ink">{fmt(invoice.subtotalAmount)}</span>
             </div>
             {/* Shown whenever a rate is set — even if the amount is $0 (e.g.
                no line prices yet), so the configured tax is always visible. */}
             {invoice.taxRate > 0 ? (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">{`${t.tax} (${invoice.taxRate}%)`}</span>
-                <span className="text-sm text-gray-900">{fmt(invoice.taxAmount)}</span>
+                <span className="text-sm text-muted">{`${t.tax} (${invoice.taxRate}%)`}</span>
+                <span className="text-sm text-ink">{fmt(invoice.taxAmount)}</span>
               </div>
             ) : null}
-            <div className="flex justify-between pt-2 border-t border-gray-100">
-              <span className="text-base font-bold text-gray-900">{t.total}</span>
+            <div className="flex justify-between pt-2 border-t border-border-soft">
+              <span className="text-base font-bold text-ink">{t.total}</span>
               <span className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</span>
             </div>
             {payments.length > 0 ? (
-              <div className="pt-2 border-t border-gray-100 flex flex-col gap-1.5">
+              <div className="pt-2 border-t border-border-soft flex flex-col gap-1.5">
                 {/* Summary row toggles the detail rows so many partials don't
                    swamp the totals card. */}
                 <button
@@ -473,15 +473,15 @@ export function InvoiceDetailScreen({
                   onClick={() => setPaymentsToggle(!paymentsExpanded)}
                   className="flex items-center justify-between w-full"
                 >
-                  <span className="flex items-center gap-1 text-sm font-medium text-gray-500">
+                  <span className="flex items-center gap-1 text-sm font-medium text-muted">
                     {tInv.payments.title} ({payments.length})
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${paymentsExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={14} className={`text-faint transition-transform ${paymentsExpanded ? 'rotate-180' : ''}`} />
                   </span>
                   <span className="text-sm font-medium text-emerald-700">−{fmt(paidSoFar)}</span>
                 </button>
                 {paymentsExpanded ? payments.map(p => (
                   <div key={p.id} className="flex items-center justify-between group pl-2">
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted">
                       {p.method ?? '—'} · {formatDate(p.paidOn)}
                     </span>
                     <span className="flex items-center gap-2">
@@ -491,7 +491,7 @@ export function InvoiceDetailScreen({
                           type="button"
                           onClick={() => onEditPayment(p)}
                           disabled={updating}
-                          className="p-1 rounded-lg text-gray-300 hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition"
+                          className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition"
                         >
                           <Pencil size={13} />
                         </button>
@@ -501,7 +501,7 @@ export function InvoiceDetailScreen({
                           type="button"
                           onClick={() => onDeletePayment(p)}
                           disabled={updating}
-                          className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
+                          className="p-1 rounded-lg text-faint hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -528,7 +528,7 @@ export function InvoiceDetailScreen({
                 <Send size={16} /> {tInv.sendInvoice}
               </button>
             ) : null}
-            <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-700 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+            <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-ink py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
               <CheckCircle size={16} /> {tInv.markSent}
             </button>
           </div>
@@ -538,20 +538,20 @@ export function InvoiceDetailScreen({
             <button onClick={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
               <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
             </button>
-            <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-500 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+            <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
               <Undo2 size={16} /> {tInv.undoSent}
             </button>
           </div>
         ) : null}
         {invoice.status === 'paid' && onUndoPaid ? (
-          <button onClick={onUndoPaid} disabled={updating} className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-500 py-3 rounded-2xl font-semibold hover:bg-gray-50 disabled:opacity-60">
+          <button onClick={onUndoPaid} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
             <Undo2 size={16} /> {tInv.payments.undoPaid}
           </button>
         ) : null}
 
         {/* Last edited — bottom of the page. */}
         {invoice.updatedAt && invoice.updatedAt !== invoice.createdAt ? (
-          <p className="text-xs text-gray-400 text-center mt-1">
+          <p className="text-xs text-faint text-center mt-1">
             {tInv.lastEditedLabel}: {formatDateTimeLong(invoice.updatedAt, dateLoc)}
           </p>
         ) : null}

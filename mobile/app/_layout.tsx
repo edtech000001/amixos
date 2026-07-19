@@ -7,6 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { cssInterop } from 'nativewind';
 import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
+import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { useProtectedRoute } from '@/lib/auth/gate';
 // Importing the auth store at module load wires up the single
 // onAuthStateChange listener and the safety timeout.
@@ -62,17 +63,23 @@ function AuthAwareApp() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
 
+// Status-bar icons follow the theme: dark glyphs on the light bg, light glyphs
+// on the dark bg. Must live inside ThemeProvider to read the resolved theme.
+function ThemedStatusBar() {
+  const { resolved } = useTheme();
+  return <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />;
+}
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <LangProvider>
-          {/* App UI is light-only, so force dark status-bar icons (clock,
-             wifi, battery). `auto` follows the device theme and turns them
-             white in dark mode, making them invisible on our light bg. */}
-          <StatusBar style="dark" />
-          <AuthAwareApp />
-        </LangProvider>
+        <ThemeProvider>
+          <LangProvider>
+            <ThemedStatusBar />
+            <AuthAwareApp />
+          </LangProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

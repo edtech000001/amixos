@@ -84,18 +84,18 @@ export function AddonStoreScreen({
     <div className="px-5 lg:px-6 pt-5 pb-10">
       {/* Heading */}
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{t.heading}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
+        <h1 className="text-2xl font-bold text-ink">{t.heading}</h1>
+        <p className="text-sm text-muted mt-0.5">{t.subtitle}</p>
       </div>
 
       {/* Search */}
       <div className="relative mb-3">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder={t.searchPlaceholder}
-          className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full rounded-2xl border border-border bg-card pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
@@ -109,7 +109,7 @@ export function AddonStoreScreen({
               key={c.key}
               onClick={() => setCategory(c.key)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                active ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                active ? 'bg-primary text-white' : 'bg-card border border-border text-ink hover:bg-surface'
               }`}
             >
               {c.label}
@@ -128,14 +128,14 @@ export function AddonStoreScreen({
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-10 flex items-center justify-center">
-          <p className="text-sm text-gray-500">{t.noResults}</p>
+          <p className="text-sm text-muted">{t.noResults}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
           {groups.map(g => (
             <div key={g.key}>
               {g.label ? (
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">{g.label}</p>
+                <p className="text-xs font-bold text-faint uppercase tracking-wider mb-2 ml-1">{g.label}</p>
               ) : null}
               <div className="flex flex-col gap-3">
               {g.items.map(m => {
@@ -148,16 +148,16 @@ export function AddonStoreScreen({
 
             const buttonLabel = isComingSoon ? t.statusComingSoon : enabled ? t.disable : t.enable;
             const buttonStyle = isComingSoon
-              ? 'bg-gray-100 border border-gray-200'
+              ? 'bg-border-soft border border-border'
               : enabled
-                ? 'bg-white border border-gray-200'
+                ? 'bg-card border border-border'
                 : 'bg-primary';
-            const buttonText = isComingSoon ? 'text-gray-400' : enabled ? 'text-gray-900' : 'text-white';
+            const buttonText = isComingSoon ? 'text-faint' : enabled ? 'text-ink' : 'text-white';
 
             return (
               <div
                 key={m.id}
-                className={`bg-white rounded-2xl ${enabled ? 'border-2' : 'border'} border-gray-100 p-4 flex flex-col`}
+                className={`bg-card rounded-2xl ${enabled ? 'border-2' : 'border'} border-border-soft p-4 flex flex-col`}
                 style={enabled ? { borderColor: '#4ADE80' } : undefined}
               >
                 <div
@@ -183,8 +183,8 @@ export function AddonStoreScreen({
                     ) : null}
                   </div>
 
-                  <p className="text-base font-semibold text-gray-900 mb-0.5 truncate">{name}</p>
-                  <p className="text-xs text-gray-500 leading-snug line-clamp-3">{description}</p>
+                  <p className="text-base font-semibold text-ink mb-0.5 truncate">{name}</p>
+                  <p className="text-xs text-muted leading-snug line-clamp-3">{description}</p>
                 </div>
 
                 <button

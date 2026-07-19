@@ -126,25 +126,25 @@ export default function ActividadPage() {
     <div className="md:flex md:min-h-screen">
       <SettingsNav />
       <div className="flex-1 min-w-0 p-6">
-      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+      <div className="bg-card rounded-2xl border border-border-soft p-6">
         <div className="flex items-start gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <Activity size={18} className="text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{t.heading}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
+            <h1 className="text-xl font-bold text-ink">{t.heading}</h1>
+            <p className="text-sm text-muted mt-0.5">{t.subtitle}</p>
           </div>
         </div>
 
         {rows.length > 0 && (
           <div className="relative mb-4">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={t.searchPlaceholder}
-              className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-xl border border-border bg-card pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
         )}
@@ -154,21 +154,21 @@ export default function ActividadPage() {
             <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: `${i*0.15}s`}}/>)}</div>
           </div>
         ) : rows.length === 0 ? (
-          <p className="py-10 text-center text-sm text-gray-400">{t.emptyState}</p>
+          <p className="py-10 text-center text-sm text-faint">{t.emptyState}</p>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-gray-400">{t.noResults}</p>
+          <p className="py-10 text-center text-sm text-faint">{t.noResults}</p>
         ) : (
           <div className="flex flex-col max-h-[calc(100vh-280px)] overflow-y-auto -mr-3 pr-3">
             {filtered.map((row, i) => (
-              <div key={row.id} className={`flex items-start gap-3 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-gray-500">
+              <div key={row.id} className={`flex items-start gap-3 py-3 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}>
+                <div className="w-9 h-9 rounded-full bg-border-soft flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-muted">
                     {(row.user_name || row.user_email || '?').charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">{describe(row, lang, moduleName)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-sm text-ink">{describe(row, lang, moduleName)}</p>
+                  <p className="text-xs text-faint mt-0.5">
                     {actorLine(row, t.unknownUser)} · {relTime(row.created_at, t, locale)}
                   </p>
                 </div>

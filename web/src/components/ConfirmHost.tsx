@@ -39,17 +39,17 @@ export default function ConfirmHost() {
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
       onClick={() => close(false)}
     >
-      <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-3 ${active.destructive ? 'bg-red-100' : 'bg-primary/10'}`}>
           <AlertTriangle size={20} className={active.destructive ? 'text-red-600' : 'text-primary'} />
         </div>
-        {active.title ? <p className="text-lg font-bold text-gray-900">{active.title}</p> : null}
-        <p className={`text-sm text-gray-600 ${active.title ? 'mt-1' : ''} whitespace-pre-line`}>{active.message}</p>
+        {active.title ? <p className="text-lg font-bold text-ink">{active.title}</p> : null}
+        <p className={`text-sm text-muted ${active.title ? 'mt-1' : ''} whitespace-pre-line`}>{active.message}</p>
         <div className="flex justify-end gap-2 mt-5">
           {isConfirm ? (
             <button
               onClick={() => close(false)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100"
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-border-soft"
             >
               {cancelLabel}
             </button>

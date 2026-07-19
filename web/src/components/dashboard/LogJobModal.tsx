@@ -72,61 +72,61 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={close} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">{f.logTitle}</h2>
-          <button onClick={close} className="p-1 rounded-lg hover:bg-gray-100"><X size={20} className="text-gray-500" /></button>
+      <div className="relative bg-card rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
+          <h2 className="text-lg font-bold text-ink">{f.logTitle}</h2>
+          <button onClick={close} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} className="text-muted" /></button>
         </div>
 
         <div className="px-5 py-4 overflow-y-auto">
           {/* Title */}
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.jobTitleLabel}</label>
+          <label className="block text-sm font-medium text-ink mb-1.5">{f.jobTitleLabel}</label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder={f.jobTitlePlaceholder}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 mb-4 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full border border-border rounded-xl px-4 py-2.5 text-sm text-ink mb-4 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
 
           {/* Location geostamp (auto-captured) */}
-          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
-            <MapPin size={15} className={locState === 'done' ? 'text-emerald-600' : 'text-gray-400'} />
-            <span className={`text-xs ${locState === 'done' ? 'text-gray-700' : 'text-gray-400'}`}>
+          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-surface border border-border-soft">
+            <MapPin size={15} className={locState === 'done' ? 'text-emerald-600' : 'text-faint'} />
+            <span className={`text-xs ${locState === 'done' ? 'text-ink' : 'text-faint'}`}>
               {locState === 'capturing' ? f.locCapturing : locState === 'done' ? locText : f.locUnavailable}
             </span>
           </div>
 
           {/* Client */}
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.clientLabel}</label>
-          <div className="flex items-center border border-gray-200 rounded-xl px-3 mb-2">
-            <Search size={16} className="text-gray-400" />
+          <label className="block text-sm font-medium text-ink mb-1.5">{f.clientLabel}</label>
+          <div className="flex items-center border border-border rounded-xl px-3 mb-2">
+            <Search size={16} className="text-faint" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={f.clientSearch}
-              className="flex-1 px-2 py-2.5 text-sm text-gray-900 focus:outline-none"
+              className="flex-1 px-2 py-2.5 text-sm text-ink focus:outline-none"
             />
           </div>
-          <div className="border border-gray-100 rounded-xl overflow-y-auto max-h-52 mb-4">
+          <div className="border border-border-soft rounded-xl overflow-y-auto max-h-52 mb-4">
             <button
               onClick={() => setClientId(null)}
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 text-left"
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface border-b border-border-soft text-left"
             >
-              <span className={`text-sm ${clientId === null ? 'text-primary font-semibold' : 'text-gray-600'}`}>{f.noClientOption}</span>
+              <span className={`text-sm ${clientId === null ? 'text-primary font-semibold' : 'text-muted'}`}>{f.noClientOption}</span>
               {clientId === null ? <Check size={16} className="text-primary" /> : null}
             </button>
             {clientsLoading ? (
-              <p className="text-sm text-gray-400 text-center py-6">…</p>
+              <p className="text-sm text-faint text-center py-6">…</p>
             ) : filtered.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">{f.noResults}</p>
+              <p className="text-sm text-faint text-center py-6">{f.noResults}</p>
             ) : (
               filtered.map(c => (
                 <button
                   key={c.id}
                   onClick={() => setClientId(c.id)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-b-0 text-left"
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface border-b border-border-soft last:border-b-0 text-left"
                 >
-                  <span className={`text-sm truncate ${clientId === c.id ? 'text-primary font-semibold' : 'text-gray-800'}`}>{c.name}</span>
+                  <span className={`text-sm truncate ${clientId === c.id ? 'text-primary font-semibold' : 'text-ink'}`}>{c.name}</span>
                   {clientId === c.id ? <Check size={16} className="text-primary shrink-0" /> : null}
                 </button>
               ))
@@ -134,21 +134,21 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
           </div>
 
           {/* Notes */}
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.notesLabel}</label>
+          <label className="block text-sm font-medium text-ink mb-1.5">{f.notesLabel}</label>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={3}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 mb-4 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+            className="w-full border border-border rounded-xl px-4 py-2.5 text-sm text-ink mb-4 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
           />
 
           {error ? (
-            <div className="mb-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">{error}</div>
+            <div className="mb-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">{error}</div>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
-          <button onClick={close} className="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200">{tc.buttons.cancel}</button>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border-soft">
+          <button onClick={close} className="px-4 py-2.5 rounded-xl bg-border-soft text-ink text-sm font-semibold hover:bg-border">{tc.buttons.cancel}</button>
           <button
             onClick={submit}
             disabled={busy}

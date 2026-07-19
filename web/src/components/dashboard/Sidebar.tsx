@@ -14,6 +14,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { LocationSwitcher } from '@/components/dashboard/LocationSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
 
@@ -76,7 +77,7 @@ export function Sidebar() {
   const NavContent = () => (
     <div className="flex flex-col h-full">
       {/* Business switcher (replaces the read-only logo + name block) */}
-      <div className="px-6 py-5 border-b border-gray-100 flex flex-col gap-3">
+      <div className="px-6 py-5 border-b border-border-soft flex flex-col gap-3">
         <BusinessSwitcher />
         <LocationSwitcher />
       </div>
@@ -96,7 +97,7 @@ export function Sidebar() {
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 active
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  : 'text-muted hover:bg-border-soft hover:text-ink'
               )}
             >
               <Icon size={18} />
@@ -119,7 +120,7 @@ export function Sidebar() {
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 active
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                  : 'text-muted hover:bg-border-soft hover:text-ink',
               )}
             >
               {/* Inherit currentColor (gray when idle, white when active) so
@@ -136,7 +137,7 @@ export function Sidebar() {
           Tienda (enabling modules) is a business-settings act → admins only.
           Ajustes stays visible to everyone since it also holds the personal
           account tab; the settings rail itself gates the config tabs. */}
-      <div className="px-3 py-4 border-t border-gray-100 flex flex-col gap-0.5">
+      <div className="px-3 py-4 border-t border-border-soft flex flex-col gap-0.5">
         {can.manageBusinessSettings(currentRole) && (
           <Link
             href="/dashboard/ajustes/tienda"
@@ -145,7 +146,7 @@ export function Sidebar() {
               'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
               isActive('/dashboard/ajustes/tienda')
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                : 'text-muted hover:bg-border-soft hover:text-ink',
             )}
           >
             <StoreIcon size={18} />
@@ -155,7 +156,7 @@ export function Sidebar() {
         <Link
           href="/dashboard/ajustes"
           onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-border-soft hover:text-ink transition-all"
         >
           <Settings size={18} />
           {t.ajustes}
@@ -163,14 +164,18 @@ export function Sidebar() {
       </div>
 
       {/* Platform brand — the workspace shows the customer's name up top;
-          this keeps Amixos as the subtle platform mark at the foot. */}
-      <div className="px-6 py-3 border-t border-gray-100">
-        <p className="text-[10px] text-gray-400">
-          Powered by <span className="font-semibold text-gray-500">Amixos</span>
-        </p>
-        {APP_VERSION && (
-          <p className="text-[10px] text-gray-300 mt-0.5">{APP_VERSION}</p>
-        )}
+          this keeps Amixos as the subtle platform mark at the foot. Theme
+          toggle sits here (light ↔ dark). */}
+      <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] text-faint">
+            Powered by <span className="font-semibold text-muted">Amixos</span>
+          </p>
+          {APP_VERSION && (
+            <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
+          )}
+        </div>
+        <ThemeToggle />
       </div>
     </div>
   );
@@ -180,16 +185,16 @@ export function Sidebar() {
       {/* Desktop sidebar — hidden on settings pages (drill-in: the settings
           tabs become the single left rail with their own Back link). */}
       {!isSettingsRoute && (
-        <aside className="hidden md:flex w-60 shrink-0 border-r border-gray-100 bg-white h-screen sticky top-0 flex-col">
+        <aside className="hidden md:flex w-60 shrink-0 border-r border-border-soft bg-card h-screen sticky top-0 flex-col">
           <NavContent />
         </aside>
       )}
 
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">{business?.name ?? 'Amixos'}</p>
-        <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg hover:bg-gray-100">
-          <Menu size={20} className="text-gray-600" />
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border-soft px-4 py-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-ink">{business?.name ?? 'Amixos'}</p>
+        <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg hover:bg-border-soft">
+          <Menu size={20} className="text-muted" />
         </button>
       </div>
 
@@ -197,10 +202,10 @@ export function Sidebar() {
       {open && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="relative w-72 bg-white h-full shadow-xl flex flex-col">
+          <aside className="relative w-72 bg-card h-full shadow-xl flex flex-col">
             <div className="absolute top-3 right-3">
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <X size={18} className="text-gray-500" />
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                <X size={18} className="text-muted" />
               </button>
             </div>
             <NavContent />

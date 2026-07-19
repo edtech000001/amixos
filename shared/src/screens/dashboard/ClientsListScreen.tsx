@@ -507,7 +507,12 @@ export function ClientsListScreen({
         <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 bg-black/40 justify-end">
           <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-6 pt-3 pb-10">
             <View className="self-center w-10 h-1 rounded-full bg-gray-200 mb-4" />
-            <Text className="text-base font-bold text-gray-900 mb-4">{t.group.title}</Text>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-bold text-gray-900">{t.group.title}</Text>
+              <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
             <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled">
               <View className="flex-row flex-wrap gap-2">
                 {groupOptions.map(o => {
