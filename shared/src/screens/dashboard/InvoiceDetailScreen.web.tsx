@@ -18,6 +18,7 @@ import {
   Pencil,
   Trash2,
   Undo2,
+  Ban,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -25,7 +26,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
-import { formatDateLong, formatDateTimeLong } from '../../lib/format';
+import { formatDateLong, formatDateTimeLong, daysOverdue } from '../../lib/format';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -91,7 +92,7 @@ export interface InvoiceDetailScreenProps {
   templateConfig: InvoiceTemplateConfig;
   updating: boolean;
   onBack: () => void;
-  onUpdateStatus: (status: 'sent' | 'paid' | 'draft') => Promise<void> | void;
+  onUpdateStatus: (status: 'sent' | 'paid' | 'draft' | 'total_loss') => Promise<void> | void;
   /** Print / download PDF. Hidden if not provided. */
   onPrint?: () => void;
   /** Copy/share the public invoice link. Hidden if not provided. */
@@ -142,6 +143,7 @@ const STATUS_PILL_BG: Record<string, string> = {
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
   cancelled: 'bg-border-soft',
+  total_loss: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
   draft: 'text-muted',
@@ -149,6 +151,7 @@ const STATUS_PILL_TEXT: Record<string, string> = {
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
   cancelled: 'text-faint',
+  total_loss: 'text-muted',
 };
 
 function fmt(n: number) {
@@ -186,6 +189,9 @@ export function InvoiceDetailScreen({
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
   const tStatus = ui.dashboard.invoiceStatus;
+  // Hooks must run before the early returns below (Rules of Hooks).
+  // null = auto (expand short lists, collapse 3+); a click pins the choice.
+  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
 
   if (loading) {
     return (
@@ -218,8 +224,6 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
-  // null = auto (expand short lists, collapse 3+); a click pins the choice.
-  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
@@ -245,7 +249,9 @@ export function InvoiceDetailScreen({
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-ink">{invoice.invoiceNumber}</h1>
               <span className={`px-3.5 py-1.5 rounded-full text-sm font-bold ${pillBg} ${pillText}`}>
-                {statusLabel}
+                {invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
+                  ? `${statusLabel} ${tInv.daysOverdue.replace('{{n}}', String(daysOverdue(invoice.dueDate)))}`
+                  : statusLabel}
               </span>
               {isPartial ? (
                 <span className="px-3.5 py-1.5 rounded-full text-sm font-bold bg-amber-100 text-amber-700">
@@ -541,7 +547,16 @@ export function InvoiceDetailScreen({
             <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
               <Undo2 size={16} /> {tInv.undoSent}
             </button>
+            {/* Write-off: an invoice the client will never pay. Drops out of overdue. */}
+            <button onClick={() => onUpdateStatus('total_loss')} disabled={updating} className="flex items-center justify-center gap-2 text-muted py-2 rounded-2xl font-semibold text-sm hover:opacity-70 disabled:opacity-60">
+              <Ban size={15} /> {tInv.markTotalLoss}
+            </button>
           </div>
+        ) : null}
+        {invoice.status === 'total_loss' ? (
+          <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="w-full flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
+            <Undo2 size={16} /> {tInv.reinstateInvoice}
+          </button>
         ) : null}
         {invoice.status === 'paid' && onUndoPaid ? (
           <button onClick={onUndoPaid} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">

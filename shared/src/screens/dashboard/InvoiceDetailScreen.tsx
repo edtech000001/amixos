@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   Undo2,
+  Ban,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -21,7 +22,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
-import { formatDateLong, formatDateTimeLong } from '../../lib/format';
+import { formatDateLong, formatDateTimeLong, daysOverdue } from '../../lib/format';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -88,7 +89,7 @@ export interface InvoiceDetailScreenProps {
   templateConfig: InvoiceTemplateConfig;
   updating: boolean;
   onBack: () => void;
-  onUpdateStatus: (status: 'sent' | 'paid' | 'draft') => Promise<void> | void;
+  onUpdateStatus: (status: 'sent' | 'paid' | 'draft' | 'total_loss') => Promise<void> | void;
   /** Print / export PDF (mobile: share sheet). Hidden if not provided. */
   onPrint?: () => void;
   /** Copy/share the public invoice link. Hidden if not provided. */
@@ -142,6 +143,7 @@ const STATUS_PILL_BG: Record<string, string> = {
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
   cancelled: 'bg-border-soft',
+  total_loss: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
   draft: 'text-muted',
@@ -149,6 +151,7 @@ const STATUS_PILL_TEXT: Record<string, string> = {
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
   cancelled: 'text-faint',
+  total_loss: 'text-muted',
 };
 
 function fmt(n: number) {
@@ -188,6 +191,9 @@ export function InvoiceDetailScreen({
   const c = useThemeColors();
   const tInv = ui.dashboard.invoices;
   const tStatus = ui.dashboard.invoiceStatus;
+  // Hooks must run before the early returns below (Rules of Hooks).
+  // null = auto (expand short lists, collapse 3+); a tap pins the choice.
+  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
 
   if (loading) {
     return (
@@ -220,8 +226,6 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
-  // null = auto (expand short lists, collapse 3+); a tap pins the choice.
-  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
@@ -250,7 +254,11 @@ export function InvoiceDetailScreen({
                action icons on narrow screens. */}
             <View className="flex-row items-center gap-2 flex-wrap mt-1">
               <View className={`px-3.5 py-1.5 rounded-full ${pillBg}`}>
-                <Text className={`text-sm font-bold ${pillText}`}>{statusLabel}</Text>
+                <Text className={`text-sm font-bold ${pillText}`}>
+                  {invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
+                    ? `${statusLabel} ${tInv.daysOverdue.replace('{{n}}', String(daysOverdue(invoice.dueDate)))}`
+                    : statusLabel}
+                </Text>
               </View>
               {isPartial ? (
                 <View className="px-3.5 py-1.5 rounded-full bg-amber-100">
@@ -523,7 +531,18 @@ export function InvoiceDetailScreen({
             <Undo2 size={16} color={c.muted} />
             <Text className="text-muted font-semibold">{tInv.undoSent}</Text>
           </Pressable>
+          {/* Write-off: an invoice the client will never pay. Drops out of overdue. */}
+          <Pressable onPress={() => onUpdateStatus('total_loss')} disabled={updating} className="flex-row items-center justify-center gap-2 py-2 rounded-2xl active:opacity-70">
+            <Ban size={15} color={c.muted} />
+            <Text className="text-muted font-semibold text-sm">{tInv.markTotalLoss}</Text>
+          </Pressable>
         </View>
+      ) : null}
+      {invoice.status === 'total_loss' ? (
+        <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">
+          <Undo2 size={16} color={c.muted} />
+          <Text className="text-muted font-semibold">{tInv.reinstateInvoice}</Text>
+        </Pressable>
       ) : null}
       {invoice.status === 'paid' && onUndoPaid ? (
         <Pressable onPress={onUndoPaid} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">

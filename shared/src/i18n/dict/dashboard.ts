@@ -183,6 +183,7 @@ export type DashboardDict = {
     paid: string;
     overdue: string;
     cancelled: string;
+    total_loss: string;
   };
   invoices: {
     title: string;
@@ -201,6 +202,7 @@ export type DashboardDict = {
       sent: string;
       paid: string;
       overdue: string;
+      totalLoss: string;
     };
     filters2: {
       button: string;
@@ -230,6 +232,10 @@ export type DashboardDict = {
     markSent: string;
     undoSent: string;
     markPaid: string;
+    markTotalLoss: string;
+    markTotalLossConfirm: string;
+    reinstateInvoice: string;
+    daysOverdue: string;
     payments: {
       title: string;
       recordTitle: string;
@@ -2705,6 +2711,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       paid: 'Pagada',
       overdue: 'Vencida',
       cancelled: 'Cancelada',
+      total_loss: 'Pérdida total',
     },
     invoices: {
       title: 'Facturas',
@@ -2723,6 +2730,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sent: 'Enviadas',
         paid: 'Pagadas',
         overdue: 'Vencidas',
+        totalLoss: 'Pérdida total',
       },
       filters2: {
         button: 'Filtros',
@@ -2752,6 +2760,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markSent: 'Marcar enviada',
       undoSent: 'Deshacer envío',
       markPaid: 'Marcar pagada',
+      markTotalLoss: 'Marcar pérdida total',
+      markTotalLossConfirm: '¿Marcar esta factura como pérdida total? Saldrá de vencidas y no contará en tus ingresos.',
+      reinstateInvoice: 'Reactivar factura',
+      daysOverdue: 'por {{n}} días',
       payments: {
         title: 'Pagos',
         recordTitle: 'Registrar pago',
@@ -5214,6 +5226,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       paid: 'Paid',
       overdue: 'Overdue',
       cancelled: 'Cancelled',
+      total_loss: 'Total loss',
     },
     invoices: {
       title: 'Invoices',
@@ -5232,6 +5245,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sent: 'Sent',
         paid: 'Paid',
         overdue: 'Overdue',
+        totalLoss: 'Total loss',
       },
       filters2: {
         button: 'Filters',
@@ -5261,6 +5275,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markSent: 'Mark sent',
       undoSent: 'Undo sent',
       markPaid: 'Mark paid',
+      markTotalLoss: 'Mark as total loss',
+      markTotalLossConfirm: 'Mark this invoice as a total loss? It drops out of overdue and stops counting toward your revenue.',
+      reinstateInvoice: 'Reinstate invoice',
+      daysOverdue: 'by {{n}} days',
       payments: {
         title: 'Payments',
         recordTitle: 'Record payment',

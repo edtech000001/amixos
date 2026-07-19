@@ -424,7 +424,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     })();
   }, [id, business, locale]);
 
-  const updateStatus = async (status: 'sent' | 'paid' | 'draft') => {
+  const updateStatus = async (status: 'sent' | 'paid' | 'draft' | 'total_loss') => {
     setUpdating(true);
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();

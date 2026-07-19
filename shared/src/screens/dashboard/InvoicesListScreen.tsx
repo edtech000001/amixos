@@ -6,7 +6,7 @@ import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { Fab } from '../../ui/Fab';
-import { formatDateLong } from '../../lib/format';
+import { formatDateLong, daysOverdue } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { useThemeColors } from '../../theme';
@@ -44,7 +44,7 @@ export interface InvoicesListScreenProps {
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
-const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue'] as const;
+const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue', 'total_loss'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
@@ -54,6 +54,7 @@ const STATUS_PILL_BG: Record<string, string> = {
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
   cancelled: 'bg-border-soft',
+  total_loss: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
   draft: 'text-muted',
@@ -61,6 +62,7 @@ const STATUS_PILL_TEXT: Record<string, string> = {
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
   cancelled: 'text-faint',
+  total_loss: 'text-muted',
 };
 
 function fmt(n: number) {
@@ -116,6 +118,7 @@ export function InvoicesListScreen({
     sent: t.filters.sent,
     paid: t.filters.paid,
     overdue: t.filters.overdue,
+    total_loss: t.filters.totalLoss,
   };
   const groupOptions: { key: GroupKey; label: string; Icon: typeof List }[] = [
     { key: 'none', label: tg.none, Icon: List },
@@ -126,7 +129,7 @@ export function InvoicesListScreen({
 
   // Per-status counts for the tab badges.
   const counts = useMemo(() => {
-    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 };
+    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0, total_loss: 0 };
     for (const inv of invoices) if (inv.status in c) c[inv.status as StatusKey]++;
     return c;
   }, [invoices]);
@@ -163,7 +166,7 @@ export function InvoicesListScreen({
     if (groupBy === 'none') return [{ title: '', data: filtered }];
     if (groupBy === 'status') {
       // Actionable first: overdue → sent (awaiting payment) → draft → paid.
-      const ORDER = ['overdue', 'sent', 'draft', 'paid'];
+      const ORDER = ['overdue', 'sent', 'draft', 'paid', 'total_loss'];
       const map = new Map<string, InvoiceListItem[]>();
       for (const inv of filtered) {
         const arr = map.get(inv.status);
@@ -419,7 +422,11 @@ export function InvoicesListScreen({
                             {inv.invoiceNumber}
                           </Text>
                           <View className={`px-2 py-0.5 rounded-full ${pillBg}`}>
-                            <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
+                            <Text className={`text-xs font-medium ${pillText}`}>
+                              {inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
+                                ? `${statusLabel} ${t.daysOverdue.replace('{{n}}', String(daysOverdue(inv.dueDate)))}`
+                                : statusLabel}
+                            </Text>
                           </View>
                         </View>
                         <Text className="text-xs text-faint mt-0.5">

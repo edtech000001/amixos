@@ -93,6 +93,22 @@ function toDate(input: string | Date | null | undefined): Date | null {
  * Format a date as "Mayo 24, 2026" (ES) or "May 24, 2026" (EN).
  * Used everywhere a date is shown without a time.
  */
+/**
+ * Whole days an invoice is past its due date (local time). Positive = overdue
+ * by that many days; 0 or negative = due today / not yet due. Returns 0 if no
+ * due date. Used to show "N days overdue" on overdue invoices.
+ */
+export function daysOverdue(dueDate: string | null | undefined): number {
+  if (!dueDate) return 0;
+  const [y, m, d] = dueDate.split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  const due = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.floor((today.getTime() - due.getTime()) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+
 /** Today's date as YYYY-MM-DD in the *local* timezone. Prefer this over
  *  `new Date().toISOString().split('T')[0]` for date-input defaults: ISO uses
  *  UTC, which rolls over to tomorrow during US evenings — so "log hours today"

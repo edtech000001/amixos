@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
-import { formatDateLong } from '../../lib/format';
+import { formatDateLong, daysOverdue } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 
@@ -44,7 +44,7 @@ export interface InvoicesListScreenProps {
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
-const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue'] as const;
+const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue', 'total_loss'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
@@ -54,6 +54,7 @@ const STATUS_PILL: Record<string, string> = {
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-600',
   cancelled: 'bg-border-soft text-faint',
+  total_loss: 'bg-border-soft text-muted',
 };
 
 function fmt(n: number) {
@@ -105,6 +106,7 @@ export function InvoicesListScreen({
     sent: t.filters.sent,
     paid: t.filters.paid,
     overdue: t.filters.overdue,
+    total_loss: t.filters.totalLoss,
   };
   const groupOptions: { key: GroupKey; label: string; Icon: typeof List }[] = [
     { key: 'none', label: tg.none, Icon: List },
@@ -114,7 +116,7 @@ export function InvoicesListScreen({
   ];
 
   const counts = useMemo(() => {
-    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 };
+    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0, total_loss: 0 };
     for (const inv of invoices) if (inv.status in c) c[inv.status as StatusKey]++;
     return c;
   }, [invoices]);
@@ -150,7 +152,7 @@ export function InvoicesListScreen({
     if (groupBy === 'none') return [{ title: '', data: filtered }];
     if (groupBy === 'status') {
       // Actionable first: overdue → sent (awaiting payment) → draft → paid.
-      const ORDER = ['overdue', 'sent', 'draft', 'paid'];
+      const ORDER = ['overdue', 'sent', 'draft', 'paid', 'total_loss'];
       const map = new Map<string, InvoiceListItem[]>();
       for (const inv of filtered) {
         const arr = map.get(inv.status);
@@ -458,6 +460,10 @@ export function InvoicesListScreen({
                 {section.data.map((inv) => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
+                  // Overdue folds the day count into the pill ("Overdue by N days").
+                  const pillLabel = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
+                    ? `${statusLabel} ${t.daysOverdue.replace('{{n}}', String(daysOverdue(inv.dueDate)))}`
+                    : statusLabel;
                   const pill = STATUS_PILL[inv.status] ?? 'bg-border-soft text-muted';
                   const client = inv.clientNames ?? t.noClient;
                   const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
@@ -482,15 +488,15 @@ export function InvoicesListScreen({
                       <div className="flex-1 md:flex-none md:w-36 min-w-0">
                         <span className="block text-sm font-semibold text-ink truncate">{inv.invoiceNumber}</span>
                         <span className="md:hidden flex items-center gap-2 flex-wrap mt-0.5">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
                         </span>
                         <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                         </span>
                       </div>
-                      <span className="hidden md:flex w-28 shrink-0">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{statusLabel}</span>
+                      <span className="hidden md:flex w-36 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
                       </span>
                       <span className="hidden md:block flex-1 min-w-0 text-sm text-muted truncate">{client}</span>
                       <span className="hidden lg:block w-48 shrink-0 text-xs text-faint truncate">

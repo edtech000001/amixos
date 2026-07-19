@@ -7,7 +7,10 @@ export const SUPPORTED_LANGUAGES = ['en', 'es'] as const;
 
 export const USER_ROLES = ['owner', 'manager', 'worker'] as const;
 
-export const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const;
+// 'total_loss' = written off; an unpaid invoice the client will never pay. It
+// drops out of "overdue" (the overdue auto-flip only touches 'sent') and is
+// excluded from revenue/overdue totals.
+export const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'total_loss'] as const;
 
 export const LOYALTY_STATUSES = ['good_standing', 'flagged', 'vip'] as const;
 

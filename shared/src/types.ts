@@ -5,7 +5,7 @@ import type { Locale } from './i18n/locales';
 export type UserRole = 'owner' | 'manager' | 'worker';
 /** @deprecated Use `Locale` from `./i18n` instead. Kept as an alias for backward compat. */
 export type Language = Locale;
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'total_loss';
 export type InvoiceType = 'invoice' | 'estimate';
 export type LoyaltyStatus = 'good_standing' | 'flagged' | 'vip';
 export type PayType = 'hourly' | 'salary';
