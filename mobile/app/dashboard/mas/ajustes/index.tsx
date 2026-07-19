@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronRight,
+  ChevronLeft,
   Building2,
   Briefcase,
   Users,
@@ -155,11 +156,18 @@ export default function AjustesIndex() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      {/* No back arrow — Ajustes is a top-level Más item, reached via the
-         dock. To go back the user taps the Más tab (same pattern as
-         Empleados / Calendario / Inventario / Tienda). */}
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
-        <Text className="text-2xl font-bold text-ink mb-5">{t.title}</Text>
+        {/* Back to the Más menu (Ajustes is pushed from there, not a dock tab). */}
+        <View className="flex-row items-center mb-5 -ml-2">
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.push('/dashboard/mas'))}
+            hitSlop={12}
+            className="p-2 rounded-lg active:bg-border-soft"
+          >
+            <ChevronLeft size={24} color={c.ink} />
+          </Pressable>
+          <Text className="text-2xl font-bold text-ink ml-1">{t.title}</Text>
+        </View>
 
         {/* Appearance — dark mode toggle */}
         <Pressable

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 
 interface SettingsPageProps {
   title: string;
@@ -75,6 +76,7 @@ export function useSettingsSaveAction(state: SaveState | null) {
  */
 export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   const router = useRouter();
+  const c = useThemeColors();
   const { t } = useLang();
   const tc = t.common.buttons;
   const ts = t.dashboard.settings;
@@ -107,7 +109,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
             hitSlop={12}
             className="p-2 -ml-2 rounded-lg active:bg-border-soft"
           >
-            <ChevronLeft size={22} color="#111827" />
+            <ChevronLeft size={22} color={c.ink} />
           </Pressable>
           <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{title}</Text>
 

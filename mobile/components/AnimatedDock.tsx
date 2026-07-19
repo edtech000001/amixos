@@ -12,6 +12,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StackActions } from '@react-navigation/native';
 import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 import { useApp } from '@/lib/AppContext';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDockStore } from '@/lib/dockStore';
 import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
 
@@ -38,10 +39,7 @@ const NOTCH_RADIUS = 24;
 // Smaller flank = tighter, more circular notch. Larger = wider easing.
 const NOTCH_FLANK = 4;
 const CORNER_RADIUS = 12;
-const BAR_FILL = '#1F2937';
-const BUBBLE_FILL = '#4F46E5';
-const ICON_INACTIVE = '#9CA3AF';
-const ICON_ACTIVE = '#FFFFFF';
+const ICON_ACTIVE = '#FFFFFF'; // white icon on the blue active bubble (both themes)
 
 // Bubble + notch can't sit inside the rounded corners (visually disconnects).
 // When a tab's natural flex-1 center falls inside that zone, clamp the
@@ -54,6 +52,14 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { currentRole } = useApp();
+  // The dock stays a dark bar in BOTH themes: on light content a light dock
+  // blends in, and a fixed dark bar reads as an intentional floating dock (and
+  // still separates from the darker page/cards in dark mode). Icons are a light
+  // gray that's legible on it; the active bubble is the brand blue.
+  const c = useThemeColors();
+  const BAR_FILL = '#1E293B';
+  const BUBBLE_FILL = c.primary;
+  const ICON_INACTIVE = '#94A3B8';
   // The user's dock-app selection — applied here (not via route href) so
   // toggling apps is a cheap dock re-render, not a tab-navigator reconfigure.
   const dockKeys = useDockStore(s => s.keys);
