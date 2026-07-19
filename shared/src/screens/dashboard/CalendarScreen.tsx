@@ -18,6 +18,7 @@ import {
   ChevronRight as Chevron,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Select } from '../../ui/Select';
@@ -93,11 +94,11 @@ const TYPE_BAR: Record<CalEventType, string> = {
 };
 const TYPE_CHIP_BG: Record<CalEventType, string> = {
   job: 'bg-primary/10',
-  meeting: 'bg-blue-50',
-  delivery: 'bg-orange-50',
-  reminder: 'bg-amber-50',
-  follow_up: 'bg-violet-50',
-  other: 'bg-gray-100',
+  meeting: 'bg-blue-500/10',
+  delivery: 'bg-orange-500/10',
+  reminder: 'bg-amber-500/10',
+  follow_up: 'bg-violet-500/10',
+  other: 'bg-border-soft',
 };
 const TYPE_CHIP_TEXT: Record<CalEventType, string> = {
   job: 'text-primary',
@@ -105,7 +106,7 @@ const TYPE_CHIP_TEXT: Record<CalEventType, string> = {
   delivery: 'text-orange-600',
   reminder: 'text-amber-600',
   follow_up: 'text-violet-600',
-  other: 'text-gray-600',
+  other: 'text-muted',
 };
 const TYPE_HEX: Record<CalEventType, string> = {
   job: '#4F46E5',
@@ -133,7 +134,7 @@ const JOB_STATUS_BG: Record<string, string> = {
   in_progress: 'bg-amber-100',
   completed: 'bg-emerald-100',
   invoiced: 'bg-purple-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
 };
 const JOB_STATUS_TEXT: Record<string, string> = {
   posible: 'text-teal-700',
@@ -141,7 +142,7 @@ const JOB_STATUS_TEXT: Record<string, string> = {
   in_progress: 'text-amber-700',
   completed: 'text-emerald-700',
   invoiced: 'text-purple-700',
-  cancelled: 'text-gray-500',
+  cancelled: 'text-muted',
 };
 
 function pad(n: number): string {
@@ -166,6 +167,7 @@ export function CalendarScreen({
   onJobPress,
 }: CalendarScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.calendar;
   const tc = full.common;
   const jobStatuses = full.dashboard.jobs.statuses;
@@ -374,14 +376,14 @@ export function CalendarScreen({
         {/* Header — on web the add button lives here; on native the FAB
             (bottom-right, thumb reach) is the single add affordance. */}
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
+          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
           <View className="flex-row items-center gap-2">
             <Pressable
               onPress={openAvailability}
-              className="flex-row items-center gap-1.5 border border-gray-200 px-3 py-2 rounded-xl active:bg-gray-50"
+              className="flex-row items-center gap-1.5 border border-border px-3 py-2 rounded-xl active:bg-surface"
             >
-              <Users size={15} color="#4B5563" />
-              <Text className="text-sm font-semibold text-gray-600">{t.availability.button}</Text>
+              <Users size={15} color={c.muted} />
+              <Text className="text-sm font-semibold text-muted">{t.availability.button}</Text>
             </Pressable>
             {Platform.OS === 'web' ? (
               <Pressable
@@ -397,16 +399,16 @@ export function CalendarScreen({
 
         {/* View switcher + Today */}
         <View className="flex-row items-center justify-between mb-3">
-          <View className="flex-row bg-gray-100 rounded-xl p-1">
+          <View className="flex-row bg-border-soft rounded-xl p-1">
             {(['month', 'week', 'day'] as CalView[]).map(v => {
               const active = view === v;
               return (
                 <Pressable
                   key={v}
                   onPress={() => switchView(v)}
-                  className={`px-3.5 py-1.5 rounded-lg ${active ? 'bg-white shadow-sm' : ''}`}
+                  className={`px-3.5 py-1.5 rounded-lg ${active ? 'bg-card shadow-sm' : ''}`}
                 >
-                  <Text className={`text-xs font-semibold ${active ? 'text-gray-900' : 'text-gray-500'}`}>
+                  <Text className={`text-xs font-semibold ${active ? 'text-ink' : 'text-muted'}`}>
                     {t.views[v]}
                   </Text>
                 </Pressable>
@@ -415,20 +417,20 @@ export function CalendarScreen({
           </View>
           <Pressable
             onPress={goToday}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 active:bg-gray-50"
+            className="px-3 py-1.5 rounded-lg border border-border active:bg-surface"
           >
-            <Text className="text-xs font-semibold text-gray-600">{t.today}</Text>
+            <Text className="text-xs font-semibold text-muted">{t.today}</Text>
           </Pressable>
         </View>
 
         {/* Nav row */}
         <View className="flex-row items-center justify-between mb-4">
-          <Pressable onPress={goPrev} className="p-2 rounded-xl active:bg-gray-100">
-            <ChevronLeft size={18} color="#4B5563" />
+          <Pressable onPress={goPrev} className="p-2 rounded-xl active:bg-border-soft">
+            <ChevronLeft size={18} color={c.muted} />
           </Pressable>
-          <Text className="text-base font-semibold text-gray-900 capitalize">{navLabel}</Text>
-          <Pressable onPress={goNext} className="p-2 rounded-xl active:bg-gray-100">
-            <ChevronRight size={18} color="#4B5563" />
+          <Text className="text-base font-semibold text-ink capitalize">{navLabel}</Text>
+          <Pressable onPress={goNext} className="p-2 rounded-xl active:bg-border-soft">
+            <ChevronRight size={18} color={c.muted} />
           </Pressable>
         </View>
 
@@ -472,7 +474,7 @@ export function CalendarScreen({
                   accessibilityLabel={t.eventTypes[key]}
                 >
                   <View className={`w-2.5 h-2.5 rounded-full ${active ? TYPE_BAR[key] : 'bg-gray-300'}`} />
-                  <Text className={`text-xs ${active ? 'text-gray-500' : 'text-gray-300 line-through'}`}>
+                  <Text className={`text-xs ${active ? 'text-muted' : 'text-faint line-through'}`}>
                     {t.eventTypes[key]}
                   </Text>
                 </Pressable>
@@ -487,10 +489,10 @@ export function CalendarScreen({
           {agendaItems.length === 0 ? (
             <Pressable
               onPress={() => openNew(agendaDay)}
-              className="items-center justify-center py-10 rounded-2xl border border-dashed border-gray-200 bg-white/50 active:bg-gray-50"
+              className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50 active:bg-surface"
             >
-              <CalendarDays size={26} color="#D1D5DB" />
-              <Text className="text-sm text-gray-400 mt-2">{t.agenda.empty}</Text>
+              <CalendarDays size={26} color={c.faint} />
+              <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
               <Text className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</Text>
             </Pressable>
           ) : (
@@ -519,33 +521,33 @@ export function CalendarScreen({
         <View className="gap-3">
           {/* Week nav */}
           <View className="flex-row items-center justify-between">
-            <Pressable onPress={() => setAvailWeek(addDays(availWeek, -7))} className="p-2 rounded-xl active:bg-gray-100">
-              <ChevronLeft size={16} color="#4B5563" />
+            <Pressable onPress={() => setAvailWeek(addDays(availWeek, -7))} className="p-2 rounded-xl active:bg-border-soft">
+              <ChevronLeft size={16} color={c.muted} />
             </Pressable>
-            <Text className="text-sm font-semibold text-gray-900 capitalize">
+            <Text className="text-sm font-semibold text-ink capitalize">
               {`${availDays[0].toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })} – ${availDays[6].toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}`}
             </Text>
-            <Pressable onPress={() => setAvailWeek(addDays(availWeek, 7))} className="p-2 rounded-xl active:bg-gray-100">
-              <ChevronRight size={16} color="#4B5563" />
+            <Pressable onPress={() => setAvailWeek(addDays(availWeek, 7))} className="p-2 rounded-xl active:bg-border-soft">
+              <ChevronRight size={16} color={c.muted} />
             </Pressable>
           </View>
-          <Text className="text-xs text-gray-400">{t.availability.hint}</Text>
+          <Text className="text-xs text-faint">{t.availability.hint}</Text>
 
           {leads.length === 0 ? (
-            <Text className="text-sm text-gray-400 py-6 text-center">{t.availability.noTeam}</Text>
+            <Text className="text-sm text-faint py-6 text-center">{t.availability.noTeam}</Text>
           ) : (
             <View>
               {/* Day header row */}
-              <View className="flex-row items-end pb-2 border-b border-gray-100">
+              <View className="flex-row items-end pb-2 border-b border-border-soft">
                 <View className="w-24" />
                 {availDays.map(d => {
                   const isToday = sameDay(d, today);
                   return (
                     <View key={d.getTime()} className="flex-1 items-center">
-                      <Text className={`text-[10px] uppercase ${isToday ? 'text-primary font-bold' : 'text-gray-400'}`}>
+                      <Text className={`text-[10px] uppercase ${isToday ? 'text-primary font-bold' : 'text-faint'}`}>
                         {d.toLocaleDateString(dateLocale, { weekday: 'narrow' })}
                       </Text>
-                      <Text className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-gray-600'}`}>
+                      <Text className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-muted'}`}>
                         {d.getDate()}
                       </Text>
                     </View>
@@ -554,12 +556,12 @@ export function CalendarScreen({
               </View>
               {/* Member rows */}
               {availGrid.map(({ lead, days }) => (
-                <View key={lead.id} className="flex-row items-center py-2 border-b border-gray-50">
+                <View key={lead.id} className="flex-row items-center py-2 border-b border-border-soft">
                   <View className="w-24 flex-row items-center gap-1.5 pr-1">
                     <View className="w-6 h-6 rounded-full bg-primary/10 items-center justify-center">
                       <Text className="text-primary text-[10px] font-bold">{lead.name.charAt(0).toUpperCase()}</Text>
                     </View>
-                    <Text className="text-xs font-medium text-gray-700 flex-1" numberOfLines={1}>
+                    <Text className="text-xs font-medium text-ink flex-1" numberOfLines={1}>
                       {lead.name}
                     </Text>
                   </View>
@@ -570,7 +572,7 @@ export function CalendarScreen({
                           <Text className="text-[11px] font-bold text-amber-700">{jobs.length}</Text>
                         </View>
                       ) : (
-                        <View className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                        <View className="w-1.5 h-1.5 rounded-full bg-border" />
                       )}
                     </View>
                   ))}
@@ -580,11 +582,11 @@ export function CalendarScreen({
               <View className="flex-row items-center gap-4 mt-3">
                 <View className="flex-row items-center gap-1.5">
                   <View className="w-3.5 h-3.5 rounded bg-amber-100" />
-                  <Text className="text-xs text-gray-500">{t.availability.busy}</Text>
+                  <Text className="text-xs text-muted">{t.availability.busy}</Text>
                 </View>
                 <View className="flex-row items-center gap-1.5">
-                  <View className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                  <Text className="text-xs text-gray-500">{t.availability.available}</Text>
+                  <View className="w-1.5 h-1.5 rounded-full bg-border" />
+                  <Text className="text-xs text-muted">{t.availability.available}</Text>
                 </View>
               </View>
             </View>
@@ -613,34 +615,34 @@ export function CalendarScreen({
               </Text>
             </View>
             {detailItem.description ? (
-              <Text className="text-sm text-gray-700 leading-relaxed">{detailItem.description}</Text>
+              <Text className="text-sm text-ink leading-relaxed">{detailItem.description}</Text>
             ) : null}
             <View className="gap-2">
               <View className="flex-row items-center gap-2">
-                <Clock size={14} color="#9CA3AF" />
-                <Text className="text-sm text-gray-600">{whenLabel(detailItem, dateLocale, t)}</Text>
+                <Clock size={14} color={c.faint} />
+                <Text className="text-sm text-muted">{whenLabel(detailItem, dateLocale, t)}</Text>
               </View>
               {detailItem.location ? (
                 <View className="flex-row items-center gap-2">
-                  <MapPin size={14} color="#9CA3AF" />
-                  <Text className="text-sm text-gray-600">{detailItem.location}</Text>
+                  <MapPin size={14} color={c.faint} />
+                  <Text className="text-sm text-muted">{detailItem.location}</Text>
                 </View>
               ) : null}
             </View>
             <View className="flex-row gap-2 pt-1">
               <Pressable
                 onPress={() => openEdit(detailItem)}
-                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 active:bg-gray-50"
+                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border active:bg-surface"
               >
-                <Pencil size={14} color="#4B5563" />
-                <Text className="text-sm font-semibold text-gray-700">{tc.buttons.edit}</Text>
+                <Pencil size={14} color={c.muted} />
+                <Text className="text-sm font-semibold text-ink">{tc.buttons.edit}</Text>
               </Pressable>
               <Pressable
                 onPress={removeEvent}
                 disabled={deleting}
-                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-50 active:bg-red-100"
+                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-500/10 active:bg-red-100"
               >
-                <Trash2 size={14} color="#DC2626" />
+                <Trash2 size={14} color={c.danger} />
                 <Text className="text-sm font-semibold text-red-600">
                   {deleting ? tc.states.saving : tc.buttons.delete}
                 </Text>
@@ -729,7 +731,7 @@ export function CalendarScreen({
             options={[{ value: '', label: t.modal.noClientOption }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
           />
           <View className="gap-2">
-            <Text className="text-sm font-semibold text-gray-700">{t.modal.notesLabel}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.modal.notesLabel}</Text>
             <Input
               placeholder={t.modal.notesPlaceholder}
               value={form.description}
@@ -810,9 +812,9 @@ function AgendaHeader({
   const label = day.toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' });
   return (
     <View className="flex-row items-baseline justify-between mb-3">
-      <Text className="text-base font-bold text-gray-900 capitalize">{label}</Text>
+      <Text className="text-base font-bold text-ink capitalize">{label}</Text>
       {count > 0 ? (
-        <Text className="text-xs text-gray-400">{t.agenda.count.replace('{{count}}', String(count))}</Text>
+        <Text className="text-xs text-faint">{t.agenda.count.replace('{{count}}', String(count))}</Text>
       ) : null}
     </View>
   );
@@ -829,12 +831,13 @@ function AgendaRow({
   jobStatusLabel: string;
   onPress: () => void;
 }) {
+  const c = useThemeColors();
   const Icon = TYPE_ICON[item.eventType];
   const subtitle = [item.clientName, item.location].filter(Boolean).join(' · ');
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-stretch bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden active:bg-gray-50"
+      className="flex-row items-stretch bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden active:bg-surface"
     >
       <View className={`w-1.5 ${TYPE_BAR[item.eventType]}`} />
       <View className="flex-1 flex-row items-center gap-3 px-3.5 py-3">
@@ -843,34 +846,34 @@ function AgendaRow({
         </View>
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-ink flex-1" numberOfLines={1}>
               {item.title}
             </Text>
             {item.kind === 'job' && item.status ? (
-              <View className={`px-2 py-0.5 rounded-full ${JOB_STATUS_BG[item.status] ?? 'bg-gray-100'}`}>
-                <Text className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-gray-500'}`}>
+              <View className={`px-2 py-0.5 rounded-full ${JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
+                <Text className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>
                   {jobStatusLabel}
                 </Text>
               </View>
             ) : null}
           </View>
-          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>
+          <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>
             {item.allDay ? t.agenda.allDay : formatTime12h(item.start)}
             {!item.allDay && item.end ? ` – ${formatTime12h(item.end)}` : ''}
             {subtitle ? `  ·  ${subtitle}` : ''}
           </Text>
           {item.kind === 'job' && item.leadName ? (
-            <View className="flex-row items-center gap-1 mt-1 self-start bg-gray-100 rounded-full pl-1 pr-2 py-0.5">
+            <View className="flex-row items-center gap-1 mt-1 self-start bg-border-soft rounded-full pl-1 pr-2 py-0.5">
               <View className="w-4 h-4 rounded-full bg-primary/15 items-center justify-center">
-                <UserRound size={9} color="#4F46E5" />
+                <UserRound size={9} color={c.primary} />
               </View>
-              <Text className="text-[11px] font-medium text-gray-600" numberOfLines={1}>
+              <Text className="text-[11px] font-medium text-muted" numberOfLines={1}>
                 {item.leadName}
               </Text>
             </View>
           ) : null}
         </View>
-        {item.kind === 'job' ? <Chevron size={16} color="#D1D5DB" /> : null}
+        {item.kind === 'job' ? <Chevron size={16} color={c.faint} /> : null}
       </View>
     </Pressable>
   );
@@ -973,11 +976,11 @@ function MonthGrid({
   );
 
   return (
-    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <View className="flex-row border-b border-gray-100">
+    <View className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+      <View className="flex-row border-b border-border-soft">
         {dayHeaders.map((d, i) => (
           <View key={i} className="flex-1 py-2 items-center">
-            <Text className="text-xs font-semibold text-gray-400 capitalize">{d}</Text>
+            <Text className="text-xs font-semibold text-faint capitalize">{d}</Text>
           </View>
         ))}
       </View>
@@ -995,7 +998,7 @@ function MonthGrid({
                   <Pressable
                     key={col}
                     onPress={() => onDayPress(day)}
-                    className={`flex-1 border-b border-r border-gray-50 active:bg-gray-50 ${col === 6 ? 'border-r-0' : ''} ${
+                    className={`flex-1 border-b border-r border-border-soft active:bg-surface ${col === 6 ? 'border-r-0' : ''} ${
                       !inMonth ? 'bg-gray-50/40' : isSelected ? 'bg-primary/5' : ''
                     }`}
                   >
@@ -1007,7 +1010,7 @@ function MonthGrid({
                       >
                         <Text
                           className={`text-xs font-semibold ${
-                            isToday ? 'text-white' : !inMonth ? 'text-gray-300' : isSelected ? 'text-primary' : 'text-gray-700'
+                            isToday ? 'text-white' : !inMonth ? 'text-faint' : isSelected ? 'text-primary' : 'text-ink'
                           }`}
                         >
                           {day.getDate()}
@@ -1063,7 +1066,7 @@ function MonthGrid({
                     top: DAY_HEADER_H + MAX_LANES * LANE_H,
                   }}
                 >
-                  <Text className="text-[10px] text-gray-400 text-center" numberOfLines={1}>
+                  <Text className="text-[10px] text-faint text-center" numberOfLines={1}>
                     {moreLabel.replace('{{count}}', String(n))}
                   </Text>
                 </Pressable>
@@ -1104,10 +1107,10 @@ function WeekStrip({
             key={day.getTime()}
             onPress={() => onDayPress(day)}
             className={`flex-1 items-center py-2.5 rounded-2xl border active:opacity-80 ${
-              isSelected ? 'bg-primary border-primary' : 'bg-white border-gray-100'
+              isSelected ? 'bg-primary border-primary' : 'bg-card border-border-soft'
             }`}
           >
-            <Text className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+            <Text className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-white/80' : 'text-faint'}`}>
               {weekday}
             </Text>
             <View
@@ -1117,7 +1120,7 @@ function WeekStrip({
             >
               <Text
                 className={`text-sm font-bold ${
-                  isSelected ? 'text-white' : isToday ? 'text-primary' : 'text-gray-800'
+                  isSelected ? 'text-white' : isToday ? 'text-primary' : 'text-ink'
                 }`}
               >
                 {day.getDate()}
@@ -1125,7 +1128,7 @@ function WeekStrip({
             </View>
             <View className="h-2 mt-1 flex-row items-center justify-center">
               {count > 0 ? (
-                <View className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-primary'}`} />
+                <View className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-card' : 'bg-primary'}`} />
               ) : null}
             </View>
           </Pressable>

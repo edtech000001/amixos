@@ -73,10 +73,10 @@ export default function SplashScreen() {
         <View className="w-24 h-24 rounded-3xl bg-primary/10 items-center justify-center mb-8">
           <Icon color="#4F46E5" size={48} strokeWidth={1.75} />
         </View>
-        <Text className="text-2xl font-extrabold text-gray-900 text-center mb-3 tracking-tight">
+        <Text className="text-2xl font-extrabold text-ink text-center mb-3 tracking-tight">
           {item.title}
         </Text>
-        <Text className="text-base text-gray-500 text-center leading-6 px-2">
+        <Text className="text-base text-muted text-center leading-6 px-2">
           {item.subtitle}
         </Text>
       </View>
@@ -84,7 +84,7 @@ export default function SplashScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-card" edges={['top', 'bottom']}>
       <View className="items-center pt-4 pb-2">
         <View
           className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-3"
@@ -98,7 +98,7 @@ export default function SplashScreen() {
         >
           <Text className="text-3xl font-extrabold text-primary">a</Text>
         </View>
-        <Text className="text-xl font-extrabold text-gray-900 tracking-tight">
+        <Text className="text-xl font-extrabold text-ink tracking-tight">
           Amixos
         </Text>
       </View>
@@ -129,7 +129,7 @@ export default function SplashScreen() {
             <View
               key={i}
               className={`h-2 rounded-full ${
-                i === index ? 'w-6 bg-primary' : 'w-2 bg-gray-200'
+                i === index ? 'w-6 bg-primary' : 'w-2 bg-border'
               }`}
             />
           ))}
@@ -146,9 +146,9 @@ export default function SplashScreen() {
           </Pressable>
           <Pressable
             onPress={() => router.push('/auth/login')}
-            className="bg-white border border-gray-200 rounded-2xl py-4 items-center active:bg-gray-50"
+            className="bg-card border border-border rounded-2xl py-4 items-center active:bg-surface"
           >
-            <Text className="text-gray-900 font-semibold text-base">
+            <Text className="text-ink font-semibold text-base">
               {s.login}
             </Text>
           </Pressable>

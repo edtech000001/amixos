@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import {
   DASHBOARD_WIDGET_SIZES,
   buildDashboardLayout,
@@ -102,19 +103,19 @@ const GAP = 12;
 const H_PAD = 24;
 
 const STATUS_PILL_BG: Record<string, string> = {
-  draft: 'bg-gray-100',
+  draft: 'bg-border-soft',
   sent: 'bg-blue-100',
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
 };
 
 const STATUS_PILL_TEXT: Record<string, string> = {
-  draft: 'text-gray-600',
+  draft: 'text-muted',
   sent: 'text-blue-600',
   paid: 'text-emerald-600',
   overdue: 'text-red-600',
-  cancelled: 'text-gray-400',
+  cancelled: 'text-faint',
 };
 
 const JOB_STATUS_PILL_BG: Record<string, string> = {
@@ -162,10 +163,10 @@ function MiniBars({ monthly, light }: { monthly: number[]; light?: boolean }) {
           key={i}
           className={`flex-1 rounded-sm ${
             i === currentMonth
-              ? light ? 'bg-white' : 'bg-primary'
+              ? light ? 'bg-card' : 'bg-primary'
               : amount > 0
                 ? light ? 'bg-white/40' : 'bg-primary/30'
-                : light ? 'bg-white/15' : 'bg-gray-100'
+                : light ? 'bg-white/15' : 'bg-border-soft'
           }`}
           style={{ height: Math.max(amount > 0 ? 6 : 3, Math.round((amount / max) * 48)) }}
         />
@@ -196,6 +197,7 @@ export function DashboardHomeScreen({
   onCalendarPress,
 }: DashboardHomeScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard;
   const { width: screenWidth } = useWindowDimensions();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -323,7 +325,7 @@ export function DashboardHomeScreen({
       value: stats?.clientsTotal ?? 0,
       icon: Users,
       color: 'text-blue-600',
-      bg: 'bg-blue-50',
+      bg: 'bg-blue-500/10',
       sub: t.home.widgets.clientsSub,
     },
     invoicesOverdue: {
@@ -331,7 +333,7 @@ export function DashboardHomeScreen({
       value: stats?.invoicesOverdue ?? 0,
       icon: AlertCircle,
       color: 'text-red-500',
-      bg: 'bg-red-50',
+      bg: 'bg-red-500/10',
       sub: t.home.widgets.invoicesOverdueSub,
     },
     clockedIn: {
@@ -339,7 +341,7 @@ export function DashboardHomeScreen({
       value: stats?.clockedInNow ?? 0,
       icon: Clock,
       color: 'text-orange-500',
-      bg: 'bg-orange-50',
+      bg: 'bg-orange-500/10',
       sub: t.home.widgets.clockedInSub,
     },
     earningsYear: {
@@ -347,7 +349,7 @@ export function DashboardHomeScreen({
       value: yearAmount,
       icon: TrendingUp,
       color: 'text-violet-600',
-      bg: 'bg-violet-50',
+      bg: 'bg-violet-500/10',
       sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr),
       extra: avgPerMonthLine,
       bars: true,
@@ -357,7 +359,7 @@ export function DashboardHomeScreen({
       value: stats?.jobsActive ?? 0,
       icon: Briefcase,
       color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
+      bg: 'bg-emerald-500/10',
       sub: t.home.widgets.jobsActiveSub,
     },
   };
@@ -380,8 +382,8 @@ export function DashboardHomeScreen({
       if (size === 'lg') {
         return (
           <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 justify-center">
-            <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
-            <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
+
+
             <View className="flex-row items-center gap-4">
               <View className="w-14 h-14 rounded-2xl bg-white/15 items-center justify-center">
                 <DollarSign size={26} color="#FFFFFF" />
@@ -405,8 +407,8 @@ export function DashboardHomeScreen({
       }
       return (
         <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1">
-          <View className="absolute -right-5 -top-5 w-24 h-24 rounded-full bg-white/10" />
-          <View className="absolute -right-10 top-10 w-24 h-24 rounded-full bg-white/5" />
+
+
           <View className="w-9 h-9 rounded-xl bg-white/15 items-center justify-center mb-3">
             <DollarSign size={18} color="#FFFFFF" />
           </View>
@@ -433,15 +435,15 @@ export function DashboardHomeScreen({
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
+          <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
             <View className="flex-row items-center gap-4">
               <View className={`w-14 h-14 rounded-2xl ${bg} items-center justify-center`}>
                 <Icon size={26} className={color} />
               </View>
               <View className="flex-1">
-                <Text className="text-xs font-medium text-gray-500">{label}</Text>
-                <Text className="text-3xl font-bold text-gray-900 mt-0.5">{String(value)}</Text>
-                <Text className="text-xs text-gray-400 mt-0.5">
+                <Text className="text-xs font-medium text-muted">{label}</Text>
+                <Text className="text-3xl font-bold text-ink mt-0.5">{String(value)}</Text>
+                <Text className="text-xs text-faint mt-0.5">
                   {sub}
                   {extra ? ` · ${extra}` : ''}
                 </Text>
@@ -452,15 +454,15 @@ export function DashboardHomeScreen({
         );
       }
       return (
-        <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
+        <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
           <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
             <Icon size={18} className={color} />
           </View>
-          <Text className="text-2xl font-bold text-gray-900">{String(value)}</Text>
-          <Text className="text-xs font-medium text-gray-700 mt-0.5">{label}</Text>
-          <Text className="text-xs text-gray-400 mt-0.5">{sub}</Text>
+          <Text className="text-2xl font-bold text-ink">{String(value)}</Text>
+          <Text className="text-xs font-medium text-ink mt-0.5">{label}</Text>
+          <Text className="text-xs text-faint mt-0.5">{sub}</Text>
           {size === 'md' && extra ? (
-            <Text className="text-xs font-semibold text-gray-600 mt-1">{extra}</Text>
+            <Text className="text-xs font-semibold text-muted mt-1">{extra}</Text>
           ) : null}
         </View>
       );
@@ -472,9 +474,9 @@ export function DashboardHomeScreen({
         // roles that can do none — see resolveDashboardLayout).
         const actions = [
           { label: t.home.quickActions.newInvoice, icon: FileText, onPress: onNewInvoicePress, bg: 'bg-primary/10', color: '#4F46E5', show: can.createInvoice(role) },
-          { label: t.home.quickActions.newClient, icon: UserPlus, onPress: onNewClientPress, bg: 'bg-blue-50', color: '#2563EB', show: can.createClient(role) },
-          { label: t.home.quickActions.newJob, icon: Briefcase, onPress: onNewJobPress, bg: 'bg-emerald-50', color: '#059669', show: can.createJob(role) },
-          { label: t.home.quickActions.calendar, icon: CalendarDays, onPress: onCalendarPress, bg: 'bg-orange-50', color: '#EA580C', show: can.editCalendar(role) },
+          { label: t.home.quickActions.newClient, icon: UserPlus, onPress: onNewClientPress, bg: 'bg-blue-500/10', color: '#2563EB', show: can.createClient(role) },
+          { label: t.home.quickActions.newJob, icon: Briefcase, onPress: onNewJobPress, bg: 'bg-emerald-500/10', color: '#059669', show: can.createJob(role) },
+          { label: t.home.quickActions.calendar, icon: CalendarDays, onPress: onCalendarPress, bg: 'bg-orange-500/10', color: '#EA580C', show: can.editCalendar(role) },
         ].filter(a => a.show);
         if (size === 'sm') {
           // Compact half-width tile: 2x2 icon-only buttons. Each button gets
@@ -484,7 +486,7 @@ export function DashboardHomeScreen({
           // keeps the rows centered if the card ends up taller than its content.
           const rows = [actions.slice(0, 2), actions.slice(2, 4)];
           return (
-            <View className="bg-white rounded-2xl border border-gray-100 p-3 flex-1">
+            <View className="bg-card rounded-2xl border border-border-soft p-3 flex-1">
               <View style={{ flex: 1, rowGap: 10, justifyContent: 'center' }}>
                 {rows.map((row, ri) => (
                   <View key={ri} style={{ flexDirection: 'row', columnGap: 10 }}>
@@ -508,7 +510,7 @@ export function DashboardHomeScreen({
         if (size === 'md') {
           // Full-width strip: 4 across, icon over a small label.
           return (
-            <View className="bg-white rounded-2xl border border-gray-100 p-4 flex-1 justify-center">
+            <View className="bg-card rounded-2xl border border-border-soft p-4 flex-1 justify-center">
               <View className="flex-row gap-2">
                 {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
                   <Pressable
@@ -528,7 +530,7 @@ export function DashboardHomeScreen({
         }
         // lg — 2x2 big buttons with labels.
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-4 flex-1 justify-center">
+          <View className="bg-card rounded-2xl border border-border-soft p-4 flex-1 justify-center">
             <View className="flex-row flex-wrap gap-3">
               {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
                 <Pressable
@@ -554,19 +556,19 @@ export function DashboardHomeScreen({
         const monthLabel = (i: number) =>
           new Intl.DateTimeFormat(t.dateLocale, { month: 'narrow' }).format(new Date(2026, i, 1));
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 p-5 flex-1">
-            <Text className="text-sm font-semibold text-gray-900 mb-1">
+          <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
+            <Text className="text-sm font-semibold text-ink mb-1">
               {t.home.monthlyChart.title}
             </Text>
             {size === 'lg' && max > 0 ? (
-              <Text className="text-xs text-gray-500 mb-3">
+              <Text className="text-xs text-muted mb-3">
                 {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}: {yearAmount} · {t.home.monthlyChart.avgLabel}: {formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}
               </Text>
             ) : (
               <View className="mb-3" />
             )}
             {max === 0 ? (
-              <Text className="text-sm text-gray-400 text-center py-6">
+              <Text className="text-sm text-faint text-center py-6">
                 {t.home.monthlyChart.empty}
               </Text>
             ) : (
@@ -582,13 +584,13 @@ export function DashboardHomeScreen({
                               ? 'bg-primary'
                               : amount > 0
                                 ? 'bg-primary/30'
-                                : 'bg-gray-100'
+                                : 'bg-border-soft'
                           }`}
                           style={{ height: Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * barArea)) }}
                         />
                       </View>
                       <Text
-                        className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-gray-400'}`}
+                        className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-faint'}`}
                       >
                         {monthLabel(i)}
                       </Text>
@@ -604,9 +606,9 @@ export function DashboardHomeScreen({
       case 'upcomingJobs': {
         const rows = upcomingJobs.slice(0, LIST_ROWS[size]);
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 flex-1">
-            <View className="px-6 py-4 border-b border-gray-50 flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-gray-900">
+          <View className="bg-card rounded-2xl border border-border-soft flex-1">
+            <View className="px-6 py-4 border-b border-border-soft flex-row items-center justify-between">
+              <Text className="text-sm font-semibold text-ink">
                 {t.home.upcomingJobs.title}
               </Text>
               <Pressable onPress={onViewAllJobsPress}>
@@ -617,8 +619,8 @@ export function DashboardHomeScreen({
             </View>
             {rows.length === 0 ? (
               <View className="px-6 py-10 items-center">
-                <CalendarDays size={32} color="#D1D5DB" />
-                <Text className="text-gray-400 text-sm mt-3">{t.home.upcomingJobs.empty}</Text>
+                <CalendarDays size={32} color={c.faint} />
+                <Text className="text-faint text-sm mt-3">{t.home.upcomingJobs.empty}</Text>
               </View>
             ) : (
               <View>
@@ -628,9 +630,9 @@ export function DashboardHomeScreen({
                     <Pressable
                       key={job.id}
                       onPress={() => onJobPress(job.id)}
-                      className={`flex-row items-center justify-between px-6 active:bg-gray-50 ${
+                      className={`flex-row items-center justify-between px-6 active:bg-surface ${
                         size === 'sm' ? 'py-2.5' : 'py-3.5'
-                      } ${idx > 0 ? 'border-t border-gray-50' : ''}`}
+                      } ${idx > 0 ? 'border-t border-border-soft' : ''}`}
                     >
                       <View className="flex-row items-center gap-3 flex-1 mr-3">
                         <View className="bg-primary/10 px-2 py-1 rounded-lg">
@@ -639,19 +641,19 @@ export function DashboardHomeScreen({
                           </Text>
                         </View>
                         <View className="flex-1">
-                          <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
+                          <Text className="text-sm font-medium text-ink" numberOfLines={1}>
                             {job.title}
                           </Text>
                           {size !== 'sm' ? (
-                            <Text className="text-xs text-gray-400" numberOfLines={1}>
+                            <Text className="text-xs text-faint" numberOfLines={1}>
                               {job.clientName ?? t.home.upcomingJobs.noClient}
                             </Text>
                           ) : null}
                         </View>
                       </View>
                       {size !== 'sm' ? (
-                        <View className={`px-2.5 py-1 rounded-full ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-gray-100'}`}>
-                          <Text className={`text-xs font-medium ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-gray-500'}`}>
+                        <View className={`px-2.5 py-1 rounded-full ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-border-soft'}`}>
+                          <Text className={`text-xs font-medium ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-muted'}`}>
                             {t.jobs.statuses[statusKey] ?? job.status}
                           </Text>
                         </View>
@@ -668,17 +670,17 @@ export function DashboardHomeScreen({
       case 'recentInvoices': {
         const rows = recent.slice(0, LIST_ROWS[size]);
         return (
-          <View className="bg-white rounded-2xl border border-gray-100 flex-1">
-            <View className="px-6 py-4 border-b border-gray-50 flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-gray-900">{t.home.recent.title}</Text>
+          <View className="bg-card rounded-2xl border border-border-soft flex-1">
+            <View className="px-6 py-4 border-b border-border-soft flex-row items-center justify-between">
+              <Text className="text-sm font-semibold text-ink">{t.home.recent.title}</Text>
               <Pressable onPress={onViewAllInvoicesPress}>
                 <Text className="text-xs text-primary font-medium">{t.home.recent.viewAll}</Text>
               </Pressable>
             </View>
             {rows.length === 0 ? (
               <View className="px-6 py-12 items-center">
-                <FileText size={32} color="#D1D5DB" />
-                <Text className="text-gray-400 text-sm mt-3">{t.home.recent.empty}</Text>
+                <FileText size={32} color={c.faint} />
+                <Text className="text-faint text-sm mt-3">{t.home.recent.empty}</Text>
                 <Pressable onPress={onCreateFirstInvoicePress} className="mt-1">
                   <Text className="text-primary font-medium text-sm">
                     {t.home.recent.createFirst}
@@ -690,23 +692,23 @@ export function DashboardHomeScreen({
                 {rows.map((inv, idx) => {
                   const statusKey = inv.status as keyof typeof t.invoiceStatus;
                   const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
-                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-gray-100';
-                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-gray-500';
+                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
+                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
                   const clientName = inv.clientName ?? t.home.recent.noClient;
                   return (
                     <Pressable
                       key={inv.id}
                       onPress={() => onInvoicePress(inv.id)}
-                      className={`flex-row items-center justify-between px-6 active:bg-gray-50 ${
+                      className={`flex-row items-center justify-between px-6 active:bg-surface ${
                         size === 'sm' ? 'py-2.5' : 'py-3.5'
-                      } ${idx > 0 ? 'border-t border-gray-50' : ''}`}
+                      } ${idx > 0 ? 'border-t border-border-soft' : ''}`}
                     >
                       <View className="flex-1 mr-3">
-                        <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
+                        <Text className="text-sm font-medium text-ink" numberOfLines={1}>
                           {inv.invoiceNumber}
                         </Text>
                         {size !== 'sm' ? (
-                          <Text className="text-xs text-gray-400" numberOfLines={1}>{clientName}</Text>
+                          <Text className="text-xs text-faint" numberOfLines={1}>{clientName}</Text>
                         ) : null}
                       </View>
                       <View className="flex-row items-center gap-3">
@@ -715,7 +717,7 @@ export function DashboardHomeScreen({
                             <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
                           </View>
                         ) : null}
-                        <Text className="text-sm font-semibold text-gray-900">
+                        <Text className="text-sm font-semibold text-ink">
                           {formatCurrency(inv.totalAmount)}
                         </Text>
                       </View>
@@ -737,7 +739,7 @@ export function DashboardHomeScreen({
     <View className="mb-6">
       <View className="flex-row items-center justify-between">
         <View className="flex-1 mr-3">
-          <Text className="text-2xl font-bold text-gray-900">{t.home.welcome}</Text>
+          <Text className="text-2xl font-bold text-ink">{t.home.welcome}</Text>
         </View>
         {editing ? (
           <Pressable
@@ -750,10 +752,10 @@ export function DashboardHomeScreen({
         ) : (
           <Pressable
             onPress={() => setEditing(true)}
-            className="flex-row items-center gap-2 bg-white border border-gray-200 px-4 py-2.5 rounded-xl active:opacity-80"
+            className="flex-row items-center gap-2 bg-card border border-border px-4 py-2.5 rounded-xl active:opacity-80"
           >
-            <SlidersHorizontal size={16} color="#374151" />
-            <Text className="text-gray-700 text-sm font-semibold">{t.home.customize.editBtn}</Text>
+            <SlidersHorizontal size={16} color={c.ink} />
+            <Text className="text-ink text-sm font-semibold">{t.home.customize.editBtn}</Text>
           </Pressable>
         )}
       </View>
@@ -764,10 +766,10 @@ export function DashboardHomeScreen({
       ) : businessSlot ? (
         <View className="mt-2 self-start">{businessSlot}</View>
       ) : businessName ? (
-        <Text className="text-sm text-gray-500 mt-1">{businessName}</Text>
+        <Text className="text-sm text-muted mt-1">{businessName}</Text>
       ) : null}
       {saveError ? (
-        <View className="mt-4 px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+        <View className="mt-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
           <Text className="text-sm text-red-600">{t.home.customize.saveError}</Text>
         </View>
       ) : null}
@@ -824,10 +826,10 @@ export function DashboardHomeScreen({
                         hitSlop={4}
                         accessibilityLabel={t.home.customize.sizes[s]}
                         className={`w-7 h-7 rounded-md items-center justify-center ${
-                          size === s ? 'bg-white' : ''
+                          size === s ? 'bg-card' : ''
                         }`}
                       >
-                        <Text className={`text-[11px] font-bold ${size === s ? 'text-gray-900' : 'text-white/60'}`}>
+                        <Text className={`text-[11px] font-bold ${size === s ? 'text-ink' : 'text-white/60'}`}>
                           {t.home.customize.sizes[s].charAt(0)}
                         </Text>
                       </Pressable>
@@ -842,12 +844,12 @@ export function DashboardHomeScreen({
 
       {/* Add-widget panel (edit mode only) */}
       {editing ? (
-        <View className="mt-4 bg-white rounded-2xl border border-gray-100 p-5">
-          <Text className="text-sm font-semibold text-gray-900 mb-3">
+        <View className="mt-4 bg-card rounded-2xl border border-border-soft p-5">
+          <Text className="text-sm font-semibold text-ink mb-3">
             {t.home.customize.addTitle}
           </Text>
           {hiddenIds.length === 0 ? (
-            <Text className="text-sm text-gray-400">{t.home.customize.addEmpty}</Text>
+            <Text className="text-sm text-faint">{t.home.customize.addEmpty}</Text>
           ) : (
             <View className="flex-row flex-wrap gap-2">
               {hiddenIds.map((id) => {
@@ -856,13 +858,13 @@ export function DashboardHomeScreen({
                   <Pressable
                     key={id}
                     onPress={() => addWidget(id)}
-                    className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 active:opacity-80"
+                    className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-border active:opacity-80"
                   >
-                    <Icon size={15} color="#4F46E5" />
-                    <Text className="text-sm font-medium text-gray-700">
+                    <Icon size={15} color={c.primary} />
+                    <Text className="text-sm font-medium text-ink">
                       {t.home.widgetNames[id]}
                     </Text>
-                    <Plus size={14} color="#9CA3AF" />
+                    <Plus size={14} color={c.faint} />
                   </Pressable>
                 );
               })}

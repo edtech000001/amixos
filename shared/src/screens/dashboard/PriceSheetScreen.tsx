@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal } from 'react-native';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { usStateName } from '../../lib/usStates';
 import {
@@ -58,6 +59,7 @@ const emptyDraft = (): Draft => ({
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.priceSheet;
 
   const [items, setItems] = useState<PriceSheetItem[]>([]);
@@ -224,8 +226,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     <View className="flex-1">
       <View className="flex-row items-start justify-between gap-3 mb-4">
         <View className="flex-1">
-          <Text className="text-base font-semibold text-gray-900">{t.title}</Text>
-          <Text className="text-xs text-gray-400 mt-0.5">{t.subtitle}</Text>
+          <Text className="text-base font-semibold text-ink">{t.title}</Text>
+          <Text className="text-xs text-faint mt-0.5">{t.subtitle}</Text>
         </View>
         {canManage ? (
           <Pressable onPress={() => setDraft(emptyDraft())} className="flex-row items-center gap-1.5 bg-primary px-3.5 py-2 rounded-xl active:opacity-90">
@@ -236,28 +238,28 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       </View>
 
       {/* Search */}
-      <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-3 mb-4">
-        <Search size={16} color="#9CA3AF" />
-        <TextInput value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} placeholderTextColor="#9CA3AF"
-          autoCapitalize="none" autoCorrect={false} className="flex-1 py-2.5 pl-2 text-sm text-gray-900" />
-        {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color="#9CA3AF" /></Pressable> : null}
+      <View className="flex-row items-center rounded-2xl border border-border bg-card px-3 mb-4">
+        <Search size={16} color={c.faint} />
+        <TextInput value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} placeholderTextColor={c.faint}
+          autoCapitalize="none" autoCorrect={false} className="flex-1 py-2.5 pl-2 text-sm text-ink" />
+        {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color={c.faint} /></Pressable> : null}
       </View>
 
       {canManage ? (
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-          <Text className="text-sm font-semibold text-gray-900">{t.tiersTitle}</Text>
-          <Text className="text-[11px] text-gray-400 mt-0.5 mb-2">{t.tiersHint}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft p-4 mb-4">
+          <Text className="text-sm font-semibold text-ink">{t.tiersTitle}</Text>
+          <Text className="text-[11px] text-faint mt-0.5 mb-2">{t.tiersHint}</Text>
           <View className="gap-2">
             {tiers.map(tier => (
               <View key={tier.id} className="flex-row items-center gap-2">
                 <TextInput value={tier.name} onChangeText={(v) => renameTier(tier.id, v)}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900" />
-                <Pressable onPress={() => removeTier(tier.id)} className="p-1.5"><X size={16} color="#D1D5DB" /></Pressable>
+                  className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink" />
+                <Pressable onPress={() => removeTier(tier.id)} className="p-1.5"><X size={16} color={c.faint} /></Pressable>
               </View>
             ))}
             <View className="flex-row items-center gap-2">
-              <TextInput value={newTier} onChangeText={setNewTier} placeholder={t.tierNamePlaceholder} placeholderTextColor="#9CA3AF"
-                className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900" />
+              <TextInput value={newTier} onChangeText={setNewTier} placeholder={t.tierNamePlaceholder} placeholderTextColor={c.faint}
+                className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink" />
               <Pressable onPress={addTier} disabled={!newTier.trim()} className={`px-3 py-2 ${newTier.trim() ? '' : 'opacity-40'}`}>
                 <Text className="text-xs font-semibold text-primary">+ {t.addTier}</Text>
               </Pressable>
@@ -267,42 +269,42 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       ) : null}
 
       {loading ? (
-        <View className="items-center py-12"><ActivityIndicator color="#4F46E5" /></View>
+        <View className="items-center py-12"><ActivityIndicator color={c.primary} /></View>
       ) : items.length === 0 ? (
         <View className="items-center py-16">
-          <View className="w-12 h-12 rounded-2xl bg-primary/10 items-center justify-center mb-3"><DollarSign size={20} color="#4F46E5" /></View>
-          <Text className="text-sm text-gray-400 text-center px-8">{t.empty}</Text>
+          <View className="w-12 h-12 rounded-2xl bg-primary/10 items-center justify-center mb-3"><DollarSign size={20} color={c.primary} /></View>
+          <Text className="text-sm text-faint text-center px-8">{t.empty}</Text>
         </View>
       ) : groups.length === 0 ? (
-        <View className="items-center py-16"><Text className="text-sm text-gray-400">{t.noResults}</Text></View>
+        <View className="items-center py-16"><Text className="text-sm text-faint">{t.noResults}</Text></View>
       ) : (
         <View className="gap-5">
           {groups.map(([key, list]) => (
             <View key={key}>
-              <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">
                 {key === '￿' ? t.uncategorized : key}
               </Text>
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 {list.map((i, idx) => (
-                  <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-gray-50' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+                  <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
                     <View className="flex-1 min-w-0">
                       <View className="flex-row items-center gap-2">
-                        <Text className="text-sm font-semibold text-gray-900 flex-shrink" numberOfLines={1}>{i.name}</Text>
+                        <Text className="text-sm font-semibold text-ink flex-shrink" numberOfLines={1}>{i.name}</Text>
                         {i.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
                       </View>
-                      <Text className="text-xs text-gray-500 mt-1">
+                      <Text className="text-xs text-muted mt-1">
                         {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
                         {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
                       </Text>
                     </View>
                     {canManage ? (
                       <View className="flex-row items-center gap-1">
-                        <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-gray-100">
-                          <Text className="text-xs font-semibold text-gray-500">{i.active ? t.deactivate : t.activate}</Text>
+                        <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-border-soft">
+                          <Text className="text-xs font-semibold text-muted">{i.active ? t.deactivate : t.activate}</Text>
                         </Pressable>
-                        <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color="#9CA3AF" /></Pressable>
-                        <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color="#9CA3AF" /></Pressable>
-                        <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-50"><Trash2 size={14} color="#F87171" /></Pressable>
+                        <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color={c.faint} /></Pressable>
+                        <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color={c.faint} /></Pressable>
+                        <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-500/10"><Trash2 size={14} color={c.danger} /></Pressable>
                       </View>
                     ) : null}
                   </View>
@@ -317,67 +319,67 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       <RNModal visible={!!draft} transparent animationType="fade" onRequestClose={() => setDraft(null)}>
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setDraft(null)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-gray-900">{t.title}</Text>
-              <Pressable onPress={() => setDraft(null)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100"><X size={20} color="#9CA3AF" /></Pressable>
+              <Text className="text-lg font-bold text-ink">{t.title}</Text>
+              <Pressable onPress={() => setDraft(null)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
             </View>
             {draft ? (
               <ScrollView keyboardShouldPersistTaps="handled">
-                <Text className="text-sm font-semibold text-gray-700 mb-1">{t.nameLabel}</Text>
-                <TextInput value={draft.name} onChangeText={v => setDraftKey('name', v)} placeholder={t.namePlaceholder} placeholderTextColor="#9CA3AF"
-                  className="mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                <Text className="text-sm font-semibold text-ink mb-1">{t.nameLabel}</Text>
+                <TextInput value={draft.name} onChangeText={v => setDraftKey('name', v)} placeholder={t.namePlaceholder} placeholderTextColor={c.faint}
+                  className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
 
-                <Text className="text-sm font-semibold text-gray-700 mb-1">{t.categoryLabel}</Text>
-                <TextInput value={draft.category} onChangeText={v => setDraftKey('category', v)} placeholder={t.categoryPlaceholder} placeholderTextColor="#9CA3AF"
-                  className="mb-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                <Text className="text-sm font-semibold text-ink mb-1">{t.categoryLabel}</Text>
+                <TextInput value={draft.category} onChangeText={v => setDraftKey('category', v)} placeholder={t.categoryPlaceholder} placeholderTextColor={c.faint}
+                  className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
 
-                <Text className="text-sm font-semibold text-gray-700 mb-1">{t.modeLabel}</Text>
+                <Text className="text-sm font-semibold text-ink mb-1">{t.modeLabel}</Text>
                 <View className="flex-row gap-2 mb-3">
                   {(['per_unit', 'flat'] as PricingMode[]).map(m => (
                     <Pressable key={m} onPress={() => setDraftKey('pricingMode', m)}
-                      className={`flex-1 py-2.5 rounded-xl items-center border ${draft.pricingMode === m ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}>
-                      <Text className={`text-xs font-semibold ${draft.pricingMode === m ? 'text-primary' : 'text-gray-500'}`}>{m === 'per_unit' ? t.modePerUnit : t.modeFlat}</Text>
+                      className={`flex-1 py-2.5 rounded-xl items-center border ${draft.pricingMode === m ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}>
+                      <Text className={`text-xs font-semibold ${draft.pricingMode === m ? 'text-primary' : 'text-muted'}`}>{m === 'per_unit' ? t.modePerUnit : t.modeFlat}</Text>
                     </Pressable>
                   ))}
                 </View>
 
                 {draft.pricingMode === 'per_unit' ? (
                   <>
-                    <Text className="text-sm font-semibold text-gray-700 mb-1">{t.unitLabel}</Text>
-                    <TextInput value={draft.unitLabel} onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder} placeholderTextColor="#9CA3AF"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
-                    <Text className="text-[11px] text-gray-400 mt-1 mb-3">{t.unitHint}</Text>
+                    <Text className="text-sm font-semibold text-ink mb-1">{t.unitLabel}</Text>
+                    <TextInput value={draft.unitLabel} onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder} placeholderTextColor={c.faint}
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                    <Text className="text-[11px] text-faint mt-1 mb-3">{t.unitHint}</Text>
                   </>
                 ) : null}
 
                 <Pressable onPress={() => setDraftKey('isAddon', !draft.isAddon)} className="flex-row items-start gap-2.5 mb-4">
-                  <View className={`mt-0.5 w-5 h-5 rounded border items-center justify-center ${draft.isAddon ? 'bg-primary border-primary' : 'bg-white border-gray-300'}`}>
+                  <View className={`mt-0.5 w-5 h-5 rounded border items-center justify-center ${draft.isAddon ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
                     {draft.isAddon ? <Check size={14} color="#fff" /> : null}
                   </View>
                   <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-700">{t.addonLabel}</Text>
-                    <Text className="text-[11px] text-gray-400">{t.addonHint}</Text>
+                    <Text className="text-sm font-semibold text-ink">{t.addonLabel}</Text>
+                    <Text className="text-[11px] text-faint">{t.addonHint}</Text>
                   </View>
                 </Pressable>
 
-                <Text className="text-sm font-semibold text-gray-700 mb-1">{t.rateLabel}</Text>
-                <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3 mb-4">
-                  <Text className="text-gray-400">$</Text>
-                  <TextInput value={draft.rate} onChangeText={v => setDraftKey('rate', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#9CA3AF"
-                    className="flex-1 py-2.5 pl-1 text-base text-gray-900" />
+                <Text className="text-sm font-semibold text-ink mb-1">{t.rateLabel}</Text>
+                <View className="flex-row items-center rounded-xl border border-border bg-card px-3 mb-4">
+                  <Text className="text-faint">$</Text>
+                  <TextInput value={draft.rate} onChangeText={v => setDraftKey('rate', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.faint}
+                    className="flex-1 py-2.5 pl-1 text-base text-ink" />
                 </View>
 
                 {tiers.length > 0 ? (
                   <View className="mb-4">
-                    <Text className="text-sm font-semibold text-gray-700 mb-2">{t.tierRatesLabel}</Text>
+                    <Text className="text-sm font-semibold text-ink mb-2">{t.tierRatesLabel}</Text>
                     {tiers.map(tier => (
                       <View key={tier.id} className="flex-row items-center gap-2 mb-2">
-                        <Text className="w-24 text-sm text-gray-600" numberOfLines={1}>{tier.name}</Text>
-                        <View className="flex-1 flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                          <Text className="text-gray-400">$</Text>
+                        <Text className="w-24 text-sm text-muted" numberOfLines={1}>{tier.name}</Text>
+                        <View className="flex-1 flex-row items-center rounded-xl border border-border bg-card px-3">
+                          <Text className="text-faint">$</Text>
                           <TextInput value={draft.tierRates[tier.id] ?? ''} onChangeText={v => setDraftKey('tierRates', { ...draft.tierRates, [tier.id]: v.replace(/[^0-9.]/g, '') })}
-                            keyboardType="decimal-pad" placeholder={String(draft.rate || '0.00')} placeholderTextColor="#9CA3AF" className="flex-1 py-2.5 pl-1 text-base text-gray-900" />
+                            keyboardType="decimal-pad" placeholder={String(draft.rate || '0.00')} placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-base text-ink" />
                         </View>
                       </View>
                     ))}
@@ -385,15 +387,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 ) : null}
 
                 <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-700 mb-1">{t.matchTermsLabel}</Text>
-                  <Text className="text-[11px] text-gray-400 mb-1.5">{t.matchTermsHint}</Text>
-                  <TextInput value={draft.matchTerms} onChangeText={v => setDraftKey('matchTerms', v)} placeholder={t.matchTermsPlaceholder} placeholderTextColor="#9CA3AF"
-                    multiline numberOfLines={2} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" style={{ minHeight: 56, textAlignVertical: 'top' }} />
+                  <Text className="text-sm font-semibold text-ink mb-1">{t.matchTermsLabel}</Text>
+                  <Text className="text-[11px] text-faint mb-1.5">{t.matchTermsHint}</Text>
+                  <TextInput value={draft.matchTerms} onChangeText={v => setDraftKey('matchTerms', v)} placeholder={t.matchTermsPlaceholder} placeholderTextColor={c.faint}
+                    multiline numberOfLines={2} className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" style={{ minHeight: 56, textAlignVertical: 'top' }} />
                 </View>
 
                 <View className="mb-4">
                   <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-sm font-semibold text-gray-700">{t.stateRatesLabel}</Text>
+                    <Text className="text-sm font-semibold text-ink">{t.stateRatesLabel}</Text>
                     <View className="flex-row items-center gap-4">
                       <Pressable onPress={addAllStates}><Text className="text-xs font-semibold text-primary">{t.addAllStates}</Text></Pressable>
                       <Pressable onPress={() => setDraftKey('stateRates', [...draft.stateRates, { state: '', rate: '' }])}>
@@ -401,22 +403,22 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                       </Pressable>
                     </View>
                   </View>
-                  <Text className="text-[11px] text-gray-400 mb-2">{t.stateRatesHint}</Text>
+                  <Text className="text-[11px] text-faint mb-2">{t.stateRatesHint}</Text>
                   {draft.stateRates.map((sr, i) => (
                     <View key={i} className="flex-row items-center gap-2 mb-2">
                       <Pressable onPress={() => { setStateQuery(''); setStatePickerFor(i); }}
-                        className="w-40 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-                        <Text className={`text-base flex-1 ${sr.state ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                        className="w-40 flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
+                        <Text className={`text-base flex-1 ${sr.state ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                           {sr.state ? usStateName(sr.state, locale) : t.selectStatePlaceholder}
                         </Text>
-                        <ChevronDown size={16} color="#9CA3AF" />
+                        <ChevronDown size={16} color={c.faint} />
                       </Pressable>
-                      <View className="flex-1 flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                        <Text className="text-gray-400">$</Text>
+                      <View className="flex-1 flex-row items-center rounded-xl border border-border bg-card px-3">
+                        <Text className="text-faint">$</Text>
                         <TextInput value={sr.rate} onChangeText={v => { const next = [...draft.stateRates]; next[i] = { ...sr, rate: v.replace(/[^0-9.]/g, '') }; setDraftKey('stateRates', next); }}
-                          keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#9CA3AF" className="flex-1 py-2.5 pl-1 text-base text-gray-900" />
+                          keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-base text-ink" />
                       </View>
-                      <Pressable onPress={() => setDraftKey('stateRates', draft.stateRates.filter((_, j) => j !== i))} className="p-1.5"><X size={16} color="#D1D5DB" /></Pressable>
+                      <Pressable onPress={() => setDraftKey('stateRates', draft.stateRates.filter((_, j) => j !== i))} className="p-1.5"><X size={16} color={c.faint} /></Pressable>
                     </View>
                   ))}
                 </View>
@@ -431,24 +433,24 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
             {/* State picker — absolute overlay inside the sheet card (NOT a
                 second RNModal, which iOS would refuse to present). */}
             {statePickerFor !== null ? (
-              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="bg-white rounded-t-3xl px-5 pt-5">
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="bg-card rounded-t-3xl px-5 pt-5">
                 <View className="flex-row items-center justify-between mb-3">
-                  <Text className="text-lg font-bold text-gray-900">{t.selectStatePlaceholder}</Text>
-                  <Pressable onPress={() => setStatePickerFor(null)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100"><X size={20} color="#9CA3AF" /></Pressable>
+                  <Text className="text-lg font-bold text-ink">{t.selectStatePlaceholder}</Text>
+                  <Pressable onPress={() => setStatePickerFor(null)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
                 </View>
-                <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-3 mb-3">
-                  <Search size={16} color="#9CA3AF" />
-                  <TextInput value={stateQuery} onChangeText={setStateQuery} placeholder={t.searchPlaceholder} placeholderTextColor="#9CA3AF"
-                    autoFocus autoCorrect={false} autoCapitalize="none" className="flex-1 py-2.5 pl-2 text-base text-gray-900" />
+                <View className="flex-row items-center rounded-2xl border border-border bg-card px-3 mb-3">
+                  <Search size={16} color={c.faint} />
+                  <TextInput value={stateQuery} onChangeText={setStateQuery} placeholder={t.searchPlaceholder} placeholderTextColor={c.faint}
+                    autoFocus autoCorrect={false} autoCapitalize="none" className="flex-1 py-2.5 pl-2 text-base text-ink" />
                 </View>
                 <ScrollView keyboardShouldPersistTaps="handled" className="mb-4">
                   {filteredStates.map(s => {
                     const isSel = draft.stateRates[statePickerFor!]?.state === s;
                     return (
                       <Pressable key={s} onPress={() => setRowState(statePickerFor!, s)}
-                        className={`flex-row items-center justify-between px-2 py-3.5 rounded-xl active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}>
-                        <Text className={`text-base flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{usStateName(s, locale)}</Text>
-                        {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                        className={`flex-row items-center justify-between px-2 py-3.5 rounded-xl active:bg-surface ${isSel ? 'bg-primary/5' : ''}`}>
+                        <Text className={`text-base flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`}>{usStateName(s, locale)}</Text>
+                        {isSel ? <Check size={16} color={c.primary} /> : null}
                       </Pressable>
                     );
                   })}

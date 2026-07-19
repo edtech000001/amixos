@@ -90,13 +90,13 @@ export function BillingGate() {
         zIndex: 9999,
         elevation: 9999,
       }}
-      className="bg-gray-50 items-center justify-center"
+      className="bg-surface items-center justify-center"
     >
-      <View className="bg-white rounded-2xl border border-gray-100 p-6 m-4 w-full max-w-md items-center">
-        <Text className="text-xl font-bold text-gray-900 text-center">
+      <View className="bg-card rounded-2xl border border-border-soft p-6 m-4 w-full max-w-md items-center">
+        <Text className="text-xl font-bold text-ink text-center">
           {heading}
         </Text>
-        <Text className="text-base text-gray-600 text-center mt-2">{body}</Text>
+        <Text className="text-base text-muted text-center mt-2">{body}</Text>
 
         {isAdmin ? (
           <Pressable
@@ -108,7 +108,7 @@ export function BillingGate() {
             </Text>
           </Pressable>
         ) : (
-          <Text className="text-sm text-gray-500 text-center mt-6">
+          <Text className="text-sm text-muted text-center mt-6">
             {en
               ? 'Contact your business owner to renew the plan.'
               : 'Contacta al dueño de tu negocio para renovar el plan.'}
@@ -117,7 +117,7 @@ export function BillingGate() {
 
         {otherActive.length > 0 ? (
           <View className="mt-6 w-full">
-            <Text className="text-xs font-semibold text-gray-500 uppercase mb-2">
+            <Text className="text-xs font-semibold text-muted uppercase mb-2">
               {en ? 'Switch business' : 'Cambiar de negocio'}
             </Text>
             <View className="gap-2">
@@ -125,9 +125,9 @@ export function BillingGate() {
                 <Pressable
                   key={b.id}
                   onPress={() => setActiveBusiness(b.id)}
-                  className="w-full py-3 px-4 rounded-2xl border border-gray-200 active:opacity-90"
+                  className="w-full py-3 px-4 rounded-2xl border border-border active:opacity-90"
                 >
-                  <Text className="text-base font-medium text-gray-900">
+                  <Text className="text-base font-medium text-ink">
                     {b.name}
                   </Text>
                 </Pressable>
@@ -137,7 +137,7 @@ export function BillingGate() {
         ) : null}
 
         <Pressable onPress={() => logout()} className="mt-6 py-2" hitSlop={8}>
-          <Text className="text-sm font-medium text-gray-500">
+          <Text className="text-sm font-medium text-muted">
             {en ? 'Sign out' : 'Cerrar sesión'}
           </Text>
         </Pressable>

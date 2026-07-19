@@ -118,7 +118,9 @@ export function BusinessSwitcher() {
           <button
             onClick={() => {
               setOpen(false);
-              router.push('/onboarding');
+              // adding=1 → onboarding shows a "Cancel" escape (the user already
+              // has a business and can back out).
+              router.push('/onboarding?adding=1');
             }}
             className="w-full flex items-center gap-3 px-4 py-3 border-t border-border-soft hover:bg-surface transition-colors text-left"
           >

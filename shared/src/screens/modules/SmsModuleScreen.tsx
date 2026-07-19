@@ -5,6 +5,7 @@ import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { Select } from '../../ui/Select';
 import { Button } from '../../ui/Button';
+import { useThemeColors } from '../../theme';
 
 export type SmsProvider = 'twilio' | 'clicksend';
 
@@ -66,6 +67,7 @@ export function SmsModuleScreen({
 }: SmsModuleScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.modules.messaging;
+  const c = useThemeColors();
 
   const connected = !!status?.connected;
   const [configuring, setConfiguring] = useState(false);
@@ -153,28 +155,28 @@ export function SmsModuleScreen({
           {/* Header */}
           {onBack ? (
             <Pressable onPress={onBack} hitSlop={10} className="flex-row items-center gap-1 mb-3 active:opacity-70">
-              <ChevronLeft size={18} color="#6B7280" />
-              <Text className="text-sm text-gray-500">{full.common.buttons.back}</Text>
+              <ChevronLeft size={18} color={c.muted} />
+              <Text className="text-sm text-muted">{full.common.buttons.back}</Text>
             </Pressable>
           ) : null}
           <View className="flex-row items-center gap-3 mb-1">
             <View className="w-10 h-10 rounded-2xl items-center justify-center" style={{ backgroundColor: '#06B6D415' }}>
               <MessageSquare size={20} color="#06B6D4" />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
+            <Text className="text-2xl font-bold text-ink">{t.title}</Text>
           </View>
-          <Text className="text-sm text-gray-500 mb-6">{t.subtitle}</Text>
+          <Text className="text-sm text-muted mb-6">{t.subtitle}</Text>
 
           {/* Connected status banner */}
           {connected && !configuring ? (
-            <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+            <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-5">
               <View className="flex-row items-center gap-2">
-                <CheckCircle2 size={18} color="#059669" />
-                <Text className="text-sm font-semibold text-gray-900 flex-1">
+                <CheckCircle2 size={18} color={c.success} />
+                <Text className="text-sm font-semibold text-ink flex-1">
                   {t.connectedVia.replace('{{provider}}', providerLabel(status!.provider ?? 'twilio'))}
                 </Text>
               </View>
-              <Text className="text-xs text-gray-500 mt-1 ml-7">
+              <Text className="text-xs text-muted mt-1 ml-7">
                 {status?.fromNumber ? t.fromShown.replace('{{number}}', status.fromNumber) : ''}
                 {status?.maskedKey ? `   ·   ${status.maskedKey}` : ''}
               </Text>
@@ -186,11 +188,11 @@ export function SmsModuleScreen({
                       setFromNumber(status?.fromNumber ?? '');
                       setConfiguring(true);
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 active:bg-gray-50"
+                    className="px-3 py-1.5 rounded-lg border border-border active:bg-surface"
                   >
-                    <Text className="text-xs font-semibold text-gray-600">{t.change}</Text>
+                    <Text className="text-xs font-semibold text-muted">{t.change}</Text>
                   </Pressable>
-                  <Pressable onPress={disconnect} className="px-3 py-1.5 rounded-lg bg-red-50 active:bg-red-100">
+                  <Pressable onPress={disconnect} className="px-3 py-1.5 rounded-lg bg-red-500/10 active:bg-red-100">
                     <Text className="text-xs font-semibold text-red-600">{t.disconnect}</Text>
                   </Pressable>
                 </View>
@@ -200,8 +202,8 @@ export function SmsModuleScreen({
 
           {/* Connect form */}
           {showConnectForm ? (
-            <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5 gap-4">
-              <Text className="text-sm font-bold text-gray-900">{t.connectTitle}</Text>
+            <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 mb-5 gap-4">
+              <Text className="text-sm font-bold text-ink">{t.connectTitle}</Text>
               {!canConfigure ? (
                 <Text className="text-xs text-amber-600">{t.onlyWriters}</Text>
               ) : (
@@ -252,7 +254,7 @@ export function SmsModuleScreen({
                       autoCapitalize="none"
                       placeholder="+15551234567"
                     />
-                    <Text className="text-xs text-gray-400">{t.fromNumberHint}</Text>
+                    <Text className="text-xs text-faint">{t.fromNumberHint}</Text>
                   </View>
                   {connectError ? <Text className="text-xs text-red-600">{connectError}</Text> : null}
                   <View className="flex-row gap-3">
@@ -277,8 +279,8 @@ export function SmsModuleScreen({
 
           {/* Compose */}
           {connected && !configuring ? (
-            <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 gap-4">
-              <Text className="text-sm font-bold text-gray-900">{t.composeTitle}</Text>
+            <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 gap-4">
+              <Text className="text-sm font-bold text-ink">{t.composeTitle}</Text>
               <Select
                 label={t.clientLabel}
                 value={clientId}
@@ -297,7 +299,7 @@ export function SmsModuleScreen({
                 placeholder={t.toPlaceholder}
               />
               <View className="gap-1">
-                <Text className="text-sm font-semibold text-gray-700">{t.messageLabel}</Text>
+                <Text className="text-sm font-semibold text-ink">{t.messageLabel}</Text>
                 <Input
                   value={message}
                   onChangeText={setMessage}
@@ -306,12 +308,12 @@ export function SmsModuleScreen({
                   numberOfLines={4}
                   className="h-24"
                 />
-                <Text className="text-[11px] text-gray-400 text-right">{message.length}</Text>
+                <Text className="text-[11px] text-faint text-right">{message.length}</Text>
               </View>
               {sendError ? <Text className="text-xs text-red-600">{sendError}</Text> : null}
               {sent ? (
                 <View className="flex-row items-center gap-1.5">
-                  <CheckCircle2 size={14} color="#059669" />
+                  <CheckCircle2 size={14} color={c.success} />
                   <Text className="text-xs font-semibold text-emerald-600">{t.sentToast}</Text>
                 </View>
               ) : null}
@@ -326,7 +328,7 @@ export function SmsModuleScreen({
 
           {/* Not-configured hint for non-writers */}
           {!connected && !canConfigure && !loadingStatus ? (
-            <Text className="text-sm text-gray-400 text-center mt-2">{t.notConfigured}</Text>
+            <Text className="text-sm text-faint text-center mt-2">{t.notConfigured}</Text>
           ) : null}
         </View>
       </ScrollView>

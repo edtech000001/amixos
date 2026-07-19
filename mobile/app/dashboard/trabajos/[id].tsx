@@ -36,6 +36,7 @@ import {
   Sparkles,
   type LucideIcon, Archive, DollarSign } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
@@ -190,6 +191,7 @@ export default function JobDetailRoute() {
     }
   };
   const supabase = createSupabaseClient();
+  const c = useThemeColors();
   const { business } = useApp();
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
@@ -249,8 +251,8 @@ export default function JobDetailRoute() {
     if (value === null) return null;
     return (
       <View key={tpl.id}>
-        <Text className="text-xs text-gray-500 mb-1">{tpl.field_label}</Text>
-        <Text className="text-sm text-gray-700">{value}</Text>
+        <Text className="text-xs text-muted mb-1">{tpl.field_label}</Text>
+        <Text className="text-sm text-ink">{value}</Text>
       </View>
     );
   };
@@ -645,7 +647,7 @@ export default function JobDetailRoute() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -657,11 +659,11 @@ export default function JobDetailRoute() {
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <RNModal visible transparent animationType="fade" onRequestClose={goBack}>
           <Pressable onPress={goBack} className="flex-1 bg-black/40 justify-end">
-            <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
+            <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
               <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-xl font-bold text-gray-900">{t.notFound}</Text>
+                <Text className="text-xl font-bold text-ink">{t.notFound}</Text>
                 <Pressable onPress={goBack} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                  <X size={22} color="#9CA3AF" />
+                  <X size={22} color={c.faint} />
                 </Pressable>
               </View>
               <Pressable
@@ -875,13 +877,13 @@ export default function JobDetailRoute() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={goBack}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="flex-row gap-1">
           {isProposal ? (
@@ -890,7 +892,7 @@ export default function JobDetailRoute() {
               hitSlop={8}
               className="p-2 rounded-lg active:bg-primary/10"
             >
-              <Send size={18} color="#4F46E5" />
+              <Send size={18} color={c.primary} />
             </Pressable>
           ) : null}
           {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) ? (
@@ -899,7 +901,7 @@ export default function JobDetailRoute() {
               hitSlop={8}
               className="p-2 rounded-lg active:bg-primary/10"
             >
-              <Building2 size={18} color="#4F46E5" />
+              <Building2 size={18} color={c.primary} />
             </Pressable>
           ) : null}
           {can.createJob(currentRole) ? (
@@ -918,27 +920,27 @@ export default function JobDetailRoute() {
                 ])
               }
               hitSlop={8}
-              className="p-2 rounded-lg active:bg-gray-100"
+              className="p-2 rounded-lg active:bg-border-soft"
             >
-              <Copy size={18} color="#6B7280" />
+              <Copy size={18} color={c.muted} />
             </Pressable>
           ) : null}
           {can.editJobMetadata(currentRole) ? (
             <Pressable
               onPress={() => router.push(`/dashboard/trabajos/nuevo?edit=${job.id}` as never)}
               hitSlop={8}
-              className="p-2 rounded-lg active:bg-gray-100"
+              className="p-2 rounded-lg active:bg-border-soft"
             >
-              <Pencil size={18} color="#6B7280" />
+              <Pencil size={18} color={c.muted} />
             </Pressable>
           ) : null}
           {can.deleteJob(currentRole) ? (
             <Pressable
               onPress={confirmDelete}
               hitSlop={8}
-              className="p-2 rounded-lg active:bg-red-50"
+              className="p-2 rounded-lg active:bg-red-500/10"
             >
-              <Trash2 size={18} color="#EF4444" />
+              <Trash2 size={18} color={c.danger} />
             </Pressable>
           ) : null}
         </View>
@@ -948,13 +950,13 @@ export default function JobDetailRoute() {
         {/* Title + client + created date */}
         <View className="mb-6">
           {isProposal ? (
-            <Text className="text-xs font-mono text-gray-400 mb-1">{job.estimate_number}</Text>
+            <Text className="text-xs font-mono text-faint mb-1">{job.estimate_number}</Text>
           ) : null}
-          <Text className="text-2xl font-bold text-gray-900">{job.title}</Text>
+          <Text className="text-2xl font-bold text-ink">{job.title}</Text>
           {/* Non-proposals show a reference so every job has an ID: imported
              project id, else a stable short code for old/manual jobs. */}
           {!isProposal ? (
-            <Text className="text-xs font-mono text-gray-400 mt-0.5">{job.external_ref?.trim() || jobShortCode(job.id)}</Text>
+            <Text className="text-xs font-mono text-faint mt-0.5">{job.external_ref?.trim() || jobShortCode(job.id)}</Text>
           ) : null}
           {clientName ? (
             <Pressable
@@ -971,15 +973,15 @@ export default function JobDetailRoute() {
               </Text>
             </Pressable>
           ) : null}
-          <Text className="text-[11px] text-gray-400 mt-1.5">
+          <Text className="text-[11px] text-faint mt-1.5">
             {td.createdOn.replace('{{date}}', fmtDateTime(job.created_at))}
           </Text>
         </View>
 
         {/* Cancelled / declined banner */}
         {isCancelled ? (
-          <View className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-5 flex-row items-start gap-3">
-            <AlertTriangle size={18} color="#DC2626" />
+          <View className="bg-red-500/10 border border-red-100 rounded-2xl p-4 mb-5 flex-row items-start gap-3">
+            <AlertTriangle size={18} color={c.danger} />
             <View className="flex-1">
               <Text className="text-sm font-semibold text-red-700">
                 {job.status === 'cancelled' ? td.cancelledBanner : td.declinedBanner}
@@ -992,9 +994,9 @@ export default function JobDetailRoute() {
               <Pressable
                 onPress={reinstateJob}
                 disabled={updatingStatus}
-                className="self-start mt-2 flex-row items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-red-200 active:bg-red-50"
+                className="self-start mt-2 flex-row items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border border-red-200 active:bg-red-500/10"
               >
-                <RotateCcw size={12} color="#DC2626" />
+                <RotateCcw size={12} color={c.danger} />
                 <Text className="text-xs font-semibold text-red-600">{td.reinstate}</Text>
               </Pressable>
             </View>
@@ -1018,10 +1020,10 @@ export default function JobDetailRoute() {
           {job.invoice_id && can.seeInvoices(currentRole) ? (
             <Pressable
               onPress={() => router.push(`/dashboard/facturas/${job.invoice_id}?from=job&jobId=${job.id}` as never)}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
             >
-              <FileText size={16} color="#374151" />
-              <Text className="text-sm font-semibold text-gray-700">{td.viewInvoiceBtn}</Text>
+              <FileText size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{td.viewInvoiceBtn}</Text>
             </Pressable>
           ) : null}
 
@@ -1029,10 +1031,10 @@ export default function JobDetailRoute() {
             <Pressable
               onPress={unInvoice}
               disabled={unInvoicing}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
             >
-              <RotateCcw size={16} color="#374151" />
-              <Text className="text-sm font-semibold text-gray-700">{td.unInvoiceBtn}</Text>
+              <RotateCcw size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{td.unInvoiceBtn}</Text>
             </Pressable>
           ) : null}
 
@@ -1042,9 +1044,9 @@ export default function JobDetailRoute() {
                 <Pressable
                   onPress={() => updateStatus(prevStatusAction.next)}
                   disabled={updatingStatus}
-                  className={`${nextStatusAction ? '' : 'flex-1 '}flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-gray-100 border border-gray-200 active:opacity-80`}
+                  className={`${nextStatusAction ? '' : 'flex-1 '}flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-border-soft border border-border active:opacity-80`}
                 >
-                  <Text className="text-sm font-semibold text-gray-600">← {prevStatusAction.label}</Text>
+                  <Text className="text-sm font-semibold text-muted">← {prevStatusAction.label}</Text>
                 </Pressable>
               ) : null}
               {nextStatusAction ? (
@@ -1065,10 +1067,10 @@ export default function JobDetailRoute() {
           {!isCancelled && can.seeAllJobs(currentRole) ? (
             <Pressable
               onPress={shareJobToCrew}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-gray-50"
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
             >
-              <MessageSquare size={16} color="#374151" />
-              <Text className="text-sm font-semibold text-gray-700">{td.sendToCrew}</Text>
+              <MessageSquare size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{td.sendToCrew}</Text>
             </Pressable>
           ) : null}
 
@@ -1080,9 +1082,9 @@ export default function JobDetailRoute() {
                 <Pressable
                   onPress={confirmCancelJob}
                   disabled={updatingStatus}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 active:bg-red-50"
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-red-500/10"
                 >
-                  <XCircle size={16} color="#EF4444" />
+                  <XCircle size={16} color={c.danger} />
                   <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
                 </Pressable>
               ) : null}
@@ -1105,10 +1107,10 @@ export default function JobDetailRoute() {
                       { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
                     ]);
                   }}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-border-soft active:bg-border"
                 >
-                  <Archive size={16} color="#6B7280" />
-                  <Text className="text-sm font-semibold text-gray-600">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
+                  <Archive size={16} color={c.muted} />
+                  <Text className="text-sm font-semibold text-muted">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1116,22 +1118,22 @@ export default function JobDetailRoute() {
         </View>
 
         {/* Details card */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5 gap-3">
-          <Text className="text-xs font-semibold text-gray-400 uppercase">
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-5 gap-3">
+          <Text className="text-xs font-semibold text-faint uppercase">
             {td.detailsHeading}
           </Text>
 
           {job.scheduled_date ? (
             <View className="flex-row items-center gap-3">
-              <CalendarIcon size={16} color="#6B7280" />
+              <CalendarIcon size={16} color={c.muted} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-500">{td.scheduledDate}</Text>
-                <Text className="text-sm text-gray-900">
+                <Text className="text-xs text-muted">{td.scheduledDate}</Text>
+                <Text className="text-sm text-ink">
                   {fmtDate(job.scheduled_date)}
                   {job.end_date ? ` — ${fmtDate(job.end_date)}` : ''}
                 </Text>
                 {(job.time_start || job.time_end) ? (
-                  <Text className="text-xs text-gray-400 mt-0.5">
+                  <Text className="text-xs text-faint mt-0.5">
                     {formatTime12h(job.time_start)}{job.time_end ? ` — ${formatTime12h(job.time_end)}` : ''}
                   </Text>
                 ) : null}
@@ -1141,7 +1143,7 @@ export default function JobDetailRoute() {
                     tc.duration,
                   );
                   return totalTimeText ? (
-                    <Text className="text-xs text-gray-400 mt-0.5">{t.new.totalTimeLabel}: {totalTimeText}</Text>
+                    <Text className="text-xs text-faint mt-0.5">{t.new.totalTimeLabel}: {totalTimeText}</Text>
                   ) : null;
                 })()}
               </View>
@@ -1150,16 +1152,16 @@ export default function JobDetailRoute() {
 
           {((job.total_hours ?? 0) > 0 || (job.driver_hours ?? 0) > 0 || (job.driver_names?.length ?? 0) > 0) ? (
             <View className="flex-row items-start gap-3">
-              <Clock size={16} color="#6B7280" />
+              <Clock size={16} color={c.muted} />
               <View className="flex-1">
                 {(job.total_hours ?? 0) > 0 ? (
                   <>
-                    <Text className="text-xs text-gray-500">{t.new.totalHoursLabel}</Text>
-                    <Text className="text-sm text-gray-900">{job.total_hours} h</Text>
+                    <Text className="text-xs text-muted">{t.new.totalHoursLabel}</Text>
+                    <Text className="text-sm text-ink">{job.total_hours} h</Text>
                   </>
                 ) : null}
                 {((job.driver_names?.length ?? 0) > 0 || (job.driver_hours ?? 0) > 0) ? (
-                  <Text className="text-xs text-gray-400 mt-0.5">
+                  <Text className="text-xs text-faint mt-0.5">
                     {t.new.driverLabel}: {job.driver_names?.length ? job.driver_names.join(', ') : '—'}
                     {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
                   </Text>
@@ -1171,11 +1173,11 @@ export default function JobDetailRoute() {
           {(job.job_address || job.job_lat != null || job.job_map_link) ? (
             <Pressable
               onPress={() => setLocationModalOpen(true)}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <MapPin size={16} color="#6B7280" />
+              <MapPin size={16} color={c.muted} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-500">{td.location}</Text>
+                <Text className="text-xs text-muted">{td.location}</Text>
                 <Text className="text-sm text-primary">
                   {job.job_address
                     ? `${job.job_address}${job.job_city ? `, ${job.job_city}` : ''}${
@@ -1191,24 +1193,24 @@ export default function JobDetailRoute() {
 
           {job.description ? (
             <View>
-              <Text className="text-xs text-gray-500 mb-1">{td.description}</Text>
-              <Text className="text-sm text-gray-900">{job.description}</Text>
+              <Text className="text-xs text-muted mb-1">{td.description}</Text>
+              <Text className="text-sm text-ink">{job.description}</Text>
             </View>
           ) : null}
 
           {job.internal_notes ? (
             <View>
-              <Text className="text-xs text-gray-500 mb-1">{td.internalNote}</Text>
-              <Text className="text-sm text-gray-700">{job.internal_notes}</Text>
+              <Text className="text-xs text-muted mb-1">{td.internalNote}</Text>
+              <Text className="text-sm text-ink">{job.internal_notes}</Text>
             </View>
           ) : null}
 
           {job.worker_notes ? (
             <View>
-              <Text className="text-xs text-gray-500 mb-1">
+              <Text className="text-xs text-muted mb-1">
                 {full.dashboard.jobs.new.workerNoteLabel}
               </Text>
-              <Text className="text-sm text-gray-700">{job.worker_notes}</Text>
+              <Text className="text-sm text-ink">{job.worker_notes}</Text>
             </View>
           ) : null}
 
@@ -1225,8 +1227,8 @@ export default function JobDetailRoute() {
         {/* Additional details — ONLY custom fields assigned to the
            'additional' section get their own card (form parity). */}
         {additionalCustoms.some(tpl => customValue(tpl) !== null) ? (
-          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
+          <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-5">
+            <Text className="text-xs font-semibold text-faint uppercase mb-2">
               {locale === 'es' ? 'Detalles adicionales' : 'Additional details'}
             </Text>
             <View className="gap-3">
@@ -1237,8 +1239,8 @@ export default function JobDetailRoute() {
 
         {/* Workers card — assigned crew with the lead badged (web parity). */}
         {assignments.length > 0 ? (
-          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">{td.workersHeading}</Text>
+          <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-5">
+            <Text className="text-xs font-semibold text-faint uppercase mb-3">{td.workersHeading}</Text>
             <View className="gap-2.5">
               {assignments.map(a => {
                 const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
@@ -1247,7 +1249,7 @@ export default function JobDetailRoute() {
                     <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
                       <Text className="text-primary text-xs font-bold">{name.charAt(0)}</Text>
                     </View>
-                    <Text className="text-sm text-gray-900 font-medium">{name}</Text>
+                    <Text className="text-sm text-ink font-medium">{name}</Text>
                     {a.is_lead ? (
                       <View className="px-2 py-0.5 rounded-full bg-amber-100">
                         <Text className="text-[10px] font-semibold text-amber-700">{t.new.leadBadge}</Text>
@@ -1262,9 +1264,9 @@ export default function JobDetailRoute() {
 
         {/* Items list */}
         {showMaterials ? (
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-5">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-semibold text-gray-400 uppercase">
+            <Text className="text-xs font-semibold text-faint uppercase">
               {isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}
             </Text>
             {canEditItems && items.length > 0 ? (
@@ -1276,7 +1278,7 @@ export default function JobDetailRoute() {
 
           {items.length === 0 ? (
             <View className="py-2 items-start gap-2">
-              <Text className="text-sm text-gray-400">{td.noItems}</Text>
+              <Text className="text-sm text-faint">{td.noItems}</Text>
               {canEditItems ? (
                 <Pressable onPress={openItemsEdit} hitSlop={8}>
                   <Text className="text-sm font-semibold text-primary">{td.addItemsBtn}</Text>
@@ -1289,44 +1291,44 @@ export default function JobDetailRoute() {
                 <View
                   key={it.id}
                   className={`flex-row items-start gap-3 py-3 ${
-                    i < items.length - 1 ? 'border-b border-gray-50' : ''
+                    i < items.length - 1 ? 'border-b border-border-soft' : ''
                   }`}
                 >
                   <View className="flex-1">
                     {showItemTypes ? (
-                      <Text className="text-xs text-gray-400 mb-0.5">
+                      <Text className="text-xs text-faint mb-0.5">
                         {ITEM_TYPE_LABELS[it.item_type] ?? it.item_type}
                       </Text>
                     ) : null}
-                    <Text className="text-sm text-gray-900">{it.description}</Text>
-                    <Text className="text-xs text-gray-500 mt-0.5">
+                    <Text className="text-sm text-ink">{it.description}</Text>
+                    <Text className="text-xs text-muted mt-0.5">
                       {it.quantity} × {fmt(it.unit_price)}{(it as { original_quantity?: number | null }).original_quantity ? `  ·  ${td.measuredNote.replace('{{qty}}', String((it as { original_quantity?: number | null }).original_quantity))}` : ''}
                     </Text>
                   </View>
-                  <Text className="text-sm font-semibold text-gray-900">{fmt(it.total)}</Text>
+                  <Text className="text-sm font-semibold text-ink">{fmt(it.total)}</Text>
                 </View>
               ))}
 
               {isProposal && (job.tax_rate > 0 || job.discount > 0) ? (
-                <View className="border-t border-gray-100 mt-2 pt-2 gap-1">
+                <View className="border-t border-border-soft mt-2 pt-2 gap-1">
                   <View className="flex-row justify-between">
-                    <Text className="text-xs text-gray-500">{td.tax}</Text>
-                    <Text className="text-xs text-gray-700">{fmt(job.tax_amount)}</Text>
+                    <Text className="text-xs text-muted">{td.tax}</Text>
+                    <Text className="text-xs text-ink">{fmt(job.tax_amount)}</Text>
                   </View>
                   {job.discount > 0 ? (
                     <View className="flex-row justify-between">
-                      <Text className="text-xs text-gray-500">{td.discount}</Text>
-                      <Text className="text-xs text-gray-700">−{fmt(job.discount)}</Text>
+                      <Text className="text-xs text-muted">{td.discount}</Text>
+                      <Text className="text-xs text-ink">−{fmt(job.discount)}</Text>
                     </View>
                   ) : null}
                 </View>
               ) : null}
 
-              <View className="border-t border-gray-100 mt-3 pt-3 flex-row justify-between items-center">
-                <Text className="text-sm font-semibold text-gray-900">
+              <View className="border-t border-border-soft mt-3 pt-3 flex-row justify-between items-center">
+                <Text className="text-sm font-semibold text-ink">
                   {isProposal ? td.totalEstimated : td.totalEstimated}
                 </Text>
-                <Text className="text-lg font-bold text-gray-900">{fmt(total)}</Text>
+                <Text className="text-lg font-bold text-ink">{fmt(total)}</Text>
               </View>
             </View>
           )}
@@ -1334,7 +1336,7 @@ export default function JobDetailRoute() {
         ) : null}
 
         {/* Photos */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           <JobPhotosSection
             jobId={job.id}
             businessId={job.business_id}
@@ -1344,7 +1346,7 @@ export default function JobDetailRoute() {
 
         {/* Metadata — last edited (created moved to top) */}
         <View className="gap-1 px-1 mt-4">
-          <Text className="text-[10px] text-gray-400">
+          <Text className="text-[10px] text-faint">
             {td.lastEditedOn.replace('{{date}}', fmtDateTime(job.updated_at))}
           </Text>
           {job.delegated_to_business_id ? (
@@ -1361,15 +1363,15 @@ export default function JobDetailRoute() {
       {/* Job-items editor */}
       <RNModal visible={itemsEditOpen} transparent animationType="slide" onRequestClose={() => setItemsEditOpen(false)}>
         <View className="flex-1 bg-black/40 justify-end">
-          <View className="bg-white rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
-            <View className="items-center mb-2"><View className="w-10 h-1 bg-gray-200 rounded-full" /></View>
-            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-gray-100">
-              <Text className="text-lg font-bold text-gray-900">{isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}</Text>
-              <Pressable onPress={() => setItemsEditOpen(false)} hitSlop={8}><X size={20} color="#9CA3AF" /></Pressable>
+          <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}</Text>
+              <Pressable onPress={() => setItemsEditOpen(false)} hitSlop={8}><X size={20} color={c.faint} /></Pressable>
             </View>
             <ScrollView contentContainerClassName="px-5 py-4 gap-3" keyboardShouldPersistTaps="handled">
               {editRows.map(r => (
-                <View key={r.id} className="bg-gray-50 rounded-2xl p-3 gap-2">
+                <View key={r.id} className="bg-surface rounded-2xl p-3 gap-2">
                   <View className="flex-row items-start justify-between gap-2">
                     {showItemTypes ? (
                       <View className="flex-1 flex-row flex-wrap gap-1.5">
@@ -1379,9 +1381,9 @@ export default function JobDetailRoute() {
                             <Pressable
                               key={tk}
                               onPress={() => updateRow(r.id, 'item_type', tk)}
-                              className={`px-3 py-1.5 rounded-full border ${on ? 'bg-primary border-primary' : 'bg-white border-gray-200'}`}
+                              className={`px-3 py-1.5 rounded-full border ${on ? 'bg-primary border-primary' : 'bg-card border-border'}`}
                             >
-                              <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-600'}`}>
+                              <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>
                                 {ITEM_TYPE_LABELS[tk] ?? tk}
                               </Text>
                             </Pressable>
@@ -1390,24 +1392,24 @@ export default function JobDetailRoute() {
                       </View>
                     ) : <View className="flex-1" />}
                     <Pressable onPress={() => setEditRows(prev => prev.filter(x => x.id !== r.id))} hitSlop={8} className="pt-1">
-                      <Trash2 size={16} color="#EF4444" />
+                      <Trash2 size={16} color={c.danger} />
                     </Pressable>
                   </View>
                   <TextInput
                     value={r.description}
                     onChangeText={v => updateRow(r.id, 'description', v)}
                     placeholder={t.new.colDescription}
-                    placeholderTextColor="#9CA3AF"
-                    className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                    placeholderTextColor={c.faint}
+                    className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink"
                   />
                   <View className="flex-row gap-2">
                     <View className="flex-1">
-                      <Text className="text-[11px] text-gray-400 mb-1">{t.new.colQty}</Text>
-                      <TextInput value={r.quantity} onChangeText={v => updateRow(r.id, 'quantity', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900" />
+                      <Text className="text-[11px] text-faint mb-1">{t.new.colQty}</Text>
+                      <TextInput value={r.quantity} onChangeText={v => updateRow(r.id, 'quantity', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink" />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-[11px] text-gray-400 mb-1">{td.colUnitPriceShort}</Text>
-                      <TextInput value={r.unit_price} onChangeText={v => updateRow(r.id, 'unit_price', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900" />
+                      <Text className="text-[11px] text-faint mb-1">{td.colUnitPriceShort}</Text>
+                      <TextInput value={r.unit_price} onChangeText={v => updateRow(r.id, 'unit_price', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink" />
                     </View>
                   </View>
                 </View>
@@ -1418,18 +1420,18 @@ export default function JobDetailRoute() {
                 </Pressable>
                 {priceItems.length > 0 ? (
                   <Pressable onPress={autopriceRows} className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg active:bg-primary/5">
-                    <DollarSign size={14} color="#4F46E5" />
+                    <DollarSign size={14} color={c.primary} />
                     <Text className="text-sm font-semibold text-primary">{td.autopriceBtn}</Text>
                   </Pressable>
                 ) : null}
               </View>
               {showPriceVerify ? (
-                <View className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+                <View className="rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2">
                   <Text className="text-xs text-amber-700">{td.autopriceVerify}</Text>
                 </View>
               ) : null}
             </ScrollView>
-            <View className="flex-row gap-3 px-5 pt-3 pb-8 border-t border-gray-100">
+            <View className="flex-row gap-3 px-5 pt-3 pb-8 border-t border-border-soft">
               <Button variant="secondary" onPress={() => setItemsEditOpen(false)} className="flex-1">{full.common.buttons.cancel}</Button>
               <Button onPress={saveItems} loading={savingItems} className="flex-1">{full.common.buttons.save}</Button>
             </View>
@@ -1449,22 +1451,22 @@ export default function JobDetailRoute() {
           className="flex-1 justify-end bg-black/40"
         >
           {/* No-op press swallows taps on the sheet so they don't close it. */}
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="flex-row items-center justify-between px-3">
-              <Text className="text-base font-semibold text-gray-900">
+              <Text className="text-base font-semibold text-ink">
                 {tw.delegateModalTitle}
               </Text>
               <Pressable onPress={() => setDelegateOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
-            <Text className="text-xs text-gray-500 px-3 mt-1 mb-4">
+            <Text className="text-xs text-muted px-3 mt-1 mb-4">
               {tw.delegateChooseTarget}
             </Text>
-            <View className="bg-gray-50 rounded-2xl overflow-hidden">
+            <View className="bg-surface rounded-2xl overflow-hidden">
               {businesses
                 .filter((b) => b.id !== job.business_id)
                 .map((b, i, arr) => (
@@ -1473,22 +1475,22 @@ export default function JobDetailRoute() {
                     onPress={() => runDelegate(b.id)}
                     disabled={delegating}
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
-                      i < arr.length - 1 ? 'border-b border-gray-100' : ''
-                    } active:bg-gray-100`}
+                      i < arr.length - 1 ? 'border-b border-border-soft' : ''
+                    } active:bg-border-soft`}
                   >
                     <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
                       {delegating ? (
-                        <ActivityIndicator size="small" color="#4F46E5" />
+                        <ActivityIndicator size="small" color={c.primary} />
                       ) : (
-                        <Building2 size={16} color="#4F46E5" />
+                        <Building2 size={16} color={c.primary} />
                       )}
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+                      <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
                         {b.name}
                       </Text>
                       {b.city ? (
-                        <Text className="text-xs text-gray-500">
+                        <Text className="text-xs text-muted">
                           {b.city}
                           {b.state ? `, ${b.state}` : ''}
                         </Text>
@@ -1500,9 +1502,9 @@ export default function JobDetailRoute() {
             <Pressable
               onPress={() => setDelegateOpen(false)}
               disabled={delegating}
-              className="mt-3 items-center py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+              className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
             >
-              <Text className="text-sm font-semibold text-gray-700">
+              <Text className="text-sm font-semibold text-ink">
                 {full.common.buttons.cancel}
               </Text>
             </Pressable>
@@ -1523,23 +1525,23 @@ export default function JobDetailRoute() {
         >
           <Pressable
             onPress={() => {}}
-            className="bg-white rounded-t-3xl pt-3"
+            className="bg-card rounded-t-3xl pt-3"
             style={{ maxHeight: '85%' }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-              <Text className="text-lg font-bold text-gray-900">{td.locationModalTitle}</Text>
+            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{td.locationModalTitle}</Text>
               <Pressable onPress={() => setLocationModalOpen(false)} hitSlop={8}>
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
             <View className="px-5 py-5 pb-8 gap-4">
               {job.job_address ? (
                 <View>
-                  <Text className="text-xs text-gray-500">{td.location}</Text>
-                  <Text className="text-base text-gray-900 mt-1">
+                  <Text className="text-xs text-muted">{td.location}</Text>
+                  <Text className="text-base text-ink mt-1">
                     {job.job_address}
                     {job.job_city ? `\n${job.job_city}` : ''}
                     {job.job_state ? `, ${job.job_state}` : ''}
@@ -1549,8 +1551,8 @@ export default function JobDetailRoute() {
 
               {job.job_lat != null && job.job_lng != null ? (
                 <View>
-                  <Text className="text-xs text-gray-500">{td.coordinates}</Text>
-                  <Text className="text-base text-gray-900 mt-1 font-mono">
+                  <Text className="text-xs text-muted">{td.coordinates}</Text>
+                  <Text className="text-base text-ink mt-1 font-mono">
                     {job.job_lat}, {job.job_lng}
                   </Text>
                 </View>
@@ -1572,10 +1574,10 @@ export default function JobDetailRoute() {
                   const url = buildMapsUrl(job);
                   if (url) Share.share({ message: url, url }).catch(() => {});
                 }}
-                className="flex-row items-center justify-center gap-2 border border-gray-200 py-3.5 rounded-2xl active:bg-gray-50"
+                className="flex-row items-center justify-center gap-2 border border-border py-3.5 rounded-2xl active:bg-surface"
               >
-                <Share2 size={16} color="#374151" />
-                <Text className="text-gray-700 font-semibold text-sm">{td.shareLocation}</Text>
+                <Share2 size={16} color={c.muted} />
+                <Text className="text-ink font-semibold text-sm">{td.shareLocation}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -1599,6 +1601,7 @@ function PipelineStrip({
   pipeline: PipelineStep[];
   currentIdx: number;
 }) {
+  const c = useThemeColors();
   const STEP_WIDTH = 84;
   const CONNECTOR_WIDTH = 18;
   const scrollRef = useRef<ScrollView>(null);
@@ -1613,7 +1616,7 @@ function PipelineStrip({
   }, [currentIdx]);
 
   return (
-    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-5">
+    <View className="bg-card rounded-2xl border border-border-soft shadow-sm mb-5">
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -1631,28 +1634,28 @@ function PipelineStrip({
                 <View
                   className="w-10 h-10 rounded-full items-center justify-center"
                   style={{
-                    backgroundColor: isCurrent ? `${s.color}1A` : isPast ? '#F3F4F6' : '#F9FAFB',
+                    backgroundColor: isCurrent ? `${s.color}1A` : isPast ? c.borderSoft : c.surface,
                     borderWidth: isCurrent ? 2 : 0,
                     borderColor: isCurrent ? s.color : 'transparent',
                   }}
                 >
                   <Icon
                     size={18}
-                    color={isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB'}
+                    color={isCurrent ? s.color : isPast ? c.faint : c.faint}
                   />
                 </View>
                 <Text
                   className="text-[11px] font-semibold mt-1.5 text-center"
-                  style={{ color: isCurrent ? s.color : isPast ? '#9CA3AF' : '#D1D5DB' }}
+                  style={{ color: isCurrent ? s.color : isPast ? c.muted : c.faint }}
                   numberOfLines={1}
                 >
                   {s.label}
                 </Text>
                 {(isPast || isCurrent) && s.stamp?.date ? (
                   <View className="items-center mt-0.5">
-                    <Text className="text-[9px] text-gray-400 text-center" numberOfLines={1}>{s.stamp.date}</Text>
+                    <Text className="text-[9px] text-faint text-center" numberOfLines={1}>{s.stamp.date}</Text>
                     {s.stamp.time ? (
-                      <Text className="text-[9px] text-gray-300 text-center" numberOfLines={1}>{s.stamp.time}</Text>
+                      <Text className="text-[9px] text-faint text-center" numberOfLines={1}>{s.stamp.time}</Text>
                     ) : null}
                   </View>
                 ) : null}
@@ -1663,7 +1666,7 @@ function PipelineStrip({
                     width: CONNECTOR_WIDTH,
                     height: 2,
                     marginTop: 19,
-                    backgroundColor: isPast ? '#D1D5DB' : '#F3F4F6',
+                    backgroundColor: isPast ? c.border : c.borderSoft,
                   }}
                 />
               ) : null}

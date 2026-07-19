@@ -10,6 +10,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Input, Button, Fab } from '../../ui';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, INVITABLE_ROLES, type Role } from '../../lib/permissions';
 
@@ -53,7 +54,7 @@ const ROLE_BADGE_COLORS: Record<Role, string> = {
   admin:   'bg-blue-100 text-blue-700',
   manager: 'bg-emerald-100 text-emerald-700',
   office:  'bg-amber-100 text-amber-700',
-  field:   'bg-gray-100 text-gray-600',
+  field:   'bg-border-soft text-muted',
   viewer:  'bg-slate-100 text-slate-600',
 };
 
@@ -69,6 +70,7 @@ export function TeamScreen({
   onCopyInviteLink,
 }: TeamScreenProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.team;
 
   const lang = locale === 'es' ? 'es' : 'en';
@@ -110,16 +112,16 @@ export function TeamScreen({
       {/* Heading */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1 mr-3">
-          <Text className="text-2xl font-bold text-gray-900">{t.heading}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">{t.subtitle}</Text>
+          <Text className="text-2xl font-bold text-ink">{t.heading}</Text>
+          <Text className="text-sm text-muted mt-0.5">{t.subtitle}</Text>
         </View>
       </View>
 
       {/* Members */}
-      <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 ml-1">
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2 ml-1">
         {t.membersHeading}
       </Text>
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-5">
+      <View className="bg-card rounded-2xl border border-border-soft overflow-hidden mb-5">
         {loading ? (
           <View className="px-5 py-8 items-center">
             <View className="flex-row gap-1">
@@ -128,7 +130,7 @@ export function TeamScreen({
           </View>
         ) : members.length === 0 ? (
           <View className="px-5 py-8">
-            <Text className="text-sm text-gray-400 text-center">{t.noMembersYet}</Text>
+            <Text className="text-sm text-faint text-center">{t.noMembersYet}</Text>
           </View>
         ) : (
           members.map((m, i) => {
@@ -138,7 +140,7 @@ export function TeamScreen({
               <View
                 key={m.id}
                 className={`flex-row items-center gap-3 px-4 py-3.5 ${
-                  isLast ? '' : 'border-b border-gray-50'
+                  isLast ? '' : 'border-b border-border-soft'
                 }`}
               >
                 <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
@@ -147,11 +149,11 @@ export function TeamScreen({
                   </Text>
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+                  <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
                     {m.displayName ?? m.email}
                     {m.isYou ? ` ${t.youSuffix}` : ''}
                   </Text>
-                  <Text className="text-xs text-gray-500" numberOfLines={1}>{m.email}</Text>
+                  <Text className="text-xs text-muted" numberOfLines={1}>{m.email}</Text>
                 </View>
                 <View className={`px-2.5 py-1 rounded-full ${ROLE_BADGE_COLORS[m.role]}`}>
                   <Text className={`text-xs font-semibold ${ROLE_BADGE_COLORS[m.role].split(' ')[1]}`}>
@@ -163,16 +165,16 @@ export function TeamScreen({
                     <Pressable
                       onPress={() => setRolePickerFor(m)}
                       hitSlop={8}
-                      className="p-2 rounded-lg active:bg-gray-100"
+                      className="p-2 rounded-lg active:bg-border-soft"
                     >
-                      <ChevronRight size={16} color="#6B7280" />
+                      <ChevronRight size={16} color={c.muted} />
                     </Pressable>
                     <Pressable
                       onPress={() => onRemoveMember(m.id)}
                       hitSlop={8}
-                      className="p-2 rounded-lg active:bg-red-50"
+                      className="p-2 rounded-lg active:bg-red-500/10"
                     >
-                      <Trash2 size={15} color="#EF4444" />
+                      <Trash2 size={15} color={c.danger} />
                     </Pressable>
                   </View>
                 ) : null}
@@ -185,13 +187,13 @@ export function TeamScreen({
       {/* Pending invites */}
       {canManage ? (
         <>
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 ml-1">
+          <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2 ml-1">
             {t.invitesHeading}
           </Text>
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
             {invites.length === 0 ? (
               <View className="px-5 py-8">
-                <Text className="text-sm text-gray-400 text-center">{t.noPendingInvites}</Text>
+                <Text className="text-sm text-faint text-center">{t.noPendingInvites}</Text>
               </View>
             ) : (
               invites.map((inv, i) => {
@@ -202,33 +204,33 @@ export function TeamScreen({
                   <View
                     key={inv.id}
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
-                      isLast ? '' : 'border-b border-gray-50'
+                      isLast ? '' : 'border-b border-border-soft'
                     }`}
                   >
-                    <View className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center">
-                      <Mail size={16} color="#6B7280" />
+                    <View className="w-10 h-10 rounded-full bg-border-soft items-center justify-center">
+                      <Mail size={16} color={c.muted} />
                     </View>
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+                      <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
                         {inv.email}
                       </Text>
-                      <Text className="text-xs text-gray-500">
+                      <Text className="text-xs text-muted">
                         {ROLE_LABELS[inv.role][lang]} · {expired ? t.expiredBadge : t.pendingBadge}
                       </Text>
                     </View>
                     <Pressable
                       onPress={() => copyLink(inv)}
                       hitSlop={8}
-                      className="p-2 rounded-lg active:bg-gray-100"
+                      className="p-2 rounded-lg active:bg-border-soft"
                     >
-                      {copied ? <Check size={16} color="#059669" /> : <Copy size={15} color="#6B7280" />}
+                      {copied ? <Check size={16} color={c.success} /> : <Copy size={15} color={c.muted} />}
                     </Pressable>
                     <Pressable
                       onPress={() => onRevokeInvite(inv.id)}
                       hitSlop={8}
-                      className="p-2 rounded-lg active:bg-red-50"
+                      className="p-2 rounded-lg active:bg-red-500/10"
                     >
-                      <X size={16} color="#EF4444" />
+                      <X size={16} color={c.danger} />
                     </Pressable>
                   </View>
                 );
@@ -249,12 +251,12 @@ export function TeamScreen({
           onPress={() => setInviteOpen(false)}
           className="flex-1 bg-black/40 items-center justify-end web:justify-center px-6 pb-10"
         >
-          <Pressable className="bg-white rounded-2xl w-full max-w-md p-5">
-            <Text className="text-lg font-bold text-gray-900 mb-1">{t.inviteModalTitle}</Text>
-            <Text className="text-sm text-gray-500 mb-5">{t.subtitle}</Text>
+          <Pressable className="bg-card rounded-2xl w-full max-w-md p-5">
+            <Text className="text-lg font-bold text-ink mb-1">{t.inviteModalTitle}</Text>
+            <Text className="text-sm text-muted mb-5">{t.subtitle}</Text>
 
             <View className="mb-3">
-              <Text className="text-xs font-semibold text-gray-700 mb-1.5">{t.emailLabel}</Text>
+              <Text className="text-xs font-semibold text-ink mb-1.5">{t.emailLabel}</Text>
               <Input
                 value={inviteEmail}
                 onChangeText={setInviteEmail}
@@ -264,7 +266,7 @@ export function TeamScreen({
               />
             </View>
 
-            <Text className="text-xs font-semibold text-gray-700 mb-1.5">{t.roleLabel}</Text>
+            <Text className="text-xs font-semibold text-ink mb-1.5">{t.roleLabel}</Text>
             <View className="flex-col gap-1.5 mb-5">
               {INVITABLE_ROLES.map(r => {
                 const selected = inviteRole === r;
@@ -273,17 +275,17 @@ export function TeamScreen({
                     key={r}
                     onPress={() => setInviteRole(r)}
                     className={`flex-row items-start gap-3 px-3 py-2.5 rounded-xl border ${
-                      selected ? 'border-primary bg-primary/5' : 'border-gray-100'
+                      selected ? 'border-primary bg-primary/5' : 'border-border-soft'
                     }`}
                   >
                     <View className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
-                      selected ? 'border-primary bg-primary' : 'border-gray-300'
+                      selected ? 'border-primary bg-primary' : 'border-border'
                     }`}>
-                      {selected ? <View className="w-1.5 h-1.5 rounded-full bg-white m-0.5" /> : null}
+                      {selected ? <View className="w-1.5 h-1.5 rounded-full bg-card m-0.5" /> : null}
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900">{ROLE_LABELS[r][lang]}</Text>
-                      <Text className="text-xs text-gray-500 mt-0.5">{ROLE_DESCRIPTIONS[r][lang]}</Text>
+                      <Text className="text-sm font-semibold text-ink">{ROLE_LABELS[r][lang]}</Text>
+                      <Text className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[r][lang]}</Text>
                     </View>
                   </Pressable>
                 );
@@ -291,7 +293,7 @@ export function TeamScreen({
             </View>
 
             {inviteError ? (
-              <View className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 mb-3">
+              <View className="bg-red-500/10 border border-red-100 rounded-xl px-3 py-2 mb-3">
                 <Text className="text-xs text-red-600">{inviteError}</Text>
               </View>
             ) : null}
@@ -328,9 +330,9 @@ export function TeamScreen({
           onPress={() => setRolePickerFor(null)}
           className="flex-1 bg-black/40 items-center justify-end web:justify-center px-6 pb-10"
         >
-          <Pressable className="bg-white rounded-2xl w-full max-w-md p-5">
-            <Text className="text-lg font-bold text-gray-900 mb-1">{t.changeRoleBtn}</Text>
-            <Text className="text-sm text-gray-500 mb-4">
+          <Pressable className="bg-card rounded-2xl w-full max-w-md p-5">
+            <Text className="text-lg font-bold text-ink mb-1">{t.changeRoleBtn}</Text>
+            <Text className="text-sm text-muted mb-4">
               {rolePickerFor?.displayName ?? rolePickerFor?.email}
             </Text>
             <View className="flex-col gap-1.5">
@@ -346,17 +348,17 @@ export function TeamScreen({
                       }
                     }}
                     className={`flex-row items-start gap-3 px-3 py-2.5 rounded-xl border ${
-                      selected ? 'border-primary bg-primary/5' : 'border-gray-100'
+                      selected ? 'border-primary bg-primary/5' : 'border-border-soft'
                     }`}
                   >
                     <View className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
-                      selected ? 'border-primary bg-primary' : 'border-gray-300'
+                      selected ? 'border-primary bg-primary' : 'border-border'
                     }`}>
-                      {selected ? <View className="w-1.5 h-1.5 rounded-full bg-white m-0.5" /> : null}
+                      {selected ? <View className="w-1.5 h-1.5 rounded-full bg-card m-0.5" /> : null}
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900">{ROLE_LABELS[r][lang]}</Text>
-                      <Text className="text-xs text-gray-500 mt-0.5">{ROLE_DESCRIPTIONS[r][lang]}</Text>
+                      <Text className="text-sm font-semibold text-ink">{ROLE_LABELS[r][lang]}</Text>
+                      <Text className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[r][lang]}</Text>
                     </View>
                   </Pressable>
                 );

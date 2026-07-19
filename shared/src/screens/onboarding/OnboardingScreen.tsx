@@ -32,6 +32,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Toggle } from '../../ui/Toggle';
@@ -94,6 +95,13 @@ export interface OnboardingScreenProps {
    * link shows at the top.
    */
   onLogout?: () => void;
+  /**
+   * Return to the app without creating a business. Shown as a "Cancel" link
+   * (instead of "Sign out") when the user already has a business and is just
+   * adding another — otherwise they'd be trapped in onboarding. Takes
+   * precedence over onLogout when both are provided.
+   */
+  onCancel?: () => void;
   /** Pending invites for the signed-in email — offered before "create". */
   pendingInvites?: OnboardingPendingInvite[];
   /** Accepts one invite; resolves to an error message or null on success. */
@@ -145,9 +153,10 @@ const US_STATES = [
 // react-native-web) and mobile (via Expo) render the same component.
 // Platform-specific concerns (Supabase, image pickers, post-finish nav)
 // are supplied by the route-level wrapper on each platform.
-export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
+  const c = useThemeColors();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -212,15 +221,17 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvite
     >
       {/* Escape hatch — sign out / use a different account. Onboarding has no
           other way back to login for a wrong-provider sign-in. */}
-      {onLogout && (
+      {(onCancel || onLogout) && (
         <View className="w-full max-w-lg flex-row justify-end mb-4">
           <Pressable
-            onPress={onLogout}
+            onPress={onCancel ?? onLogout}
             hitSlop={8}
-            className="flex-row items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-2 active:opacity-70"
+            className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 active:opacity-70"
           >
-            <LogOut size={14} color="#4B5563" />
-            <Text className="text-xs font-semibold text-gray-600">{full.common.loadError.signOut}</Text>
+            {onCancel ? <X size={14} color={c.muted} /> : <LogOut size={14} color={c.muted} />}
+            <Text className="text-xs font-semibold text-muted">
+              {onCancel ? full.common.buttons.cancel : full.common.loadError.signOut}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -228,12 +239,12 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvite
       {/* Progress bar */}
       <View className="w-full max-w-lg mb-8">
         <View className="flex-row justify-between mb-2">
-          <Text className="text-xs text-gray-400">{t.page.progressLabel}</Text>
-          <Text className="text-xs text-gray-400">
+          <Text className="text-xs text-faint">{t.page.progressLabel}</Text>
+          <Text className="text-xs text-faint">
             {progress} {t.page.progressOf} {TOTAL_STEPS}
           </Text>
         </View>
-        <View className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <View className="h-1.5 bg-border-soft rounded-full overflow-hidden">
           <View
             className="h-full bg-primary rounded-full"
             style={{ width: `${(progress / TOTAL_STEPS) * 100}%` }}
@@ -242,11 +253,11 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvite
       </View>
 
       {/* Step content */}
-      <View className="w-full max-w-lg bg-white rounded-2xl border border-gray-100 p-8">
+      <View className="w-full max-w-lg bg-card rounded-2xl border border-border-soft p-8">
         {step === 1 && (pendingInvites?.length ?? 0) > 0 ? (
           <View className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-            <Text className="text-sm font-bold text-gray-900">{t.invites.title}</Text>
-            <Text className="text-xs text-gray-500 mt-0.5 mb-3">{t.invites.body}</Text>
+            <Text className="text-sm font-bold text-ink">{t.invites.title}</Text>
+            <Text className="text-xs text-muted mt-0.5 mb-3">{t.invites.body}</Text>
             <View className="gap-2">
               {pendingInvites!.map(inv => (
                 <Pressable
@@ -262,7 +273,7 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvite
               ))}
             </View>
             {inviteError ? <Text className="text-xs text-red-500 mt-2">{inviteError}</Text> : null}
-            <Text className="text-[11px] text-gray-400 mt-3">{t.invites.orCreate}</Text>
+            <Text className="text-[11px] text-faint mt-3">{t.invites.orCreate}</Text>
           </View>
         ) : null}
         {step === 1 && (
@@ -317,7 +328,7 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, pendingInvite
 
       {/* Footer note */}
       {step < TOTAL_STEPS + 1 && (
-        <Text className="text-xs text-gray-400 mt-4 text-center">
+        <Text className="text-xs text-faint mt-4 text-center">
           {t.page.footerNote}
         </Text>
       )}
@@ -338,6 +349,7 @@ interface StepBusinessNameProps {
 function StepBusinessName({ value, onChange, onNext }: StepBusinessNameProps) {
   const { t: full } = useLang();
   const t = full.onboarding.businessName;
+  const c = useThemeColors();
   const [error, setError] = useState('');
 
   const handleNext = () => {
@@ -353,10 +365,10 @@ function StepBusinessName({ value, onChange, onNext }: StepBusinessNameProps) {
     <View className="flex-col gap-6">
       <View>
         <View className="w-12 h-12 bg-primary/10 rounded-2xl items-center justify-center mb-4">
-          <Building2 color="#4F46E5" size={24} />
+          <Building2 color={c.primary} size={24} />
         </View>
-        <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
+        <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
       <Input
@@ -391,6 +403,7 @@ interface StepServiceTypeProps {
 function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypeProps) {
   const { t: full } = useLang();
   const t = full.onboarding.serviceType;
+  const c = useThemeColors();
   const [error, setError] = useState('');
 
   const handleNext = () => {
@@ -405,8 +418,8 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
   return (
     <View className="flex-col gap-6">
       <View>
-        <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
+        <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
       <View className="flex-row flex-wrap -m-1.5">
@@ -424,14 +437,14 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
                   'flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 min-h-[92px]',
                   active
                     ? 'border-primary bg-primary/5'
-                    : 'border-gray-100',
+                    : 'border-border-soft',
                 )}
               >
-                <Icon size={22} color={active ? '#4F46E5' : '#4B5563'} />
+                <Icon size={22} color={active ? c.primary : c.muted} />
                 <Text
                   className={clsx(
                     'text-sm font-medium text-center',
-                    active ? 'text-primary' : 'text-gray-600',
+                    active ? 'text-primary' : 'text-muted',
                   )}
                 >
                   {label}
@@ -479,6 +492,7 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
   const { t: full } = useLang();
   const t = full.onboarding.location;
   const tb = full.dashboard.settings.business;
+  const c = useThemeColors();
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -503,10 +517,10 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
     <View className="flex-col gap-6">
       <View>
         <View className="w-12 h-12 bg-primary/10 rounded-2xl items-center justify-center mb-4">
-          <MapPin color="#4F46E5" size={24} />
+          <MapPin color={c.primary} size={24} />
         </View>
-        <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
+        <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
       <View className="flex-col gap-3">
@@ -528,18 +542,18 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
         {/* State picker — universal: tap to open inline list. RN has no
             native <select>, so we render a Pressable that toggles a list. */}
         <View className="flex-col gap-1.5">
-          <Text className="text-sm font-medium text-gray-700">{t.stateLabel}</Text>
+          <Text className="text-sm font-medium text-ink">{t.stateLabel}</Text>
           <Pressable
             onPress={() => setPickerOpen((o) => !o)}
-            className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5"
+            className="flex-row items-center justify-between rounded-xl border border-border bg-card px-4 py-2.5"
           >
-            <Text className={clsx('text-sm', state ? 'text-gray-900' : 'text-gray-400')}>
+            <Text className={clsx('text-sm', state ? 'text-ink' : 'text-faint')}>
               {state || t.statePlaceholder}
             </Text>
-            <ChevronDown size={16} color="#9CA3AF" />
+            <ChevronDown size={16} color={c.faint} />
           </Pressable>
           {pickerOpen && (
-            <View className="rounded-xl border border-gray-200 bg-white max-h-64 overflow-hidden">
+            <View className="rounded-xl border border-border bg-card max-h-64 overflow-hidden">
               <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
                 {US_STATES.map((s) => (
                   <Pressable
@@ -556,7 +570,7 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
                     <Text
                       className={clsx(
                         'text-sm',
-                        state === s ? 'text-primary font-medium' : 'text-gray-900',
+                        state === s ? 'text-primary font-medium' : 'text-ink',
                       )}
                     >
                       {s}
@@ -579,7 +593,7 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
       </View>
 
       {/* Optional business hours — same data as Settings → Negocio. */}
-      <View className="flex-col gap-3 border-t border-gray-100 pt-4">
+      <View className="flex-col gap-3 border-t border-border-soft pt-4">
         <Toggle
           value={hours != null}
           onValueChange={toggleHours}
@@ -592,17 +606,17 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
               const d = hours[dk];
               return (
                 <View key={dk} className="flex-row items-center py-2">
-                  <Text className="w-20 text-sm text-gray-800">{tb.days[dk]}</Text>
+                  <Text className="w-20 text-sm text-ink">{tb.days[dk]}</Text>
                   <Toggle value={d.enabled} onValueChange={(v) => setDay(dk, { enabled: v })} />
                   <View className="flex-1" />
                   {d.enabled ? (
                     <View className="flex-row items-center gap-1">
                       <DatePicker variant="ghost" mode="time" value={d.start} onChange={(v) => setDay(dk, { start: v })} />
-                      <Text className="text-gray-400">–</Text>
+                      <Text className="text-faint">–</Text>
                       <DatePicker variant="ghost" mode="time" value={d.end} onChange={(v) => setDay(dk, { end: v })} />
                     </View>
                   ) : (
-                    <Text className="text-sm text-gray-400">{tb.closedLabel}</Text>
+                    <Text className="text-sm text-faint">{tb.closedLabel}</Text>
                   )}
                 </View>
               );
@@ -644,6 +658,7 @@ interface StepLogoProps {
 function StepLogo({ logoUrl, onChange, onPickLogo, onNext, onBack }: StepLogoProps) {
   const { t: full } = useLang();
   const t = full.onboarding.logo;
+  const c = useThemeColors();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
@@ -665,17 +680,17 @@ function StepLogo({ logoUrl, onChange, onPickLogo, onNext, onBack }: StepLogoPro
     <View className="flex-col gap-6">
       <View>
         <View className="w-12 h-12 bg-primary/10 rounded-2xl items-center justify-center mb-4">
-          <ImageIcon color="#4F46E5" size={24} />
+          <ImageIcon color={c.primary} size={24} />
         </View>
-        <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
+        <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
       <Pressable
         onPress={handlePick}
         className={clsx(
           'border-2 border-dashed rounded-2xl p-8 items-center justify-center',
-          logoUrl ? 'border-accent bg-accent/5' : 'border-gray-200',
+          logoUrl ? 'border-accent bg-accent/5' : 'border-border',
         )}
       >
         {logoUrl ? (
@@ -689,16 +704,16 @@ function StepLogo({ logoUrl, onChange, onPickLogo, onNext, onBack }: StepLogoPro
               onPress={() => onChange(null)}
               className="flex-row items-center gap-1"
             >
-              <X size={12} color="#F87171" />
+              <X size={12} color={c.danger} />
               <Text className="text-xs text-red-400">{t.remove}</Text>
             </Pressable>
           </View>
         ) : (
           <View className="items-center gap-3">
-            <Upload size={28} color="#D1D5DB" />
+            <Upload size={28} color={c.faint} />
             <View className="items-center">
-              <Text className="text-sm font-medium text-gray-700">{t.uploadPrimary}</Text>
-              <Text className="text-xs text-gray-400">{t.uploadSecondary}</Text>
+              <Text className="text-sm font-medium text-ink">{t.uploadPrimary}</Text>
+              <Text className="text-xs text-faint">{t.uploadSecondary}</Text>
             </View>
           </View>
         )}
@@ -747,6 +762,7 @@ function StepFeatures({
 }: StepFeaturesProps) {
   const { t: full } = useLang();
   const t = full.onboarding.features;
+  const c = useThemeColors();
   const modules = full.dashboard.modules.list;
   const recommended = featuresForIndustry(serviceType);
 
@@ -760,13 +776,13 @@ function StepFeatures({
   return (
     <View className="flex-col gap-6">
       <View>
-        <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-1">{t.sub}</Text>
+        <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
       {recommended.length === 0 ? (
-        <View className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-5">
-          <Text className="text-sm text-gray-500 text-center">{t.fallback}</Text>
+        <View className="bg-surface border border-border-soft rounded-2xl px-4 py-5">
+          <Text className="text-sm text-muted text-center">{t.fallback}</Text>
         </View>
       ) : (
         <View className="flex-col gap-3">
@@ -780,32 +796,32 @@ function StepFeatures({
                 onPress={() => toggle(id)}
                 className={clsx(
                   'flex-row gap-4 p-4 rounded-2xl border-2',
-                  active ? 'border-primary bg-primary/5' : 'border-gray-100',
+                  active ? 'border-primary bg-primary/5' : 'border-border-soft',
                 )}
               >
                 <View
                   className={clsx(
                     'w-10 h-10 rounded-xl items-center justify-center',
-                    active ? 'bg-primary' : 'bg-gray-100',
+                    active ? 'bg-primary' : 'bg-border-soft',
                   )}
                 >
                   {active ? (
                     <Check size={18} color="#FFFFFF" />
                   ) : (
-                    <Icon size={18} color="#6B7280" />
+                    <Icon size={18} color={c.muted} />
                   )}
                 </View>
                 <View className="flex-1">
                   <Text
                     className={clsx(
                       'font-semibold text-sm',
-                      active ? 'text-primary' : 'text-gray-800',
+                      active ? 'text-primary' : 'text-ink',
                     )}
                   >
                     {m?.name}
                   </Text>
-                  <Text className="text-xs text-gray-500 mt-0.5">{m?.description}</Text>
-                  <Text className="text-xs text-gray-400 mt-1 italic">{t.note}</Text>
+                  <Text className="text-xs text-muted mt-0.5">{m?.description}</Text>
+                  <Text className="text-xs text-faint mt-1 italic">{t.note}</Text>
                 </View>
               </Pressable>
             );
@@ -814,7 +830,7 @@ function StepFeatures({
       )}
 
       {error ? (
-        <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+        <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3">
           <Text className="text-red-600 text-sm">{error}</Text>
         </View>
       ) : null}
@@ -842,6 +858,7 @@ function StepFeatures({
 function StepComplete() {
   const { t: full } = useLang();
   const t = full.onboarding.complete;
+  const c = useThemeColors();
 
   // The route wrapper handles the actual post-finish navigation (it knows
   // about the platform router). We just render the success state here.
@@ -850,10 +867,10 @@ function StepComplete() {
   return (
     <View className="items-center gap-4 py-6">
       <View className="w-16 h-16 bg-accent/10 rounded-full items-center justify-center">
-        <CheckCircle2 color="#10B981" size={36} />
+        <CheckCircle2 color={c.success} size={36} />
       </View>
-      <Text className="text-xl font-bold text-gray-900">{t.heading}</Text>
-      <Text className="text-sm text-gray-500 text-center">{t.sub}</Text>
+      <Text className="text-xl font-bold text-ink">{t.heading}</Text>
+      <Text className="text-sm text-muted text-center">{t.sub}</Text>
       <View className="flex-row gap-1 mt-2">
         {[0, 1, 2].map((i) => (
           <View key={i} className="w-2 h-2 rounded-full bg-primary" />

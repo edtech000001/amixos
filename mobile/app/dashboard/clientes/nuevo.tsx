@@ -16,6 +16,7 @@ import { ChevronLeft, Building2, Phone, Mail, MapPin } from 'lucide-react-native
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { SelectOption } from '@amixos/shared/ui';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
@@ -63,8 +64,8 @@ const fmtPhoneInput = (raw: string): string => {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View className="mb-5">
-      <Text className="text-xs font-semibold text-gray-400 uppercase mb-3 px-1">{title}</Text>
-      <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-3">{children}</View>
+      <Text className="text-xs font-semibold text-faint uppercase mb-3 px-1">{title}</Text>
+      <View className="bg-card rounded-2xl border border-border-soft p-4 gap-3">{children}</View>
     </View>
   );
 }
@@ -76,6 +77,7 @@ export default function NuevoClienteRoute() {
   const { business } = useApp();
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.clients;
   const tc = full.common;
 
@@ -203,14 +205,14 @@ export default function NuevoClienteRoute() {
       // Long free text — multiline, grows with content.
       return (
         <View key={tpl.field_key}>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
           <TextInput
             value={value}
             onChangeText={setVal}
             multiline
             numberOfLines={4}
-            placeholderTextColor="#9CA3AF"
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+            placeholderTextColor={c.faint}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
             style={{ textAlignVertical: 'top' }}
           />
         </View>
@@ -223,7 +225,7 @@ export default function NuevoClienteRoute() {
         const selected = splitMultiValue(value);
         return (
           <View key={tpl.field_key}>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+            <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
             <View className="flex-row flex-wrap gap-2">
               {tpl.field_options.map(o => {
                 const on = selected.includes(o);
@@ -231,9 +233,9 @@ export default function NuevoClienteRoute() {
                   <Pressable
                     key={o}
                     onPress={() => setVal(toggleMultiOption(value, o))}
-                    className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                    className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                   >
-                    <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                    <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-muted'}`}>{o}</Text>
                   </Pressable>
                 );
               })}
@@ -259,21 +261,21 @@ export default function NuevoClienteRoute() {
       const noActive = value === 'false';
       return (
         <View key={tpl.field_key}>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
           <View className="flex-row gap-2">
             <Pressable
               onPress={() => setVal(yesActive ? '' : 'true')}
-              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
             >
-              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>
                 {tc.states.yes}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setVal(noActive ? '' : 'false')}
-              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
             >
-              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>
                 {tc.states.no}
               </Text>
             </Pressable>
@@ -342,7 +344,7 @@ export default function NuevoClienteRoute() {
             placeholder={t.fields.placeholders.company}
             value={company}
             onChangeText={setCompany}
-            leftIcon={<Building2 size={15} color="#9CA3AF" />}
+            leftIcon={<Building2 size={15} color={c.faint} />}
           />
         );
       case 'phone_cell':
@@ -354,7 +356,7 @@ export default function NuevoClienteRoute() {
             value={fmtPhoneInput(phoneCell)}
             onChangeText={v => setPhoneCell(fmtPhoneInput(v))}
             keyboardType="phone-pad"
-            leftIcon={<Phone size={15} color="#9CA3AF" />}
+            leftIcon={<Phone size={15} color={c.faint} />}
           />
         );
       case 'phone_office':
@@ -366,7 +368,7 @@ export default function NuevoClienteRoute() {
             value={fmtPhoneInput(phoneOffice)}
             onChangeText={v => setPhoneOffice(fmtPhoneInput(v))}
             keyboardType="phone-pad"
-            leftIcon={<Phone size={15} color="#9CA3AF" />}
+            leftIcon={<Phone size={15} color={c.faint} />}
           />
         );
       case 'email_office':
@@ -379,7 +381,7 @@ export default function NuevoClienteRoute() {
             onChangeText={setEmailOffice}
             keyboardType="email-address"
             autoCapitalize="none"
-            leftIcon={<Mail size={15} color="#9CA3AF" />}
+            leftIcon={<Mail size={15} color={c.faint} />}
           />
         );
       case 'email_home':
@@ -392,7 +394,7 @@ export default function NuevoClienteRoute() {
             onChangeText={setEmailHome}
             keyboardType="email-address"
             autoCapitalize="none"
-            leftIcon={<Mail size={15} color="#9CA3AF" />}
+            leftIcon={<Mail size={15} color={c.faint} />}
           />
         );
       case 'address':
@@ -403,7 +405,7 @@ export default function NuevoClienteRoute() {
               placeholder={t.fields.placeholders.address}
               value={address}
               onChangeText={setAddress}
-              leftIcon={<MapPin size={15} color="#9CA3AF" />}
+              leftIcon={<MapPin size={15} color={c.faint} />}
             />
             <Input
               label={t.fields.addressLine2}
@@ -447,15 +449,15 @@ export default function NuevoClienteRoute() {
         );
       case 'notes':
         return (
-          <View key={key} className="rounded-xl border border-gray-200 bg-white px-4 py-1">
+          <View key={key} className="rounded-xl border border-border bg-card px-4 py-1">
             <TextInput
               multiline
               numberOfLines={3}
               placeholder={t.fields.placeholders.notes}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               value={notes}
               onChangeText={setNotes}
-              className="text-sm text-gray-900 py-2"
+              className="text-sm text-ink py-2"
               style={{ textAlignVertical: 'top', minHeight: 60 }}
             />
           </View>
@@ -608,7 +610,7 @@ export default function NuevoClienteRoute() {
   if (loadingEdit) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -618,12 +620,12 @@ export default function NuevoClienteRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-2 flex-1">
-          <Text className="text-lg font-bold text-gray-900">{heading}</Text>
+          <Text className="text-lg font-bold text-ink">{heading}</Text>
         </View>
       </View>
 
@@ -639,7 +641,7 @@ export default function NuevoClienteRoute() {
 
           {priceTiers.length > 0 ? (
             <View className="mb-3">
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{full.dashboard.settings.priceSheet.clientTierLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{full.dashboard.settings.priceSheet.clientTierLabel}</Text>
               <Select
                 value={priceTierId}
                 onValueChange={setPriceTierId}

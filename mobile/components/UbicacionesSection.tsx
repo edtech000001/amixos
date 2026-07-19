@@ -4,6 +4,7 @@ import { MapPin, Plus, Trash2 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createLocation, updateLocation, archiveLocation } from '@amixos/shared/lib/locations';
 
 // Ajustes → Ubicaciones (mobile). Branch CRUD only — each worker's home branch
@@ -13,6 +14,7 @@ export function UbicacionesSection() {
   const supabase = createSupabaseClient();
   const { business, locations, refetchLocations } = useApp();
   const { locale } = useLang();
+  const c = useThemeColors();
   const es = locale !== 'en';
 
   const [newName, setNewName] = useState('');
@@ -53,25 +55,25 @@ export function UbicacionesSection() {
 
   return (
     <View className="gap-5 px-1">
-      <Text className="text-sm text-gray-500">
+      <Text className="text-sm text-muted">
         {es
           ? 'Crea sucursales para separar trabajos, equipo e inventario por ubicación. Los reportes siguen mostrando el total combinado. La sucursal de cada empleado se define en su perfil.'
           : 'Create branches to split jobs, team and inventory by location. Reports still show the combined total. Each employee’s branch is set on their profile.'}
       </Text>
 
-      <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-2">
-        <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{es ? 'Sucursales' : 'Branches'}</Text>
+      <View className="bg-card rounded-2xl border border-border-soft p-4 gap-2">
+        <Text className="text-xs font-semibold text-faint uppercase mb-1">{es ? 'Sucursales' : 'Branches'}</Text>
         {locations.length === 0 ? (
-          <Text className="text-sm text-gray-400 py-2">{es ? 'Aún no tienes ubicaciones.' : 'No locations yet.'}</Text>
+          <Text className="text-sm text-faint py-2">{es ? 'Aún no tienes ubicaciones.' : 'No locations yet.'}</Text>
         ) : null}
         {locations.map((l) => (
-          <View key={l.id} className="flex-row items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5">
-            <MapPin size={16} color="#9CA3AF" />
+          <View key={l.id} className="flex-row items-center gap-3 rounded-xl border border-border-soft px-3 py-2.5">
+            <MapPin size={16} color={c.faint} />
             <Pressable className="flex-1" onPress={() => rename(l.id, l.name)}>
-              <Text className="text-sm font-medium text-gray-900">{l.name}</Text>
+              <Text className="text-sm font-medium text-ink">{l.name}</Text>
             </Pressable>
             <Pressable onPress={() => remove(l.id)} hitSlop={8}>
-              <Trash2 size={16} color="#D1D5DB" />
+              <Trash2 size={16} color={c.faint} />
             </Pressable>
           </View>
         ))}
@@ -80,8 +82,8 @@ export function UbicacionesSection() {
           <TextInput
             value={newName} onChangeText={setNewName}
             placeholder={es ? 'Nombre (ej. Lexington)' : 'Name (e.g. Lexington)'}
-            placeholderTextColor="#9CA3AF"
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900"
+            placeholderTextColor={c.faint}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-ink"
           />
           {/* Always rendered (faded when empty/busy) so the row keeps a stable
               shape and the name field doesn't look orphaned at half width. */}

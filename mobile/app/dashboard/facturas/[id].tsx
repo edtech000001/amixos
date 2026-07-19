@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import {
@@ -97,6 +98,7 @@ export default function FacturaDetailRoute() {
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const { confirm, confirmSheet } = useConfirmSheet();
@@ -676,7 +678,7 @@ export default function FacturaDetailRoute() {
     const url = `${base}/factura/${token}`;
     // Business's custom templates (Ajustes → Facturas → Email) win; blank
     // falls back to the localized default. {{tokens}} substituted here.
-    const c = invoice.clients[0];
+    const cl = invoice.clients[0];
     const { subject, body } = renderInvoiceEmail({
       subjectTemplate: business?.invoice_email_subject,
       bodyTemplate: business?.invoice_email_body,
@@ -685,10 +687,10 @@ export default function FacturaDetailRoute() {
       vars: {
         number: invoice.invoiceNumber,
         link: url,
-        client: c ? `${c.firstName} ${c.lastName}`.trim() : '',
-        firstName: c?.firstName ?? '',
-        lastName: c?.lastName ?? '',
-        company: c?.company ?? '',
+        client: cl ? `${cl.firstName} ${cl.lastName}`.trim() : '',
+        firstName: cl?.firstName ?? '',
+        lastName: cl?.lastName ?? '',
+        company: cl?.company ?? '',
         business: business?.name ?? '',
         total: `$${invoice.totalAmount.toFixed(2)}`,
         dueDate: invoice.dueDate ?? '',
@@ -793,19 +795,19 @@ export default function FacturaDetailRoute() {
       {/* Move-to-another-invoice picker */}
       <RNModal visible={moveJobId !== null} transparent animationType="fade" onRequestClose={() => setMoveJobId(null)}>
         <Pressable onPress={() => setMoveJobId(null)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900">{jobsT.moveTitle}</Text>
+              <Text className="text-lg font-bold text-ink">{jobsT.moveTitle}</Text>
               <Pressable onPress={() => setMoveJobId(null)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             {moveTargets.length === 0 ? (
-              <Text className="text-sm text-gray-400 pb-4">{jobsT.moveEmpty}</Text>
+              <Text className="text-sm text-faint pb-4">{jobsT.moveEmpty}</Text>
             ) : (
               moveTargets.map(inv => (
-                <Pressable key={inv.id} onPress={() => doMove(inv.id)} disabled={jobBusy} className="py-3 border-b border-gray-50">
-                  <Text className="text-sm font-mono text-gray-700">{inv.invoice_number}</Text>
+                <Pressable key={inv.id} onPress={() => doMove(inv.id)} disabled={jobBusy} className="py-3 border-b border-border-soft">
+                  <Text className="text-sm font-mono text-ink">{inv.invoice_number}</Text>
                 </Pressable>
               ))
             )}
@@ -817,22 +819,22 @@ export default function FacturaDetailRoute() {
       <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setAddOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900">{jobsT.addTitle}</Text>
+              <Text className="text-lg font-bold text-ink">{jobsT.addTitle}</Text>
               <Pressable onPress={() => setAddOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
 
             {/* Manual line item */}
-            <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{jobsT.manualHeading}</Text>
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{jobsT.manualHeading}</Text>
             <TextInput
               value={manualDesc}
               onChangeText={setManualDesc}
               placeholder={jobsT.manualDescPlaceholder}
-              placeholderTextColor="#9CA3AF"
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 mb-2"
+              placeholderTextColor={c.faint}
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-2"
             />
             <View className="flex-row gap-2 mb-4">
               <TextInput
@@ -840,34 +842,34 @@ export default function FacturaDetailRoute() {
                 onChangeText={v => setManualQty(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
-                placeholderTextColor="#9CA3AF"
-                className="w-20 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center text-gray-900"
+                placeholderTextColor={c.faint}
+                className="w-20 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
               />
               <Pressable
                 onPress={() => setManualRate(toggleSign(manualRate))}
                 className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
-                  manualRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                  manualRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-card border-border'
                 }`}
               >
-                <Text className={`text-base font-bold ${manualRate.startsWith('-') ? 'text-white' : 'text-gray-600'}`}>±</Text>
+                <Text className={`text-base font-bold ${manualRate.startsWith('-') ? 'text-white' : 'text-muted'}`}>±</Text>
               </Pressable>
               <View className="flex-1 relative justify-center">
-                <Text className="absolute left-3 z-10 text-gray-400">$</Text>
+                <Text className="absolute left-3 z-10 text-faint">$</Text>
                 <TextInput
                   value={manualRate}
                   onChangeText={v => setManualRate(cleanAmount(v))}
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
-                  placeholderTextColor="#9CA3AF"
-                  className="bg-white border border-gray-200 rounded-xl pl-6 pr-3 py-2.5 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
                 />
               </View>
             </View>
 
             {/* Completed jobs */}
-            <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{jobsT.jobsHeading}</Text>
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{jobsT.jobsHeading}</Text>
             {addCandidates.length === 0 ? (
-              <Text className="text-sm text-gray-400 pb-2">{jobsT.addEmpty}</Text>
+              <Text className="text-sm text-faint pb-2">{jobsT.addEmpty}</Text>
             ) : (
               <ScrollView style={{ maxHeight: 280 }}>
                 {addCandidates.map(j => {
@@ -878,13 +880,13 @@ export default function FacturaDetailRoute() {
                       onPress={() => setAddPicked(prev => { const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n; })}
                       className={`flex-row items-center gap-3 px-2 py-3 rounded-xl ${picked ? 'bg-primary/10' : ''}`}
                     >
-                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-border'}`}>
                         {picked ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
                       </View>
                       <View className="flex-1">
-                        <Text className="text-sm text-gray-800" numberOfLines={1}>{j.title}</Text>
+                        <Text className="text-sm text-ink" numberOfLines={1}>{j.title}</Text>
                         {j.scheduled_date ? (
-                          <Text className="text-xs text-gray-400 mt-0.5">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</Text>
+                          <Text className="text-xs text-faint mt-0.5">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</Text>
                         ) : null}
                       </View>
                     </Pressable>
@@ -904,19 +906,19 @@ export default function FacturaDetailRoute() {
       <RNModal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setEditOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900">{jobsT.editItemTitle}</Text>
+              <Text className="text-lg font-bold text-ink">{jobsT.editItemTitle}</Text>
               <Pressable onPress={() => setEditOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <TextInput
               value={editDesc}
               onChangeText={setEditDesc}
               placeholder={jobsT.manualDescPlaceholder}
-              placeholderTextColor="#9CA3AF"
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 mb-2"
+              placeholderTextColor={c.faint}
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-2"
             />
             <View className="flex-row gap-2 mb-4">
               <TextInput
@@ -924,26 +926,26 @@ export default function FacturaDetailRoute() {
                 onChangeText={v => setEditQty(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
-                placeholderTextColor="#9CA3AF"
-                className="w-20 bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center text-gray-900"
+                placeholderTextColor={c.faint}
+                className="w-20 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
               />
               <Pressable
                 onPress={() => setEditRate(toggleSign(editRate))}
                 className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
-                  editRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                  editRate.startsWith('-') ? 'bg-primary border-primary' : 'bg-card border-border'
                 }`}
               >
-                <Text className={`text-base font-bold ${editRate.startsWith('-') ? 'text-white' : 'text-gray-600'}`}>±</Text>
+                <Text className={`text-base font-bold ${editRate.startsWith('-') ? 'text-white' : 'text-muted'}`}>±</Text>
               </Pressable>
               <View className="flex-1 relative justify-center">
-                <Text className="absolute left-3 z-10 text-gray-400">$</Text>
+                <Text className="absolute left-3 z-10 text-faint">$</Text>
                 <TextInput
                   value={editRate}
                   onChangeText={v => setEditRate(cleanAmount(v))}
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
-                  placeholderTextColor="#9CA3AF"
-                  className="bg-white border border-gray-200 rounded-xl pl-6 pr-3 py-2.5 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
                 />
               </View>
             </View>
@@ -959,23 +961,23 @@ export default function FacturaDetailRoute() {
       <RNModal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <Pressable onPress={() => setPayOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
+              <Text className="text-lg font-bold text-ink">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
               <Pressable onPress={() => setPayOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
 
-            <Text className="text-sm font-semibold text-gray-700 mb-1.5">{tInv.payments.amountLabel}</Text>
+            <Text className="text-sm font-semibold text-ink mb-1.5">{tInv.payments.amountLabel}</Text>
             <View className="relative justify-center mb-1">
-              <Text className="absolute left-3 z-10 text-gray-400">$</Text>
+              <Text className="absolute left-3 z-10 text-faint">$</Text>
               <TextInput
                 value={payAmount}
                 onChangeText={v => setPayAmount(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
-                placeholderTextColor="#9CA3AF"
-                className="bg-white border border-gray-200 rounded-xl pl-6 pr-32 py-2.5 text-sm text-gray-900"
+                placeholderTextColor={c.faint}
+                className="bg-card border border-border rounded-xl pl-6 pr-32 py-2.5 text-sm text-ink"
               />
               <Pressable
                 onPress={() => {
@@ -983,7 +985,7 @@ export default function FacturaDetailRoute() {
                   const remaining = Math.max(0, invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0));
                   setPayAmount(String(Math.round(remaining * 100) / 100));
                 }}
-                className="absolute right-2 rounded-full bg-indigo-50 px-2.5 py-1 active:bg-indigo-100"
+                className="absolute right-2 rounded-full bg-indigo-500/10 px-2.5 py-1 active:bg-indigo-100"
               >
                 <Text className="text-xs font-semibold text-indigo-600">{tInv.payments.fullAmountBtn}</Text>
               </Pressable>
@@ -1005,8 +1007,8 @@ export default function FacturaDetailRoute() {
                 value={payMethodOther}
                 onChangeText={setPayMethodOther}
                 placeholder={tInv.payments.otherPlaceholder}
-                placeholderTextColor="#9CA3AF"
-                className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 mb-3"
+                placeholderTextColor={c.faint}
+                className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-3"
               />
             ) : null}
 

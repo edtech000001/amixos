@@ -35,6 +35,7 @@ import {
   ImagePlus,
   Camera,
 } from 'lucide-react-native';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
 import { isOnlineNow } from '@/lib/offline/network';
@@ -138,6 +139,7 @@ export default function NuevoTrabajoRoute() {
   const insets = useSafeAreaInsets();
   const { edit, duplicate, modo, client: clientParam, copy } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string }>();
   const supabase = createSupabaseClient();
+  const c = useThemeColors();
   const { business, user, currentRole, activeLocationId, locations } = useApp();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
   // insert and they have no clients to pick). The entry points are hidden, but
@@ -610,20 +612,20 @@ export default function NuevoTrabajoRoute() {
       return (
         <Fragment key={k}>
           <View className="flex flex-col gap-2 mt-3">
-            <Text className="text-sm font-semibold text-gray-700">{jrl('client_id', t.clientLabel)}</Text>
+            <Text className="text-sm font-semibold text-ink">{jrl('client_id', t.clientLabel)}</Text>
             <Pressable
               onPress={() => setClientPickerOpen(true)}
-              className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+              className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
             >
               {selectedClient ? (
-                <Text className="text-base text-gray-900 flex-1" numberOfLines={1}>
+                <Text className="text-base text-ink flex-1" numberOfLines={1}>
                   {(() => {
                     const d = clientPickerDisplay(selectedClient);
                     return d.sub ? `${d.top} · ${d.sub}` : d.top;
                   })()}
                 </Text>
               ) : (
-                <Text className="text-base text-gray-400 flex-1">{t.clientPlaceholder}</Text>
+                <Text className="text-base text-faint flex-1">{t.clientPlaceholder}</Text>
               )}
               {clientId ? (
                 <Pressable
@@ -631,10 +633,10 @@ export default function NuevoTrabajoRoute() {
                   hitSlop={8}
                   className="mr-2 p-1 rounded-lg"
                 >
-                  <X size={14} color="#9CA3AF" />
+                  <X size={14} color={c.faint} />
                 </Pressable>
               ) : null}
-              <ChevronDown size={16} color="#9CA3AF" />
+              <ChevronDown size={16} color={c.faint} />
             </Pressable>
           </View>
 
@@ -642,7 +644,7 @@ export default function NuevoTrabajoRoute() {
              crew: their job auto-uses their own branch. */}
           {locations.length >= 2 && !restrictedCreator ? (
             <View className="flex flex-col gap-2 mt-3">
-              <Text className="text-sm font-semibold text-gray-700">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
+              <Text className="text-sm font-semibold text-ink">{locale === 'es' ? 'Ubicación' : 'Location'}</Text>
               <View className="flex-row flex-wrap gap-2">
                 {[{ id: '', name: locale === 'es' ? 'Sin ubicación' : 'No location' }, ...locations].map((l) => {
                   const selected = locationId === l.id;
@@ -650,9 +652,9 @@ export default function NuevoTrabajoRoute() {
                     <Pressable
                       key={l.id || 'none'}
                       onPress={() => setLocationId(l.id)}
-                      className={`rounded-full border px-4 py-2 ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                      className={`rounded-full border px-4 py-2 ${selected ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                     >
-                      <Text className={`text-sm font-medium ${selected ? 'text-primary' : 'text-gray-600'}`}>{l.name}</Text>
+                      <Text className={`text-sm font-medium ${selected ? 'text-primary' : 'text-muted'}`}>{l.name}</Text>
                     </Pressable>
                   );
                 })}
@@ -683,7 +685,7 @@ export default function NuevoTrabajoRoute() {
               </View>
               {totalTimeText ? (
                 <View className="flex-row justify-end items-baseline gap-1.5">
-                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                  <Text className="text-xs text-muted">{t.totalTimeLabel}:</Text>
                   <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
                 </View>
               ) : null}
@@ -709,9 +711,9 @@ export default function NuevoTrabajoRoute() {
                   />
                 ) : (
                   <>
-                    <Text className="text-sm font-medium text-gray-700 mb-1.5">{t.statusLabel}</Text>
-                    <View className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                      <Text className="text-sm text-gray-500">{(tStatuses as Record<string, string>)[loadedStatus] ?? loadedStatus}</Text>
+                    <Text className="text-sm font-medium text-ink mb-1.5">{t.statusLabel}</Text>
+                    <View className="rounded-xl border border-border bg-surface px-4 py-3">
+                      <Text className="text-sm text-muted">{(tStatuses as Record<string, string>)[loadedStatus] ?? loadedStatus}</Text>
                     </View>
                   </>
                 )}
@@ -740,15 +742,15 @@ export default function NuevoTrabajoRoute() {
       if (fHidden('description')) return null;
       return (
         <View key={k} className="flex flex-col gap-2 mt-3">
-          <Text className="text-sm font-semibold text-gray-700">{jrl('description', t.descriptionLabel)}</Text>
+          <Text className="text-sm font-semibold text-ink">{jrl('description', t.descriptionLabel)}</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder={t.descriptionPlaceholder}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.faint}
             multiline
             numberOfLines={3}
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
             style={{ textAlignVertical: 'top' }}
           />
         </View>
@@ -767,9 +769,9 @@ export default function NuevoTrabajoRoute() {
             className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/5 py-3"
           >
             {gettingLocation ? (
-              <ActivityIndicator size="small" color="#4F46E5" />
+              <ActivityIndicator size="small" color={c.primary} />
             ) : (
-              <Navigation size={15} color="#4F46E5" />
+              <Navigation size={15} color={c.primary} />
             )}
             <Text className="text-sm font-semibold text-primary">
               {gettingLocation ? t.gettingLocation : t.useMyLocation}
@@ -779,18 +781,18 @@ export default function NuevoTrabajoRoute() {
           {/* Map link paste — auto-fills address/city/state */}
           <View className="flex flex-col gap-2 mt-3">
             <View className="flex-row items-center gap-1.5">
-              <Link2 size={13} color="#9CA3AF" />
-              <Text className="text-sm font-semibold text-gray-700">{jrl('coordinates', t.mapLinkLabel)}</Text>
+              <Link2 size={13} color={c.faint} />
+              <Text className="text-sm font-semibold text-ink">{jrl('coordinates', t.mapLinkLabel)}</Text>
             </View>
             <TextInput
               value={mapLink}
               onChangeText={parseMapLink}
               placeholder={t.mapLinkPlaceholder}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
+              className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
             />
             {mapLinkUnrecognized ? (
               <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
@@ -800,19 +802,19 @@ export default function NuevoTrabajoRoute() {
           {/* Coordinates — lat, lng */}
           <View className="flex flex-col gap-2 mt-3">
             <View className="flex-row items-center gap-1.5">
-              <Navigation size={13} color="#9CA3AF" />
-              <Text className="text-sm font-semibold text-gray-700">{t.coordinatesLabel}</Text>
+              <Navigation size={13} color={c.faint} />
+              <Text className="text-sm font-semibold text-ink">{t.coordinatesLabel}</Text>
             </View>
             <TextInput
               value={coordsText}
               onChangeText={onCoordsChange}
               placeholder={t.coordinatesPlaceholder}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numbers-and-punctuation"
-              className={`rounded-2xl border bg-white px-4 py-3 text-base text-gray-900 ${
-                coordsInvalid ? 'border-red-300' : 'border-gray-200'
+              className={`rounded-2xl border bg-card px-4 py-3 text-base text-ink ${
+                coordsInvalid ? 'border-red-300' : 'border-border'
               }`}
             />
             {coordsInvalid ? (
@@ -895,7 +897,7 @@ export default function NuevoTrabajoRoute() {
       return (
         <Fragment key={k}>
           <View className="mt-4 flex-row items-center justify-between">
-            <Text className="text-sm font-medium text-gray-700">{t.allDayLabel}</Text>
+            <Text className="text-sm font-medium text-ink">{t.allDayLabel}</Text>
             <Toggle value={allDay} onValueChange={setAllDay} />
           </View>
           {!allDay ? (
@@ -927,13 +929,13 @@ export default function NuevoTrabajoRoute() {
       if (fHidden('total_hours')) return null;
       return (
         <View key={k} className="mt-3">
-          <Text className="text-sm font-medium text-gray-700 mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
+          <Text className="text-sm font-medium text-ink mb-2">{jrl('total_hours', t.totalHoursLabel)}</Text>
           {bothTimesSet ? (
-            <View className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 flex-row items-center justify-between">
-              <Text className="text-base text-gray-500">
+            <View className="rounded-2xl border border-border bg-border-soft px-4 py-3.5 flex-row items-center justify-between">
+              <Text className="text-base text-muted">
                 {computedHours != null ? `${computedHours} h` : '—'}
               </Text>
-              <Text className="text-xs text-gray-400">{t.totalHoursAutoHint}</Text>
+              <Text className="text-xs text-faint">{t.totalHoursAutoHint}</Text>
             </View>
           ) : (
             <Input
@@ -943,7 +945,7 @@ export default function NuevoTrabajoRoute() {
               placeholder="0"
             />
           )}
-          <Text className="text-xs text-gray-400 mt-1.5">{t.totalHoursHint}</Text>
+          <Text className="text-xs text-faint mt-1.5">{t.totalHoursHint}</Text>
         </View>
       );
     }
@@ -959,7 +961,7 @@ export default function NuevoTrabajoRoute() {
                 onPress={() => setCrewFinderOpen(true)}
                 className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
               >
-                <Navigation size={15} color="#4F46E5" />
+                <Navigation size={15} color={c.primary} />
                 <Text className="text-sm font-semibold text-primary">{full.dashboard.crewFinder.openButton}</Text>
               </Pressable>
               ) : null}
@@ -967,15 +969,15 @@ export default function NuevoTrabajoRoute() {
                  field creators: the person logging the job IS the lead. */}
               {business?.job_crew_mode !== false && !restrictedCreator ? (
                 <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.leadLabel}</Text>
+                  <Text className="text-sm font-semibold text-ink mb-2">{t.leadLabel}</Text>
                   <Pressable
                     onPress={() => { setLeadSearch(''); setLeadPickerOpen(true); }}
-                    className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                    className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
                   >
-                    <Text className={`text-base flex-1 ${leadEmployee ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                    <Text className={`text-base flex-1 ${leadEmployee ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                       {leadEmployee ? `${leadEmployee.first_name} ${leadEmployee.last_name}` : t.leadNone}
                     </Text>
-                    <ChevronDown size={16} color="#9CA3AF" />
+                    <ChevronDown size={16} color={c.faint} />
                   </Pressable>
                 </View>
               ) : null}
@@ -984,18 +986,18 @@ export default function NuevoTrabajoRoute() {
                  picker above and excluded here. */}
               <View className="mb-3">
                 {business?.job_crew_mode !== false ? (
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.crewLabel}</Text>
+                  <Text className="text-sm font-semibold text-ink mb-2">{t.crewLabel}</Text>
                 ) : null}
                 <Pressable
                   onPress={() => { setCrewSearch(''); setCrewPickerOpen(true); }}
-                  className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                  className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
                 >
-                  <Text className={`text-base flex-1 ${assignedEmployees.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                  <Text className={`text-base flex-1 ${assignedEmployees.length > 0 ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                     {assignedEmployees.length > 0
                       ? t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))
                       : t.crewPlaceholder}
                   </Text>
-                  <ChevronDown size={16} color="#9CA3AF" />
+                  <ChevronDown size={16} color={c.faint} />
                 </Pressable>
                 {assignedEmployees.length > 0 ? (
                   <View className="flex-row flex-wrap gap-2 mt-2">
@@ -1010,7 +1012,7 @@ export default function NuevoTrabajoRoute() {
                           <Text className="text-xs font-medium text-primary">
                             {emp.first_name} {emp.last_name}
                           </Text>
-                          <X size={12} color="#4F46E5" />
+                          <X size={12} color={c.primary} />
                         </Pressable>
                       ))}
                   </View>
@@ -1023,17 +1025,17 @@ export default function NuevoTrabajoRoute() {
               credited driverHours on top of the job's total hours. */}
           {employees.length > 0 ? (
             <View className="mt-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverLabel}</Text>
+              <Text className="text-sm font-semibold text-ink mb-2">{t.driverLabel}</Text>
               <Pressable
                 onPress={() => { setDriverSearch(''); setDriverPickerOpen(true); }}
-                className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
               >
-                <Text className={`text-base flex-1 ${driverEmployeeIds.length > 0 ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                <Text className={`text-base flex-1 ${driverEmployeeIds.length > 0 ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                   {driverEmployeeIds.length > 0
                     ? t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))
                     : t.driverNone}
                 </Text>
-                <ChevronDown size={16} color="#9CA3AF" />
+                <ChevronDown size={16} color={c.faint} />
               </Pressable>
               {driverEmployeeIds.length > 0 ? (
                 <View className="flex-row flex-wrap gap-2 mt-2">
@@ -1048,21 +1050,21 @@ export default function NuevoTrabajoRoute() {
                         <Text className="text-xs font-medium text-primary">
                           {emp.first_name} {emp.last_name}
                         </Text>
-                        <X size={12} color="#4F46E5" />
+                        <X size={12} color={c.primary} />
                       </Pressable>
                     ))}
                 </View>
               ) : null}
               {driverEmployeeIds.length > 0 ? (
                 <View className="mt-3">
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.driverHoursLabel}</Text>
+                  <Text className="text-sm font-semibold text-ink mb-2">{t.driverHoursLabel}</Text>
                   <Input
                     value={driverHours}
                     onChangeText={(v) => setDriverHours(v.replace(/[^0-9.]/g, ''))}
                     keyboardType="decimal-pad"
                     placeholder="0"
                   />
-                  <Text className="text-xs text-gray-400 mt-1.5">{t.driverHoursHint}</Text>
+                  <Text className="text-xs text-faint mt-1.5">{t.driverHoursHint}</Text>
                 </View>
               ) : null}
             </View>
@@ -1076,17 +1078,17 @@ export default function NuevoTrabajoRoute() {
       if (!isProposal && fHidden('internal_notes')) return null;
       return (
         <View key={k} className="mt-3">
-          <Text className="text-sm font-semibold text-gray-700 mb-2">
+          <Text className="text-sm font-semibold text-ink mb-2">
             {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
           </Text>
           <TextInput
             value={internalNotes}
             onChangeText={setInternalNotes}
             placeholder={isProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.faint}
             multiline
             numberOfLines={4}
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[100px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[100px]"
             style={{ textAlignVertical: 'top' }}
           />
         </View>
@@ -1096,17 +1098,17 @@ export default function NuevoTrabajoRoute() {
       if (isProposal || fHidden('worker_notes')) return null;
       return (
         <View key={k} className="mt-4">
-          <Text className="text-sm font-semibold text-gray-700 mb-2">
+          <Text className="text-sm font-semibold text-ink mb-2">
             {t.workerNoteLabel}
           </Text>
           <TextInput
             value={workerNotes}
             onChangeText={setWorkerNotes}
             placeholder={t.workerNotePlaceholder}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.faint}
             multiline
             numberOfLines={3}
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
             style={{ textAlignVertical: 'top' }}
           />
         </View>
@@ -1641,7 +1643,7 @@ export default function NuevoTrabajoRoute() {
   if (loadingEdit) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -1683,17 +1685,17 @@ export default function NuevoTrabajoRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={confirmBack}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-2 flex-1">
-          <Text className="text-lg font-bold text-gray-900">{heading}</Text>
-          <Text className="text-xs text-gray-400">{subtitle}</Text>
+          <Text className="text-lg font-bold text-ink">{heading}</Text>
+          <Text className="text-xs text-faint">{subtitle}</Text>
         </View>
       </View>
 
@@ -1722,7 +1724,7 @@ export default function NuevoTrabajoRoute() {
           {/* Location — shown for jobs AND estimates (the work has a place even
              at quote time). Save already persists it for both modes. */}
           {(secVisible('location') || customFieldsFor('location').length > 0) && (
-            <Section title={t.locationHeading} icon={<MapPin size={14} color="#4F46E5" />}>
+            <Section title={t.locationHeading} icon={<MapPin size={14} color={c.primary} />}>
               {/* Standard + custom fields, interleaved in saved layout order. */}
               {fieldsInSection(jobLayout, 'location').map(renderJobField)}
             </Section>
@@ -1730,7 +1732,7 @@ export default function NuevoTrabajoRoute() {
 
           {/* Schedule (job mode only) */}
           {!isProposal && (secVisible('schedule') || customFieldsFor('schedule').length > 0) && (
-            <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color="#4F46E5" />}>
+            <Section title={t.scheduleHeading} icon={<CalendarIcon size={14} color={c.primary} />}>
               {/* Standard + custom fields, interleaved in saved layout order. */}
               {fieldsInSection(jobLayout, 'schedule').map(renderJobField)}
 
@@ -1747,7 +1749,7 @@ export default function NuevoTrabajoRoute() {
 
               {totalTimeText ? (
                 <View className="mt-3 flex-row justify-end items-baseline gap-1.5">
-                  <Text className="text-xs text-gray-500">{t.totalTimeLabel}:</Text>
+                  <Text className="text-xs text-muted">{t.totalTimeLabel}:</Text>
                   <Text className="text-sm font-semibold text-primary">{totalTimeText}</Text>
                 </View>
               ) : null}
@@ -1756,7 +1758,7 @@ export default function NuevoTrabajoRoute() {
 
           {/* Workers (job mode only) */}
           {!isProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
-            <Section title={t.workersHeading} icon={<UsersIcon size={14} color="#4F46E5" />}>
+            <Section title={t.workersHeading} icon={<UsersIcon size={14} color={c.primary} />}>
               {/* Standard + custom fields, interleaved in saved layout order. */}
               {fieldsInSection(jobLayout, 'workers').map(renderJobField)}
             </Section>
@@ -1767,20 +1769,20 @@ export default function NuevoTrabajoRoute() {
 
           {/* Notes (section hideable in job mode) */}
           {(isProposal || secVisible('notes') || customFieldsFor('notes').length > 0) && (
-          <Section title={t.notesHeading} icon={<FileText size={14} color="#4F46E5" />}>
+          <Section title={t.notesHeading} icon={<FileText size={14} color={c.primary} />}>
             {isProposal ? (
               <View className="mb-3">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">
+                <Text className="text-sm font-semibold text-ink mb-2">
                   {t.clientNoteLabel}
                 </Text>
                 <TextInput
                   value={clientNotes}
                   onChangeText={setClientNotes}
                   placeholder={t.clientNotePlaceholder}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={c.faint}
                   multiline
                   numberOfLines={3}
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
                   style={{ textAlignVertical: 'top' }}
                 />
               </View>
@@ -1802,7 +1804,7 @@ export default function NuevoTrabajoRoute() {
              photos locally and queues the uploads right after save (see
              queuePendingPhotos), so nothing lands in storage if the form
              is abandoned. */}
-          <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color="#4F46E5" />}>
+          <Section title={full.dashboard.jobs.detail.photos.heading} icon={<ImagePlus size={14} color={c.primary} />}>
             {editId && business ? (
               <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
             ) : (
@@ -1834,26 +1836,26 @@ export default function NuevoTrabajoRoute() {
                   <View className="flex-row" style={{ gap: 10 }}>
                     <Pressable
                       onPress={() => void pickPendingPhoto('camera')}
-                      className="flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 active:bg-gray-50"
+                      className="flex-1 flex-row items-center justify-center rounded-xl border border-border py-2.5 active:bg-surface"
                     >
-                      <Camera size={16} color="#4B5563" />
-                      <Text className="text-sm font-medium text-gray-600 ml-1.5">
+                      <Camera size={16} color={c.muted} />
+                      <Text className="text-sm font-medium text-muted ml-1.5">
                         {full.dashboard.jobs.detail.photos.takePhoto}
                       </Text>
                     </Pressable>
                     <Pressable
                       onPress={() => void pickPendingPhoto('library')}
-                      className="flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 active:bg-gray-50"
+                      className="flex-1 flex-row items-center justify-center rounded-xl border border-border py-2.5 active:bg-surface"
                     >
-                      <ImagePlus size={16} color="#4B5563" />
-                      <Text className="text-sm font-medium text-gray-600 ml-1.5">
+                      <ImagePlus size={16} color={c.muted} />
+                      <Text className="text-sm font-medium text-muted ml-1.5">
                         {full.dashboard.jobs.detail.photos.chooseFromLibrary}
                       </Text>
                     </Pressable>
                   </View>
                 ) : null}
                 {pendingPhotos.length > 0 ? (
-                  <Text className="text-xs text-gray-400 mt-2.5">
+                  <Text className="text-xs text-faint mt-2.5">
                     {full.dashboard.jobs.detail.photos.pendingHint}
                   </Text>
                 ) : null}
@@ -1866,12 +1868,12 @@ export default function NuevoTrabajoRoute() {
              field crew: their job is auto-published so they (and any assigned
              crew) can see it. */}
           {!restrictedCreator ? (
-            <Section title={t.publishedToCrewLabel} icon={<Eye size={14} color="#4F46E5" />}>
-              <Text className="text-xs text-gray-500 mb-2.5">{t.publishedToCrewHint}</Text>
-              <View className="flex-row p-1 rounded-2xl bg-gray-100">
+            <Section title={t.publishedToCrewLabel} icon={<Eye size={14} color={c.primary} />}>
+              <Text className="text-xs text-muted mb-2.5">{t.publishedToCrewHint}</Text>
+              <View className="flex-row p-1 rounded-2xl bg-border-soft">
                 <Pressable
                   onPress={() => setPublishedToCrew(false)}
-                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${!publishedToCrew ? 'bg-white' : ''}`}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${!publishedToCrew ? 'bg-card' : ''}`}
                   style={!publishedToCrew ? {
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
@@ -1880,12 +1882,12 @@ export default function NuevoTrabajoRoute() {
                     elevation: 2,
                   } : undefined}
                 >
-                  <Lock size={13} color={!publishedToCrew ? '#4F46E5' : '#9CA3AF'} />
-                  <Text className={`text-sm font-semibold ${!publishedToCrew ? 'text-primary' : 'text-gray-500'}`}>{t.privateBadge}</Text>
+                  <Lock size={13} color={!publishedToCrew ? c.primary : c.faint} />
+                  <Text className={`text-sm font-semibold ${!publishedToCrew ? 'text-primary' : 'text-muted'}`}>{t.privateBadge}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setPublishedToCrew(true)}
-                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${publishedToCrew ? 'bg-white' : ''}`}
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${publishedToCrew ? 'bg-card' : ''}`}
                   style={publishedToCrew ? {
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
@@ -1894,15 +1896,15 @@ export default function NuevoTrabajoRoute() {
                     elevation: 2,
                   } : undefined}
                 >
-                  <Eye size={13} color={publishedToCrew ? '#4F46E5' : '#9CA3AF'} />
-                  <Text className={`text-sm font-semibold ${publishedToCrew ? 'text-primary' : 'text-gray-500'}`}>{t.publicBadge}</Text>
+                  <Eye size={13} color={publishedToCrew ? c.primary : c.faint} />
+                  <Text className={`text-sm font-semibold ${publishedToCrew ? 'text-primary' : 'text-muted'}`}>{t.publicBadge}</Text>
                 </Pressable>
               </View>
             </Section>
           ) : null}
 
           {error ? (
-            <View className="mt-4 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">
+            <View className="mt-4 rounded-2xl bg-red-500/10 border border-red-100 px-4 py-3">
               <Text className="text-sm text-red-600">{error}</Text>
             </View>
           ) : null}
@@ -1953,7 +1955,7 @@ export default function NuevoTrabajoRoute() {
           {/* Floating card: rounded on all corners, lifted off the screen
               edges with side + bottom margins and a soft shadow. */}
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -1965,63 +1967,63 @@ export default function NuevoTrabajoRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.clientLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.clientLabel}</Text>
               <Pressable onPress={() => setClientPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={clientSearch}
                   onChangeText={setClientSearch}
                   placeholder={t.clientSearchPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
               <Pressable
                 onPress={() => pickClient('')}
-                className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
+                className="flex-row items-center justify-between px-5 py-3.5 active:bg-surface"
               >
-                <Text className={`text-base ${!clientId ? 'text-primary font-semibold' : 'text-gray-500'}`}>
+                <Text className={`text-base ${!clientId ? 'text-primary font-semibold' : 'text-muted'}`}>
                   {t.clientNone}
                 </Text>
-                {!clientId ? <Check size={16} color="#4F46E5" /> : null}
+                {!clientId ? <Check size={16} color={c.primary} /> : null}
               </Pressable>
-              {filteredClients.map((c) => {
-                const isSel = c.id === clientId;
-                const { top, sub } = clientPickerDisplay(c);
+              {filteredClients.map((cl) => {
+                const isSel = cl.id === clientId;
+                const { top, sub } = clientPickerDisplay(cl);
                 return (
                   <Pressable
-                    key={c.id}
-                    onPress={() => pickClient(c.id)}
-                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                    key={cl.id}
+                    onPress={() => pickClient(cl.id)}
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
                   >
                     <View className="flex-1">
                       <Text
                         className={`text-base ${
-                          isSel ? 'text-primary font-semibold' : 'text-gray-900'
+                          isSel ? 'text-primary font-semibold' : 'text-ink'
                         }`}
                         numberOfLines={1}
                       >
                         {top}
                       </Text>
                       {sub ? (
-                        <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>
+                        <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
                           {sub}
                         </Text>
                       ) : null}
                       {(() => {
-                        const ct = matchedContactOf(c);
+                        const ct = matchedContactOf(cl);
                         return ct ? (
                           <Text className="text-xs text-primary mt-0.5" numberOfLines={1}>
                             {ct.name}{ct.role ? `  ·  ${ct.role}` : ''}
@@ -2029,22 +2031,22 @@ export default function NuevoTrabajoRoute() {
                         ) : null;
                       })()}
                     </View>
-                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                    {isSel ? <Check size={16} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
               {filteredClients.length === 0 ? (
                 <View className="px-5 py-8 items-center">
-                  <Text className="text-sm text-gray-400">{t.clientNoResults}</Text>
+                  <Text className="text-sm text-faint">{t.clientNoResults}</Text>
                 </View>
               ) : null}
               {/* Inline create — always available, prominent in the empty state.
                  Pre-fills the first name with the current search text. */}
               <Pressable
                 onPress={openQuickAdd}
-                className="flex-row items-center gap-2 px-5 py-3.5 active:bg-gray-50 border-t border-gray-100"
+                className="flex-row items-center gap-2 px-5 py-3.5 active:bg-surface border-t border-border-soft"
               >
-                <UserPlus size={16} color="#4F46E5" />
+                <UserPlus size={16} color={c.primary} />
                 <Text className="text-sm font-semibold text-primary">
                   {locale === 'es' ? 'Crear cliente nuevo' : 'Create new client'}
                 </Text>
@@ -2071,7 +2073,7 @@ export default function NuevoTrabajoRoute() {
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               marginBottom: insets.bottom + 12,
               shadowColor: '#000',
@@ -2082,14 +2084,14 @@ export default function NuevoTrabajoRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">
+              <Text className="text-base font-semibold text-ink">
                 {locale === 'es' ? 'Nuevo cliente' : 'New client'}
               </Text>
               <Pressable onPress={() => setQuickAddOpen(false)} hitSlop={8} className="p-1 rounded-lg">
-                <X size={18} color="#9CA3AF" />
+                <X size={18} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView className="px-5" keyboardShouldPersistTaps="handled">
@@ -2117,7 +2119,7 @@ export default function NuevoTrabajoRoute() {
                 />
               </View>
               {qaError ? (
-                <View className="mt-3 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">
+                <View className="mt-3 rounded-2xl bg-red-500/10 border border-red-100 px-4 py-3">
                   <Text className="text-sm text-red-600">{qaError}</Text>
                 </View>
               ) : null}
@@ -2150,7 +2152,7 @@ export default function NuevoTrabajoRoute() {
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -2162,35 +2164,35 @@ export default function NuevoTrabajoRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.leadLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.leadLabel}</Text>
               <Pressable onPress={() => setLeadPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={leadSearch}
                   onChangeText={setLeadSearch}
                   placeholder={t.workerSearchPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
               <Pressable
                 onPress={() => { setLead(''); setLeadPickerOpen(false); }}
-                className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
+                className="flex-row items-center justify-between px-5 py-3.5 active:bg-surface"
               >
-                <Text className={`text-sm ${!leadEmployeeId ? 'text-primary font-semibold' : 'text-gray-500'}`}>
+                <Text className={`text-sm ${!leadEmployeeId ? 'text-primary font-semibold' : 'text-muted'}`}>
                   {t.leadNone}
                 </Text>
-                {!leadEmployeeId ? <Check size={16} color="#4F46E5" /> : null}
+                {!leadEmployeeId ? <Check size={16} color={c.primary} /> : null}
               </Pressable>
               {filteredLeadEmployees.map((emp) => {
                 const isSel = emp.id === leadEmployeeId;
@@ -2198,23 +2200,23 @@ export default function NuevoTrabajoRoute() {
                   <Pressable
                     key={emp.id}
                     onPress={() => { setLead(emp.id); setLeadPickerOpen(false); }}
-                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
                   >
                     <Text
-                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`}
                       numberOfLines={1}
                     >
                       {emp.first_name} {emp.last_name}
                     </Text>
-                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                    {isSel ? <Check size={16} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
               {filteredLeadEmployees.length === 0 ? (
                 <View className="px-5 py-8 items-center">
-                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                  <Text className="text-sm text-faint">{t.workerNoResults}</Text>
                 </View>
               ) : null}
             </ScrollView>
@@ -2236,7 +2238,7 @@ export default function NuevoTrabajoRoute() {
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -2248,28 +2250,28 @@ export default function NuevoTrabajoRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.crewLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.crewLabel}</Text>
               <View className="flex-row items-center gap-3">
-                <Text className="text-xs text-gray-400">
+                <Text className="text-xs text-faint">
                   {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
                 </Text>
                 <Pressable onPress={() => setCrewPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                  <X size={22} color="#9CA3AF" />
+                  <X size={22} color={c.faint} />
                 </Pressable>
               </View>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={crewSearch}
                   onChangeText={setCrewSearch}
                   placeholder={t.workerSearchPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
@@ -2280,27 +2282,27 @@ export default function NuevoTrabajoRoute() {
                   <Pressable
                     key={emp.id}
                     onPress={() => toggleEmployee(emp.id)}
-                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
                   >
                     <Text
-                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`}
                       numberOfLines={1}
                     >
                       {emp.first_name} {emp.last_name}
                     </Text>
-                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                    {isSel ? <Check size={16} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
               {filteredCrewEmployees.length === 0 ? (
                 <View className="px-5 py-8 items-center">
-                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                  <Text className="text-sm text-faint">{t.workerNoResults}</Text>
                 </View>
               ) : null}
             </ScrollView>
-            <View className="px-5 pt-3 border-t border-gray-100">
+            <View className="px-5 pt-3 border-t border-border-soft">
               <Pressable
                 onPress={() => { Keyboard.dismiss(); setCrewPickerOpen(false); }}
                 className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
@@ -2325,7 +2327,7 @@ export default function NuevoTrabajoRoute() {
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -2337,28 +2339,28 @@ export default function NuevoTrabajoRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.driverLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.driverLabel}</Text>
               <View className="flex-row items-center gap-3">
-                <Text className="text-xs text-gray-400">
+                <Text className="text-xs text-faint">
                   {t.crewSelectedCount.replace('{{count}}', String(driverEmployeeIds.length))}
                 </Text>
                 <Pressable onPress={() => setDriverPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                  <X size={22} color="#9CA3AF" />
+                  <X size={22} color={c.faint} />
                 </Pressable>
               </View>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={driverSearch}
                   onChangeText={setDriverSearch}
                   placeholder={t.workerSearchPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
@@ -2369,27 +2371,27 @@ export default function NuevoTrabajoRoute() {
                   <Pressable
                     key={emp.id}
                     onPress={() => toggleDriver(emp.id)}
-                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                    className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
                   >
                     <Text
-                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}
+                      className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`}
                       numberOfLines={1}
                     >
                       {emp.first_name} {emp.last_name}
                     </Text>
-                    {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                    {isSel ? <Check size={16} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
               {filteredDriverPool.length === 0 ? (
                 <View className="px-5 py-8 items-center">
-                  <Text className="text-sm text-gray-400">{t.workerNoResults}</Text>
+                  <Text className="text-sm text-faint">{t.workerNoResults}</Text>
                 </View>
               ) : null}
             </ScrollView>
-            <View className="px-5 pt-3 border-t border-gray-100">
+            <View className="px-5 pt-3 border-t border-border-soft">
               <Pressable
                 onPress={() => setDriverPickerOpen(false)}
                 className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
@@ -2430,11 +2432,11 @@ function Section({
     <View className="mb-5">
       <View className="flex-row items-center gap-2 mb-3 px-1">
         {icon}
-        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+        <Text className="text-xs font-semibold text-faint uppercase tracking-wide">
           {title}
         </Text>
       </View>
-      <View className="bg-white rounded-2xl border border-gray-100 p-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-4">
         {children}
       </View>
     </View>
@@ -2444,6 +2446,7 @@ function Section({
 function CustomFieldInput({
   template, value, onChange,
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
+  const c = useThemeColors();
   const tc = useLang().t.common;
   const label = template.required ? `${template.field_label} *` : template.field_label;
   const cfg = parseFieldConfig(template.field_config);
@@ -2451,14 +2454,14 @@ function CustomFieldInput({
     // Long free text — multiline, grows with content.
     return (
       <View className="mt-3">
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <TextInput
           value={value}
           onChangeText={onChange}
           multiline
           numberOfLines={4}
-          placeholderTextColor="#9CA3AF"
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+          placeholderTextColor={c.faint}
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
           style={{ textAlignVertical: 'top' }}
         />
       </View>
@@ -2478,15 +2481,15 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <View className="mt-3">
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <View className="flex-row gap-2">
           <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>{tc.states.yes}</Text>
           </Pressable>
           <Pressable onPress={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>{tc.states.no}</Text>
           </Pressable>
         </View>
       </View>
@@ -2499,7 +2502,7 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <View className="mt-3">
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
           <View className="flex-row flex-wrap gap-2">
             {template.field_options.map((o) => {
               const on = selected.includes(o);
@@ -2507,9 +2510,9 @@ function CustomFieldInput({
                 <Pressable
                   key={o}
                   onPress={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                 >
-                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-muted'}`}>{o}</Text>
                 </Pressable>
               );
             })}

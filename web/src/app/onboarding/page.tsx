@@ -11,9 +11,14 @@ import {
   type PickLogoResult,
 } from '@amixos/shared/screens/onboarding/OnboardingScreen';
 import { useLang } from '@/i18n/LangProvider';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function OnboardingPage() {
   const supabase = createSupabaseClient();
+  const router = useRouter();
+  // ?adding=1 → the user already has a business and is creating another; show a
+  // "Cancel" escape (back to the dashboard) instead of "Sign out".
+  const adding = useSearchParams().get('adding');
   const { t: full } = useLang();
   const t = full.onboarding;
 
@@ -185,6 +190,7 @@ export default function OnboardingPage() {
         onPickLogo={handlePickLogo}
         onFinish={handleFinish}
         onLogout={async () => { await supabase.auth.signOut(); window.location.href = '/auth/login'; }}
+        onCancel={adding ? () => router.push('/dashboard') : undefined}
         pendingInvites={pendingInvites}
         onAcceptInvite={acceptInvite}
       />

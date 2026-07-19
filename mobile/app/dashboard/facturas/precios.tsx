@@ -22,11 +22,11 @@ export default function FacturasPreciosPage() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
           <ChevronLeft size={22} color="#111827" />
         </Pressable>
-        <Text className="ml-2 text-lg font-bold text-gray-900">{full.dashboard.settings.priceSheet.title}</Text>
+        <Text className="ml-2 text-lg font-bold text-ink">{full.dashboard.settings.priceSheet.title}</Text>
       </View>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-24">
         <PriceSheetScreen

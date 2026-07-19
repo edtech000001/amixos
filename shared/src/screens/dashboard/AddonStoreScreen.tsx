@@ -2,6 +2,7 @@ import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { MODULE_REGISTRY, type ModuleDef, type ModuleCategory } from '../../modules/registry';
 import { can, type Role } from '../../lib/permissions';
@@ -34,6 +35,7 @@ export function AddonStoreScreen({
   onOpen,
 }: AddonStoreScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.store;
   const modulesDict = full.dashboard.modules.list;
   const canManage = can.manageBusinessSettings(currentRole);
@@ -99,19 +101,19 @@ export function AddonStoreScreen({
     <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
       {/* Heading */}
       <View className="mb-4">
-        <Text className="text-2xl font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-sm text-gray-500 mt-0.5">{t.subtitle}</Text>
+        <Text className="text-2xl font-bold text-ink">{t.heading}</Text>
+        <Text className="text-sm text-muted mt-0.5">{t.subtitle}</Text>
       </View>
 
       {/* Search bar — diacritic-aware substring match against name + description. */}
-      <View className="flex-row items-center gap-2 mb-3 rounded-2xl bg-white border border-gray-200 px-4 py-2.5">
-        <Search size={16} color="#9CA3AF" />
+      <View className="flex-row items-center gap-2 mb-3 rounded-2xl bg-card border border-border px-4 py-2.5">
+        <Search size={16} color={c.faint} />
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder={t.searchPlaceholder}
-          placeholderTextColor="#9CA3AF"
-          className="flex-1 text-sm text-gray-900"
+          placeholderTextColor={c.faint}
+          className="flex-1 text-sm text-ink"
         />
       </View>
 
@@ -130,10 +132,10 @@ export function AddonStoreScreen({
               key={c.key}
               onPress={() => setCategory(c.key)}
               className={`px-3.5 py-1.5 rounded-full ${
-                active ? 'bg-primary' : 'bg-white border border-gray-200'
+                active ? 'bg-primary' : 'bg-card border border-border'
               }`}
             >
-              <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                 {c.label}
               </Text>
             </Pressable>
@@ -152,7 +154,7 @@ export function AddonStoreScreen({
       ) : (
         filtered.length === 0 ? (
           <View className="py-10 items-center">
-            <Text className="text-sm text-gray-500">{t.noResults}</Text>
+            <Text className="text-sm text-muted">{t.noResults}</Text>
           </View>
         ) : (
         // Single column — one card per row (w-full) so each module's name +
@@ -161,7 +163,7 @@ export function AddonStoreScreen({
           {groups.map(g => (
             <View key={g.key}>
               {g.label ? (
-                <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">{g.label}</Text>
+                <Text className="text-xs font-bold text-faint uppercase tracking-wider mb-2 ml-1">{g.label}</Text>
               ) : null}
               {g.items.map(m => {
             const Icon = m.icon;
@@ -184,20 +186,20 @@ export function AddonStoreScreen({
                 ? t.disable
                 : t.enable;
             const buttonStyle = isComingSoon
-              ? 'bg-gray-100 border border-gray-200'
+              ? 'bg-border-soft border border-border'
               : enabled
-                ? 'bg-white border border-gray-200'
+                ? 'bg-card border border-border'
                 : 'bg-primary';
             const buttonText = isComingSoon
-              ? 'text-gray-400'
+              ? 'text-faint'
               : enabled
-                ? 'text-gray-900'
+                ? 'text-ink'
                 : 'text-white';
 
             return (
               <View
                 key={m.id}
-                className={`w-full bg-white rounded-2xl ${enabled ? 'border-2' : 'border'} border-gray-100 p-4 mb-3`}
+                className={`w-full bg-card rounded-2xl ${enabled ? 'border-2' : 'border'} border-border-soft p-4 mb-3`}
                 style={enabled ? { borderColor: '#4ADE80' } : undefined}
               >
                 <Pressable
@@ -221,7 +223,7 @@ export function AddonStoreScreen({
                       </View>
                     ) : enabled ? (
                       <View className="flex-row items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-100">
-                        <Check size={9} color="#059669" />
+                        <Check size={9} color={c.success} />
                         <Text className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">
                           {t.enabledBadge}
                         </Text>
@@ -229,10 +231,10 @@ export function AddonStoreScreen({
                     ) : null}
                   </View>
 
-                  <Text className="text-base font-semibold text-gray-900 mb-0.5" numberOfLines={1}>
+                  <Text className="text-base font-semibold text-ink mb-0.5" numberOfLines={1}>
                     {name}
                   </Text>
-                  <Text className="text-xs text-gray-500 leading-snug" numberOfLines={3}>
+                  <Text className="text-xs text-muted leading-snug" numberOfLines={3}>
                     {description}
                   </Text>
                 </Pressable>

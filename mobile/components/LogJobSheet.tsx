@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Check, X, Search, MapPin } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
 
 // expo-location is loaded lazily + guarded. Importing it eagerly triggers a
@@ -42,6 +43,7 @@ type LocState = 'idle' | 'capturing' | 'done' | 'unavailable';
 
 export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmit }: LogJobSheetProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const f = full.dashboard.fieldHome;
   const tc = full.common;
 
@@ -118,78 +120,78 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
   return (
     <RNModal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <Pressable onPress={close} className="flex-1 bg-black/40 justify-end">
-        <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
+        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
           <View className="items-center mb-3">
-            <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            <View className="w-10 h-1 bg-border rounded-full" />
           </View>
           <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-lg font-bold text-gray-900">{f.logTitle}</Text>
+            <Text className="text-lg font-bold text-ink">{f.logTitle}</Text>
             <Pressable onPress={close} hitSlop={8} className="p-1">
-              <X size={20} color="#6B7280" />
+              <X size={20} color={c.muted} />
             </Pressable>
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Title */}
-            <Text className="text-sm font-medium text-gray-700 mb-1.5">{f.jobTitleLabel}</Text>
+            <Text className="text-sm font-medium text-ink mb-1.5">{f.jobTitleLabel}</Text>
             <TextInput
               value={title}
               onChangeText={setTitle}
               placeholder={f.jobTitlePlaceholder}
-              placeholderTextColor="#9CA3AF"
-              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900 mb-4"
+              placeholderTextColor={c.faint}
+              className="border border-border rounded-xl px-4 py-3 text-base text-ink mb-4"
             />
 
             {/* Location geostamp (auto-captured) */}
-            <View className="flex-row items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
-              <MapPin size={15} color={locState === 'done' ? '#059669' : '#9CA3AF'} />
+            <View className="flex-row items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-surface border border-border-soft">
+              <MapPin size={15} color={locState === 'done' ? c.success : c.faint} />
               {locState === 'capturing' ? (
-                <Text className="text-xs text-gray-500 flex-1">{f.locCapturing}</Text>
+                <Text className="text-xs text-muted flex-1">{f.locCapturing}</Text>
               ) : locState === 'done' ? (
-                <Text className="text-xs text-gray-700 flex-1" numberOfLines={1}>{locText}</Text>
+                <Text className="text-xs text-ink flex-1" numberOfLines={1}>{locText}</Text>
               ) : (
-                <Text className="text-xs text-gray-400 flex-1">{f.locUnavailable}</Text>
+                <Text className="text-xs text-faint flex-1">{f.locUnavailable}</Text>
               )}
             </View>
 
             {/* Client */}
-            <Text className="text-sm font-medium text-gray-700 mb-1.5">{f.clientLabel}</Text>
-            <View className="flex-row items-center border border-gray-200 rounded-xl px-3 mb-2">
-              <Search size={16} color="#9CA3AF" />
+            <Text className="text-sm font-medium text-ink mb-1.5">{f.clientLabel}</Text>
+            <View className="flex-row items-center border border-border rounded-xl px-3 mb-2">
+              <Search size={16} color={c.faint} />
               <TextInput
                 value={search}
                 onChangeText={setSearch}
                 placeholder={f.clientSearch}
-                placeholderTextColor="#9CA3AF"
-                className="flex-1 px-2 py-3 text-base text-gray-900"
+                placeholderTextColor={c.faint}
+                className="flex-1 px-2 py-3 text-base text-ink"
               />
             </View>
-            <View className="border border-gray-100 rounded-xl overflow-hidden mb-4 max-h-56">
+            <View className="border border-border-soft rounded-xl overflow-hidden mb-4 max-h-56">
               <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
                 <Pressable
                   onPress={() => setClientId(null)}
-                  className="flex-row items-center justify-between px-4 py-3 active:bg-gray-50 border-b border-gray-50"
+                  className="flex-row items-center justify-between px-4 py-3 active:bg-surface border-b border-border-soft"
                 >
-                  <Text className={`text-sm ${clientId === null ? 'text-primary font-semibold' : 'text-gray-600'}`}>
+                  <Text className={`text-sm ${clientId === null ? 'text-primary font-semibold' : 'text-muted'}`}>
                     {f.noClientOption}
                   </Text>
-                  {clientId === null ? <Check size={16} color="#4F46E5" /> : null}
+                  {clientId === null ? <Check size={16} color={c.primary} /> : null}
                 </Pressable>
                 {clientsLoading ? (
-                  <View className="py-6 items-center"><ActivityIndicator size="small" color="#4F46E5" /></View>
+                  <View className="py-6 items-center"><ActivityIndicator size="small" color={c.primary} /></View>
                 ) : filtered.length === 0 ? (
-                  <Text className="text-sm text-gray-400 text-center py-6">{f.noResults}</Text>
+                  <Text className="text-sm text-faint text-center py-6">{f.noResults}</Text>
                 ) : (
-                  filtered.map(c => (
+                  filtered.map(cl => (
                     <Pressable
-                      key={c.id}
-                      onPress={() => setClientId(c.id)}
-                      className="flex-row items-center justify-between px-4 py-3 active:bg-gray-50 border-b border-gray-50"
+                      key={cl.id}
+                      onPress={() => setClientId(cl.id)}
+                      className="flex-row items-center justify-between px-4 py-3 active:bg-surface border-b border-border-soft"
                     >
-                      <Text className={`text-sm flex-1 ${clientId === c.id ? 'text-primary font-semibold' : 'text-gray-800'}`} numberOfLines={1}>
-                        {c.name}
+                      <Text className={`text-sm flex-1 ${clientId === cl.id ? 'text-primary font-semibold' : 'text-ink'}`} numberOfLines={1}>
+                        {cl.name}
                       </Text>
-                      {clientId === c.id ? <Check size={16} color="#4F46E5" /> : null}
+                      {clientId === cl.id ? <Check size={16} color={c.primary} /> : null}
                     </Pressable>
                   ))
                 )}
@@ -197,17 +199,17 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
             </View>
 
             {/* Notes */}
-            <Text className="text-sm font-medium text-gray-700 mb-1.5">{f.notesLabel}</Text>
+            <Text className="text-sm font-medium text-ink mb-1.5">{f.notesLabel}</Text>
             <TextInput
               value={notes}
               onChangeText={setNotes}
               multiline
-              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900 mb-4 min-h-[72px]"
+              className="border border-border rounded-xl px-4 py-3 text-base text-ink mb-4 min-h-[72px]"
               style={{ textAlignVertical: 'top' }}
             />
 
             {error ? (
-              <View className="mb-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+              <View className="mb-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
                 <Text className="text-sm text-red-600">{error}</Text>
               </View>
             ) : null}
@@ -223,8 +225,8 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
                 <Text className="text-base font-semibold text-white">{tc.buttons.save}</Text>
               )}
             </Pressable>
-            <Pressable onPress={close} className="py-3.5 rounded-2xl bg-gray-100 items-center active:bg-gray-200">
-              <Text className="text-base font-semibold text-gray-700">{tc.buttons.cancel}</Text>
+            <Pressable onPress={close} className="py-3.5 rounded-2xl bg-border-soft items-center active:bg-border">
+              <Text className="text-base font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>
           </View>
         </Pressable>

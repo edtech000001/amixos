@@ -2,6 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { Appearance, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colorScheme, vars } from 'nativewind';
+import { ThemeColorsProvider, LIGHT_COLORS, DARK_COLORS } from '@amixos/shared/theme';
+
+// Re-export so existing `@/lib/ThemeProvider` icon-color imports keep working;
+// the source of truth for the palette is shared/src/theme.tsx.
+export { useThemeColors } from '@amixos/shared/theme';
 
 export type ThemePref = 'light' | 'dark' | 'system';
 
@@ -90,11 +95,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider value={{ theme, resolved, setTheme, toggle }}>
-      {/* Applies the theme's CSS variables to the whole tree — this is what
-          actually flips bg-card / text-ink / etc. on native. */}
-      <View style={THEME_VARS[resolved]} className="flex-1">
-        {children}
-      </View>
+      {/* vars() flips bg-card / text-ink / etc. on native; ThemeColorsProvider
+          feeds hex values to shared screens for RN icon colors. */}
+      <ThemeColorsProvider value={resolved === 'dark' ? DARK_COLORS : LIGHT_COLORS}>
+        <View style={THEME_VARS[resolved]} className="flex-1">
+          {children}
+        </View>
+      </ThemeColorsProvider>
     </Ctx.Provider>
   );
 }
@@ -103,23 +110,4 @@ export function useTheme(): ThemeCtx {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
-}
-
-// RN icons/SVGs take a `color` HEX prop (not a className), so they can't use
-// the semantic Tailwind tokens. This resolves the same palette to hex values
-// for the active theme — use for icon colors, StatusBar, etc.
-const LIGHT = {
-  primary: '#2563EB', ink: '#0F172A', muted: '#64748B', faint: '#94A3B8',
-  border: '#E2E8F0', borderSoft: '#F1F5F9', card: '#FFFFFF', surface: '#F8FAFC',
-  success: '#16A34A', danger: '#DC2626', warning: '#D97706',
-};
-const DARK = {
-  primary: '#3B82F6', ink: '#F1F5F9', muted: '#94A3B8', faint: '#64748B',
-  border: '#1E293B', borderSoft: '#1E293B', card: '#131C31', surface: '#0B1220',
-  success: '#22C55E', danger: '#F87171', warning: '#F59E0B',
-};
-
-export function useThemeColors() {
-  const { resolved } = useTheme();
-  return resolved === 'dark' ? DARK : LIGHT;
 }

@@ -25,15 +25,15 @@ export default function TrabajosPage() {
     <SettingsPageWrapper title={t.dashboard.settings.tabs.trabajos}>
       <View style={{ gap: 40 }}>
         <TrabajosSection />
-        <View className="h-px bg-gray-100 -mx-6" />
+        <View className="h-px bg-border-soft -mx-6" />
         <TrabajosFieldsSection />
-        <View className="h-px bg-gray-100 -mx-6" />
+        <View className="h-px bg-border-soft -mx-6" />
         <JobAlertsSection />
-        <View className="h-px bg-gray-100 -mx-6" />
+        <View className="h-px bg-border-soft -mx-6" />
         <JobItemTypesSection />
-        <View className="h-px bg-gray-100 -mx-6" />
+        <View className="h-px bg-border-soft -mx-6" />
         <JobPrivateOnInvoiceSection />
-        <View className="h-px bg-gray-100 -mx-6" />
+        <View className="h-px bg-border-soft -mx-6" />
         <CrewModeSection />
       </View>
     </SettingsPageWrapper>

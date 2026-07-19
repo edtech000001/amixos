@@ -46,6 +46,7 @@ import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
 import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { useThemeColors } from '@/lib/ThemeProvider';
 
 interface FieldTemplate {
   id: string;
@@ -148,6 +149,7 @@ const EMPTY_CONTACT = {
 
 export default function ClienteDetailRoute() {
   const router = useRouter();
+  const c = useThemeColors();
   const { id, from, jobId, invoice } = useLocalSearchParams<{ id: string; from?: string; jobId?: string; invoice?: string }>();
   // Honor ?from=map so the back arrow returns to the map module instead of the
   // clientes list. ?from=job&jobId=… returns to that specific job. We navigate
@@ -513,7 +515,7 @@ export default function ClienteDetailRoute() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -521,7 +523,7 @@ export default function ClienteDetailRoute() {
   if (!client) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <Text className="text-sm text-gray-500">{t.notFound}</Text>
+        <Text className="text-sm text-muted">{t.notFound}</Text>
       </SafeAreaView>
     );
   }
@@ -555,44 +557,44 @@ export default function ClienteDetailRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={goBack}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="flex-row gap-1">
           <Pressable
             onPress={onSharePdf}
             hitSlop={8}
-            className="p-2 rounded-lg active:bg-gray-100"
+            className="p-2 rounded-lg active:bg-border-soft"
             accessibilityLabel={td.sharePdfBtn}
           >
-            <FileText size={18} color="#6B7280" />
+            <FileText size={18} color={c.muted} />
           </Pressable>
           <Pressable
             onPress={onShareCsv}
             hitSlop={8}
-            className="p-2 rounded-lg active:bg-gray-100"
+            className="p-2 rounded-lg active:bg-border-soft"
             accessibilityLabel={td.shareCsvBtn}
           >
-            <Share2 size={18} color="#6B7280" />
+            <Share2 size={18} color={c.muted} />
           </Pressable>
           <Pressable
             onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
             hitSlop={8}
-            className="p-2 rounded-lg active:bg-gray-100"
+            className="p-2 rounded-lg active:bg-border-soft"
           >
-            <Pencil size={18} color="#6B7280" />
+            <Pencil size={18} color={c.muted} />
           </Pressable>
           <Pressable
             onPress={confirmDelete}
             hitSlop={8}
-            className="p-2 rounded-lg active:bg-red-50"
+            className="p-2 rounded-lg active:bg-red-500/10"
           >
-            <Trash2 size={18} color="#EF4444" />
+            <Trash2 size={18} color={c.danger} />
           </Pressable>
         </View>
       </View>
@@ -604,13 +606,13 @@ export default function ClienteDetailRoute() {
             <Text className="text-primary text-lg font-bold">{initials}</Text>
           </View>
           <View className="flex-1">
-            <Text className="text-xl font-bold text-gray-900">
+            <Text className="text-xl font-bold text-ink">
               {client.first_name} {client.last_name}
             </Text>
             {client.company ? (
               <View className="flex-row items-center gap-1.5 mt-0.5">
-                <Building2 size={13} color="#9CA3AF" />
-                <Text className="text-sm text-gray-500">{client.company}</Text>
+                <Building2 size={13} color={c.faint} />
+                <Text className="text-sm text-muted">{client.company}</Text>
               </View>
             ) : null}
           </View>
@@ -628,14 +630,14 @@ export default function ClienteDetailRoute() {
             })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryPhone
-                ? 'bg-white border-gray-100 active:bg-gray-50'
-                : 'bg-gray-50 border-gray-100 opacity-50'
+                ? 'bg-card border-border-soft active:bg-surface'
+                : 'bg-surface border-border-soft opacity-50'
             }`}
           >
-            <Phone size={18} color={primaryPhone ? '#4F46E5' : '#9CA3AF'} />
+            <Phone size={18} color={primaryPhone ? c.primary : c.faint} />
             <Text
               className={`text-[11px] font-semibold mt-1 ${
-                primaryPhone ? 'text-primary' : 'text-gray-400'
+                primaryPhone ? 'text-primary' : 'text-faint'
               }`}
             >
               {td.actionCall}
@@ -651,14 +653,14 @@ export default function ClienteDetailRoute() {
             })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryPhone
-                ? 'bg-white border-gray-100 active:bg-gray-50'
-                : 'bg-gray-50 border-gray-100 opacity-50'
+                ? 'bg-card border-border-soft active:bg-surface'
+                : 'bg-surface border-border-soft opacity-50'
             }`}
           >
-            <MessageSquare size={18} color={primaryPhone ? '#4F46E5' : '#9CA3AF'} />
+            <MessageSquare size={18} color={primaryPhone ? c.primary : c.faint} />
             <Text
               className={`text-[11px] font-semibold mt-1 ${
-                primaryPhone ? 'text-primary' : 'text-gray-400'
+                primaryPhone ? 'text-primary' : 'text-faint'
               }`}
             >
               {td.actionText}
@@ -674,14 +676,14 @@ export default function ClienteDetailRoute() {
             })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryEmail
-                ? 'bg-white border-gray-100 active:bg-gray-50'
-                : 'bg-gray-50 border-gray-100 opacity-50'
+                ? 'bg-card border-border-soft active:bg-surface'
+                : 'bg-surface border-border-soft opacity-50'
             }`}
           >
-            <Mail size={18} color={primaryEmail ? '#4F46E5' : '#9CA3AF'} />
+            <Mail size={18} color={primaryEmail ? c.primary : c.faint} />
             <Text
               className={`text-[11px] font-semibold mt-1 ${
-                primaryEmail ? 'text-primary' : 'text-gray-400'
+                primaryEmail ? 'text-primary' : 'text-faint'
               }`}
             >
               {td.actionEmail}
@@ -705,9 +707,9 @@ export default function ClienteDetailRoute() {
             onPress={() =>
               router.push(`/dashboard/trabajos/nuevo?client=${client.id}` as never)
             }
-            className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary bg-white active:bg-primary/5"
+            className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary bg-card active:bg-primary/5"
           >
-            <Plus size={16} color="#4F46E5" />
+            <Plus size={16} color={c.primary} />
             <Text className="text-sm font-semibold text-primary">
               {full.dashboard.jobs.newDropdown.jobOption}
             </Text>
@@ -715,53 +717,53 @@ export default function ClienteDetailRoute() {
         </View>
 
         {/* Contact card */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-3">
-          <Text className="text-xs font-semibold text-gray-400 uppercase">{td.contact}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-3">
+          <Text className="text-xs font-semibold text-faint uppercase">{td.contact}</Text>
           {primaryPhone ? (
             <Pressable
               onPress={() => openLink(`tel:${primaryPhone}`)}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <Phone size={15} color="#9CA3AF" />
+              <Phone size={15} color={c.faint} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-400">{t.fields.phoneCell}</Text>
-                <Text className="text-sm text-gray-900 font-medium">{fmtPhone(primaryPhone)}</Text>
+                <Text className="text-xs text-faint">{t.fields.phoneCell}</Text>
+                <Text className="text-sm text-ink font-medium">{fmtPhone(primaryPhone)}</Text>
               </View>
             </Pressable>
           ) : null}
           {officePhone ? (
             <Pressable
               onPress={() => openLink(`tel:${officePhone}`)}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <Phone size={15} color="#9CA3AF" />
+              <Phone size={15} color={c.faint} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-400">{t.fields.phoneOffice}</Text>
-                <Text className="text-sm text-gray-900 font-medium">{fmtPhone(officePhone)}</Text>
+                <Text className="text-xs text-faint">{t.fields.phoneOffice}</Text>
+                <Text className="text-sm text-ink font-medium">{fmtPhone(officePhone)}</Text>
               </View>
             </Pressable>
           ) : null}
           {primaryEmail ? (
             <Pressable
               onPress={() => openLink(`mailto:${primaryEmail}`)}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <Mail size={15} color="#9CA3AF" />
+              <Mail size={15} color={c.faint} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-400">{t.fields.emailOffice}</Text>
-                <Text className="text-sm text-gray-900 font-medium">{primaryEmail}</Text>
+                <Text className="text-xs text-faint">{t.fields.emailOffice}</Text>
+                <Text className="text-sm text-ink font-medium">{primaryEmail}</Text>
               </View>
             </Pressable>
           ) : null}
           {homeEmail ? (
             <Pressable
               onPress={() => openLink(`mailto:${homeEmail}`)}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <Mail size={15} color="#9CA3AF" />
+              <Mail size={15} color={c.faint} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-400">{t.fields.emailHome}</Text>
-                <Text className="text-sm text-gray-900 font-medium">{homeEmail}</Text>
+                <Text className="text-xs text-faint">{t.fields.emailHome}</Text>
+                <Text className="text-sm text-ink font-medium">{homeEmail}</Text>
               </View>
             </Pressable>
           ) : null}
@@ -769,12 +771,12 @@ export default function ClienteDetailRoute() {
             <Pressable
               onPress={() => clientMapsUrl && openLink(clientMapsUrl)}
               disabled={!clientMapsUrl}
-              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-gray-50"
+              className="flex-row items-start gap-3 -mx-2 px-2 py-1 rounded-lg active:bg-surface"
             >
-              <MapPin size={15} color="#9CA3AF" />
+              <MapPin size={15} color={c.faint} />
               <View className="flex-1">
-                <Text className="text-xs text-gray-400">{t.fields.addressLine1}</Text>
-                <Text className="text-sm text-gray-900 font-medium">{fullAddress}</Text>
+                <Text className="text-xs text-faint">{t.fields.addressLine1}</Text>
+                <Text className="text-sm text-ink font-medium">{fullAddress}</Text>
                 {clientMapsUrl ? (
                   <Text className="text-xs text-primary font-medium mt-0.5">
                     {full.dashboard.jobs.detail.openInMaps}
@@ -784,28 +786,28 @@ export default function ClienteDetailRoute() {
             </Pressable>
           ) : null}
           {!primaryPhone && !officePhone && !primaryEmail && !homeEmail && !fullAddress ? (
-            <Text className="text-xs text-gray-400">{td.noContactInfo}</Text>
+            <Text className="text-xs text-faint">{td.noContactInfo}</Text>
           ) : null}
         </View>
 
         {/* Contact people card */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-semibold text-gray-400 uppercase">
+            <Text className="text-xs font-semibold text-faint uppercase">
               {td.contactPeople}
             </Text>
             <Pressable
               onPress={openAddContact}
               hitSlop={8}
-              className="p-1 rounded-lg active:bg-gray-100"
+              className="p-1 rounded-lg active:bg-border-soft"
             >
-              <UserPlus size={15} color="#9CA3AF" />
+              <UserPlus size={15} color={c.faint} />
             </Pressable>
           </View>
 
           {contacts.length === 0 ? (
             <View className="items-center py-2">
-              <Text className="text-xs text-gray-400">{td.noContacts}</Text>
+              <Text className="text-xs text-faint">{td.noContacts}</Text>
               <Pressable onPress={openAddContact} className="mt-1">
                 <Text className="text-xs text-primary font-medium">{td.addContact}</Text>
               </Pressable>
@@ -816,44 +818,44 @@ export default function ClienteDetailRoute() {
                 <View
                   key={ct.id}
                   className={`py-3 ${
-                    idx < contacts.length - 1 ? 'border-b border-gray-50' : ''
+                    idx < contacts.length - 1 ? 'border-b border-border-soft' : ''
                   }`}
                 >
                   <View className="flex-row items-start justify-between gap-2">
                     <View className="flex-1">
                       <View className="flex-row items-center gap-1.5">
-                        <Text className="text-sm font-semibold text-gray-900">{ct.name}</Text>
+                        <Text className="text-sm font-semibold text-ink">{ct.name}</Text>
                         {ct.is_primary ? (
-                          <Star size={11} color="#F59E0B" fill="#F59E0B" />
+                          <Star size={11} color={c.warning} fill="#F59E0B" />
                         ) : null}
                       </View>
                       {ct.role ? (
-                        <Text className="text-xs text-gray-400 mt-0.5">{ct.role}</Text>
+                        <Text className="text-xs text-faint mt-0.5">{ct.role}</Text>
                       ) : null}
                       {ct.phone ? (
-                        <Text className="text-xs text-gray-500 mt-1">{fmtPhone(ct.phone)}</Text>
+                        <Text className="text-xs text-muted mt-1">{fmtPhone(ct.phone)}</Text>
                       ) : null}
                       {ct.email ? (
-                        <Text className="text-xs text-gray-500">{ct.email}</Text>
+                        <Text className="text-xs text-muted">{ct.email}</Text>
                       ) : null}
                       {ct.notes ? (
-                        <Text className="text-xs text-gray-400 italic mt-1">{ct.notes}</Text>
+                        <Text className="text-xs text-faint italic mt-1">{ct.notes}</Text>
                       ) : null}
                     </View>
                     <View className="flex-row gap-1">
                       <Pressable
                         onPress={() => openEditContact(ct)}
                         hitSlop={6}
-                        className="p-1.5 rounded-lg active:bg-blue-50"
+                        className="p-1.5 rounded-lg active:bg-blue-500/10"
                       >
-                        <Pencil size={13} color="#60A5FA" />
+                        <Pencil size={13} color={c.primary} />
                       </Pressable>
                       <Pressable
                         onPress={() => removeContact(ct.id)}
                         hitSlop={6}
-                        className="p-1.5 rounded-lg active:bg-red-50"
+                        className="p-1.5 rounded-lg active:bg-red-500/10"
                       >
-                        <Trash2 size={13} color="#F87171" />
+                        <Trash2 size={13} color={c.danger} />
                       </Pressable>
                     </View>
                   </View>
@@ -871,7 +873,7 @@ export default function ClienteDetailRoute() {
                           })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
-                          <Phone size={12} color="#4F46E5" />
+                          <Phone size={12} color={c.primary} />
                           <Text className="text-[11px] font-semibold text-primary">{td.actionCall}</Text>
                         </Pressable>
                       ) : null}
@@ -886,7 +888,7 @@ export default function ClienteDetailRoute() {
                           })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
-                          <MessageSquare size={12} color="#4F46E5" />
+                          <MessageSquare size={12} color={c.primary} />
                           <Text className="text-[11px] font-semibold text-primary">{td.actionText}</Text>
                         </Pressable>
                       ) : null}
@@ -901,7 +903,7 @@ export default function ClienteDetailRoute() {
                           })}
                           className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70"
                         >
-                          <Mail size={12} color="#4F46E5" />
+                          <Mail size={12} color={c.primary} />
                           <Text className="text-[11px] font-semibold text-primary">{td.actionEmail}</Text>
                         </Pressable>
                       ) : null}
@@ -916,8 +918,8 @@ export default function ClienteDetailRoute() {
         {/* Custom fields card — hidden entirely when no field would render
            (only rows with a value, or required ones, are shown). */}
         {templates.some(tpl => client.custom_fields?.[tpl.field_key] || tpl.required) ? (
-          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-2.5">
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">
+          <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-2.5">
+            <Text className="text-xs font-semibold text-faint uppercase mb-1">
               {t.sections.customFields}
             </Text>
             {templates.map(tpl => {
@@ -930,8 +932,8 @@ export default function ClienteDetailRoute() {
                   : val ?? '—';
               return (
                 <View key={tpl.field_key}>
-                  <Text className="text-xs text-gray-400">{tpl.field_label}</Text>
-                  <Text className="text-sm text-gray-900 font-medium">{display}</Text>
+                  <Text className="text-xs text-faint">{tpl.field_label}</Text>
+                  <Text className="text-sm text-ink font-medium">{display}</Text>
                 </View>
               );
             })}
@@ -940,37 +942,37 @@ export default function ClienteDetailRoute() {
 
         {/* Notes */}
         {client.notes ? (
-          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
+          <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
+            <Text className="text-xs font-semibold text-faint uppercase mb-2">
               {t.sections.notes}
             </Text>
-            <Text className="text-sm text-gray-600">{client.notes}</Text>
+            <Text className="text-sm text-muted">{client.notes}</Text>
           </View>
         ) : null}
 
         {/* Summary card */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 gap-2">
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{td.summary}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-2">
+          <Text className="text-xs font-semibold text-faint uppercase mb-1">{td.summary}</Text>
           <View className="flex-row justify-between">
-            <Text className="text-sm text-gray-500">{td.totalPaid}</Text>
+            <Text className="text-sm text-muted">{td.totalPaid}</Text>
             <Text className="text-sm font-semibold text-emerald-600">{fmtMoney(stats.totalPaid)}</Text>
           </View>
           <View className="flex-row justify-between">
-            <Text className="text-sm text-gray-500">{td.pending}</Text>
+            <Text className="text-sm text-muted">{td.pending}</Text>
             <Text className="text-sm font-semibold text-blue-600">{fmtMoney(stats.pendingTotal)}</Text>
           </View>
           <View className="flex-row justify-between">
-            <Text className="text-sm text-gray-500">{td.invoicesCount}</Text>
-            <Text className="text-sm font-semibold text-gray-900">{stats.count}</Text>
+            <Text className="text-sm text-muted">{td.invoicesCount}</Text>
+            <Text className="text-sm font-semibold text-ink">{stats.count}</Text>
           </View>
         </View>
 
         {/* Invoices list — inner View clips the rows to rounded corners; the
            outer keeps the shadow (RN clips shadows under overflow-hidden). */}
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm mb-4">
           <View className="rounded-2xl overflow-hidden">
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-50">
-            <Text className="text-sm font-semibold text-gray-900">{td.invoicesTitle}</Text>
+          <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-soft">
+            <Text className="text-sm font-semibold text-ink">{td.invoicesTitle}</Text>
             <Pressable
               onPress={() =>
                 router.push(`/dashboard/facturas/nueva?client=${client.id}` as never)
@@ -978,15 +980,15 @@ export default function ClienteDetailRoute() {
               hitSlop={6}
               className="flex-row items-center gap-1"
             >
-              <Plus size={13} color="#4F46E5" />
+              <Plus size={13} color={c.primary} />
               <Text className="text-xs font-medium text-primary">{td.newInvoiceShort}</Text>
             </Pressable>
           </View>
 
           {invoices.length === 0 ? (
             <View className="items-center py-10">
-              <FileText size={28} color="#E5E7EB" />
-              <Text className="text-sm text-gray-400 mt-2">{td.noInvoices}</Text>
+              <FileText size={28} color={c.faint} />
+              <Text className="text-sm text-faint mt-2">{td.noInvoices}</Text>
               <Pressable
                 onPress={() =>
                   router.push(`/dashboard/facturas/nueva?client=${client.id}` as never)
@@ -1005,13 +1007,13 @@ export default function ClienteDetailRoute() {
                 <Pressable
                   key={inv.id}
                   onPress={() => router.push(`/dashboard/facturas/${inv.id}?from=client&clientId=${client.id}` as never)}
-                  className={`flex-row items-center justify-between px-4 py-3 active:bg-gray-50 ${
-                    idx < invoices.length - 1 ? 'border-b border-gray-50' : ''
+                  className={`flex-row items-center justify-between px-4 py-3 active:bg-surface ${
+                    idx < invoices.length - 1 ? 'border-b border-border-soft' : ''
                   }`}
                 >
                   <View className="flex-1">
-                    <Text className="text-sm font-medium text-gray-900">{inv.invoice_number}</Text>
-                    <Text className="text-[11px] text-gray-400 mt-0.5">
+                    <Text className="text-sm font-medium text-ink">{inv.invoice_number}</Text>
+                    <Text className="text-[11px] text-faint mt-0.5">
                       {fmtDateTime(inv.created_at)}
                       {inv.due_date
                         ? ` · ${td.dueShort.replace('{{date}}', formatDateLong(inv.due_date, dateLoc))}`
@@ -1027,7 +1029,7 @@ export default function ClienteDetailRoute() {
                         {statusLabel}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-gray-900">
+                    <Text className="text-sm font-bold text-ink">
                       {fmtMoney(inv.total_amount)}
                     </Text>
                   </View>
@@ -1052,9 +1054,9 @@ export default function ClienteDetailRoute() {
 
         {/* Created / last-edited footer — mirrors the job detail screen. */}
         <View className="px-1 pb-2 gap-0.5">
-          <Text className="text-[10px] text-gray-400">{td.addedAt} · {fmtDateTime(client.created_at)}</Text>
+          <Text className="text-[10px] text-faint">{td.addedAt} · {fmtDateTime(client.created_at)}</Text>
           {client.updated_at && client.updated_at !== client.created_at ? (
-            <Text className="text-[10px] text-gray-400">{td.modifiedAt} · {fmtDateTime(client.updated_at)}</Text>
+            <Text className="text-[10px] text-faint">{td.modifiedAt} · {fmtDateTime(client.updated_at)}</Text>
           ) : null}
         </View>
       </ScrollView>
@@ -1069,15 +1071,15 @@ export default function ClienteDetailRoute() {
         onRequestClose={() => setContactModalOpen(false)}
       >
         <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-          <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100">
+          <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
             <Pressable
               onPress={() => setContactModalOpen(false)}
               hitSlop={12}
-              className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+              className="p-2 -ml-2 rounded-lg active:bg-border-soft"
             >
-              <ChevronLeft size={22} color="#111827" />
+              <ChevronLeft size={22} color={c.ink} />
             </Pressable>
-            <Text className="text-lg font-semibold text-gray-900" numberOfLines={1}>
+            <Text className="text-lg font-semibold text-ink" numberOfLines={1}>
               {editingContact ? td.contactModal.editTitle : td.contactModal.addTitle}
             </Text>
             <Pressable
@@ -1088,7 +1090,7 @@ export default function ClienteDetailRoute() {
             >
               <Text
                 className={`text-[15px] font-medium ${
-                  contactForm.name.trim() && !savingContact ? 'text-primary' : 'text-gray-300'
+                  contactForm.name.trim() && !savingContact ? 'text-primary' : 'text-faint'
                 }`}
               >
                 {tc.buttons.save}
@@ -1117,7 +1119,7 @@ export default function ClienteDetailRoute() {
                 value={fmtPhoneInput(contactForm.phone)}
                 onChangeText={v => setContactForm(f => ({ ...f, phone: fmtPhoneInput(v) }))}
                 keyboardType="phone-pad"
-                leftIcon={<Phone size={15} color="#9CA3AF" />}
+                leftIcon={<Phone size={15} color={c.faint} />}
               />
               <Input
                 label={td.contactModal.emailLabel}
@@ -1126,21 +1128,21 @@ export default function ClienteDetailRoute() {
                 onChangeText={v => setContactForm(f => ({ ...f, email: v }))}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                leftIcon={<Mail size={15} color="#9CA3AF" />}
+                leftIcon={<Mail size={15} color={c.faint} />}
               />
               <View>
-                <Text className="text-sm font-medium text-gray-700 mb-1.5">
+                <Text className="text-sm font-medium text-ink mb-1.5">
                   {td.contactModal.notesLabel}
                 </Text>
-                <View className="rounded-xl border border-gray-200 bg-white px-4 py-1">
+                <View className="rounded-xl border border-border bg-card px-4 py-1">
                   <TextInput
                     multiline
                     numberOfLines={3}
                     placeholder={td.contactModal.notesPlaceholder}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={c.faint}
                     value={contactForm.notes}
                     onChangeText={v => setContactForm(f => ({ ...f, notes: v }))}
-                    className="text-sm text-gray-900 py-2"
+                    className="text-sm text-ink py-2"
                     style={{ textAlignVertical: 'top', minHeight: 60 }}
                   />
                 </View>
@@ -1151,8 +1153,8 @@ export default function ClienteDetailRoute() {
                   onValueChange={v => setContactForm(f => ({ ...f, is_primary: v }))}
                 />
                 <View className="flex-row items-center gap-1.5">
-                  <Text className="text-sm text-gray-700">{td.contactModal.primaryLabel}</Text>
-                  <Star size={12} color="#4F46E5" fill="#4F46E5" />
+                  <Text className="text-sm text-ink">{td.contactModal.primaryLabel}</Text>
+                  <Star size={12} color={c.primary} fill="#4F46E5" />
                 </View>
               </View>
             </View>

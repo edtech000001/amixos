@@ -15,6 +15,7 @@ import {
   Undo2,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import {
   getInvoiceLabels,
   getInvoiceDateLocale,
@@ -136,18 +137,18 @@ export interface InvoiceDetailScreenProps {
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
-  draft: 'bg-gray-100',
+  draft: 'bg-border-soft',
   sent: 'bg-blue-100',
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
-  draft: 'text-gray-500',
+  draft: 'text-muted',
   sent: 'text-blue-600',
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
-  cancelled: 'text-gray-400',
+  cancelled: 'text-faint',
 };
 
 function fmt(n: number) {
@@ -184,6 +185,7 @@ export function InvoiceDetailScreen({
   jobTitles,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
+  const c = useThemeColors();
   const tInv = ui.dashboard.invoices;
   const tStatus = ui.dashboard.invoiceStatus;
 
@@ -202,7 +204,7 @@ export function InvoiceDetailScreen({
   if (!invoice) {
     return (
       <View className="p-6">
-        <Text className="text-gray-400">{tInv.notFound}</Text>
+        <Text className="text-faint">{tInv.notFound}</Text>
       </View>
     );
   }
@@ -216,8 +218,8 @@ export function InvoiceDetailScreen({
   const dateLoc = getInvoiceDateLocale(uiLang);
   const statusKey = invoice.status as keyof typeof tStatus;
   const statusLabel = tStatus[statusKey] ?? invoice.status;
-  const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-gray-100';
-  const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-gray-500';
+  const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
+  const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
   // null = auto (expand short lists, collapse 3+); a tap pins the choice.
   const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -239,11 +241,11 @@ export function InvoiceDetailScreen({
       {/* Header — title left, utility actions top-right (jobs/equipment pattern) */}
       <View className="flex-row items-start justify-between mb-4 gap-3">
         <View className="flex-row items-center gap-3 flex-1 min-w-0">
-          <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-gray-100">
-            <ArrowLeft size={18} color="#6B7280" />
+          <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-border-soft">
+            <ArrowLeft size={18} color={c.muted} />
           </Pressable>
           <View className="flex-1 min-w-0">
-            <Text className="text-xl font-bold text-gray-900">{invoice.invoiceNumber}</Text>
+            <Text className="text-xl font-bold text-ink">{invoice.invoiceNumber}</Text>
             {/* Pills on their own row — inline they collide with the header
                action icons on narrow screens. */}
             <View className="flex-row items-center gap-2 flex-wrap mt-1">
@@ -256,101 +258,101 @@ export function InvoiceDetailScreen({
                 </View>
               ) : null}
             </View>
-            <Text className="text-xs text-gray-400 mt-1">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
+            <Text className="text-xs text-faint mt-1">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
           </View>
         </View>
         <View className="flex-row items-center gap-0.5 shrink-0">
           {onAutoprice ? (
-            <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color="#4F46E5" /></Pressable>
+            <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color={c.primary} /></Pressable>
           ) : null}
           {onShareLink ? (
-            <Pressable onPress={onShareLink} className="p-2 rounded-xl active:bg-gray-100"><Link2 size={18} color="#6B7280" /></Pressable>
+            <Pressable onPress={onShareLink} className="p-2 rounded-xl active:bg-border-soft"><Link2 size={18} color={c.muted} /></Pressable>
           ) : null}
           {onPrint ? (
-            <Pressable onPress={onPrint} className="p-2 rounded-xl active:bg-gray-100"><Printer size={18} color="#6B7280" /></Pressable>
+            <Pressable onPress={onPrint} className="p-2 rounded-xl active:bg-border-soft"><Printer size={18} color={c.muted} /></Pressable>
           ) : null}
           {onEdit ? (
-            <Pressable onPress={onEdit} className="p-2 rounded-xl active:bg-gray-100"><Pencil size={18} color="#6B7280" /></Pressable>
+            <Pressable onPress={onEdit} className="p-2 rounded-xl active:bg-border-soft"><Pencil size={18} color={c.muted} /></Pressable>
           ) : null}
           {onDelete ? (
-            <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-50"><Trash2 size={18} color="#EF4444" /></Pressable>
+            <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-500/10"><Trash2 size={18} color={c.danger} /></Pressable>
           ) : null}
         </View>
       </View>
 
       {/* Quick total */}
-      <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex-row items-center gap-3 mb-4">
+      <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex-row items-center gap-3 mb-4">
         <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
           <DollarSign size={18} className="text-primary" />
         </View>
         <View>
-          <Text className="text-xs text-gray-400 font-medium">{t.total}</Text>
-          <Text className="text-xl font-bold text-gray-900">{fmt(invoice.totalAmount)}</Text>
+          <Text className="text-xs text-faint font-medium">{t.total}</Text>
+          <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</Text>
         </View>
       </View>
 
       {/* Client — name, business, address */}
-      <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-        <Text className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{t.billTo}</Text>
+      <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
+        <Text className="text-[11px] text-faint font-semibold uppercase tracking-wide mb-1">{t.billTo}</Text>
         {invoice.clients.length ? invoice.clients.map((c, i) => {
           const cityStateZip = [[c.city, c.state].filter(Boolean).join(', '), c.zip].filter(Boolean).join(' ');
           const loc = [c.address, cityStateZip].filter(Boolean).join(' · ');
           return (
-            <View key={i} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-50' : ''}>
+            <View key={i} className={i > 0 ? 'mt-2 pt-2 border-t border-border-soft' : ''}>
               {onClientPress && c.id ? (
                   <Pressable onPress={() => onClientPress(c.id!)} hitSlop={4}>
                     <Text className="text-base font-semibold text-primary">{c.firstName} {c.lastName}</Text>
                   </Pressable>
                 ) : (
-                  <Text className="text-base font-semibold text-gray-900">{c.firstName} {c.lastName}</Text>
+                  <Text className="text-base font-semibold text-ink">{c.firstName} {c.lastName}</Text>
                 )}
-              {c.company ? <Text className="text-sm text-gray-600 mt-0.5">{c.company}</Text> : null}
-              {loc ? <Text className="text-sm text-gray-500 mt-0.5">{loc}</Text> : null}
-              {c.phoneCell ? <Text className="text-sm text-gray-500 mt-0.5">{c.phoneCell}</Text> : null}
+              {c.company ? <Text className="text-sm text-muted mt-0.5">{c.company}</Text> : null}
+              {loc ? <Text className="text-sm text-muted mt-0.5">{loc}</Text> : null}
+              {c.phoneCell ? <Text className="text-sm text-muted mt-0.5">{c.phoneCell}</Text> : null}
             </View>
           );
-        }) : <Text className="text-sm text-gray-400">—</Text>}
+        }) : <Text className="text-sm text-faint">—</Text>}
       </View>
 
       {/* Dates — combined */}
-      <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+      <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
         <View className="flex-row items-center gap-3">
-          <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center">
+          <View className="w-10 h-10 rounded-xl bg-blue-500/10 items-center justify-center">
             <Calendar size={18} className="text-blue-500" />
           </View>
           <View>
-            <Text className="text-xs text-gray-400 font-medium">{t.issueDate}</Text>
-            <Text className="text-sm font-semibold text-gray-900">{formatDate(invoice.issueDate)}</Text>
+            <Text className="text-xs text-faint font-medium">{t.issueDate}</Text>
+            <Text className="text-sm font-semibold text-ink">{formatDate(invoice.issueDate)}</Text>
           </View>
         </View>
-        <View className="flex-row items-center gap-3 mt-3 pt-3 border-t border-gray-50">
-          <View className="w-10 h-10 rounded-xl bg-amber-50 items-center justify-center">
+        <View className="flex-row items-center gap-3 mt-3 pt-3 border-t border-border-soft">
+          <View className="w-10 h-10 rounded-xl bg-amber-500/10 items-center justify-center">
             <FileText size={18} className="text-amber-500" />
           </View>
           <View>
-            <Text className="text-xs text-gray-400 font-medium">{t.dueDate}</Text>
-            <Text className="text-sm font-semibold text-gray-900">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</Text>
+            <Text className="text-xs text-faint font-medium">{t.dueDate}</Text>
+            <Text className="text-sm font-semibold text-ink">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</Text>
           </View>
         </View>
       </View>
 
       {/* Notes */}
       {invoice.notes ? (
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <Text className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">{t.notes}</Text>
-          <Text className="text-sm text-gray-700 mt-1">{invoice.notes}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
+          <Text className="text-[11px] text-faint font-semibold uppercase tracking-wide">{t.notes}</Text>
+          <Text className="text-sm text-ink mt-1">{invoice.notes}</Text>
         </View>
       ) : null}
 
       {/* Custom fields (invoice_field_templates) — read-only. */}
       {invoice.customFields && invoice.customFields.length > 0 ? (
-        <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <Text className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
+          <Text className="text-[11px] text-faint font-semibold uppercase tracking-wide mb-2">{ui.dashboard.employees.modal.customFieldsHeading}</Text>
           <View className="gap-2">
             {invoice.customFields.map(f => (
               <View key={f.key ?? f.label} className="flex-row justify-between gap-3">
-                <Text className="text-xs text-gray-400 flex-1">{f.label}</Text>
-                <Text className="text-sm text-gray-700 text-right flex-1">{f.value}</Text>
+                <Text className="text-xs text-faint flex-1">{f.label}</Text>
+                <Text className="text-sm text-ink text-right flex-1">{f.value}</Text>
               </View>
             ))}
           </View>
@@ -359,7 +361,7 @@ export function InvoiceDetailScreen({
 
       {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
          document is only built for print / share (PDF). */}
-      <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+      <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
         {(() => {
           const seen = new Set<string>();
           return invoice.lineItems.map((li, idx) => {
@@ -369,7 +371,7 @@ export function InvoiceDetailScreen({
             const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
             if (jid) seen.add(jid);
             return (
-              <View key={idx} className="py-2.5 border-b border-gray-200">
+              <View key={idx} className="py-2.5 border-b border-border">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 pr-3">
                     {jid && onJobPress ? (
@@ -377,22 +379,22 @@ export function InvoiceDetailScreen({
                         <Text className="text-sm font-medium text-primary">{(jid && jobTitles?.[jid]) || li.description}</Text>
                       </Pressable>
                     ) : (
-                      <Text className="text-sm text-gray-900">{(jid && jobTitles?.[jid]) || li.description}</Text>
+                      <Text className="text-sm text-ink">{(jid && jobTitles?.[jid]) || li.description}</Text>
                     )}
-                    <Text className="text-xs text-gray-400 mt-0.5">{q} × {fmt(r)}</Text>
+                    <Text className="text-xs text-faint mt-0.5">{q} × {fmt(r)}</Text>
                   </View>
-                  <Text className="text-sm font-semibold text-gray-900">{fmt(q * r)}</Text>
+                  <Text className="text-sm font-semibold text-ink">{fmt(q * r)}</Text>
                 </View>
                 {showActions ? (
                   <View className="flex-row justify-end gap-4 mt-1.5">
                     {onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
-                        <Text className="text-xs font-semibold text-gray-500">{ui.common.buttons.edit}</Text>
+                        <Text className="text-xs font-semibold text-muted">{ui.common.buttons.edit}</Text>
                       </Pressable>
                     ) : null}
                     {onMoveJob ? (
                       <Pressable onPress={() => onMoveJob(jid!)} disabled={jobBusy} hitSlop={6}>
-                        <Text className="text-xs font-semibold text-gray-500">{tInv.jobsSection.moveBtn}</Text>
+                        <Text className="text-xs font-semibold text-muted">{tInv.jobsSection.moveBtn}</Text>
                       </Pressable>
                     ) : null}
                     <Pressable onPress={() => onRemoveJob!(jid!)} disabled={jobBusy} hitSlop={6}>
@@ -403,7 +405,7 @@ export function InvoiceDetailScreen({
                   <View className="flex-row justify-end gap-4 mt-1.5">
                     {onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
-                        <Text className="text-xs font-semibold text-gray-500">{ui.common.buttons.edit}</Text>
+                        <Text className="text-xs font-semibold text-muted">{ui.common.buttons.edit}</Text>
                       </Pressable>
                     ) : null}
                     {onRemoveManualItem ? (
@@ -425,31 +427,31 @@ export function InvoiceDetailScreen({
         ) : null}
 
         {autopriceVerify ? (
-          <View className="mt-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
+          <View className="mt-2 rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2">
             <Text className="text-xs text-amber-700">{ui.dashboard.jobs.detail.autopriceVerify}</Text>
           </View>
         ) : null}
 
         {/* Totals — below the items */}
-        <View className="mt-3 pt-3 border-t border-gray-100 gap-1.5">
+        <View className="mt-3 pt-3 border-t border-border-soft gap-1.5">
           <View className="flex-row justify-between">
-            <Text className="text-sm text-gray-500">{t.subtotal}</Text>
-            <Text className="text-sm text-gray-900">{fmt(invoice.subtotalAmount)}</Text>
+            <Text className="text-sm text-muted">{t.subtotal}</Text>
+            <Text className="text-sm text-ink">{fmt(invoice.subtotalAmount)}</Text>
           </View>
           {/* Shown whenever a rate is set — even if the amount is $0 (e.g.
              no line prices yet), so the configured tax is always visible. */}
           {invoice.taxRate > 0 ? (
             <View className="flex-row justify-between">
-              <Text className="text-sm text-gray-500">{`${t.tax} (${invoice.taxRate}%)`}</Text>
-              <Text className="text-sm text-gray-900">{fmt(invoice.taxAmount)}</Text>
+              <Text className="text-sm text-muted">{`${t.tax} (${invoice.taxRate}%)`}</Text>
+              <Text className="text-sm text-ink">{fmt(invoice.taxAmount)}</Text>
             </View>
           ) : null}
-          <View className="flex-row justify-between pt-2 border-t border-gray-100">
-            <Text className="text-base font-bold text-gray-900">{t.total}</Text>
+          <View className="flex-row justify-between pt-2 border-t border-border-soft">
+            <Text className="text-base font-bold text-ink">{t.total}</Text>
             <Text className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</Text>
           </View>
           {payments.length > 0 ? (
-            <View className="pt-2 border-t border-gray-100 gap-1.5">
+            <View className="pt-2 border-t border-border-soft gap-1.5">
               {/* Summary row toggles the detail rows so many partials don't
                  swamp the totals card. */}
               <Pressable
@@ -458,28 +460,28 @@ export function InvoiceDetailScreen({
                 hitSlop={4}
               >
                 <View className="flex-row items-center gap-1">
-                  <Text className="text-sm font-medium text-gray-500">
+                  <Text className="text-sm font-medium text-muted">
                     {tInv.payments.title} ({payments.length})
                   </Text>
-                  <ChevronDown size={14} color="#9CA3AF" style={{ transform: [{ rotate: paymentsExpanded ? '180deg' : '0deg' }] }} />
+                  <ChevronDown size={14} color={c.faint} style={{ transform: [{ rotate: paymentsExpanded ? '180deg' : '0deg' }] }} />
                 </View>
                 <Text className="text-sm font-medium text-emerald-700">−{fmt(paidSoFar)}</Text>
               </Pressable>
               {paymentsExpanded ? payments.map(p => (
                 <View key={p.id} className="flex-row items-center justify-between pl-2">
-                  <Text className="text-sm text-gray-500 flex-1 pr-2" numberOfLines={1}>
+                  <Text className="text-sm text-muted flex-1 pr-2" numberOfLines={1}>
                     {p.method ?? '—'} · {formatDate(p.paidOn)}
                   </Text>
                   <View className="flex-row items-center gap-2">
                     <Text className="text-sm text-emerald-700">−{fmt(p.amount)}</Text>
                     {onEditPayment ? (
                       <Pressable onPress={() => onEditPayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
-                        <Pencil size={13} color="#9CA3AF" />
+                        <Pencil size={13} color={c.faint} />
                       </Pressable>
                     ) : null}
                     {onDeletePayment ? (
                       <Pressable onPress={() => onDeletePayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
-                        <Trash2 size={13} color="#D1D5DB" />
+                        <Trash2 size={13} color={c.faint} />
                       </Pressable>
                     ) : null}
                   </View>
@@ -505,9 +507,9 @@ export function InvoiceDetailScreen({
               <Text className="text-white font-semibold">{tInv.sendInvoice}</Text>
             </Pressable>
           ) : null}
-          <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50">
-            <CheckCircle size={16} color="#374151" />
-            <Text className="text-gray-700 font-semibold">{tInv.markSent}</Text>
+          <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
+            <CheckCircle size={16} color={c.ink} />
+            <Text className="text-ink font-semibold">{tInv.markSent}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -517,16 +519,16 @@ export function InvoiceDetailScreen({
             <CheckCircle size={16} color="#FFFFFF" />
             <Text className="text-white font-semibold">{paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}</Text>
           </Pressable>
-          <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50">
-            <Undo2 size={16} color="#6B7280" />
-            <Text className="text-gray-500 font-semibold">{tInv.undoSent}</Text>
+          <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
+            <Undo2 size={16} color={c.muted} />
+            <Text className="text-muted font-semibold">{tInv.undoSent}</Text>
           </Pressable>
         </View>
       ) : null}
       {invoice.status === 'paid' && onUndoPaid ? (
-        <Pressable onPress={onUndoPaid} disabled={updating} className="flex-row items-center justify-center gap-2 border border-gray-200 bg-white py-3.5 rounded-2xl active:bg-gray-50 mb-4">
-          <Undo2 size={16} color="#6B7280" />
-          <Text className="text-gray-500 font-semibold">{tInv.payments.undoPaid}</Text>
+        <Pressable onPress={onUndoPaid} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">
+          <Undo2 size={16} color={c.muted} />
+          <Text className="text-muted font-semibold">{tInv.payments.undoPaid}</Text>
         </Pressable>
       ) : null}
 
@@ -534,7 +536,7 @@ export function InvoiceDetailScreen({
 
       {/* Last edited — bottom of the page. */}
       {invoice.updatedAt && invoice.updatedAt !== invoice.createdAt ? (
-        <Text className="text-xs text-gray-400 text-center mt-2">
+        <Text className="text-xs text-faint text-center mt-2">
           {tInv.lastEditedLabel}: {formatDateTimeLong(invoice.updatedAt, dateLoc)}
         </Text>
       ) : null}

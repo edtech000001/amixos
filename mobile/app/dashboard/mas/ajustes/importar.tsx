@@ -52,28 +52,28 @@ export default function ImportarDatosPage() {
 
   return (
     <SettingsPageWrapper title={t.tabs.importar}>
-      <Text className="text-xs text-gray-500 mb-3">{t.importHub.subtitle}</Text>
-      <View className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-4">
+      <Text className="text-xs text-muted mb-3">{t.importHub.subtitle}</Text>
+      <View className="bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3 mb-4">
         <Text className="text-xs text-blue-800 leading-5">{t.importHub.orderHint}</Text>
       </View>
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
         {steps.map((step, i) => (
           <Pressable
             key={step.key}
             onPress={() => setOpenStep(step.key)}
-            className={`flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 ${
-              i < steps.length - 1 ? 'border-b border-gray-50' : ''
+            className={`flex-row items-center gap-3 px-4 py-4 active:bg-surface ${
+              i < steps.length - 1 ? 'border-b border-border-soft' : ''
             }`}
           >
             <View className="w-9 h-9 rounded-full bg-primary/10 items-center justify-center">
               <Text className="text-sm font-bold text-primary">{i + 1}</Text>
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-semibold text-gray-900">{step.title}</Text>
-              <Text className="text-xs text-gray-500 mt-0.5">{step.desc}</Text>
+              <Text className="text-sm font-semibold text-ink">{step.title}</Text>
+              <Text className="text-xs text-muted mt-0.5">{step.desc}</Text>
             </View>
-            <Text className="text-xl text-gray-400">›</Text>
+            <Text className="text-xl text-faint">›</Text>
           </Pressable>
         ))}
       </View>

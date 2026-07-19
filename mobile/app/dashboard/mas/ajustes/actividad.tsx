@@ -9,6 +9,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
+import { useThemeColors } from '@/lib/ThemeProvider';
 
 interface AuditRow {
   id: string;
@@ -43,6 +44,7 @@ export default function ActividadPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.activity;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+  const c = useThemeColors();
 
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,35 +115,35 @@ export default function ActividadPage() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900">{t.heading}</Text>
+        <Text className="ml-1 text-lg font-semibold text-ink">{t.heading}</Text>
       </View>
       {/* Pinned header + search — stay fixed while the list scrolls below. */}
       <View className="px-5 pt-5">
         <View className="flex-row items-start gap-3 mb-4">
           <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-            <Activity size={18} color="#4F46E5" />
+            <Activity size={18} color={c.primary} />
           </View>
           <View className="flex-1">
-            <Text className="text-lg font-bold text-gray-900">{t.heading}</Text>
-            <Text className="text-xs text-gray-500 mt-0.5">{t.subtitle}</Text>
+            <Text className="text-lg font-bold text-ink">{t.heading}</Text>
+            <Text className="text-xs text-muted mt-0.5">{t.subtitle}</Text>
           </View>
         </View>
 
         {rows.length > 0 ? (
-          <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
-            <Search size={16} color="#9CA3AF" />
+          <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5">
+            <Search size={16} color={c.faint} />
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder={t.searchPlaceholder}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoCorrect={false}
-              className="flex-1 text-sm text-gray-900"
+              className="flex-1 text-sm text-ink"
             />
           </View>
         ) : null}
@@ -153,21 +155,21 @@ export default function ActividadPage() {
             <View className="flex-row gap-1">{[0,1,2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}</View>
           </View>
         ) : rows.length === 0 ? (
-          <Text className="py-10 text-center text-sm text-gray-400">{t.emptyState}</Text>
+          <Text className="py-10 text-center text-sm text-faint">{t.emptyState}</Text>
         ) : filtered.length === 0 ? (
-          <Text className="py-10 text-center text-sm text-gray-400">{t.noResults}</Text>
+          <Text className="py-10 text-center text-sm text-faint">{t.noResults}</Text>
         ) : (
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
             {filtered.map((row, i) => (
-              <View key={row.id} className={`flex-row items-start gap-3 px-4 py-3 ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                <View className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center">
-                  <Text className="text-xs font-bold text-gray-500">
+              <View key={row.id} className={`flex-row items-start gap-3 px-4 py-3 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}>
+                <View className="w-9 h-9 rounded-full bg-border-soft items-center justify-center">
+                  <Text className="text-xs font-bold text-muted">
                     {(row.user_name || row.user_email || '?').charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-sm text-gray-900">{describe(row)}</Text>
-                  <Text className="text-xs text-gray-400 mt-0.5">
+                  <Text className="text-sm text-ink">{describe(row)}</Text>
+                  <Text className="text-xs text-faint mt-0.5">
                     {actorLine(row, t.unknownUser)} · {relTime(row.created_at)}
                   </Text>
                 </View>
@@ -179,7 +181,7 @@ export default function ActividadPage() {
           <Pressable
             onPress={() => load(rows[rows.length - 1]?.created_at)}
             disabled={loading}
-            className="mt-4 self-center px-4 py-2 rounded-xl active:bg-gray-100"
+            className="mt-4 self-center px-4 py-2 rounded-xl active:bg-border-soft"
           >
             <Text className="text-sm font-semibold text-primary">{loading ? '...' : t.loadMore}</Text>
           </Pressable>

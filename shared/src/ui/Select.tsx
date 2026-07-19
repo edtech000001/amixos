@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, TextInput, Modal as RNModal, ScrollView, Platform } from 'react-native';
 import { ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { clsx } from 'clsx';
+import { useThemeColors } from '../theme';
 
 export interface SelectOption {
   value: string;
@@ -46,11 +47,12 @@ export function Select({
   searchEmptyText,
   containerClassName,
 }: SelectProps) {
+  const c = useThemeColors();
   const borderClass = error
     ? 'border-red-300'
     : highlight
-      ? 'border-amber-400 bg-amber-50'
-      : 'border-gray-200';
+      ? 'border-amber-400 bg-amber-500/10'
+      : 'border-border';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = options.find(o => o.value === value);
@@ -66,7 +68,7 @@ export function Select({
 
   return (
     <View className={clsx('flex flex-col gap-2', containerClassName)}>
-      {label ? <Text className="text-sm font-semibold text-gray-700">{label}</Text> : null}
+      {label ? <Text className="text-sm font-semibold text-ink">{label}</Text> : null}
 
       {Platform.OS === 'web' ? (
         // Native HTML select for web accessibility/keyboard support.
@@ -74,9 +76,9 @@ export function Select({
           value={value}
           onChange={(e: any) => onValueChange(e.target.value)}
           className={clsx(
-            'w-full rounded-2xl border px-4 py-3.5 text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
+            'w-full rounded-2xl border px-4 py-3.5 text-base text-ink focus:outline-none focus:ring-2 focus:ring-primary appearance-none',
             borderClass,
-            !highlight && !error && 'bg-white',
+            !highlight && !error && 'bg-card',
           )}
         >
           {placeholder ? <option value="">{placeholder}</option> : null}
@@ -93,7 +95,7 @@ export function Select({
             className={clsx(
               'flex-row items-center justify-between rounded-2xl border px-4 py-3.5',
               borderClass,
-              !highlight && !error && 'bg-white',
+              !highlight && !error && 'bg-card',
             )}
             style={{
               shadowColor: '#000',
@@ -106,12 +108,12 @@ export function Select({
             <Text
               className={clsx(
                 'text-base flex-1',
-                selected ? 'text-gray-900' : 'text-gray-400',
+                selected ? 'text-ink' : 'text-faint',
               )}
             >
               {displayText}
             </Text>
-            <ChevronDown size={16} color="#9CA3AF" />
+            <ChevronDown size={16} color={c.faint} />
           </Pressable>
 
           <RNModal
@@ -127,7 +129,7 @@ export function Select({
               <Pressable
                 onPress={(e: any) => e.stopPropagation?.()}
                 className={clsx(
-                  'bg-white rounded-t-3xl w-full overflow-hidden pb-6',
+                  'bg-card rounded-t-3xl w-full overflow-hidden pb-6',
                   // Fixed height when searchable so the sheet doesn't shrink /
                   // jump as results are filtered; otherwise size to content.
                   searchable ? 'h-[75%]' : 'max-h-[75%]',
@@ -135,32 +137,32 @@ export function Select({
               >
                 {/* Grab handle — one-hand bottom-sheet affordance. */}
                 <View className="items-center pt-3 pb-1">
-                  <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                  <View className="w-10 h-1 bg-border rounded-full" />
                 </View>
                 {label ? (
-                  <View className="px-5 py-3 border-b border-gray-100 flex-row items-center justify-between">
-                    <Text className="text-base font-semibold text-gray-900">{label}</Text>
+                  <View className="px-5 py-3 border-b border-border-soft flex-row items-center justify-between">
+                    <Text className="text-base font-semibold text-ink">{label}</Text>
                     <Pressable onPress={() => setOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                      <X size={20} color="#9CA3AF" />
+                      <X size={20} color={c.faint} />
                     </Pressable>
                   </View>
                 ) : null}
                 {searchable ? (
-                  <View className="px-4 py-3 border-b border-gray-100 flex-row items-center gap-2">
-                    <Search size={16} color="#9CA3AF" />
+                  <View className="px-4 py-3 border-b border-border-soft flex-row items-center gap-2">
+                    <Search size={16} color={c.faint} />
                     <TextInput
                       value={query}
                       onChangeText={setQuery}
                       placeholder={searchPlaceholder ?? 'Buscar…'}
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={c.faint}
                       autoFocus
                       autoCorrect={false}
                       autoCapitalize="none"
-                      className="flex-1 text-base text-gray-900 py-1"
+                      className="flex-1 text-base text-ink py-1"
                     />
                     {query.length > 0 ? (
                       <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear">
-                        <X size={16} color="#9CA3AF" />
+                        <X size={16} color={c.faint} />
                       </Pressable>
                     ) : null}
                   </View>
@@ -170,7 +172,7 @@ export function Select({
                     making options unclickable. */}
                 <ScrollView className={clsx(searchable && 'flex-1')} keyboardShouldPersistTaps="handled">
                   {filteredOptions.length === 0 ? (
-                    <Text className="text-sm text-gray-400 px-5 py-4">
+                    <Text className="text-sm text-faint px-5 py-4">
                       {searchEmptyText ?? 'Sin resultados.'}
                     </Text>
                   ) : null}
@@ -184,14 +186,14 @@ export function Select({
                           setOpen(false);
                         }}
                         className={clsx(
-                          'flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50',
+                          'flex-row items-center justify-between px-5 py-3.5 active:bg-surface',
                           isSelected && 'bg-primary/5',
                         )}
                       >
                         <Text
                           className={clsx(
                             'text-sm flex-1',
-                            isSelected ? 'text-primary font-semibold' : 'text-gray-900',
+                            isSelected ? 'text-primary font-semibold' : 'text-ink',
                           )}
                         >
                           {o.label}

@@ -23,11 +23,10 @@ import {
   X,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import type { useAssistant } from './useAssistant';
 import { useVoiceCall } from './useVoiceCall';
 import { MessageBubble } from './MessageBubble';
-
-const PRIMARY = '#4F46E5';
 
 // Show the END of a long in-progress utterance, not the start.
 const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}` : s);
@@ -87,6 +86,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
   const { t: full, locale } = useLang();
   const a = full.dashboard.assistant;
   const insets = useSafeAreaInsets();
+  const c = useThemeColors();
   const { bubbles, pendingDraft, sending, confirming, error, send, confirm, reset } = assistant;
 
   const [text, setText] = useState('');
@@ -124,34 +124,34 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
         pointerEvents="box-none"
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-        <View className="bg-white rounded-t-3xl" style={{ height: '88%', maxHeight: '88%' }}>
+        <View className="bg-card rounded-t-3xl" style={{ height: '88%', maxHeight: '88%' }}>
           <View className="items-center pt-3">
-            <View className="w-10 h-1 rounded-full bg-gray-200" />
+            <View className="w-10 h-1 rounded-full bg-border" />
           </View>
 
           {/* Header — identity left, reset + close right. */}
-          <View className="flex-row items-center px-5 pt-3 pb-3 border-b border-gray-100">
+          <View className="flex-row items-center px-5 pt-3 pb-3 border-b border-border-soft">
             <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
-              <BotMessageSquare size={20} color={PRIMARY} />
+              <BotMessageSquare size={20} color={c.primary} />
             </View>
             <View className="flex-1 ml-3">
-              <Text className="text-lg font-bold text-gray-900">{a.title}</Text>
-              <Text className="text-xs text-gray-500">{a.subtitle}</Text>
+              <Text className="text-lg font-bold text-ink">{a.title}</Text>
+              <Text className="text-xs text-muted">{a.subtitle}</Text>
             </View>
             <Pressable
               onPress={reset}
               hitSlop={8}
               accessibilityLabel={a.newChat}
-              className="w-9 h-9 rounded-full items-center justify-center active:bg-gray-100 ml-1"
+              className="w-9 h-9 rounded-full items-center justify-center active:bg-border-soft ml-1"
             >
-              <RotateCcw size={18} color="#6B7280" />
+              <RotateCcw size={18} color={c.muted} />
             </Pressable>
             <Pressable
               onPress={onClose}
               hitSlop={8}
-              className="w-9 h-9 rounded-full items-center justify-center active:bg-gray-100 ml-1"
+              className="w-9 h-9 rounded-full items-center justify-center active:bg-border-soft ml-1"
             >
-              <X size={20} color="#6B7280" />
+              <X size={20} color={c.muted} />
             </Pressable>
           </View>
 
@@ -160,10 +160,10 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
           {bubbles.length === 0 && !sending ? (
             <View className="flex-1 items-center justify-center px-8">
               <View className="w-16 h-16 rounded-full bg-primary/10 items-center justify-center mb-4">
-                <BotMessageSquare size={30} color={PRIMARY} />
+                <BotMessageSquare size={30} color={c.primary} />
               </View>
-              <Text className="text-lg font-bold text-gray-900 text-center">{a.emptyTitle}</Text>
-              <Text className="text-sm text-gray-500 text-center mt-1 mb-6">{a.emptyState}</Text>
+              <Text className="text-lg font-bold text-ink text-center">{a.emptyTitle}</Text>
+              <Text className="text-sm text-muted text-center mt-1 mb-6">{a.emptyState}</Text>
               {/* Tappable examples — one tap sends the question. */}
               <View className="gap-2.5 self-stretch">
                 {[a.suggestion1, a.suggestion2, a.suggestion3].map(s => (
@@ -198,9 +198,9 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
               // exactly where the typing indicator / error row belongs.
               ListHeaderComponent={
                 sending ? (
-                  <View className="self-start bg-gray-100 rounded-2xl rounded-bl-md px-4 py-2.5 mb-2 flex-row items-center">
-                    <ActivityIndicator size="small" color={PRIMARY} />
-                    <Text className="text-sm text-gray-500 ml-2">{a.thinking}</Text>
+                  <View className="self-start bg-border-soft rounded-2xl rounded-bl-md px-4 py-2.5 mb-2 flex-row items-center">
+                    <ActivityIndicator size="small" color={c.primary} />
+                    <Text className="text-sm text-muted ml-2">{a.thinking}</Text>
                   </View>
                 ) : error ? (
                   <Text className="text-xs text-red-600 mb-2">{a.errorMsg}</Text>
@@ -222,17 +222,17 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
                 {call.status === 'listening' ? <PulseRing /> : null}
                 <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
                   {call.status === 'thinking' ? (
-                    <ActivityIndicator size="small" color={PRIMARY} />
+                    <ActivityIndicator size="small" color={c.primary} />
                   ) : call.status === 'speaking' ? (
-                    <Volume2 size={18} color={PRIMARY} />
+                    <Volume2 size={18} color={c.primary} />
                   ) : (
-                    <Mic size={18} color={PRIMARY} />
+                    <Mic size={18} color={c.primary} />
                   )}
                 </View>
               </View>
               <View className="flex-1" style={{ marginLeft: 28, marginRight: 12 }}>
-                <Text className="text-sm font-semibold text-gray-900">{callStatusLabel}</Text>
-                <Text className="text-xs text-gray-500" numberOfLines={1}>
+                <Text className="text-sm font-semibold text-ink">{callStatusLabel}</Text>
+                <Text className="text-xs text-muted" numberOfLines={1}>
                   {call.status === 'speaking'
                     ? a.callInterrupt
                     : call.status === 'thinking'
@@ -253,7 +253,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
             </Pressable>
           ) : (
             <View
-              className="flex-row items-end px-4 pt-2 border-t border-gray-100"
+              className="flex-row items-end px-4 pt-2 border-t border-border-soft"
               style={{ paddingBottom: insets.bottom + 12 }}
             >
               <TextInput
@@ -261,8 +261,8 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
                 onChangeText={setText}
                 multiline
                 placeholder={a.placeholder}
-                placeholderTextColor="#9CA3AF"
-                className="flex-1 rounded-2xl border border-gray-200 px-4 py-2.5 text-[15px] text-gray-900"
+                placeholderTextColor={c.faint}
+                className="flex-1 rounded-2xl border border-border px-4 py-2.5 text-[15px] text-ink"
                 style={{ maxHeight: 100 }}
               />
               {call.supported ? (
@@ -270,9 +270,9 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
                   onPress={call.start}
                   hitSlop={4}
                   accessibilityLabel={a.callButton}
-                  className="w-10 h-10 rounded-full items-center justify-center ml-2 bg-gray-100 active:bg-gray-200"
+                  className="w-10 h-10 rounded-full items-center justify-center ml-2 bg-border-soft active:bg-border"
                 >
-                  <AudioLines size={18} color="#4B5563" />
+                  <AudioLines size={18} color={c.muted} />
                 </Pressable>
               ) : null}
               <Pressable

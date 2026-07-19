@@ -16,6 +16,7 @@ import { CloudOff, RefreshCw, AlertCircle, X, Clock } from 'lucide-react-native'
 import { useOutboxStore, pendingCount, errorCount, type OutboxOp } from '@/lib/offline/outbox';
 import { useNetworkStore } from '@/lib/offline/network';
 import { retryAndDrain } from '@/lib/offline/syncRunner';
+import { useThemeColors } from '@/lib/ThemeProvider';
 
 function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
@@ -148,6 +149,7 @@ function DetailSheet({
   ops: OutboxOp[];
   hasErrors: boolean;
 }) {
+  const c = useThemeColors();
   // fade (not slide) so the dim backdrop eases in smoothly instead of a gray
   // bar sliding up from the bottom — matches the rest of the app.
   return (
@@ -180,7 +182,7 @@ function DetailSheet({
               Cambios sin sincronizar
             </Text>
             <Pressable onPress={onClose} hitSlop={8}>
-              <X size={22} color="#6B7280" />
+              <X size={22} color={c.muted} />
             </Pressable>
           </View>
 
@@ -204,7 +206,7 @@ function DetailSheet({
                       borderBottomColor: '#F3F4F6',
                     }}
                   >
-                    <Clock size={16} color="#9CA3AF" />
+                    <Clock size={16} color={c.faint} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: '#111827', fontWeight: '600', fontSize: 14 }}>
                         {op.label}

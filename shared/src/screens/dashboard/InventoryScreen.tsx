@@ -9,6 +9,7 @@ import {
   TrendingUp,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
@@ -49,6 +50,7 @@ export function InventoryScreen({
   modalsSlot,
 }: InventoryScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.inventory;
 
   const [search, setSearch] = usePersistedSearch('search.inventory');
@@ -83,8 +85,8 @@ export function InventoryScreen({
     <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
       {/* Header — the "add item" action lives in the bottom-right FAB. */}
       <View className="mb-5">
-        <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-        <Text className="text-sm text-gray-500 mt-0.5">
+        <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+        <Text className="text-sm text-muted mt-0.5">
           {summaryText}
           {lowStockCount > 0 ? (
             <Text className="text-orange-500 font-medium"> · {summaryLowStockText}</Text>
@@ -94,8 +96,8 @@ export function InventoryScreen({
 
       {/* Low stock banner */}
       {lowStockCount > 0 ? (
-        <View className="flex-row items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
-          <AlertTriangle size={18} color="#F97316" />
+        <View className="flex-row items-center gap-3 bg-orange-500/10 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
+          <AlertTriangle size={18} color={c.warning} />
           <Text className="text-sm text-orange-700 flex-1">
             <Text className="font-semibold">{lowStockBannerText}</Text> {t.lowStockBannerSuffix}
             <Text
@@ -115,21 +117,21 @@ export function InventoryScreen({
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color="#9CA3AF" />}
+          leftIcon={<Search size={16} color={c.faint} />}
         />
       </View>
 
       {/* Filters — below the search. */}
-      <View className="flex-row gap-1 bg-gray-100 p-1 rounded-xl self-start mb-4">
+      <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl self-start mb-4">
         {(['todos', 'bajo_stock'] as const).map(f => (
           <Pressable
             key={f}
             onPress={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg ${filter === f ? 'bg-white' : ''}`}
+            className={`px-3 py-1.5 rounded-lg ${filter === f ? 'bg-card' : ''}`}
           >
             <Text
               className={`text-xs font-semibold ${
-                filter === f ? 'text-gray-900' : 'text-gray-500'
+                filter === f ? 'text-ink' : 'text-muted'
               }`}
             >
               {f === 'todos' ? t.filters.all : t.filters.lowStock}
@@ -149,8 +151,8 @@ export function InventoryScreen({
         </View>
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
-          <Package size={40} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-3">
+          <Package size={40} color={c.faint} />
+          <Text className="text-sm text-faint mt-3">
             {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
           </Text>
           {!search && filter === 'todos' ? (
@@ -168,41 +170,41 @@ export function InventoryScreen({
               item.sku ? t.itemMeta.skuPrefix.replace('{{sku}}', item.sku) : null,
             ].filter(Boolean).join(' · ');
             return (
-              <View key={item.id} className="bg-white rounded-2xl border border-gray-100 p-4">
+              <View key={item.id} className="bg-card rounded-2xl border border-border-soft p-4">
                 {/* Name + prominent stock */}
                 <View className="flex-row items-start justify-between gap-3">
                   <View className="flex-1 min-w-0">
                     <View className="flex-row items-center gap-1.5">
-                      <Text className="text-base font-semibold text-gray-900 shrink" numberOfLines={1}>
+                      <Text className="text-base font-semibold text-ink shrink" numberOfLines={1}>
                         {item.name}
                       </Text>
-                      {low ? <AlertTriangle size={14} color="#FB923C" /> : null}
+                      {low ? <AlertTriangle size={14} color={c.warning} /> : null}
                     </View>
                     {meta ? (
-                      <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>{meta}</Text>
+                      <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>{meta}</Text>
                     ) : null}
                   </View>
                   <View className="items-end">
-                    <Text className={`text-xl font-bold ${low ? 'text-orange-500' : 'text-gray-900'}`}>
+                    <Text className={`text-xl font-bold ${low ? 'text-orange-500' : 'text-ink'}`}>
                       {item.quantity}
                     </Text>
-                    <Text className="text-[11px] text-gray-400">{unitLabel(item.unit)}</Text>
+                    <Text className="text-[11px] text-faint">{unitLabel(item.unit)}</Text>
                   </View>
                 </View>
                 {/* Cost + min + actions */}
-                <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                  <Text className="text-xs text-gray-500">
+                <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-xs text-muted">
                     ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
                   </Text>
                   <View className="flex-row items-center gap-1">
                     <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
-                      <TrendingUp size={16} color="#4F46E5" />
+                      <TrendingUp size={16} color={c.primary} />
                     </Pressable>
-                    <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-gray-100">
-                      <Pencil size={16} color="#9CA3AF" />
+                    <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
+                      <Pencil size={16} color={c.faint} />
                     </Pressable>
-                    <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-50">
-                      <Trash2 size={16} color="#F87171" />
+                    <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                      <Trash2 size={16} color={c.danger} />
                     </Pressable>
                   </View>
                 </View>

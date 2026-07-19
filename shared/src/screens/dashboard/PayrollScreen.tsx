@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wren
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { DatePicker } from '../../ui';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
@@ -162,6 +163,7 @@ export function PayrollScreen({
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
+  const c = useThemeColors();
 
   // Mark-paid sheet state.
   // Settings sheet — edits a DRAFT; nothing persists until Save.
@@ -502,55 +504,55 @@ export function PayrollScreen({
   return (
     <View className="flex-1 bg-surface">
       {/* Header */}
-      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-1 flex-1">
-          <Text className="text-base font-semibold text-gray-900">{t.title}</Text>
-          <Text className="text-xs text-gray-400">{t.subtitle}</Text>
+          <Text className="text-base font-semibold text-ink">{t.title}</Text>
+          <Text className="text-xs text-faint">{t.subtitle}</Text>
         </View>
         {onHistoryPress ? (
           <Pressable
             onPress={onHistoryPress}
             hitSlop={8}
-            className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-xl mr-1 active:bg-gray-50"
+            className="flex-row items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-xl mr-1 active:bg-surface"
           >
-            <History size={15} color="#374151" />
-            <Text className="text-xs font-semibold text-gray-700">{t.historyTitle}</Text>
+            <History size={15} color={c.muted} />
+            <Text className="text-xs font-semibold text-ink">{t.historyTitle}</Text>
           </Pressable>
         ) : null}
         {canManage ? (
-          <Pressable onPress={openSettings} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
-            <Settings size={20} color="#6B7280" />
+          <Pressable onPress={openSettings} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+            <Settings size={20} color={c.muted} />
           </Pressable>
         ) : null}
       </View>
 
       <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-4">
         {/* Period navigator */}
-        <View className="flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-2 py-2">
-          <Pressable onPress={onPrevPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-gray-100">
-            <ChevronLeft size={20} color="#6B7280" />
+        <View className="flex-row items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
+          <Pressable onPress={onPrevPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-border-soft">
+            <ChevronLeft size={20} color={c.muted} />
           </Pressable>
-          <Text className="text-sm font-semibold text-gray-900">{periodLabel}</Text>
-          <Pressable onPress={onNextPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-gray-100">
-            <ChevronRight size={20} color="#6B7280" />
+          <Text className="text-sm font-semibold text-ink">{periodLabel}</Text>
+          <Pressable onPress={onNextPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-border-soft">
+            <ChevronRight size={20} color={c.muted} />
           </Pressable>
         </View>
 
         {/* Summary */}
         <View className="flex-row gap-3">
-          <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalHours}</Text>
-            <Text className="text-lg font-bold text-gray-900" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{Math.round(totalHours * 100) / 100}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalHours}</Text>
+            <Text className="text-lg font-bold text-ink" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{Math.round(totalHours * 100) / 100}</Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalPay}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalPay}</Text>
             <Text className="text-lg font-bold text-primary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPay)}</Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-            <Text className="text-[11px] text-gray-400" numberOfLines={1}>{t.totalPending}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
+            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalPending}</Text>
             <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPending)}</Text>
           </View>
         </View>
@@ -561,16 +563,16 @@ export function PayrollScreen({
           <View className="flex-row gap-3">
             {allWorkers && allWorkers.length > 0 ? (
               <Pressable onPress={openManual}
-                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white border border-gray-200 py-2.5 rounded-xl active:bg-gray-50">
-                <Banknote size={15} color="#374151" />
-                <Text className="text-sm font-semibold text-gray-700">{t.manualPayBtn}</Text>
+                className="flex-1 flex-row items-center justify-center gap-1.5 bg-card border border-border py-2.5 rounded-xl active:bg-surface">
+                <Banknote size={15} color={c.muted} />
+                <Text className="text-sm font-semibold text-ink">{t.manualPayBtn}</Text>
               </Pressable>
             ) : null}
             {onAddLoan ? (
               <Pressable onPress={openLoansGlobal}
-                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white border border-gray-200 py-2.5 rounded-xl active:bg-gray-50">
-                <Landmark size={15} color="#374151" />
-                <Text className="text-sm font-semibold text-gray-700">{t.loanViewBtn}</Text>
+                className="flex-1 flex-row items-center justify-center gap-1.5 bg-card border border-border py-2.5 rounded-xl active:bg-surface">
+                <Landmark size={15} color={c.muted} />
+                <Text className="text-sm font-semibold text-ink">{t.loanViewBtn}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -578,14 +580,14 @@ export function PayrollScreen({
 
         {rows.length > 0 ? (
           <View className="flex-row items-center justify-between -mt-1">
-            <Text className="text-xs text-gray-400">
+            <Text className="text-xs text-faint">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </Text>
-            <View className="flex-row gap-1 bg-gray-100 p-1 rounded-lg">
+            <View className="flex-row gap-1 bg-border-soft p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 <Pressable key={v} onPress={() => changeView(v)}
-                  className={`p-1.5 rounded-md ${view === v ? 'bg-white shadow-sm' : ''}`}>
-                  <Icon size={15} color={view === v ? '#111827' : '#9CA3AF'} />
+                  className={`p-1.5 rounded-md ${view === v ? 'bg-card shadow-sm' : ''}`}>
+                  <Icon size={15} color={view === v ? c.ink : c.faint} />
                 </Pressable>
               ))}
             </View>
@@ -600,7 +602,7 @@ export function PayrollScreen({
             </View>
           </View>
         ) : rows.length === 0 ? (
-          <Text className="text-sm text-gray-400 text-center py-10">{t.empty}</Text>
+          <Text className="text-sm text-faint text-center py-10">{t.empty}</Text>
         ) : view === 'grid' ? (
           <View className="flex-row flex-wrap justify-between">
             {sortedRows.map(r => {
@@ -609,7 +611,7 @@ export function PayrollScreen({
               const action = (r.payments?.length ?? 0) > 0 ? (
                 <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage} className="self-start">
                   <View className={`px-2 py-0.5 rounded-full flex-row items-center gap-1 ${isPartial(r) ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-                    <Check size={11} color={isPartial(r) ? '#B45309' : '#047857'} />
+                    <Check size={11} color={isPartial(r) ? c.warning : c.success} />
                     <Text className={`text-[11px] font-semibold ${isPartial(r) ? 'text-amber-700' : 'text-emerald-700'}`}>
                       {isPartial(r)
                         ? `${t.partialLabel} ${fmt(paidTotal(r))}${paidHours(r) > 0 ? ` · ${Math.round(paidHours(r) * 100) / 100} h` : ''}`
@@ -624,23 +626,23 @@ export function PayrollScreen({
                 </Pressable>
               ) : null;
               return (
-                <View key={r.employeeId} className={`${gridTwoCol ? 'w-[48.5%]' : 'w-full flex-row items-center'} bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 mb-3`}>
+                <View key={r.employeeId} className={`${gridTwoCol ? 'w-[48.5%]' : 'w-full flex-row items-center'} bg-card rounded-2xl border border-border-soft shadow-sm p-3.5 mb-3`}>
                   <View className={gridTwoCol ? '' : 'flex-1 min-w-0'}>
                     <Pressable onPress={() => setDetailRow(r)} className="active:opacity-60">
-                      <Text className="text-[11px] text-gray-400">
+                      <Text className="text-[11px] text-faint">
                         {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
                       </Text>
-                      <Text className="text-sm font-semibold text-gray-900 mt-0.5" numberOfLines={1}>{r.name}</Text>
+                      <Text className="text-sm font-semibold text-ink mt-0.5" numberOfLines={1}>{r.name}</Text>
                     </Pressable>
                     {isPartial(r) ? (
                       <Text className="text-xl font-bold text-amber-600 mt-1">
                         {fmt(checkBaseOf(r))}
-                        <Text className="text-xs font-semibold text-gray-400"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                        <Text className="text-xs font-semibold text-faint"> {t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
                       </Text>
                     ) : overpaid(r) ? (
                       <Text className="text-xl font-bold text-amber-600 mt-1">
                         {fmt(paidTotal(r))}
-                        <Text className="text-xs font-semibold text-gray-400"> {t.paidTag}</Text>
+                        <Text className="text-xs font-semibold text-faint"> {t.paidTag}</Text>
                       </Text>
                     ) : (
                       <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
@@ -653,43 +655,43 @@ export function PayrollScreen({
             })}
           </View>
         ) : (
-          <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <View className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
             {sortedRows.map((r, i) => (
               <View
                 key={r.employeeId}
-                className={`px-4 py-3.5 flex-row items-center gap-3 ${i < sortedRows.length - 1 ? 'border-b border-gray-50' : ''}`}
+                className={`px-4 py-3.5 flex-row items-center gap-3 ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 {/* Name/hours area opens the hours breakdown. */}
                 <Pressable onPress={() => setDetailRow(r)} className="flex-1 min-w-0 flex-row items-center gap-1.5 active:opacity-60">
                   <View className="flex-1 min-w-0">
-                    <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{r.name}</Text>
-                    <Text className="text-xs text-gray-400">
+                    <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{r.name}</Text>
+                    <Text className="text-xs text-faint">
                       {Math.round(r.hours * 100) / 100} h · {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''}
                       {(r.overtimeHours ?? 0) > 0 ? ` · ${Math.round((r.overtimeHours ?? 0) * 100) / 100} h ${t.otShort}` : ''}
                       {(r.driverPay ?? 0) > 0 ? ` · ${fmt(r.driverPay ?? 0)} ${t.driveShort}` : ''}
                     </Text>
                   </View>
-                  <ChevronRight size={14} color="#D1D5DB" />
+                  <ChevronRight size={14} color={c.faint} />
                 </Pressable>
                 <View className="items-end">
                   {isPartial(r) ? (
                     <View className="items-end">
                       <Text className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</Text>
-                      <Text className="text-[11px] text-gray-400">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
+                      <Text className="text-[11px] text-faint">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
                     </View>
                   ) : overpaid(r) ? (
                     <View className="items-end">
                       <Text className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</Text>
-                      <Text className="text-[11px] text-gray-400">{t.paidTag}</Text>
+                      <Text className="text-[11px] text-faint">{t.paidTag}</Text>
                     </View>
                   ) : (
-                    <Text className="text-sm font-bold text-gray-900">{fmt(r.pay)}</Text>
+                    <Text className="text-sm font-bold text-ink">{fmt(r.pay)}</Text>
                   )}
                   {(r.payments?.length ?? 0) > 0 ? (
                     <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage}>
                       <View className="flex-row items-center gap-1 mt-0.5">
                         <View className={`px-2 py-0.5 rounded-full flex-row items-center gap-1 ${isPartial(r) ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-                          <Check size={11} color={isPartial(r) ? '#B45309' : '#047857'} />
+                          <Check size={11} color={isPartial(r) ? c.warning : c.success} />
                           <Text className={`text-[11px] font-semibold ${isPartial(r) ? 'text-amber-700' : 'text-emerald-700'}`}>
                             {isPartial(r)
                               ? `${t.partialLabel} ${fmt(paidTotal(r))}${paidHours(r) > 0 ? ` · ${Math.round(paidHours(r) * 100) / 100} h` : ''}`
@@ -718,48 +720,48 @@ export function PayrollScreen({
                     onPress={() => setManualOpen(false)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-gray-900">{t.manualPayBtn}</Text>
-              <Pressable onPress={() => setManualOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100">
-                <X size={20} color="#9CA3AF" />
+              <Text className="text-lg font-bold text-ink">{t.manualPayBtn}</Text>
+              <Pressable onPress={() => setManualOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.manualPeriodLabel}</Text>
+              <Text className="text-sm font-semibold text-ink mb-2">{t.manualPeriodLabel}</Text>
               <Pressable
                 onPress={() => setManualPeriodPickerOpen(true)}
-                className="mb-4 flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                className="mb-4 flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
               >
-                <Text className="text-base flex-1 text-gray-900" numberOfLines={1}>
+                <Text className="text-base flex-1 text-ink" numberOfLines={1}>
                   {manualPeriods.find(pr => pr.start === manualPeriod)?.label ?? ''}
                 </Text>
-                <ChevronDown size={16} color="#9CA3AF" />
+                <ChevronDown size={16} color={c.faint} />
               </Pressable>
 
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.manualWorkerLabel}</Text>
+              <Text className="text-sm font-semibold text-ink mb-2">{t.manualWorkerLabel}</Text>
               <Pressable
                 onPress={() => { setWorkerSearch(''); setManualPickerOpen(true); }}
-                className="mb-4 flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                className="mb-4 flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
               >
-                <Text className={`text-base flex-1 ${manualWorker ? 'text-gray-900' : 'text-gray-400'}`} numberOfLines={1}>
+                <Text className={`text-base flex-1 ${manualWorker ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                   {(allWorkers ?? []).find(w => w.id === manualWorker)?.name ?? t.manualSelectWorker}
                 </Text>
-                <ChevronDown size={16} color="#9CA3AF" />
+                <ChevronDown size={16} color={c.faint} />
               </Pressable>
 
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</Text>
               <View className="flex-row gap-2 mb-4">
                 {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                   const on = manualMethod === m;
                   return (
                     <Pressable key={m} onPress={() => setManualMethod(m)}
-                      className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}>
-                      <Icon size={16} color={on ? '#4F46E5' : '#9CA3AF'} />
-                      <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
+                      className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}>
+                      <Icon size={16} color={on ? c.primary : c.faint} />
+                      <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-muted'}`}>{label}</Text>
                     </Pressable>
                   );
                 })}
@@ -767,25 +769,25 @@ export function PayrollScreen({
 
               {manualMethod === 'check' ? (
                 <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</Text>
+                  <Text className="text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</Text>
                   <TextInput value={manualCheck} onChangeText={setManualCheck} placeholder={t.checkNumberPlaceholder}
-                    placeholderTextColor="#9CA3AF" keyboardType="number-pad"
-                    className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+                    placeholderTextColor={c.faint} keyboardType="number-pad"
+                    className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
                 </View>
               ) : null}
 
               <View className="mb-4">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">{t.amountLabel}</Text>
+                <Text className="text-sm font-semibold text-ink mb-2">{t.amountLabel}</Text>
                 <TextInput value={manualAmount} onChangeText={v => setManualAmount(v.replace(/[^0-9.]/g, ''))} placeholder="0.00"
-                  placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+                  placeholderTextColor={c.faint} keyboardType="decimal-pad"
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
               </View>
 
               <View className="mb-4">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">{t.hoursCoveredLabel}</Text>
+                <Text className="text-sm font-semibold text-ink mb-2">{t.hoursCoveredLabel}</Text>
                 <TextInput value={manualHours} onChangeText={v => setManualHours(v.replace(/[^0-9.]/g, ''))} placeholder="0"
-                  placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900" />
+                  placeholderTextColor={c.faint} keyboardType="decimal-pad"
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
               </View>
 
               <Pressable onPress={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
@@ -803,16 +805,16 @@ export function PayrollScreen({
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
               />
               <View
-                className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+                className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
                 style={{ height: '70%', marginBottom: insets.bottom + 12, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 24 }}
               >
                 <View className="items-center mb-2">
-                  <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                  <View className="w-10 h-1 bg-border rounded-full" />
                 </View>
                 <View className="px-5 mb-3 flex-row items-center justify-between">
-                  <Text className="text-base font-semibold text-gray-900">{t.manualPeriodLabel}</Text>
+                  <Text className="text-base font-semibold text-ink">{t.manualPeriodLabel}</Text>
                   <Pressable onPress={() => setManualPeriodPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                    <X size={22} color="#9CA3AF" />
+                    <X size={22} color={c.faint} />
                   </Pressable>
                 </View>
                 <ScrollView className="flex-1">
@@ -822,10 +824,10 @@ export function PayrollScreen({
                       <Pressable
                         key={pr.start}
                         onPress={() => { setManualPeriod(pr.start); setManualPeriodPickerOpen(false); }}
-                        className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}
+                        className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${isSel ? 'bg-primary/5' : ''}`}
                       >
-                        <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{pr.label}</Text>
-                        {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                        <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`}>{pr.label}</Text>
+                        {isSel ? <Check size={16} color={c.primary} /> : null}
                       </Pressable>
                     );
                   })}
@@ -844,7 +846,7 @@ export function PayrollScreen({
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -856,23 +858,23 @@ export function PayrollScreen({
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.manualWorkerLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.manualWorkerLabel}</Text>
               <Pressable onPress={() => setManualPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={workerSearch}
                   onChangeText={setWorkerSearch}
                   placeholder={t.manualSelectWorker}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
@@ -885,12 +887,12 @@ export function PayrollScreen({
                     <Pressable
                       key={w.id}
                       onPress={() => { setManualWorker(w.id); setManualPickerOpen(false); }}
-                      className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${isSel ? 'bg-primary/5' : ''}`}
+                      className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${isSel ? 'bg-primary/5' : ''}`}
                     >
-                      <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-gray-900'}`} numberOfLines={1}>
+                      <Text className={`text-sm flex-1 ${isSel ? 'text-primary font-semibold' : 'text-ink'}`} numberOfLines={1}>
                         {w.name}
                       </Text>
-                      {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                      {isSel ? <Check size={16} color={c.primary} /> : null}
                     </Pressable>
                   );
                 })}
@@ -909,22 +911,22 @@ export function PayrollScreen({
                     onPress={() => setSettingsOpen(false)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-gray-900">{t.settingsTitle}</Text>
-              <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-gray-100">
-                <X size={20} color="#9CA3AF" />
+              <Text className="text-lg font-bold text-ink">{t.settingsTitle}</Text>
+              <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.freqLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.freqLabel}</Text>
               <View className="flex-row gap-2 mb-4">
                 {FREQS.map(f => {
                   const on = f === draftFreq;
                   return (
                     <Pressable key={f} onPress={() => setDraftFreq(f)}
-                      className={`flex-1 py-2.5 rounded-xl items-center border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}>
-                      <Text className={`text-sm font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{freqLabel[f]}</Text>
+                      className={`flex-1 py-2.5 rounded-xl items-center border ${on ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}>
+                      <Text className={`text-sm font-semibold ${on ? 'text-primary' : 'text-muted'}`}>{freqLabel[f]}</Text>
                     </Pressable>
                   );
                 })}
@@ -932,37 +934,37 @@ export function PayrollScreen({
 
               {draftFreq === 'custom' ? (
                 <View className="mb-4">
-                  <Text className="text-xs text-gray-500 mb-1">{t.customDaysLabel}</Text>
+                  <Text className="text-xs text-muted mb-1">{t.customDaysLabel}</Text>
                   <TextInput
                     value={draftCustomDays}
                     onChangeText={setDraftCustomDays}
                     keyboardType="number-pad"
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                    className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                   />
                 </View>
               ) : null}
 
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.anchorLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.anchorLabel}</Text>
               <DatePicker value={draftAnchor} onChange={setDraftAnchor} />
-              <Text className="text-[11px] text-gray-400 mt-1.5 mb-4">{t.anchorHint}</Text>
+              <Text className="text-[11px] text-faint mt-1.5 mb-4">{t.anchorHint}</Text>
 
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.componentsHeading}</Text>
-              <View className="rounded-2xl border border-gray-100 p-4 gap-3 mb-5">
-                <Text className="text-sm font-medium text-gray-700">{t.driverHeading}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.componentsHeading}</Text>
+              <View className="rounded-2xl border border-border-soft p-4 gap-3 mb-5">
+                <Text className="text-sm font-medium text-ink">{t.driverHeading}</Text>
                 <View className="flex-row gap-2">
                   {([['same', t.driverSame], ['rate', t.driverRate], ['flat', t.driverFlat]] as [DriverPayMode, string][]).map(([m, label]) => (
                     <Pressable key={m}
                       onPress={() => setDraftConfig({ ...draftConfig, driver: { ...draftConfig.driver, mode: m } })}
                       className={`flex-1 py-2 rounded-xl items-center border ${
-                        draftConfig.driver.mode === m ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+                        draftConfig.driver.mode === m ? 'bg-primary/10 border-primary' : 'bg-card border-border'
                       }`}>
-                      <Text className={`text-xs font-semibold ${draftConfig.driver.mode === m ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
+                      <Text className={`text-xs font-semibold ${draftConfig.driver.mode === m ? 'text-primary' : 'text-muted'}`}>{label}</Text>
                     </Pressable>
                   ))}
                 </View>
                 {draftConfig.driver.mode !== 'same' ? (
                   <View>
-                    <Text className="text-xs text-gray-500 mb-1">
+                    <Text className="text-xs text-muted mb-1">
                       {draftConfig.driver.mode === 'rate' ? t.driverRateLabel : t.driverFlatLabel}
                     </Text>
                     <TextInput
@@ -975,39 +977,39 @@ export function PayrollScreen({
                         });
                       }}
                       keyboardType="decimal-pad"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                     />
                   </View>
                 ) : null}
               </View>
 
-              <View className="rounded-2xl border border-gray-100 p-4 gap-3 mb-5">
+              <View className="rounded-2xl border border-border-soft p-4 gap-3 mb-5">
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-sm font-medium text-gray-700">{t.formulaHeading}</Text>
+                  <Text className="text-sm font-medium text-ink">{t.formulaHeading}</Text>
                   {draftConfig.formula ? (
                     <Pressable
                       onPress={() => setDraftConfig(c => ({ ...c, formula: null }))}
-                      className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white active:bg-gray-50"
+                      className="px-3 py-1.5 rounded-lg border border-border bg-card active:bg-surface"
                     >
-                      <Text className="text-xs font-semibold text-gray-600">{t.formulaRemove}</Text>
+                      <Text className="text-xs font-semibold text-muted">{t.formulaRemove}</Text>
                     </Pressable>
                   ) : null}
                 </View>
                 {!draftConfig.formula ? (
                   <>
-                    <Text className="text-xs text-gray-400">{t.formulaStandardHint}</Text>
+                    <Text className="text-xs text-faint">{t.formulaStandardHint}</Text>
                     <Pressable
                       onPress={() => setDraftConfig(c => ({ ...c, formula: [] }))}
-                      className="py-2 rounded-xl border border-dashed border-gray-300 items-center active:opacity-80"
+                      className="py-2 rounded-xl border border-dashed border-border items-center active:opacity-80"
                     >
-                      <Text className="text-sm font-semibold text-gray-500">{t.formulaCreate}</Text>
+                      <Text className="text-sm font-semibold text-muted">{t.formulaCreate}</Text>
                     </Pressable>
                   </>
                 ) : (
                   <>
-                    <View className="min-h-[52px] rounded-xl bg-gray-50 border border-gray-100 p-2 flex-row flex-wrap items-center gap-1.5">
+                    <View className="min-h-[52px] rounded-xl bg-surface border border-border-soft p-2 flex-row flex-wrap items-center gap-1.5">
                       {draftConfig.formula.length === 0 ? (
-                        <Text className="text-xs text-gray-400 px-1">{t.formulaEmpty}</Text>
+                        <Text className="text-xs text-faint px-1">{t.formulaEmpty}</Text>
                       ) : (
                         draftConfig.formula.map((tok, i) => (
                           <Pressable
@@ -1015,13 +1017,13 @@ export function PayrollScreen({
                             onPress={() => removeTok(i)}
                             className={`px-2 py-1 rounded-lg border ${
                               tok.t === 'op' || tok.t === 'lp' || tok.t === 'rp' || tok.t === 'num'
-                                ? 'bg-white border-gray-200'
+                                ? 'bg-card border-border'
                                 : 'bg-primary/10 border-primary/30'
                             }`}
                           >
                             <Text className={`text-xs font-semibold ${
-                              tok.t === 'op' || tok.t === 'lp' || tok.t === 'rp' ? 'text-gray-700'
-                              : tok.t === 'num' ? 'text-gray-900' : 'text-primary'
+                              tok.t === 'op' || tok.t === 'lp' || tok.t === 'rp' ? 'text-ink'
+                              : tok.t === 'num' ? 'text-ink' : 'text-primary'
                             }`}>{tokLabel(tok)}</Text>
                           </Pressable>
                         ))
@@ -1030,37 +1032,37 @@ export function PayrollScreen({
                     {formulaError ? (
                       <Text className="text-xs text-red-500">{t.formulaInvalid}</Text>
                     ) : (
-                      <Text className="text-[11px] text-gray-400">{t.formulaBuildHint}</Text>
+                      <Text className="text-[11px] text-faint">{t.formulaBuildHint}</Text>
                     )}
 
                     <View className="flex-row flex-wrap gap-1.5 items-center">
                       {(['+', '-', '*', '/'] as const).map(op => (
                         <Pressable key={op} onPress={() => pushTok({ t: 'op', v: op })}
-                          className="w-9 h-8 rounded-lg border border-gray-200 items-center justify-center active:bg-gray-50">
-                          <Text className="text-sm font-bold text-gray-700">{OP_SYMBOLS[op]}</Text>
+                          className="w-9 h-8 rounded-lg border border-border items-center justify-center active:bg-surface">
+                          <Text className="text-sm font-bold text-ink">{OP_SYMBOLS[op]}</Text>
                         </Pressable>
                       ))}
-                      <Pressable onPress={() => pushTok({ t: 'lp' })} className="w-9 h-8 rounded-lg border border-gray-200 items-center justify-center active:bg-gray-50">
-                        <Text className="text-sm font-bold text-gray-700">(</Text>
+                      <Pressable onPress={() => pushTok({ t: 'lp' })} className="w-9 h-8 rounded-lg border border-border items-center justify-center active:bg-surface">
+                        <Text className="text-sm font-bold text-ink">(</Text>
                       </Pressable>
-                      <Pressable onPress={() => pushTok({ t: 'rp' })} className="w-9 h-8 rounded-lg border border-gray-200 items-center justify-center active:bg-gray-50">
-                        <Text className="text-sm font-bold text-gray-700">)</Text>
+                      <Pressable onPress={() => pushTok({ t: 'rp' })} className="w-9 h-8 rounded-lg border border-border items-center justify-center active:bg-surface">
+                        <Text className="text-sm font-bold text-ink">)</Text>
                       </Pressable>
                       <TextInput
                         value={numEntry}
                         onChangeText={setNumEntry}
                         placeholder={t.formulaNumberPlaceholder}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="w-24 h-8 rounded-lg border border-gray-200 px-2 text-xs text-gray-900"
+                        className="w-24 h-8 rounded-lg border border-border px-2 text-xs text-ink"
                       />
                       <Pressable onPress={addNumEntry} disabled={!numEntry}
-                        className={`h-8 px-3 rounded-lg border border-gray-200 items-center justify-center ${numEntry ? 'active:bg-gray-50' : 'opacity-40'}`}>
-                        <Text className="text-xs font-semibold text-gray-700">{t.formulaAddNumber}</Text>
+                        className={`h-8 px-3 rounded-lg border border-border items-center justify-center ${numEntry ? 'active:bg-surface' : 'opacity-40'}`}>
+                        <Text className="text-xs font-semibold text-ink">{t.formulaAddNumber}</Text>
                       </Pressable>
                     </View>
 
-                    <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaVarsHeading}</Text>
+                    <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaVarsHeading}</Text>
                     <View className="flex-row flex-wrap gap-1.5">
                       {FORMULA_VARS.map(k => (
                         <Pressable key={k} onPress={() => pushTok({ t: 'var', k: k as FormulaVar })}
@@ -1072,13 +1074,13 @@ export function PayrollScreen({
                     </View>
                     {formulaFields && formulaFields.emp.length > 0 ? (
                       <>
-                        <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaEmpFieldsHeading}</Text>
+                        <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaEmpFieldsHeading}</Text>
                         <View className="flex-row flex-wrap gap-1.5">
                           {fieldChips(formulaFields.emp).map(c => (
                             <Pressable key={`${c.key}=${c.eq ?? ''}`}
                               onPress={() => pushTok({ t: 'ecf', k: c.key, label: c.label, ...(c.eq !== undefined ? { eq: c.eq } : {}) })}
                               onLongPress={() => Alert.alert(c.label, c.eq !== undefined ? t.formulaEcfMatchDesc : t.formulaEcfDesc)}
-                              className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 active:bg-amber-100">
+                              className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-200 active:bg-amber-100">
                               <Text className="text-xs font-semibold text-amber-700">{c.label}</Text>
                             </Pressable>
                           ))}
@@ -1087,23 +1089,23 @@ export function PayrollScreen({
                     ) : null}
                     {formulaFields && formulaFields.job.length > 0 ? (
                       <>
-                        <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formulaJobFieldsHeading}</Text>
+                        <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.formulaJobFieldsHeading}</Text>
                         <View className="flex-row flex-wrap gap-1.5">
                           {fieldChips(formulaFields.job).map(c => (
                             <Pressable key={`${c.key}=${c.eq ?? ''}`}
                               onPress={() => pushTok({ t: 'jcf', k: c.key, label: c.label, ...(c.eq !== undefined ? { eq: c.eq } : {}) })}
                               onLongPress={() => Alert.alert(c.label, c.eq !== undefined ? t.formulaJcfCountDesc : t.formulaJcfDesc)}
-                              className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 active:bg-emerald-100">
+                              className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-200 active:bg-emerald-100">
                               <Text className="text-xs font-semibold text-emerald-700">{c.label}</Text>
                             </Pressable>
                           ))}
                         </View>
-                        <Text className="text-[11px] text-gray-400">{t.formulaJobFieldHint}</Text>
+                        <Text className="text-[11px] text-faint">{t.formulaJobFieldHint}</Text>
                       </>
                     ) : null}
                     {draftConfig.formula.length > 0 ? (
                       <Pressable onPress={() => setDraftConfig(c => ({ ...c, formula: [] }))} className="self-start">
-                        <Text className="text-xs font-semibold text-gray-400">{t.formulaClear}</Text>
+                        <Text className="text-xs font-semibold text-faint">{t.formulaClear}</Text>
                       </Pressable>
                     ) : null}
                   </>
@@ -1125,39 +1127,39 @@ export function PayrollScreen({
                     onPress={() => setPayRow(null)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="items-center mb-4">
-              <Pressable onPress={() => setPayRow(null)} hitSlop={10} className="absolute right-0 top-0 p-1 rounded-lg active:bg-gray-100">
-                <X size={20} color="#9CA3AF" />
+              <Pressable onPress={() => setPayRow(null)} hitSlop={10} className="absolute right-0 top-0 p-1 rounded-lg active:bg-border-soft">
+                <X size={20} color={c.faint} />
               </Pressable>
-              <Text className="text-base font-semibold text-gray-900">{payRow?.name}</Text>
+              <Text className="text-base font-semibold text-ink">{payRow?.name}</Text>
               <Text className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</Text>
-              <Text className="text-sm text-gray-400 mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
+              <Text className="text-sm text-faint mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
               {payRow && componentsText(checkComponentsOf(payRow)) ? (
-                <Text className="text-xs text-gray-400 mt-0.5">{componentsText(checkComponentsOf(payRow))}</Text>
+                <Text className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</Text>
               ) : null}
             </View>
 
             {(payRow?.payments ?? []).length > 0 ? (
               <View className="mb-4">
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.alreadyPaidLabel}</Text>
-                <View className="rounded-xl border border-gray-100 overflow-hidden">
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.alreadyPaidLabel}</Text>
+                <View className="rounded-xl border border-border-soft overflow-hidden">
                   {(payRow?.payments ?? []).map((pmt, i) => (
-                    <View key={pmt.id} className={`px-3 py-2 flex-row items-center gap-2 ${i < (payRow?.payments?.length ?? 0) - 1 ? 'border-b border-gray-50' : ''}`}>
+                    <View key={pmt.id} className={`px-3 py-2 flex-row items-center gap-2 ${i < (payRow?.payments?.length ?? 0) - 1 ? 'border-b border-border-soft' : ''}`}>
                       <View className="flex-1 min-w-0">
-                        <Text className="text-sm font-semibold text-gray-900">{fmt(pmt.grossPay)}</Text>
-                        <Text className="text-[11px] text-gray-400">
+                        <Text className="text-sm font-semibold text-ink">{fmt(pmt.grossPay)}</Text>
+                        <Text className="text-[11px] text-faint">
                           {pmt.hours ? `${Math.round(pmt.hours * 100) / 100} h · ` : ''}
                           {paymentBadgeLabel(pmt)}
                           {pmt.paidAt ? ` · ${fmtDay(pmt.paidAt)}` : ''}
                           {componentsText(pmt.components) ? ` · ${componentsText(pmt.components)}` : ''}
                         </Text>
                       </View>
-                      <Pressable onPress={() => onDeletePayment(pmt.id)} disabled={busy} hitSlop={8} className="p-1.5 rounded-lg active:bg-red-50">
-                        <Trash2 size={15} color="#F87171" />
+                      <Pressable onPress={() => onDeletePayment(pmt.id)} disabled={busy} hitSlop={8} className="p-1.5 rounded-lg active:bg-red-500/10">
+                        <Trash2 size={15} color={c.danger} />
                       </Pressable>
                     </View>
                   ))}
@@ -1182,7 +1184,7 @@ export function PayrollScreen({
               </View>
             ) : null}
 
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.methodHeading}</Text>
+            <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</Text>
             <View className="flex-row gap-2 mb-4">
               {([['cash', Banknote, t.methodCash], ['check', FileText, t.methodCheck], ['wire', Landmark, t.methodWire]] as const).map(([m, Icon, label]) => {
                 const on = method === m;
@@ -1190,10 +1192,10 @@ export function PayrollScreen({
                   <Pressable
                     key={m}
                     onPress={() => setMethod(m)}
-                    className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+                    className={`flex-1 py-3 rounded-2xl items-center gap-1 border ${on ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}
                   >
-                    <Icon size={16} color={on ? '#4F46E5' : '#9CA3AF'} />
-                    <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-gray-500'}`}>{label}</Text>
+                    <Icon size={16} color={on ? c.primary : c.faint} />
+                    <Text className={`text-xs font-semibold ${on ? 'text-primary' : 'text-muted'}`}>{label}</Text>
                   </Pressable>
                 );
               })}
@@ -1201,49 +1203,49 @@ export function PayrollScreen({
 
             {method === 'check' ? (
               <View className="mb-4">
-                <Text className="text-sm font-semibold text-gray-700 mb-2">{t.checkNumberLabel}</Text>
+                <Text className="text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</Text>
                 <TextInput
                   value={checkNumber}
                   onChangeText={setCheckNumber}
                   placeholder={t.checkNumberPlaceholder}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={c.faint}
                   keyboardType="number-pad"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
                 />
               </View>
             ) : null}
 
 
             <View className="mb-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">{t.bonusLabel}</Text>
+              <Text className="text-sm font-semibold text-ink mb-2">{t.bonusLabel}</Text>
               <TextInput
                 value={bonus}
                 onChangeText={v => setBonus(v.replace(/[^0-9.]/g, ''))}
                 placeholder="0.00"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.faint}
                 keyboardType="decimal-pad"
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
+                className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
               />
             </View>
 
             {/* Loan tracker — outstanding balance + deduct from this check.
                Full history / add / delete lives in the loans overlay. */}
             {payRow && onAddLoan ? (
-              <View className="mb-4 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-sm font-semibold text-gray-700">{t.loanTitle}</Text>
-                  <Text className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                  <Text className="text-sm font-semibold text-ink">{t.loanTitle}</Text>
+                  <Text className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                     {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
                   </Text>
                 </View>
                 {loanBalanceOf(payRow.employeeId) > 0 ? (
                   <View className="mt-2">
-                    <Text className="text-xs text-gray-500 mb-1">{t.loanDeductLabel}</Text>
+                    <Text className="text-xs text-muted mb-1">{t.loanDeductLabel}</Text>
                     <TextInput value={loanDeduct} onChangeText={v => setLoanDeduct(v.replace(/[^0-9.]/g, ''))}
-                      placeholder="0.00" placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                      placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad"
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
-                      <Text className="text-xs text-gray-500 mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-gray-900">{fmt(netToPay)}</Text></Text>
+                      <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink">{fmt(netToPay)}</Text></Text>
                     ) : null}
                   </View>
                 ) : null}
@@ -1262,29 +1264,29 @@ export function PayrollScreen({
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end">
               <Pressable onPress={() => setShowLoans(false)}
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-              <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+              <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
                 <View className="flex-row items-center justify-between mb-3">
                   <View>
-                    <Text className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</Text>
-                    <Text className={`text-sm font-semibold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    <Text className="text-lg font-bold text-ink">{t.loanHistoryTitle}</Text>
+                    <Text className={`text-sm font-semibold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                       {fmt(loanBalanceOf(payRow.employeeId))} {t.loanOwed}
                     </Text>
                   </View>
-                  <Pressable onPress={() => setShowLoans(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                  <Pressable onPress={() => setShowLoans(false)} hitSlop={10} className="p-1"><X size={22} color={c.muted} /></Pressable>
                 </View>
 
                 {/* Add / edit loan */}
                 {showAddLoan || editingEntry ? (
-                  <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <Text className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</Text>
+                  <View className="gap-2 mb-3 rounded-2xl border border-border-soft bg-surface p-3">
+                    <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</Text>
                     <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
-                      placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
-                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor="#9CA3AF"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                      placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
-                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
+                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-border-soft items-center"><Text className="text-sm font-semibold text-muted">{full.common.buttons.cancel}</Text></Pressable>
                       <Pressable onPress={editingEntry ? submitEditLoan : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0} className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) > 0 ? 'bg-primary active:opacity-90' : 'bg-primary/50'}`}><Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text></Pressable>
                     </View>
                   </View>
@@ -1298,26 +1300,26 @@ export function PayrollScreen({
                 {/* History */}
                 <ScrollView className="max-h-80">
                   {loanEntriesOf(payRow.employeeId).length === 0 ? (
-                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</Text>
+                    <Text className="text-sm text-faint text-center py-6">{t.loanEmpty}</Text>
                   ) : loanEntriesOf(payRow.employeeId).map(e => {
                     const isLoan = e.amount >= 0;
                     return (
-                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-gray-50">
+                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-border-soft">
                         <View className="flex-1 min-w-0">
-                          <Text className="text-sm font-semibold text-gray-900">
+                          <Text className="text-sm font-semibold text-ink">
                             <Text className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</Text>
                             {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
                           </Text>
-                          <Text className="text-xs text-gray-400">
+                          <Text className="text-xs text-faint">
                             {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
                             {e.note ? ` · ${e.note}` : ''}
                           </Text>
                         </View>
                         {onEditLoan ? (
-                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color="#6B7280" /></Pressable>
+                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color={c.muted} /></Pressable>
                         ) : null}
                         {onDeleteLoan ? (
-                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
+                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color={c.danger} /></Pressable>
                         ) : null}
                       </View>
                     );
@@ -1336,14 +1338,14 @@ export function PayrollScreen({
                     onPress={() => setDetailRow(null)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="flex-row items-start justify-between mb-4">
               <View className="flex-1 pr-3">
-                <Text className="text-lg font-bold text-gray-900">{detailRow?.name}</Text>
-                <Text className="text-sm text-gray-500">
+                <Text className="text-lg font-bold text-ink">{detailRow?.name}</Text>
+                <Text className="text-sm text-muted">
                   {fmt(detailRow?.pay ?? 0)} · {Math.round((detailRow?.hours ?? 0) * 100) / 100} h
                 </Text>
                 {detailRow && paidTotal(detailRow) > 0 ? (
@@ -1353,46 +1355,46 @@ export function PayrollScreen({
                 ) : null}
               </View>
               <Pressable onPress={() => setDetailRow(null)} hitSlop={10} className="p-1">
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
 
             {/* Worked vs driven vs logged */}
             <View className="flex-row gap-2 mb-4">
               {([[Wrench, t.hoursWorked, detailRow?.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, detailRow?.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, detailRow?.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
-                <View key={i} className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 p-3 items-center">
-                  <Icon size={15} color="#9CA3AF" />
-                  <Text className="text-base font-bold text-gray-900 mt-1">{val}</Text>
-                  <Text className="text-[11px] text-gray-400">{label}</Text>
+                <View key={i} className="flex-1 rounded-2xl border border-border-soft bg-surface p-3 items-center">
+                  <Icon size={15} color={c.faint} />
+                  <Text className="text-base font-bold text-ink mt-1">{val}</Text>
+                  <Text className="text-[11px] text-faint">{label}</Text>
                 </View>
               ))}
             </View>
 
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
+            <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
             {detailRow?.breakdown && detailRow.breakdown.jobs.length > 0 ? (
               <ScrollView className="max-h-72">
                 <View className="gap-2">
                   {detailRow.breakdown.jobs.map((j, i) => (
-                    <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                    <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
                       <Pressable
                         disabled={!j.jobId || !onJobPress}
                         onPress={() => { if (j.jobId && onJobPress) { setDetailRow(null); onJobPress(j.jobId, detailRow.employeeId); } }}
                         className="flex-1 min-w-0 active:opacity-60"
                       >
-                        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                        {j.date ? <Text className="text-[11px] text-gray-400">{fmtDay(j.date)}</Text> : null}
+                        <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
+                        {j.date ? <Text className="text-[11px] text-faint">{fmtDay(j.date)}</Text> : null}
                       </Pressable>
                       <View className="items-end">
                         {j.workedHours > 0 ? (
                           <View className="flex-row items-center gap-1">
-                            <Wrench size={11} color="#9CA3AF" />
-                            <Text className="text-xs text-gray-600">{j.workedHours} h</Text>
+                            <Wrench size={11} color={c.faint} />
+                            <Text className="text-xs text-muted">{j.workedHours} h</Text>
                           </View>
                         ) : null}
                         {j.drivenHours > 0 ? (
                           <View className="flex-row items-center gap-1">
-                            <Truck size={11} color="#9CA3AF" />
-                            <Text className="text-xs text-gray-600">{j.drivenHours} h</Text>
+                            <Truck size={11} color={c.faint} />
+                            <Text className="text-xs text-muted">{j.drivenHours} h</Text>
                           </View>
                         ) : null}
                       </View>
@@ -1401,7 +1403,7 @@ export function PayrollScreen({
                 </View>
               </ScrollView>
             ) : (
-              <Text className="text-sm text-gray-400 py-4 text-center">{t.noBreakdown}</Text>
+              <Text className="text-sm text-faint py-4 text-center">{t.noBreakdown}</Text>
             )}
           </View>
         </View>
@@ -1413,33 +1415,33 @@ export function PayrollScreen({
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setLoansOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
-            <View className="items-center mb-3"><View className="w-10 h-1 bg-gray-200 rounded-full" /></View>
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
+            <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
             {loanWorkerId ? (
               <>
                 <View className="flex-row items-center gap-2 mb-3">
-                  <Pressable onPress={() => setLoanWorkerId(null)} hitSlop={10} className="p-1"><ChevronLeft size={22} color="#111827" /></Pressable>
+                  <Pressable onPress={() => setLoanWorkerId(null)} hitSlop={10} className="p-1"><ChevronLeft size={22} color={c.ink} /></Pressable>
                   <View className="flex-1 min-w-0">
-                    <Text className="text-lg font-bold text-gray-900" numberOfLines={1}>{loanNameOf(loanWorkerId)}</Text>
-                    <Text className={`text-sm font-semibold ${loanBalanceOf(loanWorkerId) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    <Text className="text-lg font-bold text-ink" numberOfLines={1}>{loanNameOf(loanWorkerId)}</Text>
+                    <Text className={`text-sm font-semibold ${loanBalanceOf(loanWorkerId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                       {fmt(loanBalanceOf(loanWorkerId))} {t.loanOwed}
                     </Text>
                   </View>
-                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color={c.muted} /></Pressable>
                 </View>
 
                 {loanFormOpen ? (
-                  <View className="gap-2 mb-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <Text className="text-sm font-semibold text-gray-700">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
+                  <View className="gap-2 mb-3 rounded-2xl border border-border-soft bg-surface p-3">
+                    <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
                     <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
-                      placeholder={t.loanAmountPlaceholder} placeholderTextColor="#9CA3AF" keyboardType="decimal-pad"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
-                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor="#9CA3AF"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900" />
+                      placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                    <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
-                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-gray-100 items-center"><Text className="text-sm font-semibold text-gray-600">{full.common.buttons.cancel}</Text></Pressable>
+                      <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-border-soft items-center"><Text className="text-sm font-semibold text-muted">{full.common.buttons.cancel}</Text></Pressable>
                       <Pressable onPress={editingEntry ? submitEditLoan : showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
                         className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) <= 0 ? 'bg-gray-300' : showAddPayment ? 'bg-emerald-600 active:opacity-90' : 'bg-primary active:opacity-90'}`}>
                         <Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text>
@@ -1454,7 +1456,7 @@ export function PayrollScreen({
                     </Pressable>
                     {onLoanRepayment ? (
                       <Pressable onPress={() => { resetLoanForms(); setShowAddPayment(true); }}
-                        className="flex-1 py-2.5 rounded-xl bg-emerald-50 items-center active:opacity-80">
+                        className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 items-center active:opacity-80">
                         <Text className="text-sm font-semibold text-emerald-700">{t.recordPaymentBtn}</Text>
                       </Pressable>
                     ) : null}
@@ -1463,26 +1465,26 @@ export function PayrollScreen({
 
                 <ScrollView className="flex-1">
                   {loanEntriesOf(loanWorkerId).length === 0 ? (
-                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanEmpty}</Text>
+                    <Text className="text-sm text-faint text-center py-6">{t.loanEmpty}</Text>
                   ) : loanEntriesOf(loanWorkerId).map(e => {
                     const isLoan = e.amount >= 0;
                     return (
-                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-gray-50">
+                      <View key={e.id} className="flex-row items-center gap-3 py-2.5 border-b border-border-soft">
                         <View className="flex-1 min-w-0">
-                          <Text className="text-sm font-semibold text-gray-900">
+                          <Text className="text-sm font-semibold text-ink">
                             <Text className={isLoan ? 'text-amber-600' : 'text-emerald-600'}>{isLoan ? t.loanGivenLabel : t.loanPaymentLabel}</Text>
                             {'  '}{isLoan ? '+' : '−'}{fmt(Math.abs(e.amount))}
                           </Text>
-                          <Text className="text-xs text-gray-400">
+                          <Text className="text-xs text-faint">
                             {new Date(`${e.entryDate}T00:00:00`).toLocaleDateString(full.dashboard.dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
                             {e.note ? ` · ${e.note}` : ''}
                           </Text>
                         </View>
                         {onEditLoan ? (
-                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color="#6B7280" /></Pressable>
+                          <Pressable onPress={() => startEditEntry(e)} hitSlop={8} className="p-1.5 active:opacity-60"><Pencil size={15} color={c.muted} /></Pressable>
                         ) : null}
                         {onDeleteLoan ? (
-                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color="#F87171" /></Pressable>
+                          <Pressable onPress={() => onDeleteLoan(e.id)} hitSlop={8} className="p-1.5 active:opacity-60"><Trash2 size={16} color={c.danger} /></Pressable>
                         ) : null}
                       </View>
                     );
@@ -1492,24 +1494,24 @@ export function PayrollScreen({
             ) : loanPickMode ? (
               <>
                 <View className="flex-row items-center gap-2 mb-3">
-                  <Pressable onPress={() => setLoanPickMode(false)} hitSlop={10} className="p-1"><ChevronLeft size={22} color="#111827" /></Pressable>
-                  <Text className="flex-1 text-lg font-bold text-gray-900">{t.loanPickTitle}</Text>
-                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                  <Pressable onPress={() => setLoanPickMode(false)} hitSlop={10} className="p-1"><ChevronLeft size={22} color={c.ink} /></Pressable>
+                  <Text className="flex-1 text-lg font-bold text-ink">{t.loanPickTitle}</Text>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color={c.muted} /></Pressable>
                 </View>
-                <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 mb-3">
-                  <Search size={16} color="#9CA3AF" />
-                  <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor="#9CA3AF"
-                    className="flex-1 text-base text-gray-900 p-0" />
+                <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 mb-3">
+                  <Search size={16} color={c.faint} />
+                  <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor={c.faint}
+                    className="flex-1 text-base text-ink p-0" />
                 </View>
                 <ScrollView className="flex-1">
                   {loanPickList.length === 0 ? (
-                    <Text className="text-sm text-gray-400 text-center py-6">{t.loanNoWorkerFound}</Text>
+                    <Text className="text-sm text-faint text-center py-6">{t.loanNoWorkerFound}</Text>
                   ) : loanPickList.map(w => (
                     <Pressable key={w.id} onPress={() => selectLoanWorker(w.id, true)}
-                      className="flex-row items-center gap-3 py-3 border-b border-gray-50 active:opacity-60">
-                      <Text className="flex-1 min-w-0 text-sm font-semibold text-gray-900" numberOfLines={1}>{w.name}</Text>
+                      className="flex-row items-center gap-3 py-3 border-b border-border-soft active:opacity-60">
+                      <Text className="flex-1 min-w-0 text-sm font-semibold text-ink" numberOfLines={1}>{w.name}</Text>
                       {loanBalanceOf(w.id) > 0 ? <Text className="text-xs font-semibold text-amber-600">{fmt(loanBalanceOf(w.id))}</Text> : null}
-                      <ChevronRight size={16} color="#D1D5DB" />
+                      <ChevronRight size={16} color={c.faint} />
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -1517,30 +1519,30 @@ export function PayrollScreen({
             ) : (
               <>
                 <View className="flex-row items-center justify-between mb-3">
-                  <Text className="text-lg font-bold text-gray-900">{t.loanHistoryTitle}</Text>
-                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color="#6B7280" /></Pressable>
+                  <Text className="text-lg font-bold text-ink">{t.loanHistoryTitle}</Text>
+                  <Pressable onPress={() => setLoansOpen(false)} hitSlop={10} className="p-1"><X size={22} color={c.muted} /></Pressable>
                 </View>
                 <Pressable onPress={startAddLoanPicker} className="mb-3 py-2.5 rounded-xl bg-primary items-center active:opacity-90">
                   <Text className="text-sm font-semibold text-white">+ {t.addLoanBtn}</Text>
                 </Pressable>
                 {loanDirectory.length > 0 || loanSearch.trim() ? (
-                  <View className="flex-row items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 mb-3">
-                    <Search size={16} color="#9CA3AF" />
-                    <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor="#9CA3AF"
-                      className="flex-1 text-base text-gray-900 p-0" />
+                  <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 mb-3">
+                    <Search size={16} color={c.faint} />
+                    <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor={c.faint}
+                      className="flex-1 text-base text-ink p-0" />
                   </View>
                 ) : null}
                 <ScrollView className="flex-1">
                   {loanDirectory.length === 0 ? (
-                    <Text className="text-sm text-gray-400 text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</Text>
+                    <Text className="text-sm text-faint text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</Text>
                   ) : loanDirectory.map(w => (
                     <Pressable key={w.id} onPress={() => selectLoanWorker(w.id)}
-                      className="flex-row items-center gap-3 py-3 border-b border-gray-50 active:opacity-60">
-                      <Text className="flex-1 min-w-0 text-sm font-semibold text-gray-900" numberOfLines={1}>{w.name}</Text>
-                      <Text className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      className="flex-row items-center gap-3 py-3 border-b border-border-soft active:opacity-60">
+                      <Text className="flex-1 min-w-0 text-sm font-semibold text-ink" numberOfLines={1}>{w.name}</Text>
+                      <Text className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-faint'}`}>
                         {fmt(loanBalanceOf(w.id))}
                       </Text>
-                      <ChevronRight size={16} color="#D1D5DB" />
+                      <ChevronRight size={16} color={c.faint} />
                     </Pressable>
                   ))}
                 </ScrollView>

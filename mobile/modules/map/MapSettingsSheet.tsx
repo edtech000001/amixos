@@ -27,6 +27,7 @@ import { Plus, Trash2, ChevronDown, ChevronLeft, Check, Search, X, Eye, EyeOff }
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { createSupabaseClient } from '@/lib/supabase';
 import {
@@ -105,6 +106,7 @@ export function MapSettingsSheet({
   const { business, refetchBusiness } = useApp();
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.modules.map;
 
   const [config, setConfig] = useState<Required<MapPinConfig>>({
@@ -440,17 +442,17 @@ export function MapSettingsSheet({
          presentationStyle="fullScreen" render in a new window context. */}
       <SafeAreaProvider>
         <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100 bg-white">
-            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-              <ChevronLeft size={22} color="#111827" />
+          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft bg-card">
+            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+              <ChevronLeft size={22} color={c.ink} />
             </Pressable>
-            <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{t.settingsTitle}</Text>
+            <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{t.settingsTitle}</Text>
           </View>
 
-          <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5">
             {/* Map type */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.mapTypeLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.mapTypeLabel}</Text>
               <View className="flex-row flex-wrap gap-2">
                 {mapTypeOptions.map(opt => {
                   const on = stagedDeviceSettings.mapType === opt.key;
@@ -458,9 +460,9 @@ export function MapSettingsSheet({
                     <Pressable
                       key={opt.key}
                       onPress={() => setStagedDeviceSettings(prev => ({ ...prev, mapType: opt.key }))}
-                      className={`px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                      className={`px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}
                     >
-                      <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</Text>
+                      <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-ink'}`}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -470,16 +472,16 @@ export function MapSettingsSheet({
             {/* Clustering */}
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
-                <Text className="text-sm font-semibold text-gray-900">{t.clusteringLabel}</Text>
-                <Text className="text-xs text-gray-500 mt-0.5">{t.clusteringSubtitle}</Text>
+                <Text className="text-sm font-semibold text-ink">{t.clusteringLabel}</Text>
+                <Text className="text-xs text-muted mt-0.5">{t.clusteringSubtitle}</Text>
               </View>
               <Pressable
                 onPress={() => setStagedDeviceSettings(prev => ({ ...prev, clustering: !prev.clustering }))}
                 style={{ width: 44, height: 24 }}
-                className={`relative rounded-full ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-gray-200'}`}
+                className={`relative rounded-full ${stagedDeviceSettings.clustering ? 'bg-primary' : 'bg-border'}`}
               >
                 <View
-                  className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                  className="absolute top-1 w-4 h-4 rounded-full bg-card"
                   style={{ transform: [{ translateX: stagedDeviceSettings.clustering ? 24 : 4 }] }}
                 />
               </Pressable>
@@ -487,7 +489,7 @@ export function MapSettingsSheet({
 
             {/* Pin size */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.pinSizeLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.pinSizeLabel}</Text>
               <View className="flex-row gap-2">
                 {pinSizeOptions.map(opt => {
                   const on = stagedDeviceSettings.pinSize === opt.key;
@@ -495,9 +497,9 @@ export function MapSettingsSheet({
                     <Pressable
                       key={opt.key}
                       onPress={() => setStagedDeviceSettings(prev => ({ ...prev, pinSize: opt.key }))}
-                      className={`flex-1 px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                      className={`flex-1 px-3 py-2 rounded-xl border ${on ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}
                     >
-                      <Text className={`text-sm font-medium text-center ${on ? 'text-primary' : 'text-gray-700'}`}>{opt.label}</Text>
+                      <Text className={`text-sm font-medium text-center ${on ? 'text-primary' : 'text-ink'}`}>{opt.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -508,8 +510,8 @@ export function MapSettingsSheet({
                with the green ✓ when outreach mode is on. */}
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
-                <Text className="text-sm font-semibold text-gray-900">{t.outreachDaysLabel}</Text>
-                <Text className="text-xs text-gray-500 mt-0.5">{t.outreachDaysSubtitle}</Text>
+                <Text className="text-sm font-semibold text-ink">{t.outreachDaysLabel}</Text>
+                <Text className="text-xs text-muted mt-0.5">{t.outreachDaysSubtitle}</Text>
               </View>
               <View className="flex-row items-center gap-2">
                 <Pressable
@@ -517,11 +519,11 @@ export function MapSettingsSheet({
                   disabled={stagedDeviceSettings.outreachDays <= 1}
                   hitSlop={6}
                   style={{ width: 32, height: 32 }}
-                  className={`rounded-lg border border-gray-200 bg-white items-center justify-center ${stagedDeviceSettings.outreachDays <= 1 ? 'opacity-40' : 'active:bg-gray-50'}`}
+                  className={`rounded-lg border border-border bg-card items-center justify-center ${stagedDeviceSettings.outreachDays <= 1 ? 'opacity-40' : 'active:bg-surface'}`}
                 >
-                  <Text className="text-lg font-semibold text-gray-700">−</Text>
+                  <Text className="text-lg font-semibold text-ink">−</Text>
                 </Pressable>
-                <Text className="text-sm font-semibold text-gray-900 text-center" style={{ minWidth: 56 }}>
+                <Text className="text-sm font-semibold text-ink text-center" style={{ minWidth: 56 }}>
                   {t.outreachDaysValue.replace('{{days}}', String(stagedDeviceSettings.outreachDays))}
                 </Text>
                 <Pressable
@@ -529,17 +531,17 @@ export function MapSettingsSheet({
                   disabled={stagedDeviceSettings.outreachDays >= 365}
                   hitSlop={6}
                   style={{ width: 32, height: 32 }}
-                  className={`rounded-lg border border-gray-200 bg-white items-center justify-center ${stagedDeviceSettings.outreachDays >= 365 ? 'opacity-40' : 'active:bg-gray-50'}`}
+                  className={`rounded-lg border border-border bg-card items-center justify-center ${stagedDeviceSettings.outreachDays >= 365 ? 'opacity-40' : 'active:bg-surface'}`}
                 >
-                  <Text className="text-lg font-semibold text-gray-700">+</Text>
+                  <Text className="text-lg font-semibold text-ink">+</Text>
                 </Pressable>
               </View>
             </View>
 
             {/* Layer style cards */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.pinRulesHeading}</Text>
-              <Text className="text-xs text-gray-500 mb-3">{t.pinRulesSubtitle}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-1">{t.pinRulesHeading}</Text>
+              <Text className="text-xs text-muted mb-3">{t.pinRulesSubtitle}</Text>
 
               <View className="gap-2">
                 {visibleLayers.map(layer => {
@@ -551,7 +553,7 @@ export function MapSettingsSheet({
                   // returns the layer to "Sin regla".
                   const ruleMode: 'none' | 'custom' = (cfg.rules.length > 0 || cfg.field_key) ? 'custom' : 'none';
                   return (
-                    <View key={layer} className="bg-gray-50 rounded-2xl overflow-hidden">
+                    <View key={layer} className="bg-surface rounded-2xl overflow-hidden">
                       <Pressable
                         onPress={() => setOpenLayer(expanded ? null : layer)}
                         className="flex-row items-center gap-4 px-4 py-3"
@@ -559,44 +561,44 @@ export function MapSettingsSheet({
                         <View className="w-7 h-9 items-center justify-center">
                           <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={24} />
                         </View>
-                        <Text className="flex-1 text-sm font-semibold text-gray-900">{layerLabel[layer]}</Text>
+                        <Text className="flex-1 text-sm font-semibold text-ink">{layerLabel[layer]}</Text>
                         {ruleMode === 'custom' ? (
-                          <Text className="text-xs text-gray-500 mr-2">
+                          <Text className="text-xs text-muted mr-2">
                             {fieldOpts.find(f => f.key === cfg.field_key)?.label ?? cfg.field_key} · {cfg.rules.length}
                           </Text>
                         ) : null}
                         <ChevronDown
                           size={16}
-                          color="#6B7280"
+                          color={c.muted}
                           style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}
                         />
                       </Pressable>
 
                       {expanded ? (
-                        <View className="px-4 pb-4 gap-3 border-t border-gray-100">
+                        <View className="px-4 pb-4 gap-3 border-t border-border-soft">
                           {/* Default style — single clickable pin badge. */}
                           <View className="mt-3">
-                            <Text className="text-xs text-gray-500 mb-2">{t.defaultStyleLabel}</Text>
+                            <Text className="text-xs text-muted mb-2">{t.defaultStyleLabel}</Text>
                             <Pressable
                               onPress={() => setPicker({ layer, ruleIdx: 'default' })}
-                              className="self-start flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white active:bg-gray-50"
+                              className="self-start flex-row items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card active:bg-surface"
                             >
                               <PinBadge iconKey={cfg.default_icon} color={cfg.default_color} iconColor={cfg.default_icon_color ?? '#FFFFFF'} size={26} />
-                              <Text className="text-xs text-gray-500">{t.editStylePinHint}</Text>
+                              <Text className="text-xs text-muted">{t.editStylePinHint}</Text>
                             </Pressable>
                           </View>
 
                           {/* Mode toggle */}
                           <View>
-                            <Text className="text-xs text-gray-500 mb-2">{t.modeLabel}</Text>
+                            <Text className="text-xs text-muted mb-2">{t.modeLabel}</Text>
                             <View className="flex-row gap-2">
                               <Pressable
                                 onPress={() => updateLayer(layer, { field_key: null, rules: [] })}
                                 className={`flex-1 px-3 py-2 rounded-xl border ${
-                                  ruleMode === 'none' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                                  ruleMode === 'none' ? 'border-primary bg-primary/5' : 'border-border bg-card'
                                 }`}
                               >
-                                <Text className={`text-sm font-medium text-center ${ruleMode === 'none' ? 'text-primary' : 'text-gray-700'}`}>
+                                <Text className={`text-sm font-medium text-center ${ruleMode === 'none' ? 'text-primary' : 'text-ink'}`}>
                                   {t.modeNoRule}
                                 </Text>
                               </Pressable>
@@ -610,10 +612,10 @@ export function MapSettingsSheet({
                                   if (ruleMode !== 'custom') addRule(layer);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-xl border ${
-                                  ruleMode === 'custom' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                                  ruleMode === 'custom' ? 'border-primary bg-primary/5' : 'border-border bg-card'
                                 }`}
                               >
-                                <Text className={`text-sm font-medium text-center ${ruleMode === 'custom' ? 'text-primary' : 'text-gray-700'}`}>
+                                <Text className={`text-sm font-medium text-center ${ruleMode === 'custom' ? 'text-primary' : 'text-ink'}`}>
                                   {t.modeCustom}
                                 </Text>
                               </Pressable>
@@ -626,14 +628,14 @@ export function MapSettingsSheet({
                                  first-match-wins. Placed once at the top
                                  of the rule list so it's seen but not
                                  repeated per row. */}
-                              <View className="flex-row items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
+                              <View className="flex-row items-start gap-1.5 bg-amber-500/10 border border-amber-100 rounded-lg px-2.5 py-2">
                                 <Text className="text-[10px] text-amber-700 leading-4 flex-1">
                                   💡 {t.ruleOrderNote}
                                 </Text>
                               </View>
-                              <Text className="text-xs text-gray-500">{t.applyRuleToLabel}</Text>
+                              <Text className="text-xs text-muted">{t.applyRuleToLabel}</Text>
                               {cfg.rules.length === 0 ? (
-                                <Text className="text-xs text-gray-400 italic">{t.rulesEmpty}</Text>
+                                <Text className="text-xs text-faint italic">{t.rulesEmpty}</Text>
                               ) : (
                                 cfg.rules.map((rule, idx) => {
                                   // Resolve effective field for this rule —
@@ -657,19 +659,19 @@ export function MapSettingsSheet({
                                           ? t.ruleMatchCountSingle
                                           : t.ruleMatchCount.replace('{{count}}', String(count));
                                   const chipBg = isLoading
-                                    ? 'bg-gray-100'
+                                    ? 'bg-border-soft'
                                     : isHide && count && count > 0
-                                      ? 'bg-amber-50'
+                                      ? 'bg-amber-500/10'
                                       : count && count > 0
-                                        ? 'bg-emerald-50'
-                                        : 'bg-gray-100';
+                                        ? 'bg-emerald-500/10'
+                                        : 'bg-border-soft';
                                   const chipText = isLoading
-                                    ? 'text-gray-400'
+                                    ? 'text-faint'
                                     : isHide && count && count > 0
                                       ? 'text-amber-700'
                                       : count && count > 0
                                         ? 'text-emerald-700'
-                                        : 'text-gray-500';
+                                        : 'text-muted';
                                   return (
                                     <View key={idx} className="gap-1">
                                       <View className="flex-row ml-1">
@@ -684,7 +686,7 @@ export function MapSettingsSheet({
                                          input full-width on bottom. Gives
                                          the value field all the horizontal
                                          room it needs for long values. */}
-                                      <View className="gap-2 bg-white rounded-xl border border-gray-100 p-2">
+                                      <View className="gap-2 bg-card rounded-xl border border-border-soft p-2">
                                         <View className="flex-row items-center gap-2">
                                           <Pressable
                                             onPress={() => setPicker({ layer, ruleIdx: idx })}
@@ -719,19 +721,19 @@ export function MapSettingsSheet({
                                             onPress={() => updateRule(layer, idx, { hide: !rule.hide })}
                                             hitSlop={6}
                                             className={`p-2 rounded-lg ${
-                                              rule.hide ? 'bg-amber-50 active:bg-amber-100' : 'active:bg-gray-100'
+                                              rule.hide ? 'bg-amber-500/10 active:bg-amber-100' : 'active:bg-border-soft'
                                             }`}
                                           >
                                             {rule.hide
-                                              ? <EyeOff size={14} color="#D97706" />
-                                              : <Eye size={14} color="#6B7280" />}
+                                              ? <EyeOff size={14} color={c.warning} />
+                                              : <Eye size={14} color={c.muted} />}
                                           </Pressable>
                                           <Pressable
                                             onPress={() => removeRule(layer, idx)}
                                             hitSlop={6}
-                                            className="p-2 rounded-lg active:bg-red-50"
+                                            className="p-2 rounded-lg active:bg-red-500/10"
                                           >
-                                            <Trash2 size={14} color="#EF4444" />
+                                            <Trash2 size={14} color={c.danger} />
                                           </Pressable>
                                         </View>
                                         {/* Value row — hidden when operator is
@@ -742,8 +744,8 @@ export function MapSettingsSheet({
                                             value={rule.value}
                                             onChangeText={v => updateRule(layer, idx, { value: v })}
                                             placeholder={t.ruleValuePlaceholder}
-                                            placeholderTextColor="#9CA3AF"
-                                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                                            placeholderTextColor={c.faint}
+                                            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
                                           />
                                         )}
                                       </View>
@@ -753,9 +755,9 @@ export function MapSettingsSheet({
                               )}
                               <Pressable
                                 onPress={() => addRule(layer)}
-                                className="flex-row items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-gray-300 active:bg-gray-100"
+                                className="flex-row items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-border active:bg-border-soft"
                               >
-                                <Plus size={14} color="#4F46E5" />
+                                <Plus size={14} color={c.primary} />
                                 <Text className="text-sm text-primary font-semibold">{t.addRuleBtn}</Text>
                               </Pressable>
                             </View>
@@ -835,6 +837,7 @@ function IgnoredClientsSection({
 }) {
   const { business } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.modules.map;
   const supabase = createSupabaseClient();
   type Row = { id: string; first_name: string | null; last_name: string | null; company: string | null };
@@ -895,36 +898,36 @@ function IgnoredClientsSection({
       >
         <View className="flex-1 pr-3">
           <View className="flex-row items-center gap-2">
-            <Text className="text-xs font-semibold text-gray-400 uppercase">{t.ignoredSectionTitle}</Text>
-            <View className="px-1.5 py-0.5 rounded-full bg-gray-100">
-              <Text className="text-[10px] font-bold text-gray-600">{rows.length}</Text>
+            <Text className="text-xs font-semibold text-faint uppercase">{t.ignoredSectionTitle}</Text>
+            <View className="px-1.5 py-0.5 rounded-full bg-border-soft">
+              <Text className="text-[10px] font-bold text-muted">{rows.length}</Text>
             </View>
           </View>
-          <Text className="text-xs text-gray-500 mt-1">{t.ignoredSectionSubtitle}</Text>
+          <Text className="text-xs text-muted mt-1">{t.ignoredSectionSubtitle}</Text>
         </View>
         <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
-          <ChevronDown size={16} color="#9CA3AF" />
+          <ChevronDown size={16} color={c.faint} />
         </View>
       </Pressable>
       {expanded ? (
-        <View className="mt-3 rounded-2xl border border-gray-100 bg-white overflow-hidden">
+        <View className="mt-3 rounded-2xl border border-border-soft bg-card overflow-hidden">
           {rows.map((r, i) => {
             const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
             return (
               <View
                 key={r.id}
-                className={`flex-row items-center ${i < rows.length - 1 ? 'border-b border-gray-100' : ''}`}
+                className={`flex-row items-center ${i < rows.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 {/* Whole name area is a Pressable that navigates to the
                    client detail — handy when the user wants to inspect /
                    fix the address before restoring. */}
                 <Pressable
                   onPress={() => onOpenClient(r.id)}
-                  className="flex-1 min-w-0 px-4 py-3 active:bg-gray-50"
+                  className="flex-1 min-w-0 px-4 py-3 active:bg-surface"
                 >
-                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
+                  <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{name}</Text>
                   {r.company ? (
-                    <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
+                    <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>{r.company}</Text>
                   ) : null}
                 </Pressable>
                 <Pressable
@@ -933,7 +936,7 @@ function IgnoredClientsSection({
                   hitSlop={6}
                   className="mr-3 flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 active:opacity-70"
                 >
-                  <Eye size={14} color="#4F46E5" />
+                  <Eye size={14} color={c.primary} />
                   <Text className="text-xs font-semibold text-primary">{t.geocodeRestoreBtn}</Text>
                 </Pressable>
               </View>
@@ -966,6 +969,7 @@ function StylePickerModal({
   onSelectIconColor: (c: string) => void;
 }) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.modules.map;
 
   const layerCfg = config[picker.layer];
@@ -1017,11 +1021,11 @@ function StylePickerModal({
     <RNModal visible animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
       <SafeAreaProvider>
         <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100 bg-white">
-            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-              <ChevronLeft size={22} color="#111827" />
+          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft bg-card">
+            <Pressable onPress={onClose} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+              <ChevronLeft size={22} color={c.ink} />
             </Pressable>
-            <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{t.stylePickerTitle}</Text>
+            <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{t.stylePickerTitle}</Text>
             <Pressable
               onPress={onClose}
               className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary active:opacity-80"
@@ -1031,15 +1035,15 @@ function StylePickerModal({
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 bg-white" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5">
             {/* Preview */}
-            <View className="items-center py-4 bg-gray-50 rounded-2xl">
+            <View className="items-center py-4 bg-surface rounded-2xl">
               <PinBadge iconKey={currentIcon} color={currentColor} iconColor={currentIconColor} size={56} />
             </View>
 
             {/* Pin color */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.colorLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.colorLabel}</Text>
               <View className="flex-row flex-wrap gap-2">
                 {PIN_COLORS.map(c => (
                   <Pressable
@@ -1051,7 +1055,7 @@ function StylePickerModal({
                     className={`rounded-xl border-2 ${
                       currentColor.toLowerCase() === c.toLowerCase()
                         ? 'border-gray-900'
-                        : c.toLowerCase() === '#ffffff' ? 'border-gray-200' : 'border-transparent'
+                        : c.toLowerCase() === '#ffffff' ? 'border-border' : 'border-transparent'
                     }`}
                   />
                 ))}
@@ -1061,7 +1065,7 @@ function StylePickerModal({
             {/* Icon color — white default, can switch to dark or any palette
                color when white contrast is poor (e.g. on yellow pins). */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconColorLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.iconColorLabel}</Text>
               <View className="flex-row flex-wrap gap-2">
                 {ICON_COLOR_PALETTE.map(c => (
                   <Pressable
@@ -1071,7 +1075,7 @@ function StylePickerModal({
                     className={`rounded-xl border-2 ${
                       currentIconColor.toLowerCase() === c.toLowerCase()
                         ? 'border-gray-900'
-                        : c === '#FFFFFF' ? 'border-gray-200' : 'border-transparent'
+                        : c === '#FFFFFF' ? 'border-border' : 'border-transparent'
                     }`}
                   />
                 ))}
@@ -1080,23 +1084,23 @@ function StylePickerModal({
 
             {/* Icon search + categories + grid */}
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">{t.iconLabel}</Text>
+              <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.iconLabel}</Text>
               {/* Search box — substring match against the icon key. Typing
                  hides the category tabs and shows all matching icons. */}
-              <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white mb-3">
-                <Search size={14} color="#9CA3AF" />
+              <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card mb-3">
+                <Search size={14} color={c.faint} />
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
                   placeholder={t.iconSearchPlaceholder}
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 text-sm text-gray-900"
+                  placeholderTextColor={c.faint}
+                  className="flex-1 text-sm text-ink"
                   autoCorrect={false}
                   autoCapitalize="none"
                 />
                 {query ? (
                   <Pressable onPress={() => setQuery('')} hitSlop={6}>
-                    <X size={14} color="#9CA3AF" />
+                    <X size={14} color={c.faint} />
                   </Pressable>
                 ) : null}
               </View>
@@ -1110,9 +1114,9 @@ function StylePickerModal({
                       <Pressable
                         key={cat.i18nKey}
                         onPress={() => setActiveCategory(cat)}
-                        className={`px-3 py-1.5 rounded-full border ${on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'}`}
+                        className={`px-3 py-1.5 rounded-full border ${on ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}
                       >
-                        <Text className={`text-xs ${on ? 'text-primary font-semibold' : 'text-gray-700'}`}>
+                        <Text className={`text-xs ${on ? 'text-primary font-semibold' : 'text-ink'}`}>
                           {categoryLabel(cat.i18nKey)}
                         </Text>
                       </Pressable>
@@ -1123,7 +1127,7 @@ function StylePickerModal({
 
               {/* Icon grid — visibleIcons is either the active category or the search results. */}
               {visibleIcons.length === 0 ? (
-                <Text className="text-xs text-gray-400 italic mt-3">{t.iconSearchNoResults}</Text>
+                <Text className="text-xs text-faint italic mt-3">{t.iconSearchNoResults}</Text>
               ) : (
                 <View className="flex-row flex-wrap gap-2 mt-3">
                   {visibleIcons.map(icon => {
@@ -1134,7 +1138,7 @@ function StylePickerModal({
                         onPress={() => onSelectIcon(icon)}
                         style={{ width: 56, height: 56 }}
                         className={`rounded-xl border items-center justify-center ${
-                          on ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+                          on ? 'border-primary bg-primary/5' : 'border-border bg-card'
                         }`}
                       >
                         <PinIcon iconKey={icon} color={currentColor} size={26} />
@@ -1179,6 +1183,7 @@ function OperatorPicker({
   labels: Record<Operator, string>;
 }) {
   const [open, setOpen] = useState(false);
+  const c = useThemeColors();
   const orderedOps: Operator[] = ['equals', 'not_equals', 'contains', 'has_value', 'gt', 'gte', 'lt', 'lte'];
   return (
     <>
@@ -1186,10 +1191,10 @@ function OperatorPicker({
         onPress={() => setOpen(true)}
         hitSlop={6}
         className={`w-7 h-7 rounded-lg border items-center justify-center ${
-          value !== 'equals' ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+          value !== 'equals' ? 'border-primary bg-primary/5' : 'border-border bg-card'
         }`}
       >
-        <Text className={`text-sm font-bold ${value !== 'equals' ? 'text-primary' : 'text-gray-600'}`}>
+        <Text className={`text-sm font-bold ${value !== 'equals' ? 'text-primary' : 'text-muted'}`}>
           {OPERATOR_GLYPHS[value]}
         </Text>
       </Pressable>
@@ -1197,7 +1202,7 @@ function OperatorPicker({
         <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden"
+            className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
           >
             <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 12 }}>
               {orderedOps.map((op, i) => {
@@ -1207,16 +1212,16 @@ function OperatorPicker({
                     key={op}
                     onPress={() => { onChange(op); setOpen(false); }}
                     className={`flex-row items-center gap-3 px-4 py-3 ${
-                      i < orderedOps.length - 1 ? 'border-b border-gray-50' : ''
-                    } ${on ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                      i < orderedOps.length - 1 ? 'border-b border-border-soft' : ''
+                    } ${on ? 'bg-primary/5' : 'active:bg-surface'}`}
                   >
-                    <View className="w-7 h-7 rounded-lg border border-gray-200 items-center justify-center">
-                      <Text className="text-sm font-bold text-gray-700">{OPERATOR_GLYPHS[op]}</Text>
+                    <View className="w-7 h-7 rounded-lg border border-border items-center justify-center">
+                      <Text className="text-sm font-bold text-ink">{OPERATOR_GLYPHS[op]}</Text>
                     </View>
-                    <Text className={`flex-1 text-sm ${on ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                    <Text className={`flex-1 text-sm ${on ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {labels[op]}
                     </Text>
-                    {on ? <Check size={14} color="#4F46E5" /> : null}
+                    {on ? <Check size={14} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
@@ -1244,6 +1249,7 @@ function FieldDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const { t: full } = useLang();
+  const c = useThemeColors();
   const tMap = full.dashboard.modules.map;
   const selected = options.find(o => o.key === value);
   // Show fade affordance only when there's enough content to scroll.
@@ -1253,18 +1259,18 @@ function FieldDropdown({
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        className="flex-row items-center gap-1 px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+        className="flex-row items-center gap-1 px-2 py-1.5 rounded-lg border border-border bg-card"
       >
-        <Text className="text-xs text-gray-700 flex-1" numberOfLines={1}>
+        <Text className="text-xs text-ink flex-1" numberOfLines={1}>
           {selected?.label ?? placeholder}
         </Text>
-        <ChevronDown size={12} color="#6B7280" />
+        <ChevronDown size={12} color={c.muted} />
       </Pressable>
       <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden"
+            className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
             style={{
               shadowColor: '#000',
               shadowOpacity: 0.15,
@@ -1276,14 +1282,14 @@ function FieldDropdown({
             {/* Header — clearly distinct from the list rows below.
                Larger type, bolder weight, and a subtle gray background
                so it reads as a sheet title, not "row 0". */}
-            <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-gray-50 border-b border-gray-200">
-              <Text className="text-lg font-bold text-gray-900">{tMap.applyRuleToLabel}</Text>
+            <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-surface border-b border-border">
+              <Text className="text-lg font-bold text-ink">{tMap.applyRuleToLabel}</Text>
               <Pressable
                 onPress={() => setOpen(false)}
                 hitSlop={8}
-                className="p-1.5 rounded-lg active:bg-gray-200"
+                className="p-1.5 rounded-lg active:bg-border"
               >
-                <X size={20} color="#374151" />
+                <X size={20} color={c.muted} />
               </Pressable>
             </View>
 
@@ -1307,13 +1313,13 @@ function FieldDropdown({
                       key={opt.key}
                       onPress={() => { onChange(opt.key); setOpen(false); }}
                       className={`flex-row items-center justify-between px-4 py-3 ${
-                        i < options.length - 1 ? 'border-b border-gray-50' : ''
-                      } ${on ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                        i < options.length - 1 ? 'border-b border-border-soft' : ''
+                      } ${on ? 'bg-primary/5' : 'active:bg-surface'}`}
                     >
-                      <Text className={`text-sm ${on ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                      <Text className={`text-sm ${on ? 'text-primary font-semibold' : 'text-ink'}`}>
                         {opt.label}
                       </Text>
-                      {on ? <Check size={14} color="#4F46E5" /> : null}
+                      {on ? <Check size={14} color={c.primary} /> : null}
                     </Pressable>
                   );
                 })}

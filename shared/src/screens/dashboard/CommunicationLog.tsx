@@ -16,6 +16,7 @@ import {
 } from 'lucide-react-native';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { formatRelativeLong, formatDateTimeLong } from '../../lib/format';
 import { Modal, Input, Button, DatePicker } from '../../ui';
 import {
@@ -98,6 +99,7 @@ export function CommunicationLog({
   reloadToken = 0,
 }: Props) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.clients.detail.commLog;
 
   const [entries, setEntries] = useState<ClientCommunicationEntry[] | null>(null);
@@ -243,18 +245,18 @@ export function CommunicationLog({
   );
 
   return (
-    <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
       <View className="flex-row items-center justify-between mb-4">
-        <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wide">
           {t.heading}
         </Text>
         {canWrite ? (
           <Pressable
             onPress={openAdd}
-            className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg active:bg-gray-100"
+            className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg active:bg-border-soft"
             accessibilityLabel={t.add}
           >
-            <Plus size={15} color="#4F46E5" />
+            <Plus size={15} color={c.primary} />
             <Text className="text-sm font-medium text-primary">{t.add}</Text>
           </Pressable>
         ) : null}
@@ -262,11 +264,11 @@ export function CommunicationLog({
 
       {entries === null ? (
         <View className="py-8 items-center">
-          <ActivityIndicator color="#4F46E5" />
+          <ActivityIndicator color={c.primary} />
         </View>
       ) : entries.length === 0 ? (
         <View className="py-6 items-center">
-          <Text className="text-sm text-gray-400">{t.empty}</Text>
+          <Text className="text-sm text-faint">{t.empty}</Text>
         </View>
       ) : (
         <>
@@ -282,15 +284,15 @@ export function CommunicationLog({
                     key={ty}
                     onPress={() => toggleType(ty)}
                     className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
-                      active ? 'border-transparent' : 'border-gray-200 bg-white active:bg-gray-50'
+                      active ? 'border-transparent' : 'border-border bg-card active:bg-surface'
                     }`}
                     style={active ? { backgroundColor: `${color}1A` } : undefined}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={t.types[ty]}
                   >
-                    <Icon size={13} color={active ? color : '#9CA3AF'} />
-                    <Text className="text-xs font-medium" style={{ color: active ? color : '#9CA3AF' }}>
+                    <Icon size={13} color={active ? color : c.faint} />
+                    <Text className="text-xs font-medium" style={{ color: active ? color : c.faint }}>
                       {t.types[ty]}
                     </Text>
                   </Pressable>
@@ -301,7 +303,7 @@ export function CommunicationLog({
 
           {visibleEntries.length === 0 ? (
             <View className="py-6 items-center">
-              <Text className="text-sm text-gray-400">{t.emptyFiltered}</Text>
+              <Text className="text-sm text-faint">{t.emptyFiltered}</Text>
             </View>
           ) : (
             <View className="gap-3">
@@ -405,7 +407,7 @@ function PillGroup({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-sm font-semibold text-gray-700">{label}</Text>
+      <Text className="text-sm font-semibold text-ink">{label}</Text>
       <View className="flex-row flex-wrap gap-2">
         {options.map(o => {
           const active = o.value === value;
@@ -414,10 +416,10 @@ function PillGroup({
               key={o.value || '__none__'}
               onPress={() => onChange(o.value)}
               className={`px-3.5 py-2 rounded-xl border ${
-                active ? 'bg-primary border-primary' : 'bg-white border-gray-200 active:bg-gray-50'
+                active ? 'bg-primary border-primary' : 'bg-card border-border active:bg-surface'
               }`}
             >
-              <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-ink'}`}>
                 {o.label}
               </Text>
             </Pressable>
@@ -443,6 +445,7 @@ function CommRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const c = useThemeColors();
   const Icon = ICONS[entry.type] ?? FileText;
   const color = COLORS[entry.type] ?? '#6B7280';
   const label = t.types[entry.type] ?? entry.type;
@@ -466,21 +469,21 @@ function CommRow({
       </View>
       <View className="flex-1">
         <View className="flex-row items-center justify-between gap-2">
-          <Text className="text-sm font-semibold text-gray-900">{label}</Text>
-          <Text className="text-xs text-gray-400" accessibilityLabel={formatDateTimeLong(entry.occurred_at, locale)}>
+          <Text className="text-sm font-semibold text-ink">{label}</Text>
+          <Text className="text-xs text-faint" accessibilityLabel={formatDateTimeLong(entry.occurred_at, locale)}>
             {rel}
           </Text>
         </View>
-        {meta ? <Text className="text-xs text-gray-500 mt-0.5">{meta}</Text> : null}
-        {entry.note ? <Text className="text-sm text-gray-600 mt-0.5">{entry.note}</Text> : null}
+        {meta ? <Text className="text-xs text-muted mt-0.5">{meta}</Text> : null}
+        {entry.note ? <Text className="text-sm text-muted mt-0.5">{entry.note}</Text> : null}
       </View>
       {canWrite ? (
         <View className="flex-row gap-1">
-          <Pressable onPress={onEdit} className="p-1.5 rounded-lg active:bg-gray-100" accessibilityLabel={t.form.edit}>
-            <Pencil size={14} color="#9CA3AF" />
+          <Pressable onPress={onEdit} className="p-1.5 rounded-lg active:bg-border-soft" accessibilityLabel={t.form.edit}>
+            <Pencil size={14} color={c.faint} />
           </Pressable>
-          <Pressable onPress={onDelete} className="p-1.5 rounded-lg active:bg-red-50" accessibilityLabel={t.form.delete}>
-            <Trash2 size={14} color="#EF4444" />
+          <Pressable onPress={onDelete} className="p-1.5 rounded-lg active:bg-red-500/10" accessibilityLabel={t.form.delete}>
+            <Trash2 size={14} color={c.danger} />
           </Pressable>
         </View>
       ) : null}

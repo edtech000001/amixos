@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { Briefcase, DollarSign, UserCheck, UserX, FileText, Award } from 'lucide-react-native';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { formatDateLong } from '../../lib/format';
 import type { EmployeeHistoryEntry, EmployeeEventType } from '../../lib/employeeHistory';
 
@@ -39,6 +40,7 @@ const fmtMoney = (n: number) =>
  */
 export function EmployeeHistoryView({ supabase, employeeId }: Props) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.employees;
   const th = t.history;
   const [entries, setEntries] = useState<EmployeeHistoryEntry[] | null>(null);
@@ -62,7 +64,7 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
   if (entries === null) {
     return (
       <View className="py-8 items-center">
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </View>
     );
   }
@@ -70,7 +72,7 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
   if (entries.length === 0) {
     return (
       <View className="py-8 items-center">
-        <Text className="text-sm text-gray-400">{th.empty}</Text>
+        <Text className="text-sm text-faint">{th.empty}</Text>
       </View>
     );
   }
@@ -92,13 +94,13 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
             </View>
             <View className="flex-1">
               <View className="flex-row items-center justify-between">
-                <Text className="text-sm font-semibold text-gray-900">{label}</Text>
-                <Text className="text-xs text-gray-400">
+                <Text className="text-sm font-semibold text-ink">{label}</Text>
+                <Text className="text-xs text-faint">
                   {formatDateLong(e.effective_date, locale)}
                 </Text>
               </View>
               {summary ? (
-                <Text className="text-sm text-gray-600 mt-0.5">{summary}</Text>
+                <Text className="text-sm text-muted mt-0.5">{summary}</Text>
               ) : null}
             </View>
           </View>

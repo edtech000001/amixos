@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { buildDateRangePresets } from '../../lib/dateRangePresets';
@@ -164,26 +165,26 @@ export interface JobsListScreenProps {
 
 const STATUS_PILL_BG: Record<string, string> = {
   posible: 'bg-teal-100',
-  proposal: 'bg-gray-100',
+  proposal: 'bg-border-soft',
   sent: 'bg-blue-100',
   accepted: 'bg-emerald-100',
   declined: 'bg-red-100',
   scheduled: 'bg-blue-100',
   in_progress: 'bg-amber-100',
   completed: 'bg-emerald-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
   invoiced: 'bg-purple-100',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
   posible: 'text-teal-700',
-  proposal: 'text-gray-600',
+  proposal: 'text-muted',
   sent: 'text-blue-600',
   accepted: 'text-emerald-700',
   declined: 'text-red-600',
   scheduled: 'text-blue-700',
   in_progress: 'text-amber-700',
   completed: 'text-emerald-700',
-  cancelled: 'text-gray-400',
+  cancelled: 'text-faint',
   invoiced: 'text-purple-700',
 };
 const STATUS_DOT: Record<string, string> = {
@@ -199,7 +200,7 @@ const STATUS_DOT: Record<string, string> = {
   invoiced: 'bg-purple-500',
 };
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'text-gray-400',
+  low: 'text-faint',
   normal: 'text-blue-500',
   high: 'text-orange-500',
   urgent: 'text-red-500',
@@ -234,6 +235,7 @@ export function JobsListScreen({
   businessId,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.jobs;
   const dateLoc = full.dashboard.dateLocale;
   const overdueBadgeLabel = full.dashboard.settings.jobAlerts.overdueBadge;
@@ -399,9 +401,9 @@ export function JobsListScreen({
     const expired = isExpired(job);
     if (job.status === 'posible') {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'scheduled')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-50">
-            <Calendar size={11} color="#2563EB" />
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'scheduled')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-500/10">
+            <Calendar size={11} color={c.primary} />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.schedule}</Text>
           </Pressable>
         </View>
@@ -409,9 +411,9 @@ export function JobsListScreen({
     }
     if (job.status === 'proposal') {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'sent')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-50">
-            <Send size={11} color="#2563EB" />
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'sent')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-500/10">
+            <Send size={11} color={c.primary} />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.markSent}</Text>
           </Pressable>
         </View>
@@ -419,13 +421,13 @@ export function JobsListScreen({
     }
     if (job.status === 'sent' && !expired) {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'accepted')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-emerald-50">
-            <CheckCircle2 size={11} color="#059669" />
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'accepted')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-emerald-500/10">
+            <CheckCircle2 size={11} color={c.success} />
             <Text className="text-xs font-semibold text-emerald-600">{t.actions.markAccepted}</Text>
           </Pressable>
-          <Pressable onPress={() => onUpdateStatus(job.id, 'declined')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-red-50">
-            <XCircle size={11} color="#EF4444" />
+          <Pressable onPress={() => onUpdateStatus(job.id, 'declined')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-red-500/10">
+            <XCircle size={11} color={c.danger} />
             <Text className="text-xs font-semibold text-red-500">{t.actions.markDeclined}</Text>
           </Pressable>
         </View>
@@ -433,13 +435,13 @@ export function JobsListScreen({
     }
     if (job.status === 'accepted') {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'scheduled')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-50">
-            <Calendar size={11} color="#2563EB" />
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'scheduled')} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-blue-500/10">
+            <Calendar size={11} color={c.primary} />
             <Text className="text-xs font-semibold text-blue-600">{t.actions.schedule}</Text>
           </Pressable>
           {canInvoicePerm ? (
-          <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-50">
+          <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-500/10">
             <FileText size={11} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.generateInvoice}</Text>
           </Pressable>
@@ -449,8 +451,8 @@ export function JobsListScreen({
     }
     if (job.status === 'scheduled') {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'in_progress')} className="px-3 py-1.5 rounded-lg active:bg-amber-50">
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'in_progress')} className="px-3 py-1.5 rounded-lg active:bg-amber-500/10">
             <Text className="text-xs font-semibold text-amber-600">{t.actions.startWork}</Text>
           </Pressable>
         </View>
@@ -458,8 +460,8 @@ export function JobsListScreen({
     }
     if (job.status === 'in_progress') {
       return (
-        <View className="flex-row items-center gap-2 border-t border-gray-50 px-5 py-2.5">
-          <Pressable onPress={() => onUpdateStatus(job.id, 'completed')} className="px-3 py-1.5 rounded-lg active:bg-emerald-50">
+        <View className="flex-row items-center gap-2 border-t border-border-soft px-5 py-2.5">
+          <Pressable onPress={() => onUpdateStatus(job.id, 'completed')} className="px-3 py-1.5 rounded-lg active:bg-emerald-500/10">
             <Text className="text-xs font-semibold text-emerald-600">{t.actions.markCompleted}</Text>
           </Pressable>
         </View>
@@ -467,9 +469,9 @@ export function JobsListScreen({
     }
     if (job.status === 'completed') {
       return (
-        <View className="border-t border-gray-50 px-5 py-2.5">
+        <View className="border-t border-border-soft px-5 py-2.5">
           {canInvoicePerm ? (
-          <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-50 self-start">
+          <Pressable onPress={() => onGenerateInvoice(job.id)} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg active:bg-purple-500/10 self-start">
             <FileText size={12} color="#9333EA" />
             <Text className="text-xs font-semibold text-purple-600">{t.actions.generateInvoice}</Text>
           </Pressable>
@@ -479,7 +481,7 @@ export function JobsListScreen({
     }
     if (job.status === 'invoiced' && job.invoiceId) {
       return (
-        <View className="border-t border-gray-50 px-5 py-2.5">
+        <View className="border-t border-border-soft px-5 py-2.5">
 {canViewInvoicePerm ? (
           <Pressable onPress={() => onViewInvoice(job.invoiceId!)} className="flex-row items-center gap-1 self-start">
             <FileText size={12} color="#9333EA" />
@@ -617,8 +619,8 @@ export function JobsListScreen({
       {/* Header */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">
+          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <Text className="text-sm text-muted mt-0.5">
             {search.trim()
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(jobs.length))}
@@ -640,28 +642,28 @@ export function JobsListScreen({
             <Pressable
               onPress={clearFilters}
               accessibilityLabel={t.clearFilters}
-              className="w-11 h-11 rounded-xl border border-red-200 bg-red-50 items-center justify-center active:opacity-80"
+              className="w-11 h-11 rounded-xl border border-red-200 bg-red-500/10 items-center justify-center active:opacity-80"
             >
-              <XCircle size={16} color="#DC2626" />
+              <XCircle size={16} color={c.danger} />
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => setDateMenuOpen(o => !o)}
             accessibilityLabel={t.dateFilter.button}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              dateActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              dateActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
+            <Calendar size={16} color={dateActive ? c.primary : c.muted} />
           </Pressable>
           <Pressable
             onPress={() => setSortMenuOpen(true)}
             accessibilityLabel={t.sort.button}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              sortActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              sortActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <ArrowUpDown size={16} color={sortActive ? '#4F46E5' : '#6B7280'} />
+            <ArrowUpDown size={16} color={sortActive ? c.primary : c.muted} />
           </Pressable>
           {/* Select-all moved into the selection banner below (Todos). */}
           {onCreateInvoice || canDelete ? (
@@ -669,15 +671,15 @@ export function JobsListScreen({
               onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
               accessibilityLabel={canDelete ? t.selectButton : t.batchInvoice.selectButton}
               className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-                selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+                selectMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
               }`}
             >
               {/* With delete available the mode is generic ("Seleccionar"),
                  not invoice-specific — that's also where bulk delete lives. */}
               {canDelete ? (
-                <ListChecks size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+                <ListChecks size={16} color={selectMode ? c.primary : c.muted} />
               ) : (
-                <FileText size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+                <FileText size={16} color={selectMode ? c.primary : c.muted} />
               )}
             </Pressable>
           ) : null}
@@ -691,7 +693,7 @@ export function JobsListScreen({
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color="#9CA3AF" />}
+          leftIcon={<Search size={16} color={c.faint} />}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -708,10 +710,10 @@ export function JobsListScreen({
             onPress={() => setTabs([])}
             accessibilityLabel={tabLabels.all}
             className={`flex-row items-center justify-center px-2.5 py-1.5 rounded-xl ${
-              tabs.length === 0 ? 'bg-primary' : 'bg-gray-100'
+              tabs.length === 0 ? 'bg-primary' : 'bg-border-soft'
             }`}
           >
-            <List size={15} color={tabs.length === 0 ? '#FFFFFF' : '#6B7280'} />
+            <List size={15} color={tabs.length === 0 ? '#FFFFFF' : c.muted} />
           </Pressable>
           {STATUS_TAB_KEYS.map(k => {
             const isActive = tabSet.has(k);
@@ -721,13 +723,13 @@ export function JobsListScreen({
                 key={k}
                 onPress={() => toggleTab(k)}
                 className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${
-                  isActive ? 'bg-primary' : 'bg-gray-100'
+                  isActive ? 'bg-primary' : 'bg-border-soft'
                 }`}
               >
-                <Icon size={13} color={isActive ? '#FFFFFF' : '#6B7280'} />
+                <Icon size={13} color={isActive ? '#FFFFFF' : c.muted} />
                 <Text
                   className={`text-xs font-semibold ${
-                    isActive ? 'text-white' : 'text-gray-500'
+                    isActive ? 'text-white' : 'text-muted'
                   }`}
                 >
                   {tabLabels[k]}
@@ -735,12 +737,12 @@ export function JobsListScreen({
                 {counts[k] > 0 ? (
                   <View
                     className={`px-1.5 py-0.5 rounded-full ${
-                      isActive ? 'bg-white/20' : 'bg-gray-200'
+                      isActive ? 'bg-white/20' : 'bg-border'
                     }`}
                   >
                     <Text
                       className={`text-xs font-bold ${
-                        isActive ? 'text-white' : 'text-gray-600'
+                        isActive ? 'text-white' : 'text-muted'
                       }`}
                     >
                       {counts[k]}
@@ -757,7 +759,7 @@ export function JobsListScreen({
       {selectMode ? (
         <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-4">
           <Pressable onPress={exitSelect} className="p-1 rounded">
-            <X size={14} color="#4F46E5" />
+            <X size={14} color={c.primary} />
           </Pressable>
           <Text className="text-sm font-medium text-primary flex-shrink" numberOfLines={1}>
             {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
@@ -782,8 +784,8 @@ export function JobsListScreen({
         </View>
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
-          <ClipboardList size={40} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-3">
+          <ClipboardList size={40} color={c.faint} />
+          <Text className="text-sm text-faint mt-3">
             {search || tabs.length > 0 ? t.emptyNoMatch : t.emptyAll}
           </Text>
           {!search && tabs.length === 0 && canCreate ? (
@@ -798,11 +800,11 @@ export function JobsListScreen({
           <Fragment key={section.title ?? '__all__'}>
           {section.title ? (
             <View className="flex-row items-center gap-2 mt-2">
-              <Text className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+              <Text className="text-xs font-bold text-muted uppercase tracking-wide">
                 {section.title}
               </Text>
-              <View className="px-1.5 py-0.5 rounded-full bg-gray-200">
-                <Text className="text-[10px] font-bold text-gray-600">{section.jobs.length}</Text>
+              <View className="px-1.5 py-0.5 rounded-full bg-border">
+                <Text className="text-[10px] font-bold text-muted">{section.jobs.length}</Text>
               </View>
             </View>
           ) : null}
@@ -818,16 +820,16 @@ export function JobsListScreen({
             return (
               // Outer view carries the shadow; inner clips content (RN clips
               // shadows under overflow-hidden).
-              <View key={job.id} className={`bg-white rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
+              <View key={job.id} className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
               <View
                 className={`rounded-2xl border overflow-hidden ${
                   picked
                     ? 'bg-primary/5 border-primary'
                     : overdue
-                    ? 'bg-red-50 border-red-200 border-l-4 border-l-red-500'
+                    ? 'bg-red-500/10 border-red-200 border-l-4 border-l-red-500'
                     : alertStyle
-                      ? `bg-white border-gray-100 border-l-4 ${alertStyle.borderClass}`
-                      : 'bg-white border-gray-100'
+                      ? `bg-card border-border-soft border-l-4 ${alertStyle.borderClass}`
+                      : 'bg-card border-border-soft'
                 }`}
               >
                 <Pressable
@@ -839,11 +841,11 @@ export function JobsListScreen({
                     setSelectMode(true);
                     toggleSelect(job.id);
                   }}
-                  className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-gray-50'}`}
+                  className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-surface'}`}
                 >
                   {selectMode ? (
                     <View className={`w-5 h-5 mt-0.5 rounded-md border items-center justify-center ${
-                      picked ? 'bg-primary border-primary' : selectable ? 'border-gray-300' : 'border-gray-200'
+                      picked ? 'bg-primary border-primary' : selectable ? 'border-border' : 'border-border'
                     }`}>
                       {picked ? <Check size={13} color="#FFFFFF" /> : null}
                     </View>
@@ -854,14 +856,14 @@ export function JobsListScreen({
                   <View className="flex-1 min-w-0">
                     {/* Reference code on its own line above the title so it
                        never squeezes the title's width. */}
-                    <Text className="text-xs font-mono text-gray-400" numberOfLines={1}>
+                    <Text className="text-xs font-mono text-faint" numberOfLines={1}>
                       {jobRefLabel({ estimateNumber: job.estimateNumber, externalRef: job.externalRef, id: job.id })}
                     </Text>
-                    <Text className="text-sm font-bold text-gray-900" numberOfLines={1}>
+                    <Text className="text-sm font-bold text-ink" numberOfLines={1}>
                       {job.title}
                     </Text>
                     {job.clientName ? (
-                      <Text className="text-xs text-gray-500 mt-0.5">
+                      <Text className="text-xs text-muted mt-0.5">
                         {job.clientName}
                         {job.clientCompany ? ` · ${job.clientCompany}` : ''}
                       </Text>
@@ -883,8 +885,8 @@ export function JobsListScreen({
                          is true, so this badge only fires when the owner
                          explicitly kept the job in their private scheduler. */}
                       {job.publishedToCrew === false ? (
-                        <View className="px-2 py-0.5 rounded-full bg-gray-200">
-                          <Text className="text-[10px] font-semibold text-gray-600">{t.new.privateBadge}</Text>
+                        <View className="px-2 py-0.5 rounded-full bg-border">
+                          <Text className="text-[10px] font-semibold text-muted">{t.new.privateBadge}</Text>
                         </View>
                       ) : null}
                       {expired ? (
@@ -896,8 +898,8 @@ export function JobsListScreen({
                     <View className="flex-row flex-wrap gap-x-4 gap-y-1 mt-2">
                       {isProposal && job.issueDate ? (
                         <View className="flex-row items-center gap-1">
-                          <Calendar size={12} color="#9CA3AF" />
-                          <Text className="text-xs text-gray-400">
+                          <Calendar size={12} color={c.faint} />
+                          <Text className="text-xs text-faint">
                             {formatDateLong(job.issueDate, dateLoc)}
                             {job.expiryDate
                               ? ` · ${t.dueShort.replace('{{date}}', formatDateLong(job.expiryDate, dateLoc))}`
@@ -908,9 +910,9 @@ export function JobsListScreen({
                       {!isProposal && job.scheduledDate ? (
                         <View className="flex-row items-center gap-1">
                           {overdue
-                            ? <AlertTriangle size={13} color="#DC2626" accessibilityLabel={overdueBadgeLabel} />
-                            : <Calendar size={12} color="#9CA3AF" />}
-                          <Text className={`text-xs ${overdue ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                            ? <AlertTriangle size={13} color={c.danger} accessibilityLabel={overdueBadgeLabel} />
+                            : <Calendar size={12} color={c.faint} />}
+                          <Text className={`text-xs ${overdue ? 'text-red-600 font-bold' : 'text-faint'}`}>
                             {formatDateLong(job.scheduledDate, dateLoc)}
                             {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
                           </Text>
@@ -918,8 +920,8 @@ export function JobsListScreen({
                       ) : null}
                       {durationText ? (
                         <View className="flex-row items-center gap-1">
-                          <Clock size={12} color="#9CA3AF" />
-                          <Text className="text-xs text-gray-400">{durationText}</Text>
+                          <Clock size={12} color={c.faint} />
+                          <Text className="text-xs text-faint">{durationText}</Text>
                         </View>
                       ) : null}
                       {alertStyle && alertChipLabel ? (
@@ -931,15 +933,15 @@ export function JobsListScreen({
                       ) : null}
                       {job.jobCity || job.jobAddress ? (
                         <View className="flex-row items-center gap-1">
-                          <MapPin size={12} color="#9CA3AF" />
-                          <Text className="text-xs text-gray-400">
+                          <MapPin size={12} color={c.faint} />
+                          <Text className="text-xs text-faint">
                             {job.jobCity || job.jobAddress}
                             {job.jobState ? `, ${job.jobState}` : ''}
                           </Text>
                         </View>
                       ) : null}
                       {job.totalAmount > 0 ? (
-                        <Text className="text-xs font-bold text-gray-700">
+                        <Text className="text-xs font-bold text-ink">
                           {fmt(job.totalAmount)}
                         </Text>
                       ) : null}
@@ -957,8 +959,8 @@ export function JobsListScreen({
                        so the lead is easy to scan, distinct from the meta row. */}
                     {job.leadName || job.workerNames.length > 0 ? (
                       <View className="flex-row items-center gap-1 mt-2">
-                        <Users size={12} color="#9CA3AF" />
-                        <Text className="text-xs text-gray-500 font-medium">
+                        <Users size={12} color={c.faint} />
+                        <Text className="text-xs text-muted font-medium">
                           {job.leadName
                             ? `${t.leadPrefix}: ${job.leadName}`
                             : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
@@ -967,7 +969,7 @@ export function JobsListScreen({
                     ) : null}
                   </View>
 
-                  {selectMode ? null : <ChevronRight size={16} color="#9CA3AF" />}
+                  {selectMode ? null : <ChevronRight size={16} color={c.faint} />}
                 </Pressable>
 
                 {selectMode ? null : renderActionBar(job)}
@@ -995,16 +997,16 @@ export function JobsListScreen({
           onPress={() => setSortMenuOpen(false)}
           className="flex-1 bg-black/40 justify-end"
         >
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-6 pt-3 pb-10">
-            <View className="self-center w-10 h-1 rounded-full bg-gray-200 mb-4" />
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
+            <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
             <View className="flex-row items-center justify-between mb-5">
-              <Text className="text-base font-bold text-gray-900">{t.sort.title}</Text>
+              <Text className="text-base font-bold text-ink">{t.sort.title}</Text>
               <Pressable onPress={() => setSortMenuOpen(false)} hitSlop={8}>
                 <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
               </Pressable>
             </View>
 
-            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2.5">
               {t.sort.sortByTitle}
             </Text>
             <View className="gap-1 mb-6">
@@ -1016,22 +1018,22 @@ export function JobsListScreen({
                     key={k}
                     onPress={() => setSortBy(k)}
                     className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
-                      selected ? 'bg-primary/10' : 'active:bg-gray-50'
+                      selected ? 'bg-primary/10' : 'active:bg-surface'
                     }`}
                   >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-gray-100'}`}>
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
                       <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
                     </View>
-                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {t.sort.by[k]}
                     </Text>
-                    {selected ? <Check size={20} color="#4F46E5" /> : null}
+                    {selected ? <Check size={20} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
+            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2.5">
               {t.sort.groupByTitle}
             </Text>
             <View className="gap-1">
@@ -1043,16 +1045,16 @@ export function JobsListScreen({
                     key={k}
                     onPress={() => setGroupBy(k)}
                     className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
-                      selected ? 'bg-primary/10' : 'active:bg-gray-50'
+                      selected ? 'bg-primary/10' : 'active:bg-surface'
                     }`}
                   >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-gray-100'}`}>
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
                       <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
                     </View>
-                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {t.sort.group[k]}
                     </Text>
-                    {selected ? <Check size={20} color="#4F46E5" /> : null}
+                    {selected ? <Check size={20} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
@@ -1075,41 +1077,41 @@ export function JobsListScreen({
           className="flex-1 justify-end bg-black/40"
         >
           {/* No-op press swallows taps on the sheet so they don't close it. */}
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="bg-gray-50 rounded-2xl overflow-hidden">
+            <View className="bg-surface rounded-2xl overflow-hidden">
               <Pressable
                 onPress={() => { setNewMenuOpen(false); onNewJob(); }}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100 border-b border-gray-100"
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft"
               >
-                <ClipboardList size={18} color="#6B7280" />
+                <ClipboardList size={18} color={c.muted} />
                 <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-900">{t.newDropdown.jobOption}</Text>
-                  <Text className="text-xs text-gray-400">{t.newDropdown.jobOptionSub}</Text>
+                  <Text className="text-sm font-semibold text-ink">{t.newDropdown.jobOption}</Text>
+                  <Text className="text-xs text-faint">{t.newDropdown.jobOptionSub}</Text>
                 </View>
               </Pressable>
               {canCreateEstimates ? (
               <Pressable
                 onPress={() => { setNewMenuOpen(false); onNewProposal(); }}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100"
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft"
               >
-                <FileText size={18} color="#6B7280" />
+                <FileText size={18} color={c.muted} />
                 <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-900">
+                  <Text className="text-sm font-semibold text-ink">
                     {t.newDropdown.proposalOption}
                   </Text>
-                  <Text className="text-xs text-gray-400">{t.newDropdown.proposalOptionSub}</Text>
+                  <Text className="text-xs text-faint">{t.newDropdown.proposalOptionSub}</Text>
                 </View>
               </Pressable>
               ) : null}
             </View>
             <Pressable
               onPress={() => setNewMenuOpen(false)}
-              className="mt-3 items-center py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+              className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
             >
-              <Text className="text-sm font-semibold text-gray-700">
+              <Text className="text-sm font-semibold text-ink">
                 {full.common.buttons.cancel}
               </Text>
             </Pressable>

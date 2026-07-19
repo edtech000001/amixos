@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, ImagePlus, X, Trash2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -47,6 +48,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.jobs.detail.photos;
   const tc = full.common;
   const insets = useSafeAreaInsets();
@@ -258,22 +260,22 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between">
-        <Text className="text-sm font-bold text-gray-900">{t.heading}</Text>
-        <Text className="text-xs text-gray-400">
+        <Text className="text-sm font-bold text-ink">{t.heading}</Text>
+        <Text className="text-xs text-faint">
           {t.countLabel.replace('{{count}}', String(photos.length)).replace('{{max}}', String(MAX_PHOTOS_PER_JOB))}
         </Text>
       </View>
 
       {error ? (
-        <View className="px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+        <View className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
           <Text className="text-sm text-red-600">{error}</Text>
         </View>
       ) : null}
 
       {photos.length === 0 && pending.length === 0 && !canWrite ? (
         <View className="py-8 items-center">
-          <ImagePlus size={28} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-2">{t.empty}</Text>
+          <ImagePlus size={28} color={c.faint} />
+          <Text className="text-sm text-faint mt-2">{t.empty}</Text>
         </View>
       ) : (
         <View className="flex-row flex-wrap" style={{ gap: GAP }}>
@@ -282,7 +284,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               key={p.id}
               onPress={() => setViewerIndex(i)}
               style={{ width: tileSize, height: tileSize }}
-              className="rounded-xl overflow-hidden bg-gray-100"
+              className="rounded-xl overflow-hidden bg-border-soft"
             >
               <Image
                 source={{ uri: photoUrls[p.storage_path] }}
@@ -298,7 +300,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             <View
               key={op.id}
               style={{ width: tileSize, height: tileSize }}
-              className="rounded-xl overflow-hidden bg-gray-100"
+              className="rounded-xl overflow-hidden bg-border-soft"
             >
               <Image source={{ uri: op.localUri }} style={{ width: tileSize, height: tileSize }} resizeMode="cover" />
               <View className="absolute inset-0 items-center justify-center bg-black/30">
@@ -312,17 +314,17 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               onPress={() => setPickerOpen(true)}
               disabled={uploading}
               style={{ width: tileSize, height: tileSize }}
-              className="rounded-xl border-2 border-dashed border-gray-200 items-center justify-center active:bg-gray-50"
+              className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-surface"
             >
               {uploading ? (
                 <>
-                  <ActivityIndicator color="#4F46E5" />
-                  <Text className="text-[11px] text-gray-400 mt-1.5">{t.uploading}</Text>
+                  <ActivityIndicator color={c.primary} />
+                  <Text className="text-[11px] text-faint mt-1.5">{t.uploading}</Text>
                 </>
               ) : (
                 <>
-                  <ImagePlus size={22} color="#9CA3AF" />
-                  <Text className="text-[11px] text-gray-500 mt-1.5 font-medium">{t.addBtn}</Text>
+                  <ImagePlus size={22} color={c.faint} />
+                  <Text className="text-[11px] text-muted mt-1.5 font-medium">{t.addBtn}</Text>
                 </>
               )}
             </Pressable>
@@ -333,31 +335,31 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       {/* Camera / library chooser */}
       <RNModal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable onPress={() => setPickerOpen(false)} className="flex-1 justify-end bg-black/40">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="bg-gray-50 rounded-2xl overflow-hidden">
+            <View className="bg-surface rounded-2xl overflow-hidden">
               <Pressable
                 onPress={() => pickAndUpload('camera')}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100 border-b border-gray-100"
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft"
               >
-                <Camera size={18} color="#4F46E5" />
-                <Text className="text-sm font-semibold text-gray-900">{t.takePhoto}</Text>
+                <Camera size={18} color={c.primary} />
+                <Text className="text-sm font-semibold text-ink">{t.takePhoto}</Text>
               </Pressable>
               <Pressable
                 onPress={() => pickAndUpload('library')}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-gray-100"
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft"
               >
-                <ImagePlus size={18} color="#4F46E5" />
-                <Text className="text-sm font-semibold text-gray-900">{t.chooseFromLibrary}</Text>
+                <ImagePlus size={18} color={c.primary} />
+                <Text className="text-sm font-semibold text-ink">{t.chooseFromLibrary}</Text>
               </Pressable>
             </View>
             <Pressable
               onPress={() => setPickerOpen(false)}
-              className="mt-3 items-center py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200"
+              className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
             >
-              <Text className="text-sm font-semibold text-gray-700">{tc.buttons.cancel}</Text>
+              <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -396,7 +398,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               ) : null}
               {canWrite && viewerPhoto ? (
                 <Pressable onPress={() => removePhoto(viewerPhoto)} hitSlop={10}>
-                  <Trash2 size={22} color="#F87171" />
+                  <Trash2 size={22} color={c.danger} />
                 </Pressable>
               ) : null}
             </View>

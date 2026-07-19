@@ -20,6 +20,7 @@ import {
   LocateFixed, EyeOff, CircleCheckBig, History,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { DateRangeSheet } from '@amixos/shared/ui';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -270,6 +271,7 @@ export default function MapScreen() {
   const router = useRouter();
   const { business, user } = useApp();
   const insets = useSafeAreaInsets();
+  const c = useThemeColors();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
@@ -643,24 +645,24 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{moduleName}</Text>
+        <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{moduleName}</Text>
         {/* Storm focus toggle — only shown when the alpha business has
            weather enabled, since it's useless otherwise. */}
         {weatherEnabled ? (
           <Pressable
             onPress={() => setStormFocus(v => !v)}
             hitSlop={12}
-            className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${stormFocus ? 'bg-red-50' : ''}`}
+            className={`p-2 mr-1 rounded-lg active:bg-border-soft ${stormFocus ? 'bg-red-500/10' : ''}`}
           >
-            <Crosshair size={20} color={stormFocus ? '#DC2626' : '#374151'} />
+            <Crosshair size={20} color={stormFocus ? c.danger : c.muted} />
           </Pressable>
         ) : null}
         {weatherEnabled ? (
@@ -668,9 +670,9 @@ export default function MapScreen() {
             onPress={() => setWeatherDateOpen(v => !v)}
             hitSlop={12}
             accessibilityLabel={tdate.button}
-            className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${weatherDateActive ? 'bg-primary/10' : ''}`}
+            className={`p-2 mr-1 rounded-lg active:bg-border-soft ${weatherDateActive ? 'bg-primary/10' : ''}`}
           >
-            <Calendar size={20} color={weatherDateActive ? '#4F46E5' : '#374151'} />
+            <Calendar size={20} color={weatherDateActive ? c.primary : c.muted} />
           </Pressable>
         ) : null}
         {/* Outreach mode toggle — dims + ✓ clients contacted within the
@@ -678,16 +680,16 @@ export default function MapScreen() {
         <Pressable
           onPress={() => setOutreach(v => !v)}
           hitSlop={12}
-          className={`p-2 mr-1 rounded-lg active:bg-gray-100 ${outreach ? 'bg-emerald-50' : ''}`}
+          className={`p-2 mr-1 rounded-lg active:bg-border-soft ${outreach ? 'bg-emerald-500/10' : ''}`}
         >
-          <CircleCheckBig size={20} color={outreach ? '#16A34A' : '#374151'} />
+          <CircleCheckBig size={20} color={outreach ? c.success : c.muted} />
         </Pressable>
         <Pressable
           onPress={() => setSettingsOpen(true)}
           hitSlop={12}
-          className="p-2 -mr-2 rounded-lg active:bg-gray-100"
+          className="p-2 -mr-2 rounded-lg active:bg-border-soft"
         >
-          <SettingsIcon size={20} color="#374151" />
+          <SettingsIcon size={20} color={c.muted} />
         </Pressable>
       </View>
 
@@ -736,7 +738,7 @@ export default function MapScreen() {
         </ScrollView>
         {/* Tiny hint so users know the chips toggle visibility — wasn't
            obvious from styling alone. */}
-        <Text className="text-[10px] text-gray-400 mt-1 px-4">
+        <Text className="text-[10px] text-faint mt-1 px-4">
           {t.layerToggleHint}
         </Text>
       </View>
@@ -745,24 +747,24 @@ export default function MapScreen() {
          (name, company, city, state, custom fields, etc.). Map auto-fits
          to the matching subset so the user lands on the results. */}
       <View className="px-4 pb-3">
-        <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white">
-          <SearchIcon size={14} color="#9CA3AF" />
+        <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card">
+          <SearchIcon size={14} color={c.faint} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder={t.searchPlaceholder}
-            placeholderTextColor="#9CA3AF"
-            className="flex-1 text-sm text-gray-900"
+            placeholderTextColor={c.faint}
+            className="flex-1 text-sm text-ink"
             autoCorrect={false}
             autoCapitalize="none"
           />
           {search ? (
             <>
-              <Text className="text-[10px] text-gray-500">
+              <Text className="text-[10px] text-muted">
                 {t.searchResultsCount.replace('{{count}}', String(visiblePins.length))}
               </Text>
               <Pressable onPress={() => setSearch('')} hitSlop={6}>
-                <X size={14} color="#9CA3AF" />
+                <X size={14} color={c.faint} />
               </Pressable>
             </>
           ) : null}
@@ -773,25 +775,25 @@ export default function MapScreen() {
            the context of "what's being filtered" lives in the same visual
            group as the other filter inputs. */}
         {stormFocus && weatherEnabled ? (
-          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-100">
-            <Crosshair size={12} color="#DC2626" />
+          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-100">
+            <Crosshair size={12} color={c.danger} />
             <Text className="text-[11px] font-semibold text-red-700 flex-1">
               {t.weather.focusModeBadge}
             </Text>
             <Pressable onPress={() => setStormFocus(false)} hitSlop={6}>
-              <X size={12} color="#DC2626" />
+              <X size={12} color={c.danger} />
             </Pressable>
           </View>
         ) : null}
         {/* Outreach-mode active banner — contacted clients are dimmed + ✓. */}
         {outreach ? (
-          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-            <CircleCheckBig size={12} color="#16A34A" />
+          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-100">
+            <CircleCheckBig size={12} color={c.success} />
             <Text className="text-[11px] font-semibold text-emerald-700 flex-1">
               {t.outreachModeBadge.replace('{{days}}', String(deviceSettings.outreachDays))}
             </Text>
             <Pressable onPress={() => setOutreach(false)} hitSlop={6}>
-              <X size={12} color="#16A34A" />
+              <X size={12} color={c.success} />
             </Pressable>
           </View>
         ) : null}
@@ -809,7 +811,7 @@ export default function MapScreen() {
             // when it returned "0 located".
             onPress={() => setUnresolvedOpen(true)}
             disabled={geocoding}
-            className="mt-2 rounded-2xl bg-white border border-gray-200 px-4 py-3 flex-row items-center gap-3"
+            className="mt-2 rounded-2xl bg-card border border-border px-4 py-3 flex-row items-center gap-3"
             style={{
               shadowColor: '#000',
               shadowOpacity: 0.08,
@@ -819,10 +821,10 @@ export default function MapScreen() {
             }}
           >
             <View className="w-8 h-8 rounded-full bg-sky-100 items-center justify-center">
-              <Users size={16} color="#0EA5E9" />
+              <Users size={16} color={c.primary} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm text-gray-900">
+              <Text className="text-sm text-ink">
                 {geocoding && geocodeProgress
                   ? t.geocodeProgress
                       .replace('{{done}}', String(geocodeProgress.done))
@@ -832,7 +834,7 @@ export default function MapScreen() {
                     : t.geocodeMissing.replace('{{count}}', String(pins.needsGeocoding))}
               </Text>
               {!geocoding && pins.geocodeBreakdown ? (
-                <Text className="text-xs text-gray-500 mt-0.5">
+                <Text className="text-xs text-muted mt-0.5">
                   {t.geocodeBreakdown
                     .replace('{{noAddr}}', String(pins.geocodeBreakdown.noAddress))
                     .replace('{{unresolved}}', String(pins.geocodeBreakdown.unresolved))
@@ -840,16 +842,16 @@ export default function MapScreen() {
                 </Text>
               ) : null}
             </View>
-            {geocoding ? <ActivityIndicator size="small" color="#4F46E5" /> : null}
+            {geocoding ? <ActivityIndicator size="small" color={c.primary} /> : null}
             {/* Dismiss for this session — banner re-shows when the user
                returns to the map. stopPropagation so the surrounding
                Pressable's onPress (open list) doesn't also fire. */}
             <Pressable
               onPress={(e) => { e.stopPropagation(); setBannerDismissed(true); }}
               hitSlop={10}
-              className="p-1.5 rounded-lg active:bg-gray-100"
+              className="p-1.5 rounded-lg active:bg-border-soft"
             >
-              <X size={16} color="#9CA3AF" />
+              <X size={16} color={c.faint} />
             </Pressable>
           </Pressable>
         ) : null}
@@ -858,7 +860,7 @@ export default function MapScreen() {
       <View className="flex-1">
         {loading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#4F46E5" />
+            <ActivityIndicator color={c.primary} />
           </View>
         ) : (
           <ClusteredMapView
@@ -875,7 +877,7 @@ export default function MapScreen() {
             mapRef={(ref) => { mapRef.current = ref as unknown as MapView; }}
             mapType={deviceSettings.mapType}
             clusteringEnabled={deviceSettings.clustering}
-            clusterColor="#4F46E5"
+            clusterColor={c.primary}
             clusterTextColor="#FFFFFF"
             // Off-by-default in the lib, but the lib's animation glitches
             // when used with a lot of markers — leave it off for now.
@@ -949,7 +951,7 @@ export default function MapScreen() {
           <Pressable
             onPress={resetView}
             accessibilityLabel={t.resetView}
-            className="absolute right-4 w-10 h-10 rounded-full bg-white items-center justify-center border border-gray-200"
+            className="absolute right-4 w-10 h-10 rounded-full bg-card items-center justify-center border border-border"
             style={{
               bottom: insets.bottom + 84,
               shadowColor: '#000',
@@ -959,7 +961,7 @@ export default function MapScreen() {
               elevation: 4,
             }}
           >
-            <LocateFixed size={18} color="#374151" />
+            <LocateFixed size={18} color={c.muted} />
           </Pressable>
         ) : null}
 
@@ -1056,25 +1058,26 @@ interface LayerPillProps {
 }
 
 function LayerPill({ icon: Icon, label, color, active, count, onPress }: LayerPillProps) {
+  const c = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
       className={`flex-row items-center gap-1.5 px-3 py-2 rounded-full ${
         active ? '' : 'opacity-50'
       }`}
-      style={{ backgroundColor: active ? `${color}20` : '#F3F4F6' }}
+      style={{ backgroundColor: active ? `${color}20` : c.card }}
     >
-      <Icon size={14} color={active ? color : '#6B7280'} />
+      <Icon size={14} color={active ? color : c.muted} />
       <Text
         className="text-xs font-semibold"
-        style={{ color: active ? color : '#6B7280' }}
+        style={{ color: active ? color : c.muted }}
       >
         {label}
       </Text>
       <View className="bg-white/70 rounded-full px-1.5 py-0.5 min-w-[20px] items-center">
         <Text
           className="text-[10px] font-bold"
-          style={{ color: active ? color : '#6B7280' }}
+          style={{ color: active ? color : c.muted }}
         >
           {count}
         </Text>
@@ -1110,6 +1113,7 @@ function SelectedPinCard({
   };
   fireContact: (args: FireContactArgs) => void;
 }) {
+  const c = useThemeColors();
   const layerColor =
     selected.type === 'client'
       ? LAYER_COLORS.clients
@@ -1158,7 +1162,7 @@ function SelectedPinCard({
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          className="bg-white rounded-3xl w-full max-w-sm p-5"
+          className="bg-card rounded-3xl w-full max-w-sm p-5"
           style={{
             shadowColor: '#000',
             shadowOpacity: 0.2,
@@ -1182,37 +1186,37 @@ function SelectedPinCard({
               )}
             </View>
             <View className="flex-1 min-w-0 pt-0.5">
-              <Text className="text-base font-bold text-gray-900" numberOfLines={1}>
+              <Text className="text-base font-bold text-ink" numberOfLines={1}>
                 {displayName}
               </Text>
               {subtitle ? (
-                <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>
+                <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>
                   {subtitle}
                 </Text>
               ) : null}
             </View>
             <Pressable onPress={onClose} hitSlop={8} className="p-1 -mr-1 -mt-1">
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={c.faint} />
             </Pressable>
           </View>
 
           {/* Info rows */}
           <View className="gap-2 mb-4">
             {phone ? (
-              <InfoRow icon={<Phone size={14} color="#6B7280" />} text={fmtPhonePretty(phone)} />
+              <InfoRow icon={<Phone size={14} color={c.muted} />} text={fmtPhonePretty(phone)} />
             ) : null}
             {email ? (
-              <InfoRow icon={<Mail size={14} color="#6B7280" />} text={email} />
+              <InfoRow icon={<Mail size={14} color={c.muted} />} text={email} />
             ) : null}
             {addressLine ? (
-              <InfoRow icon={<MapPinIconLucide size={14} color="#6B7280" />} text={addressLine} />
+              <InfoRow icon={<MapPinIconLucide size={14} color={c.muted} />} text={addressLine} />
             ) : null}
             {selected.type === 'job' && selected.scheduled_date ? (
-              <InfoRow icon={<Calendar size={14} color="#6B7280" />} text={selected.scheduled_date} />
+              <InfoRow icon={<Calendar size={14} color={c.muted} />} text={selected.scheduled_date} />
             ) : null}
             {selected.type === 'client' ? (
               <InfoRow
-                icon={<History size={14} color="#6B7280" />}
+                icon={<History size={14} color={c.muted} />}
                 text={
                   selected.last_contacted_at
                     ? commLog.lastContacted.replace(
@@ -1230,7 +1234,7 @@ function SelectedPinCard({
             <View className="flex-row gap-2 mb-3">
               {phone ? (
                 <ActionButton
-                  icon={<Phone size={16} color="#4F46E5" />}
+                  icon={<Phone size={16} color={c.primary} />}
                   label={callsClient.actionCall}
                   onPress={() => fireContact({
                     type: 'call',
@@ -1242,7 +1246,7 @@ function SelectedPinCard({
               ) : null}
               {phone ? (
                 <ActionButton
-                  icon={<MessageSquare size={16} color="#4F46E5" />}
+                  icon={<MessageSquare size={16} color={c.primary} />}
                   label={callsClient.actionText}
                   onPress={() => fireContact({
                     type: 'sms',
@@ -1254,7 +1258,7 @@ function SelectedPinCard({
               ) : null}
               {email ? (
                 <ActionButton
-                  icon={<Mail size={16} color="#4F46E5" />}
+                  icon={<Mail size={16} color={c.primary} />}
                   label={callsClient.actionEmail}
                   onPress={() => fireContact({
                     type: 'email',
@@ -1284,14 +1288,14 @@ function SelectedPinCard({
 // Two-column label/value row used in the weather alert detail card.
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-row py-1.5 border-b border-gray-50" style={{ gap: 16 }}>
+    <View className="flex-row py-1.5 border-b border-border-soft" style={{ gap: 16 }}>
       <Text
         style={{ width: 100 }}
-        className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 pt-0.5"
+        className="text-[10px] font-semibold uppercase tracking-wide text-faint pt-0.5"
       >
         {label}
       </Text>
-      <Text className="flex-1 text-xs text-gray-800">{value}</Text>
+      <Text className="flex-1 text-xs text-ink">{value}</Text>
     </View>
   );
 }
@@ -1300,7 +1304,7 @@ function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <View className="flex-row items-start gap-2">
       <View className="mt-0.5">{icon}</View>
-      <Text className="text-xs text-gray-700 flex-1" numberOfLines={2}>{text}</Text>
+      <Text className="text-xs text-ink flex-1" numberOfLines={2}>{text}</Text>
     </View>
   );
 }
@@ -1352,6 +1356,7 @@ function WeatherPinCard({
     pinPopupOtherAlerts: string;
   };
 }) {
+  const c = useThemeColors();
   // Internal "current" alert — defaults to `selected` (the marker's
   // primary) but the user can switch by tapping a sibling row. Reset
   // when the parent passes a different `selected` (different marker tap).
@@ -1394,7 +1399,7 @@ function WeatherPinCard({
           className="absolute inset-0 bg-black/40"
         />
         <View
-          className="bg-white rounded-3xl w-full max-w-sm"
+          className="bg-card rounded-3xl w-full max-w-sm"
           style={{
             maxHeight: '85%',
             shadowColor: '#000',
@@ -1405,7 +1410,7 @@ function WeatherPinCard({
           }}
         >
           {/* Header — sticky-feeling because it sits above the scroll body */}
-          <View className="flex-row items-start gap-3 p-5 pb-3 border-b border-gray-100">
+          <View className="flex-row items-start gap-3 p-5 pb-3 border-b border-border-soft">
             <View
               className="w-12 h-12 rounded-2xl items-center justify-center"
               style={{ backgroundColor: `${color}15` }}
@@ -1413,7 +1418,7 @@ function WeatherPinCard({
               <CloudLightning size={22} color={color} />
             </View>
             <View className="flex-1 min-w-0 pt-0.5">
-              <Text className="text-base font-bold text-gray-900" numberOfLines={2}>
+              <Text className="text-base font-bold text-ink" numberOfLines={2}>
                 {current.event}
               </Text>
               {current.severity ? (
@@ -1423,7 +1428,7 @@ function WeatherPinCard({
               ) : null}
             </View>
             <Pressable onPress={onClose} hitSlop={8} className="p-1 -mr-1 -mt-1">
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={c.faint} />
             </Pressable>
           </View>
 
@@ -1461,17 +1466,17 @@ function WeatherPinCard({
             {addedTime ? <DetailRow label={labels.pinPopupAdded} value={addedTime} /> : null}
             {current.description ? (
               <View className="mt-2">
-                <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-1">
                   {labels.pinPopupDescription}
                 </Text>
-                <Text className="text-xs text-gray-700 leading-5">{current.description}</Text>
+                <Text className="text-xs text-ink leading-5">{current.description}</Text>
               </View>
             ) : null}
 
             {/* Other alerts at the same county — tap to swap the detail view */}
             {otherAlerts.length > 0 ? (
               <View className="mt-4">
-                <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
+                <Text className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-2">
                   {labels.pinPopupOtherAlerts}
                 </Text>
                 <View className="gap-1.5">
@@ -1482,21 +1487,21 @@ function WeatherPinCard({
                       <Pressable
                         key={alt.id}
                         onPress={() => setCurrent(alt)}
-                        className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-gray-100"
+                        className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-border-soft"
                       >
                         <View
                           className="w-2.5 h-2.5 rounded-full"
                           style={{ backgroundColor: altColor }}
                         />
                         <View className="flex-1 min-w-0">
-                          <Text className="text-xs font-semibold text-gray-800" numberOfLines={1}>
+                          <Text className="text-xs font-semibold text-ink" numberOfLines={1}>
                             {alt.event}
                           </Text>
-                          <Text className="text-[10px] text-gray-500" numberOfLines={1}>
+                          <Text className="text-[10px] text-muted" numberOfLines={1}>
                             {alt.severity ? `${alt.severity} · ` : ''}{altWhen}
                           </Text>
                         </View>
-                        <ArrowRight size={12} color="#9CA3AF" />
+                        <ArrowRight size={12} color={c.faint} />
                       </Pressable>
                     );
                   })}
@@ -1506,7 +1511,7 @@ function WeatherPinCard({
           </ScrollView>
 
           {nwsUrl ? (
-            <View className="p-5 pt-3 border-t border-gray-100">
+            <View className="p-5 pt-3 border-t border-border-soft">
               <Pressable
                 onPress={() => Linking.openURL(nwsUrl).catch(() => {})}
                 className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
@@ -1544,6 +1549,7 @@ function UnresolvedClientsModal({
   onChanged?: () => void;
 }) {
   const { business } = useApp();
+  const c = useThemeColors();
   const { t: full } = useLang();
   const t = full.dashboard.modules.map;
   const supabase = createSupabaseClient();
@@ -1627,20 +1633,20 @@ function UnresolvedClientsModal({
     const name = [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || t.geocodeListUnnamed;
     const addr = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
     return (
-      <View key={r.id} className="flex-row items-start border-b border-gray-100">
+      <View key={r.id} className="flex-row items-start border-b border-border-soft">
         <Pressable
           onPress={() => onOpenClient(r.id)}
-          className="flex-1 px-4 py-3 active:bg-gray-50"
+          className="flex-1 px-4 py-3 active:bg-surface"
         >
-          <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{name}</Text>
+          <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{name}</Text>
           {r.company ? (
-            <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={1}>{r.company}</Text>
+            <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>{r.company}</Text>
           ) : null}
-          <Text className="text-xs text-gray-400 mt-1" numberOfLines={2}>
+          <Text className="text-xs text-faint mt-1" numberOfLines={2}>
             {addr || '—'}
           </Text>
           {hint ? (
-            <Text className="text-[10px] text-gray-400 italic mt-1" numberOfLines={2}>{hint}</Text>
+            <Text className="text-[10px] text-faint italic mt-1" numberOfLines={2}>{hint}</Text>
           ) : null}
         </Pressable>
         {/* Per-row "permanently ignore" — sets clients.geocoding_ignored=true
@@ -1652,7 +1658,7 @@ function UnresolvedClientsModal({
           hitSlop={6}
           className="py-3 pr-4 pl-2 active:opacity-60"
         >
-          <EyeOff size={16} color="#9CA3AF" />
+          <EyeOff size={16} color={c.faint} />
         </Pressable>
       </View>
     );
@@ -1663,7 +1669,7 @@ function UnresolvedClientsModal({
       <View className="flex-1 items-center justify-center px-6">
         <Pressable onPress={onClose} className="absolute inset-0 bg-black/40" />
         <View
-          className="bg-white rounded-3xl w-full max-w-sm"
+          className="bg-card rounded-3xl w-full max-w-sm"
           style={{
             maxHeight: '85%',
             shadowColor: '#000',
@@ -1673,30 +1679,30 @@ function UnresolvedClientsModal({
             elevation: 12,
           }}
         >
-          <View className="flex-row items-center gap-3 p-5 pb-3 border-b border-gray-100">
+          <View className="flex-row items-center gap-3 p-5 pb-3 border-b border-border-soft">
             <View className="w-10 h-10 rounded-2xl items-center justify-center bg-sky-100">
-              <Users size={20} color="#0EA5E9" />
+              <Users size={20} color={c.primary} />
             </View>
-            <Text className="flex-1 text-base font-bold text-gray-900">{t.geocodeListTitle}</Text>
+            <Text className="flex-1 text-base font-bold text-ink">{t.geocodeListTitle}</Text>
             <Pressable onPress={onClose} hitSlop={8} className="p-1">
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={c.faint} />
             </Pressable>
           </View>
 
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
             {loading ? (
               <View className="py-12 items-center">
-                <ActivityIndicator size="small" color="#4F46E5" />
+                <ActivityIndicator size="small" color={c.primary} />
               </View>
             ) : rows.length === 0 ? (
-              <Text className="text-xs text-gray-400 italic text-center py-8">
+              <Text className="text-xs text-faint italic text-center py-8">
                 {t.geocodeListEmpty}
               </Text>
             ) : (
               <>
                 {groups.pending.length > 0 ? (
                   <View>
-                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                       {t.geocodeListSectionPending} ({groups.pending.length})
                     </Text>
                     {groups.pending.map((r) => renderRow(r))}
@@ -1704,7 +1710,7 @@ function UnresolvedClientsModal({
                 ) : null}
                 {groups.notFound.length > 0 ? (
                   <View>
-                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                       {t.geocodeListSectionUnresolved} ({groups.notFound.length})
                     </Text>
                     {groups.notFound.map((r) => renderRow(r, t.geocodeListUnresolvedHint))}
@@ -1712,7 +1718,7 @@ function UnresolvedClientsModal({
                 ) : null}
                 {groups.noAddress.length > 0 ? (
                   <View>
-                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                    <Text className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">
                       {t.geocodeListSectionNoAddress} ({groups.noAddress.length})
                     </Text>
                     {groups.noAddress.map((r) => renderRow(r, t.geocodeListNoAddressHint))}
@@ -1723,7 +1729,7 @@ function UnresolvedClientsModal({
           </ScrollView>
 
           {groups.pending.length > 0 ? (
-            <View className="p-5 pt-3 border-t border-gray-100">
+            <View className="p-5 pt-3 border-t border-border-soft">
               <Pressable
                 onPress={onRetry}
                 disabled={retrying}

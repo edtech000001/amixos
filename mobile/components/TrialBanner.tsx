@@ -2,6 +2,7 @@ import { View, Text, Pressable, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Clock, AlertTriangle } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useAuthStore } from '@/lib/auth/store';
 import {
   trialDaysLeft,
@@ -18,6 +19,7 @@ export function TrialBanner() {
   const { locale } = useLang();
   const en = locale === 'en';
   const router = useRouter();
+  const c = useThemeColors();
   const business = useAuthStore((s) => s.business);
 
   if (!business) return null;
@@ -53,9 +55,9 @@ export function TrialBanner() {
     return (
       <Pressable
         onPress={open}
-        className="mx-4 mb-3 flex-row items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 active:opacity-80"
+        className="mx-4 mb-3 flex-row items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-500/10 px-4 py-3 active:opacity-80"
       >
-        <AlertTriangle size={18} color="#B45309" />
+        <AlertTriangle size={18} color={c.warning} />
         <Text className="flex-1 text-sm font-semibold text-amber-800">
           {needsPlan
             ? en
@@ -75,7 +77,7 @@ export function TrialBanner() {
       onPress={open}
       className="mx-4 mb-3 flex-row items-center gap-2.5 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 active:opacity-80"
     >
-      <Clock size={18} color="#4F46E5" />
+      <Clock size={18} color={c.primary} />
       <Text className="flex-1 text-sm font-semibold text-primary">
         {en
           ? `${days} ${days === 1 ? 'day' : 'days'} left in your trial · Subscribe`

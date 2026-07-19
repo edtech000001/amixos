@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -13,6 +13,10 @@ import {
 
 export default function OnboardingRoute() {
   const router = useRouter();
+  // ?adding=1 → the user already has a business and is creating another (from
+  // the switcher). Show a "Cancel" escape instead of "Sign out" so they aren't
+  // trapped in onboarding.
+  const { adding } = useLocalSearchParams<{ adding?: string }>();
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
   const t = full.onboarding;
@@ -176,6 +180,7 @@ export default function OnboardingRoute() {
       onPickLogo={handlePickLogo}
       onFinish={handleFinish}
       onLogout={() => { void useAuthStore.getState().logout(); }}
+      onCancel={adding ? () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); } : undefined}
       pendingInvites={pendingInvites}
       onAcceptInvite={acceptInvite}
     />

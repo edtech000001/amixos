@@ -8,6 +8,7 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useDockStore } from '@/lib/dockStore';
 import { SortableList } from '@/components/SortableList';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import {
   eligibleDockApps,
   effectiveDockKeys,
@@ -26,6 +27,7 @@ export default function NavegacionSettings() {
   const keys = useDockStore(s => s.keys);
   const save = useDockStore(s => s.save);
   const [msg, setMsg] = useState<string | null>(null);
+  const c = useThemeColors();
 
   const eligible = useMemo(() => eligibleDockApps(currentRole), [currentRole]);
   // The middle selection, in the user's saved order.
@@ -65,20 +67,20 @@ export default function NavegacionSettings() {
   };
 
   const FixedRow = ({ label, Icon }: { label: string; Icon: typeof Home }) => (
-    <View className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50">
-      <View className="w-10 h-10 rounded-xl bg-gray-100 items-center justify-center">
-        <Icon size={18} color="#6B7280" />
+    <View className="flex-row items-center gap-3 px-4 py-4 border-b border-border-soft">
+      <View className="w-10 h-10 rounded-xl bg-border-soft items-center justify-center">
+        <Icon size={18} color={c.muted} />
       </View>
-      <Text className="flex-1 text-base font-semibold text-gray-900">{label}</Text>
-      <View className="flex-row items-center gap-1 px-2 py-1 rounded-lg bg-gray-100">
-        <Lock size={11} color="#9CA3AF" />
-        <Text className="text-[11px] font-medium text-gray-500">{t.fixedBadge}</Text>
+      <Text className="flex-1 text-base font-semibold text-ink">{label}</Text>
+      <View className="flex-row items-center gap-1 px-2 py-1 rounded-lg bg-border-soft">
+        <Lock size={11} color={c.faint} />
+        <Text className="text-[11px] font-medium text-muted">{t.fixedBadge}</Text>
       </View>
     </View>
   );
 
   const SectionLabel = ({ label }: { label: string }) => (
-    <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400 mt-6 mb-2 px-1">
+    <Text className="text-xs font-semibold uppercase tracking-wide text-faint mt-6 mb-2 px-1">
       {label}
     </Text>
   );
@@ -87,22 +89,22 @@ export default function NavegacionSettings() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-1">
         <Pressable onPress={() => router.back()} hitSlop={10} className="p-2 -ml-2">
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={c.ink} />
         </Pressable>
       </View>
       <ScrollView contentContainerClassName="px-6 pt-2 pb-36">
-        <Text className="text-2xl font-bold text-gray-900 mb-1">{t.title}</Text>
-        <Text className="text-sm text-gray-500 mb-2">{t.intro.replace('{{max}}', maxLabel)}</Text>
+        <Text className="text-2xl font-bold text-ink mb-1">{t.title}</Text>
+        <Text className="text-sm text-muted mb-2">{t.intro.replace('{{max}}', maxLabel)}</Text>
 
         {msg ? (
-          <View className="mb-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-2.5">
+          <View className="mb-3 rounded-xl bg-amber-500/10 border border-amber-100 px-4 py-2.5">
             <Text className="text-xs text-amber-700">{msg}</Text>
           </View>
         ) : null}
 
         {/* In the bar — Inicio (fixed) → draggable selection → Más (fixed) */}
         <SectionLabel label={t.inBarLabel} />
-        <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
           <FixedRow label={t.inicioLabel} Icon={Home} />
 
           <SortableList<{ id: string; app: DockApp }>
@@ -112,20 +114,20 @@ export default function NavegacionSettings() {
               const Icon = app.Icon;
               const canRemove = selectedKeys.length > MIN_DOCK_MIDDLE;
               return (
-                <View className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50 bg-white">
-                  <GripVertical size={18} color="#D1D5DB" />
+                <View className="flex-row items-center gap-3 px-4 py-4 border-b border-border-soft bg-card">
+                  <GripVertical size={18} color={c.faint} />
                   <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-                    <Icon size={18} color="#4F46E5" />
+                    <Icon size={18} color={c.primary} />
                   </View>
-                  <Text className="flex-1 text-base font-semibold text-gray-900">{sb[app.labelKey]}</Text>
+                  <Text className="flex-1 text-base font-semibold text-ink">{sb[app.labelKey]}</Text>
                   <Pressable
                     onPress={() => removeApp(app)}
                     hitSlop={8}
                     className={`w-7 h-7 rounded-full items-center justify-center ${
-                      canRemove ? 'bg-red-50' : 'bg-gray-100'
+                      canRemove ? 'bg-red-500/10' : 'bg-border-soft'
                     }`}
                   >
-                    <Minus size={16} color={canRemove ? '#DC2626' : '#D1D5DB'} strokeWidth={3} />
+                    <Minus size={16} color={canRemove ? c.danger : c.faint} strokeWidth={3} />
                   </Pressable>
                 </View>
               );
@@ -134,27 +136,27 @@ export default function NavegacionSettings() {
 
           <FixedRow label={t.masLabel} Icon={LayoutGrid} />
         </View>
-        <Text className="text-xs text-gray-400 mt-2 px-1">{t.reorderHint}</Text>
+        <Text className="text-xs text-faint mt-2 px-1">{t.reorderHint}</Text>
 
         {/* Available — not in the bar; tap + to add (reachable from Más meanwhile) */}
         {availableApps.length ? (
           <>
             <SectionLabel label={t.availableLabel} />
-            <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
               {availableApps.map(app => {
                 const Icon = app.Icon;
                 return (
                   <Pressable
                     key={app.key}
                     onPress={() => addApp(app)}
-                    className="flex-row items-center gap-3 px-4 py-4 border-b border-gray-50 active:bg-gray-50"
+                    className="flex-row items-center gap-3 px-4 py-4 border-b border-border-soft active:bg-surface"
                   >
-                    <View className="w-10 h-10 rounded-xl bg-gray-100 items-center justify-center">
-                      <Icon size={18} color="#6B7280" />
+                    <View className="w-10 h-10 rounded-xl bg-border-soft items-center justify-center">
+                      <Icon size={18} color={c.muted} />
                     </View>
-                    <Text className="flex-1 text-base font-semibold text-gray-900">{sb[app.labelKey]}</Text>
+                    <Text className="flex-1 text-base font-semibold text-ink">{sb[app.labelKey]}</Text>
                     <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
-                      <Plus size={16} color="#4F46E5" strokeWidth={3} />
+                      <Plus size={16} color={c.primary} strokeWidth={3} />
                     </View>
                   </Pressable>
                 );
@@ -163,7 +165,7 @@ export default function NavegacionSettings() {
           </>
         ) : null}
 
-        <Text className="text-xs text-gray-400 mt-4 px-1">{t.maxNote.replace('{{max}}', maxLabel)}</Text>
+        <Text className="text-xs text-faint mt-4 px-1">{t.maxNote.replace('{{max}}', maxLabel)}</Text>
       </ScrollView>
     </SafeAreaView>
   );

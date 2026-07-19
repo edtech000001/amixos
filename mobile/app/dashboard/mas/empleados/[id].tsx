@@ -43,6 +43,7 @@ import {
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { fetchEmployeeLocations, setEmployeePrimaryLocation, toggleEmployeeBranch } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -122,6 +123,7 @@ export default function EmpleadoDetailRoute() {
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, locations } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.employees;
   const tc = full.common;
   const teamT = full.dashboard.settings.team;
@@ -240,11 +242,11 @@ export default function EmpleadoDetailRoute() {
       case 'pay_rate':
         return (
           <View key={key}>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
+            <Text className="text-sm font-semibold text-ink mb-2">
               {t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[form.pay_type] ?? PAY_UNIT.hourly)}
             </Text>
-            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
-              <DollarSign size={16} color="#9CA3AF" />
+            <View className="flex-row items-center rounded-2xl border border-border bg-card px-4">
+              <DollarSign size={16} color={c.faint} />
               <Input
                 containerClassName="flex-1 ml-2"
                 placeholder="0.00"
@@ -260,33 +262,33 @@ export default function EmpleadoDetailRoute() {
                   onPress={() => setForm(f => ({ ...f, overtime_eligible: !f.overtime_eligible }))}
                   className="flex-row items-center justify-between"
                 >
-                  <Text className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</Text>
-                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-gray-200'}`}>
-                    <View className={`w-5 h-5 rounded-full bg-white ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
+                  <Text className="text-sm font-medium text-ink">{t.modal.overtimeLabel}</Text>
+                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-border'}`}>
+                    <View className={`w-5 h-5 rounded-full bg-card ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
                   </View>
                 </Pressable>
                 {form.overtime_eligible ? (
                   <View className="flex-row gap-3">
                     <View className="flex-1">
-                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeThresholdLabel}</Text>
+                      <Text className="text-xs text-muted mb-1">{t.modal.overtimeThresholdLabel}</Text>
                       <TextInput
                         value={form.overtime_threshold}
                         onChangeText={v => setForm(f => ({ ...f, overtime_threshold: v.replace(/[^0-9.]/g, '') }))}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeMultiplierLabel}</Text>
+                      <Text className="text-xs text-muted mb-1">{t.modal.overtimeMultiplierLabel}</Text>
                       <TextInput
                         value={form.overtime_multiplier}
                         onChangeText={v => setForm(f => ({ ...f, overtime_multiplier: v.replace(/[^0-9.]/g, '') }))}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                       />
                     </View>
                   </View>
@@ -350,8 +352,8 @@ export default function EmpleadoDetailRoute() {
     if (visibleKeys.length === 0) return null;
     return (
       <View key={section}>
-        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{sectionLabel[section]}</Text>
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-4">
+        <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-3 px-1">{sectionLabel[section]}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft p-4 gap-4">
           {visibleKeys.map(k => {
             if (k.startsWith('custom:')) {
               const tpl = templates.find(tp => `custom:${tp.id}` === k);
@@ -653,7 +655,7 @@ export default function EmpleadoDetailRoute() {
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <Header onBack={goBack} />
         <View className="flex-1 items-center justify-center">
-          <Text className="text-sm text-gray-400">{tc.states.loading}...</Text>
+          <Text className="text-sm text-faint">{tc.states.loading}...</Text>
         </View>
       </SafeAreaView>
     );
@@ -663,7 +665,7 @@ export default function EmpleadoDetailRoute() {
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <Header onBack={goBack} />
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-sm text-gray-400">—</Text>
+          <Text className="text-sm text-faint">—</Text>
         </View>
       </SafeAreaView>
     );
@@ -674,28 +676,28 @@ export default function EmpleadoDetailRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 flex-1 text-base font-semibold text-gray-900" numberOfLines={1}>
+        <Text className="ml-1 flex-1 text-base font-semibold text-ink" numberOfLines={1}>
           {employee.first_name} {employee.last_name}
         </Text>
         <View className="flex-row items-center gap-1">
           {isView ? (
             <>
-              <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
-                <Pencil size={18} color="#9CA3AF" />
+              <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+                <Pencil size={18} color={c.faint} />
               </Pressable>
               {canDeleteEmployee ? (
-                <Pressable onPress={deleteEmployee} disabled={accessBusy} hitSlop={8} className="p-2 rounded-lg active:bg-red-50 disabled:opacity-50">
-                  <Trash2 size={18} color="#EF4444" />
+                <Pressable onPress={deleteEmployee} disabled={accessBusy} hitSlop={8} className="p-2 rounded-lg active:bg-red-500/10 disabled:opacity-50">
+                  <Trash2 size={18} color={c.danger} />
                 </Pressable>
               ) : null}
             </>
           ) : (
-            <Pressable onPress={() => { setMode('view'); setError(''); void load(); }} hitSlop={8} className="p-2 rounded-lg active:bg-gray-100">
-              <X size={18} color="#9CA3AF" />
+            <Pressable onPress={() => { setMode('view'); setError(''); void load(); }} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+              <X size={18} color={c.faint} />
             </Pressable>
           )}
         </View>
@@ -704,12 +706,12 @@ export default function EmpleadoDetailRoute() {
       <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-5" keyboardShouldPersistTaps="handled">
         {/* Avatar hero */}
         <View className="items-center gap-2 py-1">
-          <View className={`w-24 h-24 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-gray-100'}`}>
-            <Text className={`text-3xl font-bold ${employee.active ? 'text-primary' : 'text-gray-400'}`}>
+          <View className={`w-24 h-24 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
+            <Text className={`text-3xl font-bold ${employee.active ? 'text-primary' : 'text-faint'}`}>
               {employee.first_name.charAt(0)}{employee.last_name.charAt(0)}
             </Text>
           </View>
-          <Text className="text-xl font-bold text-gray-900 mt-1 text-center">
+          <Text className="text-xl font-bold text-ink mt-1 text-center">
             {employee.first_name} {employee.last_name}
           </Text>
           <View className="flex-row items-center gap-2">
@@ -719,8 +721,8 @@ export default function EmpleadoDetailRoute() {
               </View>
             ) : null}
             {!employee.active ? (
-              <View className="bg-gray-100 px-2.5 py-0.5 rounded-full">
-                <Text className="text-xs font-semibold text-gray-400">{t.inactiveBadge}</Text>
+              <View className="bg-border-soft px-2.5 py-0.5 rounded-full">
+                <Text className="text-xs font-semibold text-faint">{t.inactiveBadge}</Text>
               </View>
             ) : null}
           </View>
@@ -744,31 +746,31 @@ export default function EmpleadoDetailRoute() {
             {/* Branch sharing — home branch + lend to other branches (they show
                 in that branch's team list too). Home is changed via the form. */}
             {locations.length >= 2 ? (
-              <View className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 gap-3">
+              <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 gap-3">
                 <View className="flex-row items-center gap-2.5">
                   <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                    <MapPin size={16} color="#4F46E5" />
+                    <MapPin size={16} color={c.primary} />
                   </View>
-                  <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex-1">{locale === 'en' ? 'Locations' : 'Ubicaciones'}</Text>
+                  <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide flex-1">{locale === 'en' ? 'Locations' : 'Ubicaciones'}</Text>
                 </View>
-                <Text className="text-sm text-gray-700">
+                <Text className="text-sm text-ink">
                   {locale === 'en' ? 'Home branch: ' : 'Sucursal principal: '}
                   <Text className="font-semibold">{locations.find(l => l.id === homeLocation)?.name ?? (locale === 'en' ? 'None' : 'Ninguna')}</Text>
                 </Text>
-                <Text className="text-xs text-gray-400">{locale === 'en' ? 'Share with other branches:' : 'Compartir con otras sucursales:'}</Text>
+                <Text className="text-xs text-faint">{locale === 'en' ? 'Share with other branches:' : 'Compartir con otras sucursales:'}</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {locations.filter(l => l.id !== homeLocation).map(l => {
                     const shared = sharedLocations.includes(l.id);
                     return (
                       <Pressable key={l.id} onPress={() => toggleShare(l.id)}
-                        className={`flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${shared ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
-                        {shared ? <Check size={12} color="#4F46E5" /> : null}
-                        <Text className={`text-xs font-medium ${shared ? 'text-primary' : 'text-gray-500'}`}>{l.name}</Text>
+                        className={`flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${shared ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                        {shared ? <Check size={12} color={c.primary} /> : null}
+                        <Text className={`text-xs font-medium ${shared ? 'text-primary' : 'text-muted'}`}>{l.name}</Text>
                       </Pressable>
                     );
                   })}
                   {locations.filter(l => l.id !== homeLocation).length === 0 ? (
-                    <Text className="text-xs text-gray-400">{locale === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</Text>
+                    <Text className="text-xs text-faint">{locale === 'en' ? 'No other branches.' : 'No hay otras sucursales.'}</Text>
                   ) : null}
                 </View>
               </View>
@@ -838,8 +840,8 @@ export default function EmpleadoDetailRoute() {
             {/* Home branch — multi-location businesses only. */}
             {locations.length >= 2 ? (
               <View>
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
-                <View className="bg-white rounded-2xl border border-gray-100 p-4">
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
+                <View className="bg-card rounded-2xl border border-border-soft p-4">
                   <Select
                     value={homeLocation}
                     onValueChange={setHomeLocation}
@@ -855,12 +857,12 @@ export default function EmpleadoDetailRoute() {
 
         {/* Access section (both view and edit modes) */}
         {selAccess ? (
-          <View className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4 gap-3">
+          <View className="rounded-2xl border border-border-soft bg-card shadow-sm p-4 gap-3">
             <View className="flex-row items-center gap-2.5">
               <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                <KeyRound size={16} color="#4F46E5" />
+                <KeyRound size={16} color={c.primary} />
               </View>
-              <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex-1">{t.modal.appAccessHeading}</Text>
+              <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide flex-1">{t.modal.appAccessHeading}</Text>
             </View>
             {selAccess.kind === 'active' ? (
               <View className="gap-2">
@@ -868,8 +870,8 @@ export default function EmpleadoDetailRoute() {
                   <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
                     <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</Text>
                   </View>
-                  {selAccess.isYou ? <Text className="text-xs text-gray-400">{teamT.youSuffix}</Text> : null}
-                  {selAccess.role === 'owner' ? <Text className="text-xs text-gray-400">{teamT.ownerSuffix}</Text> : null}
+                  {selAccess.isYou ? <Text className="text-xs text-faint">{teamT.youSuffix}</Text> : null}
+                  {selAccess.role === 'owner' ? <Text className="text-xs text-faint">{teamT.ownerSuffix}</Text> : null}
                 </View>
                 {canManageAccess && !selAccess.isYou && selAccess.role !== 'owner' ? (
                   <>
@@ -879,16 +881,16 @@ export default function EmpleadoDetailRoute() {
                       options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r][lang] }))}
                     />
                     <Pressable onPress={() => removeAccess(selAccess.memberId)} disabled={accessBusy}
-                      className="py-2.5 rounded-2xl bg-red-50 active:bg-red-100 items-center">
+                      className="py-2.5 rounded-2xl bg-red-500/10 active:bg-red-100 items-center">
                       <Text className="text-sm font-semibold text-red-600">{teamT.removeBtn}</Text>
                     </Pressable>
                   </>
                 ) : null}
                 {!selAccess.isYou && canVerComo(selAccess.role) ? (
                   <Pressable onPress={() => verComoMember(selAccess.memberId)} disabled={accessBusy}
-                    className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-gray-200 bg-white active:bg-gray-50">
-                    <Eye size={15} color="#374151" />
-                    <Text className="text-sm font-semibold text-gray-700">{teamT.verComoBtn}</Text>
+                    className="flex-row items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-border bg-card active:bg-surface">
+                    <Eye size={15} color={c.muted} />
+                    <Text className="text-sm font-semibold text-ink">{teamT.verComoBtn}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -897,7 +899,7 @@ export default function EmpleadoDetailRoute() {
                 <View className="rounded-full bg-amber-100 px-2.5 py-0.5">
                   <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
                 </View>
-                <Text className="text-xs text-gray-500">{ROLE_LABELS[selAccess.role][lang]}</Text>
+                <Text className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</Text>
                 {canManageAccess ? (
                   <View className="ml-auto flex-row items-center gap-1">
                     {invites.find((i) => i.id === selAccess.inviteId)?.acceptUrl ? (
@@ -911,7 +913,7 @@ export default function EmpleadoDetailRoute() {
                     <Pressable
                       onPress={() => revokeInvite(selAccess.inviteId, employee.email ?? '')}
                       disabled={accessBusy}
-                      className="px-3 py-1.5 rounded-2xl bg-red-50 active:bg-red-100"
+                      className="px-3 py-1.5 rounded-2xl bg-red-500/10 active:bg-red-100"
                     >
                       <Text className="text-sm font-semibold text-red-600">{teamT.revokeBtn}</Text>
                     </Pressable>
@@ -920,7 +922,7 @@ export default function EmpleadoDetailRoute() {
               </View>
             ) : canManageAccess ? (
               <View className="gap-2">
-                <Text className="text-xs text-gray-500">{t.modal.appAccessNoneHint}</Text>
+                <Text className="text-xs text-muted">{t.modal.appAccessNoneHint}</Text>
                 <Select
                   value={accessRole}
                   onValueChange={(v) => setAccessRole(v as Role)}
@@ -929,16 +931,16 @@ export default function EmpleadoDetailRoute() {
                 <Pressable
                   onPress={() => inviteToApp(form.email.trim(), accessRole)}
                   disabled={accessBusy || !form.email.trim()}
-                  className={`py-2.5 rounded-2xl items-center ${form.email.trim() ? 'bg-primary/10 active:bg-primary/20' : 'bg-gray-100'}`}
+                  className={`py-2.5 rounded-2xl items-center ${form.email.trim() ? 'bg-primary/10 active:bg-primary/20' : 'bg-border-soft'}`}
                 >
-                  <Text className={`text-sm font-semibold ${form.email.trim() ? 'text-primary' : 'text-gray-400'}`}>
+                  <Text className={`text-sm font-semibold ${form.email.trim() ? 'text-primary' : 'text-faint'}`}>
                     {teamT.inviteBtn}
                   </Text>
                 </Pressable>
                 {!form.email.trim() ? <Text className="text-xs text-amber-600">{t.modal.appAccessEmailRequired}</Text> : null}
               </View>
             ) : (
-              <Text className="text-xs text-gray-400">{t.modal.appAccessNoManage}</Text>
+              <Text className="text-xs text-faint">{t.modal.appAccessNoManage}</Text>
             )}
             {accessError ? <Text className="text-xs text-red-500">{accessError}</Text> : null}
           </View>
@@ -948,9 +950,9 @@ export default function EmpleadoDetailRoute() {
         {isView ? (
           <Pressable
             onPress={() => setHistoryOpen(true)}
-            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-50 active:bg-gray-100"
+            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-surface active:bg-border-soft"
           >
-            <Clock size={16} color="#4F46E5" />
+            <Clock size={16} color={c.primary} />
             <Text className="text-sm font-semibold text-primary">{t.history.openBtn}</Text>
           </Pressable>
         ) : null}
@@ -961,15 +963,15 @@ export default function EmpleadoDetailRoute() {
           <Pressable
             onPress={toggleActive}
             className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
-              employee.active ? 'bg-gray-50 active:bg-gray-100' : 'bg-emerald-50 active:bg-emerald-100'
+              employee.active ? 'bg-surface active:bg-border-soft' : 'bg-emerald-500/10 active:bg-emerald-100'
             }`}
           >
             {employee.active ? (
-              <UserX size={16} color="#6B7280" />
+              <UserX size={16} color={c.muted} />
             ) : (
-              <UserCheck size={16} color="#10B981" />
+              <UserCheck size={16} color={c.success} />
             )}
-            <Text className={`text-sm font-semibold ${employee.active ? 'text-gray-600' : 'text-emerald-700'}`}>
+            <Text className={`text-sm font-semibold ${employee.active ? 'text-muted' : 'text-emerald-700'}`}>
               {employee.active ? t.deactivateBtn : t.reactivateBtn}
             </Text>
           </Pressable>
@@ -980,15 +982,15 @@ export default function EmpleadoDetailRoute() {
           <Pressable
             onPress={toggleRoster}
             className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
-              (employee.show_in_roster ?? true) ? 'bg-gray-50 active:bg-gray-100' : 'bg-amber-50 active:bg-amber-100'
+              (employee.show_in_roster ?? true) ? 'bg-surface active:bg-border-soft' : 'bg-amber-500/10 active:bg-amber-100'
             }`}
           >
             {(employee.show_in_roster ?? true) ? (
-              <UserX size={16} color="#6B7280" />
+              <UserX size={16} color={c.muted} />
             ) : (
-              <UserCheck size={16} color="#D97706" />
+              <UserCheck size={16} color={c.warning} />
             )}
-            <Text className={`text-sm font-semibold ${(employee.show_in_roster ?? true) ? 'text-gray-600' : 'text-amber-700'}`}>
+            <Text className={`text-sm font-semibold ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-700'}`}>
               {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
             </Text>
           </Pressable>
@@ -1018,14 +1020,14 @@ export default function EmpleadoDetailRoute() {
             onPress={() => setHistoryOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
-          <View className="bg-white rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
+          <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-              <Text className="text-lg font-bold text-gray-900">{t.history.title}</Text>
+            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{t.history.title}</Text>
               <Pressable onPress={() => setHistoryOpen(false)} hitSlop={8}>
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView contentContainerClassName="px-5 py-5 pb-10">
@@ -1040,10 +1042,11 @@ export default function EmpleadoDetailRoute() {
 }
 
 function Header({ onBack }: { onBack: () => void }) {
+  const c = useThemeColors();
   return (
-    <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100">
-      <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
-        <ChevronLeft size={22} color="#111827" />
+    <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
+      <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+        <ChevronLeft size={22} color={c.ink} />
       </Pressable>
     </View>
   );
@@ -1051,12 +1054,13 @@ function Header({ onBack }: { onBack: () => void }) {
 
 // Round icon button for the hero quick actions (call / text / email).
 function QuickAction({ Icon, onPress }: { Icon: LucideIcon; onPress: () => void }) {
+  const c = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
       className="w-11 h-11 rounded-full bg-primary/10 items-center justify-center active:bg-primary/20"
     >
-      <Icon size={18} color="#4F46E5" />
+      <Icon size={18} color={c.primary} />
     </Pressable>
   );
 }
@@ -1064,8 +1068,8 @@ function QuickAction({ Icon, onPress }: { Icon: LucideIcon; onPress: () => void 
 // White card grouping a labelled section of detail rows.
 function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <View className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4 gap-3.5">
-      <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{title}</Text>
+    <View className="rounded-2xl border border-border-soft bg-card shadow-sm p-4 gap-3.5">
+      <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide">{title}</Text>
       {children}
     </View>
   );
@@ -1085,19 +1089,20 @@ function InfoRow({
   value: string | null | undefined;
   onPress?: () => void;
 }) {
+  const c = useThemeColors();
   if (!value) return null;
   const body = (
     <View className="flex-row items-center gap-3">
       {Icon ? (
-        <View className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center">
-          <Icon size={16} color="#6B7280" />
+        <View className="w-9 h-9 rounded-xl bg-surface items-center justify-center">
+          <Icon size={16} color={c.muted} />
         </View>
       ) : null}
       <View className="flex-1 min-w-0">
-        <Text className="text-[11px] text-gray-400">{label}</Text>
-        <Text className="text-[15px] font-medium text-gray-900">{value}</Text>
+        <Text className="text-[11px] text-faint">{label}</Text>
+        <Text className="text-[15px] font-medium text-ink">{value}</Text>
       </View>
-      {onPress ? <ChevronRight size={16} color="#D1D5DB" /> : null}
+      {onPress ? <ChevronRight size={16} color={c.faint} /> : null}
     </View>
   );
   return onPress ? (
@@ -1111,20 +1116,21 @@ function CustomFieldInput({
   template, value, onChange,
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
   const tc = useLang().t.common;
+  const c = useThemeColors();
   const label = template.required ? `${template.field_label} *` : template.field_label;
   const cfg = parseFieldConfig(template.field_config);
   if (template.field_type === 'note') {
     // Long free text — multiline, grows with content.
     return (
       <View>
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <TextInput
           value={value}
           onChangeText={onChange}
           multiline
           numberOfLines={4}
-          placeholderTextColor="#9CA3AF"
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+          placeholderTextColor={c.faint}
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
           style={{ textAlignVertical: 'top' }}
         />
       </View>
@@ -1140,15 +1146,15 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <View>
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <View className="flex-row gap-2">
           <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>{tc.states.yes}</Text>
           </Pressable>
           <Pressable onPress={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>{tc.states.no}</Text>
           </Pressable>
         </View>
       </View>
@@ -1161,7 +1167,7 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <View>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
           <View className="flex-row flex-wrap gap-2">
             {template.field_options.map((o) => {
               const on = selected.includes(o);
@@ -1169,9 +1175,9 @@ function CustomFieldInput({
                 <Pressable
                   key={o}
                   onPress={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                 >
-                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-muted'}`}>{o}</Text>
                 </Pressable>
               );
             })}

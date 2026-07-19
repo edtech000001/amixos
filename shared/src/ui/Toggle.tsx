@@ -29,13 +29,13 @@ export function Toggle({
       disabled={disabled}
       className={clsx(
         'relative w-11 h-6 rounded-full',
-        value ? 'bg-primary' : 'bg-gray-200',
+        value ? 'bg-primary' : 'bg-border',
         disabled && 'opacity-50',
       )}
     >
       <View
         className={clsx(
-          'absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm',
+          'absolute top-1 w-4 h-4 rounded-full bg-card shadow-sm',
           value ? 'left-6' : 'left-1',
         )}
       />
@@ -49,9 +49,9 @@ export function Toggle({
       {trigger}
       <View className="flex-1">
         {label ? (
-          <Text className="text-sm font-medium text-gray-900">{label}</Text>
+          <Text className="text-sm font-medium text-ink">{label}</Text>
         ) : null}
-        {hint ? <Text className="text-xs text-gray-500">{hint}</Text> : null}
+        {hint ? <Text className="text-xs text-muted">{hint}</Text> : null}
       </View>
     </View>
   );

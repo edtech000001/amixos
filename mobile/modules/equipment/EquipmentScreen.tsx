@@ -54,6 +54,7 @@ import {
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached, writeCached } from '@/lib/offline/cache';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
@@ -185,6 +186,7 @@ function InlinePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const c = useThemeColors();
   const selected = options.find(o => o.value === value);
   const hasValue = !!(selected && selected.value);
   const list = searchable && query.trim()
@@ -192,45 +194,45 @@ function InlinePicker({
     : options;
   return (
     <View className="gap-1.5">
-      <Text className="text-sm font-semibold text-gray-700">{label}</Text>
+      <Text className="text-sm font-semibold text-ink">{label}</Text>
       <Pressable
         onPress={() => { setOpen(o => !o); setQuery(''); }}
-        className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+        className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
       >
-        <Text className={`text-base flex-1 ${hasValue ? 'text-gray-900' : 'text-gray-400'}`}>
+        <Text className={`text-base flex-1 ${hasValue ? 'text-ink' : 'text-faint'}`}>
           {hasValue ? selected!.label : placeholder}
         </Text>
-        <ChevronDown size={16} color="#9CA3AF" />
+        <ChevronDown size={16} color={c.faint} />
       </Pressable>
       {open ? (
-        <View className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <View className="rounded-2xl border border-border bg-card overflow-hidden">
           {searchable ? (
-            <View className="flex-row items-center gap-2 px-3 py-2 border-b border-gray-100">
-              <Search size={14} color="#9CA3AF" />
+            <View className="flex-row items-center gap-2 px-3 py-2 border-b border-border-soft">
+              <Search size={14} color={c.faint} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder={searchPlaceholder}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={c.faint}
                 autoFocus
                 autoCorrect={false}
-                className="flex-1 py-1 text-sm text-gray-900"
+                className="flex-1 py-1 text-sm text-ink"
               />
             </View>
           ) : null}
           <ScrollView className="max-h-56" nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {list.length === 0 ? (
-              <Text className="text-sm text-gray-400 px-4 py-3">{noResultsText}</Text>
+              <Text className="text-sm text-faint px-4 py-3">{noResultsText}</Text>
             ) : list.map(o => {
               const sel = o.value === value;
               return (
                 <Pressable
                   key={o.value || '__none__'}
                   onPress={() => { onSelect(o.value); setOpen(false); }}
-                  className={`flex-row items-center justify-between px-4 py-3 ${sel ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+                  className={`flex-row items-center justify-between px-4 py-3 ${sel ? 'bg-primary/5' : 'active:bg-surface'}`}
                 >
-                  <Text className={`text-sm flex-1 ${sel ? 'text-primary font-semibold' : 'text-gray-900'}`}>{o.label}</Text>
-                  {sel ? <Check size={16} color="#4F46E5" /> : null}
+                  <Text className={`text-sm flex-1 ${sel ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</Text>
+                  {sel ? <Check size={16} color={c.primary} /> : null}
                 </Pressable>
               );
             })}
@@ -269,11 +271,11 @@ function DetailCard({ rows, footer }: { rows: DetailRowData[]; footer?: ReactNod
   const visible = rows.filter((r) => r.value);
   if (visible.length === 0 && !footer) return null;
   return (
-    <View className="rounded-2xl bg-white border border-gray-100" style={cardShadow}>
+    <View className="rounded-2xl bg-card border border-border-soft" style={cardShadow}>
       {visible.map((r, i) => (
-        <View key={r.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-          <Text className="text-xs font-medium text-gray-400">{r.label}</Text>
-          <Text className="text-base text-gray-900 mt-0.5">{r.value}</Text>
+        <View key={r.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+          <Text className="text-xs font-medium text-faint">{r.label}</Text>
+          <Text className="text-base text-ink mt-0.5">{r.value}</Text>
         </View>
       ))}
       {footer ? <View className="px-4 pb-3.5 pt-0.5">{footer}</View> : null}
@@ -290,6 +292,7 @@ export default function EquipmentScreen() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
+  const c = useThemeColors();
 
   // Group-by — persists across navigation + refresh, scoped per business so it
   // doesn't carry across companies.
@@ -815,13 +818,13 @@ export default function EquipmentScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-1 flex-1">
-          <Text className="text-lg font-semibold text-gray-900">{t.title}</Text>
-          <Text className="text-xs text-gray-500">
+          <Text className="text-lg font-semibold text-ink">{t.title}</Text>
+          <Text className="text-xs text-muted">
             {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
           </Text>
         </View>
@@ -829,27 +832,27 @@ export default function EquipmentScreen() {
         <Pressable
           onPress={() => setGroupMenuOpen(true)}
           className={`p-2.5 rounded-xl border active:opacity-80 ${
-            groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+            groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
           }`}
         >
-          <Layers size={18} color={groupBy !== 'none' ? '#4F46E5' : '#374151'} />
+          <Layers size={18} color={groupBy !== 'none' ? c.primary : c.muted} />
         </Pressable>
       </View>
 
       {/* Search */}
       <View className="px-4 pt-3">
-        <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-3">
-          <Search size={14} color="#9CA3AF" />
+        <View className="flex-row items-center rounded-2xl border border-border bg-card px-3">
+          <Search size={14} color={c.faint} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder={t.searchPlaceholder}
-            placeholderTextColor="#9CA3AF"
-            className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+            placeholderTextColor={c.faint}
+            className="flex-1 py-2.5 pl-2 text-sm text-ink"
           />
           {search.length > 0 ? (
             <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
-              <X size={16} color="#9CA3AF" />
+              <X size={16} color={c.faint} />
             </Pressable>
           ) : null}
         </View>
@@ -858,18 +861,18 @@ export default function EquipmentScreen() {
       {/* List */}
       <ScrollView className="flex-1" contentContainerClassName="px-4 pt-4 pb-32">
         {filtered.length === 0 ? (
-          <View className="bg-white rounded-2xl border border-gray-100 p-8 items-center">
-            <Forklift size={32} color="#D1D5DB" />
-            <Text className="text-sm font-semibold text-gray-700 mt-3">{t.emptyTitle}</Text>
-            <Text className="text-xs text-gray-500 mt-1 text-center">{t.emptyHint}</Text>
+          <View className="bg-card rounded-2xl border border-border-soft p-8 items-center">
+            <Forklift size={32} color={c.faint} />
+            <Text className="text-sm font-semibold text-ink mt-3">{t.emptyTitle}</Text>
+            <Text className="text-xs text-muted mt-1 text-center">{t.emptyHint}</Text>
           </View>
         ) : (
           <View className="gap-5">
             {sections.map((section) => (
               <View key={section.title || '__all'} className="gap-3">
                 {section.title ? (
-                  <Text className="text-xs font-bold text-gray-500 uppercase tracking-wide px-1">
-                    {section.title} <Text className="text-gray-400">· {section.data.length}</Text>
+                  <Text className="text-xs font-bold text-muted uppercase tracking-wide px-1">
+                    {section.title} <Text className="text-faint">· {section.data.length}</Text>
                   </Text>
                 ) : null}
                 {section.data.map((e) => {
@@ -877,15 +880,15 @@ export default function EquipmentScreen() {
                   const days = plateExpirationDays(e.plate_expiration);
                   const plateBadge =
                     days === null ? null
-                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-50', fg: 'text-red-700' }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700' }
+                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-500/10', fg: 'text-red-700' }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700' }
                     : null;
                   const assigned = employeeName(e.assigned_employee_id);
                   return (
                     <Pressable
                       key={e.id}
                       onPress={() => openDetail(e)}
-                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden active:bg-gray-50"
+                      className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface"
                     >
                       {cover ? (
                         <Image
@@ -894,33 +897,33 @@ export default function EquipmentScreen() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <View style={{ height: 160 }} className="bg-gray-50 items-center justify-center">
-                          <Truck size={40} color="#D1D5DB" />
+                        <View style={{ height: 160 }} className="bg-surface items-center justify-center">
+                          <Truck size={40} color={c.faint} />
                         </View>
                       )}
                       <View className="p-4 gap-1">
                         <View className="flex-row items-center justify-between gap-2">
-                          <Text className="text-base font-semibold text-gray-900 flex-1" numberOfLines={1}>{e.name}</Text>
+                          <Text className="text-base font-semibold text-ink flex-1" numberOfLines={1}>{e.name}</Text>
                           {e.paid_off ? (
-                            <View className="bg-emerald-50 px-2 py-0.5 rounded-full">
+                            <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
                               <Text className="text-[10px] font-semibold text-emerald-700">{t.paidOffBadge}</Text>
                             </View>
                           ) : e.loan_lender ? (
-                            <View className="bg-amber-50 px-2 py-0.5 rounded-full">
+                            <View className="bg-amber-500/10 px-2 py-0.5 rounded-full">
                               <Text className="text-[10px] font-semibold text-amber-700">{t.loanBadge}</Text>
                             </View>
                           ) : null}
                         </View>
-                        <Text className="text-xs text-gray-500" numberOfLines={1}>
+                        <Text className="text-xs text-muted" numberOfLines={1}>
                           {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
                         </Text>
                         <View className="flex-row items-center gap-1.5 mt-1">
-                          <UserIcon size={12} color="#6B7280" />
-                          <Text className="text-xs text-gray-500">{assigned ?? t.unassignedBadge}</Text>
+                          <UserIcon size={12} color={c.muted} />
+                          <Text className="text-xs text-muted">{assigned ?? t.unassignedBadge}</Text>
                         </View>
                         {plateBadge ? (
                           <View className={`mt-1 self-start flex-row items-center gap-1 ${plateBadge.bg} px-2 py-0.5 rounded-full`}>
-                            <AlertTriangle size={10} color={days! < 0 ? '#B91C1C' : '#B45309'} />
+                            <AlertTriangle size={10} color={days! < 0 ? c.danger : c.warning} />
                             <Text className={`text-[10px] font-semibold ${plateBadge.fg}`}>{plateBadge.text}</Text>
                           </View>
                         ) : null}
@@ -949,23 +952,23 @@ export default function EquipmentScreen() {
           <View className="flex-1 justify-end">
             <Pressable onPress={() => { setModal(null); setSelected(null); }} style={sheetScrim} />
             <View
-              className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
+              className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
               style={{ maxHeight: '85%', ...sheetShadow }}
             >
               <View className="items-center mb-2">
-                <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                <View className="w-10 h-1 bg-border rounded-full" />
               </View>
-              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-                <Text className="text-lg font-bold text-gray-900">
+              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
+                <Text className="text-lg font-bold text-ink">
                   {modal === 'add' ? t.addTitle : t.editTitle}
                 </Text>
                 <Pressable onPress={() => { setModal(null); setSelected(null); }} hitSlop={8}>
-                  <X size={20} color="#9CA3AF" />
+                  <X size={20} color={c.faint} />
                 </Pressable>
               </View>
               <ScrollView contentContainerClassName="px-5 py-5 pb-10 gap-4" keyboardShouldPersistTaps="handled">
                 {/* Basic info */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.basicInfoHeading}</Text>
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide">{t.basicInfoHeading}</Text>
                 <Input
                   label={t.nameLabel}
                   placeholder={t.namePlaceholder}
@@ -995,21 +998,21 @@ export default function EquipmentScreen() {
                   onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters"
                   rightIcon={
                     <Pressable onPress={startVinScan} hitSlop={8} accessibilityLabel={t.scanVinHint}>
-                      <ScanLine size={18} color="#4F46E5" />
+                      <ScanLine size={18} color={c.primary} />
                     </Pressable>
                   } />
                 <Input label={t.serialNumberLabel} placeholder={t.serialNumberPlaceholder} value={form.serial_number}
                   onChangeText={(v) => setForm((f) => ({ ...f, serial_number: v }))} autoCapitalize="characters" />
 
                 {/* Registration */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
                 <Input label={t.plateNumberLabel} placeholder={t.plateNumberPlaceholder} value={form.plate_number}
                   onChangeText={(v) => setForm((f) => ({ ...f, plate_number: v }))} autoCapitalize="characters" />
                 <DatePicker label={t.plateExpirationLabel} value={form.plate_expiration}
                   onChange={(v) => setForm((f) => ({ ...f, plate_expiration: v }))} />
 
                 {/* Insurance */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.insuranceHeading}</Text>
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.insuranceHeading}</Text>
                 <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
                   onChangeText={(v) => setForm((f) => ({ ...f, insurance_carrier: v }))} />
                 <Input label={t.insurancePolicyLabel} placeholder={t.insurancePolicyPlaceholder} value={form.insurance_policy_number}
@@ -1022,14 +1025,14 @@ export default function EquipmentScreen() {
                   onChange={(v) => setForm((f) => ({ ...f, insurance_expiration: v }))} />
 
                 {/* Ownership */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
                 {/* Value is always shown; lender + loan amount only when not paid off. */}
                 <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="decimal-pad"
-                  leftIcon={<Text className="text-base text-gray-500">$</Text>}
+                  leftIcon={<Text className="text-base text-muted">$</Text>}
                   value={fmtThousands(form.value)}
                   onChangeText={(v) => setForm((f) => ({ ...f, value: sanitizeMoney(v) }))} />
-                <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
-                  <Text className="text-base text-gray-900">{t.paidOffLabel}</Text>
+                <View className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5">
+                  <Text className="text-base text-ink">{t.paidOffLabel}</Text>
                   <Toggle value={form.paid_off} onValueChange={(v) => setForm((f) => ({ ...f, paid_off: v }))} />
                 </View>
                 {!form.paid_off ? (
@@ -1037,7 +1040,7 @@ export default function EquipmentScreen() {
                     <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
                       onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
                     <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="decimal-pad"
-                      leftIcon={<Text className="text-base text-gray-500">$</Text>}
+                      leftIcon={<Text className="text-base text-muted">$</Text>}
                       value={fmtThousands(form.loan_amount)}
                       onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: sanitizeMoney(v) }))} />
                   </>
@@ -1048,7 +1051,7 @@ export default function EquipmentScreen() {
                   onChange={(v) => setForm((f) => ({ ...f, warranty_expiration: v }))} />
 
                 {/* Assignment */}
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
                 <InlinePicker
                   label={t.assignedToLabel}
                   value={form.assigned_employee_id}
@@ -1075,23 +1078,23 @@ export default function EquipmentScreen() {
                    (uploaded immediately). */}
                 {(modal === 'add' || (modal === 'edit' && selected)) ? (
                   <>
-                    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-1">{t.photosHeading}</Text>
+                    <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.photosHeading}</Text>
                     {(modal === 'add' ? pendingPhotos.length : photos.length) === 0 ? (
-                      <View className="py-8 items-center rounded-2xl border-2 border-dashed border-gray-200 gap-2">
-                        <ImageIcon size={20} color="#9CA3AF" />
-                        <Text className="text-sm text-gray-500">{t.photoEmpty}</Text>
+                      <View className="py-8 items-center rounded-2xl border-2 border-dashed border-border gap-2">
+                        <ImageIcon size={20} color={c.faint} />
+                        <Text className="text-sm text-muted">{t.photoEmpty}</Text>
                       </View>
                     ) : modal === 'add' ? (
                       <View className="flex-row flex-wrap gap-2">
                         {pendingPhotos.map((uri) => (
-                          <View key={uri} className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100">
+                          <View key={uri} className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft">
                             <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                             <Pressable
                               onPress={() => removePending(uri)}
                               hitSlop={6}
                               className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
                             >
-                              <X size={12} color="#EF4444" />
+                              <X size={12} color={c.danger} />
                             </Pressable>
                           </View>
                         ))}
@@ -1102,7 +1105,7 @@ export default function EquipmentScreen() {
                           <Pressable
                             key={p.id}
                             onLongPress={() => removePhoto(p)}
-                            className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-100 active:opacity-80"
+                            className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft active:opacity-80"
                           >
                             <Image
                               source={{ uri: photoUrls[p.storage_path] }}
@@ -1114,7 +1117,7 @@ export default function EquipmentScreen() {
                               hitSlop={6}
                               className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
                             >
-                              <X size={12} color="#EF4444" />
+                              <X size={12} color={c.danger} />
                             </Pressable>
                           </Pressable>
                         ))}
@@ -1124,24 +1127,24 @@ export default function EquipmentScreen() {
                       <Pressable
                         onPress={() => pickPhoto('camera')}
                         disabled={uploadingPhoto}
-                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 active:opacity-70 disabled:opacity-50"
+                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
                       >
-                        <Camera size={16} color="#374151" />
-                        <Text className="text-sm font-semibold text-gray-700">{t.photoTakeBtn}</Text>
+                        <Camera size={16} color={c.muted} />
+                        <Text className="text-sm font-semibold text-ink">{t.photoTakeBtn}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => pickPhoto('library')}
                         disabled={uploadingPhoto}
-                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 active:opacity-70 disabled:opacity-50"
+                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
                       >
-                        <ImagePlus size={16} color="#374151" />
-                        <Text className="text-sm font-semibold text-gray-700">{t.photoLibraryBtn}</Text>
+                        <ImagePlus size={16} color={c.muted} />
+                        <Text className="text-sm font-semibold text-ink">{t.photoLibraryBtn}</Text>
                       </Pressable>
                     </View>
                     {uploadingPhoto ? (
                       <View className="flex-row items-center gap-2">
-                        <ActivityIndicator size="small" color="#4F46E5" />
-                        <Text className="text-xs text-gray-500">{t.photoUploading}</Text>
+                        <ActivityIndicator size="small" color={c.primary} />
+                        <Text className="text-xs text-muted">{t.photoUploading}</Text>
                       </View>
                     ) : null}
                   </>
@@ -1193,28 +1196,28 @@ export default function EquipmentScreen() {
         <View
           style={[StyleSheet.absoluteFill, { backgroundColor: '#F9FAFB', zIndex: 30, elevation: 30, paddingTop: insets.top }]}
         >
-          <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-gray-100 bg-white">
+          <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-border-soft bg-card">
             <Pressable
               onPress={() => { setModal(null); setSelected(null); }}
               hitSlop={12}
-              className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+              className="p-2 -ml-2 rounded-lg active:bg-border-soft"
             >
-              <ChevronLeft size={22} color="#111827" />
+              <ChevronLeft size={22} color={c.ink} />
             </Pressable>
-            <Text className="text-lg font-bold text-gray-900 flex-1 mx-1" numberOfLines={1}>{selected.name}</Text>
+            <Text className="text-lg font-bold text-ink flex-1 mx-1" numberOfLines={1}>{selected.name}</Text>
             <Pressable
               onPress={() => openEdit(selected)}
               hitSlop={8}
-              className="p-2 rounded-lg active:bg-gray-100"
+              className="p-2 rounded-lg active:bg-border-soft"
             >
-              <Pencil size={18} color="#6B7280" />
+              <Pencil size={18} color={c.muted} />
             </Pressable>
             <Pressable
               onPress={onDelete}
               hitSlop={8}
-              className="p-2 rounded-lg active:bg-red-50"
+              className="p-2 rounded-lg active:bg-red-500/10"
             >
-              <Trash2 size={18} color="#EF4444" />
+              <Trash2 size={18} color={c.danger} />
             </Pressable>
           </View>
           <ScrollView contentContainerClassName="px-5 pt-5 pb-32 gap-4" keyboardShouldPersistTaps="handled">
@@ -1224,7 +1227,7 @@ export default function EquipmentScreen() {
                       <Pressable
                         key={p.id}
                         onPress={() => setViewerIndex(idx)}
-                        className="rounded-2xl overflow-hidden bg-gray-100 active:opacity-80"
+                        className="rounded-2xl overflow-hidden bg-border-soft active:opacity-80"
                       >
                         <Image
                           source={{ uri: photoUrls[p.storage_path] }}
@@ -1260,8 +1263,8 @@ export default function EquipmentScreen() {
                   const days = plateExpirationDays(selected.plate_expiration);
                   const badge =
                     days === null ? null
-                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-50', fg: 'text-red-700', icon: '#B91C1C' }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700', icon: '#B45309' }
+                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-500/10', fg: 'text-red-700', icon: c.danger }
+                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700', icon: c.warning }
                     : null;
                   return (
                     <DetailCard
@@ -1283,8 +1286,8 @@ export default function EquipmentScreen() {
                   const days = plateExpirationDays(selected.insurance_expiration);
                   const badge =
                     days === null ? null
-                    : days < 0 ? { text: t.insuranceExpired, bg: 'bg-red-50', fg: 'text-red-700', icon: '#B91C1C' }
-                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-50', fg: 'text-amber-700', icon: '#B45309' }
+                    : days < 0 ? { text: t.insuranceExpired, bg: 'bg-red-500/10', fg: 'text-red-700', icon: c.danger }
+                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700', icon: c.warning }
                     : null;
                   return (
                     <DetailCard
@@ -1438,11 +1441,11 @@ export default function EquipmentScreen() {
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setConfirmingDelete(false)} style={sheetScrim} />
           <View
-            className="bg-white rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
             style={{ paddingBottom: insets.bottom + 16, ...sheetShadow }}
           >
-            <Text className="text-lg font-bold text-gray-900">{t.deleteConfirmTitle}</Text>
-            <Text className="text-sm text-gray-500 mt-1.5">{t.deleteConfirmMsg}</Text>
+            <Text className="text-lg font-bold text-ink">{t.deleteConfirmTitle}</Text>
+            <Text className="text-sm text-muted mt-1.5">{t.deleteConfirmMsg}</Text>
             <View className="flex-row gap-3 mt-5">
               <View className="flex-1">
                 <Button variant="secondary" onPress={() => setConfirmingDelete(false)} fullWidth>
@@ -1469,13 +1472,13 @@ export default function EquipmentScreen() {
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setGroupMenuOpen(false)} style={sheetScrim} />
           <View
-            className="bg-white rounded-3xl px-4 pt-3 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl px-4 pt-3 mx-3 overflow-hidden"
             style={{ paddingBottom: insets.bottom + 12, ...sheetShadow }}
           >
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <Text className="text-lg font-bold text-gray-900 px-1 mb-3">{t.groups.title}</Text>
+            <Text className="text-lg font-bold text-ink px-1 mb-3">{t.groups.title}</Text>
             <View className="gap-1">
               {groupOptions.map((o) => {
                 const active = groupBy === o.key;
@@ -1483,15 +1486,15 @@ export default function EquipmentScreen() {
                   <Pressable
                     key={o.key}
                     onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-gray-50'}`}
+                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-surface'}`}
                   >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-gray-100'}`}>
-                      <o.Icon size={18} color={active ? '#FFFFFF' : '#6B7280'} />
+                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-border-soft'}`}>
+                      <o.Icon size={18} color={active ? '#FFFFFF' : c.muted} />
                     </View>
-                    <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                    <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {o.label}
                     </Text>
-                    {active ? <Check size={20} color="#4F46E5" /> : null}
+                    {active ? <Check size={20} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}

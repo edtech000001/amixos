@@ -25,6 +25,7 @@ import {
   ListChecks,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
@@ -106,6 +107,7 @@ export function ClientsListScreen({
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
+  const c = useThemeColors();
 
   // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
   // choice persists across navigation + refresh via AsyncStorage.
@@ -282,8 +284,8 @@ export function ClientsListScreen({
     <View className="pt-6">
       <View className="flex-row items-center justify-between mb-6">
         <View>
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">
+          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <Text className="text-sm text-muted mt-0.5">
             {search.trim()
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(clients.length))}
@@ -295,30 +297,30 @@ export function ClientsListScreen({
             onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
             accessibilityLabel={t.selectButton}
             className={`items-center justify-center px-3 py-2.5 rounded-xl border active:opacity-80 ${
-              selectionMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <ListChecks size={15} color={selectionMode ? '#4F46E5' : '#374151'} />
+            <ListChecks size={15} color={selectionMode ? c.primary : c.muted} />
           </Pressable>
           {/* Group-by control — highlighted when not the default A–Z. */}
           <Pressable
             onPress={() => setGroupMenuOpen(true)}
             className={`flex-row items-center gap-1.5 px-4 py-2.5 rounded-xl border active:opacity-80 ${
-              groupBy !== 'name' ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              groupBy !== 'name' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <Layers size={15} color={groupBy !== 'name' ? '#4F46E5' : '#374151'} />
-            <Text className={`text-sm font-semibold ${groupBy !== 'name' ? 'text-primary' : 'text-gray-700'}`}>
+            <Layers size={15} color={groupBy !== 'name' ? c.primary : c.muted} />
+            <Text className={`text-sm font-semibold ${groupBy !== 'name' ? 'text-primary' : 'text-ink'}`}>
               {t.group.button}
             </Text>
           </Pressable>
           {onImportPress ? (
             <Pressable
               onPress={onImportPress}
-              className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl active:bg-gray-50"
+              className="flex-row items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl active:bg-surface"
             >
-              <Upload size={15} color="#374151" />
-              <Text className="text-sm font-semibold text-gray-700">{t.importBtn}</Text>
+              <Upload size={15} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{t.importBtn}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -330,7 +332,7 @@ export function ClientsListScreen({
           value={search}
           onChangeText={onSearchChange}
           onClear={() => onSearchChange('')}
-          leftIcon={<Search size={16} color="#9CA3AF" />}
+          leftIcon={<Search size={16} color={c.faint} />}
           // Search is case-insensitive — turn off iOS smart-capitalize +
           // autocorrect so the input doesn't start each query with a
           // capital letter or try to "correct" partial names.
@@ -365,7 +367,7 @@ export function ClientsListScreen({
       {showList ? (
         // Rounded top edge of the white card; section headers + rows continue
         // the frame below it (mirrors the footer strip).
-        <View className="bg-white rounded-t-2xl border border-b-0 border-gray-100 h-2" />
+        <View className="bg-card rounded-t-2xl border border-b-0 border-border-soft h-2" />
       ) : null}
 
       {loading ? (
@@ -378,8 +380,8 @@ export function ClientsListScreen({
         </View>
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
-          <User size={40} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-3">
+          <User size={40} color={c.faint} />
+          <Text className="text-sm text-faint mt-3">
             {search ? t.emptyNoMatch : t.emptyAll}
           </Text>
           {!search ? (
@@ -404,10 +406,10 @@ export function ClientsListScreen({
     if (item.type === 'header') {
       return (
         <View
-          className="bg-gray-50 px-5 justify-center border-x border-b border-x-gray-100 border-b-gray-200"
+          className="bg-surface px-5 justify-center border-x border-b border-x-gray-100 border-b-gray-200"
           style={{ height: LETTER_HEADER_H }}
         >
-          <Text className="text-xs font-bold text-gray-500">{item.letter}</Text>
+          <Text className="text-xs font-bold text-muted">{item.letter}</Text>
         </View>
       );
     }
@@ -430,7 +432,7 @@ export function ClientsListScreen({
     return (
       <>
         {showList ? (
-          <View className="bg-white rounded-b-2xl border border-t-0 border-gray-100 h-2" />
+          <View className="bg-card rounded-b-2xl border border-t-0 border-border-soft h-2" />
         ) : null}
         {bottomSlot}
       </>
@@ -505,12 +507,12 @@ export function ClientsListScreen({
         onRequestClose={() => setGroupMenuOpen(false)}
       >
         <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-6 pt-3 pb-10">
-            <View className="self-center w-10 h-1 rounded-full bg-gray-200 mb-4" />
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
+            <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-bold text-gray-900">{t.group.title}</Text>
+              <Text className="text-base font-bold text-ink">{t.group.title}</Text>
               <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled">
@@ -522,11 +524,11 @@ export function ClientsListScreen({
                       key={o.key}
                       onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
                       className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
-                        selected ? 'bg-primary border-primary' : 'bg-white border-gray-200'
+                        selected ? 'bg-primary border-primary' : 'bg-card border-border'
                       }`}
                     >
                       {selected ? <Check size={13} color="#FFFFFF" /> : null}
-                      <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-gray-600'}`}>
+                      <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-muted'}`}>
                         {o.label}
                       </Text>
                     </Pressable>
@@ -683,7 +685,7 @@ function AlphabetScrubber({
             <View key={l} className="w-4 h-4 items-center justify-center">
               <Text
                 className={`text-[9px] font-bold text-center ${
-                  l === highlighted ? 'text-white' : 'text-gray-400'
+                  l === highlighted ? 'text-white' : 'text-faint'
                 }`}
               >
                 {l}
@@ -718,6 +720,7 @@ const ClientRow = memo(function ClientRow({
   onToggleSelect,
   onClientPress,
 }: ClientRowProps) {
+  const tc = useThemeColors();
   const matchedContacts = matchingContacts(c, search);
   return (
     <Pressable
@@ -733,15 +736,15 @@ const ClientRow = memo(function ClientRow({
       // content is vertically centered and clipped to keep rows uniform;
       // otherwise py-4 sizes the row to its content (search mode).
       style={fixedHeight ? { height: fixedHeight, overflow: 'hidden' } : undefined}
-      className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-white border-x ${
+      className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-card border-x ${
         isLast ? '' : 'border-b border-b-gray-200'
-      } border-x-gray-100 ${isChecked ? 'bg-primary/5' : 'active:bg-gray-50'}`}
+      } border-x-gray-100 ${isChecked ? 'bg-primary/5' : 'active:bg-surface'}`}
     >
       <View className="flex-row items-center gap-3 min-w-0 flex-1">
         {selectionMode ? (
           <View
             className={`w-5 h-5 rounded-full border ${
-              isChecked ? 'border-primary bg-primary' : 'border-gray-300 bg-white'
+              isChecked ? 'border-primary bg-primary' : 'border-border bg-card'
             } items-center justify-center`}
           >
             {isChecked ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
@@ -754,33 +757,33 @@ const ClientRow = memo(function ClientRow({
           </Text>
         </View>
         <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+          <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
             {c.firstName} {c.lastName}
             {c.company ? (
-              <Text className="text-gray-400 font-normal"> · {c.company}</Text>
+              <Text className="text-faint font-normal"> · {c.company}</Text>
             ) : null}
           </Text>
           <View className="flex-row flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
             {c.phoneDisplay ? (
               <View className="flex-row items-center gap-1">
-                <Phone size={11} color="#9CA3AF" />
-                <Text className="text-xs text-gray-400">{c.phoneDisplay}</Text>
+                <Phone size={11} color={tc.faint} />
+                <Text className="text-xs text-faint">{c.phoneDisplay}</Text>
               </View>
             ) : null}
             {c.emailDisplay ? (
               // flex-shrink + numberOfLines: a long email truncates in place
               // instead of wrapping the meta line and making rows uneven.
               <View className="flex-row items-center gap-1 flex-shrink min-w-0">
-                <Mail size={11} color="#9CA3AF" />
-                <Text className="text-xs text-gray-400 flex-shrink" numberOfLines={1}>
+                <Mail size={11} color={tc.faint} />
+                <Text className="text-xs text-faint flex-shrink" numberOfLines={1}>
                   {c.emailDisplay}
                 </Text>
               </View>
             ) : null}
             {c.city ? (
               <View className="flex-row items-center gap-1">
-                <MapPin size={11} color="#9CA3AF" />
-                <Text className="text-xs text-gray-400">
+                <MapPin size={11} color={tc.faint} />
+                <Text className="text-xs text-faint">
                   {c.city}
                   {c.state ? `, ${c.state}` : ''}
                 </Text>
@@ -791,7 +794,7 @@ const ClientRow = memo(function ClientRow({
             <View className="mt-1 gap-0.5">
               {matchedContacts.map((ct, i) => (
                 <View key={i} className="flex-row items-center gap-1">
-                  <Users size={11} color="#4F46E5" />
+                  <Users size={11} color={tc.primary} />
                   <Text className="text-xs font-medium text-primary" numberOfLines={1}>
                     {ct.name}
                     {ct.role ? `  ·  ${ct.role}` : ''}

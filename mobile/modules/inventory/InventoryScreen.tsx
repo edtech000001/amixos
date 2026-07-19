@@ -8,6 +8,7 @@ import { loadCached, writeCached } from '@/lib/offline/cache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Button, Input, Modal, Select, AutocompleteInput } from '@amixos/shared/ui';
@@ -45,6 +46,7 @@ export default function InventoryModuleScreen() {
   const tc = full.common;
   const supabase = createSupabaseClient();
   const { business, locations, activeLocationId } = useApp();
+  const c = useThemeColors();
 
   const [items, setItems] = useState<RawItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function InventoryModuleScreen() {
 
   // Previously-used categories — suggested while typing a new item's category.
   const categorySuggestions = useMemo(
-    () => [...new Set(items.map(i => i.category).filter((c): c is string => !!c && c.trim() !== ''))].sort(),
+    () => [...new Set(items.map(i => i.category).filter((cl): cl is string => !!cl && cl.trim() !== ''))].sort(),
     [items],
   );
 
@@ -232,21 +234,21 @@ export default function InventoryModuleScreen() {
           />
           <View className="gap-1.5">
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-gray-700">{t.modal.skuLabel}</Text>
+              <Text className="text-sm font-semibold text-ink">{t.modal.skuLabel}</Text>
               <View className="flex-row gap-2">
                 <Pressable
                   onPress={openScan}
                   accessibilityLabel={t.modal.scanSku}
-                  className="w-9 h-9 rounded-lg border border-gray-200 bg-white items-center justify-center active:bg-gray-50"
+                  className="w-9 h-9 rounded-lg border border-border bg-card items-center justify-center active:bg-surface"
                 >
-                  <ScanLine size={16} color="#4F46E5" />
+                  <ScanLine size={16} color={c.primary} />
                 </Pressable>
                 <Pressable
                   onPress={genSku}
                   accessibilityLabel={t.modal.generateSku}
-                  className="w-9 h-9 rounded-lg border border-gray-200 bg-white items-center justify-center active:bg-gray-50"
+                  className="w-9 h-9 rounded-lg border border-border bg-card items-center justify-center active:bg-surface"
                 >
-                  <Sparkles size={16} color="#4F46E5" />
+                  <Sparkles size={16} color={c.primary} />
                 </Pressable>
               </View>
             </View>
@@ -325,9 +327,9 @@ export default function InventoryModuleScreen() {
         size="sm"
       >
         <View className="gap-4">
-          <Text className="text-sm text-gray-500">
+          <Text className="text-sm text-muted">
             {t.adjustModal.currentStock}{' '}
-            <Text className="font-bold text-gray-900">
+            <Text className="font-bold text-ink">
               {selected?.quantity} {selected ? unitLabel(selected.unit) : ''}
             </Text>
           </Text>
@@ -335,22 +337,22 @@ export default function InventoryModuleScreen() {
             <Pressable
               onPress={() => setAdjustType('add')}
               className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-xl border-2 ${
-                adjustType === 'add' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'
+                adjustType === 'add' ? 'border-emerald-500 bg-emerald-500/10' : 'border-border'
               }`}
             >
-              <TrendingUp size={15} color={adjustType === 'add' ? '#059669' : '#9CA3AF'} />
-              <Text className={`text-sm font-semibold ${adjustType === 'add' ? 'text-emerald-600' : 'text-gray-500'}`}>
+              <TrendingUp size={15} color={adjustType === 'add' ? c.success : c.faint} />
+              <Text className={`text-sm font-semibold ${adjustType === 'add' ? 'text-emerald-600' : 'text-muted'}`}>
                 {t.adjustModal.addOption}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setAdjustType('remove')}
               className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-xl border-2 ${
-                adjustType === 'remove' ? 'border-red-400 bg-red-50' : 'border-gray-200'
+                adjustType === 'remove' ? 'border-red-400 bg-red-500/10' : 'border-border'
               }`}
             >
-              <TrendingDown size={15} color={adjustType === 'remove' ? '#EF4444' : '#9CA3AF'} />
-              <Text className={`text-sm font-semibold ${adjustType === 'remove' ? 'text-red-500' : 'text-gray-500'}`}>
+              <TrendingDown size={15} color={adjustType === 'remove' ? c.danger : c.faint} />
+              <Text className={`text-sm font-semibold ${adjustType === 'remove' ? 'text-red-500' : 'text-muted'}`}>
                 {t.adjustModal.removeOption}
               </Text>
             </Pressable>

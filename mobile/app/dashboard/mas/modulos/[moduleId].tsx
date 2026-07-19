@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Construction } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import MapScreen from '@/modules/map/MapScreen';
 import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
@@ -27,19 +28,20 @@ export default function ModuleRoute() {
   const router = useRouter();
   const { moduleId } = useLocalSearchParams<{ moduleId: string }>();
   const { t: full } = useLang();
+  const c = useThemeColors();
 
   const def = moduleId ? getModuleById(moduleId) : null;
 
   if (!def) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-          <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-            <ChevronLeft size={22} color="#111827" />
+        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+          <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
           </Pressable>
         </View>
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-sm text-gray-500">Module not found.</Text>
+          <Text className="text-sm text-muted">Module not found.</Text>
         </View>
       </SafeAreaView>
     );
@@ -55,15 +57,15 @@ export default function ModuleRoute() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900">{name}</Text>
+        <Text className="ml-1 text-lg font-semibold text-ink">{name}</Text>
       </View>
       <ScrollView contentContainerClassName="px-6 pt-10 pb-12 items-center">
         <View
@@ -72,16 +74,16 @@ export default function ModuleRoute() {
         >
           <Icon size={32} color={def.color} />
         </View>
-        <Text className="text-2xl font-bold text-gray-900 mb-2 text-center">{name}</Text>
+        <Text className="text-2xl font-bold text-ink mb-2 text-center">{name}</Text>
         {description ? (
-          <Text className="text-sm text-gray-500 mb-6 text-center max-w-xs">{description}</Text>
+          <Text className="text-sm text-muted mb-6 text-center max-w-xs">{description}</Text>
         ) : null}
-        <View className="items-center gap-2 mt-6 pt-6 border-t border-gray-100 w-full">
-          <Construction size={20} color="#F59E0B" />
-          <Text className="text-sm font-semibold text-gray-900">
+        <View className="items-center gap-2 mt-6 pt-6 border-t border-border-soft w-full">
+          <Construction size={20} color={c.warning} />
+          <Text className="text-sm font-semibold text-ink">
             {full.dashboard.modules.placeholder.heading}
           </Text>
-          <Text className="text-xs text-gray-500 text-center max-w-xs">
+          <Text className="text-xs text-muted text-center max-w-xs">
             {full.dashboard.modules.placeholder.body}
           </Text>
         </View>

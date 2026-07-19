@@ -18,6 +18,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
@@ -147,6 +148,7 @@ export default function EmpleadosRoute() {
   const supabase = createSupabaseClient();
   const { business, user, currentRole, activeLocationId } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.employees;
   const tc = full.common;
   const insets = useSafeAreaInsets();
@@ -614,16 +616,16 @@ export default function EmpleadosRoute() {
             style={sheetScrim}
           />
           <View
-            className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
             style={{ maxHeight: '85%', ...sheetShadow }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-              <Text className="text-lg font-bold text-gray-900">{t.history.title}</Text>
+            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{t.history.title}</Text>
               <Pressable onPress={() => setHistoryOpen(false)} hitSlop={8}>
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
             <ScrollView contentContainerClassName="px-5 py-5 pb-10">
@@ -652,16 +654,16 @@ export default function EmpleadosRoute() {
               style={sheetScrim}
             />
             <View
-              className="bg-white rounded-3xl pt-3 mx-3 overflow-hidden"
+              className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
               style={{ maxHeight: '90%', ...sheetShadow }}
             >
               <View className="items-center mb-2">
-                <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                <View className="w-10 h-1 bg-border rounded-full" />
               </View>
-              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-gray-100">
-                <Text className="text-lg font-bold text-gray-900">{t.timesheetModal.title}</Text>
+              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
+                <Text className="text-lg font-bold text-ink">{t.timesheetModal.title}</Text>
                 <Pressable onPress={() => setTsModalOpen(false)} hitSlop={8}>
-                  <X size={20} color="#9CA3AF" />
+                  <X size={20} color={c.faint} />
                 </Pressable>
               </View>
               <ScrollView
@@ -671,16 +673,16 @@ export default function EmpleadosRoute() {
                 {/* Employee picker — hours are always logged against a
                     registered employee (no free-text name). */}
                 <View className="flex flex-col gap-2">
-                  <Text className="text-sm font-semibold text-gray-700">
+                  <Text className="text-sm font-semibold text-ink">
                     {t.timesheetModal.employeeLabel}
                   </Text>
                   <Pressable
                     onPress={() => { setEmpSearch(''); setEmpPickerOpen(true); }}
-                    className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+                    className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
                   >
                     <Text
                       className={`flex-1 text-base ${
-                        selectedTsEmp ? 'text-gray-900' : 'text-gray-400'
+                        selectedTsEmp ? 'text-ink' : 'text-faint'
                       }`}
                       numberOfLines={1}
                     >
@@ -688,7 +690,7 @@ export default function EmpleadosRoute() {
                         ? `${selectedTsEmp.first_name} ${selectedTsEmp.last_name}`
                         : t.timesheetModal.selectEmployee}
                     </Text>
-                    <ChevronDown size={16} color="#9CA3AF" />
+                    <ChevronDown size={16} color={c.faint} />
                   </Pressable>
                 </View>
 
@@ -701,16 +703,16 @@ export default function EmpleadosRoute() {
                     />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-sm font-medium text-gray-700 mb-1.5">
+                    <Text className="text-sm font-medium text-ink mb-1.5">
                       {t.timesheetModal.hoursLabel}
                     </Text>
-                    <View className="flex-row items-center rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    <View className="flex-row items-center rounded-xl border border-border bg-card overflow-hidden">
                       <Pressable
                         onPress={() => setHours((tsForm.hours_worked || 0) - 1)}
                         hitSlop={6}
-                        className="h-[42px] w-11 items-center justify-center active:bg-gray-50 border-r border-gray-100"
+                        className="h-[42px] w-11 items-center justify-center active:bg-surface border-r border-border-soft"
                       >
-                        <Minus size={16} color="#4F46E5" />
+                        <Minus size={16} color={c.primary} />
                       </Pressable>
                       <TextInput
                         value={hoursText}
@@ -722,15 +724,15 @@ export default function EmpleadosRoute() {
                         }}
                         keyboardType="decimal-pad"
                         placeholder={t.timesheetModal.hoursPlaceholder}
-                        placeholderTextColor="#9CA3AF"
-                        className="flex-1 text-center text-base font-semibold text-gray-900 py-2.5"
+                        placeholderTextColor={c.faint}
+                        className="flex-1 text-center text-base font-semibold text-ink py-2.5"
                       />
                       <Pressable
                         onPress={() => setHours((tsForm.hours_worked || 0) + 1)}
                         hitSlop={6}
-                        className="h-[42px] w-11 items-center justify-center active:bg-gray-50 border-l border-gray-100"
+                        className="h-[42px] w-11 items-center justify-center active:bg-surface border-l border-border-soft"
                       >
-                        <Plus size={16} color="#4F46E5" />
+                        <Plus size={16} color={c.primary} />
                       </Pressable>
                     </View>
                   </View>
@@ -773,29 +775,29 @@ export default function EmpleadosRoute() {
               >
                 <Pressable onPress={() => setEmpPickerOpen(false)} style={sheetScrim} />
                 <View
-                  className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+                  className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
                   style={{ maxHeight: '70%', ...sheetShadow }}
                 >
                   <View className="items-center mb-2">
-                    <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                    <View className="w-10 h-1 bg-border rounded-full" />
                   </View>
                   <View className="flex-row items-center justify-between px-5 mb-3">
-                    <Text className="text-base font-semibold text-gray-900">
+                    <Text className="text-base font-semibold text-ink">
                       {t.timesheetModal.employeeLabel}
                     </Text>
                     <Pressable onPress={() => setEmpPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                      <X size={22} color="#9CA3AF" />
+                      <X size={22} color={c.faint} />
                     </Pressable>
                   </View>
                   <View className="px-5 mb-3">
-                    <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                      <Search size={16} color="#9CA3AF" />
+                    <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                      <Search size={16} color={c.faint} />
                       <TextInput
                         value={empSearch}
                         onChangeText={setEmpSearch}
                         placeholder={t.timesheetModal.selectEmployee}
-                        placeholderTextColor="#9CA3AF"
-                        className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                        placeholderTextColor={c.faint}
+                        className="flex-1 py-2.5 pl-2 text-sm text-ink"
                       />
                     </View>
                   </View>
@@ -813,18 +815,18 @@ export default function EmpleadosRoute() {
                             setTsForm((f) => ({ ...f, employee_id: e.id }));
                             setEmpPickerOpen(false);
                           }}
-                          className={`flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50 ${
+                          className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                             isSel ? 'bg-primary/5' : ''
                           }`}
                         >
                           <Text
                             className={`text-sm ${
-                              isSel ? 'text-primary font-semibold' : 'text-gray-900'
+                              isSel ? 'text-primary font-semibold' : 'text-ink'
                             }`}
                           >
                             {e.first_name} {e.last_name}
                           </Text>
-                          {isSel ? <Check size={16} color="#4F46E5" /> : null}
+                          {isSel ? <Check size={16} color={c.primary} /> : null}
                         </Pressable>
                       );
                     })}
@@ -891,21 +893,21 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <View>
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <View className="flex-row gap-2">
           <Pressable
             onPress={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
           >
-            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>
               {tc.states.yes}
             </Text>
           </Pressable>
           <Pressable
             onPress={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
           >
-            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>
               {tc.states.no}
             </Text>
           </Pressable>
@@ -946,8 +948,8 @@ function ViewRow({ label, value }: { label: string; value: string | null | undef
   if (!value) return null;
   return (
     <View className="gap-0.5">
-      <Text className="text-xs text-gray-400">{label}</Text>
-      <Text className="text-sm text-gray-900">{value}</Text>
+      <Text className="text-xs text-faint">{label}</Text>
+      <Text className="text-sm text-ink">{value}</Text>
     </View>
   );
 }

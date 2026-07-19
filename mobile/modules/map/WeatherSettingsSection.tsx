@@ -10,6 +10,7 @@ import { Modal as RNModal, View, Text, Pressable, TextInput, ScrollView } from '
 import { Plus, Trash2, ChevronDown, X, Search, Check } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import {
   isWeatherFeatureEnabled,
   NOAA_EVENT_CATEGORIES,
@@ -25,6 +26,7 @@ interface Props {
 export function WeatherSettingsSection({ config, onChange }: Props) {
   const { business } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.modules.map.weather;
   const gated = isWeatherFeatureEnabled(business?.id);
   // Open picker for a specific event row. null = closed.
@@ -80,23 +82,23 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
 
   return (
     <View>
-      <Text className="text-xs font-semibold text-gray-400 uppercase mb-1">{t.sectionTitle}</Text>
-      <Text className="text-xs text-gray-500 mb-3">{t.sectionSubtitle}</Text>
+      <Text className="text-xs font-semibold text-faint uppercase mb-1">{t.sectionTitle}</Text>
+      <Text className="text-xs text-muted mb-3">{t.sectionSubtitle}</Text>
 
-      <View className="bg-gray-50 rounded-2xl p-4 gap-4">
+      <View className="bg-surface rounded-2xl p-4 gap-4">
         {/* Enabled toggle */}
         <View className="flex-row items-center justify-between gap-3">
           <View className="flex-1">
-            <Text className="text-sm font-semibold text-gray-900">{t.enabledLabel}</Text>
-            <Text className="text-xs text-gray-500 mt-0.5">{t.enabledSubtitle}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.enabledLabel}</Text>
+            <Text className="text-xs text-muted mt-0.5">{t.enabledSubtitle}</Text>
           </View>
           <Pressable
             onPress={() => onChange({ ...config, enabled: !config.enabled })}
             style={{ width: 44, height: 24 }}
-            className={`relative rounded-full ${config.enabled ? 'bg-primary' : 'bg-gray-200'}`}
+            className={`relative rounded-full ${config.enabled ? 'bg-primary' : 'bg-border'}`}
           >
             <View
-              className="absolute top-1 w-4 h-4 rounded-full bg-white"
+              className="absolute top-1 w-4 h-4 rounded-full bg-card"
               style={{ transform: [{ translateX: config.enabled ? 24 : 4 }] }}
             />
           </Pressable>
@@ -104,7 +106,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
 
         {/* Retention window — how long expired alerts persist before purge. */}
         <View>
-          <Text className="text-xs text-gray-500 mb-1">{t.retentionLabel}</Text>
+          <Text className="text-xs text-muted mb-1">{t.retentionLabel}</Text>
           <TextInput
             value={String(config.retention_days)}
             onChangeText={(v) => {
@@ -112,14 +114,14 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
               onChange({ ...config, retention_days: isNaN(n) ? 15 : Math.max(1, Math.min(90, n)) });
             }}
             keyboardType="number-pad"
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
           />
-          <Text className="text-[10px] text-gray-400 mt-1">{t.retentionSubtitle}</Text>
+          <Text className="text-[10px] text-faint mt-1">{t.retentionSubtitle}</Text>
         </View>
 
         {/* Focus radius — used by the map's "Storm focus" toggle. */}
         <View>
-          <Text className="text-xs text-gray-500 mb-1">{t.proximityRadiusLabel}</Text>
+          <Text className="text-xs text-muted mb-1">{t.proximityRadiusLabel}</Text>
           <TextInput
             value={String(config.proximity_radius_miles)}
             onChangeText={(v) => {
@@ -127,15 +129,15 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
               onChange({ ...config, proximity_radius_miles: isNaN(n) ? 50 : Math.max(1, Math.min(500, n)) });
             }}
             keyboardType="number-pad"
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
           />
-          <Text className="text-[10px] text-gray-400 mt-1">{t.proximityRadiusSubtitle}</Text>
+          <Text className="text-[10px] text-faint mt-1">{t.proximityRadiusSubtitle}</Text>
         </View>
 
         {/* Excluded states — comma-separated. Parsed on blur so commas can
             be typed without being stripped on every keystroke. */}
         <View>
-          <Text className="text-xs text-gray-500 mb-1">{t.excludedStatesLabel}</Text>
+          <Text className="text-xs text-muted mb-1">{t.excludedStatesLabel}</Text>
           <TextInput
             value={excludedDraft}
             onChangeText={setExcludedDraft}
@@ -143,8 +145,8 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
             autoCapitalize="characters"
             autoCorrect={false}
             placeholder={t.excludedStatesPlaceholder}
-            placeholderTextColor="#9CA3AF"
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+            placeholderTextColor={c.faint}
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
           />
         </View>
 
@@ -156,21 +158,21 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
             className="flex-row items-center justify-between py-1 active:opacity-70"
           >
             <View className="flex-1">
-              <Text className="text-xs font-semibold text-gray-700">
+              <Text className="text-xs font-semibold text-ink">
                 {t.eventsHeading}{' '}
-                <Text className="text-gray-400 font-normal">({config.events.length})</Text>
+                <Text className="text-faint font-normal">({config.events.length})</Text>
               </Text>
-              <Text className="text-[10px] text-gray-400 mt-0.5">{t.eventsSubtitle}</Text>
+              <Text className="text-[10px] text-faint mt-0.5">{t.eventsSubtitle}</Text>
             </View>
             <View style={{ transform: [{ rotate: eventsExpanded ? '180deg' : '0deg' }] }}>
-              <ChevronDown size={16} color="#6B7280" />
+              <ChevronDown size={16} color={c.muted} />
             </View>
           </Pressable>
 
           {eventsExpanded ? (
           <View className="gap-2 mt-2">
             {config.events.length === 0 ? (
-              <Text className="text-xs text-gray-500 italic">{t.eventsEmpty}</Text>
+              <Text className="text-xs text-muted italic">{t.eventsEmpty}</Text>
             ) : (
               config.events.map((ev, idx) => {
                 const isEnabled = ev.enabled !== false;
@@ -181,7 +183,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                 return (
                   <View
                     key={idx}
-                    className="rounded-xl bg-white border border-gray-200 p-3 gap-2"
+                    className="rounded-xl bg-card border border-border p-3 gap-2"
                   >
                     <View className="flex-row items-center gap-2">
                       {/* Enable switch — same shape/colors as the master
@@ -191,10 +193,10 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                       <Pressable
                         onPress={() => updateEvent(idx, { enabled: !isEnabled })}
                         style={{ width: 44, height: 24 }}
-                        className={`relative rounded-full ${isEnabled ? 'bg-primary' : 'bg-gray-200'}`}
+                        className={`relative rounded-full ${isEnabled ? 'bg-primary' : 'bg-border'}`}
                       >
                         <View
-                          className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                          className="absolute top-1 w-4 h-4 rounded-full bg-card"
                           style={{ transform: [{ translateX: isEnabled ? 24 : 4 }] }}
                         />
                       </Pressable>
@@ -202,28 +204,28 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                       <Pressable
                         onPress={() => setPickerForIdx(idx)}
                         style={dimStyle}
-                        className="flex-1 flex-row items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 active:bg-gray-50"
+                        className="flex-1 flex-row items-center gap-1 rounded-lg border border-border bg-card px-3 py-2 active:bg-surface"
                       >
                         <Text
-                          className={`flex-1 text-sm ${ev.event ? 'text-gray-900' : 'text-gray-400'}`}
+                          className={`flex-1 text-sm ${ev.event ? 'text-ink' : 'text-faint'}`}
                           numberOfLines={1}
                         >
                           {ev.event || t.eventNamePlaceholder}
                         </Text>
-                        <ChevronDown size={14} color="#6B7280" />
+                        <ChevronDown size={14} color={c.muted} />
                       </Pressable>
                       <Pressable
                         onPress={() => removeEvent(idx)}
                         hitSlop={8}
                         style={dimStyle}
-                        className="p-2 rounded-lg active:bg-gray-100"
+                        className="p-2 rounded-lg active:bg-border-soft"
                       >
-                        <Trash2 size={16} color="#EF4444" />
+                        <Trash2 size={16} color={c.danger} />
                       </Pressable>
                     </View>
                     {eventCarriesWind(ev.event) ? (
                       <View style={dimStyle}>
-                        <Text className="text-[10px] text-gray-500 mb-1">{t.minWindLabel}</Text>
+                        <Text className="text-[10px] text-muted mb-1">{t.minWindLabel}</Text>
                         <TextInput
                           value={ev.min_wind_speed != null ? String(ev.min_wind_speed) : ''}
                           onChangeText={(v) => {
@@ -232,8 +234,8 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                           }}
                           keyboardType="number-pad"
                           placeholder="—"
-                          placeholderTextColor="#9CA3AF"
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                          placeholderTextColor={c.faint}
+                          className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
                         />
                       </View>
                     ) : null}
@@ -243,9 +245,9 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
             )}
             <Pressable
               onPress={addEvent}
-              className="flex-row items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-gray-300 active:bg-gray-100"
+              className="flex-row items-center justify-center gap-1 py-2 rounded-xl border border-dashed border-border active:bg-border-soft"
             >
-              <Plus size={14} color="#4F46E5" />
+              <Plus size={14} color={c.primary} />
               <Text className="text-sm text-primary font-semibold">{t.addEventBtn}</Text>
             </Pressable>
           </View>
@@ -283,6 +285,7 @@ function EventPicker({
   onClose: () => void;
 }) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.modules.map.weather;
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
@@ -305,27 +308,27 @@ function EventPicker({
       <Pressable onPress={onClose} className="flex-1 bg-black/40 items-center justify-center px-6">
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          className="bg-white rounded-2xl w-full max-w-sm overflow-hidden"
+          className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
           style={{ maxHeight: '80%' }}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-gray-50 border-b border-gray-200">
-            <Text className="text-lg font-bold text-gray-900">{t.eventPickerTitle}</Text>
-            <Pressable onPress={onClose} hitSlop={8} className="p-1.5 rounded-lg active:bg-gray-200">
-              <X size={20} color="#374151" />
+          <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-surface border-b border-border">
+            <Text className="text-lg font-bold text-ink">{t.eventPickerTitle}</Text>
+            <Pressable onPress={onClose} hitSlop={8} className="p-1.5 rounded-lg active:bg-border">
+              <X size={20} color={c.muted} />
             </Pressable>
           </View>
 
           {/* Search */}
           <View className="px-4 pt-3 pb-2">
-            <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl bg-gray-100">
-              <Search size={14} color="#9CA3AF" />
+            <View className="flex-row items-center gap-2 px-3 py-2 rounded-xl bg-border-soft">
+              <Search size={14} color={c.faint} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder={t.eventPickerSearchPlaceholder}
-                placeholderTextColor="#9CA3AF"
-                className="flex-1 text-sm text-gray-900"
+                placeholderTextColor={c.faint}
+                className="flex-1 text-sm text-ink"
                 autoCorrect={false}
                 autoCapitalize="none"
               />
@@ -334,7 +337,7 @@ function EventPicker({
 
           <ScrollView className="px-2 pb-3" contentContainerStyle={{ paddingBottom: 16 }}>
             {isEmpty ? (
-              <Text className="text-xs text-gray-400 italic mt-4 text-center">
+              <Text className="text-xs text-faint italic mt-4 text-center">
                 {t.eventPickerNoResults}
               </Text>
             ) : (
@@ -342,7 +345,7 @@ function EventPicker({
                 group.events.length === 0 ? null : (
                   <View key={group.category} className="mt-2">
                     {!q ? (
-                      <Text className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase text-gray-400">
+                      <Text className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase text-faint">
                         {t.eventCategories[group.category as keyof typeof t.eventCategories] ?? group.category}
                       </Text>
                     ) : null}
@@ -355,13 +358,13 @@ function EventPicker({
                           onPress={() => !isTaken && onSelect(name)}
                           disabled={isTaken}
                           className={`flex-row items-center justify-between px-3 py-2.5 rounded-lg ${
-                            isTaken ? 'opacity-40' : 'active:bg-gray-100'
+                            isTaken ? 'opacity-40' : 'active:bg-border-soft'
                           }`}
                         >
-                          <Text className={`text-sm ${isCurrent ? 'text-primary font-semibold' : 'text-gray-800'}`}>
+                          <Text className={`text-sm ${isCurrent ? 'text-primary font-semibold' : 'text-ink'}`}>
                             {name}
                           </Text>
-                          {isCurrent ? <Check size={16} color="#4F46E5" /> : null}
+                          {isCurrent ? <Check size={16} color={c.primary} /> : null}
                         </Pressable>
                       );
                     })}

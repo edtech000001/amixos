@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { ThemeColorsProvider, LIGHT_COLORS, DARK_COLORS } from '@amixos/shared/theme';
 
 export type ThemePref = 'light' | 'dark' | 'system';
 
@@ -60,7 +61,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(resolved === 'dark' ? 'light' : 'dark');
   }, [resolved, setTheme]);
 
-  return <Ctx.Provider value={{ theme, resolved, setTheme, toggle }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ theme, resolved, setTheme, toggle }}>
+      {/* Feeds hex palette to shared components' useThemeColors() (RN icon
+          colors), so shared .tsx used on web themes its icons too. */}
+      <ThemeColorsProvider value={resolved === 'dark' ? DARK_COLORS : LIGHT_COLORS}>
+        {children}
+      </ThemeColorsProvider>
+    </Ctx.Provider>
+  );
 }
 
 export function useTheme(): ThemeCtx {

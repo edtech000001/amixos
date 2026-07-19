@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin, Wallet, PiggyBank } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import {
   REPORT_RANGE_KEYS,
@@ -33,8 +34,8 @@ function fmt(n: number) {
 }
 
 const KPI_BG: Record<string, string> = {
-  emerald: 'bg-emerald-50', amber: 'bg-amber-50', indigo: 'bg-indigo-50', purple: 'bg-purple-50',
-  red: 'bg-red-50', blue: 'bg-blue-50',
+  emerald: 'bg-emerald-500/10', amber: 'bg-amber-500/10', indigo: 'bg-indigo-500/10', purple: 'bg-purple-500/10',
+  red: 'bg-red-500/10', blue: 'bg-blue-500/10',
 };
 const KPI_COLOR: Record<string, string> = {
   emerald: '#059669', amber: '#D97706', indigo: '#4F46E5', purple: '#7C3AED',
@@ -43,6 +44,7 @@ const KPI_COLOR: Record<string, string> = {
 
 export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll }: ReportsScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.reports;
   const jobsTabs = full.dashboard.jobs.tabs;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the date-filter labels
@@ -69,18 +71,18 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
   };
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <View className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
-      <Text className="text-sm font-bold text-gray-900 mb-4">{title}</Text>
+    <View className="bg-card rounded-2xl border border-border-soft p-5 mb-4">
+      <Text className="text-sm font-bold text-ink mb-4">{title}</Text>
       {children}
     </View>
   );
 
   const Kpi = ({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) => (
-    <View className="bg-white rounded-2xl border border-gray-100 p-4" style={{ width: '48%' }}>
+    <View className="bg-card rounded-2xl border border-border-soft p-4" style={{ width: '48%' }}>
       <View className={`w-9 h-9 rounded-xl items-center justify-center mb-2 ${KPI_BG[color]}`}>{icon}</View>
-      <Text className="text-xl font-black text-gray-900">{value}</Text>
-      <Text className="text-xs text-gray-500 mt-0.5">{label}</Text>
-      {sub ? <Text className="text-[11px] text-gray-400 mt-0.5" numberOfLines={1}>{sub}</Text> : null}
+      <Text className="text-xl font-black text-ink">{value}</Text>
+      <Text className="text-xs text-muted mt-0.5">{label}</Text>
+      {sub ? <Text className="text-[11px] text-faint mt-0.5" numberOfLines={1}>{sub}</Text> : null}
     </View>
   );
 
@@ -97,8 +99,8 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
   return (
     <View className="flex-1 bg-surface">
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 144 }}>
-      <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-      <Text className="text-sm text-gray-500 mt-0.5 mb-4">{t.subtitle}</Text>
+      <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+      <Text className="text-sm text-muted mt-0.5 mb-4">{t.subtitle}</Text>
 
       {/* Range selector — presets + a Custom date-range chip (opens the sheet) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
@@ -109,18 +111,18 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
               <Pressable
                 key={r}
                 onPress={() => onRangeChange(r)}
-                className={`px-3.5 py-2 rounded-xl ${on ? 'bg-primary' : 'bg-gray-100'}`}
+                className={`px-3.5 py-2 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
               >
-                <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-600'}`}>{t.ranges[r]}</Text>
+                <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>{t.ranges[r]}</Text>
               </Pressable>
             );
           })}
           <Pressable
             onPress={() => setDateOpen(true)}
-            className={`flex-row items-center gap-1.5 px-3.5 py-2 rounded-xl ${customActive ? 'bg-primary' : 'bg-gray-100'}`}
+            className={`flex-row items-center gap-1.5 px-3.5 py-2 rounded-xl ${customActive ? 'bg-primary' : 'bg-border-soft'}`}
           >
-            <CalendarRange size={13} color={customActive ? '#FFFFFF' : '#6B7280'} />
-            <Text className={`text-xs font-semibold ${customActive ? 'text-white' : 'text-gray-600'}`}>
+            <CalendarRange size={13} color={customActive ? '#FFFFFF' : c.muted} />
+            <Text className={`text-xs font-semibold ${customActive ? 'text-white' : 'text-muted'}`}>
               {t.customRange}
             </Text>
           </Pressable>
@@ -131,29 +133,29 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       {onOpenPayroll ? (
         <Pressable
           onPress={onOpenPayroll}
-          className="flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 mb-4 active:bg-gray-50"
+          className="flex-row items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-4 py-3.5 mb-4 active:bg-surface"
         >
           <View className="flex-row items-center gap-3">
             <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-              <DollarSign size={16} color="#4F46E5" />
+              <DollarSign size={16} color={c.primary} />
             </View>
-            <Text className="text-sm font-semibold text-gray-900">{t.payroll.entry}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.payroll.entry}</Text>
           </View>
-          <ChevronRight size={18} color="#9CA3AF" />
+          <ChevronRight size={18} color={c.faint} />
         </Pressable>
       ) : null}
 
       {/* KPIs */}
       <View className="flex-row flex-wrap justify-between gap-y-3 mb-4">
-        <Kpi color="emerald" icon={<DollarSign size={16} color={KPI_COLOR.emerald} />} label={t.kpis.revenueCollected} value={fmt(m.totalRevenue)}
+        <Kpi color="emerald" icon={<DollarSign size={16} color={c.success} />} label={t.kpis.revenueCollected} value={fmt(m.totalRevenue)}
           sub={m.paidInvoicesCount === 0 ? t.kpis.noPaidInvoices : (m.paidInvoicesCount === 1 ? t.kpis.paidInvoicesCountSingle : t.kpis.paidInvoicesCountPlural).replace('{{count}}', String(m.paidInvoicesCount))} />
-        <Kpi color="amber" icon={<FileText size={16} color={KPI_COLOR.amber} />} label={t.kpis.pendingToCollect} value={fmt(m.pendingRevenue + m.overdueRevenue)}
+        <Kpi color="amber" icon={<FileText size={16} color={c.warning} />} label={t.kpis.pendingToCollect} value={fmt(m.pendingRevenue + m.overdueRevenue)}
           sub={m.overdueRevenue > 0 ? t.kpis.overdueSuffix.replace('{{amount}}', fmt(m.overdueRevenue)) : undefined} />
-        <Kpi color="red" icon={<Wallet size={16} color={KPI_COLOR.red} />} label={t.kpis.payroll} value={fmt(m.totalPayroll)}
+        <Kpi color="red" icon={<Wallet size={16} color={c.danger} />} label={t.kpis.payroll} value={fmt(m.totalPayroll)}
           sub={t.kpis.payrollWorkersSub.replace('{{count}}', String(m.payrollWorkers))} />
-        <Kpi color="blue" icon={<PiggyBank size={16} color={KPI_COLOR.blue} />} label={t.kpis.grossMargin} value={m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}
+        <Kpi color="blue" icon={<PiggyBank size={16} color={c.primary} />} label={t.kpis.grossMargin} value={m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}
           sub={m.totalRevenue > 0 ? t.kpis.grossMarginSub.replace('{{percent}}', String(Math.round(((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100))) : undefined} />
-        <Kpi color="indigo" icon={<ClipboardList size={16} color={KPI_COLOR.indigo} />} label={t.kpis.avgJobValue} value={m.avgJobValue > 0 ? fmt(m.avgJobValue) : '—'}
+        <Kpi color="indigo" icon={<ClipboardList size={16} color={c.primary} />} label={t.kpis.avgJobValue} value={m.avgJobValue > 0 ? fmt(m.avgJobValue) : '—'}
           sub={t.kpis.completedJobsCount.replace('{{count}}', String(m.completedJobsCount))} />
         <Kpi color="purple" icon={<Clock size={16} color={KPI_COLOR.purple} />} label={t.kpis.hoursLogged} value={m.totalHours.toFixed(1)}
           sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(m.totalPayroll))} />
@@ -163,8 +165,8 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       <Section title={t.sections.revenueByMonth}>
         {revEmpty ? (
           <View className="items-center py-8">
-            <BarChart3 size={32} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-2">{t.empty.revenue}</Text>
+            <BarChart3 size={32} color={c.faint} />
+            <Text className="text-sm text-faint mt-2">{t.empty.revenue}</Text>
           </View>
         ) : (
           <View className="flex-row items-end justify-between" style={{ height: 140 }}>
@@ -173,7 +175,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
                 <View className="w-full px-0.5 justify-end" style={{ height: 110 }}>
                   <View className="bg-primary rounded-t-md w-full" style={{ height: Math.max(x.revenue > 0 ? 4 : 2, Math.round((x.revenue / maxRev) * 110)) }} />
                 </View>
-                <Text className="text-[10px] text-gray-400 mt-1">{x.name}</Text>
+                <Text className="text-[10px] text-faint mt-1">{x.name}</Text>
               </View>
             ))}
           </View>
@@ -184,8 +186,8 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       <Section title={t.sections.invoiceStatus}>
         {m.invoiceStatus.length === 0 ? (
           <View className="items-center py-8">
-            <FileText size={32} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-2">{t.empty.invoices}</Text>
+            <FileText size={32} color={c.faint} />
+            <Text className="text-sm text-faint mt-2">{t.empty.invoices}</Text>
           </View>
         ) : (
           <View className="gap-2.5">
@@ -199,14 +201,14 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
               <View key={d.status} className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: INVOICE_PIE_COLORS[d.status] ?? '#9CA3AF' }} />
-                  <Text className="text-xs text-gray-600">{invoiceLabel(d.status)}</Text>
+                  <Text className="text-xs text-muted">{invoiceLabel(d.status)}</Text>
                 </View>
-                <Text className="text-sm font-bold text-gray-900">{d.count}</Text>
+                <Text className="text-sm font-bold text-ink">{d.count}</Text>
               </View>
             ))}
-            <View className="border-t border-gray-100 pt-2 flex-row justify-between">
-              <Text className="text-xs font-bold text-gray-500">{t.invoicePie.total}</Text>
-              <Text className="text-xs font-bold text-gray-900">{invTotal}</Text>
+            <View className="border-t border-border-soft pt-2 flex-row justify-between">
+              <Text className="text-xs font-bold text-muted">{t.invoicePie.total}</Text>
+              <Text className="text-xs font-bold text-ink">{invTotal}</Text>
             </View>
           </View>
         )}
@@ -216,8 +218,8 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       <Section title={t.sections.jobsByStatus}>
         {m.jobsTotal === 0 ? (
           <View className="items-center py-8">
-            <ClipboardList size={32} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-2">{t.empty.jobs}</Text>
+            <ClipboardList size={32} color={c.faint} />
+            <Text className="text-sm text-faint mt-2">{t.empty.jobs}</Text>
           </View>
         ) : (
           <>
@@ -225,23 +227,23 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
               {m.jobStatus.map(d => (
                 <View key={d.status}>
                   <View className="flex-row justify-between mb-1">
-                    <Text className="text-xs text-gray-700">{jobLabel(d.status)}</Text>
-                    <Text className="text-xs font-bold text-gray-900">{d.value}</Text>
+                    <Text className="text-xs text-ink">{jobLabel(d.status)}</Text>
+                    <Text className="text-xs font-bold text-ink">{d.value}</Text>
                   </View>
-                  <View className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <View className="h-2 bg-border-soft rounded-full overflow-hidden">
                     <View className="h-full rounded-full" style={{ width: `${Math.round((d.value / maxJob) * 100)}%`, backgroundColor: d.color }} />
                   </View>
                 </View>
               ))}
             </View>
-            <View className="flex-row mt-4 pt-3 border-t border-gray-50">
+            <View className="flex-row mt-4 pt-3 border-t border-border-soft">
               <View className="flex-1 items-center">
-                <Text className="text-xl font-black text-gray-900">{m.jobsTotal}</Text>
-                <Text className="text-xs text-gray-400">{t.jobsBreakdown.totalJobs}</Text>
+                <Text className="text-xl font-black text-ink">{m.jobsTotal}</Text>
+                <Text className="text-xs text-faint">{t.jobsBreakdown.totalJobs}</Text>
               </View>
               <View className="flex-1 items-center">
                 <Text className="text-xl font-black text-emerald-600">{m.completionRate}%</Text>
-                <Text className="text-xs text-gray-400">{t.jobsBreakdown.completionRate}</Text>
+                <Text className="text-xs text-faint">{t.jobsBreakdown.completionRate}</Text>
               </View>
             </View>
           </>
@@ -254,14 +256,14 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         <Section title={t.byLocation.title}>
           <View className="gap-1">
             {m.byLocation.map(loc => (
-              <View key={loc.locationId ?? 'none'} className="flex-row items-center justify-between py-2.5 border-b border-gray-50">
+              <View key={loc.locationId ?? 'none'} className="flex-row items-center justify-between py-2.5 border-b border-border-soft">
                 <View className="flex-row items-center gap-2 flex-1 mr-2">
-                  <MapPin size={14} color="#9CA3AF" />
-                  <Text className="text-sm font-medium text-gray-900 flex-1" numberOfLines={1}>{loc.name}</Text>
+                  <MapPin size={14} color={c.faint} />
+                  <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>{loc.name}</Text>
                 </View>
                 <View className="flex-row items-center gap-4">
-                  <Text className="text-xs text-gray-400">{loc.jobCount} {t.byLocation.jobs}</Text>
-                  <Text className="text-sm font-bold text-gray-900">{fmt(loc.revenue)}</Text>
+                  <Text className="text-xs text-faint">{loc.jobCount} {t.byLocation.jobs}</Text>
+                  <Text className="text-sm font-bold text-ink">{fmt(loc.revenue)}</Text>
                 </View>
               </View>
             ))}
@@ -273,8 +275,8 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       <Section title={t.sections.newClients}>
         <View className="items-center py-4">
           <Text className="text-5xl font-black text-primary">{m.newClientsCount}</Text>
-          <Text className="text-sm text-gray-500 mt-1">{t.newClientsBlock.newCount}</Text>
-          <Text className="text-xs text-gray-400 mt-0.5">{t.newClientsBlock.totalAccumulated.replace('{{count}}', String(m.totalClientsCount))}</Text>
+          <Text className="text-sm text-muted mt-1">{t.newClientsBlock.newCount}</Text>
+          <Text className="text-xs text-faint mt-0.5">{t.newClientsBlock.totalAccumulated.replace('{{count}}', String(m.totalClientsCount))}</Text>
         </View>
       </Section>
 
@@ -283,20 +285,20 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
         <View className="gap-4">
           <View>
             <View className="flex-row items-center gap-2">
-              <Text className="text-3xl font-black text-gray-900">{m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}</Text>
+              <Text className="text-3xl font-black text-ink">{m.totalRevenue > 0 ? fmt(m.totalRevenue - m.totalPayroll) : '—'}</Text>
               {m.totalRevenue > 0 ? (
-                <View className={`px-1.5 py-0.5 rounded-md ${(m.totalRevenue - m.totalPayroll) >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <View className={`px-1.5 py-0.5 rounded-md ${(m.totalRevenue - m.totalPayroll) >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
                   <Text className={`text-xs font-bold ${(m.totalRevenue - m.totalPayroll) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                     {Math.round(((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100)}%
                   </Text>
                 </View>
               ) : null}
             </View>
-            <Text className="text-xs text-gray-500 mt-0.5">{t.financial.grossMarginEst}</Text>
+            <Text className="text-xs text-muted mt-0.5">{t.financial.grossMarginEst}</Text>
           </View>
 
           {m.totalRevenue > 0 ? (
-            <View className="flex-row h-2.5 rounded-full overflow-hidden bg-gray-100">
+            <View className="flex-row h-2.5 rounded-full overflow-hidden bg-border-soft">
               <View className="bg-amber-400 h-full" style={{ width: `${Math.min(100, Math.max(0, (m.totalPayroll / m.totalRevenue) * 100))}%` }} />
               <View className="bg-emerald-500 h-full" style={{ width: `${Math.min(100, Math.max(0, ((m.totalRevenue - m.totalPayroll) / m.totalRevenue) * 100))}%` }} />
             </View>
@@ -312,9 +314,9 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
               <View key={row.label} className="flex-row justify-between items-center">
                 <View className="flex-row items-center gap-2">
                   <View className={`w-2 h-2 rounded-full ${row.dot}`} />
-                  <Text className="text-xs text-gray-500">{row.label}</Text>
+                  <Text className="text-xs text-muted">{row.label}</Text>
                 </View>
-                <Text className="text-sm font-bold text-gray-900">{row.value}</Text>
+                <Text className="text-sm font-bold text-ink">{row.value}</Text>
               </View>
             ))}
           </View>
@@ -325,21 +327,21 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       {inventoryEnabled ? (
         <Section title={t.sections.inventory}>
           <View className="items-center py-2 mb-3">
-            <Text className="text-3xl font-black text-gray-900">{fmt(m.inventoryValue)}</Text>
-            <Text className="text-sm text-gray-500 mt-1">{t.inventoryBlock.totalValueLabel}</Text>
+            <Text className="text-3xl font-black text-ink">{fmt(m.inventoryValue)}</Text>
+            <Text className="text-sm text-muted mt-1">{t.inventoryBlock.totalValueLabel}</Text>
           </View>
           <View className="gap-2">
             <View className="flex-row justify-between">
-              <Text className="text-xs text-gray-500">{t.inventoryBlock.totalItems}</Text>
-              <Text className="text-xs font-bold text-gray-900">{m.inventoryItemsCount}</Text>
+              <Text className="text-xs text-muted">{t.inventoryBlock.totalItems}</Text>
+              <Text className="text-xs font-bold text-ink">{m.inventoryItemsCount}</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-xs text-gray-500">{t.inventoryBlock.lowStock}</Text>
-              <Text className={`text-xs font-bold ${m.lowStock > 0 ? 'text-orange-500' : 'text-gray-900'}`}>{m.lowStock}</Text>
+              <Text className="text-xs text-muted">{t.inventoryBlock.lowStock}</Text>
+              <Text className={`text-xs font-bold ${m.lowStock > 0 ? 'text-orange-500' : 'text-ink'}`}>{m.lowStock}</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-xs text-gray-500">{t.inventoryBlock.outOfStock}</Text>
-              <Text className={`text-xs font-bold ${m.outOfStock > 0 ? 'text-red-500' : 'text-gray-900'}`}>{m.outOfStock}</Text>
+              <Text className="text-xs text-muted">{t.inventoryBlock.outOfStock}</Text>
+              <Text className={`text-xs font-bold ${m.outOfStock > 0 ? 'text-red-500' : 'text-ink'}`}>{m.outOfStock}</Text>
             </View>
           </View>
         </Section>

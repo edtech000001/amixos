@@ -24,6 +24,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
@@ -99,6 +100,7 @@ export default function NuevaFacturaRoute() {
   const insets = useSafeAreaInsets();
   const { business } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.invoices.new;
   const tc = full.common;
 
@@ -302,14 +304,14 @@ export default function NuevaFacturaRoute() {
       // Long free text — multiline, grows with content.
       return (
         <View key={tpl.field_key}>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
           <TextInput
             value={value}
             onChangeText={setVal}
             multiline
             numberOfLines={4}
-            placeholderTextColor="#9CA3AF"
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+            placeholderTextColor={c.faint}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
             style={{ textAlignVertical: 'top' }}
           />
         </View>
@@ -322,7 +324,7 @@ export default function NuevaFacturaRoute() {
         const selected = splitMultiValue(value);
         return (
           <View key={tpl.field_key}>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+            <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
             <View className="flex-row flex-wrap gap-2">
               {tpl.field_options.map(o => {
                 const on = selected.includes(o);
@@ -330,9 +332,9 @@ export default function NuevaFacturaRoute() {
                   <Pressable
                     key={o}
                     onPress={() => setVal(toggleMultiOption(value, o))}
-                    className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                    className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                   >
-                    <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                    <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-muted'}`}>{o}</Text>
                   </Pressable>
                 );
               })}
@@ -358,21 +360,21 @@ export default function NuevaFacturaRoute() {
       const noActive = value === 'false';
       return (
         <View key={tpl.field_key}>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
           <View className="flex-row gap-2">
             <Pressable
               onPress={() => setVal(yesActive ? '' : 'true')}
-              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
             >
-              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>
                 {tc.states.yes}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setVal(noActive ? '' : 'false')}
-              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+              className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
             >
-              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+              <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>
                 {tc.states.no}
               </Text>
             </Pressable>
@@ -418,25 +420,25 @@ export default function NuevaFacturaRoute() {
       case 'client':
         return (
           <View key={key} className="flex flex-col gap-2">
-            <Text className="text-sm font-semibold text-gray-700">{t.clientsLabel}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.clientsLabel}</Text>
             {clientIds.length > 0 ? (
               <View className="flex-row flex-wrap gap-2">
                 {clientIds.map((cid) => {
-                  const c = clients.find((cl) => cl.id === cid);
-                  if (!c) return null;
+                  const found = clients.find((cl) => cl.id === cid);
+                  if (!found) return null;
                   return (
                     <View
                       key={cid}
-                      className="flex-row items-center gap-1.5 bg-gray-100 rounded-lg px-2.5 py-1.5"
+                      className="flex-row items-center gap-1.5 bg-border-soft rounded-lg px-2.5 py-1.5"
                     >
-                      <Text className="text-xs font-medium text-gray-700">
-                        {clientPickerDisplay(c).top}
+                      <Text className="text-xs font-medium text-ink">
+                        {clientPickerDisplay(found).top}
                       </Text>
                       <Pressable
                         onPress={() => setClientIds((prev) => prev.filter((id) => id !== cid))}
                         hitSlop={6}
                       >
-                        <X size={12} color="#6B7280" />
+                        <X size={12} color={c.muted} />
                       </Pressable>
                     </View>
                   );
@@ -445,12 +447,12 @@ export default function NuevaFacturaRoute() {
             ) : null}
             <Pressable
               onPress={() => setClientPickerOpen(true)}
-              className="flex-row items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5"
+              className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
             >
-              <Text className="text-base text-gray-400 flex-1">
+              <Text className="text-base text-faint flex-1">
                 {clientIds.length === 0 ? t.selectClient : t.addAnotherClient}
               </Text>
-              <ChevronDown size={16} color="#9CA3AF" />
+              <ChevronDown size={16} color={c.faint} />
             </Pressable>
           </View>
         );
@@ -590,7 +592,7 @@ export default function NuevaFacturaRoute() {
   if (loadingEdit) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color="#4F46E5" />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -601,17 +603,17 @@ export default function NuevaFacturaRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
           onPress={confirmBack}
           hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-2 flex-1">
-          <Text className="text-lg font-bold text-gray-900">{heading}</Text>
-          <Text className="text-xs text-gray-400">{subtitle}</Text>
+          <Text className="text-lg font-bold text-ink">{heading}</Text>
+          <Text className="text-xs text-faint">{subtitle}</Text>
         </View>
       </View>
 
@@ -655,18 +657,18 @@ export default function NuevaFacturaRoute() {
               {lines.map((line) => (
                 <View
                   key={line.id}
-                  className="bg-gray-50 rounded-2xl p-3 border border-gray-100"
+                  className="bg-surface rounded-2xl p-3 border border-border-soft"
                 >
                   <TextInput
                     value={line.description}
                     onChangeText={(v) => updateLine(line.id, 'description', v)}
                     placeholder={t.itemPlaceholder}
-                    placeholderTextColor="#9CA3AF"
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
+                    placeholderTextColor={c.faint}
+                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink"
                   />
                   <View className="flex-row items-center gap-2 mt-2">
                     <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">{t.colQty}</Text>
+                      <Text className="text-[10px] text-faint mb-1">{t.colQty}</Text>
                       <TextInput
                         value={line.qtyText ?? (line.qty ? String(line.qty) : '')}
                         onChangeText={(v) => {
@@ -676,12 +678,12 @@ export default function NuevaFacturaRoute() {
                         }}
                         keyboardType="decimal-pad"
                         placeholder="1"
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 text-center"
+                        placeholderTextColor={c.faint}
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink text-center"
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">{t.colRate}</Text>
+                      <Text className="text-[10px] text-faint mb-1">{t.colRate}</Text>
                       <TextInput
                         value={line.rateText ?? (line.rate ? String(line.rate) : '')}
                         onChangeText={(v) => {
@@ -691,14 +693,14 @@ export default function NuevaFacturaRoute() {
                         }}
                         keyboardType="decimal-pad"
                         placeholder="0.00"
-                        placeholderTextColor="#9CA3AF"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 text-right"
+                        placeholderTextColor={c.faint}
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink text-right"
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-[10px] text-gray-400 mb-1">Total</Text>
-                      <View className="rounded-xl bg-white px-3 py-2 border border-gray-100">
-                        <Text className="text-sm font-semibold text-gray-900 text-right">
+                      <Text className="text-[10px] text-faint mb-1">Total</Text>
+                      <View className="rounded-xl bg-card px-3 py-2 border border-border-soft">
+                        <Text className="text-sm font-semibold text-ink text-right">
                           {fmtMoney(line.qty * line.rate)}
                         </Text>
                       </View>
@@ -707,9 +709,9 @@ export default function NuevaFacturaRoute() {
                       <Pressable
                         onPress={() => removeLine(line.id)}
                         hitSlop={8}
-                        className="p-2 rounded-xl active:bg-red-50 self-end"
+                        className="p-2 rounded-xl active:bg-red-500/10 self-end"
                       >
-                        <Trash2 size={16} color="#EF4444" />
+                        <Trash2 size={16} color={c.danger} />
                       </Pressable>
                     ) : (
                       <View style={{ width: 32 }} />
@@ -719,13 +721,13 @@ export default function NuevaFacturaRoute() {
               ))}
 
               {/* Totals */}
-              <View className="pt-2 border-t border-gray-100 gap-2">
+              <View className="pt-2 border-t border-border-soft gap-2">
                 <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-500">{t.subtotal}</Text>
-                  <Text className="text-sm font-medium text-gray-900">{fmtMoney(subtotal)}</Text>
+                  <Text className="text-sm text-muted">{t.subtotal}</Text>
+                  <Text className="text-sm font-medium text-ink">{fmtMoney(subtotal)}</Text>
                 </View>
                 <View className="flex-row justify-between items-center">
-                  <Text className="text-sm text-gray-500">{t.taxPercent}</Text>
+                  <Text className="text-sm text-muted">{t.taxPercent}</Text>
                   <TextInput
                     value={taxRateText ?? (taxRate ? String(taxRate) : '')}
                     onChangeText={(v) => {
@@ -735,12 +737,12 @@ export default function NuevaFacturaRoute() {
                     }}
                     keyboardType="decimal-pad"
                     placeholder="0"
-                    placeholderTextColor="#9CA3AF"
-                    className="w-24 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 text-right"
+                    placeholderTextColor={c.faint}
+                    className="w-24 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-ink text-right"
                   />
                 </View>
-                <View className="flex-row justify-between items-center pt-2 border-t border-gray-100">
-                  <Text className="text-base font-bold text-gray-900">{t.total}</Text>
+                <View className="flex-row justify-between items-center pt-2 border-t border-border-soft">
+                  <Text className="text-base font-bold text-ink">{t.total}</Text>
                   <Text className="text-lg font-bold text-primary">{fmtMoney(total)}</Text>
                 </View>
               </View>
@@ -750,7 +752,7 @@ export default function NuevaFacturaRoute() {
           {/* Notes section — built-in notes (gated) + notes-assigned customs,
              interleaved in saved layout order. */}
           {(!fHidden('notes') || customFieldsFor('notes').length > 0) && (
-          <Section title={sectionLabel.notes} icon={<FileText size={14} color="#4F46E5" />}>
+          <Section title={sectionLabel.notes} icon={<FileText size={14} color={c.primary} />}>
             <View className="gap-3">
               {invoiceFieldsInSection(invoiceLayout, 'notes').map(k => {
                 if (k.startsWith('custom:')) {
@@ -764,10 +766,10 @@ export default function NuevaFacturaRoute() {
                       value={notes}
                       onChangeText={setNotes}
                       placeholder={t.notesPlaceholder}
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={c.faint}
                       multiline
                       numberOfLines={3}
-                      className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[80px]"
+                      className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
                       style={{ textAlignVertical: 'top' }}
                     />
                   );
@@ -788,7 +790,7 @@ export default function NuevaFacturaRoute() {
           ) : null}
 
           {error ? (
-            <View className="mt-4 rounded-2xl bg-red-50 border border-red-100 px-4 py-3">
+            <View className="mt-4 rounded-2xl bg-red-500/10 border border-red-100 px-4 py-3">
               <Text className="text-sm text-red-600">{error}</Text>
             </View>
           ) : null}
@@ -835,7 +837,7 @@ export default function NuevaFacturaRoute() {
           {/* Floating card: rounded on all corners, lifted off the screen
               edges with side + bottom margins and a soft shadow. */}
           <View
-            className="bg-white rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+            className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{
               height: '80%',
               marginBottom: insets.bottom + 12,
@@ -847,24 +849,24 @@ export default function NuevaFacturaRoute() {
             }}
           >
             <View className="items-center mb-2">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-gray-900">{t.clientsLabel}</Text>
+              <Text className="text-base font-semibold text-ink">{t.clientsLabel}</Text>
               <Pressable onPress={() => setClientPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color="#9CA3AF" />
+                <X size={22} color={c.faint} />
               </Pressable>
             </View>
             <View className="px-5 mb-3">
-              <View className="flex-row items-center rounded-xl border border-gray-200 bg-white px-3">
-                <Search size={16} color="#9CA3AF" />
+              <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                <Search size={16} color={c.faint} />
                 <TextInput
                   value={clientSearch}
                   onChangeText={setClientSearch}
                   placeholder={t.selectClient}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={c.faint}
                   autoFocus
-                  className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
                 />
               </View>
             </View>
@@ -882,14 +884,14 @@ export default function NuevaFacturaRoute() {
                         setClientPickerOpen(false);
                         setClientSearch('');
                       }}
-                      className="flex-row items-center justify-between px-5 py-3.5 active:bg-gray-50"
+                      className="flex-row items-center justify-between px-5 py-3.5 active:bg-surface"
                     >
                       <View className="flex-1">
-                        <Text className="text-base text-gray-900" numberOfLines={1}>
+                        <Text className="text-base text-ink" numberOfLines={1}>
                           {top}
                         </Text>
                         {sub ? (
-                          <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>
+                          <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
                             {sub}
                           </Text>
                         ) : null}
@@ -905,7 +907,7 @@ export default function NuevaFacturaRoute() {
                 })}
               {filteredClients.filter((c) => !clientIds.includes(c.id)).length === 0 ? (
                 <View className="px-5 py-8 items-center">
-                  <Text className="text-sm text-gray-400">—</Text>
+                  <Text className="text-sm text-faint">—</Text>
                 </View>
               ) : null}
             </ScrollView>
@@ -930,11 +932,11 @@ function Section({
     <View className="mb-5">
       <View className="flex-row items-center gap-2 mb-3 px-1">
         {icon}
-        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+        <Text className="text-xs font-semibold text-faint uppercase tracking-wide">
           {title}
         </Text>
       </View>
-      <View className="bg-white rounded-2xl border border-gray-100 p-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-4">
         {children}
       </View>
     </View>

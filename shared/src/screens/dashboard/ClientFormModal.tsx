@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { isValidEmail } from '../../lib/validation';
 import { usStateName } from '../../lib/usStates';
 import { Button } from '../../ui/Button';
@@ -89,6 +90,7 @@ export function ClientFormModal({
   onSubmit,
 }: ClientFormModalProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.clients;
   const tc = full.common;
 
@@ -133,7 +135,7 @@ export function ClientFormModal({
       <View className="gap-5 pb-2">
         {/* Basic info */}
         <View>
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+          <Text className="text-xs font-semibold text-faint uppercase mb-3">
             {t.sections.basicInfo}
           </Text>
           <View className="flex-col gap-3">
@@ -154,14 +156,14 @@ export function ClientFormModal({
               placeholder={t.fields.placeholders.company}
               value={form.company}
               onChangeText={v => set('company', v)}
-              leftIcon={<Building2 size={15} color="#9CA3AF" />}
+              leftIcon={<Building2 size={15} color={c.faint} />}
             />
           </View>
         </View>
 
         {/* Phones */}
         <View>
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+          <Text className="text-xs font-semibold text-faint uppercase mb-3">
             {t.sections.phones}
           </Text>
           <View className="flex-col gap-3">
@@ -171,7 +173,7 @@ export function ClientFormModal({
               value={fmtPhoneInput(form.phone_cell)}
               onChangeText={v => set('phone_cell', fmtPhoneInput(v))}
               keyboardType="phone-pad"
-              leftIcon={<Phone size={15} color="#9CA3AF" />}
+              leftIcon={<Phone size={15} color={c.faint} />}
             />
             <Input
               label={rLabel('phone_office', t.fields.phoneOffice)}
@@ -179,14 +181,14 @@ export function ClientFormModal({
               value={fmtPhoneInput(form.phone_office)}
               onChangeText={v => set('phone_office', fmtPhoneInput(v))}
               keyboardType="phone-pad"
-              leftIcon={<Phone size={15} color="#9CA3AF" />}
+              leftIcon={<Phone size={15} color={c.faint} />}
             />
           </View>
         </View>
 
         {/* Emails */}
         <View>
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+          <Text className="text-xs font-semibold text-faint uppercase mb-3">
             {t.sections.emails}
           </Text>
           <View className="flex-col gap-3">
@@ -197,7 +199,7 @@ export function ClientFormModal({
               onChangeText={v => set('email_office', v)}
               keyboardType="email-address"
               autoCapitalize="none"
-              leftIcon={<Mail size={15} color="#9CA3AF" />}
+              leftIcon={<Mail size={15} color={c.faint} />}
             />
             <Input
               label={rLabel('email_home', t.fields.emailHome)}
@@ -206,14 +208,14 @@ export function ClientFormModal({
               onChangeText={v => set('email_home', v)}
               keyboardType="email-address"
               autoCapitalize="none"
-              leftIcon={<Mail size={15} color="#9CA3AF" />}
+              leftIcon={<Mail size={15} color={c.faint} />}
             />
           </View>
         </View>
 
         {/* Address */}
         <View>
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+          <Text className="text-xs font-semibold text-faint uppercase mb-3">
             {t.sections.address}
           </Text>
           <View className="flex-col gap-3">
@@ -222,7 +224,7 @@ export function ClientFormModal({
               placeholder={t.fields.placeholders.address}
               value={form.address}
               onChangeText={v => set('address', v)}
-              leftIcon={<MapPin size={15} color="#9CA3AF" />}
+              leftIcon={<MapPin size={15} color={c.faint} />}
             />
             <Input
               label={t.fields.addressLine2}
@@ -256,7 +258,7 @@ export function ClientFormModal({
         {/* Custom fields */}
         {templates.length > 0 ? (
           <View>
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+            <Text className="text-xs font-semibold text-faint uppercase mb-3">
               {t.sections.customFields}
             </Text>
             <View className="flex-col gap-3">
@@ -284,21 +286,21 @@ export function ClientFormModal({
                   const noActive = value === 'false';
                   return (
                     <View key={tpl.field_key}>
-                      <Text className="text-sm font-semibold text-gray-700 mb-2">{labelText}</Text>
+                      <Text className="text-sm font-semibold text-ink mb-2">{labelText}</Text>
                       <View className="flex-row gap-2">
                         <Pressable
                           onPress={() => setCustom(tpl.field_key, yesActive ? '' : 'true')}
-                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
                         >
-                          <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>
+                          <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>
                             {tc.states.yes}
                           </Text>
                         </Pressable>
                         <Pressable
                           onPress={() => setCustom(tpl.field_key, noActive ? '' : 'false')}
-                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}
+                          className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}
                         >
-                          <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>
+                          <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>
                             {tc.states.no}
                           </Text>
                         </Pressable>
@@ -332,18 +334,18 @@ export function ClientFormModal({
 
         {/* Notes */}
         <View>
-          <Text className="text-xs font-semibold text-gray-400 uppercase mb-3">
+          <Text className="text-xs font-semibold text-faint uppercase mb-3">
             {t.sections.notes}
           </Text>
-          <View className="rounded-xl border border-gray-200 bg-white px-4 py-1">
+          <View className="rounded-xl border border-border bg-card px-4 py-1">
             <TextInput
               multiline
               numberOfLines={3}
               placeholder={t.fields.placeholders.notes}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               value={form.notes}
               onChangeText={v => set('notes', v)}
-              className="text-sm text-gray-900 py-2"
+              className="text-sm text-ink py-2"
               style={{ textAlignVertical: 'top', minHeight: 60 }}
             />
           </View>

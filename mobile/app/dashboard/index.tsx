@@ -169,7 +169,7 @@ function OwnerDashboardHome() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <TrialBanner />
       <DashboardHomeScreen
         loading={appLoading || loading}

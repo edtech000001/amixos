@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Alert, Modal as RNModal } from 'react-native';
 import { ChevronLeft, Search, Check, Trash2, Calendar, X, Wrench, Truck, Clock } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
@@ -52,6 +53,7 @@ function fmt(n: number) {
 
 export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod, onLoadBreakdown, onJobPress }: PayrollHistoryScreenProps) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.reports.payroll;
   const dateLocale = full.dashboard.dateLocale;
   const fmtDay = (d: string) =>
@@ -153,42 +155,42 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-surface">
       {/* Header */}
-      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-gray-100 bg-white">
-        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft bg-card">
+        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 text-base font-semibold text-gray-900">{t.historyTitle}</Text>
+        <Text className="ml-1 text-base font-semibold text-ink">{t.historyTitle}</Text>
       </View>
 
       {/* Search + select */}
       <View className="px-5 pt-4 flex-row items-center gap-2">
-        <View className="flex-1 flex-row items-center rounded-2xl border border-gray-200 bg-white px-3.5">
-          <Search size={16} color="#9CA3AF" />
+        <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
+          <Search size={16} color={c.faint} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder={t.historySearchPlaceholder}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.faint}
             autoCapitalize="none"
             autoCorrect={false}
-            className="flex-1 px-2.5 py-2.5 text-sm text-gray-900"
+            className="flex-1 px-2.5 py-2.5 text-sm text-ink"
           />
         </View>
         {/* Date range — same calendar sheet as the invoices list. */}
         <Pressable
           onPress={() => setDateOpen(true)}
-          className={`p-2.5 rounded-2xl border ${dateActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+          className={`p-2.5 rounded-2xl border ${dateActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}
         >
-          <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
+          <Calendar size={16} color={dateActive ? c.primary : c.muted} />
         </Pressable>
         {onDeleteEntries ? (
           <Pressable
             onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
-            className={`px-3 py-2.5 rounded-2xl border ${selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'}`}
+            className={`px-3 py-2.5 rounded-2xl border ${selectMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}
           >
-            <Text className={`text-sm font-semibold ${selectMode ? 'text-primary' : 'text-gray-600'}`}>
+            <Text className={`text-sm font-semibold ${selectMode ? 'text-primary' : 'text-muted'}`}>
               {selectMode ? t.historyCancelSelect : t.historySelect}
             </Text>
           </Pressable>
@@ -196,8 +198,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       </View>
 
       {/* Shown-total summary — reflects the current search + date range. */}
-      <View className="mx-5 mt-3 flex-row items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
-        <Text className="text-xs text-gray-500">
+      <View className="mx-5 mt-3 flex-row items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-4 py-3">
+        <Text className="text-xs text-muted">
           {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
         </Text>
         <Text className="text-base font-bold text-primary">{fmt(shownTotal)}</Text>
@@ -205,38 +207,38 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#4F46E5" />
+          <ActivityIndicator color={c.primary} />
         </View>
       ) : groups.length === 0 ? (
-        <Text className="text-sm text-gray-400 text-center py-16 px-6">{search ? t.historyNoResults : t.historyEmpty}</Text>
+        <Text className="text-sm text-faint text-center py-16 px-6">{search ? t.historyNoResults : t.historyEmpty}</Text>
       ) : (
         <ScrollView contentContainerClassName={`px-5 py-5 ${selectMode ? 'pb-40' : 'pb-24'}`}>
           {groups.map(([periodStart, list]) => (
             <View key={periodStart} className="mb-5">
               <View className="flex-row items-center justify-between mb-1.5">
-                <Text className="text-sm font-semibold text-gray-600">
+                <Text className="text-sm font-semibold text-muted">
                   {fmtDay(periodStart)} – {fmtDay(list[0].periodEnd)}
                 </Text>
-                <Text className="text-sm font-bold text-gray-800">
+                <Text className="text-sm font-bold text-ink">
                   {fmt(list.reduce((sum, e) => sum + e.grossPay, 0))}
                 </Text>
               </View>
-              <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <View className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
                 {list.map((h, i) => (
                   <Pressable
                     key={h.id}
                     disabled={selectMode ? false : !(h.breakdown || (onLoadBreakdown && h.employeeId))}
                     onPress={() => (selectMode ? toggleSelected(h.id) : openDetail(h))}
-                    className={`px-4 py-3 flex-row items-center gap-3 ${i < list.length - 1 ? 'border-b border-gray-50' : ''} ${selectMode ? 'active:bg-gray-50' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
+                    className={`px-4 py-3 flex-row items-center gap-3 ${i < list.length - 1 ? 'border-b border-border-soft' : ''} ${selectMode ? 'active:bg-surface' : ''} ${selectMode && selected.has(h.id) ? 'bg-primary/5' : ''}`}
                   >
                     {selectMode ? (
-                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${selected.has(h.id) ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
                         {selected.has(h.id) ? <Check size={13} color="#fff" /> : null}
                       </View>
                     ) : null}
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{h.name}</Text>
-                      <Text className="text-xs text-gray-400">
+                      <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{h.name}</Text>
+                      <Text className="text-xs text-faint">
                         {Math.round(h.hours * 100) / 100} h
                         {h.driverHours > 0 ? ` · ${Math.round(h.driverHours * 100) / 100} h ${t.driveShort}` : ''}
                         {h.bonus ? ` · ${t.historyBonus} ${fmt(h.bonus)}` : ''}
@@ -246,7 +248,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {componentsText(h.components) ? ` · ${componentsText(h.components)}` : ''}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-gray-900">{fmt(h.grossPay)}</Text>
+                    <Text className="text-sm font-bold text-ink">{fmt(h.grossPay)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -262,66 +264,66 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                     onPress={() => setDetail(null)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
             <View className="flex-row items-start justify-between mb-4">
               <View className="flex-1 pr-3">
-                <Text className="text-lg font-bold text-gray-900">{detail?.entry.name}</Text>
-                <Text className="text-sm text-gray-500">
+                <Text className="text-lg font-bold text-ink">{detail?.entry.name}</Text>
+                <Text className="text-sm text-muted">
                   {fmt(detail?.entry.grossPay ?? 0)} · {Math.round((detail?.entry.hours ?? 0) * 100) / 100} h
                   {' · '}
                   {detail?.entry.method === 'check' && detail?.entry.checkNumber ? `${t.checkPrefix}${detail.entry.checkNumber}` : (methodLabel[detail?.entry.method ?? ''] ?? detail?.entry.method)}
                 </Text>
-                <Text className="text-xs text-gray-400 mt-0.5">
+                <Text className="text-xs text-faint mt-0.5">
                   {detail ? `${fmtDay(detail.entry.periodStart)} – ${fmtDay(detail.entry.periodEnd)}` : ''}
                   {detail && componentsText(detail.entry.components) ? ` · ${componentsText(detail.entry.components)}` : ''}
                 </Text>
               </View>
               <Pressable onPress={() => setDetail(null)} hitSlop={10} className="p-1">
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={c.faint} />
               </Pressable>
             </View>
 
             {detail?.loading ? (
               <View className="items-center py-10">
-                <ActivityIndicator color="#4F46E5" />
+                <ActivityIndicator color={c.primary} />
               </View>
             ) : detail?.breakdown ? (
               <>
                 <View className="flex-row gap-2 mb-4">
                   {([[Wrench, t.hoursWorked, detail.breakdown.workedHours], [Truck, t.hoursDriven, detail.breakdown.drivenHours], [Clock, t.hoursLogged, detail.breakdown.loggedHours]] as const).map(([Icon, label, val], i) => (
-                    <View key={i} className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 p-3 items-center">
-                      <Icon size={15} color="#9CA3AF" />
-                      <Text className="text-base font-bold text-gray-900 mt-1">{val}</Text>
-                      <Text className="text-[11px] text-gray-400">{label}</Text>
+                    <View key={i} className="flex-1 rounded-2xl border border-border-soft bg-surface p-3 items-center">
+                      <Icon size={15} color={c.faint} />
+                      <Text className="text-base font-bold text-ink mt-1">{val}</Text>
+                      <Text className="text-[11px] text-faint">{label}</Text>
                     </View>
                   ))}
                 </View>
                 {detail.breakdown.jobs.length > 0 ? (
                   <>
-                    <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
+                    <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
                     <ScrollView className="max-h-72" nestedScrollEnabled>
                       <View className="gap-2">
                         {detail.breakdown.jobs.map((j, i) => (
-                          <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-gray-100 px-3 py-2.5">
+                          <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
                             <Pressable
                               disabled={!j.jobId || !onJobPress}
                               onPress={() => { if (j.jobId && onJobPress) { setDetail(null); onJobPress(j.jobId); } }}
                               className="flex-1 min-w-0 active:opacity-60"
                             >
-                              <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                              {j.date ? <Text className="text-[11px] text-gray-400">{fmtDay(j.date)}</Text> : null}
+                              <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
+                              {j.date ? <Text className="text-[11px] text-faint">{fmtDay(j.date)}</Text> : null}
                             </Pressable>
                             <View className="items-end">
                               {j.workedHours > 0 ? (
                                 <View className="flex-row items-center gap-1">
-                                  <Wrench size={11} color="#9CA3AF" />
-                                  <Text className="text-xs text-gray-600">{j.workedHours} h</Text>
+                                  <Wrench size={11} color={c.faint} />
+                                  <Text className="text-xs text-muted">{j.workedHours} h</Text>
                                 </View>
                               ) : null}
                               {j.drivenHours > 0 ? (
                                 <View className="flex-row items-center gap-1">
-                                  <Truck size={11} color="#9CA3AF" />
-                                  <Text className="text-xs text-gray-600">{j.drivenHours} h</Text>
+                                  <Truck size={11} color={c.faint} />
+                                  <Text className="text-xs text-muted">{j.drivenHours} h</Text>
                                 </View>
                               ) : null}
                             </View>
@@ -333,7 +335,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                 ) : null}
               </>
             ) : (
-              <Text className="text-sm text-gray-400 text-center py-8">{t.historyNoResults}</Text>
+              <Text className="text-sm text-faint text-center py-8">{t.historyNoResults}</Text>
             )}
           </View>
         </View>

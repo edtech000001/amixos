@@ -9,6 +9,7 @@ import { Fab } from '../../ui/Fab';
 import { formatDateLong } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { useThemeColors } from '../../theme';
 
 export interface InvoiceListItem {
   id: string;
@@ -48,18 +49,18 @@ type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
 const STATUS_PILL_BG: Record<string, string> = {
-  draft: 'bg-gray-100',
+  draft: 'bg-border-soft',
   sent: 'bg-blue-100',
   paid: 'bg-emerald-100',
   overdue: 'bg-red-100',
-  cancelled: 'bg-gray-100',
+  cancelled: 'bg-border-soft',
 };
 const STATUS_PILL_TEXT: Record<string, string> = {
-  draft: 'text-gray-500',
+  draft: 'text-muted',
   sent: 'text-blue-600',
   paid: 'text-emerald-700',
   overdue: 'text-red-600',
-  cancelled: 'text-gray-400',
+  cancelled: 'text-faint',
 };
 
 function fmt(n: number) {
@@ -77,6 +78,7 @@ export function InvoicesListScreen({
   businessId,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.invoices;
   const tg = t.group;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
@@ -228,8 +230,8 @@ export function InvoicesListScreen({
           width (mirrors the jobs list). */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">
+          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <Text className="text-sm text-muted mt-0.5">
             {search.trim() || statuses.length || dateFrom || dateTo
               ? t.countFound.replace('{{count}}', String(filtered.length))
               : t.countTotal.replace('{{count}}', String(invoices.length))}
@@ -240,48 +242,48 @@ export function InvoicesListScreen({
             <Pressable
               onPress={onPriceSheetPress}
               accessibilityLabel={full.dashboard.settings.priceSheet.title}
-              className="w-11 h-11 rounded-xl border border-gray-200 bg-white items-center justify-center active:opacity-80"
+              className="w-11 h-11 rounded-xl border border-border bg-card items-center justify-center active:opacity-80"
             >
-              <DollarSign size={16} color="#6B7280" />
+              <DollarSign size={16} color={c.muted} />
             </Pressable>
           ) : null}
           {dateActive ? (
             <Pressable
               onPress={clearDate}
               accessibilityLabel={tdate.clear}
-              className="w-11 h-11 rounded-xl border border-red-200 bg-red-50 items-center justify-center active:opacity-80"
+              className="w-11 h-11 rounded-xl border border-red-200 bg-red-500/10 items-center justify-center active:opacity-80"
             >
-              <XCircle size={16} color="#DC2626" />
+              <XCircle size={16} color={c.danger} />
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => setDateOpen(o => !o)}
             accessibilityLabel={tdate.button}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              dateActive ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              dateActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <Calendar size={16} color={dateActive ? '#4F46E5' : '#6B7280'} />
+            <Calendar size={16} color={dateActive ? c.primary : c.muted} />
           </Pressable>
           {onBulkDelete ? (
             <Pressable
               onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
               accessibilityLabel={t.selectButton}
               className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-                selectMode ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+                selectMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
               }`}
             >
-              <ListChecks size={16} color={selectMode ? '#4F46E5' : '#6B7280'} />
+              <ListChecks size={16} color={selectMode ? c.primary : c.muted} />
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => setGroupMenuOpen(true)}
             accessibilityLabel={tg.button}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <Layers size={16} color={groupBy !== 'none' ? '#4F46E5' : '#6B7280'} />
+            <Layers size={16} color={groupBy !== 'none' ? c.primary : c.muted} />
           </Pressable>
         </View>
       </View>
@@ -293,7 +295,7 @@ export function InvoicesListScreen({
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color="#9CA3AF" />}
+          leftIcon={<Search size={16} color={c.faint} />}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -313,10 +315,10 @@ export function InvoicesListScreen({
           onPress={() => setStatuses([])}
           accessibilityLabel={t.filters.all}
           className={`flex-row items-center justify-center px-2.5 py-1.5 rounded-xl ${
-            statuses.length === 0 ? 'bg-primary' : 'bg-gray-100'
+            statuses.length === 0 ? 'bg-primary' : 'bg-border-soft'
           }`}
         >
-          <List size={15} color={statuses.length === 0 ? '#FFFFFF' : '#6B7280'} />
+          <List size={15} color={statuses.length === 0 ? '#FFFFFF' : c.muted} />
         </Pressable>
         {STATUS_KEYS.map(k => {
           const on = statusSet.has(k);
@@ -324,12 +326,12 @@ export function InvoicesListScreen({
             <Pressable
               key={k}
               onPress={() => toggleStatus(k)}
-              className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-gray-100'}`}
+              className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
             >
-              <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-gray-500'}`}>{statusLabels[k]}</Text>
+              <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>{statusLabels[k]}</Text>
               {counts[k] > 0 ? (
-                <View className={`px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20' : 'bg-gray-200'}`}>
-                  <Text className={`text-xs font-bold ${on ? 'text-white' : 'text-gray-600'}`}>{counts[k]}</Text>
+                <View className={`px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20' : 'bg-border'}`}>
+                  <Text className={`text-xs font-bold ${on ? 'text-white' : 'text-muted'}`}>{counts[k]}</Text>
                 </View>
               ) : null}
             </Pressable>
@@ -341,7 +343,7 @@ export function InvoicesListScreen({
       {selectMode ? (
         <View className="flex-row items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 mb-3">
           <Pressable onPress={exitSelect} hitSlop={8}>
-            <X size={16} color="#4F46E5" />
+            <X size={16} color={c.primary} />
           </Pressable>
           <Text className="text-sm font-medium text-primary flex-1">{selectedCountText}</Text>
           {visibleOrder.length > 0 ? (
@@ -356,9 +358,9 @@ export function InvoicesListScreen({
 
       {/* Summary */}
       {filtered.length > 0 ? (
-        <Text className="text-xs text-gray-500 mb-3">
+        <Text className="text-xs text-muted mb-3">
           {t.summaryTotal}:{' '}
-          <Text className="text-gray-900 font-bold">{fmt(total)}</Text>
+          <Text className="text-ink font-bold">{fmt(total)}</Text>
         </Text>
       ) : null}
 
@@ -373,8 +375,8 @@ export function InvoicesListScreen({
         </View>
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
-          <FileText size={40} color="#D1D5DB" />
-          <Text className="text-sm text-gray-400 mt-3">{t.empty}</Text>
+          <FileText size={40} color={c.faint} />
+          <Text className="text-sm text-faint mt-3">{t.empty}</Text>
           <Pressable onPress={onNewInvoicePress} className="mt-1">
             <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
           </Pressable>
@@ -384,16 +386,16 @@ export function InvoicesListScreen({
           {sections.map(section => (
             <View key={section.title || '__all'}>
               {section.title ? (
-                <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2 px-1">
                   {section.title} · {section.data.length}
                 </Text>
               ) : null}
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 {section.data.map((inv, i) => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
-                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-gray-100';
-                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-gray-500';
+                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
+                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
                   const client = inv.clientNames ?? t.noClient;
                   const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
                   return (
@@ -401,31 +403,31 @@ export function InvoicesListScreen({
                       key={inv.id}
                       onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
                       className={`flex-row items-center gap-4 px-5 py-4 ${
-                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'active:bg-gray-50'
-                      } ${i < section.data.length - 1 ? 'border-b border-gray-50' : ''}`}
+                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'active:bg-surface'
+                      } ${i < section.data.length - 1 ? 'border-b border-border-soft' : ''}`}
                     >
                       {selectMode ? (
                         <View className={`w-5 h-5 rounded-md border items-center justify-center ${
-                          selectedIds.has(inv.id) ? 'bg-primary border-primary' : 'border-gray-300'
+                          selectedIds.has(inv.id) ? 'bg-primary border-primary' : 'border-border'
                         }`}>
                           {selectedIds.has(inv.id) ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
                         </View>
                       ) : null}
                       <View className="flex-1 min-w-0">
                         <View className="flex-row items-center gap-2 flex-wrap">
-                          <Text className="text-sm font-semibold text-gray-900">
+                          <Text className="text-sm font-semibold text-ink">
                             {inv.invoiceNumber}
                           </Text>
                           <View className={`px-2 py-0.5 rounded-full ${pillBg}`}>
                             <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
                           </View>
                         </View>
-                        <Text className="text-xs text-gray-400 mt-0.5">
+                        <Text className="text-xs text-faint mt-0.5">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                         </Text>
                       </View>
-                      <Text className="text-sm font-bold text-gray-900">
+                      <Text className="text-sm font-bold text-ink">
                         {fmt(inv.totalAmount)}
                       </Text>
                     </Pressable>
@@ -464,14 +466,14 @@ export function InvoicesListScreen({
       onRequestClose={() => setGroupMenuOpen(false)}
     >
       <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 justify-end bg-black/40">
-        <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pt-3 pb-10">
+        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pt-3 pb-10">
           <View className="items-center mb-3">
-            <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            <View className="w-10 h-1 bg-border rounded-full" />
           </View>
           <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-lg font-bold text-gray-900 px-1">{tg.title}</Text>
+            <Text className="text-lg font-bold text-ink px-1">{tg.title}</Text>
             <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-              <X size={22} color="#9CA3AF" />
+              <X size={22} color={c.faint} />
             </Pressable>
           </View>
           <View className="gap-1">
@@ -481,15 +483,15 @@ export function InvoicesListScreen({
                 <Pressable
                   key={o.key}
                   onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                  className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-gray-50'}`}
+                  className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-surface'}`}
                 >
-                  <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-gray-100'}`}>
-                    <o.Icon size={18} color={active ? '#FFFFFF' : '#6B7280'} />
+                  <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-border-soft'}`}>
+                    <o.Icon size={18} color={active ? '#FFFFFF' : c.muted} />
                   </View>
-                  <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-gray-900'}`}>
+                  <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-ink'}`}>
                     {o.label}
                   </Text>
-                  {active ? <Check size={20} color="#4F46E5" /> : null}
+                  {active ? <Check size={20} color={c.primary} /> : null}
                 </Pressable>
               );
             })}

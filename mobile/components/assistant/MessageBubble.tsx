@@ -24,8 +24,8 @@ export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, on
   }
   return (
     <View className="self-start max-w-[85%] mb-2">
-      <View className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-2.5">
-        <Text className="text-[15px] text-gray-900">{bubble.content}</Text>
+      <View className="bg-border-soft rounded-2xl rounded-bl-md px-4 py-2.5">
+        <Text className="text-[15px] text-ink">{bubble.content}</Text>
       </View>
       {bubble.draft ? (
         <JobDraftCard

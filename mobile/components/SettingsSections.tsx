@@ -23,6 +23,7 @@ import {
   Contrast,
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -199,8 +200,8 @@ function SectionHeader({
         {icon}
       </View>
       <View className="flex-1">
-        <Text className="text-base font-semibold text-gray-900">{title}</Text>
-        <Text className="text-xs text-gray-500 mt-0.5">{subtitle}</Text>
+        <Text className="text-base font-semibold text-ink">{title}</Text>
+        <Text className="text-xs text-muted mt-0.5">{subtitle}</Text>
       </View>
     </View>
   );
@@ -212,8 +213,8 @@ function StatusMsg({ msg }: { msg: { text: string; isError: boolean } | null }) 
     <View
       className={`rounded-xl px-4 py-3 ${
         msg.isError
-          ? 'bg-red-50 border border-red-100'
-          : 'bg-green-50 border border-green-100'
+          ? 'bg-red-500/10 border border-red-100'
+          : 'bg-green-500/10 border border-green-100'
       }`}
     >
       <Text className={`text-sm ${msg.isError ? 'text-red-600' : 'text-green-700'}`}>
@@ -231,7 +232,7 @@ const BUSINESS_US_STATES = [
 ];
 
 function GroupLabel({ children }: { children: string }) {
-  return <Text className="text-xs font-semibold text-gray-400 uppercase mt-2">{children}</Text>;
+  return <Text className="text-xs font-semibold text-faint uppercase mt-2">{children}</Text>;
 }
 
 // Shared legend for the field-config lists (Clientes / Trabajos / Empleados /
@@ -240,20 +241,21 @@ function GroupLabel({ children }: { children: string }) {
 // controls (drag handle, eye = show/hide, switch = required).
 function FieldListLegend() {
   const { locale } = useLang();
+  const c = useThemeColors();
   const en = locale === 'en';
   const rows: { icon: React.ReactNode; text: string }[] = [
     {
-      icon: <GripVertical size={13} color="#9CA3AF" />,
+      icon: <GripVertical size={13} color={c.faint} />,
       text: en ? 'Hold a row to reorder' : 'Mantén presionada una fila para mover',
     },
     {
-      icon: <Eye size={13} color="#9CA3AF" />,
+      icon: <Eye size={13} color={c.faint} />,
       text: en ? 'Tap the eye to show or hide a field' : 'Toca el ojo para mostrar u ocultar un campo',
     },
     {
       icon: (
         <View className="w-7 h-4 rounded-full bg-primary flex-row items-center justify-end px-0.5">
-          <View className="w-3 h-3 rounded-full bg-white" />
+          <View className="w-3 h-3 rounded-full bg-card" />
         </View>
       ),
       text: en ? 'Switch makes the field required' : 'El interruptor lo hace obligatorio',
@@ -264,7 +266,7 @@ function FieldListLegend() {
       {rows.map((r, i) => (
         <View key={i} className="flex-row items-center gap-2">
           <View className="w-7 items-center">{r.icon}</View>
-          <Text className="text-[11px] text-gray-400">{r.text}</Text>
+          <Text className="text-[11px] text-faint">{r.text}</Text>
         </View>
       ))}
     </View>
@@ -275,6 +277,7 @@ export function BusinessSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const [name, setName] = useState(business?.name ?? '');
@@ -447,9 +450,9 @@ export function BusinessSection() {
 
   return (
     <View className="gap-5">
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<Building2 size={18} color="#4F46E5" />}
+          icon={<Building2 size={18} color={c.primary} />}
           title={t.business.heading}
           subtitle={t.business.subtitle}
         />
@@ -459,11 +462,11 @@ export function BusinessSection() {
         <View className="items-center gap-3 py-1">
           {business?.logo_url ? (
             <Pressable onPress={() => setLogoViewerOpen(true)}>
-              <Image source={{ uri: business.logo_url }} className="w-32 h-32 rounded-2xl bg-gray-50" resizeMode="contain" />
+              <Image source={{ uri: business.logo_url }} className="w-32 h-32 rounded-2xl bg-surface" resizeMode="contain" />
             </Pressable>
           ) : (
-            <View className="w-32 h-32 rounded-2xl bg-gray-100 items-center justify-center">
-              <Building2 size={40} color="#9CA3AF" />
+            <View className="w-32 h-32 rounded-2xl bg-border-soft items-center justify-center">
+              <Building2 size={40} color={c.faint} />
             </View>
           )}
           <View className="flex-row items-center gap-2">
@@ -479,7 +482,7 @@ export function BusinessSection() {
             {business?.logo_url && !uploadingLogo && (
               <Pressable
                 onPress={removeLogo}
-                className="px-3.5 py-1.5 rounded-xl active:bg-red-50"
+                className="px-3.5 py-1.5 rounded-xl active:bg-red-500/10"
               >
                 <Text className="text-sm font-semibold text-red-500">{t.business.logoRemoveBtn}</Text>
               </Pressable>
@@ -557,7 +560,7 @@ export function BusinessSection() {
         <Input label={t.business.licenseLabel} value={license} onChangeText={setLicense} />
 
         <GroupLabel>{t.business.operatingHoursHeading}</GroupLabel>
-        <Text className="text-xs text-gray-400 -mt-2">{t.business.operatingHoursSub}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.business.operatingHoursSub}</Text>
         <View>
           {DAY_KEYS.map((dk) => {
             const d = operatingHours[dk];
@@ -565,17 +568,17 @@ export function BusinessSection() {
               setOperatingHours((prev) => ({ ...prev, [dk]: { ...prev[dk], ...patch } }));
             return (
               <View key={dk} className="flex-row items-center py-2.5">
-                <Text className="w-24 text-sm text-gray-800">{t.business.days[dk]}</Text>
+                <Text className="w-24 text-sm text-ink">{t.business.days[dk]}</Text>
                 <Toggle value={d.enabled} onValueChange={(v) => setDay({ enabled: v })} />
                 <View className="flex-1" />
                 {d.enabled ? (
                   <View className="flex-row items-center gap-1.5">
                     <DatePicker variant="ghost" mode="time" value={d.start} onChange={(v) => setDay({ start: v })} />
-                    <Text className="text-gray-400 text-sm">–</Text>
+                    <Text className="text-faint text-sm">–</Text>
                     <DatePicker variant="ghost" mode="time" value={d.end} onChange={(v) => setDay({ end: v })} />
                   </View>
                 ) : (
-                  <Text className="text-sm text-gray-400">{t.business.closedLabel}</Text>
+                  <Text className="text-sm text-faint">{t.business.closedLabel}</Text>
                 )}
               </View>
             );
@@ -597,6 +600,7 @@ export function FacturasSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const tNew = full.dashboard.invoices.new;
@@ -662,7 +666,7 @@ export function FacturasSection() {
           <Pressable
             key={tok.key}
             onPress={() => insertEmailToken(field, label)}
-            className="rounded-full bg-indigo-50 px-2.5 py-1 active:bg-indigo-100"
+            className="rounded-full bg-indigo-500/10 px-2.5 py-1 active:bg-indigo-100"
           >
             <Text className="text-[11px] font-mono text-indigo-600">{label}</Text>
           </Pressable>
@@ -991,9 +995,9 @@ export function FacturasSection() {
 
   return (
     <View className="gap-5">
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<FileText size={18} color="#4F46E5" />}
+          icon={<FileText size={18} color={c.primary} />}
           title={t.invoices.heading}
           subtitle={t.invoices.subtitle}
         />
@@ -1003,38 +1007,38 @@ export function FacturasSection() {
           onChangeText={(v) => setDueDays(v.replace(/[^0-9]/g, ''))}
           keyboardType="number-pad"
         />
-        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.dueDaysHint}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.invoices.dueDaysHint}</Text>
         <Input
           label={t.invoices.taxRateLabel}
           value={taxRate}
           onChangeText={(v: string) => setTaxRate(v.replace(/[^0-9.]/g, ''))}
           keyboardType="decimal-pad"
         />
-        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.taxRateHint}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.invoices.taxRateHint}</Text>
         <Select
           label={t.invoices.qtyFieldLabel}
           value={qtyField}
           onValueChange={setQtyField}
           options={[{ value: '', label: t.invoices.qtyFieldNone }, ...jobFields.map(f => ({ value: f.field_key, label: f.field_label }))]}
         />
-        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.qtyFieldHint}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.invoices.qtyFieldHint}</Text>
         <Input
           label={t.invoices.startNumberLabel}
           value={startNumber}
           onChangeText={(v) => setStartNumber(v.replace(/[^0-9]/g, ''))}
           keyboardType="number-pad"
         />
-        <Text className="text-xs text-gray-400 -mt-2">{t.invoices.startNumberHint}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.invoices.startNumberHint}</Text>
         <View>
-          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.invoices.notesLabel}</Text>
-          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
+          <Text className="text-sm font-semibold text-ink mb-1.5">{t.invoices.notesLabel}</Text>
+          <View className="rounded-2xl border border-border bg-card px-4 py-1">
             <TextInput
               multiline
               placeholder={t.invoices.notesPlaceholder}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               value={notes}
               onChangeText={setNotes}
-              className="text-base text-gray-900 py-2"
+              className="text-base text-ink py-2"
               style={{ textAlignVertical: 'top', minHeight: 70 }}
             />
           </View>
@@ -1044,9 +1048,9 @@ export function FacturasSection() {
 
       {/* Email al enviar factura — its OWN card: these fields customize the
          send email, not the invoice document (that's the card above). */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<Send size={18} color="#4F46E5" />}
+          icon={<Send size={18} color={c.primary} />}
           title={t.invoices.emailHeading}
           subtitle={t.invoices.emailSubtitle}
         />
@@ -1061,21 +1065,21 @@ export function FacturasSection() {
           {emailTokenChips('subject')}
         </View>
         <View>
-          <Text className="text-sm font-semibold text-gray-700 mb-1.5">{t.invoices.emailBodyLabel}</Text>
-          <View className="rounded-2xl border border-gray-200 bg-white px-4 py-1">
+          <Text className="text-sm font-semibold text-ink mb-1.5">{t.invoices.emailBodyLabel}</Text>
+          <View className="rounded-2xl border border-border bg-card px-4 py-1">
             <TextInput
               multiline
               placeholder={full.dashboard.invoices.emailBody}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               value={emailBody}
               onChangeText={setEmailBody}
               onSelectionChange={e => { emailSelRef.current.body = { s: e.nativeEvent.selection.start, e: e.nativeEvent.selection.end }; }}
-              className="text-base text-gray-900 py-2"
+              className="text-base text-ink py-2"
               style={{ textAlignVertical: 'top', minHeight: 90 }}
             />
           </View>
           {emailTokenChips('body')}
-          <Text className="text-xs text-gray-400 mt-1.5">{t.invoices.emailVarsHint}</Text>
+          <Text className="text-xs text-faint mt-1.5">{t.invoices.emailVarsHint}</Text>
         </View>
       </View>
 
@@ -1084,7 +1088,7 @@ export function FacturasSection() {
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader
-            icon={<Sliders size={18} color="#4F46E5" />}
+            icon={<Sliders size={18} color={c.primary} />}
             title={t.invoicesSection.title}
             subtitle={t.invoicesSection.subtitle}
           />
@@ -1110,8 +1114,8 @@ export function FacturasSection() {
           if (keys.length === 0) return null;
           return (
             <View key={section}>
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 <SortableList<{ id: string }>
                   items={keys.map((k) => ({ id: k }))}
                   onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
@@ -1122,48 +1126,48 @@ export function FacturasSection() {
                     const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
                     const lastInSec = i === keys.length - 1;
                     return (
-                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-border-soft'}`}>
                         <View className="p-1 -ml-1">
-                          <GripVertical size={16} color="#9CA3AF" />
+                          <GripVertical size={16} color={c.faint} />
                         </View>
                         <View className="flex-1">
                           <View className="flex-row items-center gap-1.5 flex-wrap">
-                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
-                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom ? <Sparkles size={12} color={c.primary} /> : null}
+                            <Text className="text-sm text-ink">{label}</Text>
                             {isCustom && tpl?.required ? (
-                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                              <View className="bg-orange-500/10 px-2 py-0.5 rounded-full">
                                 <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
                               </View>
                             ) : null}
                           </View>
                           {isCustom && tpl ? (
-                            <Text className="text-xs text-gray-400 mt-0.5">
+                            <Text className="text-xs text-faint mt-0.5">
                               {t.fieldTypes[tpl.field_type]}
                               {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                             </Text>
                           ) : null}
                         </View>
                         {isCustom ? (
-                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
-                            <FolderInput size={15} color="#6B7280" />
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-border-soft" hitSlop={4}>
+                            <FolderInput size={15} color={c.muted} />
                           </Pressable>
                         ) : null}
                         {!isCustom ? (
                           <View className="flex-row items-center gap-1">
                             {!INVOICE_FIELDS_ALWAYS_SHOWN.includes(key) && (
-                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
-                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-border-soft">
+                                {hidden[key] ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
                               </Pressable>
                             )}
                             <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
                           </View>
                         ) : (
                           <>
-                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
-                              <Pencil size={14} color="#3B82F6" />
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-500/10">
+                              <Pencil size={14} color={c.primary} />
                             </Pressable>
-                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
-                              <Trash2 size={14} color="#EF4444" />
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                              <Trash2 size={14} color={c.danger} />
                             </Pressable>
                           </>
                         )}
@@ -1182,16 +1186,16 @@ export function FacturasSection() {
       {/* Invoice theme lives here — a drill-in rather than a separate menu item. */}
       <Pressable
         onPress={() => router.push('/dashboard/mas/ajustes/factura-tema' as never)}
-        className="bg-white rounded-2xl border border-gray-100 p-4 flex-row items-center gap-3 active:bg-gray-50"
+        className="bg-card rounded-2xl border border-border-soft p-4 flex-row items-center gap-3 active:bg-surface"
       >
         <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-          <Palette size={18} color="#4F46E5" />
+          <Palette size={18} color={c.primary} />
         </View>
         <View className="flex-1">
-          <Text className="text-base font-semibold text-gray-900">{t.invoices.design.title}</Text>
-          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>{t.invoices.design.subtitle}</Text>
+          <Text className="text-base font-semibold text-ink">{t.invoices.design.title}</Text>
+          <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>{t.invoices.design.subtitle}</Text>
         </View>
-        <ChevronRight size={18} color="#9CA3AF" />
+        <ChevronRight size={18} color={c.faint} />
       </Pressable>
 
       <FieldTemplateModal
@@ -1210,6 +1214,7 @@ export function TrabajosSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const [disabled, setDisabled] = useState<Record<string, boolean>>(
@@ -1260,12 +1265,12 @@ export function TrabajosSection() {
   return (
     <View className="gap-5">
       <SectionHeader
-        icon={<Briefcase size={18} color="#4F46E5" />}
+        icon={<Briefcase size={18} color={c.primary} />}
         title={t.pipeline.heading}
         subtitle={t.pipeline.subtitle}
       />
 
-      <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
         {PIPELINE_STEP_KEYS.map((key, i) => {
           const step = t.pipelineSteps[key];
           const isDisabled = !!disabled[key];
@@ -1273,20 +1278,20 @@ export function TrabajosSection() {
             <View
               key={key}
               className={`flex-row items-center justify-between px-4 py-3 ${
-                i < PIPELINE_STEP_KEYS.length - 1 ? 'border-b border-gray-50' : ''
+                i < PIPELINE_STEP_KEYS.length - 1 ? 'border-b border-border-soft' : ''
               }`}
             >
               <View className="flex-1 mr-3">
                 <Text
                   className={`text-sm font-medium ${
-                    isDisabled ? 'text-gray-400' : 'text-gray-900'
+                    isDisabled ? 'text-faint' : 'text-ink'
                   }`}
                 >
                   {step.label}
                 </Text>
                 <Text
                   className={`text-xs mt-0.5 ${
-                    isDisabled ? 'text-gray-300' : 'text-gray-500'
+                    isDisabled ? 'text-faint' : 'text-muted'
                   }`}
                 >
                   {step.description}
@@ -1311,6 +1316,7 @@ export function TrabajosFieldsSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
   const tJobNew = full.dashboard.jobs.new;
   const secLabel = (s: JobLayoutSection) => (locale === 'en' ? JOB_SECTION_LABELS[s].en : JOB_SECTION_LABELS[s].es);
@@ -1633,7 +1639,7 @@ export function TrabajosFieldsSection() {
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader
-            icon={<Sliders size={18} color="#4F46E5" />}
+            icon={<Sliders size={18} color={c.primary} />}
             title={t.jobsSection.title}
             subtitle={t.jobsSection.subtitle}
           />
@@ -1659,8 +1665,8 @@ export function TrabajosFieldsSection() {
           if (keys.length === 0) return null;
           return (
             <View key={section}>
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 <SortableList<{ id: string }>
                   items={keys.map((k) => ({ id: k }))}
                   onReorder={(next) => reorderJobSection(section, next.map((n) => n.id))}
@@ -1671,50 +1677,50 @@ export function TrabajosFieldsSection() {
                   const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
                   const lastInSec = i === keys.length - 1;
                   return (
-                    <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                    <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-border-soft'}`}>
                       {/* Drag affordance — the whole row is the long-press
                          target; this grip just signals "hold to reorder". */}
                       <View className="p-1 -ml-1">
-                        <GripVertical size={16} color="#9CA3AF" />
+                        <GripVertical size={16} color={c.faint} />
                       </View>
                       <View className="flex-1">
                         <View className="flex-row items-center gap-1.5 flex-wrap">
-                          {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
-                          <Text className="text-sm text-gray-900">{label}</Text>
+                          {isCustom ? <Sparkles size={12} color={c.primary} /> : null}
+                          <Text className="text-sm text-ink">{label}</Text>
                           {isCustom && tpl?.required ? (
-                            <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                            <View className="bg-orange-500/10 px-2 py-0.5 rounded-full">
                               <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
                             </View>
                           ) : null}
                         </View>
                         {isCustom && tpl ? (
-                          <Text className="text-xs text-gray-400 mt-0.5">
+                          <Text className="text-xs text-faint mt-0.5">
                             {t.fieldTypes[tpl.field_type]}
                             {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                           </Text>
                         ) : null}
                       </View>
                       {isCustom ? (
-                        <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
-                          <FolderInput size={15} color="#6B7280" />
+                        <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-border-soft" hitSlop={4}>
+                          <FolderInput size={15} color={c.muted} />
                         </Pressable>
                       ) : null}
                       {!isCustom ? (
                         <View className="flex-row items-center gap-1">
                           {!JOB_FIELDS_ALWAYS_SHOWN.includes(key) && (
-                            <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
-                              {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                            <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-border-soft">
+                              {hidden[key] ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
                             </Pressable>
                           )}
                           <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
                         </View>
                       ) : (
                         <>
-                          <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
-                            <Pencil size={14} color="#3B82F6" />
+                          <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-500/10">
+                            <Pencil size={14} color={c.primary} />
                           </Pressable>
-                          <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
-                            <Trash2 size={14} color="#EF4444" />
+                          <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                            <Trash2 size={14} color={c.danger} />
                           </Pressable>
                         </>
                       )}
@@ -1747,6 +1753,7 @@ export function CrewModeSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const initial = business?.job_crew_mode ?? true;
@@ -1788,12 +1795,12 @@ export function CrewModeSection() {
   return (
     <View className="gap-3">
       <SectionHeader
-        icon={<Users size={18} color="#4F46E5" />}
+        icon={<Users size={18} color={c.primary} />}
         title={t.crewMode.heading}
         subtitle={t.crewMode.subtitle}
       />
-      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
-        <Text className="flex-1 text-sm text-gray-900">{t.crewMode.heading}</Text>
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
+        <Text className="flex-1 text-sm text-ink">{t.crewMode.heading}</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />
@@ -1807,6 +1814,7 @@ export function CrewModeSection() {
 export function JobItemTypesSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
+  const c = useThemeColors();
 
   const initial = business?.job_item_types_enabled !== false;
   const [value, setValue] = useState<boolean>(initial);
@@ -1844,12 +1852,12 @@ export function JobItemTypesSection() {
   return (
     <View className="gap-3">
       <SectionHeader
-        icon={<Sliders size={18} color="#4F46E5" />}
+        icon={<Sliders size={18} color={c.primary} />}
         title="Materiales y mano de obra"
         subtitle="Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo. Las propuestas siempre la mantienen."
       />
-      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
-        <Text className="flex-1 text-sm text-gray-900">Mostrar sección</Text>
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
+        <Text className="flex-1 text-sm text-ink">Mostrar sección</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />
@@ -1864,6 +1872,7 @@ export function JobPrivateOnInvoiceSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.privateOnInvoice;
 
   const initial = business?.job_private_on_invoice === true;
@@ -1902,12 +1911,12 @@ export function JobPrivateOnInvoiceSection() {
   return (
     <View className="gap-3">
       <SectionHeader
-        icon={<Sliders size={18} color="#4F46E5" />}
+        icon={<Sliders size={18} color={c.primary} />}
         title={t.heading}
         subtitle={t.subtitle}
       />
-      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center gap-3">
-        <Text className="flex-1 text-sm text-gray-900">{t.toggleLabel}</Text>
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center gap-3">
+        <Text className="flex-1 text-sm text-ink">{t.toggleLabel}</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />
@@ -1924,6 +1933,7 @@ export function JobAlertsSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const initial = normalizeJobAlertThresholds(business?.job_alert_thresholds);
@@ -1994,20 +2004,20 @@ export function JobAlertsSection() {
   const dirty = JSON.stringify(saved) !== JSON.stringify(value);
   useSettingsSaveAction({ dirty, saving, onSave: save });
 
-  const colorOptions = JOB_ALERT_COLORS.map(c => ({ value: c, label: t.jobAlerts.colors[c] }));
+  const colorOptions = JOB_ALERT_COLORS.map(col => ({ value: col, label: t.jobAlerts.colors[col] }));
 
   return (
     <View className="gap-3">
       <SectionHeader
-        icon={<Bell size={18} color="#4F46E5" />}
+        icon={<Bell size={18} color={c.primary} />}
         title={t.jobAlerts.heading}
         subtitle={t.jobAlerts.subtitle}
       />
 
-      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
         <View className="flex-1 mr-3">
-          <Text className="text-sm font-medium text-gray-900">{t.jobAlerts.enabledLabel}</Text>
-          <Text className="text-xs text-gray-500 mt-0.5">{t.jobAlerts.enabledHint}</Text>
+          <Text className="text-sm font-medium text-ink">{t.jobAlerts.enabledLabel}</Text>
+          <Text className="text-xs text-muted mt-0.5">{t.jobAlerts.enabledHint}</Text>
         </View>
         <Toggle value={value.enabled} onValueChange={toggleEnabled} />
       </View>
@@ -2015,27 +2025,27 @@ export function JobAlertsSection() {
       {value.enabled && (
         <View className="gap-2">
           <View className="flex-row items-center justify-between">
-            <Text className="text-xs font-semibold text-gray-500 uppercase">
+            <Text className="text-xs font-semibold text-muted uppercase">
               {t.jobAlerts.levelsHeading}
             </Text>
             <Pressable
               onPress={addLevel}
               className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 active:opacity-80"
             >
-              <Plus size={14} color="#4F46E5" />
+              <Plus size={14} color={c.primary} />
               <Text className="text-xs font-semibold text-primary">{t.jobAlerts.addLevelBtn}</Text>
             </Pressable>
           </View>
 
           {value.levels.length === 0 ? (
-            <Text className="text-xs text-gray-400 italic py-2">{t.jobAlerts.levelsEmpty}</Text>
+            <Text className="text-xs text-faint italic py-2">{t.jobAlerts.levelsEmpty}</Text>
           ) : (
             value.levels.map((level, idx) => {
               const swatch = JOB_ALERT_STYLE[level.color as JobAlertColor];
               return (
                 <View
                   key={idx}
-                  className={`bg-white rounded-xl border border-gray-100 border-l-4 px-3 py-3 ${
+                  className={`bg-card rounded-xl border border-border-soft border-l-4 px-3 py-3 ${
                     swatch?.borderClass ?? 'border-l-gray-300'
                   }`}
                 >
@@ -2048,9 +2058,9 @@ export function JobAlertsSection() {
                           const n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
                           updateLevel(idx, { days: Number.isFinite(n) ? Math.max(0, n) : 0 });
                         }}
-                        className="w-14 px-2 py-1.5 text-sm text-gray-900 rounded-lg border border-gray-200 bg-white text-center"
+                        className="w-14 px-2 py-1.5 text-sm text-ink rounded-lg border border-border bg-card text-center"
                       />
-                      <Text className="text-xs text-gray-500">
+                      <Text className="text-xs text-muted">
                         {level.days === 1 ? t.jobAlerts.daysSuffixOne : t.jobAlerts.daysSuffixMany}
                       </Text>
                     </View>
@@ -2058,9 +2068,9 @@ export function JobAlertsSection() {
                     <Pressable
                       onPress={() => removeLevel(idx)}
                       accessibilityLabel={t.jobAlerts.removeLevelLabel}
-                      className="p-2 rounded-lg active:bg-red-50"
+                      className="p-2 rounded-lg active:bg-red-500/10"
                     >
-                      <Trash2 size={14} color="#F87171" />
+                      <Trash2 size={14} color={c.danger} />
                     </Pressable>
                   </View>
                   <View className="mt-2">
@@ -2078,10 +2088,10 @@ export function JobAlertsSection() {
       )}
 
       {/* Overdue indicator — independent of the day-tier levels above. */}
-      <View className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex-row items-center">
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
         <View className="flex-1 mr-3">
-          <Text className="text-sm font-medium text-gray-900">{t.jobAlerts.overdueHeading}</Text>
-          <Text className="text-xs text-gray-500 mt-0.5">{t.jobAlerts.overdueSubtitle}</Text>
+          <Text className="text-sm font-medium text-ink">{t.jobAlerts.overdueHeading}</Text>
+          <Text className="text-xs text-muted mt-0.5">{t.jobAlerts.overdueSubtitle}</Text>
         </View>
         <Toggle value={value.overdue} onValueChange={toggleOverdue} />
       </View>
@@ -2095,6 +2105,7 @@ export function ClientesSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
   const tFields = full.dashboard.clients.fields;
   const secLabel = (s: ClientFieldSection) => (locale === 'en' ? CLIENT_SECTION_LABELS[s].en : CLIENT_SECTION_LABELS[s].es);
@@ -2435,12 +2446,12 @@ export function ClientesSection() {
       {/* Import moved to Ajustes → Importar datos (the guided hub). */}
       {/* Contacts summary — total clients + employees so the user can
          reconcile against their Google Contacts count when sync is on. */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-4">
-        <Text className="text-sm font-semibold text-gray-900 mb-3">
+      <View className="bg-card rounded-2xl border border-border-soft p-4">
+        <Text className="text-sm font-semibold text-ink mb-3">
           {t.contactsStats.heading}
         </Text>
         <View className="flex-row gap-3">
-          <View className="flex-1 bg-indigo-50 rounded-xl p-3 items-center">
+          <View className="flex-1 bg-indigo-500/10 rounded-xl p-3 items-center">
             <Text className="text-xs text-indigo-600 font-medium">
               {t.contactsStats.clientsLabel}
             </Text>
@@ -2448,7 +2459,7 @@ export function ClientesSection() {
               {clientsCount ?? '—'}
             </Text>
           </View>
-          <View className="flex-1 bg-emerald-50 rounded-xl p-3 items-center">
+          <View className="flex-1 bg-emerald-500/10 rounded-xl p-3 items-center">
             <Text className="text-xs text-emerald-600 font-medium text-center">
               {t.contactsStats.contactsLabel}
             </Text>
@@ -2456,16 +2467,16 @@ export function ClientesSection() {
               {contactsCount ?? '—'}
             </Text>
           </View>
-          <View className="flex-1 bg-gray-100 rounded-xl p-3 items-center">
-            <Text className="text-xs text-gray-600 font-medium">
+          <View className="flex-1 bg-border-soft rounded-xl p-3 items-center">
+            <Text className="text-xs text-muted font-medium">
               {t.contactsStats.totalLabel}
             </Text>
-            <Text className="text-2xl font-bold text-gray-900 mt-1">
+            <Text className="text-2xl font-bold text-ink mt-1">
               {totalCount ?? '—'}
             </Text>
           </View>
         </View>
-        <Text className="text-[11px] text-gray-500 mt-3 leading-4">
+        <Text className="text-[11px] text-muted mt-3 leading-4">
           {t.contactsStats.googleHint}
         </Text>
       </View>
@@ -2476,7 +2487,7 @@ export function ClientesSection() {
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader
-            icon={<Sliders size={18} color="#4F46E5" />}
+            icon={<Sliders size={18} color={c.primary} />}
             title={t.requiredFields.heading}
             subtitle={t.requiredFields.subtitle}
           />
@@ -2502,8 +2513,8 @@ export function ClientesSection() {
           if (keys.length === 0) return null;
           return (
             <View key={section}>
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 <SortableList<{ id: string }>
                   items={keys.map((k) => ({ id: k }))}
                   onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
@@ -2514,48 +2525,48 @@ export function ClientesSection() {
                     const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
                     const lastInSec = i === keys.length - 1;
                     return (
-                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-border-soft'}`}>
                         <View className="p-1 -ml-1">
-                          <GripVertical size={16} color="#9CA3AF" />
+                          <GripVertical size={16} color={c.faint} />
                         </View>
                         <View className="flex-1">
                           <View className="flex-row items-center gap-1.5 flex-wrap">
-                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
-                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom ? <Sparkles size={12} color={c.primary} /> : null}
+                            <Text className="text-sm text-ink">{label}</Text>
                             {isCustom && tpl?.required ? (
-                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                              <View className="bg-orange-500/10 px-2 py-0.5 rounded-full">
                                 <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
                               </View>
                             ) : null}
                           </View>
                           {isCustom && tpl ? (
-                            <Text className="text-xs text-gray-400 mt-0.5">
+                            <Text className="text-xs text-faint mt-0.5">
                               {t.fieldTypes[tpl.field_type]}
                               {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                             </Text>
                           ) : null}
                         </View>
                         {isCustom ? (
-                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
-                            <FolderInput size={15} color="#6B7280" />
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-border-soft" hitSlop={4}>
+                            <FolderInput size={15} color={c.muted} />
                           </Pressable>
                         ) : null}
                         {!isCustom ? (
                           <View className="flex-row items-center gap-1">
                             {!CLIENT_FIELDS_ALWAYS_SHOWN.includes(key) && (
-                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
-                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-border-soft">
+                                {hidden[key] ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
                               </Pressable>
                             )}
                             <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
                           </View>
                         ) : (
                           <>
-                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
-                              <Pencil size={14} color="#3B82F6" />
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-500/10">
+                              <Pencil size={14} color={c.primary} />
                             </Pressable>
-                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
-                              <Trash2 size={14} color="#EF4444" />
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                              <Trash2 size={14} color={c.danger} />
                             </Pressable>
                           </>
                         )}
@@ -2591,6 +2602,7 @@ export function EmpleadosSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
   const tEmpModal = full.dashboard.employees.modal;
   const secLabel = (s: EmployeeFieldSection) => (locale === 'en' ? EMPLOYEE_SECTION_LABELS[s].en : EMPLOYEE_SECTION_LABELS[s].es);
@@ -2874,7 +2886,7 @@ export function EmpleadosSection() {
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           <SectionHeader
-            icon={<Users size={18} color="#4F46E5" />}
+            icon={<Users size={18} color={c.primary} />}
             title={t.employeesSection.title}
             subtitle={t.employeesSection.subtitle}
           />
@@ -2900,8 +2912,8 @@ export function EmpleadosSection() {
           if (keys.length === 0) return null;
           return (
             <View key={section}>
-              <Text className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 px-1">{secLabel(section)}</Text>
-              <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel(section)}</Text>
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 <SortableList<{ id: string }>
                   items={keys.map((k) => ({ id: k }))}
                   onReorder={(next) => reorderSection(section, next.map((n) => n.id))}
@@ -2912,48 +2924,48 @@ export function EmpleadosSection() {
                     const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
                     const lastInSec = i === keys.length - 1;
                     return (
-                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-gray-50'}`}>
+                      <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-border-soft'}`}>
                         <View className="p-1 -ml-1">
-                          <GripVertical size={16} color="#9CA3AF" />
+                          <GripVertical size={16} color={c.faint} />
                         </View>
                         <View className="flex-1">
                           <View className="flex-row items-center gap-1.5 flex-wrap">
-                            {isCustom ? <Sparkles size={12} color="#4F46E5" /> : null}
-                            <Text className="text-sm text-gray-900">{label}</Text>
+                            {isCustom ? <Sparkles size={12} color={c.primary} /> : null}
+                            <Text className="text-sm text-ink">{label}</Text>
                             {isCustom && tpl?.required ? (
-                              <View className="bg-orange-50 px-2 py-0.5 rounded-full">
+                              <View className="bg-orange-500/10 px-2 py-0.5 rounded-full">
                                 <Text className="text-[10px] text-orange-600 font-semibold">{t.customFields.requiredBadge}</Text>
                               </View>
                             ) : null}
                           </View>
                           {isCustom && tpl ? (
-                            <Text className="text-xs text-gray-400 mt-0.5">
+                            <Text className="text-xs text-faint mt-0.5">
                               {t.fieldTypes[tpl.field_type]}
                               {tpl.field_type === 'select' && tpl.field_options?.length ? ` · ${tpl.field_options.join(', ')}` : ''}
                             </Text>
                           ) : null}
                         </View>
                         {isCustom ? (
-                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-gray-100" hitSlop={4}>
-                            <FolderInput size={15} color="#6B7280" />
+                          <Pressable onPress={() => promptMoveSection(key, section)} className="p-2 rounded-lg active:bg-border-soft" hitSlop={4}>
+                            <FolderInput size={15} color={c.muted} />
                           </Pressable>
                         ) : null}
                         {!isCustom ? (
                           <View className="flex-row items-center gap-1">
                             {!EMPLOYEE_FIELDS_ALWAYS_SHOWN.includes(key) && (
-                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-gray-100">
-                                {hidden[key] ? <EyeOff size={16} color="#9CA3AF" /> : <Eye size={16} color="#6B7280" />}
+                              <Pressable onPress={() => toggleHidden(key)} className="p-2 rounded-lg active:bg-border-soft">
+                                {hidden[key] ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
                               </Pressable>
                             )}
                             <Toggle value={!!required[key]} onValueChange={() => toggleRequired(key)} />
                           </View>
                         ) : (
                           <>
-                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-50">
-                              <Pencil size={14} color="#3B82F6" />
+                            <Pressable onPress={() => { if (tpl) { setEditing(tpl); setModalOpen(true); } }} className="p-2 rounded-lg active:bg-blue-500/10">
+                              <Pencil size={14} color={c.primary} />
                             </Pressable>
-                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-50">
-                              <Trash2 size={14} color="#EF4444" />
+                            <Pressable onPress={() => tpl && removeTemplate(tpl.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                              <Trash2 size={14} color={c.danger} />
                             </Pressable>
                           </>
                         )}
@@ -3104,7 +3116,7 @@ function FieldTemplateModal({
           onChangeText={setLabelEn}
           autoCapitalize="sentences"
         />
-        <Text className="text-xs text-gray-400 -mt-2">{t.customFields.translationHint}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.customFields.translationHint}</Text>
 
         <Select
           label={t.customFields.fieldTypeLabel}
@@ -3124,47 +3136,47 @@ function FieldTemplateModal({
               numberOfLines={4}
               style={{ minHeight: 80, textAlignVertical: 'top' }}
             />
-            <Text className="text-xs text-gray-400 mt-1">{t.customFields.optionsHint}</Text>
+            <Text className="text-xs text-faint mt-1">{t.customFields.optionsHint}</Text>
           </View>
         ) : null}
 
         {type === 'select' ? (
-          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+          <View className="flex-row items-center justify-between bg-surface rounded-xl px-4 py-3">
             <View className="flex-1 pr-3">
-              <Text className="text-sm text-gray-900">{t.customFields.multiToggleLabel}</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.multiHint}</Text>
+              <Text className="text-sm text-ink">{t.customFields.multiToggleLabel}</Text>
+              <Text className="text-xs text-faint mt-0.5">{t.customFields.multiHint}</Text>
             </View>
             <Toggle value={multi} onValueChange={setMulti} />
           </View>
         ) : null}
 
         {type === 'number' ? (
-          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+          <View className="flex-row items-center justify-between bg-surface rounded-xl px-4 py-3">
             <View className="flex-1 pr-3">
-              <Text className="text-sm text-gray-900">{t.customFields.integerOnlyToggleLabel}</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.integerOnlyHint}</Text>
+              <Text className="text-sm text-ink">{t.customFields.integerOnlyToggleLabel}</Text>
+              <Text className="text-xs text-faint mt-0.5">{t.customFields.integerOnlyHint}</Text>
             </View>
             <Toggle value={integerOnly} onValueChange={setIntegerOnly} />
           </View>
         ) : null}
 
         {type === 'number' ? (
-          <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+          <View className="flex-row items-center justify-between bg-surface rounded-xl px-4 py-3">
             <View className="flex-1 pr-3">
-              <Text className="text-sm text-gray-900">{t.customFields.thousandsToggleLabel}</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">{t.customFields.thousandsHint}</Text>
+              <Text className="text-sm text-ink">{t.customFields.thousandsToggleLabel}</Text>
+              <Text className="text-xs text-faint mt-0.5">{t.customFields.thousandsHint}</Text>
             </View>
             <Toggle value={thousands} onValueChange={setThousands} />
           </View>
         ) : null}
 
-        <View className="flex-row items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-          <Text className="text-sm text-gray-900">{t.customFields.requiredToggleLabel}</Text>
+        <View className="flex-row items-center justify-between bg-surface rounded-xl px-4 py-3">
+          <Text className="text-sm text-ink">{t.customFields.requiredToggleLabel}</Text>
           <Toggle value={required} onValueChange={setRequired} />
         </View>
 
         {error ? (
-          <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3">
             <Text className="text-red-600 text-sm">{error}</Text>
           </View>
         ) : null}
@@ -3188,6 +3200,7 @@ export function AccountSection() {
   const activeBusinessId = useAuthStore((s) => s.activeBusinessId);
   const roles = useAuthStore((s) => s.roles);
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const [currentPw, setCurrentPw] = useState('');
@@ -3352,9 +3365,9 @@ export function AccountSection() {
   return (
     <View className="gap-4">
       {/* Account info card */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<UserIcon size={18} color="#4F46E5" />}
+          icon={<UserIcon size={18} color={c.primary} />}
           title={t.account.heading}
           subtitle={t.account.subtitle}
         />
@@ -3374,13 +3387,13 @@ export function AccountSection() {
         <Button onPress={onSaveName} loading={savingName} fullWidth>
           <Text className="text-white font-semibold">{t.account.saveNameBtn}</Text>
         </Button>
-        <View className="gap-1 pt-2 border-t border-gray-100">
-          <Text className="text-xs text-gray-500">{t.account.emailLabel}</Text>
-          <Text className="text-sm font-medium text-gray-900">{user?.email ?? '—'}</Text>
+        <View className="gap-1 pt-2 border-t border-border-soft">
+          <Text className="text-xs text-muted">{t.account.emailLabel}</Text>
+          <Text className="text-sm font-medium text-ink">{user?.email ?? '—'}</Text>
         </View>
         <View className="gap-1">
-          <Text className="text-xs text-gray-500">{t.account.roleLabel}</Text>
-          <Text className="text-sm font-medium text-gray-900">
+          <Text className="text-xs text-muted">{t.account.roleLabel}</Text>
+          <Text className="text-sm font-medium text-ink">
             {currentRole ? ROLE_LABELS[currentRole][locale] : '—'}
           </Text>
         </View>
@@ -3389,16 +3402,16 @@ export function AccountSection() {
       {/* Businesses you belong to — shows every workspace the user is a member
           of, with their role per business. Read-only list; switching active
           business still happens via the header BusinessSwitcher. */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-3">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-3">
         <SectionHeader
-          icon={<Building2 size={18} color="#4F46E5" />}
+          icon={<Building2 size={18} color={c.primary} />}
           title={t.account.businessesHeading}
           subtitle={t.account.businessesSubtitle}
         />
         {businesses.length === 0 ? (
-          <Text className="text-sm text-gray-500">{t.account.businessesEmpty}</Text>
+          <Text className="text-sm text-muted">{t.account.businessesEmpty}</Text>
         ) : (
-          <View className="bg-gray-50 rounded-xl overflow-hidden">
+          <View className="bg-surface rounded-xl overflow-hidden">
             {businesses.map((b, i) => {
               const role = roles[b.id];
               const isActive = b.id === activeBusinessId;
@@ -3406,13 +3419,13 @@ export function AccountSection() {
                 <View
                   key={b.id}
                   className={`flex-row items-center gap-3 px-4 py-3 ${
-                    i < businesses.length - 1 ? 'border-b border-gray-100' : ''
+                    i < businesses.length - 1 ? 'border-b border-border-soft' : ''
                   }`}
                 >
                   <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-                    <Building2 size={14} color="#4F46E5" />
+                    <Building2 size={14} color={c.primary} />
                   </View>
-                  <Text className="flex-1 text-sm font-semibold text-gray-900">
+                  <Text className="flex-1 text-sm font-semibold text-ink">
                     {b.name}
                     {isActive ? ' •' : ''}
                   </Text>
@@ -3435,7 +3448,7 @@ export function AccountSection() {
           className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
         >
           <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-            <Plus size={16} color="#4F46E5" />
+            <Plus size={16} color={c.primary} />
           </View>
           <Text className="flex-1 text-sm font-semibold text-primary">
             {full.dashboard.workspaces.createBusiness}
@@ -3446,16 +3459,16 @@ export function AccountSection() {
       {/* Subscription — reflects the active business' plan/trial. Buying and
           managing happen on the web (no in-app digital-subscription sale). */}
       {subState ? (
-        <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-3">
+        <View className="bg-card rounded-2xl border border-border-soft p-5 gap-3">
           <SectionHeader
-            icon={<CreditCard size={18} color="#4F46E5" />}
+            icon={<CreditCard size={18} color={c.primary} />}
             title={locale === 'en' ? 'Subscription' : 'Suscripción'}
             subtitle={locale === 'en' ? 'Your plan and billing' : 'Tu plan y facturación'}
           />
-          <View className="bg-gray-50 rounded-xl px-4 py-3">
-            <Text className="text-sm font-semibold text-gray-900">{subState.title}</Text>
+          <View className="bg-surface rounded-xl px-4 py-3">
+            <Text className="text-sm font-semibold text-ink">{subState.title}</Text>
             {subState.detail ? (
-              <Text className="text-xs text-gray-500 mt-0.5">{subState.detail}</Text>
+              <Text className="text-xs text-muted mt-0.5">{subState.detail}</Text>
             ) : null}
           </View>
 
@@ -3465,22 +3478,22 @@ export function AccountSection() {
               className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
             >
               <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-                <Sparkles size={16} color="#4F46E5" />
+                <Sparkles size={16} color={c.primary} />
               </View>
               <Text className="flex-1 text-sm font-semibold text-primary">
                 {locale === 'en' ? 'See plans' : 'Ver planes'}
               </Text>
-              <ChevronRight size={18} color="#9CA3AF" />
+              <ChevronRight size={18} color={c.faint} />
             </Pressable>
           ) : Platform.OS === 'ios' ? (
             // App Store guideline 3.1.1: no in-app link to an external (non-IAP)
             // purchase/management flow for digital subs. iOS shows a neutral,
             // non-tappable note instead of the "Manage on the web" link.
-            <View className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50">
+            <View className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-border-soft bg-surface">
               <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-                <CreditCard size={16} color="#4F46E5" />
+                <CreditCard size={16} color={c.primary} />
               </View>
-              <Text className="flex-1 text-sm text-gray-600">
+              <Text className="flex-1 text-sm text-muted">
                 {locale === 'en'
                   ? 'Manage your plan at amixos.com'
                   : 'Administra tu plan en amixos.com'}
@@ -3489,15 +3502,15 @@ export function AccountSection() {
           ) : (
             <Pressable
               onPress={openWebBilling}
-              className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 active:opacity-70"
+              className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-border-soft bg-surface active:opacity-70"
             >
               <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-                <ExternalLink size={16} color="#4F46E5" />
+                <ExternalLink size={16} color={c.primary} />
               </View>
-              <Text className="flex-1 text-sm font-semibold text-gray-900">
+              <Text className="flex-1 text-sm font-semibold text-ink">
                 {locale === 'en' ? 'Manage on the web' : 'Administrar en la web'}
               </Text>
-              <ChevronRight size={18} color="#9CA3AF" />
+              <ChevronRight size={18} color={c.faint} />
             </Pressable>
           )}
         </View>
@@ -3506,9 +3519,9 @@ export function AccountSection() {
       <PricingModal visible={pricingOpen} onClose={() => setPricingOpen(false)} />
 
       {/* Password card */}
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<Lock size={18} color="#4F46E5" />}
+          icon={<Lock size={18} color={c.primary} />}
           title={t.password.heading}
           subtitle={t.password.subtitle}
         />
@@ -3524,7 +3537,7 @@ export function AccountSection() {
               hitSlop={8}
               accessibilityLabel={showCurrentPw ? t.password.hidePassword : t.password.showPassword}
             >
-              {showCurrentPw ? <EyeOff size={18} color="#9CA3AF" /> : <Eye size={18} color="#9CA3AF" />}
+              {showCurrentPw ? <EyeOff size={18} color={c.faint} /> : <Eye size={18} color={c.faint} />}
             </Pressable>
           }
         />
@@ -3540,7 +3553,7 @@ export function AccountSection() {
               hitSlop={8}
               accessibilityLabel={showNewPw ? t.password.hidePassword : t.password.showPassword}
             >
-              {showNewPw ? <EyeOff size={18} color="#9CA3AF" /> : <Eye size={18} color="#9CA3AF" />}
+              {showNewPw ? <EyeOff size={18} color={c.faint} /> : <Eye size={18} color={c.faint} />}
             </Pressable>
           }
         />
@@ -3552,9 +3565,9 @@ export function AccountSection() {
 
       <Pressable
         onPress={confirmLogout}
-        className="flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-white border border-red-100 active:bg-red-50"
+        className="flex-row items-center justify-center gap-2 py-4 rounded-2xl bg-card border border-red-100 active:bg-red-500/10"
       >
-        <LogOut size={18} color="#EF4444" />
+        <LogOut size={18} color={c.danger} />
         <Text className="text-sm font-semibold text-red-600">
           {full.dashboard.sidebar.logout}
         </Text>
@@ -3563,16 +3576,16 @@ export function AccountSection() {
       {/* Sign-out confirmation — bottom sheet (one-handed) */}
       <RNModal visible={logoutOpen} transparent animationType="fade" onRequestClose={() => setLogoutOpen(false)}>
         <Pressable onPress={() => setLogoutOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pb-10 pt-4">
+          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pb-10 pt-4">
             <View className="items-center mb-4">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="items-center mb-5 gap-2">
-              <View className="w-12 h-12 rounded-2xl bg-red-50 items-center justify-center">
-                <LogOut size={22} color="#EF4444" />
+              <View className="w-12 h-12 rounded-2xl bg-red-500/10 items-center justify-center">
+                <LogOut size={22} color={c.danger} />
               </View>
-              <Text className="text-lg font-bold text-gray-900">{full.dashboard.sidebar.logout}</Text>
-              <Text className="text-sm text-gray-500 text-center">{t.account.logoutConfirm}</Text>
+              <Text className="text-lg font-bold text-ink">{full.dashboard.sidebar.logout}</Text>
+              <Text className="text-sm text-muted text-center">{t.account.logoutConfirm}</Text>
             </View>
             <View className="gap-2.5">
               <Pressable
@@ -3584,9 +3597,9 @@ export function AccountSection() {
               </Pressable>
               <Pressable
                 onPress={() => setLogoutOpen(false)}
-                className="py-3.5 rounded-2xl bg-gray-100 items-center active:bg-gray-200"
+                className="py-3.5 rounded-2xl bg-border-soft items-center active:bg-border"
               >
-                <Text className="text-base font-semibold text-gray-700">{full.common.buttons.cancel}</Text>
+                <Text className="text-base font-semibold text-ink">{full.common.buttons.cancel}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -3616,6 +3629,7 @@ interface GoogleStatus {
 
 function GoogleSyncSection() {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.google;
   // Per-business sync: every Google Sync action targets the currently active
   // business. Switching workspaces (via the business switcher) automatically
@@ -4004,24 +4018,24 @@ function GoogleSyncSection() {
   return (
     <View className="gap-3">
       <SectionHeader
-        icon={<Cloud size={18} color="#4F46E5" />}
+        icon={<Cloud size={18} color={c.primary} />}
         title={t.heading}
         subtitle={t.subtitle}
       />
 
       {business?.name ? (
-        <Text className="text-xs font-medium text-gray-500">
+        <Text className="text-xs font-medium text-muted">
           {t.scopeNote.replace('{{name}}', business.name)}
         </Text>
       ) : null}
 
       {statusError ? (
-        <View className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-100">
+        <View className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-100">
           <Text className="text-sm text-amber-700">{t.statusCheckError}</Text>
         </View>
       ) : null}
 
-      <View className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+      <View className="bg-card border border-border rounded-2xl px-4 py-3">
         <View className="flex-row items-center gap-2 mb-1">
           {status.connected && status.enabled !== false ? (
             <CheckCircle2 size={14} color={statusColor} />
@@ -4033,7 +4047,7 @@ function GoogleSyncSection() {
           </Text>
         </View>
         {status.lastSyncAt ? (
-          <Text className="text-xs text-gray-500">
+          <Text className="text-xs text-muted">
             {t.lastSyncedAt}: {new Date(status.lastSyncAt).toLocaleString()}
           </Text>
         ) : null}
@@ -4073,9 +4087,9 @@ function GoogleSyncSection() {
           <Pressable
             onPress={onDisconnect}
             disabled={busy}
-            className="py-3 rounded-2xl bg-white border border-gray-200 items-center active:bg-gray-50"
+            className="py-3 rounded-2xl bg-card border border-border items-center active:bg-surface"
           >
-            <Text className="text-sm font-semibold text-gray-700">{t.disconnectBtn}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.disconnectBtn}</Text>
           </Pressable>
         </>
       ) : null}
@@ -4084,21 +4098,21 @@ function GoogleSyncSection() {
           user stuff custom-field values into the Google biography so they
           show up on iPhone Contacts (which doesn't render userDefined fields). */}
       {status.connected && status.enabled !== false && templateLoaded ? (
-        <View className="gap-2 bg-white rounded-2xl border border-gray-100 p-4">
-          <Text className="text-sm font-semibold text-gray-900">{t.templateTitle}</Text>
-          <Text className="text-xs text-gray-500 leading-5">{t.templateHint}</Text>
+        <View className="gap-2 bg-card rounded-2xl border border-border-soft p-4">
+          <Text className="text-sm font-semibold text-ink">{t.templateTitle}</Text>
+          <Text className="text-xs text-muted leading-5">{t.templateHint}</Text>
           <TextInput
             value={notesTemplate}
             onChangeText={setNotesTemplate}
             multiline
             placeholder={t.templatePlaceholder}
-            placeholderTextColor="#9CA3AF"
-            className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 bg-white"
+            placeholderTextColor={c.faint}
+            className="border border-border rounded-xl px-3 py-2 text-sm text-ink bg-card"
             style={{ minHeight: 100, textAlignVertical: 'top' }}
           />
           {availableFields.length > 0 ? (
             <View className="flex-row flex-wrap gap-1.5 pt-1">
-              <Text className="text-xs text-gray-500 mr-1">{t.templateAvailable}:</Text>
+              <Text className="text-xs text-muted mr-1">{t.templateAvailable}:</Text>
               {availableFields.map(label => (
                 <Pressable
                   key={label}
@@ -4112,9 +4126,9 @@ function GoogleSyncSection() {
                       : `${label}: {{${label}}}`;
                     return `${prev}${sep}${insertion}`;
                   })}
-                  className="px-2 py-0.5 rounded-md bg-gray-100 active:bg-gray-200"
+                  className="px-2 py-0.5 rounded-md bg-border-soft active:bg-border"
                 >
-                  <Text className="text-xs text-gray-700">{`{{${label}}}`}</Text>
+                  <Text className="text-xs text-ink">{`{{${label}}}`}</Text>
                 </Pressable>
               ))}
             </View>
@@ -4131,9 +4145,9 @@ function GoogleSyncSection() {
           </Pressable>
           <Pressable
             onPress={onReapplyTemplate}
-            className="py-2.5 rounded-xl items-center border border-gray-200 bg-white active:bg-gray-50"
+            className="py-2.5 rounded-xl items-center border border-border bg-card active:bg-surface"
           >
-            <Text className="text-sm font-semibold text-gray-700">{t.templateReapplyBtn}</Text>
+            <Text className="text-sm font-semibold text-ink">{t.templateReapplyBtn}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -4156,6 +4170,7 @@ export function InvoiceThemeSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings;
 
   const [bundle, setBundle] = useState<InvoiceThemeBundle>(() => normalizeBundle(business?.invoice_template));
@@ -4222,9 +4237,9 @@ export function InvoiceThemeSection() {
 
   return (
     <View className="gap-5">
-      <View className="bg-white rounded-2xl border border-gray-100 p-5 gap-4">
+      <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
         <SectionHeader
-          icon={<FileText size={18} color="#4F46E5" />}
+          icon={<FileText size={18} color={c.primary} />}
           title={t.invoices.design.title}
           subtitle={t.invoices.design.subtitle}
         />

@@ -50,18 +50,18 @@ export function DateRangeSheet({
     <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]} className="justify-end">
       <Pressable onPress={onClose} style={StyleSheet.absoluteFill} className="bg-black/40" />
       <View
-        className="bg-white rounded-t-3xl px-5 pt-3"
+        className="bg-card rounded-t-3xl px-5 pt-3"
         // Clear the floating dock so the buttons stay tappable.
         style={{ paddingBottom: insets.bottom + 96 }}
       >
         <View className="items-center mb-3">
-          <View className="w-10 h-1 rounded-full bg-gray-200" />
+          <View className="w-10 h-1 rounded-full bg-border" />
         </View>
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-gray-900">{title}</Text>
+          <Text className="text-lg font-bold text-ink">{title}</Text>
           {/* Clear sits where Done used to be; disabled when nothing is set. */}
           <Pressable onPress={() => onChange({ from: null, to: null })} disabled={!active} hitSlop={8}>
-            <Text className={`text-sm font-semibold ${active ? 'text-red-500' : 'text-gray-300'}`}>
+            <Text className={`text-sm font-semibold ${active ? 'text-red-500' : 'text-faint'}`}>
               {clearLabel}
             </Text>
           </Pressable>
@@ -77,9 +77,9 @@ export function DateRangeSheet({
                 <Pressable
                   key={p.label}
                   onPress={() => onChange({ from: p.from, to: p.to })}
-                  className={`px-3.5 py-1.5 rounded-full border ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                  className={`px-3.5 py-1.5 rounded-full border ${selected ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                 >
-                  <Text className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-gray-600'}`}>{p.label}</Text>
+                  <Text className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-muted'}`}>{p.label}</Text>
                 </Pressable>
               );
             })}

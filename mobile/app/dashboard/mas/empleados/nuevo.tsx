@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, DollarSign } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { setEmployeePrimaryLocation } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -107,6 +108,7 @@ export default function NuevoEmpleadoRoute() {
   const supabase = createSupabaseClient();
   const { business, user, locations, activeLocationId } = useApp();
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.employees;
   const tc = full.common;
 
@@ -223,11 +225,11 @@ export default function NuevoEmpleadoRoute() {
       case 'pay_rate':
         return (
           <View key={key}>
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
+            <Text className="text-sm font-semibold text-ink mb-2">
               {rLabel('pay_rate', t.modal.payRateLabel.replace('{{unit}}', PAY_UNIT[form.pay_type] ?? PAY_UNIT.hourly))}
             </Text>
-            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-white px-4">
-              <DollarSign size={16} color="#9CA3AF" />
+            <View className="flex-row items-center rounded-2xl border border-border bg-card px-4">
+              <DollarSign size={16} color={c.faint} />
               <Input
                 containerClassName="flex-1 ml-2"
                 placeholder="0.00"
@@ -243,33 +245,33 @@ export default function NuevoEmpleadoRoute() {
                   onPress={() => setForm(f => ({ ...f, overtime_eligible: !f.overtime_eligible }))}
                   className="flex-row items-center justify-between"
                 >
-                  <Text className="text-sm font-medium text-gray-700">{t.modal.overtimeLabel}</Text>
-                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-gray-200'}`}>
-                    <View className={`w-5 h-5 rounded-full bg-white ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
+                  <Text className="text-sm font-medium text-ink">{t.modal.overtimeLabel}</Text>
+                  <View className={`w-11 h-6 rounded-full px-0.5 justify-center ${form.overtime_eligible ? 'bg-primary' : 'bg-border'}`}>
+                    <View className={`w-5 h-5 rounded-full bg-card ${form.overtime_eligible ? 'self-end' : 'self-start'}`} />
                   </View>
                 </Pressable>
                 {form.overtime_eligible ? (
                   <View className="flex-row gap-3">
                     <View className="flex-1">
-                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeThresholdLabel}</Text>
+                      <Text className="text-xs text-muted mb-1">{t.modal.overtimeThresholdLabel}</Text>
                       <TextInput
                         value={form.overtime_threshold}
                         onChangeText={v => setForm(f => ({ ...f, overtime_threshold: v.replace(/[^0-9.]/g, '') }))}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-xs text-gray-500 mb-1">{t.modal.overtimeMultiplierLabel}</Text>
+                      <Text className="text-xs text-muted mb-1">{t.modal.overtimeMultiplierLabel}</Text>
                       <TextInput
                         value={form.overtime_multiplier}
                         onChangeText={v => setForm(f => ({ ...f, overtime_multiplier: v.replace(/[^0-9.]/g, '') }))}
                         placeholder={t.modal.overtimeDefaultPlaceholder}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                       />
                     </View>
                   </View>
@@ -333,8 +335,8 @@ export default function NuevoEmpleadoRoute() {
     if (visibleKeys.length === 0) return null;
     return (
       <View key={section}>
-        <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{sectionLabel[section]}</Text>
-        <View className="bg-white rounded-2xl border border-gray-100 p-4 gap-4">
+        <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-3 px-1">{sectionLabel[section]}</Text>
+        <View className="bg-card rounded-2xl border border-border-soft p-4 gap-4">
           {visibleKeys.map(k => {
             if (k.startsWith('custom:')) {
               const tpl = templates.find(tp => `custom:${tp.id}` === k);
@@ -470,12 +472,12 @@ export default function NuevoEmpleadoRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-2 flex-1">
-          <Text className="text-lg font-bold text-gray-900">{t.modal.addTitle}</Text>
+          <Text className="text-lg font-bold text-ink">{t.modal.addTitle}</Text>
         </View>
       </View>
 
@@ -492,8 +494,8 @@ export default function NuevoEmpleadoRoute() {
           {/* Home branch — multi-location businesses only. */}
           {locations.length >= 2 ? (
             <View>
-              <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
-              <View className="bg-white rounded-2xl border border-gray-100 p-4">
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-3 px-1">{locale === 'en' ? 'Home location' : 'Ubicación principal'}</Text>
+              <View className="bg-card rounded-2xl border border-border-soft p-4">
                 <Select
                   value={homeLocation}
                   onValueChange={setHomeLocation}
@@ -521,20 +523,21 @@ function CustomFieldInput({
   template, value, onChange,
 }: { template: FieldTemplate; value: string; onChange: (v: string) => void }) {
   const tc = useLang().t.common;
+  const c = useThemeColors();
   const label = template.required ? `${template.field_label} *` : template.field_label;
   const cfg = parseFieldConfig(template.field_config);
   if (template.field_type === 'note') {
     // Long free text — multiline, grows with content.
     return (
       <View>
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <TextInput
           value={value}
           onChangeText={onChange}
           multiline
           numberOfLines={4}
-          placeholderTextColor="#9CA3AF"
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 min-h-[90px]"
+          placeholderTextColor={c.faint}
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
           style={{ textAlignVertical: 'top' }}
         />
       </View>
@@ -550,15 +553,15 @@ function CustomFieldInput({
     const noActive = value === 'false';
     return (
       <View>
-        <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+        <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
         <View className="flex-row gap-2">
           <Pressable onPress={() => onChange(yesActive ? '' : 'true')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.yes}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${yesActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${yesActive ? 'text-white' : 'text-ink'}`}>{tc.states.yes}</Text>
           </Pressable>
           <Pressable onPress={() => onChange(noActive ? '' : 'false')}
-            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-gray-200 bg-white'}`}>
-            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-gray-700'}`}>{tc.states.no}</Text>
+            className={`flex-1 rounded-2xl border px-4 py-3 items-center ${noActive ? 'border-primary bg-primary' : 'border-border bg-card'}`}>
+            <Text className={`text-sm font-semibold ${noActive ? 'text-white' : 'text-ink'}`}>{tc.states.no}</Text>
           </Pressable>
         </View>
       </View>
@@ -571,7 +574,7 @@ function CustomFieldInput({
       const selected = splitMultiValue(value);
       return (
         <View>
-          <Text className="text-sm font-semibold text-gray-700 mb-2">{label}</Text>
+          <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
           <View className="flex-row flex-wrap gap-2">
             {template.field_options.map((o) => {
               const on = selected.includes(o);
@@ -579,9 +582,9 @@ function CustomFieldInput({
                 <Pressable
                   key={o}
                   onPress={() => onChange(toggleMultiOption(value, o))}
-                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-gray-200 bg-white'}`}
+                  className={`rounded-full border px-4 py-2 ${on ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                 >
-                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-gray-600'}`}>{o}</Text>
+                  <Text className={`text-sm font-medium ${on ? 'text-primary' : 'text-muted'}`}>{o}</Text>
                 </Pressable>
               );
             })}

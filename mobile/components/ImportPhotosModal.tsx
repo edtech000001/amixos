@@ -6,6 +6,7 @@ import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import {
   JOB_PHOTOS_BUCKET,
   MAX_PHOTOS_PER_JOB,
@@ -41,6 +42,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.importHub.photos;
 
   const [pendingJobs, setPendingJobs] = useState<PendingPhotoJob[]>([]);
@@ -234,30 +236,30 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   return (
     <RNModal visible={open} transparent animationType="fade" onRequestClose={phase === 'uploading' ? () => {} : onClose}>
       <Pressable onPress={phase === 'uploading' ? undefined : onClose} className="flex-1 bg-black/40 justify-end">
-        <Pressable className="bg-white rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onPress={() => {}}>
-          <Text className="text-lg font-bold text-gray-900 mb-2">{t.title}</Text>
+        <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onPress={() => {}}>
+          <Text className="text-lg font-bold text-ink mb-2">{t.title}</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text className="text-xs text-gray-500 mb-4 leading-5">{t.intro}</Text>
+            <Text className="text-xs text-muted mb-4 leading-5">{t.intro}</Text>
 
             {phase === 'pick' ? (
               loading ? (
-                <Text className="text-sm text-gray-400 py-6 text-center">…</Text>
+                <Text className="text-sm text-faint py-6 text-center">…</Text>
               ) : pendingNameCount === 0 ? (
-                <View className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                <View className="bg-amber-500/10 border border-amber-100 rounded-xl px-4 py-3">
                   <Text className="text-sm text-amber-800">{t.noPending}</Text>
                 </View>
               ) : (
                 <>
-                  <Text className="text-sm font-medium text-gray-700 mb-3">
+                  <Text className="text-sm font-medium text-ink mb-3">
                     {t.pendingSummary
                       .replace('{{names}}', String(pendingNameCount))
                       .replace('{{jobs}}', String(pendingJobs.filter(j => j.names.length > 0).length))}
                   </Text>
                   <Pressable
                     onPress={pickPhotos}
-                    className="items-center gap-2 py-10 rounded-2xl border-2 border-dashed border-gray-200 active:bg-gray-50"
+                    className="items-center gap-2 py-10 rounded-2xl border-2 border-dashed border-border active:bg-surface"
                   >
-                    <ImagePlus size={28} color="#9CA3AF" />
+                    <ImagePlus size={28} color={c.faint} />
                     <Text className="text-sm font-semibold text-primary">{t.chooseBtn}</Text>
                   </Pressable>
                 </>
@@ -267,8 +269,8 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
             {phase !== 'pick' ? (
               <View className="gap-4">
                 <View className="flex-row items-center gap-2">
-                  <CheckCircle2 size={16} color="#10B981" />
-                  <Text className="text-sm font-medium text-gray-800 flex-1">
+                  <CheckCircle2 size={16} color={c.success} />
+                  <Text className="text-sm font-medium text-ink flex-1">
                     {t.matchedSummary
                       .replace('{{files}}', String(matched.length))
                       .replace('{{jobs}}', String(matchedJobIds.length))}
@@ -276,13 +278,13 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                 </View>
 
                 {skipped.length > 0 ? (
-                  <Text className="text-xs text-gray-500">{t.alreadyMsg.replace('{{count}}', String(skipped.length))}</Text>
+                  <Text className="text-xs text-muted">{t.alreadyMsg.replace('{{count}}', String(skipped.length))}</Text>
                 ) : null}
 
                 {unmatched.length > 0 ? (
-                  <View className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                  <View className="bg-amber-500/10 border border-amber-100 rounded-xl px-4 py-3">
                     <View className="flex-row items-center gap-1.5">
-                      <AlertTriangle size={14} color="#B45309" />
+                      <AlertTriangle size={14} color={c.warning} />
                       <Text className="text-sm font-semibold text-amber-800">
                         {t.unmatchedTitle.replace('{{count}}', String(unmatched.length))}
                       </Text>
@@ -303,10 +305,10 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
 
                 {phase === 'uploading' ? (
                   <View>
-                    <Text className="text-sm text-gray-600 mb-2">
+                    <Text className="text-sm text-muted mb-2">
                       {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))}
                     </Text>
-                    <View className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <View className="h-2 rounded-full bg-border-soft overflow-hidden">
                       <View
                         className="h-full bg-primary"
                         style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
@@ -344,9 +346,9 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                     </Pressable>
                     <Pressable
                       onPress={() => { setPicked([]); setPhase('pick'); }}
-                      className="py-3.5 rounded-2xl border border-gray-200 items-center active:bg-gray-50"
+                      className="py-3.5 rounded-2xl border border-border items-center active:bg-surface"
                     >
-                      <Text className="text-sm font-semibold text-gray-600">{t.clearBtn}</Text>
+                      <Text className="text-sm font-semibold text-muted">{t.clearBtn}</Text>
                     </Pressable>
                   </View>
                 ) : null}
@@ -356,9 +358,9 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                     {failed.length > 0 ? (
                       <Pressable
                         onPress={() => void upload(true)}
-                        className="py-3.5 rounded-2xl border border-gray-200 items-center active:bg-gray-50"
+                        className="py-3.5 rounded-2xl border border-border items-center active:bg-surface"
                       >
-                        <Text className="text-sm font-semibold text-gray-600">{t.retryBtn}</Text>
+                        <Text className="text-sm font-semibold text-muted">{t.retryBtn}</Text>
                       </Pressable>
                     ) : null}
                     <Pressable onPress={onClose} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">

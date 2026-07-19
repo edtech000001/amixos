@@ -105,7 +105,7 @@ export default function NominaHistorialScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <PayrollHistoryScreen
         loading={loading}
         entries={entries}

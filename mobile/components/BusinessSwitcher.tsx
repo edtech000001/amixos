@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/lib/auth/store';
 import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 
 /**
  * Tap the active business name to open a bottom sheet listing every business
@@ -25,6 +26,7 @@ export function BusinessSwitcher() {
   // built-in defaults, granting access the owner may have restricted.
   const isOnline = useNetworkStore((s) => s.isOnline);
   const { t: full } = useLang();
+  const c = useThemeColors();
   const tw = full.dashboard.workspaces;
   const router = useRouter();
 
@@ -37,7 +39,7 @@ export function BusinessSwitcher() {
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        className="self-start flex-row items-center gap-2 border border-gray-200 bg-white rounded-2xl active:bg-gray-50"
+        className="self-start flex-row items-center gap-2 border border-border bg-card rounded-2xl active:bg-surface"
         accessibilityLabel={tw.switcherLabel}
         style={{
           paddingLeft: 20,
@@ -52,12 +54,12 @@ export function BusinessSwitcher() {
         }}
       >
         <View className="w-5 h-5 rounded-md bg-primary/10 items-center justify-center">
-          <Building2 size={12} color="#4F46E5" />
+          <Building2 size={12} color={c.primary} />
         </View>
-        <Text className="flex-1 text-sm font-semibold text-gray-900">
+        <Text className="flex-1 text-sm font-semibold text-ink">
           {active.name}
         </Text>
-        <ChevronDown size={14} color="#4F46E5" />
+        <ChevronDown size={14} color={c.primary} />
       </Pressable>
 
       <RNModal
@@ -72,23 +74,23 @@ export function BusinessSwitcher() {
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            className="bg-white rounded-t-3xl px-4 pb-8 pt-4"
+            className="bg-card rounded-t-3xl px-4 pb-8 pt-4"
           >
             <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-gray-200 rounded-full" />
+              <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <Text className="text-xs font-semibold text-gray-400 uppercase px-3 mb-2">
+            <Text className="text-xs font-semibold text-faint uppercase px-3 mb-2">
               {tw.switcherLabel}
             </Text>
             {!isOnline ? (
-              <View className="flex-row items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-100">
-                <CloudOff size={14} color="#92400E" />
+              <View className="flex-row items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-100">
+                <CloudOff size={14} color={c.warning} />
                 <Text className="flex-1 text-xs font-medium text-amber-700">
                   Sin conexión · conéctate para cambiar de negocio
                 </Text>
               </View>
             ) : null}
-            <View className="bg-gray-50 rounded-2xl overflow-hidden">
+            <View className="bg-surface rounded-2xl overflow-hidden">
               {businesses.map((b, i) => {
                 const isActive = b.id === activeId;
                 // Offline: only the current business stays selectable (no switch).
@@ -108,24 +110,24 @@ export function BusinessSwitcher() {
                       if (switching) router.replace('/dashboard');
                     }}
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
-                      i < businesses.length - 1 ? 'border-b border-gray-100' : ''
-                    } ${locked ? 'opacity-40' : 'active:bg-gray-100'}`}
+                      i < businesses.length - 1 ? 'border-b border-border-soft' : ''
+                    } ${locked ? 'opacity-40' : 'active:bg-border-soft'}`}
                   >
                     <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                      <Building2 size={16} color="#4F46E5" />
+                      <Building2 size={16} color={c.primary} />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900">
+                      <Text className="text-sm font-semibold text-ink">
                         {b.name}
                       </Text>
                       {b.city ? (
-                        <Text className="text-xs text-gray-500">
+                        <Text className="text-xs text-muted">
                           {b.city}
                           {b.state ? `, ${b.state}` : ''}
                         </Text>
                       ) : null}
                     </View>
-                    {isActive ? <Check size={18} color="#4F46E5" /> : null}
+                    {isActive ? <Check size={18} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
@@ -137,12 +139,14 @@ export function BusinessSwitcher() {
             <Pressable
               onPress={() => {
                 setOpen(false);
-                router.push('/onboarding');
+                // adding=1 → onboarding shows a "Cancel" escape (the user
+                // already has a business and can back out).
+                router.push('/onboarding?adding=1');
               }}
-              className="flex-row items-center gap-3 mt-2 pt-3 px-4 pb-1 border-t border-gray-100 active:opacity-70"
+              className="flex-row items-center gap-3 mt-2 pt-3 px-4 pb-1 border-t border-border-soft active:opacity-70"
             >
               <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                <Plus size={16} color="#4F46E5" />
+                <Plus size={16} color={c.primary} />
               </View>
               <Text className="flex-1 text-sm font-semibold text-primary">
                 {tw.createBusiness}

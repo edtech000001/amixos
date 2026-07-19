@@ -67,7 +67,7 @@ export function AutocompleteInput({
       />
       {showDropdown ? (
         <View
-          className="mt-1 rounded-xl border border-gray-200 bg-white overflow-hidden"
+          className="mt-1 rounded-xl border border-border bg-card overflow-hidden"
           style={{
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
@@ -88,11 +88,11 @@ export function AutocompleteInput({
                   }
                   setFocused(false);
                 }}
-                className={`px-4 py-2.5 active:bg-gray-50 ${
-                  i < filtered.length - 1 ? 'border-b border-gray-50' : ''
+                className={`px-4 py-2.5 active:bg-surface ${
+                  i < filtered.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
               >
-                <Text className="text-sm text-gray-900">{s}</Text>
+                <Text className="text-sm text-ink">{s}</Text>
               </Pressable>
             ))}
           </ScrollView>

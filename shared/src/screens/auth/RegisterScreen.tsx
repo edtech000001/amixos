@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, Lock, User } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { AuthBackground } from '../../ui/AuthBackground';
@@ -31,6 +32,7 @@ export function RegisterScreen({
 }: RegisterScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
+  const c = useThemeColors();
 
   const registerSchema = useMemo(() => z.object({
     firstName: z.string().min(1, t.register.errors.firstNameRequired),
@@ -80,7 +82,7 @@ export function RegisterScreen({
         <View className="w-full max-w-md mx-auto">
           <View className="items-center mb-8">
             <View
-              className="w-16 h-16 rounded-2xl bg-white items-center justify-center mb-4"
+              className="w-16 h-16 rounded-2xl bg-card items-center justify-center mb-4"
               style={{
                 shadowColor: '#4F46E5',
                 shadowOffset: { width: 0, height: 8 },
@@ -91,10 +93,10 @@ export function RegisterScreen({
             >
               <Text className="text-3xl font-extrabold text-primary">a</Text>
             </View>
-            <Text className="text-3xl font-extrabold text-gray-900 tracking-tight">
+            <Text className="text-3xl font-extrabold text-ink tracking-tight">
               {t.register.heading}
             </Text>
-            <Text className="text-sm text-gray-500 mt-2 text-center">
+            <Text className="text-sm text-muted mt-2 text-center">
               {t.register.sub}
             </Text>
           </View>
@@ -109,7 +111,7 @@ export function RegisterScreen({
                       <Input
                         label={t.register.firstName}
                         placeholder={t.register.firstNamePlaceholder}
-                        leftIcon={<User size={18} color="#9CA3AF" />}
+                        leftIcon={<User size={18} color={c.faint} />}
                         error={errors.firstName?.message}
                         value={value ?? ''}
                         onChangeText={onChange}
@@ -146,7 +148,7 @@ export function RegisterScreen({
                     autoCapitalize="none"
                     autoComplete="email"
                     placeholder={t.register.emailPlaceholder}
-                    leftIcon={<Mail size={18} color="#9CA3AF" />}
+                    leftIcon={<Mail size={18} color={c.faint} />}
                     error={errors.email?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -163,7 +165,7 @@ export function RegisterScreen({
                     label={t.register.password}
                     secureTextEntry
                     placeholder={t.register.passwordPlaceholder}
-                    leftIcon={<Lock size={18} color="#9CA3AF" />}
+                    leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.password?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -180,7 +182,7 @@ export function RegisterScreen({
                     label={t.register.confirmPassword}
                     secureTextEntry
                     placeholder={t.register.confirmPasswordPlaceholder}
-                    leftIcon={<Lock size={18} color="#9CA3AF" />}
+                    leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.confirmPassword?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -190,12 +192,12 @@ export function RegisterScreen({
               />
 
               {error ? (
-                <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3">
                   <Text className="text-red-600 text-sm">{error}</Text>
                 </View>
               ) : null}
 
-              <View className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+              <View className="bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3">
                 <Text className="text-blue-600 text-xs">{t.register.verificationNote}</Text>
               </View>
 
@@ -203,7 +205,7 @@ export function RegisterScreen({
                 {t.register.submit}
               </Button>
 
-              <Text className="text-xs text-center text-gray-400">
+              <Text className="text-xs text-center text-faint">
                 {t.register.termsBefore}{' '}
                 <Text onPress={onTermsPress} className="text-primary">{t.register.terms}</Text>
                 {' '}{t.register.termsAnd}{' '}
@@ -213,9 +215,9 @@ export function RegisterScreen({
               {oauthSlot ? (
                 <View className="mt-2">
                   <View className="flex-row items-center gap-3 mb-5">
-                    <View className="flex-1 h-px bg-gray-100" />
-                    <Text className="text-xs text-gray-400">{t.register.dividerEmail}</Text>
-                    <View className="flex-1 h-px bg-gray-100" />
+                    <View className="flex-1 h-px bg-border-soft" />
+                    <Text className="text-xs text-faint">{t.register.dividerEmail}</Text>
+                    <View className="flex-1 h-px bg-border-soft" />
                   </View>
                   {oauthSlot}
                 </View>
@@ -223,7 +225,7 @@ export function RegisterScreen({
             </View>
 
           <View className="flex-row justify-center mt-8">
-            <Text className="text-sm text-gray-500">{t.register.alreadyAccount} </Text>
+            <Text className="text-sm text-muted">{t.register.alreadyAccount} </Text>
             <Pressable onPress={onLoginPress}>
               <Text className="text-sm text-primary font-medium">{t.register.loginHere}</Text>
             </Pressable>

@@ -30,15 +30,15 @@ export default function LoadErrorRoute() {
         <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-5">
           <CloudOff size={28} color="#4F46E5" />
         </View>
-        <Text className="text-xl font-bold text-gray-900 text-center">{t.title}</Text>
-        <Text className="text-sm text-gray-500 text-center mt-2 leading-5">{t.body}</Text>
+        <Text className="text-xl font-bold text-ink text-center">{t.title}</Text>
+        <Text className="text-sm text-muted text-center mt-2 leading-5">{t.body}</Text>
 
         <View className="w-full mt-8 gap-3">
           <Button onPress={onRetry} loading={retrying} fullWidth>
             <Text className="text-white font-semibold">{t.retry}</Text>
           </Button>
           <Button variant="secondary" onPress={logout} fullWidth>
-            <Text className="text-gray-700 font-semibold">{t.signOut}</Text>
+            <Text className="text-ink font-semibold">{t.signOut}</Text>
           </Button>
         </View>
       </View>

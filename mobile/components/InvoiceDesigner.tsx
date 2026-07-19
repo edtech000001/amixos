@@ -7,6 +7,7 @@ import { View, Text, Pressable, TextInput, Modal, FlatList, ScrollView, PanRespo
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { ChevronUp, ChevronDown, ChevronRight, X, Check } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
 import type { InvoiceLang } from '@amixos/shared';
 import {
@@ -146,20 +147,21 @@ function fontFamilyFor(f: InvoiceFont): string | undefined {
 
 // Font picker as a dropdown (more options than fit in a segmented control).
 function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f: InvoiceFont) => void; t: DesignT }) {
+  const c = useThemeColors();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-        <Text className="text-sm text-gray-700" style={{ fontFamily: fontFamilyFor(value) }}>{t.fonts[value]}</Text>
-        <ChevronDown size={18} color="#9CA3AF" />
+      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
+        <Text className="text-sm text-ink" style={{ fontFamily: fontFamilyFor(value) }}>{t.fonts[value]}</Text>
+        <ChevronDown size={18} color={c.faint} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 justify-center px-8">
-          <Pressable onPress={() => {}} className="bg-white rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
+          <Pressable onPress={() => {}} className="bg-card rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {ALL_FONTS.map(f => (
-                <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-gray-100 ${value === f ? 'bg-primary/10' : ''}`}>
-                  <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-gray-700'}`} style={{ fontFamily: fontFamilyFor(f) }}>{t.fonts[f]}</Text>
+                <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-border-soft ${value === f ? 'bg-primary/10' : ''}`}>
+                  <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-ink'}`} style={{ fontFamily: fontFamilyFor(f) }}>{t.fonts[f]}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -191,7 +193,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (hex: strin
       <Spectrum gid="cp-lum" stops={[hslToHex(h, sat, 24), hslToHex(h, sat, 52), hslToHex(h, sat, 82)]} value={(lt - 22) / 58} onChange={v => onChange(hslToHex(h, sat, Math.round(22 + v * 58)))} />
       <View className="flex-row items-center gap-2">
         <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: value, borderWidth: 1, borderColor: '#E5E7EB' }} />
-        <Text className="text-xs text-gray-400">{value.toUpperCase()}</Text>
+        <Text className="text-xs text-faint">{value.toUpperCase()}</Text>
       </View>
     </View>
   );
@@ -253,6 +255,7 @@ function ThemeCarousel({ pageW, currentId, onSelect, value, branding, sample, t 
 }
 
 function ThemePickerModal(props: ThemePickerProps) {
+  const c = useThemeColors();
   const { width: winW } = useWindowDimensions();
   const [w, setW] = useState(0);
   const pageW = w > 0 ? w : winW;
@@ -261,7 +264,7 @@ function ThemePickerModal(props: ThemePickerProps) {
       <View style={{ flex: 1, backgroundColor: '#F9FAFB' }} onLayout={e => setW(e.nativeEvent.layout.width)}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: '#fff' }}>
           <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>{props.t.themesTitle}</Text>
-          <Pressable onPress={props.onClose} hitSlop={8}><X size={22} color="#6B7280" /></Pressable>
+          <Pressable onPress={props.onClose} hitSlop={8}><X size={22} color={c.muted} /></Pressable>
         </View>
         {props.visible && pageW > 0 ? <ThemeCarousel {...props} pageW={pageW} /> : null}
       </View>
@@ -275,14 +278,14 @@ function Seg<T extends string>({ value, options, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <View className="flex-row rounded-xl border border-gray-200 overflow-hidden self-start">
+    <View className="flex-row rounded-xl border border-border overflow-hidden self-start">
       {options.map(o => (
         <Pressable
           key={o.value}
           onPress={() => onChange(o.value)}
-          className={`px-3 py-2 ${value === o.value ? 'bg-primary' : 'bg-white'}`}
+          className={`px-3 py-2 ${value === o.value ? 'bg-primary' : 'bg-card'}`}
         >
-          <Text className={`text-sm ${value === o.value ? 'text-white' : 'text-gray-600'}`}>{o.label}</Text>
+          <Text className={`text-sm ${value === o.value ? 'text-white' : 'text-muted'}`}>{o.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -292,7 +295,7 @@ function Seg<T extends string>({ value, options, onChange }: {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View className="gap-2">
-      <Text className="text-sm font-medium text-gray-700">{label}</Text>
+      <Text className="text-sm font-medium text-ink">{label}</Text>
       {children}
     </View>
   );
@@ -312,6 +315,7 @@ export function InvoiceDesigner({
   onSwitchMode?: (m: InvoiceLayoutMode) => void;
 }) {
   const { t: full } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.settings.invoices.design;
   const [themeOpen, setThemeOpen] = useState(false);
   const [secOpen, setSecOpen] = useState(false);
@@ -329,8 +333,8 @@ export function InvoiceDesigner({
     <View className="gap-5">
       {/* Live preview up top so changes are visible immediately */}
       <Field label={t.preview}>
-        <View className="rounded-xl border border-gray-200 bg-gray-50 p-2">
-          <View className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+        <View className="rounded-xl border border-border bg-surface p-2">
+          <View className="bg-card rounded-lg border border-border-soft overflow-hidden">
             <ScaledPreview><InvoiceDocument vm={vm} /></ScaledPreview>
           </View>
         </View>
@@ -346,7 +350,7 @@ export function InvoiceDesigner({
             { value: 'en', label: 'English' },
           ]}
         />
-        <Text className="text-xs text-gray-400">{t.defaultLanguageHint}</Text>
+        <Text className="text-xs text-faint">{t.defaultLanguageHint}</Text>
       </Field>
 
       {/* Layout mode */}
@@ -359,7 +363,7 @@ export function InvoiceDesigner({
             { value: 'freeform', label: t.layoutModes.freeform },
           ]}
         />
-        {freeform ? <Text className="text-xs text-gray-400">{t.builderMobileHint}</Text> : null}
+        {freeform ? <Text className="text-xs text-faint">{t.builderMobileHint}</Text> : null}
       </Field>
 
       {/* Template — compact button that opens the swipeable theme browser.
@@ -369,13 +373,13 @@ export function InvoiceDesigner({
           <Field label={t.preset}>
             <Pressable
               onPress={() => setThemeOpen(true)}
-              className="flex-row items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5"
+              className="flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
             >
               <View className="flex-1">
-                <Text className="text-sm font-semibold text-gray-900">{t.presets[value.presetId]}</Text>
+                <Text className="text-sm font-semibold text-ink">{t.presets[value.presetId]}</Text>
                 <Text className="text-xs text-primary mt-1">{t.browseThemes}</Text>
               </View>
-              <ChevronRight size={20} color="#9CA3AF" />
+              <ChevronRight size={20} color={c.faint} />
             </Pressable>
           </Field>
 
@@ -416,10 +420,10 @@ export function InvoiceDesigner({
       <Field label={t.showLogo}>
         <View className="gap-2">
           <Pressable onPress={() => onChange(setShowLogo(value, !value.showLogo))} className="flex-row items-center gap-2">
-            <View className={`w-5 h-5 rounded border items-center justify-center ${value.showLogo ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+            <View className={`w-5 h-5 rounded border items-center justify-center ${value.showLogo ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
               {value.showLogo ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
             </View>
-            <Text className="text-sm text-gray-600">{t.showLogo}</Text>
+            <Text className="text-sm text-muted">{t.showLogo}</Text>
           </Pressable>
           {value.showLogo ? (
             <Seg<InvoiceLogoSize>
@@ -440,10 +444,10 @@ export function InvoiceDesigner({
         <View className="flex-row gap-4">
           {(['qty', 'rate', 'total'] as (keyof InvoiceColumns)[]).map(col => (
             <Pressable key={col} onPress={() => onChange(setColumn(value, col, !value.columns[col]))} className="flex-row items-center gap-2">
-              <View className={`w-5 h-5 rounded border items-center justify-center ${value.columns[col] ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+              <View className={`w-5 h-5 rounded border items-center justify-center ${value.columns[col] ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
                 {value.columns[col] ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
               </View>
-              <Text className="text-sm text-gray-600">{t.columnNames[col]}</Text>
+              <Text className="text-sm text-muted">{t.columnNames[col]}</Text>
             </Pressable>
           ))}
         </View>
@@ -452,24 +456,24 @@ export function InvoiceDesigner({
       {/* Sections — collapsible to keep the editor compact */}
       <View className="gap-2">
         <Pressable onPress={() => setSecOpen(o => !o)} className="flex-row items-center justify-between">
-          <Text className="text-sm font-medium text-gray-700">{t.sections}</Text>
-          {secOpen ? <ChevronUp size={18} color="#6B7280" /> : <ChevronDown size={18} color="#6B7280" />}
+          <Text className="text-sm font-medium text-ink">{t.sections}</Text>
+          {secOpen ? <ChevronUp size={18} color={c.muted} /> : <ChevronDown size={18} color={c.muted} />}
         </Pressable>
         {secOpen ? (
           <View className="gap-1.5">
             {value.sections.map((s, i) => (
-              <View key={s.id} className="flex-row items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5">
-                <Pressable onPress={() => onChange(toggleSection(value, s.id))} className={`w-5 h-5 rounded border items-center justify-center ${s.show ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+              <View key={s.id} className="flex-row items-center gap-2 rounded-lg border border-border-soft px-3 py-1.5">
+                <Pressable onPress={() => onChange(toggleSection(value, s.id))} className={`w-5 h-5 rounded border items-center justify-center ${s.show ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
                   {s.show ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
                 </Pressable>
-                <Text className="text-sm text-gray-700 flex-1">{t.sectionNames[s.id]}</Text>
+                <Text className="text-sm text-ink flex-1">{t.sectionNames[s.id]}</Text>
                 {!freeform ? (
                   <>
                     <Pressable disabled={i === 0} onPress={() => onChange(reorderSections(value, i, i - 1))} className="p-1">
-                      <ChevronUp size={16} color={i === 0 ? '#D1D5DB' : '#6B7280'} />
+                      <ChevronUp size={16} color={i === 0 ? c.faint : c.muted} />
                     </Pressable>
                     <Pressable disabled={i === value.sections.length - 1} onPress={() => onChange(reorderSections(value, i, i + 1))} className="p-1">
-                      <ChevronDown size={16} color={i === value.sections.length - 1 ? '#D1D5DB' : '#6B7280'} />
+                      <ChevronDown size={16} color={i === value.sections.length - 1 ? c.faint : c.muted} />
                     </Pressable>
                   </>
                 ) : null}
@@ -488,12 +492,12 @@ export function InvoiceDesigner({
             ['footer', t.footerField],
           ] as [keyof InvoiceTextBlocks, string][]).map(([key, label]) => (
             <View key={key} className="gap-1">
-              <Text className="text-xs text-gray-500">{label}</Text>
+              <Text className="text-xs text-muted">{label}</Text>
               <TextInput
                 multiline
                 value={value.text[key] ?? ''}
                 onChangeText={txt => onChange(setText(value, key, txt))}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
                 style={{ minHeight: 52, textAlignVertical: 'top' }}
               />
             </View>

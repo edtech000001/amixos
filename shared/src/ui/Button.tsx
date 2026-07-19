@@ -16,9 +16,9 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
 
 const VARIANT_STYLES: Record<Variant, { bg: string; text: string; pressed: string }> = {
   primary:   { bg: 'bg-primary',    text: 'text-white',     pressed: 'active:bg-primary-dark' },
-  secondary: { bg: 'bg-gray-100',   text: 'text-gray-900',  pressed: 'active:bg-gray-200' },
+  secondary: { bg: 'bg-border-soft',   text: 'text-ink',  pressed: 'active:bg-border' },
   danger:    { bg: 'bg-red-500',    text: 'text-white',     pressed: 'active:bg-red-600' },
-  ghost:     { bg: 'bg-transparent', text: 'text-gray-600', pressed: 'active:bg-gray-100' },
+  ghost:     { bg: 'bg-transparent', text: 'text-muted', pressed: 'active:bg-border-soft' },
 };
 
 const SIZE_STYLES: Record<Size, { container: string; text: string }> = {

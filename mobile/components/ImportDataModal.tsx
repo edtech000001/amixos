@@ -20,6 +20,7 @@ import {
 } from '@amixos/shared/lib/importRunners';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 
@@ -48,6 +49,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
   const supabase = createSupabaseClient();
   const { user, business } = useApp();
   const { locale } = useLang();
+  const c = useThemeColors();
   const en = locale === 'en';
   const tr = (esText: string, enText: string) => (en ? enText : esText);
 
@@ -339,26 +341,26 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
     <Modal open={open} onClose={close} title={title}>
       {step === 'upload' ? (
         <View className="gap-3">
-          <Text className="text-xs text-gray-500 leading-5">{uploadHint}</Text>
+          <Text className="text-xs text-muted leading-5">{uploadHint}</Text>
           <Pressable
             onPress={pickFile}
             disabled={parsing || importing}
-            className="border-2 border-dashed border-gray-200 rounded-2xl py-6 items-center active:bg-gray-50"
+            className="border-2 border-dashed border-border rounded-2xl py-6 items-center active:bg-surface"
           >
             {parsing ? (
               <>
-                <ActivityIndicator color="#4F46E5" />
-                <Text className="text-sm text-gray-500 mt-2">{tr('Leyendo archivo…', 'Reading file…')}</Text>
+                <ActivityIndicator color={c.primary} />
+                <Text className="text-sm text-muted mt-2">{tr('Leyendo archivo…', 'Reading file…')}</Text>
               </>
             ) : (
               <>
                 <View className="w-11 h-11 rounded-2xl bg-primary/10 items-center justify-center mb-2">
-                  <Upload size={20} color="#4F46E5" />
+                  <Upload size={20} color={c.primary} />
                 </View>
-                <Text className="text-sm font-semibold text-gray-900">
+                <Text className="text-sm font-semibold text-ink">
                   {tr('Elegir archivo CSV', 'Choose CSV file')}
                 </Text>
-                <Text className="text-xs text-gray-500 mt-0.5">
+                <Text className="text-xs text-muted mt-0.5">
                   {tr('Desde Archivos, Drive, etc.', 'From Files, Drive, etc.')}
                 </Text>
               </>
@@ -369,7 +371,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             onPress={downloadTemplate}
             className="flex-row items-center gap-2 self-start px-2 py-2 active:opacity-70"
           >
-            <Download size={14} color="#4F46E5" />
+            <Download size={14} color={c.primary} />
             <Text className="text-xs font-semibold text-primary">
               {tr('Descargar plantilla de ejemplo', 'Download example template')}
             </Text>
@@ -377,21 +379,21 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
           {/* Column guide — accepted values / behavior per column, readable
              BEFORE filling in the template. */}
-          <View className="bg-gray-50 rounded-xl px-4 py-3">
+          <View className="bg-surface rounded-xl px-4 py-3">
             <Pressable onPress={() => setGuideOpen(o => !o)} className="active:opacity-70">
-              <Text className="text-xs font-semibold text-gray-700">
+              <Text className="text-xs font-semibold text-ink">
                 {guideOpen ? '▾ ' : '▸ '}{tr('Guía de columnas (valores aceptados)', 'Column guide (accepted values)')}
               </Text>
             </Pressable>
             {guideOpen ? (
               <View className="mt-2 gap-1.5">
-                <Text className="text-[11px] text-gray-400">
+                <Text className="text-[11px] text-faint">
                   {tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}
                 </Text>
                 {allImportFields.map(f => (
                   <Text key={f.key} className="text-[11px] leading-4">
-                    <Text className="font-semibold text-gray-700">{f.label}{f.required ? ' *' : ''}</Text>
-                    {(en ? f.hintEn : f.hintEs) ? <Text className="text-gray-500"> — {en ? f.hintEn : f.hintEs}</Text> : null}
+                    <Text className="font-semibold text-ink">{f.label}{f.required ? ' *' : ''}</Text>
+                    {(en ? f.hintEn : f.hintEs) ? <Text className="text-muted"> — {en ? f.hintEn : f.hintEs}</Text> : null}
                   </Text>
                 ))}
               </View>
@@ -399,28 +401,28 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
           </View>
 
           {/* Recent runs of this importer — collapsed like the guide. */}
-          <View className="bg-gray-50 rounded-xl px-4 py-3">
+          <View className="bg-surface rounded-xl px-4 py-3">
             <Pressable onPress={toggleRecent} className="active:opacity-70">
-              <Text className="text-xs font-semibold text-gray-700">
+              <Text className="text-xs font-semibold text-ink">
                 {recentOpen ? '▾ ' : '▸ '}{tr('Importaciones recientes', 'Recent imports')}
               </Text>
             </Pressable>
             {recentOpen ? (
               <View className="mt-2 gap-1">
                 {recentLogs === null ? (
-                  <Text className="text-[11px] text-gray-400">…</Text>
+                  <Text className="text-[11px] text-faint">…</Text>
                 ) : recentLogs.length === 0 ? (
-                  <Text className="text-[11px] text-gray-400">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</Text>
+                  <Text className="text-[11px] text-faint">{tr('Aún no hay importaciones registradas.', 'No imports recorded yet.')}</Text>
                 ) : (
                   recentLogs.map(l => (
-                    <View key={l.id} className="flex-row items-center justify-between gap-3 py-1 border-b border-gray-100">
+                    <View key={l.id} className="flex-row items-center justify-between gap-3 py-1 border-b border-border-soft">
                       <View className="flex-1 min-w-0">
-                        <Text className="text-xs font-semibold text-gray-800" numberOfLines={1}>{l.file_name || '—'}</Text>
-                        <Text className="text-[11px] text-gray-400">
+                        <Text className="text-xs font-semibold text-ink" numberOfLines={1}>{l.file_name || '—'}</Text>
+                        <Text className="text-[11px] text-faint">
                           {new Date(l.created_at).toLocaleString(en ? 'en-US' : 'es-MX', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                         </Text>
                       </View>
-                      <Text className="text-[11px] text-gray-500">
+                      <Text className="text-[11px] text-muted">
                         {l.success} ✓{l.updated > 0 ? ` · ${l.updated}↺` : ''}{l.skipped > 0 ? ` · ${l.skipped}=` : ''}{l.failed > 0 ? ` · ${l.failed}✗` : ''}
                       </Text>
                     </View>
@@ -431,8 +433,8 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
           </View>
 
           {error ? (
-            <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex-row items-start gap-2">
-              <AlertCircle size={16} color="#EF4444" />
+            <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3 flex-row items-start gap-2">
+              <AlertCircle size={16} color={c.danger} />
               <Text className="text-red-600 text-sm flex-1">{error}</Text>
             </View>
           ) : null}
@@ -441,17 +443,17 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
       {step === 'map' ? (
         <View className="gap-4">
-          <View className="bg-gray-50 rounded-xl px-4 py-3 flex-row items-center gap-3">
-            <FileText size={18} color="#6B7280" />
+          <View className="bg-surface rounded-xl px-4 py-3 flex-row items-center gap-3">
+            <FileText size={18} color={c.muted} />
             <View className="flex-1">
-              <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>{filename}</Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-sm font-medium text-ink" numberOfLines={1}>{filename}</Text>
+              <Text className="text-xs text-muted mt-0.5">
                 {rows.length} {tr('filas', 'rows')} · {matchedCount} {tr('columnas mapeadas', 'columns mapped')}
               </Text>
             </View>
           </View>
 
-          <Text className="text-xs text-gray-500 leading-5">
+          <Text className="text-xs text-muted leading-5">
             {tr('Asigna cada campo a una columna del CSV. Los campos no mapeados se omiten.', 'Match each field to a CSV column. Unmapped fields are skipped.')}
             {' '}
             {tr('Solo los campos con * son obligatorios — todo lo demás es opcional.', 'Only fields marked * are required — everything else is optional.')}
@@ -478,15 +480,15 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
                 ]}
               />
               {(en ? f.hintEn : f.hintEs) ? (
-                <Text className="text-[10px] leading-4 text-gray-400 mt-1">{en ? f.hintEn : f.hintEs}</Text>
+                <Text className="text-[10px] leading-4 text-faint mt-1">{en ? f.hintEn : f.hintEs}</Text>
               ) : null}
               </View>
             ))}
           </View>
 
           <View className="flex-row items-center justify-between pt-2">
-            <Pressable onPress={close} className="px-3 py-2 rounded-lg active:bg-gray-100">
-              <Text className="text-sm font-semibold text-gray-700">{tr('Cancelar', 'Cancel')}</Text>
+            <Pressable onPress={close} className="px-3 py-2 rounded-lg active:bg-border-soft">
+              <Text className="text-sm font-semibold text-ink">{tr('Cancelar', 'Cancel')}</Text>
             </Pressable>
             <Pressable
               onPress={() => setStep('preview')}
@@ -501,36 +503,36 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
       {step === 'preview' ? (
         <View className="gap-4">
-          <View className="bg-gray-50 rounded-xl px-4 py-3 flex-row items-center gap-3">
-            <FileText size={18} color="#6B7280" />
+          <View className="bg-surface rounded-xl px-4 py-3 flex-row items-center gap-3">
+            <FileText size={18} color={c.muted} />
             <View className="flex-1">
-              <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>{filename}</Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-sm font-medium text-ink" numberOfLines={1}>{filename}</Text>
+              <Text className="text-xs text-muted mt-0.5">
                 {rows.length} {tr('filas', 'rows')} · {matchedCount} {tr('columnas mapeadas', 'columns mapped')}
               </Text>
             </View>
           </View>
 
           <View>
-            <Text className="text-xs font-semibold text-gray-400 uppercase mb-2">
+            <Text className="text-xs font-semibold text-faint uppercase mb-2">
               {tr('Vista previa · primeras', 'Preview · first')} {Math.min(5, rows.length)} {tr('de', 'of')} {rows.length}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator className="border border-gray-100 rounded-xl bg-white">
+            <ScrollView horizontal showsHorizontalScrollIndicator className="border border-border-soft rounded-xl bg-card">
               <View>
-                <View className="flex-row bg-gray-50 border-b border-gray-100">
+                <View className="flex-row bg-surface border-b border-border-soft">
                   {allImportFields.filter(f => colMap[f.key]).map(f => (
                     <View key={f.key} style={{ width: 140 }} className="px-3 py-2">
-                      <Text className="text-xs font-semibold text-gray-500" numberOfLines={1}>{f.label}</Text>
+                      <Text className="text-xs font-semibold text-muted" numberOfLines={1}>{f.label}</Text>
                     </View>
                   ))}
                 </View>
                 {rows.slice(0, 5).map((row, ri) => (
-                  <View key={ri} className={`flex-row ${ri < Math.min(5, rows.length) - 1 ? 'border-b border-gray-50' : ''}`}>
+                  <View key={ri} className={`flex-row ${ri < Math.min(5, rows.length) - 1 ? 'border-b border-border-soft' : ''}`}>
                     {allImportFields.filter(f => colMap[f.key]).map(f => {
                       const val = row[colMap[f.key]];
                       return (
                         <View key={f.key} style={{ width: 140 }} className="px-3 py-2">
-                          <Text className={`text-xs ${val ? 'text-gray-700' : 'text-gray-300'}`} numberOfLines={1}>
+                          <Text className={`text-xs ${val ? 'text-ink' : 'text-faint'}`} numberOfLines={1}>
                             {val || '—'}
                           </Text>
                         </View>
@@ -544,20 +546,20 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
           {importing && progress ? (
             <View className="flex-row items-center gap-3 pt-2">
-              <View className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <View className="flex-1 h-2 bg-border-soft rounded-full overflow-hidden">
                 <View className="h-full bg-primary rounded-full" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
               </View>
-              <Text className="text-xs font-semibold text-gray-500">{progress.done} / {progress.total}</Text>
+              <Text className="text-xs font-semibold text-muted">{progress.done} / {progress.total}</Text>
             </View>
           ) : null}
           <View className="flex-row items-center justify-between pt-2">
             {importing ? (
-              <Pressable onPress={() => { abortRef.current = true; }} className="px-3 py-2 rounded-lg active:bg-red-50">
+              <Pressable onPress={() => { abortRef.current = true; }} className="px-3 py-2 rounded-lg active:bg-red-500/10">
                 <Text className="text-sm font-semibold text-red-600">{tr('Cancelar importación', 'Cancel import')}</Text>
               </Pressable>
             ) : (
-              <Pressable onPress={() => setStep('map')} className="px-3 py-2 rounded-lg active:bg-gray-100">
-                <Text className="text-sm font-semibold text-gray-700">{tr('Atrás', 'Back')}</Text>
+              <Pressable onPress={() => setStep('map')} className="px-3 py-2 rounded-lg active:bg-border-soft">
+                <Text className="text-sm font-semibold text-ink">{tr('Atrás', 'Back')}</Text>
               </Pressable>
             )}
             <Pressable
@@ -577,31 +579,31 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
       {step === 'done' ? (
         <View className="gap-4 items-center py-4">
-          <View className="w-16 h-16 rounded-full bg-green-50 items-center justify-center">
-            <CheckCircle2 size={32} color="#10B981" />
+          <View className="w-16 h-16 rounded-full bg-green-500/10 items-center justify-center">
+            <CheckCircle2 size={32} color={c.success} />
           </View>
-          <Text className="text-lg font-semibold text-gray-900">{tr('¡Importación completa!', 'Import complete!')}</Text>
-          <View className="bg-gray-50 rounded-xl px-6 py-4 w-full">
+          <Text className="text-lg font-semibold text-ink">{tr('¡Importación completa!', 'Import complete!')}</Text>
+          <View className="bg-surface rounded-xl px-6 py-4 w-full">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-sm text-gray-600">{`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${tr('importados', 'imported')}`}</Text>
+              <Text className="text-sm text-muted">{`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${tr('importados', 'imported')}`}</Text>
               <Text className="text-base font-bold text-green-600">{result.success}</Text>
             </View>
             {result.skipped > 0 ? (
               <View className="flex-row justify-between items-center mb-1">
-                <Text className="text-sm text-gray-600">{tr('Ya existían', 'Already existed')}</Text>
-                <Text className="text-base font-bold text-gray-500">{result.skipped}</Text>
+                <Text className="text-sm text-muted">{tr('Ya existían', 'Already existed')}</Text>
+                <Text className="text-base font-bold text-muted">{result.skipped}</Text>
               </View>
             ) : null}
             {result.failedRows.length > 0 ? (
               <View className="flex-row justify-between items-center">
-                <Text className="text-sm text-gray-600">{tr('Errores', 'Errors')}</Text>
+                <Text className="text-sm text-muted">{tr('Errores', 'Errors')}</Text>
                 <Text className="text-base font-bold text-red-600">{result.failedRows.length}</Text>
               </View>
             ) : null}
           </View>
 
           {result.notes.length > 0 ? (
-            <View className="w-full bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <View className="w-full bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3">
               {result.notes.map((n, i) => (
                 <Text key={i} className="text-xs text-blue-800">{n}</Text>
               ))}
@@ -617,12 +619,12 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
                 <Text className="text-sm text-primary">{showErrorDetails ? '▴' : '▾'}</Text>
               </Pressable>
               {showErrorDetails ? (
-                <View className="bg-red-50 border border-red-100 rounded-xl overflow-hidden">
+                <View className="bg-red-500/10 border border-red-100 rounded-xl overflow-hidden">
                   {result.failedRows.slice(0, 20).map((f, i) => (
                     <View key={i} className={`px-4 py-2.5 ${i < Math.min(20, result.failedRows.length) - 1 ? 'border-b border-red-100/60' : ''}`}>
                       <View className="flex-row items-center justify-between gap-2">
                         <View className="flex-1">
-                          <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>{f.label}</Text>
+                          <Text className="text-sm font-medium text-ink" numberOfLines={1}>{f.label}</Text>
                           <Text className="text-xs text-red-700 mt-0.5" numberOfLines={2}>{f.reason}</Text>
                         </View>
                         {f.rowIndex != null ? (
@@ -638,7 +640,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
                       </View>
                       {/* Inline editor — fix the row's values and retry just this row. */}
                       {fixingIndex === i ? (
-                        <View className="mt-2 rounded-xl bg-white border border-gray-100 p-3" style={{ gap: 8 }}>
+                        <View className="mt-2 rounded-xl bg-card border border-border-soft p-3" style={{ gap: 8 }}>
                           {mappedFields.map(mf => (
                             <Input
                               key={mf.key}
@@ -662,7 +664,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
                   ))}
                   {result.failedRows.length > 20 ? (
                     <View className="px-4 py-2.5 bg-red-100/40">
-                      <Text className="text-xs text-gray-600 text-center">+ {result.failedRows.length - 20} {tr('más', 'more')}</Text>
+                      <Text className="text-xs text-muted text-center">+ {result.failedRows.length - 20} {tr('más', 'more')}</Text>
                     </View>
                   ) : null}
                 </View>

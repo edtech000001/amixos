@@ -20,6 +20,7 @@ import Svg, {
   Rect,
 } from 'react-native-svg';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 
 export type LoginAttemptResult =
@@ -43,6 +44,7 @@ export function LoginScreen({
 }: LoginScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
+  const c = useThemeColors();
 
   const loginSchema = useMemo(() => z.object({
     email: z.string().email(t.login.errors.emailInvalid),
@@ -81,7 +83,7 @@ export function LoginScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       // Match the hero gradient's bottom stop so the area below the floating
       // card blends seamlessly with the gradient above it.
-      style={{ flex: 1, backgroundColor: '#8B5CF6' }}
+      style={{ flex: 1, backgroundColor: '#3B82F6' }}
     >
       <ScrollView
         contentContainerClassName="flex-grow"
@@ -91,7 +93,7 @@ export function LoginScreen({
         <HeroHeader />
 
         <View
-          className="bg-white"
+          className="bg-card"
           style={{
             marginHorizontal: 12,
             marginTop: -36,
@@ -109,10 +111,10 @@ export function LoginScreen({
         >
           <View className="w-full max-w-md mx-auto">
             <Text className="text-sm font-bold text-primary mb-3">Amixos</Text>
-            <Text className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">
+            <Text className="text-2xl font-extrabold text-ink tracking-tight mb-1">
               {t.login.heading}
             </Text>
-            <Text className="text-sm text-gray-500 mb-7">{t.login.tagline}</Text>
+            <Text className="text-sm text-muted mb-7">{t.login.tagline}</Text>
 
             <View className="flex-col gap-4">
               <Controller
@@ -125,7 +127,7 @@ export function LoginScreen({
                     autoCapitalize="none"
                     autoComplete="email"
                     placeholder={t.register.emailPlaceholder}
-                    leftIcon={<Mail size={18} color="#9CA3AF" />}
+                    leftIcon={<Mail size={18} color={c.faint} />}
                     error={errors.email?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -142,7 +144,7 @@ export function LoginScreen({
                     secureTextEntry
                     autoComplete="password"
                     placeholder="••••••••"
-                    leftIcon={<Lock size={18} color="#9CA3AF" />}
+                    leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.password?.message}
                     value={value ?? ''}
                     onChangeText={onChange}
@@ -152,7 +154,7 @@ export function LoginScreen({
               />
 
               {error ? (
-                <View className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3">
                   <Text className="text-red-600 text-sm">{error}</Text>
                 </View>
               ) : null}
@@ -163,7 +165,7 @@ export function LoginScreen({
 
               <View className="items-center mt-1">
                 <Pressable onPress={onForgotPasswordPress} hitSlop={8}>
-                  <Text className="text-sm text-gray-500 font-medium">
+                  <Text className="text-sm text-muted font-medium">
                     {t.login.forgotPassword}
                   </Text>
                 </Pressable>
@@ -173,16 +175,16 @@ export function LoginScreen({
             {oauthSlot ? (
               <View className="mt-8">
                 <View className="flex-row items-center gap-3 mb-5">
-                  <View className="flex-1 h-px bg-gray-200" />
-                  <Text className="text-xs text-gray-400">{t.login.dividerEmail}</Text>
-                  <View className="flex-1 h-px bg-gray-200" />
+                  <View className="flex-1 h-px bg-border" />
+                  <Text className="text-xs text-faint">{t.login.dividerEmail}</Text>
+                  <View className="flex-1 h-px bg-border" />
                 </View>
                 {oauthSlot}
               </View>
             ) : null}
 
-            <View className="mt-8 pt-6 border-t border-gray-100 flex-row justify-center items-center">
-              <Text className="text-sm text-gray-500">{t.login.noAccount} </Text>
+            <View className="mt-8 pt-6 border-t border-border-soft flex-row justify-center items-center">
+              <Text className="text-sm text-muted">{t.login.noAccount} </Text>
               <Pressable onPress={onRegisterPress} hitSlop={8}>
                 <Text className="text-sm text-primary font-semibold">{t.login.registerHere}</Text>
               </Pressable>
@@ -203,9 +205,9 @@ function HeroHeader() {
       <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="xMidYMid slice" pointerEvents="none">
         <Defs>
           <SvgLinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#4338CA" />
-            <Stop offset="55%" stopColor="#6366F1" />
-            <Stop offset="100%" stopColor="#8B5CF6" />
+            <Stop offset="0%" stopColor="#1E40AF" />
+            <Stop offset="55%" stopColor="#2563EB" />
+            <Stop offset="100%" stopColor="#3B82F6" />
           </SvgLinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#heroGrad)" />
@@ -213,7 +215,7 @@ function HeroHeader() {
 
       <View className="flex-1 items-center justify-center pb-12 pt-10">
         <View
-          className="w-20 h-20 rounded-3xl bg-white items-center justify-center mb-4"
+          className="w-20 h-20 rounded-3xl bg-card items-center justify-center mb-4"
           style={{
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 10 },
@@ -255,7 +257,7 @@ function GradientButton({ onPress, loading, children }: GradientButtonProps) {
       <View
         className="rounded-2xl overflow-hidden h-14 items-center justify-center"
         style={{
-          shadowColor: '#6366F1',
+          shadowColor: '#2563EB',
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.3,
           shadowRadius: 12,
@@ -265,8 +267,8 @@ function GradientButton({ onPress, loading, children }: GradientButtonProps) {
         <Svg style={StyleSheet.absoluteFill}>
           <Defs>
             <SvgLinearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#6366F1" />
-              <Stop offset="100%" stopColor="#A855F7" />
+              <Stop offset="0%" stopColor="#2563EB" />
+              <Stop offset="100%" stopColor="#3B82F6" />
             </SvgLinearGradient>
           </Defs>
           <Rect width="100%" height="100%" fill="url(#btnGrad)" />

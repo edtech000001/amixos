@@ -101,15 +101,15 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   return (
     <SettingsPageContext.Provider value={{ registerSaveState, scrollRef }}>
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
+        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
           <Pressable
             onPress={goBack}
             hitSlop={12}
-            className="p-2 -ml-2 rounded-lg active:bg-gray-100"
+            className="p-2 -ml-2 rounded-lg active:bg-border-soft"
           >
             <ChevronLeft size={22} color="#111827" />
           </Pressable>
-          <Text className="ml-1 flex-1 text-lg font-semibold text-gray-900">{title}</Text>
+          <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{title}</Text>
 
           {saveState && saveState.dirty && !saveState.hideHeaderButton ? (
             <Pressable

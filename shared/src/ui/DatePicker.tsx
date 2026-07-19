@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal, Platform } from 'react-native';
 import { Calendar, Clock } from 'lucide-react-native';
 import { clsx } from 'clsx';
+import { useThemeColors } from '../theme';
 import { useLang } from '../i18n/context';
 import { formatTime12h } from '../lib/format';
 
@@ -47,7 +48,7 @@ export function DatePicker({
 }: DatePickerProps) {
   return (
     <View className={clsx('flex flex-col gap-1.5', containerClassName)}>
-      {label ? <Text className="text-sm font-medium text-gray-700">{label}</Text> : null}
+      {label ? <Text className="text-sm font-medium text-ink">{label}</Text> : null}
 
       {Platform.OS === 'web' ? (
         // Native HTML input → OS date picker on web.
@@ -58,8 +59,8 @@ export function DatePicker({
           max={max}
           onChange={(e: any) => onChange(e.target.value)}
           className={clsx(
-            'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary',
-            error ? 'border-red-300' : 'border-gray-200',
+            'w-full rounded-xl border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary',
+            error ? 'border-red-300' : 'border-border',
           )}
         />
       ) : (
@@ -97,6 +98,7 @@ function NativePicker({
   const DateTimePicker = DateTimePickerModule.default;
   const DateTimePickerAndroid = DateTimePickerModule.DateTimePickerAndroid;
 
+  const c = useThemeColors();
   const { t, locale } = useLang();
   const tc = t.common.buttons;
 
@@ -157,19 +159,19 @@ function NativePicker({
           'flex-row items-center',
           variant === 'ghost'
             ? 'active:opacity-60'
-            : clsx('rounded-xl border bg-white px-4 py-2.5', error ? 'border-red-300' : 'border-gray-200'),
+            : clsx('rounded-xl border bg-card px-4 py-2.5', error ? 'border-red-300' : 'border-border'),
         )}
       >
         <Text
           className={clsx(
             'text-sm',
             variant === 'ghost' ? 'font-semibold' : 'flex-1',
-            displayText ? 'text-gray-900' : 'text-gray-400',
+            displayText ? 'text-ink' : 'text-faint',
           )}
         >
           {displayText || placeholder || (mode === 'time' ? '--:--' : '--/--/----')}
         </Text>
-        {variant === 'ghost' ? null : <Icon size={16} color="#9CA3AF" />}
+        {variant === 'ghost' ? null : <Icon size={16} color={c.faint} />}
       </Pressable>
 
       {Platform.OS === 'ios' ? (
@@ -184,15 +186,15 @@ function NativePicker({
               onPress={() => setIosOpen(false)}
               className="absolute inset-0 bg-black/40"
             />
-            <View className="bg-white rounded-t-3xl pt-3">
+            <View className="bg-card rounded-t-3xl pt-3">
               {/* Drag-handle */}
               <View className="items-center mb-1">
-                <View className="w-10 h-1 bg-gray-200 rounded-full" />
+                <View className="w-10 h-1 bg-border rounded-full" />
               </View>
               {/* Header: title on left, Clear next to it, Done on right */}
-              <View className="flex-row items-center justify-between px-5 pt-3 pb-3 border-b border-gray-100">
+              <View className="flex-row items-center justify-between px-5 pt-3 pb-3 border-b border-border-soft">
                 <View className="flex-row items-center gap-3 flex-1">
-                  <Text className="text-2xl font-extrabold text-gray-900">
+                  <Text className="text-2xl font-extrabold text-ink">
                     {label || (mode === 'time' ? 'Hora' : 'Fecha')}
                   </Text>
                   {value ? (
@@ -203,7 +205,7 @@ function NativePicker({
                       }}
                       hitSlop={8}
                     >
-                      <Text className="text-base text-gray-400">{tc.clear}</Text>
+                      <Text className="text-base text-faint">{tc.clear}</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -223,7 +225,7 @@ function NativePicker({
                   mode={mode === 'datetime-local' ? 'datetime' : mode}
                   display={iosDisplay}
                   maximumDate={maximumDate}
-                  accentColor="#4F46E5"
+                  accentColor={c.primary}
                   themeVariant="light"
                   // Force English locale on the time wheel so AM/PM renders
                   // uppercase ("AM"/"PM") instead of Spanish "a. m." / "p. m.".

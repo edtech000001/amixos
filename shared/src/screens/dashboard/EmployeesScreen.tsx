@@ -6,6 +6,7 @@ import {
   UserCheck,
   Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Fab } from '../../ui/Fab';
 import { ROLE_LABELS } from '../../lib/permissions';
@@ -92,6 +93,7 @@ export function EmployeesScreen({
   modalsSlot,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
+  const c = useThemeColors();
   const t = full.dashboard.employees;
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
@@ -191,8 +193,8 @@ export function EmployeesScreen({
          secondary action. */}
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
         <View>
-          <Text className="text-2xl font-bold text-gray-900">{t.title}</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">
+          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <Text className="text-sm text-muted mt-0.5">
             {tab === 'empleados' && (search.trim() !== '' || filtersActive)
               ? t.resultsCount.replace('{{count}}', String(filteredEmployees.length))
               : t.summary
@@ -202,24 +204,24 @@ export function EmployeesScreen({
         </View>
         <Pressable
           onPress={onLogHours}
-          className="flex-row items-center gap-1.5 bg-white border border-gray-200 px-4 py-2.5 rounded-xl active:bg-gray-50"
+          className="flex-row items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl active:bg-surface"
         >
-          <Clock size={15} color="#374151" />
-          <Text className="text-sm font-semibold text-gray-700">{t.logHours}</Text>
+          <Clock size={15} color={c.muted} />
+          <Text className="text-sm font-semibold text-ink">{t.logHours}</Text>
         </Pressable>
       </View>
 
       {/* Tabs */}
-      <View className="flex-row gap-1 bg-gray-100 p-1 rounded-xl mb-6 self-start">
+      <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl mb-6 self-start">
         {(['empleados', 'horas'] as const).map(tabKey => (
           <Pressable
             key={tabKey}
             onPress={() => setTab(tabKey)}
-            className={`px-4 py-1.5 rounded-lg ${tab === tabKey ? 'bg-white' : ''}`}
+            className={`px-4 py-1.5 rounded-lg ${tab === tabKey ? 'bg-card' : ''}`}
           >
             <Text
               className={`text-xs font-semibold capitalize ${
-                tab === tabKey ? 'text-gray-900' : 'text-gray-500'
+                tab === tabKey ? 'text-ink' : 'text-muted'
               }`}
             >
               {t.tabs[tabKey]}
@@ -231,29 +233,29 @@ export function EmployeesScreen({
       {tab === 'empleados' ? (
         <>
         <View className="flex-row items-center gap-2 mb-3">
-          <View className="flex-1 flex-row items-center rounded-2xl border border-gray-200 bg-white px-3.5">
-            <Search size={16} color="#9CA3AF" />
+          <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
+            <Search size={16} color={c.faint} />
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder={t.teamSearchPlaceholder}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoCorrect={false}
-              className="flex-1 px-2.5 py-2.5 text-sm text-gray-900"
+              className="flex-1 px-2.5 py-2.5 text-sm text-ink"
             />
           </View>
           <Pressable
             onPress={() => setFilterOpen(o => !o)}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              filtersActive || filterOpen ? 'bg-primary/10 border-primary' : 'bg-white border-gray-200'
+              filtersActive || filterOpen ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <SlidersHorizontal size={16} color={filtersActive || filterOpen ? '#4F46E5' : '#6B7280'} />
+            <SlidersHorizontal size={16} color={filtersActive || filterOpen ? c.primary : c.muted} />
           </Pressable>
         </View>
         {filterOpen ? (
-          <View className="bg-white rounded-2xl border border-gray-100 py-1 mb-4 overflow-hidden">
+          <View className="bg-card rounded-2xl border border-border-soft py-1 mb-4 overflow-hidden">
             {filterFields.map(f => {
               const sel = filterSel[f.key] ?? [];
               const open = openField === f.key;
@@ -263,20 +265,20 @@ export function EmployeesScreen({
                 ? values.filter(([v]) => norm(v === '' ? t.filter.empty : f.labelOf(v)).includes(vq))
                 : values;
               return (
-                <View key={f.key} className="border-b border-gray-50">
+                <View key={f.key} className="border-b border-border-soft">
                   <Pressable
                     onPress={() => { setOpenField(open ? null : f.key); setValueSearch(''); }}
-                    className="flex-row items-center justify-between px-4 py-3 active:bg-gray-50"
+                    className="flex-row items-center justify-between px-4 py-3 active:bg-surface"
                   >
                     <View className="flex-row items-center gap-2">
-                      <Text className="text-sm font-semibold text-gray-700">{f.label}</Text>
+                      <Text className="text-sm font-semibold text-ink">{f.label}</Text>
                       {sel.length ? (
                         <View className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary items-center justify-center">
                           <Text className="text-[10px] font-bold text-white">{sel.length}</Text>
                         </View>
                       ) : null}
                     </View>
-                    <ChevronDown size={15} color="#9CA3AF" style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
+                    <ChevronDown size={15} color={c.faint} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
                   </Pressable>
                   {open ? (
                     <View className="px-2 pb-2">
@@ -285,10 +287,10 @@ export function EmployeesScreen({
                           value={valueSearch}
                           onChangeText={setValueSearch}
                           placeholder={t.filter.searchValue}
-                          placeholderTextColor="#9CA3AF"
+                          placeholderTextColor={c.faint}
                           autoCapitalize="none"
                           autoCorrect={false}
-                          className="mb-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-900"
+                          className="mb-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-ink"
                         />
                       ) : null}
                       <ScrollView className="max-h-52" nestedScrollEnabled>
@@ -298,15 +300,15 @@ export function EmployeesScreen({
                             <Pressable
                               key={v || '(empty)'}
                               onPress={() => toggleFilterValue(f.key, v)}
-                              className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-gray-50"
+                              className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-surface"
                             >
-                              <View className={`w-4 h-4 rounded border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}>
+                              <View className={`w-4 h-4 rounded border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
                                 {on ? <Check size={11} color="#fff" /> : null}
                               </View>
-                              <Text className={`flex-1 text-sm ${v === '' ? 'italic text-gray-400' : 'text-gray-700'}`} numberOfLines={1}>
+                              <Text className={`flex-1 text-sm ${v === '' ? 'italic text-faint' : 'text-ink'}`} numberOfLines={1}>
                                 {v === '' ? t.filter.empty : f.labelOf(v)}
                               </Text>
-                              <Text className="text-xs text-gray-400">{count}</Text>
+                              <Text className="text-xs text-faint">{count}</Text>
                             </Pressable>
                           );
                         })}
@@ -317,52 +319,52 @@ export function EmployeesScreen({
               );
             })}
             {filtersActive ? (
-              <Pressable onPress={clearFilters} className="mx-2 my-2 py-2 rounded-xl bg-gray-100 items-center active:opacity-80">
-                <Text className="text-sm font-semibold text-gray-700">{t.filter.clear}</Text>
+              <Pressable onPress={clearFilters} className="mx-2 my-2 py-2 rounded-xl bg-border-soft items-center active:opacity-80">
+                <Text className="text-sm font-semibold text-ink">{t.filter.clear}</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
         {employees.length === 0 ? (
           <View className="items-center py-20">
-            <UserCheck size={40} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-3">{t.emptyEmployees}</Text>
+            <UserCheck size={40} color={c.faint} />
+            <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
             <Pressable onPress={onAddEmployee} className="mt-1">
               <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
             </Pressable>
           </View>
         ) : (
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
             {filteredEmployees.map((e, i) => (
               <Pressable
                 key={e.id}
                 onPress={() => onEditEmployee(e.id)}
-                className={`flex-row items-start gap-3 px-5 py-4 active:bg-gray-50 ${
-                  i < filteredEmployees.length - 1 ? 'border-b border-gray-50' : ''
+                className={`flex-row items-start gap-3 px-5 py-4 active:bg-surface ${
+                  i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
               >
                 <View
                   className={`w-9 h-9 rounded-full items-center justify-center ${
-                    e.active ? 'bg-primary/10' : 'bg-gray-100'
+                    e.active ? 'bg-primary/10' : 'bg-border-soft'
                   }`}
                 >
                   <Text
                     className={`text-sm font-semibold ${
-                      e.active ? 'text-primary' : 'text-gray-400'
+                      e.active ? 'text-primary' : 'text-faint'
                     }`}
                   >
                     {e.firstName.charAt(0)}{e.lastName.charAt(0)}
                   </Text>
                 </View>
                 <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-semibold text-gray-900" numberOfLines={2}>
+                  <Text className="text-sm font-semibold text-ink" numberOfLines={2}>
                     {e.firstName} {e.lastName}
                   </Text>
                   {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
                     <View className="flex-row flex-wrap items-center gap-1.5 mt-1">
                       {!e.active ? (
-                        <View className="px-2 py-0.5 rounded-full bg-gray-100">
-                          <Text className="text-xs text-gray-400">{t.inactiveBadge}</Text>
+                        <View className="px-2 py-0.5 rounded-full bg-border-soft">
+                          <Text className="text-xs text-faint">{t.inactiveBadge}</Text>
                         </View>
                       ) : null}
                       {e.access?.kind === 'active' ? (
@@ -376,7 +378,7 @@ export function EmployeesScreen({
                       ) : null}
                     </View>
                   ) : null}
-                  <Text className="text-xs text-gray-400 mt-1">
+                  <Text className="text-xs text-faint mt-1">
                     {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
                     {e.phone ? ` · ${e.phone}` : ''}
                   </Text>
@@ -389,22 +391,22 @@ export function EmployeesScreen({
       ) : (
         timesheets.length === 0 ? (
           <View className="items-center py-20">
-            <ClipboardList size={40} color="#D1D5DB" />
-            <Text className="text-sm text-gray-400 mt-3">{t.emptyTimesheets}</Text>
+            <ClipboardList size={40} color={c.faint} />
+            <Text className="text-sm text-faint mt-3">{t.emptyTimesheets}</Text>
           </View>
         ) : (
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <View className="flex-row px-5 py-3 border-b border-gray-50">
-              <Text className="flex-1 text-xs font-semibold text-gray-400 uppercase">
+          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+            <View className="flex-row px-5 py-3 border-b border-border-soft">
+              <Text className="flex-1 text-xs font-semibold text-faint uppercase">
                 {t.timesheetCols.worker}
               </Text>
-              <Text className="w-20 text-xs font-semibold text-gray-400 uppercase text-center">
+              <Text className="w-20 text-xs font-semibold text-faint uppercase text-center">
                 {t.timesheetCols.date}
               </Text>
-              <Text className="w-16 text-xs font-semibold text-gray-400 uppercase text-center">
+              <Text className="w-16 text-xs font-semibold text-faint uppercase text-center">
                 {t.timesheetCols.hours}
               </Text>
-              <Text className="w-28 text-xs font-semibold text-gray-400 uppercase">
+              <Text className="w-28 text-xs font-semibold text-faint uppercase">
                 {t.timesheetCols.work}
               </Text>
             </View>
@@ -412,22 +414,22 @@ export function EmployeesScreen({
               <View
                 key={ts.id}
                 className={`flex-row items-center px-5 py-3 ${
-                  i < timesheets.length - 1 ? 'border-b border-gray-50' : ''
+                  i < timesheets.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
               >
-                <Text className="flex-1 text-sm text-gray-900 font-medium" numberOfLines={1}>
+                <Text className="flex-1 text-sm text-ink font-medium" numberOfLines={1}>
                   {ts.workerName ?? '—'}
                 </Text>
-                <Text className="w-20 text-xs text-gray-500 text-center">
+                <Text className="w-20 text-xs text-muted text-center">
                   {new Date(ts.workDate).toLocaleDateString(dateLocale, {
                     month: 'short',
                     day: 'numeric',
                   })}
                 </Text>
-                <Text className="w-16 text-sm font-semibold text-gray-900 text-center">
+                <Text className="w-16 text-sm font-semibold text-ink text-center">
                   {ts.hoursWorked ?? '—'}
                 </Text>
-                <Text className="w-28 text-xs text-gray-400" numberOfLines={1}>
+                <Text className="w-28 text-xs text-faint" numberOfLines={1}>
                   {ts.jobDescription ?? '—'}
                 </Text>
               </View>

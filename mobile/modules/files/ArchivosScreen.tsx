@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Toggle, Button, Fab } from '@amixos/shared/ui';
 import { can } from '@amixos/shared/lib/permissions';
@@ -45,6 +46,7 @@ export default function ArchivosScreen() {
   const { t: full } = useLang();
   const t = full.dashboard.files;
   const tc = full.common;
+  const c = useThemeColors();
   const canManage = can.manageFiles(currentRole);
 
   const [categories, setCategories] = useState<FileCategory[]>([]);
@@ -167,11 +169,11 @@ export default function ArchivosScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* App bar */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-gray-100">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-gray-100">
-          <ChevronLeft size={22} color="#111827" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-gray-900 flex-1" numberOfLines={1}>
+        <Text className="ml-1 text-lg font-semibold text-ink flex-1" numberOfLines={1}>
           {atHome ? t.title : here.label}
         </Text>
       </View>
@@ -180,12 +182,12 @@ export default function ArchivosScreen() {
          ScrollView, which stretches vertically in a flex column and left a
          huge gap under the header. flex-wrap handles deep paths. */}
       {stack.length > 1 ? (
-        <View className="flex-row flex-wrap items-center gap-1 px-4 py-2.5 border-b border-gray-100">
-          {stack.map((c, i) => (
+        <View className="flex-row flex-wrap items-center gap-1 px-4 py-2.5 border-b border-border-soft">
+          {stack.map((crumb, i) => (
             <Pressable key={i} onPress={() => { setStack(s => s.slice(0, i + 1)); clearSelection(); }} className="flex-row items-center gap-1">
-              {i > 0 ? <ChevronRight size={12} color="#D1D5DB" /> : null}
-              <Text className={`text-xs ${i === stack.length - 1 ? 'text-gray-900 font-semibold' : 'text-primary'}`}>
-                {i === 0 ? t.title : c.label}
+              {i > 0 ? <ChevronRight size={12} color={c.faint} /> : null}
+              <Text className={`text-xs ${i === stack.length - 1 ? 'text-ink font-semibold' : 'text-primary'}`}>
+                {i === 0 ? t.title : crumb.label}
               </Text>
             </Pressable>
           ))}
@@ -195,7 +197,7 @@ export default function ArchivosScreen() {
       {/* Selection bar (files + folders) */}
       {canManage && selectionCount > 0 ? (
         <View className="flex-row items-center gap-3 px-4 py-2.5 bg-primary/5 border-b border-primary/20">
-          <Pressable onPress={clearSelection} hitSlop={8}><X size={16} color="#4F46E5" /></Pressable>
+          <Pressable onPress={clearSelection} hitSlop={8}><X size={16} color={c.primary} /></Pressable>
           <Text className="text-sm font-medium text-primary flex-1">{t.selectedCount.replace('{{count}}', String(selectionCount))}</Text>
           <Pressable onPress={() => setSheet({ type: 'move' })} className="flex-row items-center gap-1.5 bg-primary px-3.5 py-1.5 rounded-full active:opacity-80">
             <FolderInput size={14} color="#FFFFFF" /><Text className="text-xs font-semibold text-white">{t.moveBtn}</Text>
@@ -204,15 +206,15 @@ export default function ArchivosScreen() {
       ) : null}
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-32">
-        {atHome ? <Text className="text-sm text-gray-500 mb-5">{t.subtitle}</Text> : null}
+        {atHome ? <Text className="text-sm text-muted mb-5">{t.subtitle}</Text> : null}
 
         {loading ? (
-          <View className="py-20 items-center"><ActivityIndicator color="#4F46E5" /></View>
+          <View className="py-20 items-center"><ActivityIndicator color={c.primary} /></View>
         ) : isEmpty ? (
-          <View className="py-16 items-center rounded-2xl border border-dashed border-gray-200 bg-gray-50">
-            <FolderOpen size={30} color="#D1D5DB" />
-            <Text className="text-sm font-medium text-gray-600 mt-3">{atHome ? t.empty : t.emptyFolder}</Text>
-            {!canManage && atHome ? <Text className="text-xs text-gray-400 mt-1 px-8 text-center">{t.emptyHint}</Text> : null}
+          <View className="py-16 items-center rounded-2xl border border-dashed border-border bg-surface">
+            <FolderOpen size={30} color={c.faint} />
+            <Text className="text-sm font-medium text-muted mt-3">{atHome ? t.empty : t.emptyFolder}</Text>
+            {!canManage && atHome ? <Text className="text-xs text-faint mt-1 px-8 text-center">{t.emptyHint}</Text> : null}
           </View>
         ) : (
           <View className="gap-2">
@@ -241,15 +243,15 @@ export default function ArchivosScreen() {
             {childEntries.map(e => {
               const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
               return (
-                <View key={e.id} className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl border ${selectedEntries.has(e.id) ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
+                <View key={e.id} className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl border ${selectedEntries.has(e.id) ? 'border-primary bg-primary/5' : 'border-border-soft'}`}>
                   {canManage && selectionMode ? (
                     <Pressable onPress={() => toggleEntry(e.id)} hitSlop={8}
-                      className={`w-5 h-5 rounded border items-center justify-center ${selectedEntries.has(e.id) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                      className={`w-5 h-5 rounded border items-center justify-center ${selectedEntries.has(e.id) ? 'bg-primary border-primary' : 'border-border'}`}>
                       {selectedEntries.has(e.id) ? <Check size={12} color="#FFFFFF" /> : null}
                     </Pressable>
                   ) : null}
-                  <View className="w-8 h-8 rounded-lg bg-gray-50 items-center justify-center">
-                    {e.kind === 'link' ? <Link2 size={15} color="#6B7280" /> : <FileText size={15} color="#6B7280" />}
+                  <View className="w-8 h-8 rounded-lg bg-surface items-center justify-center">
+                    {e.kind === 'link' ? <Link2 size={15} color={c.muted} /> : <FileText size={15} color={c.muted} />}
                   </View>
                   <Pressable
                     onPress={() => (canManage && selectionMode ? toggleEntry(e.id) : openEntry(e))}
@@ -258,18 +260,18 @@ export default function ArchivosScreen() {
                     className="flex-1"
                   >
                     <View className="flex-row items-center gap-1.5">
-                      <Text className="text-sm font-medium text-gray-900 flex-shrink" numberOfLines={1}>{e.title}</Text>
-                      {officeOnly ? <Lock size={11} color="#F59E0B" /> : null}
+                      <Text className="text-sm font-medium text-ink flex-shrink" numberOfLines={1}>{e.title}</Text>
+                      {officeOnly ? <Lock size={11} color={c.warning} /> : null}
                     </View>
-                    <Text className="text-xs text-gray-400">{fileMeta(e, t.linkBadge)}</Text>
+                    <Text className="text-xs text-faint">{fileMeta(e, t.linkBadge)}</Text>
                   </Pressable>
                   {!selectionMode ? (
                     <>
-                      <Pressable onPress={() => openEntry(e)} hitSlop={6} className="p-1.5"><ExternalLink size={15} color="#9CA3AF" /></Pressable>
+                      <Pressable onPress={() => openEntry(e)} hitSlop={6} className="p-1.5"><ExternalLink size={15} color={c.faint} /></Pressable>
                       {canManage ? (
                         <>
-                          <Pressable onPress={() => setSheet({ type: 'file', editing: e })} hitSlop={6} className="p-1.5"><Pencil size={14} color="#6B7280" /></Pressable>
-                          <Pressable onPress={() => confirmDelete(t.deleteEntryConfirm, async () => { await supabase.from('file_entries').delete().eq('id', e.id); })} hitSlop={6} className="p-1.5"><Trash2 size={14} color="#EF4444" /></Pressable>
+                          <Pressable onPress={() => setSheet({ type: 'file', editing: e })} hitSlop={6} className="p-1.5"><Pencil size={14} color={c.muted} /></Pressable>
+                          <Pressable onPress={() => confirmDelete(t.deleteEntryConfirm, async () => { await supabase.from('file_entries').delete().eq('id', e.id); })} hitSlop={6} className="p-1.5"><Trash2 size={14} color={c.danger} /></Pressable>
                         </>
                       ) : null}
                     </>
@@ -316,16 +318,17 @@ function FolderRow({ name, count, badge, onOpen, canManage, onEdit, onDelete, se
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
+  const c = useThemeColors();
   const countLabel = count == null
     ? null
     : count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
   const selectable = canManage && !!onToggleSelect;
   const inSelect = selectable && !!selectionMode;
   return (
-    <View className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border ${selected ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
+    <View className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border ${selected ? 'border-primary bg-primary/5' : 'border-border-soft'}`}>
       {inSelect ? (
         <Pressable onPress={onToggleSelect} hitSlop={8}
-          className={`w-5 h-5 rounded border items-center justify-center ${selected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+          className={`w-5 h-5 rounded border items-center justify-center ${selected ? 'bg-primary border-primary' : 'border-border'}`}>
           {selected ? <Check size={12} color="#FFFFFF" /> : null}
         </Pressable>
       ) : null}
@@ -336,28 +339,28 @@ function FolderRow({ name, count, badge, onOpen, canManage, onEdit, onDelete, se
         className="flex-row items-center gap-3 flex-1"
       >
         <View className="w-9 h-9 rounded-lg bg-primary/10 items-center justify-center">
-          <Folder size={17} color="#4F46E5" />
+          <Folder size={17} color={c.primary} />
         </View>
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            <Text className="font-medium text-gray-900 flex-shrink" numberOfLines={1}>{name}</Text>
+            <Text className="font-medium text-ink flex-shrink" numberOfLines={1}>{name}</Text>
             {badge ? (
-              <View className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${badge.team ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                {badge.team ? <UsersIcon size={9} color="#047857" /> : <Lock size={9} color="#B45309" />}
+              <View className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${badge.team ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
+                {badge.team ? <UsersIcon size={9} color={c.success} /> : <Lock size={9} color={c.warning} />}
                 <Text className={`text-[10px] font-semibold ${badge.team ? 'text-emerald-700' : 'text-amber-700'}`}>{badge.label}</Text>
               </View>
             ) : null}
           </View>
-          {countLabel ? <Text className="text-xs text-gray-400 mt-0.5">{countLabel}</Text> : null}
+          {countLabel ? <Text className="text-xs text-faint mt-0.5">{countLabel}</Text> : null}
         </View>
       </Pressable>
       {!inSelect && canManage ? (
         <View className="flex-row items-center">
-          <Pressable onPress={onEdit} hitSlop={6} className="p-1.5"><Pencil size={14} color="#6B7280" /></Pressable>
-          <Pressable onPress={onDelete} hitSlop={6} className="p-1.5"><Trash2 size={14} color="#EF4444" /></Pressable>
+          <Pressable onPress={onEdit} hitSlop={6} className="p-1.5"><Pencil size={14} color={c.muted} /></Pressable>
+          <Pressable onPress={onDelete} hitSlop={6} className="p-1.5"><Trash2 size={14} color={c.danger} /></Pressable>
         </View>
       ) : null}
-      {!inSelect ? <ChevronRight size={16} color="#D1D5DB" /> : null}
+      {!inSelect ? <ChevronRight size={16} color={c.faint} /> : null}
     </View>
   );
 }
@@ -382,6 +385,7 @@ function FileSheets({
   const { t: full } = useLang();
   const t = full.dashboard.files;
   const tc = full.common;
+  const c = useThemeColors();
 
   // Folder form state
   const folderEditing = sheet.type === 'folder' ? sheet.editing : null;
@@ -530,20 +534,20 @@ function FileSheets({
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable onPress={onClose} className="flex-1 justify-end bg-black/40">
-        <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-4 pb-8 pt-4">
-          <View className="items-center mb-3"><View className="w-10 h-1 bg-gray-200 rounded-full" /></View>
+        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+          <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
           {/* Actions chooser */}
           {sheet.type === 'actions' ? (
             <View className="gap-1 pb-2">
-              <Pressable onPress={() => onPick({ type: 'folder', editing: null })} className="flex-row items-center gap-3 px-3 py-4 rounded-2xl active:bg-gray-50">
-                <FolderPlus size={20} color="#4F46E5" />
-                <Text className="text-base font-semibold text-gray-900">{t.newFolder}</Text>
+              <Pressable onPress={() => onPick({ type: 'folder', editing: null })} className="flex-row items-center gap-3 px-3 py-4 rounded-2xl active:bg-surface">
+                <FolderPlus size={20} color={c.primary} />
+                <Text className="text-base font-semibold text-ink">{t.newFolder}</Text>
               </Pressable>
               {!atHome ? (
-                <Pressable onPress={() => onPick({ type: 'file', editing: null })} className="flex-row items-center gap-3 px-3 py-4 rounded-2xl active:bg-gray-50">
-                  <FilePlus2 size={20} color="#4F46E5" />
-                  <Text className="text-base font-semibold text-gray-900">{t.addEntry}</Text>
+                <Pressable onPress={() => onPick({ type: 'file', editing: null })} className="flex-row items-center gap-3 px-3 py-4 rounded-2xl active:bg-surface">
+                  <FilePlus2 size={20} color={c.primary} />
+                  <Text className="text-base font-semibold text-ink">{t.addEntry}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -552,13 +556,13 @@ function FileSheets({
           {/* Folder form */}
           {sheet.type === 'folder' ? (
             <View className="gap-4">
-              <Text className="text-lg font-bold text-gray-900 px-1">{folderEditing ? tc.buttons.edit : t.newFolder}</Text>
+              <Text className="text-lg font-bold text-ink px-1">{folderEditing ? tc.buttons.edit : t.newFolder}</Text>
               <Input label={t.folderNameLabel} placeholder={t.folderNamePlaceholder} value={fname} onChangeText={setFname} />
               {isCategory ? (
-                <View className="flex-row items-center justify-between rounded-2xl border border-gray-200 px-4 py-3">
+                <View className="flex-row items-center justify-between rounded-2xl border border-border px-4 py-3">
                   <View className="flex-1 pr-3">
-                    <Text className="text-sm font-medium text-gray-700">{t.crewVisibleLabel}</Text>
-                    <Text className="text-xs text-gray-400">{t.crewVisibleHint}</Text>
+                    <Text className="text-sm font-medium text-ink">{t.crewVisibleLabel}</Text>
+                    <Text className="text-xs text-faint">{t.crewVisibleHint}</Text>
                   </View>
                   <Toggle value={crewVisible} onValueChange={setCrewVisible} />
                 </View>
@@ -570,22 +574,22 @@ function FileSheets({
           {/* File form */}
           {sheet.type === 'file' ? (
             <View className="gap-4">
-              <Text className="text-lg font-bold text-gray-900 px-1">{fileEditing ? tc.buttons.edit : t.addEntry}</Text>
+              <Text className="text-lg font-bold text-ink px-1">{fileEditing ? tc.buttons.edit : t.addEntry}</Text>
               {!fileEditing ? (
-                <View className="flex-row p-1 rounded-2xl bg-gray-100">
+                <View className="flex-row p-1 rounded-2xl bg-border-soft">
                   {(['file', 'link'] as const).map(k => (
-                    <Pressable key={k} onPress={() => setKind(k)} className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${kind === k ? 'bg-white' : ''}`}>
-                      {k === 'file' ? <Upload size={14} color={kind === k ? '#4F46E5' : '#6B7280'} /> : <Link2 size={14} color={kind === k ? '#4F46E5' : '#6B7280'} />}
-                      <Text className={`text-sm font-semibold ${kind === k ? 'text-primary' : 'text-gray-500'}`}>{k === 'file' ? t.kindFile : t.kindLink}</Text>
+                    <Pressable key={k} onPress={() => setKind(k)} className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${kind === k ? 'bg-card' : ''}`}>
+                      {k === 'file' ? <Upload size={14} color={kind === k ? c.primary : c.muted} /> : <Link2 size={14} color={kind === k ? c.primary : c.muted} />}
+                      <Text className={`text-sm font-semibold ${kind === k ? 'text-primary' : 'text-muted'}`}>{k === 'file' ? t.kindFile : t.kindLink}</Text>
                     </Pressable>
                   ))}
                 </View>
               ) : null}
               <Input label={t.entryTitleLabel} placeholder={t.entryTitlePlaceholder} value={title} onChangeText={setTitle} />
               {!fileEditing && kind === 'file' ? (
-                <Pressable onPress={pickFile} className="flex-row items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-gray-300">
-                  <Upload size={18} color="#9CA3AF" />
-                  <Text className="text-sm text-gray-600 flex-1" numberOfLines={1}>{picked ? picked.name : t.chooseFile}</Text>
+                <Pressable onPress={pickFile} className="flex-row items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-border">
+                  <Upload size={18} color={c.faint} />
+                  <Text className="text-sm text-muted flex-1" numberOfLines={1}>{picked ? picked.name : t.chooseFile}</Text>
                 </Pressable>
               ) : (fileEditing?.kind === 'link' || (!fileEditing && kind === 'link')) ? (
                 <Input label={t.linkUrlLabel} placeholder={t.linkUrlPlaceholder} value={url} onChangeText={setUrl} autoCapitalize="none" />
@@ -593,11 +597,11 @@ function FileSheets({
 
               {/* Per-file visibility override */}
               <View>
-                <Text className="text-sm font-medium text-gray-700 mb-1.5">{t.visibilityLabel}</Text>
-                <View className="flex-row p-1 rounded-2xl bg-gray-100">
+                <Text className="text-sm font-medium text-ink mb-1.5">{t.visibilityLabel}</Text>
+                <View className="flex-row p-1 rounded-2xl bg-border-soft">
                   {VIS.map(v => (
-                    <Pressable key={v.key} onPress={() => setVis(v.key)} className={`flex-1 rounded-xl py-2 items-center ${vis === v.key ? 'bg-white' : ''}`}>
-                      <Text className={`text-xs font-semibold ${vis === v.key ? 'text-primary' : 'text-gray-500'}`}>{v.label}</Text>
+                    <Pressable key={v.key} onPress={() => setVis(v.key)} className={`flex-1 rounded-xl py-2 items-center ${vis === v.key ? 'bg-card' : ''}`}>
+                      <Text className={`text-xs font-semibold ${vis === v.key ? 'text-primary' : 'text-muted'}`}>{v.label}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -613,45 +617,45 @@ function FileSheets({
              The bottom button moves into the current breadcrumb level. */}
           {sheet.type === 'move' ? (
             <View className="gap-3">
-              <Text className="text-lg font-bold text-gray-900 px-1">
+              <Text className="text-lg font-bold text-ink px-1">
                 {t.moveTitle}
               </Text>
-              <Text className="text-xs text-gray-400 px-1 -mt-1">{t.moveHint}</Text>
+              <Text className="text-xs text-faint px-1 -mt-1">{t.moveHint}</Text>
               {/* Current location + an up control to climb out of the folder. */}
               <View className="flex-row items-center gap-2">
                 {!moveAtHome ? (
-                  <Pressable onPress={goUpInMove} hitSlop={6} className="w-8 h-8 rounded-lg bg-gray-100 items-center justify-center active:bg-gray-200">
-                    <ChevronLeft size={16} color="#374151" />
+                  <Pressable onPress={goUpInMove} hitSlop={6} className="w-8 h-8 rounded-lg bg-border-soft items-center justify-center active:bg-border">
+                    <ChevronLeft size={16} color={c.muted} />
                   </Pressable>
                 ) : null}
-                <Folder size={15} color="#4F46E5" />
-                <Text className="text-sm font-semibold text-gray-900 flex-1" numberOfLines={1}>
+                <Folder size={15} color={c.primary} />
+                <Text className="text-sm font-semibold text-ink flex-1" numberOfLines={1}>
                   {moveAtHome ? t.title : crumb.label}
                 </Text>
               </View>
               <ScrollView className="max-h-72" contentContainerClassName="gap-1.5">
                 {moveAtHome
-                  ? categories.map(c => (
-                      <View key={c.id} className="flex-row items-center rounded-xl border border-gray-100">
-                        <Pressable onPress={() => onDoMove({ categoryId: c.id, folderId: null })} className="flex-row items-center gap-2 px-3 py-3 flex-1">
-                          <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>{c.name}</Text>
+                  ? categories.map(cat => (
+                      <View key={cat.id} className="flex-row items-center rounded-xl border border-border-soft">
+                        <Pressable onPress={() => onDoMove({ categoryId: cat.id, folderId: null })} className="flex-row items-center gap-2 px-3 py-3 flex-1">
+                          <Folder size={15} color={c.primary} /><Text className="text-sm text-ink flex-1" numberOfLines={1}>{cat.name}</Text>
                         </Pressable>
-                        <Pressable onPress={() => setCrumb({ categoryId: c.id, folderId: null, label: c.name })} hitSlop={6} className="px-3 py-3 border-l border-gray-100">
-                          <ChevronRight size={16} color="#9CA3AF" />
+                        <Pressable onPress={() => setCrumb({ categoryId: cat.id, folderId: null, label: cat.name })} hitSlop={6} className="px-3 py-3 border-l border-border-soft">
+                          <ChevronRight size={16} color={c.faint} />
                         </Pressable>
                       </View>
                     ))
                   : moveSubFolders.map(f => (
-                      <View key={f.id} className="flex-row items-center rounded-xl border border-gray-100">
+                      <View key={f.id} className="flex-row items-center rounded-xl border border-border-soft">
                         <Pressable onPress={() => onDoMove({ categoryId: f.category_id, folderId: f.id })} className="flex-row items-center gap-2 px-3 py-3 flex-1">
-                          <Folder size={15} color="#4F46E5" /><Text className="text-sm text-gray-900 flex-1" numberOfLines={1}>{f.name}</Text>
+                          <Folder size={15} color={c.primary} /><Text className="text-sm text-ink flex-1" numberOfLines={1}>{f.name}</Text>
                         </Pressable>
-                        <Pressable onPress={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} hitSlop={6} className="px-3 py-3 border-l border-gray-100">
-                          <ChevronRight size={16} color="#9CA3AF" />
+                        <Pressable onPress={() => setCrumb({ categoryId: f.category_id, folderId: f.id, label: f.name })} hitSlop={6} className="px-3 py-3 border-l border-border-soft">
+                          <ChevronRight size={16} color={c.faint} />
                         </Pressable>
                       </View>
                     ))}
-                {!moveAtHome && moveSubFolders.length === 0 ? <Text className="text-xs text-gray-400 px-1 py-2">{t.emptyFolder}</Text> : null}
+                {!moveAtHome && moveSubFolders.length === 0 ? <Text className="text-xs text-faint px-1 py-2">{t.emptyFolder}</Text> : null}
               </ScrollView>
               <Button
                 onPress={() => crumb.categoryId && onDoMove({ categoryId: crumb.categoryId, folderId: crumb.folderId })}

@@ -17,6 +17,7 @@ import {
   type ResourceKey,
   type ViewScope,
 } from '@amixos/shared/lib/permissions';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import {
   EDITABLE_CAPS,
   capAppliesToRole,
@@ -34,7 +35,7 @@ function CheckBox({ checked, disabled, onPress }: { checked: boolean; disabled?:
     <Pressable
       onPress={disabled ? undefined : onPress}
       className={`w-6 h-6 rounded-md border items-center justify-center ${
-        checked ? 'bg-primary border-primary' : 'bg-white border-gray-300'
+        checked ? 'bg-primary border-primary' : 'bg-card border-border'
       } ${disabled ? 'opacity-50' : ''}`}
     >
       {checked ? <Check size={15} color="#FFFFFF" /> : null}
@@ -49,6 +50,7 @@ export default function RolesScreen() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;
   const tc = full.common;
+  const c = useThemeColors();
 
   useEffect(() => {
     if (currentRole && !can.manageMembers(currentRole)) router.back();
@@ -102,14 +104,14 @@ export default function RolesScreen() {
   const SCOPE_LABEL: Record<ViewScope, string> = { none: t.scopeNone, assigned: t.scopeAssigned, all: t.scopeAll };
 
   const Segmented = ({ value, onChange }: { value: ViewScope; onChange: (v: ViewScope) => void }) => (
-    <View className="flex-row rounded-lg border border-gray-200 overflow-hidden">
+    <View className="flex-row rounded-lg border border-border overflow-hidden">
       {(['none', 'assigned', 'all'] as ViewScope[]).map(s => (
         <Pressable
           key={s}
           onPress={editable ? () => onChange(s) : undefined}
-          className={`px-2.5 py-1 ${value === s ? 'bg-primary' : 'bg-white'} ${editable ? '' : 'opacity-60'}`}
+          className={`px-2.5 py-1 ${value === s ? 'bg-primary' : 'bg-card'} ${editable ? '' : 'opacity-60'}`}
         >
-          <Text className={`text-xs font-semibold ${value === s ? 'text-white' : 'text-gray-600'}`}>{SCOPE_LABEL[s]}</Text>
+          <Text className={`text-xs font-semibold ${value === s ? 'text-white' : 'text-muted'}`}>{SCOPE_LABEL[s]}</Text>
         </Pressable>
       ))}
     </View>
@@ -118,7 +120,7 @@ export default function RolesScreen() {
   const ActionChip = ({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) => (
     <Pressable onPress={editable ? onToggle : undefined} className="flex-row items-center gap-1.5">
       <CheckBox checked={checked} disabled={!editable} onPress={onToggle} />
-      <Text className="text-xs text-gray-600">{label}</Text>
+      <Text className="text-xs text-muted">{label}</Text>
     </Pressable>
   );
 
@@ -126,13 +128,13 @@ export default function RolesScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-1">
         <Pressable onPress={() => router.back()} hitSlop={8} className="p-2 -ml-2">
-          <ChevronLeft size={22} color="#111827" />
+          <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="text-base font-semibold text-gray-900 ml-1">{t.title}</Text>
+        <Text className="text-base font-semibold text-ink ml-1">{t.title}</Text>
       </View>
 
       <ScrollView contentContainerClassName="px-5 pb-40 pt-2">
-        <Text className="text-sm text-gray-500 mb-4">{t.subtitle}</Text>
+        <Text className="text-sm text-muted mb-4">{t.subtitle}</Text>
 
         {/* Role selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
@@ -141,9 +143,9 @@ export default function RolesScreen() {
               <Pressable
                 key={r}
                 onPress={() => setSelected(r)}
-                className={`px-3.5 py-2 rounded-xl border ${selected === r ? 'bg-primary border-primary' : 'bg-white border-gray-200'}`}
+                className={`px-3.5 py-2 rounded-xl border ${selected === r ? 'bg-primary border-primary' : 'bg-card border-border'}`}
               >
-                <Text className={`text-sm font-semibold ${selected === r ? 'text-white' : 'text-gray-700'}`}>
+                <Text className={`text-sm font-semibold ${selected === r ? 'text-white' : 'text-ink'}`}>
                   {ROLE_LABELS[r][locale]}{roleOverrides[r] ? ' •' : ''}
                 </Text>
               </Pressable>
@@ -151,11 +153,11 @@ export default function RolesScreen() {
           </View>
         </ScrollView>
 
-        <View className="bg-white rounded-2xl border border-gray-100 p-5">
+        <View className="bg-card rounded-2xl border border-border-soft p-5">
           <View className="flex-row items-start justify-between gap-3">
             <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">{ROLE_LABELS[selected][locale]}</Text>
-              <Text className="text-xs text-gray-500 mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</Text>
+              <Text className="text-base font-bold text-ink">{ROLE_LABELS[selected][locale]}</Text>
+              <Text className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</Text>
             </View>
             {customized && editable ? (
               <View className="bg-primary/10 px-2 py-0.5 rounded-full">
@@ -165,21 +167,21 @@ export default function RolesScreen() {
           </View>
 
           {!editable ? (
-            <View className="mt-4 flex-row items-center gap-2 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100">
-              <Lock size={15} color="#6B7280" />
-              <Text className="text-sm text-gray-500 flex-1">{t.ownerLocked}</Text>
+            <View className="mt-4 flex-row items-center gap-2 px-4 py-3 rounded-xl bg-surface border border-border-soft">
+              <Lock size={15} color={c.muted} />
+              <Text className="text-sm text-muted flex-1">{t.ownerLocked}</Text>
             </View>
           ) : null}
 
           {/* Data access */}
-          <Text className="text-xs font-semibold text-gray-400 uppercase mt-6 mb-1">{t.sectionData}</Text>
+          <Text className="text-xs font-semibold text-faint uppercase mt-6 mb-1">{t.sectionData}</Text>
           {RESOURCE_KEYS.map(r => {
             const meta = RESOURCE_ACTIONS[r];
             const rp = draft.resources[r];
             return (
-              <View key={r} className="border-t border-gray-50 py-3">
+              <View key={r} className="border-t border-border-soft py-3">
                 <View className="flex-row items-center justify-between mb-2">
-                  <Text className="text-sm font-medium text-gray-800">{t.resourceNames[r]}</Text>
+                  <Text className="text-sm font-medium text-ink">{t.resourceNames[r]}</Text>
                   {meta.assignedView ? (
                     <Segmented value={rp.view} onChange={v => setView(r, v)} />
                   ) : (
@@ -198,22 +200,22 @@ export default function RolesScreen() {
           })}
 
           {/* System */}
-          <Text className="text-xs font-semibold text-gray-400 uppercase mt-6 mb-1">{t.sectionSystem}</Text>
+          <Text className="text-xs font-semibold text-faint uppercase mt-6 mb-1">{t.sectionSystem}</Text>
           {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
-            <View key={key} className="flex-row items-center justify-between py-2.5 border-t border-gray-50">
-              <Text className="text-sm text-gray-800 flex-1 mr-3">{t.capNames[key]}</Text>
+            <View key={key} className="flex-row items-center justify-between py-2.5 border-t border-border-soft">
+              <Text className="text-sm text-ink flex-1 mr-3">{t.capNames[key]}</Text>
               <CheckBox checked={draft.caps[key]} disabled={!editable} onPress={() => setCap(key, !draft.caps[key])} />
             </View>
           ))}
         </View>
 
         {error ? (
-          <View className="mt-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100">
+          <View className="mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
             <Text className="text-sm text-red-600">{t.saveError}</Text>
           </View>
         ) : null}
         {saved && !dirty ? (
-          <View className="mt-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
+          <View className="mt-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-100">
             <Text className="text-sm text-emerald-700">{t.saved}</Text>
           </View>
         ) : null}
@@ -233,9 +235,9 @@ export default function RolesScreen() {
               )}
             </Pressable>
             {customized ? (
-              <Pressable onPress={confirmReset} disabled={busy} className="flex-row items-center gap-1.5 px-4 py-3.5 rounded-2xl bg-gray-100 active:bg-gray-200">
-                <RotateCcw size={15} color="#374151" />
-                <Text className="text-base font-semibold text-gray-700">{t.reset}</Text>
+              <Pressable onPress={confirmReset} disabled={busy} className="flex-row items-center gap-1.5 px-4 py-3.5 rounded-2xl bg-border-soft active:bg-border">
+                <RotateCcw size={15} color={c.muted} />
+                <Text className="text-base font-semibold text-ink">{t.reset}</Text>
               </Pressable>
             ) : null}
           </View>

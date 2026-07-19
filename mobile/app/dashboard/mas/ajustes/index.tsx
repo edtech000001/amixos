@@ -177,7 +177,7 @@ export default function AjustesIndex() {
           </View>
           {/* Pill switch */}
           <View className={`w-12 h-7 rounded-full p-0.5 ${resolved === 'dark' ? 'bg-primary' : 'bg-border'}`}>
-            <View className={`w-6 h-6 rounded-full bg-white ${resolved === 'dark' ? 'ml-auto' : ''}`} />
+            <View className={`w-6 h-6 rounded-full bg-card ${resolved === 'dark' ? 'ml-auto' : ''}`} />
           </View>
         </Pressable>
 

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Sparkles, X, ChevronLeft, Globe, ExternalLink } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { Input } from '@amixos/shared/ui';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -38,13 +39,12 @@ export interface PricingModalProps {
   onSelectPlan?: (key: PlanKey, period: BillingPeriod) => void;
 }
 
-const PRIMARY = '#4F46E5';
-
 export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalProps) {
   const { locale } = useLang();
   const en = locale === 'en';
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const c = useThemeColors();
 
   const user = useAuthStore((s) => s.user);
   const business = useAuthStore((s) => s.business);
@@ -127,11 +127,11 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
            ScrollView from scrolling anywhere but the buttons. */}
         <Pressable onPress={onClose} className="absolute inset-0 bg-black/40" />
         <View
-          className="bg-white rounded-t-3xl px-5 pt-4"
+          className="bg-card rounded-t-3xl px-5 pt-4"
           style={{ maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 16) + 8 }}
         >
           <View className="items-center mb-3">
-            <View className="w-10 h-1 bg-gray-200 rounded-full" />
+            <View className="w-10 h-1 bg-border rounded-full" />
           </View>
 
           {/* Header */}
@@ -143,20 +143,20 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                   hitSlop={8}
                   className="p-1 -ml-1 mr-1"
                 >
-                  <ChevronLeft size={22} color="#111827" />
+                  <ChevronLeft size={22} color={c.ink} />
                 </Pressable>
               ) : null}
-              <Text className="text-lg font-bold text-gray-900">{headerTitle}</Text>
+              <Text className="text-lg font-bold text-ink">{headerTitle}</Text>
             </View>
             <Pressable onPress={onClose} hitSlop={8} className="p-1">
-              <X size={20} color="#6B7280" />
+              <X size={20} color={c.muted} />
             </Pressable>
           </View>
 
           {view === 'plans' ? (
             <>
               {/* Monthly / annual segmented toggle */}
-              <View className="flex-row items-center self-start bg-gray-100 rounded-full p-1 mb-2">
+              <View className="flex-row items-center self-start bg-border-soft rounded-full p-1 mb-2">
                 {(['monthly', 'annual'] as BillingPeriod[]).map((p) => {
                   const active = period === p;
                   const label =
@@ -168,7 +168,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                       className={`flex-row items-center gap-1.5 px-4 py-1.5 rounded-full ${active ? 'bg-primary' : ''}`}
                     >
                       <Text
-                        className={`text-sm font-semibold ${active ? 'text-white' : 'text-gray-600'}`}
+                        className={`text-sm font-semibold ${active ? 'text-white' : 'text-muted'}`}
                       >
                         {label}
                       </Text>
@@ -188,7 +188,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 })}
               </View>
               {/* Always-on incentive — advertise the annual deal even on monthly. */}
-              <View className="self-start flex-row items-center bg-green-50 border border-green-200 rounded-full px-3 py-1.5 mb-1">
+              <View className="self-start flex-row items-center bg-green-500/10 border border-green-200 rounded-full px-3 py-1.5 mb-1">
                 <Text className="text-xs font-bold text-green-700">
                   🎁 {en ? '2 months free when you pay yearly' : '2 meses gratis al pagar por año'}
                 </Text>
@@ -207,11 +207,11 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                   }}
                   className="flex-row items-center gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 mt-3 active:opacity-80"
                 >
-                  <Globe size={18} color={PRIMARY} />
+                  <Globe size={18} color={c.primary} />
                   <Text className="flex-1 text-sm font-semibold text-primary">
                     {en ? 'Subscribe at amixos.com' : 'Suscríbete en amixos.com'}
                   </Text>
-                  <ExternalLink size={16} color={PRIMARY} />
+                  <ExternalLink size={16} color={c.primary} />
                 </Pressable>
               ) : null}
 
@@ -226,12 +226,12 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                       <View
                         key={plan.key}
                         className={`rounded-2xl border p-4 ${
-                          recommended ? 'border-primary' : 'border-gray-200'
+                          recommended ? 'border-primary' : 'border-border'
                         }`}
                       >
                         {recommended ? (
                           <View className="flex-row items-center self-start gap-1 bg-primary/10 rounded-full px-2.5 py-1 mb-2">
-                            <Sparkles size={12} color={PRIMARY} />
+                            <Sparkles size={12} color={c.primary} />
                             <Text className="text-xs font-semibold text-primary">
                               {en ? 'Most popular' : 'Más popular'}
                             </Text>
@@ -239,27 +239,27 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                         ) : null}
 
                         {/* Name + tagline */}
-                        <Text className="text-base font-bold text-gray-900">{copy.name}</Text>
-                        <Text className="text-xs text-gray-500 mt-0.5">{copy.tagline}</Text>
+                        <Text className="text-base font-bold text-ink">{copy.name}</Text>
+                        <Text className="text-xs text-muted mt-0.5">{copy.tagline}</Text>
 
                         {/* Price (or custom-pricing label for the contact-sales tier) */}
                         {custom ? (
                           <View className="mt-3">
-                            <Text className="text-2xl font-bold text-gray-900">
+                            <Text className="text-2xl font-bold text-ink">
                               {en ? 'Custom pricing' : 'Precio personalizado'}
                             </Text>
                           </View>
                         ) : (
                           <>
                             <View className="flex-row items-end mt-3">
-                              <Text className="text-3xl font-bold text-gray-900">${perMonth}</Text>
-                              <Text className="text-sm text-gray-500 mb-1 ml-1">
+                              <Text className="text-3xl font-bold text-ink">${perMonth}</Text>
+                              <Text className="text-sm text-muted mb-1 ml-1">
                                 {en ? '/mo' : '/mes'}
                               </Text>
                             </View>
                             {period === 'annual' ? (
                               <View className="mt-1">
-                                <Text className="text-xs text-gray-500">
+                                <Text className="text-xs text-muted">
                                   {en
                                     ? `billed annually · $${plan.annualTotal}/yr`
                                     : `facturado anualmente · $${plan.annualTotal}/año`}
@@ -279,9 +279,9 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                           {copy.features.map((f, i) => (
                             <View key={i} className="flex-row items-start gap-2">
                               <View className="mt-0.5">
-                                <Check size={16} color={PRIMARY} />
+                                <Check size={16} color={c.primary} />
                               </View>
-                              <Text className="flex-1 text-sm text-gray-700">{f}</Text>
+                              <Text className="flex-1 text-sm text-ink">{f}</Text>
                             </View>
                           ))}
                         </View>
@@ -325,7 +325,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 </View>
 
                 {/* Footer */}
-                <Text className="text-xs text-gray-400 text-center mt-4">
+                <Text className="text-xs text-faint text-center mt-4">
                   {en
                     ? '14-day free trial · no credit card'
                     : '14 días gratis · sin tarjeta de crédito'}
@@ -341,9 +341,9 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
               {submitted ? (
                 <View className="items-center py-10 px-4">
                   <View className="w-14 h-14 rounded-full bg-green-100 items-center justify-center mb-4">
-                    <Check size={28} color="#15803D" />
+                    <Check size={28} color={c.success} />
                   </View>
-                  <Text className="text-base font-semibold text-gray-900 text-center">
+                  <Text className="text-base font-semibold text-ink text-center">
                     {en
                       ? "Thanks! We'll be in touch soon."
                       : '¡Gracias! Te contactaremos pronto.'}
@@ -359,7 +359,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 </View>
               ) : (
                 <>
-                  <Text className="text-sm text-gray-500 mb-4">
+                  <Text className="text-sm text-muted mb-4">
                     {en
                       ? "Tell us about your team and we'll reach out with a custom plan."
                       : 'Cuéntanos sobre tu equipo y te contactaremos con un plan personalizado.'}
@@ -428,7 +428,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                     </Text>
                   </Pressable>
 
-                  <Text className="text-xs text-gray-400 text-center mt-3">
+                  <Text className="text-xs text-faint text-center mt-3">
                     {en
                       ? 'Enter an email or phone so we can reach you.'
                       : 'Ingresa un correo o teléfono para contactarte.'}
