@@ -21,13 +21,16 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
+import { formatPhoneInput, todayLocalISO, formatDateLong } from '@amixos/shared/lib/format';
+import { getPayrollPeriod, parsePayrollAnchor, normalizeFrequency, computePayrollRows, normalizePayrollConfig, type PayrollEmployee, type PayrollTimesheet } from '@amixos/shared/lib/payroll';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { foldSearchText } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import {
   EmployeesScreen,
   type EmployeeListItem,
   type TimesheetListItem,
+  type HourTotalItem,
 } from '@amixos/shared/screens/dashboard/EmployeesScreen';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
 import {
@@ -108,6 +111,7 @@ const US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 interface TsForm {
+  id: string;
   employee_id: string;
   worker_name: string;
   work_date: string;
@@ -136,6 +140,7 @@ const EMPTY_EMP: EmpForm = {
   custom_fields: {},
 };
 const EMPTY_TS = (): TsForm => ({
+  id: '',
   employee_id: '',
   worker_name: '',
   work_date: todayLocalISO(),
@@ -171,6 +176,8 @@ export default function EmpleadosRoute() {
   // appear in both). Empty in single-location mode.
   const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
+  const [hourTotals, setHourTotals] = useState<HourTotalItem[]>([]);
+  const [payPeriodLabel, setPayPeriodLabel] = useState<string | null>(null);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [members, setMembers] = useState<AccessMember[]>([]);
   const [invites, setInvites] = useState<AccessInvite[]>([]);
@@ -247,6 +254,46 @@ export default function EmpleadosRoute() {
       .limit(50);
     setTimesheets(data ?? []);
   };
+  // Per-worker hour totals for the CURRENT pay period (Hours tab). Uses the SAME
+  // engine as Payroll so hours logged on JOBS (total_hours + driver hours, split
+  // across crew assignments) count too — not just the timesheets table.
+  const loadHourTotals = async () => {
+    if (!business) return;
+    const biz = business as {
+      id: string;
+      payroll_frequency?: string | null;
+      payroll_anchor_date?: string | null;
+      payroll_custom_days?: number | null;
+      payroll_config?: unknown;
+    };
+    const freq = normalizeFrequency(biz.payroll_frequency);
+    const anchor = parsePayrollAnchor(biz.payroll_anchor_date);
+    const customDays = biz.payroll_custom_days ?? null;
+    const period = getPayrollPeriod(freq, new Date(), 0, anchor, customDays);
+    const [empRes, tsRes, jobRes] = await Promise.all([
+      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', biz.id),
+      supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', biz.id)
+        .gte('work_date', period.startStr).lte('work_date', period.endStr),
+      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
+        .eq('business_id', biz.id).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
+    ]);
+    const jobs = ((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; custom_fields: Record<string, unknown> | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
+      id: j.id, title: j.title, scheduled_date: j.scheduled_date,
+      total_hours: j.total_hours, driver_employee_ids: j.driver_employee_ids,
+      driver_hours: j.driver_hours, custom_fields: j.custom_fields,
+      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+    }));
+    const rows = computePayrollRows({
+      employees: (empRes.data ?? []) as PayrollEmployee[],
+      timesheets: (tsRes.data ?? []) as PayrollTimesheet[],
+      jobs,
+      period,
+      includeZero: false,
+      config: normalizePayrollConfig(biz.payroll_config),
+    });
+    setHourTotals(rows.map(r => ({ employeeId: r.employeeId, workerName: r.name, hours: r.hours })));
+    setPayPeriodLabel(`${formatDateLong(period.startStr, locale)} – ${formatDateLong(period.endStr, locale)}`);
+  };
 
   const loadTemplates = async () => {
     if (!business) return;
@@ -302,6 +349,7 @@ export default function EmpleadosRoute() {
     useCallback(() => {
       void loadPeople();
       void loadTimesheets();
+      void loadHourTotals();
       void loadTemplates();
       if (business) fetchEmployeeLocations(supabase, business.id).then(setEmpLocations).catch(() => setEmpLocations([]));
     }, [business?.id, locale]),
@@ -538,6 +586,26 @@ export default function EmpleadosRoute() {
     const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
     setSaving(true);
     setError('');
+    // Editing an existing entry: straight update (offline queue is only for the
+    // field-logging insert path). On failure, surface it like the insert path.
+    if (tsForm.id) {
+      const { error: upErr } = await supabase.from('timesheets').update({
+        employee_id: tsForm.employee_id || null,
+        worker_name: name,
+        work_date: tsForm.work_date,
+        hours_worked: tsForm.hours_worked,
+        job_description: tsForm.job_description || null,
+      }).eq('id', tsForm.id);
+      if (upErr) {
+        setError(__DEV__ ? `No se pudo guardar: ${upErr.message}` : 'No se pudo guardar.');
+        setSaving(false);
+        return;
+      }
+      try { await loadTimesheets(); await loadHourTotals(); } catch { /* stale list reconciles on refetch */ }
+      setSaving(false);
+      setTsModalOpen(false);
+      return;
+    }
     // Only the WRITE failing counts as "couldn't save". The list reload is a
     // separate concern — a failed refresh must not masquerade as a save error
     // (it would lie to the user when the row actually landed / was queued).
@@ -577,12 +645,37 @@ export default function EmpleadosRoute() {
     if (!queued) {
       try {
         await loadTimesheets();
+        await loadHourTotals();
       } catch {
         /* stale list is fine; next focus/refetch reconciles it */
       }
     }
     setSaving(false);
     setTsModalOpen(false);
+  };
+
+  const editTimesheet = (id: string) => {
+    const ts = timesheets.find((t) => t.id === id);
+    if (!ts) return;
+    setTsForm({
+      id: ts.id,
+      employee_id: ts.employee_id ?? '',
+      worker_name: ts.worker_name ?? '',
+      work_date: ts.work_date,
+      hours_worked: ts.hours_worked ?? 0,
+      job_description: ts.job_description ?? '',
+    });
+    setHoursText(ts.hours_worked != null ? String(ts.hours_worked) : '');
+    setError('');
+    setTsModalOpen(true);
+  };
+
+  const deleteTimesheet = async (id: string) => {
+    const ok = await confirm({ message: t.deleteHoursConfirm, confirmText: tc.buttons.delete, destructive: true });
+    if (!ok) return;
+    const { error: delErr } = await supabase.from('timesheets').delete().eq('id', id);
+    if (delErr) return;
+    try { await loadTimesheets(); await loadHourTotals(); } catch { /* stale list reconciles on refetch */ }
   };
 
   // App-access management (invite / change role / remove) lives in the person
@@ -661,7 +754,7 @@ export default function EmpleadosRoute() {
                 <View className="w-10 h-1 bg-border rounded-full" />
               </View>
               <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
-                <Text className="text-lg font-bold text-ink">{t.timesheetModal.title}</Text>
+                <Text className="text-lg font-bold text-ink">{tsForm.id ? t.timesheetModal.editTitle : t.timesheetModal.title}</Text>
                 <Pressable onPress={() => setTsModalOpen(false)} hitSlop={8}>
                   <X size={20} color={c.faint} />
                 </Pressable>
@@ -749,17 +842,11 @@ export default function EmpleadosRoute() {
                   <Text className="text-xs text-red-500 mt-1">{error}</Text>
                 ) : null}
 
-                <View className="flex-row gap-3 pt-3">
-                  <View className="flex-1">
-                    <Button variant="secondary" onPress={() => setTsModalOpen(false)} fullWidth>
-                      {tc.buttons.cancel}
-                    </Button>
-                  </View>
-                  <View className="flex-1">
-                    <Button onPress={saveTimesheet} loading={saving} fullWidth>
-                      {tc.buttons.save}
-                    </Button>
-                  </View>
+                {/* Cancel lives as the header X; just the primary action here. */}
+                <View className="pt-3">
+                  <Button onPress={saveTimesheet} loading={saving} fullWidth>
+                    {tc.buttons.save}
+                  </Button>
                 </View>
               </ScrollView>
             </View>
@@ -854,10 +941,14 @@ export default function EmpleadosRoute() {
         }))}
         employees={empList}
         timesheets={tsList}
+        hourTotals={hourTotals}
+        payPeriodLabel={payPeriodLabel}
         onAddEmployee={openAddEmp}
         onEditEmployee={openEditEmpById}
         onToggleActive={toggleActive}
         onLogHours={openLogHours}
+        onEditTimesheet={editTimesheet}
+        onDeleteTimesheet={deleteTimesheet}
         modalsSlot={modalsSlot}
       />
     </SafeAreaView>

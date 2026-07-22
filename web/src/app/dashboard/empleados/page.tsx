@@ -12,14 +12,17 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
+import { formatPhoneInput, todayLocalISO, formatDateLong } from '@amixos/shared/lib/format';
+import { getPayrollPeriod, parsePayrollAnchor, normalizeFrequency, computePayrollRows, normalizePayrollConfig, type PayrollEmployee, type PayrollTimesheet } from '@amixos/shared/lib/payroll';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
+import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import {
   EmployeesScreen,
   type EmployeeListItem,
   type TimesheetListItem,
+  type HourTotalItem,
 } from '@amixos/shared/screens/dashboard/EmployeesScreen';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
 import {
@@ -119,7 +122,7 @@ const EMPTY_EMP = {
   emergency_contact_phone: '',
   custom_fields: {} as Record<string, string>,
 };
-const EMPTY_TS  = { employee_id: '', worker_name: '', work_date: todayLocalISO(), hours_worked: 8, job_description: '' };
+const EMPTY_TS  = { id: '', employee_id: '', worker_name: '', work_date: todayLocalISO(), hours_worked: 8, job_description: '' };
 
 export default function EmpleadosPage() {
   const router = useRouter();
@@ -131,10 +134,16 @@ export default function EmpleadosPage() {
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, activeLocationId, locations } = useApp();
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  // Coming back from an employee detail lands at the top otherwise — restore
+  // the list scroll position once the rows have rendered. (This page has no
+  // loading flag; rows present = ready.)
+  useScrollRestore('employees-list', employees.length > 0);
   // Worker↔branch links — used to scope the list to the active branch (a worker
   // lent to another branch appears in both). Empty in single-location mode.
   const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
   const [timesheets, setTimesheets] = useState<RawTimesheet[]>([]);
+  const [hourTotals, setHourTotals] = useState<HourTotalItem[]>([]);
+  const [payPeriodLabel, setPayPeriodLabel] = useState<string | null>(null);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [accessRoles, setAccessRoles] = useState<{ key: string; name: string | null }[]>([]);
   const [members, setMembers] = useState<AccessMember[]>([]);
@@ -343,6 +352,40 @@ export default function EmpleadosPage() {
     const { data } = await supabase.from('timesheets').select('*').eq('business_id', business.id).order('work_date', { ascending: false }).limit(50);
     setTimesheets(data ?? []);
   };
+  // Per-worker hour totals for the CURRENT pay period (Hours tab). Uses the SAME
+  // engine as Payroll so hours logged on JOBS (total_hours + driver hours, split
+  // across crew assignments) count too — not just the timesheets table.
+  const loadHourTotals = async () => {
+    if (!business) return;
+    const bid = business.id;
+    const freq = normalizeFrequency(business.payroll_frequency);
+    const anchor = parsePayrollAnchor(business.payroll_anchor_date);
+    const customDays = business.payroll_custom_days ?? null;
+    const period = getPayrollPeriod(freq, new Date(), 0, anchor, customDays);
+    const [empRes, tsRes, jobRes] = await Promise.all([
+      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', bid),
+      supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', bid)
+        .gte('work_date', period.startStr).lte('work_date', period.endStr),
+      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
+        .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
+    ]);
+    const jobs = ((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; custom_fields: Record<string, unknown> | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
+      id: j.id, title: j.title, scheduled_date: j.scheduled_date,
+      total_hours: j.total_hours, driver_employee_ids: j.driver_employee_ids,
+      driver_hours: j.driver_hours, custom_fields: j.custom_fields,
+      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+    }));
+    const rows = computePayrollRows({
+      employees: (empRes.data ?? []) as PayrollEmployee[],
+      timesheets: (tsRes.data ?? []) as PayrollTimesheet[],
+      jobs,
+      period,
+      includeZero: false,
+      config: normalizePayrollConfig(business.payroll_config),
+    });
+    setHourTotals(rows.map(r => ({ employeeId: r.employeeId, workerName: r.name, hours: r.hours })));
+    setPayPeriodLabel(`${formatDateLong(period.startStr, locale)} – ${formatDateLong(period.endStr, locale)}`);
+  };
 
   const loadTemplates = async () => {
     if (!business) return;
@@ -398,7 +441,7 @@ export default function EmpleadosPage() {
     setEmployees(emps);
   };
 
-  useEffect(() => { loadPeople(); loadTimesheets(); loadTemplates(); }, [business]);
+  useEffect(() => { loadPeople(); loadTimesheets(); loadHourTotals(); loadTemplates(); }, [business]);
 
   // Worker↔branch assignments for the active business (for per-branch scoping).
   useEffect(() => {
@@ -479,7 +522,7 @@ export default function EmpleadosPage() {
   };
   // Row taps now navigate to the dedicated detail page; the list itself
   // only owns the "Add" modal for the create flow.
-  const openEditEmpById = (id: string) => router.push(`/dashboard/empleados/${id}`);
+  const openEditEmpById = (id: string) => { saveScrollAnchor('employees-list', id); router.push(`/dashboard/empleados/${id}`); };
   // Legacy edit-modal seed (dead code — the modal `open` condition gates
   // rendering to add-only now, so this is never reached. Kept inline for
   // one follow-up cleanup pass).
@@ -632,16 +675,41 @@ export default function EmpleadosPage() {
     const emp = employees.find(e => e.id === tsForm.employee_id);
     const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
     setSaving(true); setError('');
-    await supabase.from('timesheets').insert({
-      business_id: business!.id,
+    const payload = {
       employee_id: tsForm.employee_id || null,
       worker_name: name,
       work_date: tsForm.work_date,
       hours_worked: tsForm.hours_worked,
       job_description: tsForm.job_description || null,
-      status: 'completed',
+    };
+    if (tsForm.id) {
+      await supabase.from('timesheets').update(payload).eq('id', tsForm.id);
+    } else {
+      await supabase.from('timesheets').insert({ ...payload, business_id: business!.id, status: 'completed' });
+    }
+    await loadTimesheets(); await loadHourTotals(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS);
+  };
+
+  const editTimesheet = (id: string) => {
+    const ts = timesheets.find(t => t.id === id);
+    if (!ts) return;
+    setTsForm({
+      id: ts.id,
+      employee_id: ts.employee_id ?? '',
+      worker_name: ts.worker_name ?? '',
+      work_date: ts.work_date,
+      hours_worked: ts.hours_worked ?? 0,
+      job_description: ts.job_description ?? '',
     });
-    await loadTimesheets(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS);
+    setError('');
+    setTsModal(true);
+  };
+
+  const deleteTimesheet = async (id: string) => {
+    const ok = await confirm({ message: t.deleteHoursConfirm, confirmText: tc.buttons.delete, destructive: true });
+    if (!ok) return;
+    await supabase.from('timesheets').delete().eq('id', id);
+    await loadTimesheets(); await loadHourTotals();
   };
 
   // ─── App access (invite / change role / revoke / remove) ───────────────
@@ -1056,7 +1124,7 @@ export default function EmpleadosPage() {
         ) : null}
       </Modal>
 
-      <Modal open={tsModal} onClose={() => setTsModal(false)} title={t.timesheetModal.title}>
+      <Modal open={tsModal} onClose={() => setTsModal(false)} title={tsForm.id ? t.timesheetModal.editTitle : t.timesheetModal.title}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-ink">{t.timesheetModal.employeeLabel}</label>
@@ -1090,10 +1158,14 @@ export default function EmpleadosPage() {
       }))}
       employees={empList}
       timesheets={tsList}
+      hourTotals={hourTotals}
+      payPeriodLabel={payPeriodLabel}
       onAddEmployee={openAddEmp}
       onEditEmployee={openEditEmpById}
       onToggleActive={toggleActive}
       onLogHours={() => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); }}
+      onEditTimesheet={editTimesheet}
+      onDeleteTimesheet={deleteTimesheet}
       modalsSlot={modals}
     />
   );

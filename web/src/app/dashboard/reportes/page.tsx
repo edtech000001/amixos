@@ -567,7 +567,7 @@ export default function ReportesPage() {
       {byLocation.length > 0 && (
         <div className="mb-5">
           <Section title={locale === 'es' ? 'Por ubicación' : 'By location'}>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-border-soft">
               {byLocation.map(loc => (
                 <div key={loc.locationId ?? 'none'} className="flex items-center justify-between py-2.5">
                   <div className="flex items-center gap-2 min-w-0">

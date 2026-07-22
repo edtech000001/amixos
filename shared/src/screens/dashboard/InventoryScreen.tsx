@@ -82,7 +82,7 @@ export function InventoryScreen({
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
+    <ScrollView contentContainerClassName="px-6 pt-6 pb-44">
       {/* Header — the "add item" action lives in the bottom-right FAB. */}
       <View className="mb-5">
         <Text className="text-2xl font-bold text-ink">{t.title}</Text>

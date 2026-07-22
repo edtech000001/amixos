@@ -29,6 +29,7 @@ import {
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
+import { storageLimitBytes, storagePercent, formatBytes, wouldExceedStorage } from '@amixos/shared/lib/storageLimits';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
 
@@ -43,11 +44,31 @@ export default function ArchivosScreen() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.files;
   const tc = full.common;
   const c = useThemeColors();
+  const es = locale === 'es';
   const canManage = can.manageFiles(currentRole);
+
+  // Storage usage meter (mirrors web). Limit comes from the plan; null = unlimited.
+  const subInfo = business ? {
+    plan: business.plan,
+    subscription_status: business.subscription_status,
+    trial_ends_at: business.trial_ends_at,
+    current_period_end: business.current_period_end,
+  } : null;
+  const limitBytes = subInfo ? storageLimitBytes(subInfo) : null;
+  const [usedBytes, setUsedBytes] = useState<number | null>(null);
+
+  // Blocks an upload that would push the business over its plan's storage limit
+  // (mirrors web). Refetches usage fresh so the check is accurate.
+  const checkStorageExceeded = useCallback(async (fileBytes: number): Promise<boolean> => {
+    if (!business || !subInfo) return false;
+    const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
+    return wouldExceedStorage(subInfo, Number(data ?? 0), fileBytes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
 
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [folders, setFolders] = useState<FileFolder[]>([]);
@@ -72,6 +93,9 @@ export default function ArchivosScreen() {
     setFolders(tree.folders);
     setEntries(tree.entries);
     setLoading(false);
+    // Refresh storage usage alongside the tree (after uploads/deletes too).
+    const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
+    setUsedBytes(Number(data ?? 0));
   }, [business?.id]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -206,6 +230,35 @@ export default function ArchivosScreen() {
       ) : null}
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-32">
+        {/* Storage usage meter (mirrors web) — only at the top-level files view. */}
+        {atHome && business ? (
+          limitBytes === null ? (
+            <Text className="text-xs text-faint mb-4">{es ? 'Almacenamiento ilimitado' : 'Unlimited storage'}</Text>
+          ) : (() => {
+            const used = usedBytes ?? 0;
+            const pct = storagePercent(used, limitBytes);
+            const full100 = used >= limitBytes;
+            const barColor = full100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-primary';
+            return (
+              <View className="rounded-xl border border-border-soft bg-card px-4 py-3 mb-4">
+                <View className="flex-row items-center justify-between mb-1.5">
+                  <Text className="text-sm font-medium text-ink">{es ? 'Almacenamiento' : 'Storage'}</Text>
+                  <Text className="text-xs text-muted">
+                    {formatBytes(used)} {es ? 'de' : 'of'} {formatBytes(limitBytes)}
+                  </Text>
+                </View>
+                <View className="h-1.5 w-full rounded-full bg-border-soft overflow-hidden">
+                  <View className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                </View>
+                {full100 ? (
+                  <Text className="text-xs text-red-500 mt-1.5">
+                    {es ? 'Almacenamiento lleno · mejora tu plan' : 'Storage full · upgrade your plan'}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })()
+        ) : null}
         {atHome ? <Text className="text-sm text-muted mb-5">{t.subtitle}</Text> : null}
 
         {loading ? (
@@ -303,6 +356,7 @@ export default function ArchivosScreen() {
           onPick={(next) => setSheet(next)}
           onMove={moveSelection}
           onSaved={() => { setSheet(null); void load(); }}
+          onCheckStorage={checkStorageExceeded}
         />
       ) : null}
     </SafeAreaView>
@@ -369,7 +423,7 @@ function FolderRow({ name, count, badge, onOpen, canManage, onEdit, onDelete, se
 // move picker). animationType="fade" keeps the backdrop steady.
 function FileSheets({
   sheet, atHome, categoryId, folderId, categories, folders, selectedCount, selectedFolderIds,
-  businessId, userId, onClose, onPick, onMove, onSaved,
+  businessId, userId, onClose, onPick, onMove, onSaved, onCheckStorage,
 }: {
   sheet: NonNullable<Sheet>;
   atHome: boolean; categoryId: string | null; folderId: string | null;
@@ -381,8 +435,11 @@ function FileSheets({
   onClose: () => void; onPick: (s: Sheet) => void;
   onMove: (target: { categoryId: string; folderId: string | null }) => void;
   onSaved: () => void;
+  /** Returns true if uploading `fileBytes` would exceed the storage limit. */
+  onCheckStorage: (fileBytes: number) => Promise<boolean>;
 }) {
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
+  const es = locale === 'es';
   const t = full.dashboard.files;
   const tc = full.common;
   const c = useThemeColors();
@@ -477,6 +534,11 @@ function FileSheets({
       if (kind === 'file' && !picked) { setError(t.chooseFile); setSaving(false); return; }
       if (kind === 'link' && !url.trim()) { setError(t.linkUrlLabel); setSaving(false); return; }
       if (kind === 'file' && picked) {
+        if (await onCheckStorage(picked.size ?? 0)) {
+          setError(es ? 'No hay suficiente almacenamiento. Mejora tu plan para subir más.' : 'Not enough storage. Upgrade your plan to upload more.');
+          setSaving(false);
+          return;
+        }
         const path = fileStoragePath(businessId, fileUid(), picked.name);
         const blob = await fetch(picked.uri).then(r => r.blob());
         const arrayBuffer = await new Response(blob).arrayBuffer();

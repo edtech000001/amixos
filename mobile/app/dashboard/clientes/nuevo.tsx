@@ -634,7 +634,7 @@ export default function NuevoClienteRoute() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerClassName="px-5 pt-5 pb-32"
+          contentContainerClassName="px-5 pt-5 pb-44"
           keyboardShouldPersistTaps="handled"
         >
           {CLIENT_FIELD_SECTIONS.map(renderSection)}

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
-import { formatDateLong, daysOverdue } from '../../lib/format';
+import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 
@@ -460,16 +460,26 @@ export function InvoicesListScreen({
                 {section.data.map((inv) => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;
-                  // Overdue folds the day count into the pill ("Overdue by N days").
-                  const pillLabel = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
-                    ? `${statusLabel} ${t.daysOverdue.replace('{{n}}', String(daysOverdue(inv.dueDate)))}`
-                    : statusLabel;
+                  // Pill shows only the status word — the elapsed count goes next
+                  // to the date (like "sent Nd ago"), not folded into the pill.
+                  const pillLabel = statusLabel;
                   const pill = STATUS_PILL[inv.status] ?? 'bg-border-soft text-muted';
                   const client = inv.clientNames ?? t.noClient;
                   const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
+                  // Elapsed info shown next to the date: "sent Nd ago" (open sent)
+                  // or "overdue by Nd" (overdue).
+                  const sentAgo = inv.status === 'sent' && inv.sentAt
+                    ? (() => { const n = daysSince(inv.sentAt); return n === 0 ? t.sentToday : t.sentAgo.replace('{{n}}', String(n)); })()
+                    : null;
+                  const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
+                    ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
+                    : null;
                   return (
                     <button
                       key={inv.id}
+                      // Lets the page's scroll restore find and re-center this
+                      // exact row when the user returns from the detail.
+                      data-scroll-anchor={inv.id}
                       onClick={(e) => (selectMode ? handleSelectClick(inv.id, e.shiftKey) : onInvoicePress(inv.id))}
                       className={`w-full flex items-center gap-4 px-5 py-4 border-b border-border-soft last:border-b-0 text-left transition-colors ${
                         selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'hover:bg-surface'
@@ -493,6 +503,8 @@ export function InvoicesListScreen({
                         <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
+                          {sentAgo ? ` · ${sentAgo}` : ''}
+                          {overdueAgo ? ` · ${overdueAgo}` : ''}
                         </span>
                       </div>
                       <span className="hidden md:flex w-36 shrink-0">
@@ -501,6 +513,8 @@ export function InvoicesListScreen({
                       <span className="hidden md:block flex-1 min-w-0 text-sm text-muted truncate">{client}</span>
                       <span className="hidden lg:block w-48 shrink-0 text-xs text-faint truncate">
                         {due ? t.dueShort.replace('{{date}}', due) : ''}
+                        {sentAgo ? `${due ? ' · ' : ''}${sentAgo}` : ''}
+                        {overdueAgo ? `${due ? ' · ' : ''}${overdueAgo}` : ''}
                       </span>
                       <span className="text-sm font-bold text-ink shrink-0 w-28 text-right">{fmt(inv.totalAmount)}</span>
                     </button>

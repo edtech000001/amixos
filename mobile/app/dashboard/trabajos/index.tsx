@@ -64,6 +64,13 @@ export default function TrabajosTab() {
   const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
+  // The on-focus refresh calls a load() captured on an old render (stale
+  // closure), where rawJobs was still []. Reading the list through this
+  // "latest" ref keeps the empty-list fast paint from re-running on every
+  // return from a detail — which would shrink the full list back to 30 rows
+  // and throw away the scroll position.
+  const rawJobsRef = useRef<RawJob[]>(rawJobs);
+  rawJobsRef.current = rawJobs;
 
   // Only the columns the list actually renders/searches — `*` was hauling
   // notes, custom fields, and every timestamp for hundreds of rows.
@@ -92,7 +99,7 @@ export default function TrabajosTab() {
 
     // Fast first paint — the newest 30 in one small round-trip, so switching
     // to Jobs feels instant; the full set replaces it right after.
-    if (rawJobs.length === 0) {
+    if (rawJobsRef.current.length === 0) {
       const { data: first } = await baseQuery().order('created_at', { ascending: false }).limit(30);
       if (seq === loadSeqRef.current && first?.length) {
         setRawJobs(first as RawJob[]);
@@ -176,7 +183,7 @@ export default function TrabajosTab() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <JobsListScreen
         loading={loading}

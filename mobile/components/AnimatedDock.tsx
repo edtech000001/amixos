@@ -33,6 +33,10 @@ function dockRank(routeName: string, orderedKeys: string[]): number {
 // Visual constants. Tweak here to retune the dock's silhouette.
 const BAR_HEIGHT = 50;
 const BUBBLE_SIZE = 44;
+// How far the active bubble floats ABOVE the bar's top edge. 0 = centered on
+// the edge (half in the notch); a positive lift raises it so more of the
+// bubble clears the grey and it reads as floating.
+const BUBBLE_LIFT = 4;
 // Notch radius needs to be ≥ bubble radius so bubble fits cleanly in the
 // scoop. Slight margin (1–2px) gives a tiny visual breathing room.
 const NOTCH_RADIUS = 24;
@@ -234,7 +238,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
         bottom: 0,
         left: 0,
         right: 0,
-        height: BAR_HEIGHT + BUBBLE_SIZE / 2 + insets.bottom,
+        height: BAR_HEIGHT + BUBBLE_SIZE / 2 + BUBBLE_LIFT + insets.bottom,
       }}
       pointerEvents="box-none"
     >

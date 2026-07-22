@@ -9,7 +9,6 @@ import { ChevronUp, ChevronDown, ChevronRight, X, Check } from 'lucide-react-nat
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
-import type { InvoiceLang } from '@amixos/shared';
 import {
   INVOICE_PRESET_IDS,
   ALL_FONTS,
@@ -26,7 +25,6 @@ import {
   setColumn,
   setText,
   setLayoutMode,
-  setDefaultLanguage,
   invoiceNumberPrefix,
   hexToHsl,
   hslToHex,
@@ -340,18 +338,7 @@ export function InvoiceDesigner({
         </View>
       </Field>
 
-      {/* Default invoice language for new invoices */}
-      <Field label={t.defaultLanguage}>
-        <Seg<InvoiceLang>
-          value={value.defaultLanguage}
-          onChange={l => onChange(setDefaultLanguage(value, l))}
-          options={[
-            { value: 'es', label: 'Español' },
-            { value: 'en', label: 'English' },
-          ]}
-        />
-        <Text className="text-xs text-faint">{t.defaultLanguageHint}</Text>
-      </Field>
+      {/* Default language control moved to Ajustes → Facturas (main card). */}
 
       {/* Layout mode */}
       <Field label={t.layout}>
@@ -486,8 +473,9 @@ export function InvoiceDesigner({
       {/* Text blocks */}
       <Field label={t.textBlocks}>
         <View className="gap-3">
+          {/* headerNote removed — the per-invoice Notes field covers this; a
+              separate theme-level header note was redundant. */}
           {([
-            ['headerNote', t.headerNote],
             ['paymentInstructions', t.paymentInstructionsField],
             ['footer', t.footerField],
           ] as [keyof InvoiceTextBlocks, string][]).map(([key, label]) => (

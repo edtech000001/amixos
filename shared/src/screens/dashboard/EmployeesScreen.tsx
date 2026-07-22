@@ -4,6 +4,7 @@ import {
   Clock,
   ClipboardList,
   UserCheck,
+  Plus, Pencil, Trash2, X,
   Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -65,13 +66,27 @@ export interface TimesheetListItem {
   employeeId: string | null;
 }
 
+/** Per-worker hour total for the current pay period (Hours tab). */
+export interface HourTotalItem {
+  employeeId: string | null;
+  workerName: string | null;
+  hours: number;
+}
+
 export interface EmployeesScreenProps {
   employees: EmployeeListItem[];
   timesheets: TimesheetListItem[];
+  /** Per-worker hour totals for the current pay period (Hours tab). */
+  hourTotals?: HourTotalItem[];
+  /** Human label for the current pay period, e.g. "Jul 14 – Jul 27". */
+  payPeriodLabel?: string | null;
   onAddEmployee: () => void;
   onEditEmployee: (id: string) => void;
   onToggleActive: (id: string) => void;
   onLogHours: () => void;
+  /** Edit / delete a logged-hours entry (History tab). */
+  onEditTimesheet?: (id: string) => void;
+  onDeleteTimesheet?: (id: string) => void;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
   /** Custom-field definitions (from employee_field_templates) — drive the
@@ -80,15 +95,19 @@ export interface EmployeesScreenProps {
   customFieldDefs?: CustomFieldDef[];
 }
 
-type Tab = 'empleados' | 'horas';
+type Tab = 'empleados' | 'horas' | 'historial';
 
 export function EmployeesScreen({
   employees,
   timesheets,
+  hourTotals,
+  payPeriodLabel,
   onAddEmployee,
   onEditEmployee,
   onToggleActive,
   onLogHours,
+  onEditTimesheet,
+  onDeleteTimesheet,
   customFieldDefs,
   modalsSlot,
 }: EmployeesScreenProps) {
@@ -176,19 +195,25 @@ export function EmployeesScreen({
     });
   }, [employees, search, filterFields, filterSel]);
 
+  const [tsSearch, setTsSearch] = useState('');
+  const filteredTimesheets = useMemo(() => {
+    const q = norm(tsSearch.trim());
+    if (!q) return timesheets;
+    return timesheets.filter(ts =>
+      norm(`${ts.workerName ?? ''} ${ts.jobDescription ?? ''}`).includes(q));
+  }, [timesheets, tsSearch]);
+
   const activeCount = employees.filter(e => e.active).length;
-  const totalHoursThisWeek = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
-    return timesheets
-      .filter(ts => new Date(ts.workDate) >= start)
-      .reduce((s, ts) => s + (ts.hoursWorked ?? 0), 0);
-  }, [timesheets]);
+  // Total hours across the current pay period — includes job hours (via the
+  // hourTotals the route computes with the Payroll engine), not just timesheets.
+  const periodHours = useMemo(
+    () => Number((hourTotals ?? []).reduce((s, h) => s + h.hours, 0).toFixed(1)),
+    [hourTotals],
+  );
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-36">
+    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-44">
       {/* Header — "add" is the bottom-right Fab; log-hours stays here as a
          secondary action. */}
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
@@ -199,7 +224,7 @@ export function EmployeesScreen({
               ? t.resultsCount.replace('{{count}}', String(filteredEmployees.length))
               : t.summary
                   .replace('{{active}}', String(activeCount))
-                  .replace('{{hours}}', String(totalHoursThisWeek))}
+                  .replace('{{hours}}', String(periodHours))}
           </Text>
         </View>
         <Pressable
@@ -213,7 +238,7 @@ export function EmployeesScreen({
 
       {/* Tabs */}
       <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl mb-6 self-start">
-        {(['empleados', 'horas'] as const).map(tabKey => (
+        {(['empleados', 'horas', 'historial'] as const).map(tabKey => (
           <Pressable
             key={tabKey}
             onPress={() => setTab(tabKey)}
@@ -388,61 +413,111 @@ export function EmployeesScreen({
           </View>
         )}
         </>
-      ) : (
-        timesheets.length === 0 ? (
-          <View className="items-center py-20">
-            <ClipboardList size={40} color={c.faint} />
-            <Text className="text-sm text-faint mt-3">{t.emptyTimesheets}</Text>
-          </View>
-        ) : (
-          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-            <View className="flex-row px-5 py-3 border-b border-border-soft">
-              <Text className="flex-1 text-xs font-semibold text-faint uppercase">
-                {t.timesheetCols.worker}
-              </Text>
-              <Text className="w-20 text-xs font-semibold text-faint uppercase text-center">
-                {t.timesheetCols.date}
-              </Text>
-              <Text className="w-16 text-xs font-semibold text-faint uppercase text-center">
-                {t.timesheetCols.hours}
-              </Text>
-              <Text className="w-28 text-xs font-semibold text-faint uppercase">
-                {t.timesheetCols.work}
-              </Text>
+      ) : tab === 'horas' ? (
+        /* Hours tab — per-worker totals for the current pay period. */
+        <>
+          {payPeriodLabel ? (
+            <Text className="text-xs text-faint mb-3">
+              {t.hoursThisPeriod.replace('{{period}}', payPeriodLabel)}
+            </Text>
+          ) : null}
+          {(hourTotals ?? []).length === 0 ? (
+            <View className="items-center py-20">
+              <ClipboardList size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">{t.emptyHourTotals}</Text>
             </View>
-            {timesheets.map((ts, i) => (
-              <View
-                key={ts.id}
-                className={`flex-row items-center px-5 py-3 ${
-                  i < timesheets.length - 1 ? 'border-b border-border-soft' : ''
-                }`}
-              >
-                <Text className="flex-1 text-sm text-ink font-medium" numberOfLines={1}>
-                  {ts.workerName ?? '—'}
-                </Text>
-                <Text className="w-20 text-xs text-muted text-center">
-                  {new Date(ts.workDate).toLocaleDateString(dateLocale, {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Text>
-                <Text className="w-16 text-sm font-semibold text-ink text-center">
-                  {ts.hoursWorked ?? '—'}
-                </Text>
-                <Text className="w-28 text-xs text-faint" numberOfLines={1}>
-                  {ts.jobDescription ?? '—'}
-                </Text>
-              </View>
-            ))}
+          ) : (
+            <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+              {(hourTotals ?? []).map((h, i) => (
+                <View
+                  key={(h.employeeId ?? h.workerName ?? '') + i}
+                  className={`flex-row items-center px-5 py-4 ${
+                    i < (hourTotals ?? []).length - 1 ? 'border-b border-border-soft' : ''
+                  }`}
+                >
+                  <Text className="flex-1 text-sm text-ink font-semibold" numberOfLines={1}>
+                    {h.workerName ?? '—'}
+                  </Text>
+                  <Text className="text-sm font-bold text-ink">{Number(h.hours.toFixed(2))}h</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Search + add new entry */}
+          <View className="flex-row items-center gap-2 mb-4">
+            <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5 py-2.5">
+              <Search size={16} color={c.faint} />
+              <TextInput
+                value={tsSearch}
+                onChangeText={setTsSearch}
+                placeholder={t.hoursSearchPlaceholder}
+                placeholderTextColor={c.faint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="flex-1 ml-2 text-sm text-ink"
+              />
+              {tsSearch ? (
+                <Pressable onPress={() => setTsSearch('')} hitSlop={8}>
+                  <X size={16} color={c.faint} />
+                </Pressable>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={onLogHours}
+              className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
+            >
+              <Plus size={15} color="#fff" />
+              <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
+            </Pressable>
           </View>
-        )
+          {filteredTimesheets.length === 0 ? (
+            <View className="items-center py-20">
+              <ClipboardList size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</Text>
+            </View>
+          ) : (
+            <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+              {filteredTimesheets.map((ts, i) => (
+                <View
+                  key={ts.id}
+                  className={`flex-row items-center px-4 py-3 ${
+                    i < filteredTimesheets.length - 1 ? 'border-b border-border-soft' : ''
+                  }`}
+                >
+                  <View className="flex-1 min-w-0 pr-2">
+                    <Text className="text-sm text-ink font-semibold" numberOfLines={1}>
+                      {ts.workerName ?? '—'}
+                    </Text>
+                    <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
+                      {new Date(ts.workDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
+                      {ts.jobDescription ? ` · ${ts.jobDescription}` : ''}
+                    </Text>
+                  </View>
+                  <Text className="text-sm font-semibold text-ink mr-1">
+                    {ts.hoursWorked ?? '—'}h
+                  </Text>
+                  <Pressable onPress={() => onEditTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+                    <Pencil size={16} color={c.muted} />
+                  </Pressable>
+                  <Pressable onPress={() => onDeleteTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+                    <Trash2 size={16} color={c.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       {modalsSlot}
     </ScrollView>
 
-    {/* New employee — floating action, bottom-right thumb reach */}
-    <Fab onPress={onAddEmployee} />
+    {/* New employee — floating action, bottom-right thumb reach. The Hours
+       logged tab has its own inline "add entry" button. */}
+    {tab === 'empleados' ? <Fab onPress={onAddEmployee} /> : null}
     </View>
   );
 }

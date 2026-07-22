@@ -258,6 +258,43 @@ export function JobsListScreen({
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
 
+  // Re-anchor after returning from a job detail. The screen stays mounted so
+  // the native scroll offset survives, but the on-focus refresh can regroup /
+  // reorder rows — a preserved pixel offset would then point at a different
+  // job. So: remember which job was opened, and when the refreshed data lands
+  // scroll that row back into view (positions tracked via onLayout).
+  const scrollRef = useRef<ScrollView>(null);
+  const listTopY = useRef(0);
+  const rowY = useRef<Record<string, number>>({});
+  // Anchor = the opened job + where its row sat when it was tapped, so the
+  // effect below can tell "row moved" apart from "nothing changed".
+  const pendingAnchor = useRef<{ id: string; y: number | null } | null>(null);
+  const openJob = (id: string) => {
+    pendingAnchor.current = { id, y: rowY.current[id] ?? null };
+    onJobPress(id);
+  };
+  useEffect(() => {
+    const anchor = pendingAnchor.current;
+    if (!anchor) return;
+    // A partial fast-paint (first 30 rows) may not include the anchored job —
+    // keep the anchor armed until a data set containing it lands.
+    if (!jobs.some(j => j.id === anchor.id)) return;
+    pendingAnchor.current = null;
+    // Small delay so the refreshed rows have laid out (onLayout fired) before
+    // we read their positions.
+    const timer = setTimeout(() => {
+      const y = rowY.current[anchor.id];
+      if (y == null) return;
+      // The native scroll offset already survived the round-trip. Only
+      // re-scroll when the refresh actually MOVED the row (regrouped /
+      // reordered) — re-scrolling an unmoved row visibly hops the list a
+      // second time for no reason.
+      if (anchor.y != null && Math.abs(y - anchor.y) < 2) return;
+      scrollRef.current?.scrollTo({ y: Math.max(0, listTopY.current + y - 120), animated: false });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [jobs]);
+
   // Persisted filters are scoped per business so switching companies doesn't
   // carry one company's filters into another.
   const filtersKey = businessId ? `${JOBS_FILTERS_KEY}.${businessId}` : JOBS_FILTERS_KEY;
@@ -615,7 +652,14 @@ export function JobsListScreen({
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-96' : 'pb-36'}`}>
+    <ScrollView
+      ref={scrollRef}
+      className="flex-1"
+      contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-96' : 'pb-44'}`}
+      // A manual scroll after returning cancels the pending re-anchor so the
+      // list never yanks away from where the user just scrolled to.
+      onScrollBeginDrag={() => { pendingAnchor.current = null; }}
+    >
       {/* Header */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
@@ -795,7 +839,10 @@ export function JobsListScreen({
           ) : null}
         </View>
       ) : (
-        <View className="flex-col gap-3">
+        <View
+          className="flex-col gap-3"
+          onLayout={e => { listTopY.current = e.nativeEvent.layout.y; }}
+        >
           {sections.map(section => (
           <Fragment key={section.title ?? '__all__'}>
           {section.title ? (
@@ -820,7 +867,11 @@ export function JobsListScreen({
             return (
               // Outer view carries the shadow; inner clips content (RN clips
               // shadows under overflow-hidden).
-              <View key={job.id} className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
+              <View
+                key={job.id}
+                onLayout={e => { rowY.current[job.id] = e.nativeEvent.layout.y; }}
+                className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}
+              >
               <View
                 className={`rounded-2xl border overflow-hidden ${
                   picked
@@ -833,7 +884,7 @@ export function JobsListScreen({
                 }`}
               >
                 <Pressable
-                  onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : onJobPress(job.id))}
+                  onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : openJob(job.id))}
                   // Long-press enters selection with this job picked — same
                   // gesture as the clients list (discoverable bulk delete).
                   onLongPress={() => {

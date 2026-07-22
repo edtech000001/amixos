@@ -11,6 +11,7 @@ import {
   Clock,
   ClipboardList,
   UserCheck,
+  Pencil, Trash2,
   Search, X, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -71,13 +72,27 @@ export interface TimesheetListItem {
   employeeId: string | null;
 }
 
+/** Per-worker hour total for the current pay period (Hours tab). */
+export interface HourTotalItem {
+  employeeId: string | null;
+  workerName: string | null;
+  hours: number;
+}
+
 export interface EmployeesScreenProps {
   employees: EmployeeListItem[];
   timesheets: TimesheetListItem[];
+  /** Per-worker hour totals for the current pay period (Hours tab). */
+  hourTotals?: HourTotalItem[];
+  /** Human label for the current pay period, e.g. "Jul 14 – Jul 27". */
+  payPeriodLabel?: string | null;
   onAddEmployee: () => void;
   onEditEmployee: (id: string) => void;
   onToggleActive: (id: string) => void;
   onLogHours: () => void;
+  /** Edit / delete a logged-hours entry (History tab). */
+  onEditTimesheet?: (id: string) => void;
+  onDeleteTimesheet?: (id: string) => void;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
   /** Custom-field definitions (from employee_field_templates) — drive the
@@ -86,15 +101,19 @@ export interface EmployeesScreenProps {
   customFieldDefs?: CustomFieldDef[];
 }
 
-type Tab = 'empleados' | 'horas';
+type Tab = 'empleados' | 'horas' | 'historial';
 
 export function EmployeesScreen({
   employees,
   timesheets,
+  hourTotals,
+  payPeriodLabel,
   onAddEmployee,
   onEditEmployee,
   onToggleActive,
   onLogHours,
+  onEditTimesheet,
+  onDeleteTimesheet,
   customFieldDefs,
   modalsSlot,
 }: EmployeesScreenProps) {
@@ -181,15 +200,21 @@ export function EmployeesScreen({
     });
   }, [employees, search, filterFields, filterSel]);
 
+  const [tsSearch, setTsSearch] = useState('');
+  const filteredTimesheets = useMemo(() => {
+    const q = norm(tsSearch.trim());
+    if (!q) return timesheets;
+    return timesheets.filter(ts =>
+      norm(`${ts.workerName ?? ''} ${ts.jobDescription ?? ''}`).includes(q));
+  }, [timesheets, tsSearch]);
+
   const activeCount = employees.filter(e => e.active).length;
-  const totalHoursThisWeek = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
-    return timesheets
-      .filter(ts => new Date(ts.workDate) >= start)
-      .reduce((s, ts) => s + (ts.hoursWorked ?? 0), 0);
-  }, [timesheets]);
+  // Total hours across the current pay period — includes job hours (via the
+  // hourTotals the route computes with the Payroll engine), not just timesheets.
+  const periodHours = useMemo(
+    () => Number((hourTotals ?? []).reduce((s, h) => s + h.hours, 0).toFixed(1)),
+    [hourTotals],
+  );
 
   return (
     <div className="px-6 lg:px-8 pt-6 pb-12">
@@ -202,7 +227,7 @@ export function EmployeesScreen({
               ? t.resultsCount.replace('{{count}}', String(filteredEmployees.length))
               : t.summary
                   .replace('{{active}}', String(activeCount))
-                  .replace('{{hours}}', String(totalHoursThisWeek))}
+                  .replace('{{hours}}', String(periodHours))}
           </p>
         </div>
         <div className="flex gap-2">
@@ -227,7 +252,7 @@ export function EmployeesScreen({
 
       {/* Tabs */}
       <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl mb-6">
-        {(['empleados', 'horas'] as const).map(tabKey => (
+        {(['empleados', 'horas', 'historial'] as const).map(tabKey => (
           <button
             type="button"
             key={tabKey}
@@ -382,6 +407,9 @@ export function EmployeesScreen({
               <button
                 type="button"
                 key={e.id}
+                // Lets the page's scroll restore find and re-center this
+                // exact row when the user returns from the detail.
+                data-scroll-anchor={e.id}
                 onClick={() => onEditEmployee(e.id)}
                 className={`w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors ${
                   i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''
@@ -426,35 +454,112 @@ export function EmployeesScreen({
           </div>
         )}
         </>
-      ) : (
-        timesheets.length === 0 ? (
-          <div className="flex flex-col items-center py-20">
-            <ClipboardList size={40} className="text-faint" />
-            <p className="text-sm text-faint mt-3">{t.emptyTimesheets}</p>
-          </div>
-        ) : (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
-            <div className="flex px-5 py-3 border-b border-border-soft">
-              <span className="flex-1 text-xs font-semibold text-faint uppercase">{t.timesheetCols.worker}</span>
-              <span className="w-24 text-xs font-semibold text-faint uppercase text-center">{t.timesheetCols.date}</span>
-              <span className="w-16 text-xs font-semibold text-faint uppercase text-center">{t.timesheetCols.hours}</span>
-              <span className="w-40 text-xs font-semibold text-faint uppercase">{t.timesheetCols.work}</span>
+      ) : tab === 'horas' ? (
+        /* Hours tab — per-worker totals for the current pay period. */
+        <>
+          {payPeriodLabel ? (
+            <p className="text-xs text-faint mb-3">
+              {t.hoursThisPeriod.replace('{{period}}', payPeriodLabel)}
+            </p>
+          ) : null}
+          {(hourTotals ?? []).length === 0 ? (
+            <div className="flex flex-col items-center py-20">
+              <ClipboardList size={40} className="text-faint" />
+              <p className="text-sm text-faint mt-3">{t.emptyHourTotals}</p>
             </div>
-            {timesheets.map((ts, i) => (
-              <div
-                key={ts.id}
-                className={`flex items-center px-5 py-3 ${i < timesheets.length - 1 ? 'border-b border-border-soft' : ''}`}
-              >
-                <span className="flex-1 text-sm text-ink font-medium truncate">{ts.workerName ?? '—'}</span>
-                <span className="w-24 text-xs text-muted text-center">
-                  {new Date(ts.workDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
-                </span>
-                <span className="w-16 text-sm font-semibold text-ink text-center">{ts.hoursWorked ?? '—'}</span>
-                <span className="w-40 text-xs text-faint truncate">{ts.jobDescription ?? '—'}</span>
-              </div>
-            ))}
+          ) : (
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+              {(hourTotals ?? []).map((h, i) => (
+                <div
+                  key={(h.employeeId ?? h.workerName ?? '') + i}
+                  className={`flex items-center px-5 py-4 ${
+                    i < (hourTotals ?? []).length - 1 ? 'border-b border-border-soft' : ''
+                  }`}
+                >
+                  <span className="flex-1 text-sm font-semibold text-ink truncate">{h.workerName ?? '—'}</span>
+                  <span className="text-sm font-bold text-ink">{Number(h.hours.toFixed(2))}h</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Search + add new entry */}
+          <div className="flex items-start gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+              <input
+                value={tsSearch}
+                onChange={e => setTsSearch(e.target.value)}
+                placeholder={t.hoursSearchPlaceholder}
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="w-full rounded-2xl border border-border bg-card pl-10 pr-10 py-2.5 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {tsSearch ? (
+                <button type="button" onClick={() => setTsSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted">
+                  <X size={16} />
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onLogHours}
+              className="shrink-0 flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-2xl text-sm font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
+            >
+              <Plus size={15} className="text-white" />
+              {t.addHours}
+            </button>
           </div>
-        )
+          {filteredTimesheets.length === 0 ? (
+            <div className="flex flex-col items-center py-20">
+              <ClipboardList size={40} className="text-faint" />
+              <p className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</p>
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+              <div className="flex px-5 py-3 border-b border-border-soft">
+                <span className="flex-1 text-xs font-semibold text-faint uppercase">{t.timesheetCols.worker}</span>
+                <span className="w-24 text-xs font-semibold text-faint uppercase text-center">{t.timesheetCols.date}</span>
+                <span className="w-16 text-xs font-semibold text-faint uppercase text-center">{t.timesheetCols.hours}</span>
+                <span className="w-40 text-xs font-semibold text-faint uppercase">{t.timesheetCols.work}</span>
+                <span className="w-20 shrink-0" />
+              </div>
+              {filteredTimesheets.map((ts, i) => (
+                <div
+                  key={ts.id}
+                  className={`flex items-center px-5 py-3 ${i < filteredTimesheets.length - 1 ? 'border-b border-border-soft' : ''}`}
+                >
+                  <span className="flex-1 text-sm text-ink font-medium truncate">{ts.workerName ?? '—'}</span>
+                  <span className="w-24 text-xs text-muted text-center">
+                    {new Date(ts.workDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span className="w-16 text-sm font-semibold text-ink text-center">{ts.hoursWorked ?? '—'}</span>
+                  <span className="w-40 text-xs text-faint truncate">{ts.jobDescription ?? '—'}</span>
+                  <span className="w-20 shrink-0 flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onEditTimesheet?.(ts.id)}
+                      className="p-1.5 rounded-lg text-muted hover:bg-surface hover:text-primary transition-colors"
+                      aria-label={full.common.buttons.edit}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteTimesheet?.(ts.id)}
+                      className="p-1.5 rounded-lg text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                      aria-label={full.common.buttons.delete}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {modalsSlot}

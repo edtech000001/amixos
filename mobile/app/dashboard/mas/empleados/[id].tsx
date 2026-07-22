@@ -631,11 +631,13 @@ export default function EmpleadoDetailRoute() {
     router.replace('/dashboard/mas/empleados');
   };
 
-  // Back always returns to the empleados list. router.back() inside the
-  // Tabs navigator pops past the list into the home tab when [id] is
-  // pushed directly, so replace explicitly to the list route.
+  // Pop back to the existing list screen when there's history (the section
+  // has its own Stack, so back() lands on the list with its scroll position
+  // and loaded data intact — replace() would rebuild it from scratch).
+  // Deep links with no history still replace to the list route.
   const goBack = useCallback(() => {
-    router.replace('/dashboard/mas/empleados');
+    if (router.canGoBack()) router.back();
+    else router.replace('/dashboard/mas/empleados');
   }, [router]);
 
   // Snapshot the form when entering edit mode so the back guard only fires
@@ -703,7 +705,7 @@ export default function EmpleadoDetailRoute() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-5" keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-5" keyboardShouldPersistTaps="handled">
         {/* Avatar hero */}
         <View className="items-center gap-2 py-1">
           <View className={`w-24 h-24 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-border-soft'}`}>

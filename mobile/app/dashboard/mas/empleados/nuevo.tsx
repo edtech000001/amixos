@@ -486,7 +486,7 @@ export default function NuevoEmpleadoRoute() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerClassName="px-5 pt-5 pb-32 gap-4"
+          contentContainerClassName="px-5 pt-5 pb-44 gap-4"
           keyboardShouldPersistTaps="handled"
         >
           {EMPLOYEE_FIELD_SECTIONS.map(renderSection)}

@@ -11,6 +11,7 @@ import {
   Modal as RNModal,
   TextInput,
   Platform,
+  Image,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,9 +48,11 @@ import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h } from '@amixos/shared/lib/format';
@@ -107,6 +110,10 @@ interface Job {
   delegated_from_business_id: string | null;
   delegated_at: string | null;
   share_token: string | null;
+  client_response: 'accepted' | 'declined' | null;
+  client_responded_at: string | null;
+  client_signed_name: string | null;
+  client_signature: string | null;
   created_at: string;
   updated_at: string;
   custom_fields: Record<string, string> | null;
@@ -117,6 +124,7 @@ interface Job {
     company: string | null;
     phone_cell: string | null;
     phone_office: string | null;
+    email: string | null;
     email_office: string | null;
     email_home: string | null;
     address: string | null;
@@ -186,6 +194,11 @@ export default function JobDetailRoute() {
       router.replace('/dashboard/mas/calendario' as never);
     } else if (from === 'invoice' && fromInvoice) {
       router.replace(`/dashboard/facturas/${fromInvoice}` as never);
+    } else if (router.canGoBack()) {
+      // Pop back to the existing list screen (each section is its own Stack)
+      // so the list keeps its scroll position and loaded data — replace()
+      // would build a fresh list from scratch, resetting both.
+      router.back();
     } else {
       router.replace('/dashboard/trabajos' as never);
     }
@@ -294,7 +307,7 @@ export default function JobDetailRoute() {
         const { data, error } = await supabase
           .from('jobs')
           .select(
-            '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, custom_fields)',
+            '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email, email_office, email_home, address, city, state, zip_code, custom_fields)',
           )
           .eq('id', id)
           .single();
@@ -351,7 +364,7 @@ export default function JobDetailRoute() {
     if (!job) return false;
     let token = job.share_token;
     if (!token) {
-      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      token = secureShareToken();
       await supabase.from('jobs').update({ share_token: token }).eq('id', job.id);
       setJob((prev) => (prev ? { ...prev, share_token: token } : prev));
     }
@@ -421,9 +434,70 @@ export default function JobDetailRoute() {
     }
   };
 
-  // Opens the action sheet for "Enviar cotización" — lets the user share the
-  // link to the client (and auto-mark as sent) or just mark as sent without
-  // sending anything. Mirrors the web's share + mark-sent flow.
+  // Email the estimate: open the mail composer pre-filled with the client's
+  // address + the public accept-and-sign link, then mark sent (mirrors the
+  // invoice's send flow on web).
+  const emailProposal = async () => {
+    if (!job) return;
+    const cl = job.clients;
+    // Look the email up fresh at send time — the page may hold client data
+    // from before the user just added an email — and fall back to the
+    // client's contact people when the client record itself has none.
+    let email = '';
+    if (job.client_id) {
+      const { data: fresh } = await supabase
+        .from('clients')
+        .select('email, email_office, email_home')
+        .eq('id', job.client_id)
+        .maybeSingle();
+      email = fresh?.email || fresh?.email_office || fresh?.email_home || '';
+      if (!email) {
+        const { data: contacts } = await supabase
+          .from('client_contacts')
+          .select('email, is_primary')
+          .eq('client_id', job.client_id)
+          .not('email', 'is', null)
+          .order('is_primary', { ascending: false })
+          .limit(1);
+        email = contacts?.[0]?.email ?? '';
+      }
+    }
+    if (!email) { Alert.alert('', td.sendNoEmail); return; }
+    let token = job.share_token;
+    if (!token) {
+      token = secureShareToken();
+      await supabase.from('jobs').update({ share_token: token }).eq('id', job.id);
+      setJob((prev) => (prev ? { ...prev, share_token: token } : prev));
+    }
+    const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? '';
+    const url = `${webUrl}/propuesta/${token}`;
+    const { subject, body } = renderInvoiceEmail({
+      subjectTemplate: null,
+      bodyTemplate: null,
+      defaultSubject: td.emailSubject,
+      defaultBody: td.emailBody,
+      vars: {
+        number: job.estimate_number ?? '',
+        link: url,
+        client: cl ? `${cl.first_name} ${cl.last_name}`.trim() : '',
+        firstName: cl?.first_name ?? '',
+        lastName: cl?.last_name ?? '',
+        company: cl?.company ?? '',
+        business: business?.name ?? '',
+        total: `$${formatNumberGrouped(job.total_amount)}`,
+        dueDate: job.expiry_date ?? '',
+      },
+    });
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const canMail = await Linking.canOpenURL(mailto).catch(() => false);
+    if (!canMail) { Alert.alert('', td.shareError); return; }
+    openLink(mailto);
+    if (job.status === 'proposal') void updateStatus('sent');
+  };
+
+  // Opens the action sheet for "Enviar cotización" — email it, share the
+  // link (both auto-mark as sent), or just mark as sent without sending
+  // anything. Mirrors the web's send flow.
   const sendProposalAction = () => {
     if (!job) return;
     Alert.alert(td.sendAction, td.sendActionMessage, [
@@ -438,6 +512,10 @@ export default function JobDetailRoute() {
           const shared = await shareProposal();
           if (shared) void updateStatus('sent');
         },
+      },
+      {
+        text: td.emailAction,
+        onPress: () => void emailProposal(),
       },
     ]);
   };
@@ -489,11 +567,25 @@ export default function JobDetailRoute() {
     if (!job) return;
     setUpdatingStatus(true);
     const newStatus = job.estimate_number ? 'proposal' : 'scheduled';
+    // Clears the whole client response — decline record AND signed approval —
+    // so a reworked estimate can be re-sent and the client responds fresh.
+    // An old signature must never stand as proof for edited line items; who
+    // signed and when is preserved in the activity log below.
+    const update = {
+      status: newStatus, cancelled_at: null, declined_at: null,
+      client_response: null, client_responded_at: null,
+      client_signed_name: null, client_signature: null,
+    };
     await supabase
       .from('jobs')
-      .update({ status: newStatus, cancelled_at: null })
+      .update(update)
       .eq('id', job.id);
-    setJob((prev) => (prev ? { ...prev, status: newStatus, cancelled_at: null } : prev));
+    if (job.client_signature) {
+      void logAudit(supabase, job.business_id, 'job.signature_cleared', 'job', job.id, {
+        job_title: job.title, signed_name: job.client_signed_name, signed_at: job.client_responded_at,
+      });
+    }
+    setJob((prev) => (prev ? { ...prev, ...update } : prev));
     setUpdatingStatus(false);
   };
 
@@ -754,7 +846,9 @@ export default function JobDetailRoute() {
   const canCancel = !isCancelled && ['posible', 'proposal', 'sent', 'accepted', 'scheduled', 'in_progress'].includes(job.status);
   const confirmCancelJob = () => {
     confirmAction({
-      title: td.cancelJobConfirm,
+      // A signed estimate gets the stronger warning: cancelling + reinstating
+      // wipes the client's signed approval and restarts the approval flow.
+      title: job?.client_signature ? td.cancelSignedConfirm : td.cancelJobConfirm,
       confirmText: td.cancelJobBtn,
       destructive: true,
       onConfirm: () => void updateStatus('cancelled'),
@@ -984,11 +1078,18 @@ export default function JobDetailRoute() {
             <AlertTriangle size={18} color={c.danger} />
             <View className="flex-1">
               <Text className="text-sm font-semibold text-red-700">
-                {job.status === 'cancelled' ? td.cancelledBanner : td.declinedBanner}
+                {job.status === 'cancelled'
+                  ? td.cancelledBanner
+                  : job.client_response === 'declined' ? td.declinedByClientBanner : td.declinedBanner}
               </Text>
-              {job.cancelled_at ? (
+              {job.status === 'cancelled' && job.cancelled_at ? (
                 <Text className="text-xs text-red-600 mt-0.5">
-                  {td.cancelledOn} {fmtDateTime(job.cancelled_at)}
+                  {td.cancelledOn.replace('{{date}}', fmtDateTime(job.cancelled_at))}
+                </Text>
+              ) : null}
+              {job.status === 'declined' && job.declined_at ? (
+                <Text className="text-xs text-red-600 mt-0.5">
+                  {td.declinedOn.replace('{{date}}', fmtDateTime(job.declined_at))}
                 </Text>
               ) : null}
               <Pressable
@@ -1006,6 +1107,22 @@ export default function JobDetailRoute() {
         {/* Status pipeline */}
         {!isCancelled ? (
           <PipelineStrip pipeline={pipeline} currentIdx={pipelineIdx} />
+        ) : null}
+
+        {/* Client approval proof — the signature captured on the public
+           accept-and-sign page, kept on the job as record. */}
+        {isProposal && job.client_signature ? (
+          <View className="bg-card rounded-2xl border border-border-soft p-4 mb-5">
+            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{td.approvalTitle}</Text>
+            <View className="bg-white rounded-xl border border-border-soft p-2 mb-2 self-start">
+              <Image source={{ uri: job.client_signature }} style={{ width: 200, height: 56 }} resizeMode="contain" />
+            </View>
+            <Text className="text-xs text-muted">
+              {td.signedByLine
+                .replace('{{name}}', job.client_signed_name ?? '')
+                .replace('{{date}}', job.client_responded_at ? fmtDateTime(job.client_responded_at) : '')}
+            </Text>
+          </View>
         ) : null}
 
         {/* Primary actions */}
@@ -1064,7 +1181,9 @@ export default function JobDetailRoute() {
             </View>
           ) : null}
 
-          {!isCancelled && can.seeAllJobs(currentRole) ? (
+          {/* Crew share only once the work is actually scheduled — before
+             that there's no crew/date to send. */}
+          {['scheduled', 'in_progress'].includes(job.status) && can.seeAllJobs(currentRole) ? (
             <Pressable
               onPress={shareJobToCrew}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"

@@ -9,7 +9,7 @@ import {
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
-  MessageSquare, Navigation, Archive } from 'lucide-react';
+  MessageSquare, Navigation, Archive, Mail } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -18,10 +18,12 @@ import { useLang } from '@/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
@@ -47,10 +49,12 @@ interface Job {
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
   scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
   share_token: string | null; created_by: string | null; cancelled_at: string | null;
+  client_response: 'accepted' | 'declined' | null; client_responded_at: string | null;
+  client_signed_name: string | null; client_signature: string | null;
   delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
   created_at: string; updated_at: string;
   custom_fields: Record<string, string> | null;
-  clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null } | null;
+  clients: { id: string; first_name: string; last_name: string; company: string | null; phone_cell: string | null; email: string | null; email_office: string | null; email_home: string | null } | null;
 }
 interface JobFieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -173,7 +177,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
     const [{ data: j }, { data: a }, { data: it }, { data: tpl }] = await Promise.all([
-      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell)').eq('id', id).single(),
+      supabase.from('jobs').select('*, clients(id, first_name, last_name, company, phone_cell, email, email_office, email_home)').eq('id', id).single(),
       supabase.from('job_assignments').select('*, employees(id, first_name, last_name, user_id)').eq('job_id', id),
       supabase.from('job_items').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_field_templates').select('id, field_key, field_label, field_label_es, field_label_en, field_type').eq('business_id', business.id).order('sort_order'),
@@ -449,8 +453,22 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const reinstateJob = async () => {
     setUpdatingStatus(true);
     const newStatus = job?.estimate_number ? 'proposal' : 'scheduled';
-    await supabase.from('jobs').update({ status: newStatus, cancelled_at: null }).eq('id', id);
-    setJob(prev => prev ? { ...prev, status: newStatus, cancelled_at: null } : prev);
+    // Clears the whole client response — decline record AND signed approval —
+    // so a reworked estimate can be re-sent and the client responds fresh.
+    // An old signature must never stand as proof for edited line items; who
+    // signed and when is preserved in the activity log below.
+    const update = {
+      status: newStatus, cancelled_at: null, declined_at: null,
+      client_response: null, client_responded_at: null,
+      client_signed_name: null, client_signature: null,
+    };
+    await supabase.from('jobs').update(update).eq('id', id);
+    if (job?.client_signature && business) {
+      void logAudit(supabase, business.id, 'job.signature_cleared', 'job', id, {
+        job_title: job.title, signed_name: job.client_signed_name, signed_at: job.client_responded_at,
+      });
+    }
+    setJob(prev => prev ? { ...prev, ...update } : prev);
     setUpdatingStatus(false);
   };
 
@@ -459,7 +477,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (!job) return;
     let token = job.share_token;
     if (!token) {
-      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      token = secureShareToken();
       await supabase.from('jobs').update({ share_token: token }).eq('id', id);
       setJob(prev => prev ? { ...prev, share_token: token } : prev);
     }
@@ -514,11 +532,68 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     shareText(lines.join('\n\n'), 'crew');
   };
 
+  // Email the estimate: open the mail client pre-filled with the client's
+  // address + the public accept-and-sign link, then mark sent (mirrors the
+  // invoice's send flow).
+  const emailProposal = async () => {
+    if (!job || !business) return;
+    const c = job.clients;
+    // Look the email up fresh at send time — the page may hold client data
+    // from before the user just added an email — and fall back to the
+    // client's contact people when the client record itself has none.
+    let email = '';
+    if (job.client_id) {
+      const { data: fresh } = await supabase
+        .from('clients')
+        .select('email, email_office, email_home')
+        .eq('id', job.client_id)
+        .maybeSingle();
+      email = fresh?.email || fresh?.email_office || fresh?.email_home || '';
+      if (!email) {
+        const { data: contacts } = await supabase
+          .from('client_contacts')
+          .select('email, is_primary')
+          .eq('client_id', job.client_id)
+          .not('email', 'is', null)
+          .order('is_primary', { ascending: false })
+          .limit(1);
+        email = contacts?.[0]?.email ?? '';
+      }
+    }
+    if (!email) { void alertMessage({ message: td.sendNoEmail, destructive: true }); return; }
+    let token = job.share_token;
+    if (!token) {
+      token = secureShareToken();
+      await supabase.from('jobs').update({ share_token: token }).eq('id', id);
+      setJob(prev => prev ? { ...prev, share_token: token } : prev);
+    }
+    const url = `${window.location.origin}/propuesta/${token}`;
+    const { subject, body } = renderInvoiceEmail({
+      subjectTemplate: null,
+      bodyTemplate: null,
+      defaultSubject: td.emailSubject,
+      defaultBody: td.emailBody,
+      vars: {
+        number: job.estimate_number ?? '',
+        link: url,
+        client: c ? `${c.first_name} ${c.last_name}`.trim() : '',
+        firstName: c?.first_name ?? '',
+        lastName: c?.last_name ?? '',
+        company: c?.company ?? '',
+        business: business.name ?? '',
+        total: fmt(job.total_amount),
+        dueDate: job.expiry_date ?? '',
+      },
+    });
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (job.status === 'proposal') void updateStatus('sent');
+  };
+
   const openPrintView = async () => {
     if (!job) return;
     let token = job.share_token;
     if (!token) {
-      token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      token = secureShareToken();
       await supabase.from('jobs').update({ share_token: token }).eq('id', id);
       setJob(prev => prev ? { ...prev, share_token: token } : prev);
     }
@@ -629,6 +704,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             {isProposal && (
               <>
+                <button onClick={emailProposal}
+                  className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors"
+                  title={td.emailTooltip}>
+                  <Mail size={16}/>
+                </button>
                 <button onClick={shareProposal}
                   className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors relative"
                   title={td.shareTooltip}>
@@ -646,7 +726,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 </button>
               </>
             )}
-            {job.status !== 'cancelled' && job.status !== 'declined' && can.seeAllJobs(currentRole) && (
+            {/* Crew share only once the work is actually scheduled — before
+               that there's no crew/date to send. */}
+            {['scheduled', 'in_progress'].includes(job.status) && can.seeAllJobs(currentRole) && (
               <button onClick={shareJobToCrew}
                 className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors relative"
                 title={td.sendToCrew}>
@@ -780,9 +862,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
               {/* Proposal phase actions */}
               {job.status === 'proposal' && (
-                <Button onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
-                  <Send size={14} className="mr-1.5"/> {t.actions.markSent}
-                </Button>
+                <>
+                  <Button onClick={emailProposal} loading={updatingStatus} size="sm">
+                    <Mail size={14} className="mr-1.5"/> {td.emailAction}
+                  </Button>
+                  <Button variant="secondary" onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
+                    <Send size={14} className="mr-1.5"/> {t.actions.markSent}
+                  </Button>
+                </>
               )}
               {job.status === 'sent' && !isExpired && (
                 <>
@@ -830,7 +917,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <div className="flex justify-center gap-3 flex-wrap">
                 {!['cancelled', 'declined', 'invoiced'].includes(job.status) && (
                   <Button variant="secondary" size="sm" loading={updatingStatus}
-                    onClick={() => { void confirm({ message: td.cancelJobConfirm, destructive: true }).then(ok => { if (ok) void updateStatus('cancelled'); }); }}>
+                    onClick={() => { void confirm({ message: job.client_signature ? td.cancelSignedConfirm : td.cancelJobConfirm, destructive: true }).then(ok => { if (ok) void updateStatus('cancelled'); }); }}>
                     <XCircle size={14} className="mr-1.5"/> {td.cancelJobBtn}
                   </Button>
                 )}
@@ -901,19 +988,25 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         }`}>
           <div>
             <p className={`text-sm font-semibold ${job.status === 'cancelled' ? 'text-muted' : 'text-red-600'}`}>
-              {job.status === 'cancelled' ? td.cancelledBanner : td.declinedBanner}
+              {job.status === 'cancelled'
+                ? td.cancelledBanner
+                : job.client_response === 'declined' ? td.declinedByClientBanner : td.declinedBanner}
             </p>
             {job.status === 'cancelled' && job.cancelled_at && (
               <p className="text-xs text-faint mt-0.5">
                 {td.cancelledOn.replace('{{date}}', formatDateTimeLong(job.cancelled_at, dateLoc))}
               </p>
             )}
+            {job.status === 'declined' && job.declined_at && (
+              <p className="text-xs text-faint mt-0.5">
+                {td.declinedOn.replace('{{date}}', formatDateTimeLong(job.declined_at, dateLoc))}
+              </p>
+            )}
           </div>
-          {job.status === 'cancelled' && (
-            <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
-              <RotateCcw size={14} className="mr-1.5"/> {td.reinstate}
-            </Button>
-          )}
+          {/* Reinstate covers declined too: rework the estimate and re-send it. */}
+          <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
+            <RotateCcw size={14} className="mr-1.5"/> {td.reinstate}
+          </Button>
         </div>
       )}
 
@@ -950,6 +1043,23 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Client approval proof — the signature captured on the public
+             accept-and-sign page, kept on the job as record. */}
+          {isProposal && job.client_signature && (
+            <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{td.approvalTitle}</h2>
+              <div className="bg-white rounded-xl border border-border-soft p-3 mb-2 inline-block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={job.client_signature} alt="" className="h-14 object-contain"/>
+              </div>
+              <p className="text-xs text-muted">
+                {td.signedByLine
+                  .replace('{{name}}', job.client_signed_name ?? '')
+                  .replace('{{date}}', job.client_responded_at ? formatDateTimeLong(job.client_responded_at, dateLoc) : '')}
+              </p>
             </div>
           )}
 
@@ -1175,7 +1285,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <div className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} text-xs font-semibold text-faint uppercase tracking-wide px-5 py-2 border-b border-border-soft`}>
                   {showItemTypes ? <span>{t.new.colType}</span> : null}<span>{t.new.colDescription}</span><span className="text-center">{t.new.colQty}</span><span className="text-right">{td.colUnitPriceShort}</span><span className="text-right">{t.new.colTotal}</span>
                 </div>
-                <div className="divide-y divide-gray-50">
+                <div className="divide-y divide-border-soft">
                   {items.map(item => (
                     <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[80px_1fr_60px_80px_80px]' : 'grid-cols-[1fr_60px_80px_80px]'} items-center px-5 py-3 hover:bg-surface transition-colors`}>
                       {showItemTypes ? <span className="text-xs text-faint">{ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</span> : null}

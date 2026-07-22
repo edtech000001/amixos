@@ -908,6 +908,9 @@ export function JobsListScreen({
             return (
               <div
                 key={job.id}
+                // Lets the page's scroll restore find and re-center this exact
+                // row when the user returns from the job detail.
+                data-scroll-anchor={job.id}
                 // content-visibility skips layout/paint for offscreen rows —
                 // keeps huge lists (hundreds of jobs) cheap to render/scroll.
                 // contain-intrinsic-size reserves an estimated height so the

@@ -65,8 +65,21 @@ export function renderInvoiceEmail(opts: {
     });
     return out;
   };
+  // When the delivery mode omits the link (PDF-only), drop any body line that
+  // references the link token so the email doesn't show a dangling "view here:"
+  // line with a blank underneath. Then collapse the extra blank line it leaves.
+  const bodyTpl = opts.bodyTemplate?.trim() || opts.defaultBody;
+  const linkEmpty = !(opts.vars.link ?? '').trim();
+  const linkTokens = ALIASES.link.map(a => `{{${a}}}`);
+  const bodyPrepared = linkEmpty
+    ? bodyTpl
+        .split('\n')
+        .filter(line => !linkTokens.some(tok => line.includes(tok)))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+    : bodyTpl;
   return {
     subject: fill(opts.subjectTemplate?.trim() || opts.defaultSubject),
-    body: fill(opts.bodyTemplate?.trim() || opts.defaultBody),
+    body: fill(bodyPrepared),
   };
 }

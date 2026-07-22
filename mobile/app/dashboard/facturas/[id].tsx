@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import {
   InvoiceDetailScreen,
@@ -35,8 +36,7 @@ import {
 const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
 type PayMethodKey = (typeof PAY_METHODS)[number];
 
-const genToken = () =>
-  Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+const genToken = () => secureShareToken();
 
 interface RawClient {
   id: string;
@@ -91,6 +91,11 @@ export default function FacturaDetailRoute() {
       router.replace(`/dashboard/trabajos/${params.jobId}` as never);
     } else if (params.from === 'client' && params.clientId) {
       router.replace(`/dashboard/clientes/${params.clientId}` as never);
+    } else if (router.canGoBack()) {
+      // Pop back to the existing list screen (each section is its own Stack)
+      // so the list keeps its scroll position and loaded data — replace()
+      // would build a fresh list from scratch, resetting both.
+      router.back();
     } else {
       router.replace('/dashboard/facturas' as never);
     }
@@ -518,6 +523,7 @@ export default function FacturaDetailRoute() {
       status: raw.status,
       issueDate: raw.issue_date,
       dueDate: raw.due_date,
+      sentAt: (raw as { sent_at?: string | null }).sent_at ?? null,
       lineItems: raw.line_items ?? [],
       subtotalAmount: raw.subtotal_amount,
       taxRate: raw.tax_rate,
@@ -676,6 +682,10 @@ export default function FacturaDetailRoute() {
     const token = await ensureShareToken();
     const base = process.env.EXPO_PUBLIC_WEB_URL ?? '';
     const url = `${base}/factura/${token}`;
+    // Delivery mode (Ajustes → Facturas → Email delivery). Default = attach PDF.
+    const delivery = business?.invoice_email_delivery || 'pdf';
+    const includeLink = delivery === 'link' || delivery === 'both';
+    const includePdf = delivery === 'pdf' || delivery === 'both';
     // Business's custom templates (Ajustes → Facturas → Email) win; blank
     // falls back to the localized default. {{tokens}} substituted here.
     const cl = invoice.clients[0];
@@ -686,7 +696,7 @@ export default function FacturaDetailRoute() {
       defaultBody: tInv.emailBody,
       vars: {
         number: invoice.invoiceNumber,
-        link: url,
+        link: includeLink ? url : '',
         client: cl ? `${cl.firstName} ${cl.lastName}`.trim() : '',
         firstName: cl?.firstName ?? '',
         lastName: cl?.lastName ?? '',
@@ -719,14 +729,19 @@ export default function FacturaDetailRoute() {
     }
     if (MailComposer && composerAvailable) {
       try {
-        // Build the invoice PDF (same renderer as the "Export PDF" action).
-        const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
-        const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+        // Attach the invoice PDF only when the delivery mode includes it (same
+        // renderer as the "Export PDF" action). Link-only skips PDF generation.
+        let attachments: string[] = [];
+        if (includePdf) {
+          const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
+          const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+          attachments = [uri];
+        }
         const result = await MailComposer.composeAsync({
           recipients: [email],
           subject,
           body,
-          attachments: [uri],
+          attachments,
         });
         // Cancelled → don't flip status (nothing was sent).
         if (result.status !== MailComposer.MailComposerStatus?.CANCELLED) {

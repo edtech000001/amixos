@@ -236,6 +236,9 @@ export type DashboardDict = {
     markTotalLossConfirm: string;
     reinstateInvoice: string;
     daysOverdue: string;
+    overdueAgo: string;
+    sentAgo: string;
+    sentToday: string;
     payments: {
       title: string;
       recordTitle: string;
@@ -314,6 +317,8 @@ export type DashboardDict = {
       total: string;
       notesLabel: string;
       notesPlaceholder: string;
+      notesUseDefault: string;
+      notesCustom: string;
       customFieldsHeading: string;
       errorAtLeastOne: string;
       errorRequiredField: string;
@@ -703,8 +708,19 @@ export type DashboardDict = {
       // Cancelled / declined banner
       cancelledBanner: string;
       declinedBanner: string;
+      declinedByClientBanner: string;
       cancelledOn: string;
+      declinedOn: string;
       reinstate: string;
+      // Email estimate + client approval proof
+      emailAction: string;
+      emailTooltip: string;
+      sendNoEmail: string;
+      emailSubject: string;
+      emailBody: string;
+      approvalTitle: string;
+      signedByLine: string;
+      cancelSignedConfirm: string;
       // Cards
       proposalHeading: string;
       issuedAt: string;
@@ -891,6 +907,13 @@ export type DashboardDict = {
       errorTitleRequiredProposal: string;
       errorAtLeastOneItem: string;
       errorSaveGeneric: string;
+      conflictTitle: string;
+      conflictSoftHeading: string;
+      conflictAllDay: string;
+      conflictUntitled: string;
+      conflictConfirmMessage: string;
+      conflictSaveAnyway: string;
+      conflictGoBack: string;
       submitCreateJob: string;
       submitCreateProposal: string;
     };
@@ -914,6 +937,13 @@ export type DashboardDict = {
     title: string;
     summary: string;
     logHours: string;
+    hoursLogged: string;
+    addHours: string;
+    hoursSearchPlaceholder: string;
+    hoursNoResults: string;
+    hoursThisPeriod: string;
+    emptyHourTotals: string;
+    deleteHoursConfirm: string;
     teamSearchPlaceholder: string;
     resultsCount: string;
     filter: {
@@ -947,6 +977,7 @@ export type DashboardDict = {
     tabs: {
       empleados: string;
       horas: string;
+      historial: string;
       nomina: string;
     };
     inactiveBadge: string;
@@ -1043,6 +1074,7 @@ export type DashboardDict = {
     };
     timesheetModal: {
       title: string;
+      editTitle: string;
       employeeLabel: string;
       employeeManualOption: string;
       workerNameLabel: string;
@@ -1514,6 +1546,15 @@ export type DashboardDict = {
     invoices: {
       heading: string;
       subtitle: string;
+      defaultLanguageLabel: string;
+      defaultLanguageHint: string;
+      emailDeliveryLabel: string;
+      emailDeliveryHint: string;
+      emailDeliveryPdf: string;
+      emailDeliveryLink: string;
+      emailDeliveryBoth: string;
+      emailLinkMissingWarning: string;
+      emailLinkUnusedWarning: string;
       dueDaysLabel: string;
       dueDaysHint: string;
       taxRateLabel: string;
@@ -2764,6 +2805,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markTotalLossConfirm: '¿Marcar esta factura como pérdida total? Saldrá de vencidas y no contará en tus ingresos.',
       reinstateInvoice: 'Reactivar factura',
       daysOverdue: 'por {{n}} días',
+      overdueAgo: 'vencida hace {{n}} d',
+      sentAgo: 'enviada hace {{n}} d',
+      sentToday: 'enviada hoy',
       payments: {
         title: 'Pagos',
         recordTitle: 'Registrar pago',
@@ -2784,7 +2828,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       sendInvoice: 'Enviar factura',
       emailSubject: 'Factura {{number}}',
-      emailBody: 'Hola,\n\nAdjunto encontrarás tu factura. Puedes verla aquí:\n{{link}}\n\nGracias por tu preferencia.',
+      emailBody: 'Hola,\n\nAdjunto encontrarás tu factura.\nPuedes verla aquí: {{link}}\n\nGracias por tu preferencia.',
       sendNoEmail: 'Este cliente no tiene un correo guardado.',
       createdLabel: 'Creada',
       lastEditedLabel: 'Última edición',
@@ -2842,6 +2886,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         total: 'Total',
         notesLabel: 'Notas (opcional)',
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
+        notesUseDefault: 'Usar predeterminada',
+        notesCustom: 'Personalizada',
         customFieldsHeading: 'Campos personalizados',
         errorAtLeastOne: 'Agrega al menos un concepto',
         errorRequiredField: 'El campo "{{field}}" es requerido',
@@ -3224,8 +3270,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoiceDirectly: 'Facturar directamente',
         cancelledBanner: 'Este trabajo fue cancelado.',
         declinedBanner: 'Esta cotización fue rechazada.',
+        declinedByClientBanner: 'El cliente rechazó esta cotización.',
         cancelledOn: 'Cancelado el {{date}}',
+        declinedOn: 'Rechazada el {{date}}',
         reinstate: 'Reactivar',
+        emailAction: 'Enviar por correo',
+        emailTooltip: 'Enviar por correo',
+        sendNoEmail: 'Este cliente no tiene correo guardado. Agrégalo en su ficha para enviar la cotización.',
+        emailSubject: 'Cotización {{numero}} de {{negocio}}',
+        emailBody: 'Hola {{nombre}},\n\nLe compartimos la cotización {{numero}} por {{total}}.\n\nPuede verla, aceptarla y firmarla en línea aquí:\n{{enlace}}\n\nGracias,\n{{negocio}}',
+        approvalTitle: 'Aprobación del cliente',
+        signedByLine: 'Firmado por {{name}} el {{date}}',
+        cancelSignedConfirm: 'Esta cotización fue firmada por el cliente. Si la cancelas y luego la reactivas, la aprobación firmada se eliminará y el cliente tendrá que aprobar y firmar de nuevo. ¿Cancelar el trabajo?',
         proposalHeading: 'Cotización',
         issuedAt: 'Emitida',
         validUntil: 'Válida hasta',
@@ -3403,6 +3459,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorTitleRequiredProposal: 'El título es requerido',
         errorAtLeastOneItem: 'Agrega al menos un ítem',
         errorSaveGeneric: 'Error al guardar',
+        conflictTitle: 'Conflicto de horario',
+        conflictSoftHeading: 'También agendado ese día',
+        conflictAllDay: 'todo el día',
+        conflictUntitled: 'Trabajo sin título',
+        conflictConfirmMessage: 'Algunas personas asignadas ya están ocupadas en ese horario. ¿Guardar de todos modos?',
+        conflictSaveAnyway: 'Guardar de todos modos',
+        conflictGoBack: 'Volver',
         submitCreateJob: 'Crear trabajo',
         submitCreateProposal: 'Crear cotización',
       },
@@ -3424,8 +3487,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     employees: {
       title: 'Equipo',
-      summary: '{{active}} activos · {{hours}}h esta semana',
+      summary: '{{active}} activos · {{hours}}h este periodo',
       logHours: 'Registrar horas',
+      hoursLogged: 'Horas registradas',
+      addHours: 'Agregar',
+      hoursSearchPlaceholder: 'Buscar por empleado o trabajo...',
+      hoursNoResults: 'No se encontraron registros.',
+      hoursThisPeriod: 'Periodo de pago: {{period}}',
+      emptyHourTotals: 'Sin horas en este periodo de pago.',
+      deleteHoursConfirm: '¿Eliminar este registro de horas?',
       teamSearchPlaceholder: 'Buscar por nombre, teléfono o campo…',
       resultsCount: '{{count}} resultados',
       filter: {
@@ -3459,6 +3529,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       tabs: {
         empleados: 'Equipo',
         horas: 'Horas',
+        historial: 'Historial',
         nomina: 'Nómina',
       },
       inactiveBadge: 'Inactivo',
@@ -3551,6 +3622,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       timesheetModal: {
         title: 'Registrar horas',
+        editTitle: 'Editar horas',
         employeeLabel: 'Empleado',
         employeeManualOption: 'Escribir nombre manualmente',
         workerNameLabel: 'Nombre del trabajador',
@@ -4019,10 +4091,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveSuccess: '¡Guardado!',
       },
       invoices: {
-        heading: 'Facturas',
+        heading: 'Configuración predeterminada',
         subtitle: 'Términos por defecto y campos personalizados de tus facturas.',
+        defaultLanguageLabel: 'Idioma de factura por defecto',
+        defaultLanguageHint: 'El idioma en que empiezan las facturas nuevas. Puedes cambiarlo en cada factura.',
+        emailDeliveryLabel: 'Envío por correo',
+        emailDeliveryHint: 'Qué se incluye al enviar una factura por correo.',
+        emailDeliveryPdf: 'Solo adjuntar PDF',
+        emailDeliveryLink: 'Solo enlace',
+        emailDeliveryBoth: 'PDF y enlace',
+        emailLinkMissingWarning: 'El envío incluye un enlace, pero tu mensaje no tiene el marcador {{enlace}} — el cliente no recibirá el enlace. Agrega {{enlace}} al mensaje o cambia a "Solo adjuntar PDF".',
+        emailLinkUnusedWarning: 'El envío es "Solo adjuntar PDF", pero tu mensaje tiene el marcador {{enlace}} — se quitará y no se enviará ningún enlace. Cambia a "Solo enlace" o "PDF y enlace" para incluirlo, o quita {{enlace}}.',
         dueDaysLabel: 'Días de vencimiento por defecto',
-        dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Déjalo vacío para no usar un valor por defecto.',
+        dueDaysHint: 'Al crear una factura, la fecha de vencimiento se pone automáticamente a estos días de la fecha de emisión. Si lo dejas vacío, se usan 30 días (Neto 30).',
         taxRateLabel: 'Impuesto por defecto (%)',
         taxRateHint: 'Se aplica a las facturas nuevas; puedes ajustarlo en cada factura. Déjalo vacío o en 0 para no cobrar impuesto. No cambia las facturas ya creadas.',
         qtyFieldLabel: 'Campo para la cantidad',
@@ -5279,6 +5360,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       markTotalLossConfirm: 'Mark this invoice as a total loss? It drops out of overdue and stops counting toward your revenue.',
       reinstateInvoice: 'Reinstate invoice',
       daysOverdue: 'by {{n}} days',
+      overdueAgo: 'overdue by {{n}}d',
+      sentAgo: 'sent {{n}}d ago',
+      sentToday: 'sent today',
       payments: {
         title: 'Payments',
         recordTitle: 'Record payment',
@@ -5299,7 +5383,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       sendInvoice: 'Send invoice',
       emailSubject: 'Invoice {{number}}',
-      emailBody: 'Hi,\n\nPlease find your invoice attached. You can view it here:\n{{link}}\n\nThank you for your business.',
+      emailBody: 'Hi,\n\nPlease find your invoice attached.\nYou can view it here: {{link}}\n\nThank you for your business.',
       sendNoEmail: 'This client has no email on file.',
       createdLabel: 'Created',
       lastEditedLabel: 'Last edited',
@@ -5357,6 +5441,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         total: 'Total',
         notesLabel: 'Notes (optional)',
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
+        notesUseDefault: 'Use default',
+        notesCustom: 'Custom',
         customFieldsHeading: 'Custom fields',
         errorAtLeastOne: 'Add at least one item',
         errorRequiredField: 'The "{{field}}" field is required',
@@ -5739,8 +5825,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoiceDirectly: 'Invoice directly',
         cancelledBanner: 'This job was cancelled.',
         declinedBanner: 'This estimate was declined.',
+        declinedByClientBanner: 'The client declined this estimate.',
         cancelledOn: 'Cancelled on {{date}}',
+        declinedOn: 'Declined on {{date}}',
         reinstate: 'Reinstate',
+        emailAction: 'Send by email',
+        emailTooltip: 'Send by email',
+        sendNoEmail: 'This client has no email on file. Add one to their profile to send the estimate.',
+        emailSubject: 'Estimate {{number}} from {{business}}',
+        emailBody: 'Hi {{first_name}},\n\nHere is estimate {{number}} for {{total}}.\n\nYou can review, accept and sign it online here:\n{{link}}\n\nThank you,\n{{business}}',
+        approvalTitle: 'Client approval',
+        signedByLine: 'Signed by {{name}} on {{date}}',
+        cancelSignedConfirm: 'This estimate was signed by the client. If you cancel it and later reinstate it, the signed approval will be removed and the client will need to approve and sign again. Cancel the job?',
         proposalHeading: 'Estimate',
         issuedAt: 'Issued',
         validUntil: 'Valid until',
@@ -5918,6 +6014,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         errorTitleRequiredProposal: 'Title is required',
         errorAtLeastOneItem: 'Add at least one item',
         errorSaveGeneric: 'Save error',
+        conflictTitle: 'Scheduling conflict',
+        conflictSoftHeading: 'Also scheduled that day',
+        conflictAllDay: 'all day',
+        conflictUntitled: 'Untitled job',
+        conflictConfirmMessage: 'Some assigned people are already booked at this time. Save anyway?',
+        conflictSaveAnyway: 'Save anyway',
+        conflictGoBack: 'Go back',
         submitCreateJob: 'Create job',
         submitCreateProposal: 'Create estimate',
       },
@@ -5939,8 +6042,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     employees: {
       title: 'Team',
-      summary: '{{active}} active · {{hours}}h this week',
+      summary: '{{active}} active · {{hours}}h this period',
       logHours: 'Log hours',
+      hoursLogged: 'Hours logged',
+      addHours: 'Add',
+      hoursSearchPlaceholder: 'Search by employee or work...',
+      hoursNoResults: 'No entries found.',
+      hoursThisPeriod: 'Pay period: {{period}}',
+      emptyHourTotals: 'No hours this pay period.',
+      deleteHoursConfirm: 'Delete this hours entry?',
       teamSearchPlaceholder: 'Search name, phone or field…',
       resultsCount: '{{count}} results',
       filter: {
@@ -5974,6 +6084,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       tabs: {
         empleados: 'Team',
         horas: 'Hours',
+        historial: 'History',
         nomina: 'Payroll',
       },
       inactiveBadge: 'Inactive',
@@ -6066,6 +6177,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       timesheetModal: {
         title: 'Log hours',
+        editTitle: 'Edit hours',
         employeeLabel: 'Employee',
         employeeManualOption: 'Type name manually',
         workerNameLabel: 'Worker name',
@@ -6534,10 +6646,19 @@ export const dashboard: Record<Locale, DashboardDict> = {
         saveSuccess: 'Saved!',
       },
       invoices: {
-        heading: 'Invoices',
+        heading: 'Default configuration',
         subtitle: 'Default terms and custom fields for your invoices.',
+        defaultLanguageLabel: 'Default invoice language',
+        defaultLanguageHint: 'The language new invoices start in. You can still change it per invoice.',
+        emailDeliveryLabel: 'Email delivery',
+        emailDeliveryHint: 'What to include when you email an invoice.',
+        emailDeliveryPdf: 'Attach PDF only',
+        emailDeliveryLink: 'Link only',
+        emailDeliveryBoth: 'PDF + link',
+        emailLinkMissingWarning: 'Delivery includes a link, but your message has no {{link}} placeholder — the client won\'t get the link. Add {{link}} to the message or switch to "Attach PDF only".',
+        emailLinkUnusedWarning: 'Delivery is "Attach PDF only", but your message has a {{link}} placeholder — it will be removed and no link is sent. Switch to "Link only" or "PDF + link" to include it, or remove {{link}}.',
         dueDaysLabel: 'Default due window (days)',
-        dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty for no default.',
+        dueDaysHint: 'When you create an invoice, the due date is auto-set this many days from the issue date. Leave empty to use the default of 30 days (Net 30).',
         taxRateLabel: 'Default tax rate (%)',
         taxRateHint: 'Applied to new invoices; adjustable per invoice. Leave empty or 0 for no tax. Existing invoices are unchanged.',
         qtyFieldLabel: 'Quantity field',

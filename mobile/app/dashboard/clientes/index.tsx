@@ -252,7 +252,7 @@ export default function ClientesTab() {
   // or interaction with the GoogleSyncBanner overlay wrap). Using a
   // plain View + paddingTop sidesteps it.
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <ClientsListScreen
         loading={loading}
         clients={items}

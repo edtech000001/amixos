@@ -86,7 +86,7 @@ export interface CalendarScreenProps {
 // ── Per-type visual treatment (the colored bar / chip / icon) ───────────────
 const TYPE_BAR: Record<CalEventType, string> = {
   job: 'bg-primary',
-  meeting: 'bg-blue-500',
+  meeting: 'bg-teal-500',
   delivery: 'bg-orange-500',
   reminder: 'bg-amber-500',
   follow_up: 'bg-violet-500',
@@ -94,7 +94,7 @@ const TYPE_BAR: Record<CalEventType, string> = {
 };
 const TYPE_CHIP_BG: Record<CalEventType, string> = {
   job: 'bg-primary/10',
-  meeting: 'bg-blue-500/10',
+  meeting: 'bg-teal-500/10',
   delivery: 'bg-orange-500/10',
   reminder: 'bg-amber-500/10',
   follow_up: 'bg-violet-500/10',
@@ -102,15 +102,15 @@ const TYPE_CHIP_BG: Record<CalEventType, string> = {
 };
 const TYPE_CHIP_TEXT: Record<CalEventType, string> = {
   job: 'text-primary',
-  meeting: 'text-blue-600',
+  meeting: 'text-teal-600',
   delivery: 'text-orange-600',
   reminder: 'text-amber-600',
   follow_up: 'text-violet-600',
   other: 'text-muted',
 };
 const TYPE_HEX: Record<CalEventType, string> = {
-  job: '#4F46E5',
-  meeting: '#3B82F6',
+  job: '#2563EB',
+  meeting: '#14B8A6',
   delivery: '#F97316',
   reminder: '#F59E0B',
   follow_up: '#8B5CF6',
@@ -372,7 +372,7 @@ export function CalendarScreen({
       {/* Padding lives on an inner View (not contentContainerClassName) so it
           applies on web too, where react-native-web doesn't run NativeWind. */}
       <ScrollView className="flex-1" ref={scrollRef}>
-       <View className="px-5 pt-6 pb-36 lg:px-8">
+       <View className="px-5 pt-6 pb-44 lg:px-8">
         {/* Header — on web the add button lives here; on native the FAB
             (bottom-right, thumb reach) is the single add affordance. */}
         <View className="flex-row items-center justify-between mb-4">
@@ -999,7 +999,7 @@ function MonthGrid({
                     key={col}
                     onPress={() => onDayPress(day)}
                     className={`flex-1 border-b border-r border-border-soft active:bg-surface ${col === 6 ? 'border-r-0' : ''} ${
-                      !inMonth ? 'bg-gray-50/40' : isSelected ? 'bg-primary/5' : ''
+                      isSelected ? 'bg-primary/5' : ''
                     }`}
                   >
                     <View className="p-1 items-start">

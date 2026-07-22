@@ -25,12 +25,12 @@ import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoic
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
 
 const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
 type PayMethodKey = (typeof PAY_METHODS)[number];
 
-const genToken = () =>
-  Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+const genToken = () => secureShareToken();
 
 // Escape user-controlled text before it goes into an innerHTML template, so a
 // value like an invoice number can't inject markup. The surrounding template
@@ -369,6 +369,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       status: raw.status,
       issueDate: raw.issue_date,
       dueDate: raw.due_date,
+      sentAt: (raw as { sent_at?: string | null }).sent_at ?? null,
       lineItems: raw.line_items ?? [],
       subtotalAmount: raw.subtotal_amount,
       taxRate: raw.tax_rate,
@@ -652,6 +653,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!email) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const token = await ensureShareToken();
     const url = `${window.location.origin}/factura/${token}`;
+    // Delivery mode (Ajustes → Facturas → Email delivery). Default = PDF.
+    // The browser's mailto can't carry attachments, so for PDF we open the
+    // print/save-as-PDF view alongside the email for the user to attach.
+    const delivery = business?.invoice_email_delivery || 'pdf';
+    const includeLink = delivery === 'link' || delivery === 'both';
+    const includePdf = delivery === 'pdf' || delivery === 'both';
     // Business's custom templates (Ajustes → Facturas → Email) win; blank
     // falls back to the localized default. {{tokens}} substituted here.
     const c = invoice.clients[0];
@@ -662,7 +669,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       defaultBody: tInv.emailBody,
       vars: {
         number: invoice.invoiceNumber,
-        link: url,
+        link: includeLink ? url : '',
         client: c ? `${c.firstName} ${c.lastName}`.trim() : '',
         firstName: c?.firstName ?? '',
         lastName: c?.lastName ?? '',
@@ -672,6 +679,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         dueDate: invoice.dueDate ?? '',
       },
     });
+    // PDF (or both): open the printable view in a new tab so the user can save
+    // the PDF and attach it (mailto can't attach files itself).
+    if (includePdf) window.open(`/factura/${token}?print=1`, '_blank');
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     await updateStatus('sent');
   };

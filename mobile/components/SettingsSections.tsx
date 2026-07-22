@@ -30,7 +30,7 @@ import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { InvoiceDesigner } from './InvoiceDesigner';
-import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, invoiceDefaultLanguage, setBundleDefaultLanguage, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding, type InvoiceLang } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
@@ -666,15 +666,17 @@ export function FacturasSection() {
           <Pressable
             key={tok.key}
             onPress={() => insertEmailToken(field, label)}
-            className="rounded-full bg-indigo-500/10 px-2.5 py-1 active:bg-indigo-100"
+            className="rounded-full bg-primary/15 px-2.5 py-1 active:opacity-70"
           >
-            <Text className="text-[11px] font-mono text-indigo-600">{label}</Text>
+            <Text className="text-[11px] font-mono text-primary">{label}</Text>
           </Pressable>
         );
       })}
     </View>
   );
   const [dbEmailBody, setDbEmailBody] = useState(business?.invoice_email_body ?? '');
+  const [emailDelivery, setEmailDelivery] = useState(business?.invoice_email_delivery || 'pdf');
+  const [dbEmailDelivery, setDbEmailDelivery] = useState(business?.invoice_email_delivery || 'pdf');
   const [required, setRequired] = useState<Record<string, boolean>>(
     business?.invoice_field_required ?? {},
   );
@@ -722,6 +724,8 @@ export function FacturasSection() {
     setEmailSubject(esub); setDbEmailSubject(esub);
     const ebody = business.invoice_email_body ?? '';
     setEmailBody(ebody); setDbEmailBody(ebody);
+    const edel = business.invoice_email_delivery || 'pdf';
+    setEmailDelivery(edel); setDbEmailDelivery(edel);
     const r = business.invoice_field_required ?? {};
     setRequired(r); setDbRequired(r);
     const o = Array.isArray(business.invoice_field_order) ? (business.invoice_field_order as string[]) : [];
@@ -899,6 +903,7 @@ export function FacturasSection() {
         invoice_qty_field: qtyField || null,
         invoice_email_subject: emailSubject.trim() || null,
         invoice_email_body: emailBody.trim() || null,
+        invoice_email_delivery: emailDelivery || 'pdf',
         invoice_notes_default: notes.trim() || null,
         invoice_field_required: required,
         invoice_field_order: resolvedOrder,
@@ -923,6 +928,7 @@ export function FacturasSection() {
       setDbQtyField(qtyField);
       setDbEmailSubject(emailSubject);
       setDbEmailBody(emailBody);
+      setDbEmailDelivery(emailDelivery);
       setMsg({ text: t.invoices.saveSuccess, isError: false });
     } catch {
       setMsg({ text: t.invoices.saveError, isError: true });
@@ -939,12 +945,13 @@ export function FacturasSection() {
       qtyField !== dbQtyField ||
       emailSubject !== dbEmailSubject ||
       emailBody !== dbEmailBody ||
+      emailDelivery !== dbEmailDelivery ||
       JSON.stringify(dbRequired) !== JSON.stringify(required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
       JSON.stringify(dbHidden) !== JSON.stringify(hidden) ||
       isDirty(dbTemplates, templates),
-    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, qtyField, dbQtyField, emailSubject, dbEmailSubject, emailBody, dbEmailBody, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
+    [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, qtyField, dbQtyField, emailSubject, dbEmailSubject, emailBody, dbEmailBody, emailDelivery, dbEmailDelivery, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
   );
   useSettingsSaveAction({ dirty, saving, onSave });
 
@@ -993,6 +1000,18 @@ export function FacturasSection() {
     );
   };
 
+  // Default invoice language lives on this settings card (persists on change).
+  // It's stored in the invoice theme bundle, applied to both layout modes.
+  const [defaultLang, setDefaultLang] = useState<InvoiceLang>(() => invoiceDefaultLanguage(business?.invoice_template));
+  useEffect(() => { setDefaultLang(invoiceDefaultLanguage(business?.invoice_template)); }, [business?.invoice_template]);
+  const changeDefaultLang = async (lang: InvoiceLang) => {
+    if (!business) return;
+    setDefaultLang(lang);
+    const nextBundle = setBundleDefaultLanguage(normalizeBundle(business.invoice_template), lang);
+    await supabase.from('businesses').update({ invoice_template: nextBundle }).eq('id', business.id);
+    await refetchBusiness();
+  };
+
   return (
     <View className="gap-5">
       <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
@@ -1029,6 +1048,13 @@ export function FacturasSection() {
           keyboardType="number-pad"
         />
         <Text className="text-xs text-faint -mt-2">{t.invoices.startNumberHint}</Text>
+        <Select
+          label={t.invoices.defaultLanguageLabel}
+          value={defaultLang}
+          onValueChange={(v) => changeDefaultLang(v as InvoiceLang)}
+          options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]}
+        />
+        <Text className="text-xs text-faint -mt-2">{t.invoices.defaultLanguageHint}</Text>
         <View>
           <Text className="text-sm font-semibold text-ink mb-1.5">{t.invoices.notesLabel}</Text>
           <View className="rounded-2xl border border-border bg-card px-4 py-1">
@@ -1046,6 +1072,21 @@ export function FacturasSection() {
 
       </View>
 
+      {/* Invoice theme — a drill-in, placed right under the defaults it pairs with. */}
+      <Pressable
+        onPress={() => router.push('/dashboard/mas/ajustes/factura-tema' as never)}
+        className="bg-card rounded-2xl border border-border-soft p-4 flex-row items-center gap-3 active:bg-surface"
+      >
+        <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+          <Palette size={18} color={c.primary} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-ink">{t.invoices.design.title}</Text>
+          <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>{t.invoices.design.subtitle}</Text>
+        </View>
+        <ChevronRight size={18} color={c.faint} />
+      </Pressable>
+
       {/* Email al enviar factura — its OWN card: these fields customize the
          send email, not the invoice document (that's the card above). */}
       <View className="bg-card rounded-2xl border border-border-soft p-5 gap-4">
@@ -1054,6 +1095,17 @@ export function FacturasSection() {
           title={t.invoices.emailHeading}
           subtitle={t.invoices.emailSubtitle}
         />
+        <Select
+          label={t.invoices.emailDeliveryLabel}
+          value={emailDelivery}
+          onValueChange={setEmailDelivery}
+          options={[
+            { value: 'pdf', label: t.invoices.emailDeliveryPdf },
+            { value: 'link', label: t.invoices.emailDeliveryLink },
+            { value: 'both', label: t.invoices.emailDeliveryBoth },
+          ]}
+        />
+        <Text className="text-xs text-faint -mt-2">{t.invoices.emailDeliveryHint}</Text>
         <View>
           <Input
             label={t.invoices.emailSubjectLabel}
@@ -1080,6 +1132,20 @@ export function FacturasSection() {
           </View>
           {emailTokenChips('body')}
           <Text className="text-xs text-faint mt-1.5">{t.invoices.emailVarsHint}</Text>
+          {/* Warn on a link/message mismatch (either direction). Colors are
+              inline (not `warning` utility classes) so they render even before
+              Metro compiles a first-use class. */}
+          {(() => {
+            const hasLink = /\{\{(link|enlace)\}\}/.test(emailBody.trim() || full.dashboard.invoices.emailBody);
+            const includeLink = emailDelivery === 'link' || emailDelivery === 'both';
+            const msg = includeLink && !hasLink ? t.invoices.emailLinkMissingWarning
+              : !includeLink && hasLink ? t.invoices.emailLinkUnusedWarning : null;
+            return msg ? (
+              <View className="rounded-xl px-3 py-2.5 mt-2 bg-card" style={{ borderWidth: 1, borderColor: c.warning }}>
+                <Text className="text-xs leading-4" style={{ color: c.warning }}>{msg}</Text>
+              </View>
+            ) : null;
+          })()}
         </View>
       </View>
 
@@ -1182,21 +1248,6 @@ export function FacturasSection() {
       </View>
 
       <StatusMsg msg={msg} />
-
-      {/* Invoice theme lives here — a drill-in rather than a separate menu item. */}
-      <Pressable
-        onPress={() => router.push('/dashboard/mas/ajustes/factura-tema' as never)}
-        className="bg-card rounded-2xl border border-border-soft p-4 flex-row items-center gap-3 active:bg-surface"
-      >
-        <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
-          <Palette size={18} color={c.primary} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-base font-semibold text-ink">{t.invoices.design.title}</Text>
-          <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>{t.invoices.design.subtitle}</Text>
-        </View>
-        <ChevronRight size={18} color={c.faint} />
-      </Pressable>
 
       <FieldTemplateModal
         open={modalOpen}

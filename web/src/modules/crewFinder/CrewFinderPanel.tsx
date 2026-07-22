@@ -98,7 +98,7 @@ export function CrewFinderPanel({ businessId, target, currentCrew, onAddCrew, on
           ) : suggestions.length === 0 ? (
             <p className="text-center text-sm text-faint py-16">{t.empty}</p>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-border-soft">
               {suggestions.map(s => {
                 const isOn = currentCrew.includes(s.employeeId);
                 const nearby = s.nearbyJobs[0];

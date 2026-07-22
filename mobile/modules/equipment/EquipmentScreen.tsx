@@ -1194,7 +1194,7 @@ export default function EquipmentScreen() {
          delete / a photo did nothing when this was a modal. */}
       {modal === 'detail' && selected ? (
         <View
-          style={[StyleSheet.absoluteFill, { backgroundColor: '#F9FAFB', zIndex: 30, elevation: 30, paddingTop: insets.top }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: c.surface, zIndex: 30, elevation: 30, paddingTop: insets.top }]}
         >
           <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-border-soft bg-card">
             <Pressable

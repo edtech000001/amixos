@@ -20,7 +20,7 @@ export function AssistantFab({ onPress, label }: { onPress: () => void; label: s
         // Tucks a sliver off-screen so it reads as a pull-tab, not a button
         // floating over the page.
         right: -6,
-        bottom: insets.bottom + 160,
+        bottom: insets.bottom + 230,
         zIndex: 900,
         // shadow* = iOS, elevation = Android.
         elevation: 6,

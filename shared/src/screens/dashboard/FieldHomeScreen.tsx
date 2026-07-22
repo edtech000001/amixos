@@ -156,7 +156,7 @@ export function FieldHomeScreen({
   };
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}>
+    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}>
       <View className="mb-6">
         <Text className="text-2xl font-bold text-ink">{f.greeting}{!businessSlot && businessName ? ',' : ''}</Text>
         {businessSlot ? (

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 
 interface ProposalData {
   id: string;
@@ -21,6 +21,10 @@ interface ProposalData {
   discount: number;
   total_amount: number;
   notes: string | null;
+  client_response: 'accepted' | 'declined' | null;
+  client_responded_at: string | null;
+  client_signed_name: string | null;
+  client_signature: string | null;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   businesses: { name: string; logo_url: string | null; city: string; state: string } | null;
 }
@@ -37,6 +41,93 @@ function fmtMoney(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Draw-to-sign canvas. Reports the PNG data-URL after each finished stroke
+// (null when cleared) so the parent always holds the latest signature.
+function SignaturePad({ hint, clearLabel, onChange }: {
+  hint: string; clearLabel: string; onChange: (dataUrl: string | null) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [hasInk, setHasInk] = useState(false);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ratio = window.devicePixelRatio || 1;
+    cv.width = cv.offsetWidth * ratio;
+    cv.height = cv.offsetHeight * ratio;
+    const ctx = cv.getContext('2d')!;
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#111827';
+  }, []);
+
+  const pos = (e: React.PointerEvent) => {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const start = (e: React.PointerEvent) => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    cv.setPointerCapture(e.pointerId);
+    drawing.current = true;
+    const { x, y } = pos(e);
+    const ctx = cv.getContext('2d')!;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    // A dot for taps so a single click still leaves ink.
+    ctx.lineTo(x + 0.1, y + 0.1);
+    ctx.stroke();
+    setHasInk(true);
+  };
+  const move = (e: React.PointerEvent) => {
+    if (!drawing.current) return;
+    const cv = canvasRef.current!;
+    const { x, y } = pos(e);
+    const ctx = cv.getContext('2d')!;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+  const end = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    onChange(canvasRef.current!.toDataURL('image/png'));
+  };
+  const clear = () => {
+    const cv = canvasRef.current!;
+    cv.getContext('2d')!.clearRect(0, 0, cv.width, cv.height);
+    setHasInk(false);
+    onChange(null);
+  };
+
+  return (
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-32 bg-white border border-gray-200 rounded-xl"
+        style={{ touchAction: 'none' }}
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      />
+      {!hasInk && (
+        <span className="absolute inset-0 flex items-center justify-center text-sm text-gray-300 pointer-events-none select-none">
+          {hint}
+        </span>
+      )}
+      {hasInk && (
+        <button type="button" onClick={clear}
+          className="absolute top-2 right-2 text-xs text-gray-400 hover:text-gray-600 bg-white/80 px-2 py-0.5 rounded-lg border border-gray-200">
+          {clearLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function PublicProposalPage({ params }: { params: { token: string } }) {
   const { token } = params;
   const { t: full } = useLang();
@@ -48,6 +139,45 @@ export default function PublicProposalPage({ params }: { params: { token: string
   const [items, setItems] = useState<JobItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // Client accept & sign / decline (writes through respond_shared_proposal RPC)
+  const [signName, setSignName] = useState('');
+  const [signature, setSignature] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [respondErr, setRespondErr] = useState<string | null>(null);
+
+  const submitResponse = async (action: 'accepted' | 'declined') => {
+    if (!proposal) return;
+    if (action === 'accepted' && (!signName.trim() || !signature)) {
+      setRespondErr(t.missingFields);
+      return;
+    }
+    if (action === 'declined' && !window.confirm(t.declineConfirm)) return;
+    setSubmitting(true);
+    setRespondErr(null);
+    const supabase = createSupabaseClient();
+    const { data, error } = await supabase.rpc('respond_shared_proposal', {
+      p_token: token,
+      p_action: action,
+      p_name: action === 'accepted' ? signName.trim() : null,
+      p_signature: action === 'accepted' ? signature : null,
+    });
+    const res = data as { ok: boolean; error?: string; status?: string } | null;
+    if (error || !res?.ok) {
+      setRespondErr(res?.error === 'expired' ? t.expiredNotice : t.respondError);
+      setSubmitting(false);
+      return;
+    }
+    setProposal(prev => prev ? {
+      ...prev,
+      status: res.status!,
+      client_response: action,
+      client_responded_at: new Date().toISOString(),
+      client_signed_name: action === 'accepted' ? signName.trim() : prev.client_signed_name,
+      client_signature: action === 'accepted' ? signature : prev.client_signature,
+    } : prev);
+    setSubmitting(false);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -98,6 +228,11 @@ export default function PublicProposalPage({ params }: { params: { token: string
   const hasFinancials = proposal.tax_rate > 0 || proposal.discount > 0;
 
   const fmtDateLong = (d: string) => formatDateLong(d, t.dateLocale);
+
+  const isAccepted = ['accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'].includes(proposal.status);
+  const isDeclined = proposal.status === 'declined';
+  const isExpired = !!proposal.expiry_date && new Date(proposal.expiry_date) < new Date();
+  const canRespond = ['proposal', 'sent'].includes(proposal.status) && !isExpired;
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
@@ -227,6 +362,76 @@ export default function PublicProposalPage({ params }: { params: { token: string
           <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.termsTitle}</p>
             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{proposal.notes}</p>
+          </div>
+        )}
+
+        {/* Client approval — signed proof (kept visible in print as record) */}
+        {isAccepted && proposal.client_signature && (
+          <div className="bg-white rounded-2xl print:rounded-none border border-emerald-200 print:border-0 print:border-t shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
+            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-3">{t.signatureTitle}</p>
+            <div className="bg-gray-50 print:bg-white rounded-xl border border-gray-100 p-3 mb-2 inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={proposal.client_signature} alt="" className="h-16 object-contain"/>
+            </div>
+            <p className="text-sm text-gray-600">
+              {t.signedByLine
+                .replace('{{name}}', proposal.client_signed_name ?? '')
+                .replace('{{date}}', proposal.client_responded_at ? formatDateTimeLong(proposal.client_responded_at, t.dateLocale) : '')}
+            </p>
+          </div>
+        )}
+
+        {/* Accepted (no signature on file — accepted manually by the business) */}
+        {isAccepted && !proposal.client_signature && (
+          <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5 mb-6 print:hidden">
+            <p className="text-sm font-semibold text-emerald-700">✓ {t.acceptedBanner}</p>
+          </div>
+        )}
+
+        {/* Declined */}
+        {isDeclined && (
+          <div className="bg-red-50 rounded-2xl border border-red-100 p-5 mb-6 print:hidden">
+            <p className="text-sm font-semibold text-red-600">{t.declinedNotice}</p>
+          </div>
+        )}
+
+        {/* Expired — no longer respondable */}
+        {!isAccepted && !isDeclined && isExpired && (
+          <div className="bg-orange-50 rounded-2xl border border-orange-100 p-5 mb-6 print:hidden">
+            <p className="text-sm font-semibold text-orange-600">{t.expiredNotice}</p>
+          </div>
+        )}
+
+        {/* Accept & sign / decline form */}
+        {canRespond && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 print:hidden">
+            <h2 className="text-base font-bold text-gray-900 mb-1">{t.approveTitle}</h2>
+            <p className="text-sm text-gray-500 mb-4">{t.approveHint}</p>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{t.nameLabel}</label>
+            <input
+              type="text"
+              value={signName}
+              onChange={e => setSignName(e.target.value)}
+              placeholder={t.namePlaceholder}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 mb-4 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{t.signLabel}</label>
+            <SignaturePad hint={t.signHint} clearLabel={t.clearSignature} onChange={setSignature}/>
+            {respondErr && <p className="text-sm text-red-600 mt-3">{respondErr}</p>}
+            <div className="flex flex-col sm:flex-row gap-3 mt-5">
+              <button
+                onClick={() => submitResponse('accepted')}
+                disabled={submitting}
+                className="flex-1 px-6 py-3 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 disabled:opacity-60 transition-colors">
+                {t.acceptButton}
+              </button>
+              <button
+                onClick={() => submitResponse('declined')}
+                disabled={submitting}
+                className="px-6 py-3 text-sm font-semibold text-red-600 rounded-xl border border-red-200 hover:bg-red-50 disabled:opacity-60 transition-colors">
+                {t.declineButton}
+              </button>
+            </div>
           </div>
         )}
 

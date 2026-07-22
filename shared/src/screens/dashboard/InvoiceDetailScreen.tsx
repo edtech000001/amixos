@@ -22,7 +22,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
-import { formatDateLong, formatDateTimeLong, daysOverdue } from '../../lib/format';
+import { formatDateLong, formatDateTimeLong, daysOverdue, daysSince } from '../../lib/format';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -56,6 +56,8 @@ export interface InvoiceDetail {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
   issueDate: string;
   dueDate: string | null;
+  /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
+  sentAt: string | null;
   lineItems: InvoiceDetailLineItem[];
   subtotalAmount: number;
   taxRate: number;
@@ -226,6 +228,13 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
+  // Elapsed note shown next to the due date (not in the pill): "overdue by Nd"
+  // for overdue, "sent Nd ago" for still-open sent invoices.
+  const dateNote = invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
+    ? tInv.overdueAgo.replace('{{n}}', String(daysOverdue(invoice.dueDate)))
+    : invoice.status === 'sent' && invoice.sentAt
+    ? (daysSince(invoice.sentAt) === 0 ? tInv.sentToday : tInv.sentAgo.replace('{{n}}', String(daysSince(invoice.sentAt))))
+    : null;
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
@@ -241,7 +250,7 @@ export function InvoiceDetailScreen({
   const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-36">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-44">
       {/* Header — title left, utility actions top-right (jobs/equipment pattern) */}
       <View className="flex-row items-start justify-between mb-4 gap-3">
         <View className="flex-row items-center gap-3 flex-1 min-w-0">
@@ -255,9 +264,7 @@ export function InvoiceDetailScreen({
             <View className="flex-row items-center gap-2 flex-wrap mt-1">
               <View className={`px-3.5 py-1.5 rounded-full ${pillBg}`}>
                 <Text className={`text-sm font-bold ${pillText}`}>
-                  {invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
-                    ? `${statusLabel} ${tInv.daysOverdue.replace('{{n}}', String(daysOverdue(invoice.dueDate)))}`
-                    : statusLabel}
+                  {statusLabel}
                 </Text>
               </View>
               {isPartial ? (
@@ -339,7 +346,10 @@ export function InvoiceDetailScreen({
           </View>
           <View>
             <Text className="text-xs text-faint font-medium">{t.dueDate}</Text>
-            <Text className="text-sm font-semibold text-ink">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</Text>
+            <Text className="text-sm font-semibold text-ink">
+              {invoice.dueDate ? formatDate(invoice.dueDate) : '—'}
+              {dateNote ? <Text className="text-xs font-medium text-muted">{`  ·  ${dateNote}`}</Text> : null}
+            </Text>
           </View>
         </View>
       </View>

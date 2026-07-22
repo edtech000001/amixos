@@ -780,7 +780,7 @@ export function DashboardHomeScreen({
     <Animated.ScrollView
       ref={scrollRef}
       className="flex-1 bg-surface"
-      contentContainerStyle={{ paddingHorizontal: H_PAD, paddingTop: 24, paddingBottom: 144 }}
+      contentContainerStyle={{ paddingHorizontal: H_PAD, paddingTop: 24, paddingBottom: 176 }}
     >
       {header}
       {/* In-place drag-and-drop: the real widgets reorder right in the grid

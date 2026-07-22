@@ -149,7 +149,7 @@ export default function ActividadPage() {
         ) : null}
       </View>
 
-      <ScrollView className="flex-1" contentContainerClassName="px-5 pt-4 pb-32" keyboardShouldPersistTaps="handled">
+      <ScrollView className="flex-1" contentContainerClassName="px-5 pt-4 pb-44" keyboardShouldPersistTaps="handled">
         {loading && rows.length === 0 ? (
           <View className="py-10 items-center">
             <View className="flex-row gap-1">{[0,1,2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}</View>

@@ -9,7 +9,6 @@ import { createElement, useEffect, useRef, useState, type ReactNode } from 'reac
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Image as ImageIcon, Type, Trash2, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, Sparkles, LayoutTemplate } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
-import type { InvoiceLang } from '@amixos/shared';
 import {
   INVOICE_PRESET_IDS,
   ALL_FONTS,
@@ -26,7 +25,6 @@ import {
   setColumn,
   setText,
   setLayoutMode,
-  setDefaultLanguage,
   setPageTint,
   freeformFromPreset,
   blankFreeform,
@@ -661,7 +659,9 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
   const textBlocksControl = (
     <Field label={t.textBlocks}>
       <div className="flex flex-col gap-3">
-        {([['headerNote', t.headerNote], ['paymentInstructions', t.paymentInstructionsField], ['footer', t.footerField]] as [keyof InvoiceTextBlocks, string][]).map(([key, label]) => (
+        {/* headerNote removed — the per-invoice Notes field covers top-of-invoice
+            text; a separate theme-level header note was redundant/confusing. */}
+        {([['paymentInstructions', t.paymentInstructionsField], ['footer', t.footerField]] as [keyof InvoiceTextBlocks, string][]).map(([key, label]) => (
           <div key={key} className="flex flex-col gap-1">
             <label className="text-xs text-muted">{label}</label>
             <textarea rows={2} value={value.text[key] ?? ''} onChange={e => change(setText(value, key, e.target.value))}
@@ -691,14 +691,7 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
           into the add-element toolbar (more convenient while building). */}
       {!freeform ? <div className="flex items-center gap-2">{undoRedo}</div> : null}
 
-      <Field label={t.defaultLanguage}>
-        <Seg<InvoiceLang>
-          value={value.defaultLanguage}
-          onChange={l => change(setDefaultLanguage(value, l))}
-          options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]}
-        />
-        <p className="text-xs text-faint">{t.defaultLanguageHint}</p>
-      </Field>
+      {/* Default language control moved to Ajustes → Facturas (main card). */}
 
       <Field label={t.layout}>
         <Seg<InvoiceLayoutMode>

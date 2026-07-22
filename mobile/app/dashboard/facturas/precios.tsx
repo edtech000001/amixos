@@ -30,7 +30,7 @@ export default function FacturasPreciosPage() {
         </Pressable>
         <Text className="ml-2 text-lg font-bold text-ink">{full.dashboard.settings.priceSheet.title}</Text>
       </View>
-      <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-24">
+      <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-44">
         <PriceSheetScreen
           supabase={supabase}
           businessId={business.id}

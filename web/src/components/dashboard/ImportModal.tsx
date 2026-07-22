@@ -398,7 +398,7 @@ export default function ImportModal({
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-border-soft">
                     {rows.slice(0, 5).map((row, i) => (
                       <tr key={i} className="hover:bg-surface">
                         {fields.filter(f => colMap[f.key]).map(f => (

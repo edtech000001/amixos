@@ -162,6 +162,11 @@ export default function ClienteDetailRoute() {
       router.replace(`/dashboard/trabajos/${jobId}` as never);
     } else if (from === 'invoice' && invoice) {
       router.replace(`/dashboard/facturas/${invoice}` as never);
+    } else if (router.canGoBack()) {
+      // Pop back to the existing list screen (each section is its own Stack)
+      // so the list keeps its scroll position and loaded data — replace()
+      // would build a fresh list from scratch, resetting both.
+      router.back();
     } else {
       router.replace('/dashboard/clientes' as never);
     }
@@ -599,7 +604,7 @@ export default function ClienteDetailRoute() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
+      <ScrollView contentContainerClassName="px-5 pt-5 pb-44">
         {/* Header card: avatar + name + company */}
         <View className="flex-row items-center gap-4 mb-5">
           <View className="w-14 h-14 rounded-full bg-primary/10 items-center justify-center">

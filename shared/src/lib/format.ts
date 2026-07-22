@@ -109,6 +109,18 @@ export function daysOverdue(dueDate: string | null | undefined): number {
   return diff > 0 ? diff : 0;
 }
 
+/** Whole days between an ISO timestamp/date and today (local). 0 = today,
+ *  1 = yesterday, etc. Future dates clamp to 0. Handy for "sent N days ago". */
+export function daysSince(input: string | Date | null | undefined): number {
+  const d = toDate(input);
+  if (!d) return 0;
+  const then = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.floor((today.getTime() - then.getTime()) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+
 /** Today's date as YYYY-MM-DD in the *local* timezone. Prefer this over
  *  `new Date().toISOString().split('T')[0]` for date-input defaults: ISO uses
  *  UTC, which rolls over to tomorrow during US evenings — so "log hours today"

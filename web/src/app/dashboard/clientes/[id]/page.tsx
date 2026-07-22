@@ -519,7 +519,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-gray-50">
+              <div className="flex flex-col divide-y divide-border-soft">
                 {contacts.map(ct => (
                   <div key={ct.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex items-start justify-between gap-2">
@@ -636,7 +636,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                 <Link href={`/dashboard/facturas/nueva?client=${id}`} className="text-primary text-xs font-medium hover:underline mt-1 inline-block">{td.createFirstInvoice}</Link>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-border-soft">
                 {invoices.map(inv => {
                   const statusKey = inv.status as keyof typeof tStatus;
                   const statusLabel = tStatus[statusKey] ?? inv.status;

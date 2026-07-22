@@ -54,8 +54,10 @@ import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
-import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
-import { UserPlus } from 'lucide-react-native';
+import { formatTime12h, formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
+import { detectJobConflicts, fetchJobsForConflictCheck, hasHardConflict, type ExistingAssignedJob, type JobConflict } from '@amixos/shared/lib/jobConflicts';
+import { confirm } from '@amixos/shared/ui/confirmBus';
+import { UserPlus, AlertTriangle } from 'lucide-react-native';
 import {
   evaluateOperatingHours,
   normalizeOperatingHours,
@@ -1170,6 +1172,39 @@ export default function NuevoTrabajoRoute() {
   );
   const leadEmployee = employees.find((e) => e.id === leadEmployeeId) ?? null;
 
+  // ─── Double-booking detection ──────────────────────────────────────────────
+  // Warn (never block) when an assigned person already has an overlapping job.
+  // Fetch jobs sharing the date span once per date change; recompute conflicts
+  // cheaply whenever the crew/drivers/times change.
+  const [conflictJobs, setConflictJobs] = useState<ExistingAssignedJob[]>([]);
+  useEffect(() => {
+    if (!business || !scheduledDate) { setConflictJobs([]); return; }
+    let cancelled = false;
+    fetchJobsForConflictCheck(supabase, business.id, scheduledDate, endDate || scheduledDate)
+      .then((js) => { if (!cancelled) setConflictJobs(js); })
+      .catch(() => { if (!cancelled) setConflictJobs([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, scheduledDate, endDate]);
+
+  const assignedPeople = useMemo(() => {
+    const ids = new Set<string>([...assignedEmployees, ...driverEmployeeIds]);
+    return employees.filter((e) => ids.has(e.id)).map((e) => ({ id: e.id, name: `${e.first_name} ${e.last_name}`.trim() }));
+  }, [assignedEmployees, driverEmployeeIds, employees]);
+
+  const conflicts = useMemo(() => detectJobConflicts({
+    newJob: { scheduledDate: scheduledDate || null, endDate: endDate || null, allDay, timeStart: timeStart || null, timeEnd: timeEnd || null },
+    newJobId: editId,
+    assigned: assignedPeople,
+    existingJobs: conflictJobs,
+  }), [scheduledDate, endDate, allDay, timeStart, timeEnd, assignedPeople, conflictJobs, editId]);
+  const hardConflicts = conflicts.filter((c) => c.severity === 'hard');
+  const softConflicts = conflicts.filter((c) => c.severity === 'soft');
+  const conflictLine = (c: JobConflict) => {
+    const when = c.allDay ? t.conflictAllDay : c.timeLabel;
+    return `${c.employeeName} · ${c.jobTitle || t.conflictUntitled} · ${formatDateLong(c.jobDate, locale)}${when ? ` (${when})` : ''}`;
+  };
+
   // Driver pool — ANY employee, not just the crew. A driver-only person (drove
   // but didn't work the job) is credited ONLY their driver hours in Reports,
   // never the job's total hours (which go to the assigned crew).
@@ -1412,6 +1447,18 @@ export default function NuevoTrabajoRoute() {
     if (coordsText.trim() && coordsInvalid) {
       setError(t.coordinatesInvalid);
       return;
+    }
+    // Double-booking gate — hard conflicts (all-day overlap / colliding times)
+    // ask for confirmation; soft same-day notes never block the save.
+    if (hasHardConflict(conflicts)) {
+      const ok = await confirm({
+        title: t.conflictTitle,
+        message: `${t.conflictConfirmMessage}\n\n${hardConflicts.map((c) => `• ${conflictLine(c)}`).join('\n')}`,
+        confirmText: t.conflictSaveAnyway,
+        cancelText: t.conflictGoBack,
+        destructive: true,
+      });
+      if (!ok) return;
     }
     setSaving(true);
     setError('');
@@ -1705,7 +1752,7 @@ export default function NuevoTrabajoRoute() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
-          contentContainerClassName="px-5 pt-5 pb-32"
+          contentContainerClassName="px-5 pt-5 pb-44"
           keyboardShouldPersistTaps="handled"
         >
           {/* General info */}
@@ -1762,6 +1809,35 @@ export default function NuevoTrabajoRoute() {
               {/* Standard + custom fields, interleaved in saved layout order. */}
               {fieldsInSection(jobLayout, 'workers').map(renderJobField)}
             </Section>
+          )}
+
+          {/* Double-booking warning — assigned crew/drivers already on an
+             overlapping job. Soft same-day notes appear below hard conflicts. */}
+          {conflicts.length > 0 && (
+            <View className="mb-4" style={{ gap: 10 }}>
+              {hardConflicts.length > 0 && (
+                <View className="rounded-2xl bg-card p-4" style={{ borderWidth: 1, borderColor: c.warning }}>
+                  <View className="flex-row items-center mb-2" style={{ gap: 6 }}>
+                    <AlertTriangle size={16} color={c.warning} />
+                    <Text className="text-sm font-semibold" style={{ color: c.warning }}>{t.conflictTitle}</Text>
+                  </View>
+                  {hardConflicts.map((cf, i) => (
+                    <Text key={`h${i}`} className="text-xs text-ink mb-0.5">{conflictLine(cf)}</Text>
+                  ))}
+                </View>
+              )}
+              {softConflicts.length > 0 && (
+                <View className="rounded-2xl border border-border-soft bg-card p-4">
+                  <View className="flex-row items-center mb-2" style={{ gap: 6 }}>
+                    <AlertTriangle size={15} color={c.muted} />
+                    <Text className="text-sm font-semibold text-muted">{t.conflictSoftHeading}</Text>
+                  </View>
+                  {softConflicts.map((cf, i) => (
+                    <Text key={`s${i}`} className="text-xs text-faint mb-0.5">{conflictLine(cf)}</Text>
+                  ))}
+                </View>
+              )}
+            </View>
           )}
 
           {/* Items section removed — pricing/line items are managed on the

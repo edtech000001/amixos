@@ -83,19 +83,19 @@ export interface CalendarScreenProps {
 
 // ── Per-type visual treatment ───────────────────────────────────────────────
 const TYPE_BAR: Record<CalEventType, string> = {
-  job: 'bg-primary', meeting: 'bg-blue-500', delivery: 'bg-orange-500',
+  job: 'bg-primary', meeting: 'bg-teal-500', delivery: 'bg-orange-500',
   reminder: 'bg-amber-500', follow_up: 'bg-violet-500', other: 'bg-gray-400',
 };
 const TYPE_CHIP_BG: Record<CalEventType, string> = {
-  job: 'bg-primary/10', meeting: 'bg-blue-500/10', delivery: 'bg-orange-500/10',
+  job: 'bg-primary/10', meeting: 'bg-teal-500/10', delivery: 'bg-orange-500/10',
   reminder: 'bg-amber-500/10', follow_up: 'bg-violet-500/10', other: 'bg-border-soft',
 };
 const TYPE_CHIP_TEXT: Record<CalEventType, string> = {
-  job: 'text-primary', meeting: 'text-blue-600', delivery: 'text-orange-600',
+  job: 'text-primary', meeting: 'text-teal-600', delivery: 'text-orange-600',
   reminder: 'text-amber-600', follow_up: 'text-violet-600', other: 'text-muted',
 };
 const TYPE_HEX: Record<CalEventType, string> = {
-  job: '#4F46E5', meeting: '#3B82F6', delivery: '#F97316',
+  job: '#2563EB', meeting: '#14B8A6', delivery: '#F97316',
   reminder: '#F59E0B', follow_up: '#8B5CF6', other: '#9CA3AF',
 };
 const TYPE_ICON: Record<CalEventType, typeof Briefcase> = {
@@ -676,7 +676,7 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
                 const isSelected = sameDay(day, selectedDay);
                 return (
                   <button key={col} type="button" onClick={() => onDayPress(day)}
-                    className={`flex-1 flex flex-col items-start border-b border-r border-border-soft hover:bg-surface ${col === 6 ? 'border-r-0' : ''} ${!inMonth ? 'bg-surface/50' : isSelected ? 'bg-primary/5' : ''}`}>
+                    className={`flex-1 flex flex-col items-start border-b border-r border-border-soft hover:bg-surface ${col === 6 ? 'border-r-0' : ''} ${isSelected ? 'bg-primary/5' : ''}`}>
                     <div className="p-1">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isToday ? 'bg-primary' : isSelected ? 'bg-primary/15' : ''}`}>
                         <span className={`text-xs font-semibold ${isToday ? 'text-white' : !inMonth ? 'text-faint' : isSelected ? 'text-primary' : 'text-ink'}`}>{day.getDate()}</span>

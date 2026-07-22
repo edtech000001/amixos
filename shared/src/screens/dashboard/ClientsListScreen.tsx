@@ -367,7 +367,7 @@ export function ClientsListScreen({
       {showList ? (
         // Rounded top edge of the white card; section headers + rows continue
         // the frame below it (mirrors the footer strip).
-        <View className="bg-card rounded-t-2xl border border-b-0 border-border-soft h-2" />
+        <View className="bg-card rounded-t-2xl h-3" />
       ) : null}
 
       {loading ? (
@@ -406,7 +406,7 @@ export function ClientsListScreen({
     if (item.type === 'header') {
       return (
         <View
-          className="bg-surface px-5 justify-center border-x border-b border-x-gray-100 border-b-gray-200"
+          className="bg-surface px-5 justify-center border-b border-b-border-soft"
           style={{ height: LETTER_HEADER_H }}
         >
           <Text className="text-xs font-bold text-muted">{item.letter}</Text>
@@ -432,7 +432,7 @@ export function ClientsListScreen({
     return (
       <>
         {showList ? (
-          <View className="bg-card rounded-b-2xl border border-t-0 border-border-soft h-2" />
+          <View className="bg-card rounded-b-2xl h-3" />
         ) : null}
         {bottomSlot}
       </>
@@ -736,9 +736,9 @@ const ClientRow = memo(function ClientRow({
       // content is vertically centered and clipped to keep rows uniform;
       // otherwise py-4 sizes the row to its content (search mode).
       style={fixedHeight ? { height: fixedHeight, overflow: 'hidden' } : undefined}
-      className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-card border-x ${
-        isLast ? '' : 'border-b border-b-gray-200'
-      } border-x-gray-100 ${isChecked ? 'bg-primary/5' : 'active:bg-surface'}`}
+      className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-card ${
+        isLast ? '' : 'border-b border-b-border-soft'
+      } ${isChecked ? 'bg-primary/5' : 'active:bg-surface'}`}
     >
       <View className="flex-row items-center gap-3 min-w-0 flex-1">
         {selectionMode ? (

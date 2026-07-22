@@ -16,6 +16,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { confirm } from '@amixos/shared/ui/confirmBus';
+import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
@@ -26,6 +27,7 @@ interface RawInvoice {
   due_date: string | null;
   issue_date: string | null;
   created_at: string;
+  sent_at: string | null;
   clients: InvoiceClient | null;
   invoice_clients: { clients: InvoiceClient }[];
 }
@@ -35,14 +37,26 @@ interface RawInvoice {
 const primaryClient = (raw: RawInvoice): InvoiceClient | null =>
   raw.clients ?? raw.invoice_clients?.[0]?.clients ?? null;
 
+// Module-level cache — survives SPA route changes, so coming back from an
+// invoice detail paints the last full list instantly (no loading flash, and
+// the scroll restore has the real page height) while a refresh replaces it.
+let invoicesListCache: { key: string; invoices: InvoiceListItem[] } | null = null;
+
 export default function FacturasPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const { t: full } = useLang();
-  const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = business?.id ?? null;
+  const [invoices, setInvoices] = useState<InvoiceListItem[]>(() =>
+    cacheKey && invoicesListCache?.key === cacheKey ? invoicesListCache.invoices : []);
+  const [loading, setLoading] = useState(() =>
+    !(cacheKey && invoicesListCache?.key === cacheKey));
   const [importOpen, setImportOpen] = useState(false);
+
+  // Coming back from an invoice detail lands at the top otherwise — restore
+  // the list scroll position once the rows have rendered.
+  useScrollRestore('invoices-list', !loading);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -69,11 +83,11 @@ export default function FacturasPage() {
     const businessId = business.id;
     const raw = await fetchAll<RawInvoice>((from, to) =>
       supabase.from('invoices')
-        .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
+        .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
         .range(from, to));
-    setInvoices(raw.map(inv => {
+    const mapped: InvoiceListItem[] = raw.map(inv => {
       const pc = primaryClient(inv);
       return {
         id: inv.id,
@@ -81,6 +95,7 @@ export default function FacturasPage() {
         status: inv.status,
         totalAmount: inv.total_amount,
         dueDate: inv.due_date,
+        sentAt: inv.sent_at,
         clientNames: mapClientNames(inv),
         company: pc?.company ?? null,
         state: pc?.state ?? null,
@@ -91,8 +106,10 @@ export default function FacturasPage() {
           ...(((inv as any).jobs ?? []) as { external_ref: string | null; title: string | null }[]).flatMap(j => [j.external_ref ?? '', j.title ?? '']),
         ].filter(Boolean).join(' '),
       };
-    }));
+    });
+    setInvoices(mapped);
     setLoading(false);
+    invoicesListCache = { key: businessId, invoices: mapped };
   };
 
   useEffect(() => { load(); }, [business]);
@@ -126,7 +143,7 @@ export default function FacturasPage() {
     <InvoicesListScreen
       loading={loading}
       invoices={invoices}
-      onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
+      onInvoicePress={(id) => { saveScrollAnchor('invoices-list', id); router.push(`/dashboard/facturas/${id}`); }}
       onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
       onPriceSheetPress={() => router.push('/dashboard/precios')}
       onUpdateStatus={updateStatus}

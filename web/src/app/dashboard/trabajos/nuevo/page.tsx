@@ -6,7 +6,7 @@ import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Search, Link2, ChevronDown, X, Lock, Eye, ImagePlus, Navigation, Loader2, AlertTriangle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { CrewFinderPanel } from '@/modules/crewFinder/CrewFinderPanel';
@@ -25,7 +25,8 @@ import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
-import { formatTime12h, formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatTime12h, formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
+import { detectJobConflicts, fetchJobsForConflictCheck, hasHardConflict, type ExistingAssignedJob, type JobConflict } from '@amixos/shared/lib/jobConflicts';
 import { Modal } from '@/components/ui/Modal';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
 
@@ -946,6 +947,40 @@ function NuevoTrabajoContent() {
   const filteredCrewEmployees = filterEmployeesByName(crewEmployees, crewSearch);
   const leadEmployee = employees.find(e => e.id === leadEmployeeId) ?? null;
 
+  // ─── Double-booking detection ──────────────────────────────────────────────
+  // Warn (never block) when an assigned person already has an overlapping job.
+  // Fetch the jobs sharing this date span once per date change; recompute the
+  // conflicts cheaply whenever the crew/drivers/times change.
+  const [conflictJobs, setConflictJobs] = useState<ExistingAssignedJob[]>([]);
+  useEffect(() => {
+    if (!business || !scheduledDate) { setConflictJobs([]); return; }
+    let cancelled = false;
+    fetchJobsForConflictCheck(supabase, business.id, scheduledDate, endDate || scheduledDate)
+      .then(js => { if (!cancelled) setConflictJobs(js); })
+      .catch(() => { if (!cancelled) setConflictJobs([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, scheduledDate, endDate]);
+
+  const assignedPeople = useMemo(() => {
+    const ids = new Set<string>([...assignedEmployees, ...driverEmployeeIds]);
+    return employees.filter(e => ids.has(e.id)).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name}`.trim() }));
+  }, [assignedEmployees, driverEmployeeIds, employees]);
+
+  const conflicts = useMemo(() => detectJobConflicts({
+    newJob: { scheduledDate: scheduledDate || null, endDate: endDate || null, allDay, timeStart: timeStart || null, timeEnd: timeEnd || null },
+    newJobId: editId,
+    assigned: assignedPeople,
+    existingJobs: conflictJobs,
+  }), [scheduledDate, endDate, allDay, timeStart, timeEnd, assignedPeople, conflictJobs, editId]);
+  const hardConflicts = conflicts.filter(c => c.severity === 'hard');
+  const softConflicts = conflicts.filter(c => c.severity === 'soft');
+  const conflictWhen = (c: JobConflict) => c.allDay ? t.conflictAllDay : c.timeLabel;
+  const conflictLine = (c: JobConflict) => {
+    const when = conflictWhen(c);
+    return `${c.employeeName} · ${c.jobTitle || t.conflictUntitled} · ${formatDateLong(c.jobDate, locale)}${when ? ` (${when})` : ''}`;
+  };
+
   // Driver pool — ANY employee, not just the crew. A driver-only person (drove
   // but didn't work the job) is credited ONLY their driver hours in Reports,
   // never the job's total hours (which go to the assigned crew).
@@ -1186,6 +1221,18 @@ function NuevoTrabajoContent() {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missing.join(', ')}`);
         return;
       }
+    }
+    // Double-booking gate — hard conflicts (all-day overlap / colliding times)
+    // ask for confirmation; soft same-day notes never block the save.
+    if (hasHardConflict(conflicts)) {
+      const ok = await confirm({
+        title: t.conflictTitle,
+        message: `${t.conflictConfirmMessage}\n\n${hardConflicts.map(c => `• ${conflictLine(c)}`).join('\n')}`,
+        confirmText: t.conflictSaveAnyway,
+        cancelText: t.conflictGoBack,
+        destructive: true,
+      });
+      if (!ok) return;
     }
     setSaving(true); setError('');
 
@@ -1699,6 +1746,39 @@ function NuevoTrabajoContent() {
             )}
               </Fragment>
             ))}
+          </div>
+        )}
+
+        {/* ── Double-booking warning — assigned crew/drivers already on an
+            overlapping job. Soft same-day notes appear below hard conflicts. */}
+        {conflicts.length > 0 && (
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex flex-col gap-3">
+            {hardConflicts.length > 0 && (
+              <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} className="text-warning" />
+                  <span className="text-sm font-semibold text-warning">{t.conflictTitle}</span>
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {hardConflicts.map((c, i) => (
+                    <li key={`h${i}`} className="text-xs text-ink">{conflictLine(c)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {softConflicts.length > 0 && (
+              <div className="rounded-xl border border-border-soft bg-surface p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar size={15} className="text-muted" />
+                  <span className="text-sm font-semibold text-muted">{t.conflictSoftHeading}</span>
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {softConflicts.map((c, i) => (
+                    <li key={`s${i}`} className="text-xs text-faint">{conflictLine(c)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

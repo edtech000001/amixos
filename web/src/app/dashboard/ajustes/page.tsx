@@ -97,7 +97,7 @@ import {
 } from '@amixos/shared/lib/jobAlerts';
 import { moveTemplate, parseFieldConfig, primaryFieldLabel, localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { InvoiceDesigner } from '@/components/dashboard/InvoiceDesigner';
-import { normalizeBundle, activeBundleConfig, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { normalizeBundle, activeBundleConfig, invoiceDefaultLanguage, setBundleDefaultLanguage, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding, type InvoiceLang } from '@amixos/shared/lib/invoiceTemplate';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
@@ -312,6 +312,7 @@ export default function AjustesPage() {
   const [invoiceQtyField, setInvoiceQtyField] = useState(business?.invoice_qty_field ?? '');
   const [invoiceEmailSubject, setInvoiceEmailSubject] = useState(business?.invoice_email_subject ?? '');
   const [invoiceEmailBody, setInvoiceEmailBody] = useState(business?.invoice_email_body ?? '');
+  const [invoiceEmailDelivery, setInvoiceEmailDelivery] = useState(business?.invoice_email_delivery || 'pdf');
   // Clickable {{token}} chips insert at the cursor. Selection is tracked via
   // onSelect (fires on focus/click/keyup); null = never focused → append.
   const invoiceEmailSubjectRef = useRef<HTMLInputElement>(null);
@@ -526,6 +527,7 @@ export default function AjustesPage() {
       setInvoiceQtyField(business.invoice_qty_field ?? '');
       setInvoiceEmailSubject(business.invoice_email_subject ?? '');
       setInvoiceEmailBody(business.invoice_email_body ?? '');
+      setInvoiceEmailDelivery(business.invoice_email_delivery || 'pdf');
       setInvoiceTheme(normalizeBundle(business.invoice_template));
       const ireq = business.invoice_field_required ?? {};
       setInvoiceFieldRequired(ireq);
@@ -723,11 +725,22 @@ export default function AjustesPage() {
       invoice_qty_field: invoiceQtyField || null,
       invoice_email_subject: invoiceEmailSubject.trim() || null,
       invoice_email_body: invoiceEmailBody.trim() || null,
+      invoice_email_delivery: invoiceEmailDelivery || 'pdf',
     }).eq('id', business.id);
     setInvoiceMsgIsError(!!error);
     setInvoiceMsg(error ? t.invoices.saveError : t.invoices.saveSuccess);
     if (!error) await refetchBusiness();
     setSavingInvoice(false);
+  };
+
+  // Default invoice language lives on the main Facturas card now (persists on
+  // change). Stored in the theme bundle, applied to both layout modes.
+  const changeDefaultLanguage = async (lang: InvoiceLang) => {
+    if (!business) return;
+    const next = setBundleDefaultLanguage(invoiceTheme, lang);
+    setInvoiceTheme(next);
+    await supabase.from('businesses').update({ invoice_template: next }).eq('id', business.id);
+    await refetchBusiness();
   };
 
   // ── Invoice theme (businesses.invoice_template) — its own tab + save.
@@ -2096,8 +2109,9 @@ export default function AjustesPage() {
       (business?.invoice_qty_field ?? '') !== invoiceQtyField ||
       (business?.invoice_email_subject ?? '') !== invoiceEmailSubject ||
       (business?.invoice_email_body ?? '') !== invoiceEmailBody ||
+      (business?.invoice_email_delivery || 'pdf') !== invoiceEmailDelivery ||
       (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
-    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceQtyField, invoiceEmailSubject, invoiceEmailBody, bizInvoiceNotes],
+    [dbInvoiceTemplates, invoiceTemplates, dbInvoiceFieldRequired, invoiceFieldRequired, dbInvoiceOrder, localInvoiceOrder, dbInvoiceLayout, localInvoiceLayout, dbInvoiceHidden, invoiceHidden, business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceQtyField, invoiceEmailSubject, invoiceEmailBody, invoiceEmailDelivery, bizInvoiceNotes],
   );
 
   const invoiceThemeDirty = useMemo(
@@ -2117,6 +2131,7 @@ export default function AjustesPage() {
     setInvoiceQtyField(business?.invoice_qty_field ?? '');
     setInvoiceEmailSubject(business?.invoice_email_subject ?? '');
     setInvoiceEmailBody(business?.invoice_email_body ?? '');
+    setInvoiceEmailDelivery(business?.invoice_email_delivery || 'pdf');
     setBizInvoiceNotes(business?.invoice_notes_default ?? '');
     setInvoiceReqMsg('');
     setInvoiceMsg('');
@@ -2414,7 +2429,7 @@ export default function AjustesPage() {
                 <h2 className="text-base font-semibold text-ink mb-1">{t.pipeline.heading}</h2>
                 <p className="text-xs text-faint mb-5">{t.pipeline.subtitle}</p>
 
-                <div className="space-y-0 divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden mb-5">
+                <div className="space-y-0 divide-y divide-border-soft rounded-xl border border-border-soft overflow-hidden mb-5">
                   {ALL_PIPELINE_STEPS.map(step => {
                     const isDisabled = !!pipelineDisabled[step.key];
                     return (
@@ -2470,7 +2485,7 @@ export default function AjustesPage() {
                     return (
                       <div key={section}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
+                        <div className="divide-y divide-border-soft rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderJobSection(section, next.map(n => n.id))}
@@ -2765,7 +2780,7 @@ export default function AjustesPage() {
                     return (
                       <div key={section}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
+                        <div className="divide-y divide-border-soft rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderClientSection(section, next.map(n => n.id))}
@@ -2913,7 +2928,7 @@ export default function AjustesPage() {
                     return (
                       <div key={section}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
+                        <div className="divide-y divide-border-soft rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderEmpSection(section, next.map(n => n.id))}
@@ -3304,6 +3319,7 @@ export default function AjustesPage() {
                       label={t.invoices.dueDaysLabel}
                       type="number"
                       min="0"
+                      placeholder="30"
                       value={invoiceDueDays}
                       onChange={e => setInvoiceDueDays(e.target.value)}
                     />
@@ -3343,6 +3359,18 @@ export default function AjustesPage() {
                     />
                     <p className="text-xs text-faint mt-1.5">{t.invoices.startNumberHint}</p>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">{t.invoices.defaultLanguageLabel}</label>
+                    <select
+                      value={invoiceDefaultLanguage(business?.invoice_template)}
+                      onChange={e => changeDefaultLanguage(e.target.value as InvoiceLang)}
+                      className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="es">Español</option>
+                      <option value="en">English</option>
+                    </select>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.defaultLanguageHint}</p>
+                  </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-ink">{t.invoices.notesLabel}</label>
                     <textarea
@@ -3363,6 +3391,22 @@ export default function AjustesPage() {
                 </div>
               </div>
 
+              {/* Invoice theme — a drill-in, placed right under the defaults it pairs with. */}
+              <button
+                type="button"
+                onClick={() => tryChangeTab('facturatema')}
+                className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex items-center gap-3 text-left hover:border-border transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Palette size={18} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink">{t.invoices.design.title}</p>
+                  <p className="text-xs text-faint mt-0.5">{t.invoices.design.subtitle}</p>
+                </div>
+                <ChevronRight size={18} className="text-faint shrink-0" />
+              </button>
+
               {/* Email al enviar factura — its OWN card: these fields
                  customize the send EMAIL, not the invoice document. Saved by
                  the same handler as the terms card. */}
@@ -3370,6 +3414,19 @@ export default function AjustesPage() {
                 <h2 className="text-base font-semibold text-ink mb-1">{t.invoices.emailHeading}</h2>
                 <p className="text-xs text-faint mb-4">{t.invoices.emailSubtitle}</p>
                 <div className="flex flex-col gap-4 max-w-md">
+                  <div>
+                    <label className="block text-sm font-medium text-ink mb-1.5">{t.invoices.emailDeliveryLabel}</label>
+                    <select
+                      value={invoiceEmailDelivery}
+                      onChange={e => setInvoiceEmailDelivery(e.target.value)}
+                      className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="pdf">{t.invoices.emailDeliveryPdf}</option>
+                      <option value="link">{t.invoices.emailDeliveryLink}</option>
+                      <option value="both">{t.invoices.emailDeliveryBoth}</option>
+                    </select>
+                    <p className="text-xs text-faint mt-1.5">{t.invoices.emailDeliveryHint}</p>
+                  </div>
                   <div className="flex flex-col gap-1.5">
                     <Input
                       ref={invoiceEmailSubjectRef}
@@ -3424,6 +3481,18 @@ export default function AjustesPage() {
                       })}
                     </div>
                     <p className="text-xs text-faint">{t.invoices.emailVarsHint}</p>
+                    {/* Warn on a link/message mismatch (either direction). */}
+                    {(() => {
+                      const hasLink = /\{\{(link|enlace)\}\}/.test(invoiceEmailBody.trim() || full.dashboard.invoices.emailBody);
+                      const includeLink = invoiceEmailDelivery === 'link' || invoiceEmailDelivery === 'both';
+                      const msg = includeLink && !hasLink ? t.invoices.emailLinkMissingWarning
+                        : !includeLink && hasLink ? t.invoices.emailLinkUnusedWarning : null;
+                      return msg ? (
+                        <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2">
+                          <p className="text-xs text-warning">{msg}</p>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
                 <div className="mt-5">
@@ -3469,7 +3538,7 @@ export default function AjustesPage() {
                     return (
                       <div key={section}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5 px-1">{secLabel}</div>
-                        <div className="divide-y divide-gray-50 rounded-xl border border-border-soft overflow-hidden">
+                        <div className="divide-y divide-border-soft rounded-xl border border-border-soft overflow-hidden">
                           <SortableList<{ id: string }>
                             items={keys.map(k => ({ id: k }))}
                             onReorder={(next) => reorderInvoiceSection(section, next.map(n => n.id))}
@@ -3561,21 +3630,6 @@ export default function AjustesPage() {
                 </Button>
               </div>
 
-              {/* Invoice theme lives here — a drill-in rather than a top nav item. */}
-              <button
-                type="button"
-                onClick={() => tryChangeTab('facturatema')}
-                className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 flex items-center gap-3 text-left hover:border-border transition-colors"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Palette size={18} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink">{t.invoices.design.title}</p>
-                  <p className="text-xs text-faint mt-0.5">{t.invoices.design.subtitle}</p>
-                </div>
-                <ChevronRight size={18} className="text-faint shrink-0" />
-              </button>
             </div>
           )}
 

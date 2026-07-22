@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -70,6 +70,7 @@ function NuevaFacturaContent() {
   const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
   const { business } = useApp();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
   const [clients, setClients] = useState<Client[]>([]);
@@ -88,6 +89,11 @@ function NuevaFacturaContent() {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  // Notes source: 'default' = use the business's default note (Ajustes →
+  // Facturas), 'custom' = write your own. New invoices start on 'default' when
+  // a default note exists so it's actually applied.
+  const [notesMode, setNotesMode] = useState<'default' | 'custom'>('custom');
+  const defaultNote = (business?.invoice_notes_default ?? '').trim();
   // New invoices start at the business default (Ajustes → Facturas);
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
@@ -107,12 +113,24 @@ function NuevaFacturaContent() {
   const dueDefaultedRef = useRef(false);
   useEffect(() => {
     if (editId || dueDefaultedRef.current || !business) return;
-    const days = business.invoice_due_days;
-    if (days != null && days >= 0 && issueDate && !dueDate) {
+    // Net-30 by default for everyone; a business can override the window in
+    // Ajustes → Facturas (invoice_due_days). Only fills an empty due date.
+    const days = business.invoice_due_days ?? 30;
+    if (days >= 0 && issueDate && !dueDate) {
       setDueDate(addDaysISO(issueDate, days));
       dueDefaultedRef.current = true;
     }
   }, [editId, business, issueDate, dueDate]);
+
+  // New invoices prefill the default note (Ajustes → Facturas) and start on the
+  // "Use default" toggle so it's actually applied. Ref guard = runs once.
+  const notesDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || notesDefaultedRef.current || !business) return;
+    const def = (business.invoice_notes_default ?? '').trim();
+    if (def) { setNotes(def); setNotesMode('default'); }
+    notesDefaultedRef.current = true;
+  }, [editId, business]);
 
   // New invoices start in the business's default language (Invoice theme).
   // Edit mode skips this (the invoice's own language is loaded below); the ref
@@ -215,6 +233,10 @@ function NuevaFacturaContent() {
         setIssueDate(inv.issue_date ?? new Date().toISOString().split('T')[0]);
         setDueDate(inv.due_date ?? '');
         setNotes(inv.notes ?? '');
+        // Show "Use default" when the saved note still matches the business
+        // default; otherwise it's a custom note.
+        const def = (business?.invoice_notes_default ?? '').trim();
+        setNotesMode(def && (inv.notes ?? '').trim() === def ? 'default' : 'custom');
         setTaxRate(inv.tax_rate ?? 0);
         setLanguage((inv.language as InvoiceLang) ?? 'es');
         setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
@@ -434,7 +456,10 @@ function NuevaFacturaContent() {
       );
     }
 
-    window.location.href = `/dashboard/facturas/${invoiceId}`;
+    // Client-side navigation (not window.location) so the unsaved-changes
+    // beforeunload guard doesn't fire the browser's "Leave site?" prompt on a
+    // successful save. The detail page fetches its own data on mount.
+    router.push(`/dashboard/facturas/${invoiceId}`);
   };
 
   // Unsaved-changes guard: the back link calls confirmDiscard; beforeunload
@@ -515,13 +540,16 @@ function NuevaFacturaContent() {
               <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colRate}</span><span/>
             </div>
             {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-center">
-                <input
-                  type="text"
+              <div key={i} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-start">
+                {/* Wrap + grow with the text (capped, then scrolls) so a long
+                    item name is readable instead of clipped — never an endless box. */}
+                <textarea
+                  rows={1}
+                  ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; } }}
                   placeholder={t.itemPlaceholder}
                   value={line.description}
                   onChange={e => updateLine(i, 'description', e.target.value)}
-                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                  className="w-full resize-none overflow-auto rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 />
                 <input
                   type="text"
@@ -596,14 +624,43 @@ function NuevaFacturaContent() {
                 }
                 if (k === 'notes') {
                   return (
-                    <textarea
-                      key="notes"
-                      rows={3}
-                      placeholder={t.notesPlaceholder}
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
-                    />
+                    <div key="notes" className="flex flex-col gap-2">
+                      {/* Toggle only appears when a default note exists — otherwise
+                          it's just the editable box (no default to fall back to). */}
+                      {defaultNote ? (
+                        <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl self-start">
+                          {(['default', 'custom'] as const).map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => {
+                                setNotesMode(m);
+                                if (m === 'default') setNotes(defaultNote);
+                                else if (!notes.trim() || notes.trim() === defaultNote) setNotes(defaultNote);
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                                notesMode === m ? 'bg-primary/15 text-primary shadow-sm' : 'text-muted hover:text-ink'
+                              }`}
+                            >
+                              {m === 'default' ? t.notesUseDefault : t.notesCustom}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      {defaultNote && notesMode === 'default' ? (
+                        <div className="w-full rounded-xl border border-border-soft bg-surface px-4 py-2.5 text-sm text-muted whitespace-pre-wrap">
+                          {defaultNote}
+                        </div>
+                      ) : (
+                        <textarea
+                          rows={3}
+                          placeholder={t.notesPlaceholder}
+                          value={notes}
+                          onChange={e => setNotes(e.target.value)}
+                          className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+                        />
+                      )}
+                    </div>
                   );
                 }
                 return null;

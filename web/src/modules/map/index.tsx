@@ -1165,7 +1165,7 @@ function WeatherPinCard({
 
       {/* Scrollable detail body */}
       <div className="overflow-y-auto px-4 py-3">
-        <dl className="divide-y divide-gray-50">
+        <dl className="divide-y divide-border-soft">
           {rows.map(([label, value]) => (
             <div key={label} className="flex py-1.5">
               <dt className="w-[42%] text-[10px] font-semibold uppercase tracking-wide text-faint pt-0.5">

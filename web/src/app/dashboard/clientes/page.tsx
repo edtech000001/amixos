@@ -17,6 +17,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
+import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { useLang } from '@/i18n/LangProvider';
 import {
@@ -68,6 +69,11 @@ const FIELD_LABEL_KEYS: (keyof ClientFormValues)[] = [
   'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
 ];
 
+// Module-level cache — survives SPA route changes, so coming back from a
+// client detail paints the last full list instantly (no loading flash, and
+// the scroll restore has the real page height) while a refresh replaces it.
+let clientsListCache: { key: string; clients: Client[] } | null = null;
+
 export default function ClientesPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -77,13 +83,20 @@ export default function ClientesPage() {
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const syncBanner = useGoogleSyncBanner();
-  const [clients, setClients] = useState<Client[]>([]);
+  const cacheKey = business?.id ?? null;
+  const [clients, setClients] = useState<Client[]>(() =>
+    cacheKey && clientsListCache?.key === cacheKey ? clientsListCache.clients : []);
   const [contactsByClient, setContactsByClient] = useState<
     Map<string, { name: string; role: string | null }[]>
   >(new Map());
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [search, setSearch] = usePersistedSearch(business ? `search.clients.${business.id}` : null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    !(cacheKey && clientsListCache?.key === cacheKey));
+
+  // Coming back from a client detail lands at the top otherwise — restore the
+  // list scroll position once the rows have rendered.
+  useScrollRestore('clients-list', !loading);
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Client | null>(null);
   const [saving, setSaving] = useState(false);
@@ -118,6 +131,7 @@ export default function ClientesPage() {
     setContactsByClient(byClient);
     setTemplates(localizeTemplates(tpl ?? [], locale));
     setLoading(false);
+    clientsListCache = { key: businessId, clients: cl };
   };
 
   useEffect(() => { load(); }, [business, locale]);
@@ -401,7 +415,7 @@ export default function ClientesPage() {
       onToggleSelect={toggleSelect}
       onSelectMany={(ids) => setSelectedIds(prev => { const next = new Set(prev); ids.forEach(i => next.add(i)); return next; })}
       onToggleSelectAll={toggleSelectAll}
-      onClientPress={(id) => router.push(`/dashboard/clientes/${id}`)}
+      onClientPress={(id) => { saveScrollAnchor('clients-list', id); router.push(`/dashboard/clientes/${id}`); }}
       onEditPress={editById}
       onDeletePress={remove}
       onNewClientPress={openAdd}

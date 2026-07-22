@@ -1132,7 +1132,7 @@ export function PayrollScreen({
                 {loanEntriesOf(payRow.employeeId).length === 0 ? (
                   <p className="text-sm text-faint text-center py-6">{t.loanEmpty}</p>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-border-soft">
                     {loanEntriesOf(payRow.employeeId).map(e => {
                       const isLoan = e.amount >= 0;
                       return (
@@ -1275,7 +1275,7 @@ export function PayrollScreen({
                 {loanEntriesOf(loanWorkerId).length === 0 ? (
                   <p className="text-sm text-faint text-center py-6">{t.loanEmpty}</p>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-border-soft">
                     {loanEntriesOf(loanWorkerId).map(e => {
                       const isLoan = e.amount >= 0;
                       return (
@@ -1319,7 +1319,7 @@ export function PayrollScreen({
                 {loanPickList.length === 0 ? (
                   <p className="text-sm text-faint text-center py-6">{t.loanNoWorkerFound}</p>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-border-soft">
                     {loanPickList.map(w => (
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id, true)}
                         className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">
@@ -1351,7 +1351,7 @@ export function PayrollScreen({
                 {loanDirectory.length === 0 ? (
                   <p className="text-sm text-faint text-center py-6">{loanSearch.trim() ? t.loanNoWorkerFound : t.loanEmpty}</p>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-border-soft">
                     {loanDirectory.map(w => (
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id)}
                         className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">

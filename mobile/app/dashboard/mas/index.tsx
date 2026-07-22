@@ -136,7 +136,7 @@ export default function MasMenu() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <ScrollView contentContainerClassName="px-6 pt-6 pb-32">
+      <ScrollView contentContainerClassName="px-6 pt-6 pb-44">
         <Text className="text-2xl font-bold text-ink mb-1">{sb.mas}</Text>
         {business?.name ? (
           <Text className="text-sm text-muted mb-6">{business.name}</Text>

@@ -18,6 +18,7 @@ import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useLang } from '@/i18n/LangProvider';
+import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportModal from '@/components/dashboard/ImportModal';
 
 interface RawJob {
@@ -57,16 +58,29 @@ function assignmentName(a: { worker_name: string | null; employees: { first_name
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
+// Module-level cache — survives SPA route changes, so coming back from a job
+// detail paints the last full list instantly (no loading flash, and the
+// scroll restore has the real page height to jump to) while a background
+// refresh replaces it.
+let jobsListCache: { key: string; jobs: RawJob[] } | null = null;
+
 export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
   const { business, businesses, currentRole, activeLocationId } = useApp();
-  const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = business ? `${business.id}:${activeLocationId ?? 'all'}` : null;
+  const [rawJobs, setRawJobs] = useState<RawJob[]>(() =>
+    cacheKey && jobsListCache?.key === cacheKey ? jobsListCache.jobs : []);
+  const [loading, setLoading] = useState(() =>
+    !(cacheKey && jobsListCache?.key === cacheKey));
   const [initialTab, setInitialTab] = useState<TabKey>('all');
   const [importOpen, setImportOpen] = useState(false);
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
+
+  // Coming back from a job detail lands at the top otherwise — restore the
+  // list scroll position once the rows have rendered.
+  useScrollRestore('jobs-list', !loading);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -134,6 +148,8 @@ export default function TrabajosPage() {
     if (seq !== loadSeqRef.current) return;
     setRawJobs(data);
     setLoading(false);
+    // Only the full set is cached (never the 30-row fast paint).
+    jobsListCache = { key: `${businessId}:${activeLocationId ?? 'all'}`, jobs: data };
   };
 
   useEffect(() => { load(); }, [business, activeLocationId]);
@@ -208,9 +224,9 @@ export default function TrabajosPage() {
       loading={loading}
       jobs={jobs}
       initialTab={initialTab}
-      onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
+      onJobPress={(id) => { saveScrollAnchor('jobs-list', id); router.push(`/dashboard/trabajos/${id}`); }}
       onUpdateStatus={updateStatus}
-      onGenerateInvoice={(id) => router.push(`/dashboard/trabajos/${id}?action=invoice`)}
+      onGenerateInvoice={(id) => { saveScrollAnchor('jobs-list', id); router.push(`/dashboard/trabajos/${id}?action=invoice`); }}
       onCreateInvoice={async (jobIds) => {
         if (!business) return;
         const jt = full.dashboard.jobs.new;

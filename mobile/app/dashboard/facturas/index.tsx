@@ -22,6 +22,7 @@ interface RawInvoice {
   due_date: string | null;
   issue_date: string | null;
   created_at: string;
+  sent_at: string | null;
   clients: InvoiceClient | null;
   invoice_clients: { clients: InvoiceClient }[];
 }
@@ -54,7 +55,7 @@ export default function FacturasTab() {
     const businessId = business.id;
     const raw = await fetchAll<RawInvoice>((from, to) =>
       supabase.from('invoices')
-        .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
+        .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
         .range(from, to) as unknown as PromiseLike<{ data: RawInvoice[] | null; error: { message: string } | null }>);
@@ -66,6 +67,7 @@ export default function FacturasTab() {
         status: inv.status,
         totalAmount: inv.total_amount,
         dueDate: inv.due_date,
+        sentAt: inv.sent_at,
         clientNames: mapClientNames(inv),
         company: pc?.company ?? null,
         state: pc?.state ?? null,
@@ -99,7 +101,7 @@ export default function FacturasTab() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <InvoicesListScreen
         loading={loading}
         invoices={invoices}

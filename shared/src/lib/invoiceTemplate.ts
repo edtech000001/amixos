@@ -24,6 +24,7 @@ import {
   type InvoiceLang,
   type InvoiceLabelKey,
 } from '../i18n/invoice';
+export type { InvoiceLang } from '../i18n/invoice';
 import { formatDateLong } from './format';
 import { INVOICE_ICON_NODES } from './invoiceIconNodes';
 
@@ -1728,6 +1729,16 @@ export function setText(
 }
 export function setDefaultLanguage(c: InvoiceTemplateConfig, defaultLanguage: InvoiceLang): InvoiceTemplateConfig {
   return { ...c, defaultLanguage };
+}
+/** Set the default language on BOTH themes in a bundle so the choice is the same
+ *  regardless of which layout mode is active. Lets the setting live on the main
+ *  invoice settings card (not just the designer). */
+export function setBundleDefaultLanguage(b: InvoiceThemeBundle, defaultLanguage: InvoiceLang): InvoiceThemeBundle {
+  return {
+    ...b,
+    flow: { ...b.flow, defaultLanguage },
+    freeform: { ...b.freeform, defaultLanguage },
+  };
 }
 export function setDecoration(c: InvoiceTemplateConfig, decoration: InvoiceDecoration): InvoiceTemplateConfig {
   return { ...c, decoration };

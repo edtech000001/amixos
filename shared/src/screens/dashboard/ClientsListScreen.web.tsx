@@ -336,7 +336,7 @@ const ClientRow = memo(function ClientRow({
   return (
     // content-visibility skips layout/paint for offscreen rows — keeps huge
     // client lists cheap. Intrinsic size ≈ row height so scrolling stays smooth.
-    <div className={`[content-visibility:auto] [contain-intrinsic-size:auto_76px] group flex items-center gap-3 px-5 py-4 border-b border-b-gray-100 last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-surface'}`}>
+    <div className={`[content-visibility:auto] [contain-intrinsic-size:auto_76px] group flex items-center gap-3 px-5 py-4 border-b border-b-border-soft last:border-b-0 ${isChecked ? 'bg-primary/5' : 'hover:bg-surface'}`}>
       {/* Checkbox only exists while selection mode is on (jobs-list pattern). */}
       {selectMode ? (
         <span
@@ -346,6 +346,9 @@ const ClientRow = memo(function ClientRow({
         </span>
       ) : null}
       <button
+        // Lets the page's scroll restore find and re-center this exact row
+        // when the user returns from the client detail.
+        data-scroll-anchor={c.id}
         onClick={(e) => (selectMode ? onToggleSelect(c.id, e.shiftKey) : onClientPress(c.id))}
         className="flex items-center gap-3 min-w-0 flex-1 text-left"
       >

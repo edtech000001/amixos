@@ -119,6 +119,10 @@ export default function NuevaFacturaRoute() {
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  // Notes source: 'default' = use the business's default note, 'custom' = write
+  // your own. New invoices start on 'default' when a default note exists.
+  const [notesMode, setNotesMode] = useState<'default' | 'custom'>('custom');
+  const defaultNote = (business?.invoice_notes_default ?? '').trim();
   // New invoices start at the business default (Ajustes → Facturas);
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
@@ -142,12 +146,24 @@ export default function NuevaFacturaRoute() {
   const dueDefaultedRef = useRef(false);
   useEffect(() => {
     if (editId || dueDefaultedRef.current || !business) return;
-    const days = business.invoice_due_days;
-    if (days != null && days >= 0 && issueDate && !dueDate) {
+    // Net-30 by default for everyone; a business can override the window in
+    // Ajustes → Facturas (invoice_due_days). Only fills an empty due date.
+    const days = business.invoice_due_days ?? 30;
+    if (days >= 0 && issueDate && !dueDate) {
       setDueDate(addDaysISO(issueDate, days));
       dueDefaultedRef.current = true;
     }
   }, [editId, business, issueDate, dueDate]);
+
+  // New invoices prefill the default note (Ajustes → Facturas) and start on the
+  // "Use default" toggle so it's actually applied.
+  const notesDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (editId || notesDefaultedRef.current || !business) return;
+    const def = (business.invoice_notes_default ?? '').trim();
+    if (def) { setNotes(def); setNotesMode('default'); }
+    notesDefaultedRef.current = true;
+  }, [editId, business]);
 
   // New invoices start in the business's default language (Invoice theme).
   // Edit mode loads the invoice's own language below; the ref guard means a
@@ -225,6 +241,10 @@ export default function NuevaFacturaRoute() {
           setIssueDate(inv.issue_date ?? todayISO());
           setDueDate(inv.due_date ?? '');
           setNotes(inv.notes ?? '');
+          {
+            const def = (business?.invoice_notes_default ?? '').trim();
+            setNotesMode(def && (inv.notes ?? '').trim() === def ? 'default' : 'custom');
+          }
           setTaxRate(inv.tax_rate ?? 0);
           setLanguage((inv.language as InvoiceLang) ?? 'es');
           setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
@@ -622,7 +642,7 @@ export default function NuevaFacturaRoute() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerClassName="px-5 pt-5 pb-32"
+          contentContainerClassName="px-5 pt-5 pb-44"
           keyboardShouldPersistTaps="handled"
         >
           {/* General info — built-in keys (invoice_number, client, issue_date,
@@ -664,7 +684,12 @@ export default function NuevaFacturaRoute() {
                     onChangeText={(v) => updateLine(line.id, 'description', v)}
                     placeholder={t.itemPlaceholder}
                     placeholderTextColor={c.faint}
+                    // Wrap + grow with the text instead of clipping a long name,
+                    // but cap the height (then it scrolls) so the row can't be
+                    // stretched into an endless box.
+                    multiline
                     className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink"
+                    style={{ minHeight: 40, maxHeight: 120, textAlignVertical: 'top' }}
                   />
                   <View className="flex-row items-center gap-2 mt-2">
                     <View className="flex-1">
@@ -761,17 +786,44 @@ export default function NuevaFacturaRoute() {
                 }
                 if (k === 'notes' && !fHidden('notes')) {
                   return (
-                    <TextInput
-                      key={k}
-                      value={notes}
-                      onChangeText={setNotes}
-                      placeholder={t.notesPlaceholder}
-                      placeholderTextColor={c.faint}
-                      multiline
-                      numberOfLines={3}
-                      className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-                      style={{ textAlignVertical: 'top' }}
-                    />
+                    <View key={k} className="gap-2">
+                      {/* Toggle appears only when a default note exists. */}
+                      {defaultNote ? (
+                        <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl self-start">
+                          {(['default', 'custom'] as const).map(m => (
+                            <Pressable
+                              key={m}
+                              onPress={() => {
+                                setNotesMode(m);
+                                if (m === 'default') setNotes(defaultNote);
+                                else if (!notes.trim() || notes.trim() === defaultNote) setNotes(defaultNote);
+                              }}
+                              className={`px-3 py-1.5 rounded-lg ${notesMode === m ? 'bg-card' : ''}`}
+                            >
+                              <Text className={`text-xs font-semibold ${notesMode === m ? 'text-primary' : 'text-muted'}`}>
+                                {m === 'default' ? t.notesUseDefault : t.notesCustom}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : null}
+                      {defaultNote && notesMode === 'default' ? (
+                        <View className="rounded-2xl border border-border-soft bg-surface px-4 py-3">
+                          <Text className="text-sm text-muted">{defaultNote}</Text>
+                        </View>
+                      ) : (
+                        <TextInput
+                          value={notes}
+                          onChangeText={setNotes}
+                          placeholder={t.notesPlaceholder}
+                          placeholderTextColor={c.faint}
+                          multiline
+                          numberOfLines={3}
+                          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
+                          style={{ textAlignVertical: 'top' }}
+                        />
+                      )}
+                    </View>
                   );
                 }
                 return null;

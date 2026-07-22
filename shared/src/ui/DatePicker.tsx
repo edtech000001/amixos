@@ -226,7 +226,7 @@ function NativePicker({
                   display={iosDisplay}
                   maximumDate={maximumDate}
                   accentColor={c.primary}
-                  themeVariant="light"
+                  themeVariant={hexIsDark(c.card) ? 'dark' : 'light'}
                   // Force English locale on the time wheel so AM/PM renders
                   // uppercase ("AM"/"PM") instead of Spanish "a. m." / "p. m.".
                   // Date mode keeps the system locale so the inline calendar
@@ -248,6 +248,18 @@ function NativePicker({
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Perceived-luminance check so the native iOS picker's themeVariant follows
+ *  the app theme — a dark card means we're in dark mode and the wheel/calendar
+ *  must use light text (otherwise it draws dark-on-dark and vanishes). */
+function hexIsDark(hex: string): boolean {
+  const h = hex.replace('#', '');
+  if (h.length < 6) return false;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+}
 
 function parseValueToDate(value: string, mode: Mode): Date {
   if (!value) return new Date();

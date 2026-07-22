@@ -6,7 +6,7 @@ import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { Fab } from '../../ui/Fab';
-import { formatDateLong, daysOverdue } from '../../lib/format';
+import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { useThemeColors } from '../../theme';
@@ -17,6 +17,8 @@ export interface InvoiceListItem {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
   totalAmount: number;
   dueDate: string | null;
+  /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
+  sentAt: string | null;
   clientNames: string | null;
   /** Primary client's company + state (for the company/state filters). */
   company: string | null;
@@ -228,7 +230,7 @@ export function InvoicesListScreen({
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-64' : 'pb-36'}`}>
+    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-64' : 'pb-44'}`}>
       {/* Header — filter controls live up here so the search bar gets the full
           width (mirrors the jobs list). */}
       <View className="flex-row items-start justify-between mb-5">
@@ -401,6 +403,14 @@ export function InvoicesListScreen({
                   const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
                   const client = inv.clientNames ?? t.noClient;
                   const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
+                  // Elapsed info shown next to the date (not folded into the pill):
+                  // "sent Nd ago" for open sent invoices, "overdue by Nd" for overdue.
+                  const sentAgo = inv.status === 'sent' && inv.sentAt
+                    ? (() => { const n = daysSince(inv.sentAt); return n === 0 ? t.sentToday : t.sentAgo.replace('{{n}}', String(n)); })()
+                    : null;
+                  const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
+                    ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
+                    : null;
                   return (
                     <Pressable
                       key={inv.id}
@@ -423,15 +433,15 @@ export function InvoicesListScreen({
                           </Text>
                           <View className={`px-2 py-0.5 rounded-full ${pillBg}`}>
                             <Text className={`text-xs font-medium ${pillText}`}>
-                              {inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
-                                ? `${statusLabel} ${t.daysOverdue.replace('{{n}}', String(daysOverdue(inv.dueDate)))}`
-                                : statusLabel}
+                              {statusLabel}
                             </Text>
                           </View>
                         </View>
                         <Text className="text-xs text-faint mt-0.5">
                           {client}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
+                          {sentAgo ? ` · ${sentAgo}` : ''}
+                          {overdueAgo ? ` · ${overdueAgo}` : ''}
                         </Text>
                       </View>
                       <Text className="text-sm font-bold text-ink">

@@ -26,7 +26,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
-import { formatDateLong, formatDateTimeLong, daysOverdue } from '../../lib/format';
+import { formatDateLong, formatDateTimeLong, daysOverdue, daysSince } from '../../lib/format';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -60,6 +60,8 @@ export interface InvoiceDetail {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
   issueDate: string;
   dueDate: string | null;
+  /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
+  sentAt: string | null;
   lineItems: InvoiceDetailLineItem[];
   subtotalAmount: number;
   taxRate: number;
@@ -224,6 +226,13 @@ export function InvoiceDetailScreen({
   const statusLabel = tStatus[statusKey] ?? invoice.status;
   const pillBg = STATUS_PILL_BG[invoice.status] ?? 'bg-border-soft';
   const pillText = STATUS_PILL_TEXT[invoice.status] ?? 'text-muted';
+  // Elapsed note shown next to the due date (not in the pill): "overdue by Nd"
+  // for overdue, "sent Nd ago" for still-open sent invoices.
+  const dateNote = invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
+    ? tInv.overdueAgo.replace('{{n}}', String(daysOverdue(invoice.dueDate)))
+    : invoice.status === 'sent' && invoice.sentAt
+    ? (daysSince(invoice.sentAt) === 0 ? tInv.sentToday : tInv.sentAgo.replace('{{n}}', String(daysSince(invoice.sentAt))))
+    : null;
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
@@ -249,9 +258,7 @@ export function InvoiceDetailScreen({
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-ink">{invoice.invoiceNumber}</h1>
               <span className={`px-3.5 py-1.5 rounded-full text-sm font-bold ${pillBg} ${pillText}`}>
-                {invoice.status === 'overdue' && daysOverdue(invoice.dueDate) > 0
-                  ? `${statusLabel} ${tInv.daysOverdue.replace('{{n}}', String(daysOverdue(invoice.dueDate)))}`
-                  : statusLabel}
+                {statusLabel}
               </span>
               {isPartial ? (
                 <span className="px-3.5 py-1.5 rounded-full text-sm font-bold bg-amber-100 text-amber-700">
@@ -348,7 +355,10 @@ export function InvoiceDetailScreen({
             </div>
             <div>
               <p className="text-xs text-faint font-medium">{t.dueDate}</p>
-              <p className="text-sm font-semibold text-ink">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
+              <p className="text-sm font-semibold text-ink">
+                {invoice.dueDate ? formatDate(invoice.dueDate) : '—'}
+                {dateNote ? <span className="text-xs font-medium text-muted">{`  ·  ${dateNote}`}</span> : null}
+              </p>
             </div>
           </div>
         </div>

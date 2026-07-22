@@ -81,7 +81,7 @@ export function FieldHomeContainer() {
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       {/* Crew don't get a business logo/switcher — greet them by name. */}
       <FieldHomeScreen
         loading={appLoading || loading}
