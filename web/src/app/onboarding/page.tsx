@@ -103,7 +103,9 @@ export default function OnboardingPage() {
     );
 
     const ext = file.name.split('.').pop();
-    const path = `logos/${Date.now()}.${ext}`;
+    // Business doesn't exist yet at onboarding — scope the logo to the
+    // uploader's own uid folder (155 policy allows logos/<uid>/…).
+    const path = `logos/${session.user.id}/${Date.now()}.${ext}`;
 
     // Plain insert (no upsert): the path is a unique timestamp, and upsert's
     // ON CONFLICT path needs SELECT visibility that the logos policies don't

@@ -63,7 +63,9 @@ export default function OnboardingRoute() {
       const arrayBuffer = await new Response(blob).arrayBuffer();
 
       const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
-      const path = `logos/${Date.now()}.${ext}`;
+      // Business doesn't exist yet at onboarding — scope the logo to the
+      // uploader's own uid folder (155 policy allows logos/<uid>/…).
+      const path = `logos/${session.user.id}/${Date.now()}.${ext}`;
       const contentType = asset.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
       const { error: uploadError } = await uploadClient.storage

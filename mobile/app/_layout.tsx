@@ -1,3 +1,7 @@
+// Polyfill crypto.getRandomValues FIRST (before anything that generates
+// tokens) so secureShareToken() uses a cryptographic RNG on RN/Hermes instead
+// of its Math.random fallback. Must precede all other imports.
+import 'react-native-get-random-values';
 import '../global.css';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';

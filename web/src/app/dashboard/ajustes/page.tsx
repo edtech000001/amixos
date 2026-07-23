@@ -621,7 +621,9 @@ export default function AjustesPage() {
     setBizMsg('');
     try {
       const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-      const path = `logos/${business.id}-${Date.now()}.${ext}`;
+      // Business-scoped folder so only this business can overwrite/delete it
+      // (155 policy).
+      const path = `logos/${business.id}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('business-assets')
         .upload(path, file, { upsert: true, contentType: file.type || undefined });

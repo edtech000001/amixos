@@ -3,11 +3,12 @@
 // (via the get_shared_invoice / get_shared_proposal RPCs), so they must not be
 // predictable.
 //
-// Prefers the platform's cryptographic RNG (browsers always have it) so tokens
-// aren't recoverable Math.random output. Falls back to Math.random only where no
-// secure RNG exists (some RN/Hermes runtimes ship without a crypto module and we
-// avoid adding a native dependency there); the fallback keeps sharing working
-// rather than throwing.
+// Prefers the platform's cryptographic RNG so tokens aren't recoverable
+// Math.random output. Browsers always have it; the mobile app polyfills
+// crypto.getRandomValues at entry (react-native-get-random-values in
+// app/_layout.tsx), so the getRandomValues branch below is taken there too.
+// The Math.random fallback is a last resort for an exotic runtime with no
+// secure RNG at all — it keeps sharing working rather than throwing.
 export function secureShareToken(): string {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (c?.randomUUID) return c.randomUUID().replace(/-/g, '');

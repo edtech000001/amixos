@@ -326,7 +326,9 @@ export function BusinessSection() {
       const blob = await fetch(asset.uri).then((r) => r.blob());
       const arrayBuffer = await new Response(blob).arrayBuffer();
       const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
-      const path = `logos/${business.id}-${Date.now()}.${ext}`;
+      // Business-scoped folder so only this business can overwrite/delete it
+      // (155 policy).
+      const path = `logos/${business.id}/${Date.now()}.${ext}`;
       const contentType = asset.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
       const { error: upErr } = await supabase.storage
         .from('business-assets')
