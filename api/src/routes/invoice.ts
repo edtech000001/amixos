@@ -8,36 +8,36 @@ invoiceRouter.use(authenticate);
 // GET /api/v1/invoices
 invoiceRouter.get('/', async (req, res) => {
   // Query params: status (paid|unpaid|overdue), businessId
-  res.json({ success: true, data: [] });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // POST /api/v1/invoices
 invoiceRouter.post('/', async (req, res) => {
-  res.json({ success: true, message: 'Create invoice — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // GET /api/v1/invoices/:id
 invoiceRouter.get('/:id', async (req, res) => {
-  res.json({ success: true, data: null });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // PUT /api/v1/invoices/:id
 invoiceRouter.put('/:id', async (req, res) => {
-  res.json({ success: true, message: 'Update invoice — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // DELETE /api/v1/invoices/:id
 invoiceRouter.delete('/:id', async (req, res) => {
-  res.json({ success: true, message: 'Delete invoice — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // POST /api/v1/invoices/:id/send
 invoiceRouter.post('/:id/send', async (req, res) => {
-  res.json({ success: true, message: 'Send invoice — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // POST /api/v1/invoices/:id/pay
 invoiceRouter.post('/:id/pay', async (req, res) => {
   // Stripe payment intent
-  res.json({ success: true, message: 'Pay invoice — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });

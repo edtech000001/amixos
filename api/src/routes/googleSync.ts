@@ -46,6 +46,21 @@ async function loadCreds(userId: string, businessId: string): Promise<OAuthCreds
   return (data as OAuthCreds | null) ?? null;
 }
 
+// Membership gate. The service-role `supabase` client bypasses RLS, so every
+// handler that touches a business's data on it must verify the caller still
+// belongs to that business (mirrors the inline check in /connect and
+// /exchange-code). Guards against stale sessions / removed members reaching
+// service-role data.
+async function requireMembership(userId: string, businessId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('business_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+  return !!data;
+}
+
 /**
  * POST /api/v1/google-sync/exchange-code
  * Body: { business_id: string, code: string, redirect_uri: string }
@@ -320,6 +335,9 @@ googleSyncRouter.get('/synced-count', async (req: AuthRequest, res) => {
   if (!businessId) {
     return res.status(400).json({ success: false, message: 'business_id required' });
   }
+  if (!(await requireMembership(userId, businessId))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
+  }
   // Count BOTH clients AND client_contacts in this business that have been
   // pushed to Google — both will be removed if the user picks "Also remove
   // from Google" on disconnect, so the count reflects the full impact.
@@ -351,6 +369,9 @@ googleSyncRouter.get('/unsynced-count', async (req: AuthRequest, res) => {
   const businessId = req.query.business_id as string | undefined;
   if (!businessId) {
     return res.status(400).json({ success: false, message: 'business_id required' });
+  }
+  if (!(await requireMembership(userId, businessId))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
   }
   const [{ count: clientCount }, { count: contactCount }] = await Promise.all([
     supabase
@@ -392,6 +413,9 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
   const businessId = (req.body ?? {}).business_id as string | undefined;
   if (!businessId) {
     return res.status(400).json({ success: false, message: 'business_id required' });
+  }
+  if (!(await requireMembership(userId, businessId))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
   }
 
   const creds = await loadCreds(userId, businessId);
@@ -581,6 +605,9 @@ googleSyncRouter.post('/disconnect', async (req: AuthRequest, res) => {
   if (!business_id || typeof business_id !== 'string') {
     return res.status(400).json({ success: false, message: 'business_id required' });
   }
+  if (!(await requireMembership(userId, business_id))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
+  }
 
   // Load the full creds so we can both revoke and (optionally) delete
   // contacts before tearing down the row.
@@ -645,9 +672,12 @@ googleSyncRouter.post('/disconnect', async (req: AuthRequest, res) => {
 
   if (creds?.refresh_token) {
     try {
-      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(creds.refresh_token)}`, {
+      // Send the token in the POST body, not the URL query string — a URL
+      // can leak into proxy/access logs; a form body does not.
+      await fetch('https://oauth2.googleapis.com/revoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: creds.refresh_token }),
       });
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -750,6 +780,12 @@ googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
     return res.status(404).json({ success: false, message: 'client not found' });
   }
   const clientRow = client as ClientRow;
+
+  // Membership gate against the row's own business_id — the caller must
+  // still belong to the business this client lives in.
+  if (!(await requireMembership(userId, clientRow.business_id))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
+  }
 
   // Per-business sync: load the creds for the business this client belongs
   // to. If that business isn't connected, silently skip.
@@ -872,6 +908,12 @@ googleSyncRouter.post('/client-contact', async (req: AuthRequest, res) => {
   const row = contactRow as unknown as ClientContactRow & {
     clients: ClientRow | null;
   };
+
+  // Membership gate against the contact row's own business_id.
+  if (!(await requireMembership(userId, row.business_id))) {
+    return res.status(403).json({ success: false, message: 'forbidden' });
+  }
+
   if (!row.clients) {
     return res.status(404).json({ success: false, message: 'parent client not found' });
   }

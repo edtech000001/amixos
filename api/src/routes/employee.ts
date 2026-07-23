@@ -10,25 +10,25 @@ employeeRouter.use(authenticate);
 
 // GET /api/v1/employees
 employeeRouter.get('/', async (req, res) => {
-  res.json({ success: true, data: [] });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // POST /api/v1/employees — owner/manager only
 employeeRouter.post('/', requireBusinessRole('owner', 'manager'), async (req, res) => {
-  res.json({ success: true, message: 'Add employee — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // GET /api/v1/employees/:id
 employeeRouter.get('/:id', async (req, res) => {
-  res.json({ success: true, data: null });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // PUT /api/v1/employees/:id
 employeeRouter.put('/:id', requireBusinessRole('owner', 'manager'), async (req, res) => {
-  res.json({ success: true, message: 'Update employee — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // DELETE /api/v1/employees/:id
 employeeRouter.delete('/:id', requireBusinessRole('owner'), async (req, res) => {
-  res.json({ success: true, message: 'Delete employee — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });

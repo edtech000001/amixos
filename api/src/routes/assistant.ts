@@ -16,6 +16,8 @@ import type { AssistantChatMessage, AssistantContext, JobDraft } from '../lib/as
 export const assistantRouter = Router();
 
 // Per-user limits — the Claude calls behind /chat are the expensive part.
+// TODO: persistent daily token budget — this in-memory per-minute cap does not
+// bound cumulative daily spend per business/user across instances or restarts.
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,

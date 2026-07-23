@@ -37,7 +37,10 @@ export default function LoginPage() {
       const nextParam = typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('next')
         : null;
-      if (nextParam && nextParam.startsWith('/')) {
+      // Same-origin only: a protocol-relative URL ("//evil.com") also starts
+      // with "/", so exclude it explicitly to prevent an open-redirect to a
+      // phishing clone.
+      if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
         window.location.href = nextParam;
         return { ok: true, needsOnboarding: false };
       }

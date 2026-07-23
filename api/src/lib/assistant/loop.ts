@@ -74,7 +74,11 @@ export async function runAssistant(
     };
   }
 
-  const messages: Anthropic.MessageParam[] = turns.map(m => ({ role: m.role, content: m.content }));
+  const messages: Anthropic.MessageParam[] = turns
+    .map(m => ({ role: m.role, content: m.content }))
+    // Cap each message's content length to bound per-request token spend and
+    // blunt oversized prompt-injection payloads riding in the transcript.
+    .map(m => ({ ...m, content: typeof m.content === 'string' ? m.content.slice(0, 4000) : m.content }));
   const system = buildSystemBlocks(ctx);
 
   let latestDraft: JobDraft | null = null;
@@ -105,7 +109,15 @@ export async function runAssistant(
           try {
             const { result, draft } = await executeTool(ctx, block.name, block.input as Record<string, any>);
             if (draft) latestDraft = draft;
-            return { type: 'tool_result' as const, tool_use_id: block.id, content: result };
+            // Wrap tool output in a data fence so the model treats it as DATA,
+            // never instructions — client/employee names or notes could carry
+            // injected orders. The system prompt tells Ami to ignore any
+            // directives inside these tags.
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.id,
+              content: `<datos_del_negocio>\n${result}\n</datos_del_negocio>`,
+            };
           } catch (e) {
             return {
               type: 'tool_result' as const,

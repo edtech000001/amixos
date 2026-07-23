@@ -125,7 +125,7 @@ export function buildProposalHtml(vm: ProposalHtmlVM): string {
 
     ${vm.signature ? `<div style="border-top:1px solid #f3f4f6;padding-top:14px">
       <div style="font-size:11px;font-weight:600;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${esc(t.signatureTitle)}</div>
-      <img src="${vm.signature.image}" style="height:56px;object-fit:contain"/>
+      <img src="${esc(vm.signature.image)}" style="height:56px;object-fit:contain"/>
       <div style="font-size:12px;color:#4b5563;margin-top:4px">${esc(vm.signature.line)}</div></div>` : ''}
 
   </body></html>`;

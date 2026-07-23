@@ -1,8 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { impersonatingFetch } from '@amixos/shared/lib/impersonation';
+import { SecureSessionStorage } from './secureSessionStore';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -13,8 +13,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Platform-aware storage so the same supabase client works on web (where
-// AsyncStorage hangs silently) and native (where localStorage doesn't exist).
+// Platform-aware storage: web uses localStorage; native uses encrypted
+// SecureStore (Keychain/Keystore) for the session, which holds the long-lived
+// refresh token — plaintext AsyncStorage would expose it on a rooted device or
+// in an unencrypted backup. SecureSessionStorage migrates any existing
+// AsyncStorage session on first read so upgrading users stay signed in.
 const PlatformStorage =
   Platform.OS === 'web'
     ? {
@@ -26,11 +29,7 @@ const PlatformStorage =
           globalThis.localStorage?.removeItem(key);
         },
       }
-    : {
-        getItem: (key: string) => AsyncStorage.getItem(key),
-        setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
-        removeItem: (key: string) => AsyncStorage.removeItem(key),
-      };
+    : SecureSessionStorage;
 
 let client: SupabaseClient | null = null;
 

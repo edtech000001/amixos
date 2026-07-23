@@ -7,25 +7,25 @@ clientRouter.use(authenticate);
 
 // GET /api/v1/clients
 clientRouter.get('/', async (req, res) => {
-  res.json({ success: true, data: [] });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // POST /api/v1/clients
 clientRouter.post('/', async (req, res) => {
-  res.json({ success: true, message: 'Create client — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // GET /api/v1/clients/:id
 clientRouter.get('/:id', async (req, res) => {
-  res.json({ success: true, data: null });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // PUT /api/v1/clients/:id
 clientRouter.put('/:id', async (req, res) => {
-  res.json({ success: true, message: 'Update client — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });
 
 // DELETE /api/v1/clients/:id
 clientRouter.delete('/:id', async (req, res) => {
-  res.json({ success: true, message: 'Delete client — coming soon' });
+  res.status(501).json({ success: false, message: 'not_implemented' });
 });

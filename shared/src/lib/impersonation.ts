@@ -101,14 +101,30 @@ export function impersonatingFetch(
   if (url.includes('/auth/v1/')) return fetch(input, init);
 
   // Read-only enforcement. "Ver como" is a preview, not a way to act as the
-  // member, so block unambiguous database mutations at the transport layer —
-  // this covers BOTH platforms with no per-button wiring. Reads (GET/HEAD) and
-  // RPC calls (POST /rest/v1/rpc/* — often read-only aggregations) pass through.
+  // member, so block database mutations at the transport layer — this covers
+  // BOTH platforms with no per-button wiring. Reads (GET/HEAD) pass through.
+  // RPCs are POSTs too, and some are read-only aggregations, so we allow only
+  // an explicit read-only allowlist and block every other RPC (a mutating
+  // SECURITY DEFINER RPC — respond_shared_proposal, accept_invite,
+  // transfer_business_ownership, … — must not run in preview mode).
   const method = (init?.method ?? (isRequest ? (input as Request).method : 'GET')).toUpperCase();
   const isRpc = url.includes('/rest/v1/rpc/');
+  // Read-only RPCs safe to run while impersonating (aggregations / lookups).
+  const READONLY_RPCS = [
+    'business_storage_bytes',
+    'business_storage_breakdown',
+    'list_audit_log',
+    'list_business_members',
+    'get_shared_invoice',
+    'get_shared_proposal',
+    'default_role_permissions',
+    'member_res',
+    'member_view',
+  ];
+  const isReadOnlyRpc = isRpc && READONLY_RPCS.some(fn => url.includes(`/rest/v1/rpc/${fn}`));
   const isDbWrite =
     url.includes('/rest/v1/') &&
-    !isRpc &&
+    !isReadOnlyRpc &&
     (method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE');
   if (isDbWrite) {
     return Promise.resolve(

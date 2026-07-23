@@ -12,9 +12,16 @@ export const errorHandler = (
   _next: NextFunction
 ) => {
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const realMessage = err.message || 'Internal Server Error';
 
-  console.error(`[ERROR] ${statusCode} - ${message}`);
+  // Always log the real error server-side.
+  console.error(`[ERROR] ${statusCode} - ${realMessage}`);
+
+  // Only surface the real message for operational / client (4xx) errors.
+  // Non-operational 5xx errors get a generic message so internal details
+  // (stack traces, DB errors, secrets in messages) never leak to callers.
+  const safeToSurface = err.isOperational === true || statusCode < 500;
+  const message = safeToSurface ? realMessage : 'internal_error';
 
   res.status(statusCode).json({
     success: false,

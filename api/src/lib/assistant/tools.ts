@@ -225,11 +225,19 @@ export async function executeQueryClients(ctx: AssistantContext, input: ToolInpu
   if (term) {
     // Token-split OR match across name/company so "Bob Karlton" hits
     // first_name=Bob + last_name=Karlton.
-    const tokens = term.split(/\s+/).filter(Boolean).slice(0, 3);
-    const ors = tokens
-      .map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%,company.ilike.%${t}%`)
-      .join(',');
-    q = q.or(ors);
+    // Strip PostgREST grammar chars (, ( ) . \ ") so a search term can't
+    // break out of the ilike filter and inject extra OR conditions; cap to 3.
+    const tokens = term
+      .split(/\s+/)
+      .map(t => t.replace(/[,().\\"]/g, ''))
+      .filter(Boolean)
+      .slice(0, 3);
+    if (tokens.length) {
+      const ors = tokens
+        .map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%,company.ilike.%${t}%`)
+        .join(',');
+      q = q.or(ors);
+    }
   }
   const { data, error, count } = await q.order('first_name').limit(limit);
   if (error) throw new Error(error.message);
@@ -250,8 +258,20 @@ export async function executeQueryEmployees(ctx: AssistantContext, input: ToolIn
     .select('id, first_name, last_name, role')
     .eq('business_id', ctx.businessId);
   if (input.search) {
-    const t = String(input.search).trim();
-    q = q.or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%`);
+    // Same sanitization as query_clients: strip PostgREST grammar chars and
+    // cap to 3 tokens so the term can't inject extra filter conditions.
+    const tokens = String(input.search)
+      .trim()
+      .split(/\s+/)
+      .map(t => t.replace(/[,().\\"]/g, ''))
+      .filter(Boolean)
+      .slice(0, 3);
+    if (tokens.length) {
+      const ors = tokens
+        .map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%`)
+        .join(',');
+      q = q.or(ors);
+    }
   }
   const { data, error } = await q.limit(limit);
   if (error) throw new Error(error.message);

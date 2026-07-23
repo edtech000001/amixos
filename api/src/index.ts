@@ -30,6 +30,12 @@ const PORT = process.env.PORT || 3001;
 // Security & Middleware
 app.use(helmet());
 
+// Cloud Run sits behind exactly one Google front-end proxy hop, so trust a
+// single proxy. This makes req.ip resolve to the real client IP (from the
+// last X-Forwarded-For entry) instead of the proxy's, which the per-IP rate
+// limiters below rely on.
+app.set('trust proxy', 1);
+
 // Global rate limit, per client IP. A backstop against scraping/brute-force on
 // every route; expensive routes (e.g. SMS send) layer a stricter cap on top.
 // NOTE: this is per-instance — on multi-instance Cloud Run, move to a shared

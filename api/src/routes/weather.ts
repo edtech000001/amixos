@@ -5,6 +5,7 @@
 // Feature is alpha-gated via WEATHER_ALPHA_BUSINESS_IDS (api/src/lib/weather.ts)
 // in addition to the standard business-membership check.
 
+import crypto from 'crypto';
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
@@ -391,7 +392,15 @@ weatherRouter.post('/cron/refresh-all', async (req, res) => {
   const expected = process.env.CRON_SECRET;
   const got = req.headers['x-cron-secret'];
   if (!expected) return res.status(500).json({ success: false, message: 'CRON_SECRET not configured' });
-  if (got !== expected) return res.status(401).json({ success: false, message: 'invalid cron secret' });
+  // Constant-time comparison — a plain !== leaks the secret one byte at a time
+  // via response-timing. Length check first (timingSafeEqual throws on
+  // mismatched buffer lengths).
+  const gotStr = typeof got === 'string' ? got : '';
+  const expectedBuf = Buffer.from(expected);
+  const gotBuf = Buffer.from(gotStr);
+  const secretOk =
+    gotBuf.length === expectedBuf.length && crypto.timingSafeEqual(gotBuf, expectedBuf);
+  if (!secretOk) return res.status(401).json({ success: false, message: 'invalid cron secret' });
 
   // Loop over every alpha-gated business + run the refresh.
   // refreshBusinessAlerts skips when weather_config.enabled = false, so we

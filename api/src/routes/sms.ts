@@ -187,19 +187,44 @@ smsRouter.post('/send', sendLimiter, async (req: AuthRequest, res) => {
     const result = await sendSms(row.provider, row.credentials, row.from_number ?? '', to.trim(), body.trim());
 
     // Log into the existing client communications timeline (best-effort).
+    // Validate the client_id (and client_contact_id) belong to THIS business
+    // before linking — a caller could otherwise attach a communication to
+    // another business's client. On mismatch we skip the linkage rather than
+    // fail the (already-sent) SMS.
     if (client_id && typeof client_id === 'string') {
-      await supabase.from('client_communications').insert({
-        business_id,
-        client_id,
-        client_contact_id: client_contact_id ?? null,
-        type: 'sms',
-        direction: 'outbound',
-        outcome: 'sent',
-        contact_method: to.trim(),
-        note: body.trim(),
-        occurred_at: new Date().toISOString(),
-        created_by: userId,
-      });
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('id', client_id)
+        .eq('business_id', business_id)
+        .maybeSingle();
+
+      let linkedContactId: string | null = null;
+      if (clientRow && client_contact_id && typeof client_contact_id === 'string') {
+        const { data: contactRow } = await supabase
+          .from('client_contacts')
+          .select('id')
+          .eq('id', client_contact_id)
+          .eq('business_id', business_id)
+          .eq('client_id', client_id)
+          .maybeSingle();
+        if (contactRow) linkedContactId = client_contact_id;
+      }
+
+      if (clientRow) {
+        await supabase.from('client_communications').insert({
+          business_id,
+          client_id,
+          client_contact_id: linkedContactId,
+          type: 'sms',
+          direction: 'outbound',
+          outcome: 'sent',
+          contact_method: to.trim(),
+          note: body.trim(),
+          occurred_at: new Date().toISOString(),
+          created_by: userId,
+        });
+      }
     }
     return res.json({ success: true, data: { id: result.id } });
   } catch (e) {

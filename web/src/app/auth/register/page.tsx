@@ -33,7 +33,10 @@ export default function RegisterPage() {
     const np = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('next')
       : null;
-    window.location.href = np && np.startsWith('/') ? np : '/onboarding';
+    // Same-origin only: reject protocol-relative ("//evil.com") to avoid an
+    // open-redirect (it also starts with "/").
+    const safeNext = np && np.startsWith('/') && !np.startsWith('//') ? np : null;
+    window.location.href = safeNext ?? '/onboarding';
     return { ok: true };
   };
 
