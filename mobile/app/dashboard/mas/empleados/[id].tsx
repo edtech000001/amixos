@@ -977,66 +977,70 @@ export default function EmpleadoDetailRoute() {
           </View>
         ) : null}
 
-        {/* Historial — view mode only (edit mode skips it; user re-enters view to access). */}
+        {/* Quick actions — 2-column tile grid (icon over label), view mode
+           only. Tiles are bg-card + border so they read as buttons in both
+           themes. */}
         {isView ? (
-          <Pressable
-            onPress={() => setHistoryOpen(true)}
-            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
-          >
-            <Clock size={16} color={c.primary} />
-            <Text className="text-sm font-semibold text-primary">{t.history.openBtn}</Text>
-          </Pressable>
-        ) : null}
+          <View className="flex-row flex-wrap justify-between" style={{ rowGap: 8 }}>
+            <Pressable
+              onPress={() => setHistoryOpen(true)}
+              style={{ width: '48.75%' }}
+              className="items-center justify-center gap-1.5 py-4 px-2 rounded-2xl bg-card border border-border active:bg-surface"
+            >
+              <Clock size={18} color={c.primary} />
+              <Text className="text-xs font-semibold text-primary text-center">{t.history.openBtn}</Text>
+            </Pressable>
 
-        {/* Active / inactive toggle — view mode. Deactivating keeps the record
-           (and history); reactivating brings them back. */}
-        {isView ? (
-          <Pressable
-            onPress={toggleActive}
-            className={`flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border ${
-              employee.active ? 'bg-card border-border active:bg-surface' : 'bg-emerald-500/10 border-emerald-200 active:bg-emerald-100'
-            }`}
-          >
-            {employee.active ? (
-              <UserX size={16} color={c.muted} />
-            ) : (
-              <UserCheck size={16} color={c.success} />
-            )}
-            <Text className={`text-sm font-semibold ${employee.active ? 'text-muted' : 'text-emerald-700'}`}>
-              {employee.active ? t.deactivateBtn : t.reactivateBtn}
-            </Text>
-          </Pressable>
-        ) : null}
+            {/* Active / inactive toggle. Deactivating keeps the record (and
+               history); reactivating brings them back. */}
+            <Pressable
+              onPress={toggleActive}
+              style={{ width: '48.75%' }}
+              className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
+                employee.active ? 'bg-card border-border active:bg-surface' : 'bg-emerald-500/10 border-emerald-200 active:bg-emerald-100'
+              }`}
+            >
+              {employee.active ? (
+                <UserX size={18} color={c.muted} />
+              ) : (
+                <UserCheck size={18} color={c.success} />
+              )}
+              <Text className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-700'}`}>
+                {employee.active ? t.deactivateBtn : t.reactivateBtn}
+              </Text>
+            </Pressable>
 
-        {/* Roster flag — keep office members out of job crew pickers. */}
-        {isView ? (
-          <Pressable
-            onPress={toggleRoster}
-            className={`flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border ${
-              (employee.show_in_roster ?? true) ? 'bg-card border-border active:bg-surface' : 'bg-amber-500/10 border-amber-200 active:bg-amber-100'
-            }`}
-          >
-            {(employee.show_in_roster ?? true) ? (
-              <UserX size={16} color={c.muted} />
-            ) : (
-              <UserCheck size={16} color={c.warning} />
-            )}
-            <Text className={`text-sm font-semibold ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-700'}`}>
-              {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
-            </Text>
-          </Pressable>
-        ) : null}
+            {/* Roster flag — keep office members out of job crew pickers. */}
+            <Pressable
+              onPress={toggleRoster}
+              style={{ width: '48.75%' }}
+              className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
+                (employee.show_in_roster ?? true) ? 'bg-card border-border active:bg-surface' : 'bg-amber-500/10 border-amber-200 active:bg-amber-100'
+              }`}
+            >
+              {(employee.show_in_roster ?? true) ? (
+                <UserX size={18} color={c.muted} />
+              ) : (
+                <UserCheck size={18} color={c.warning} />
+              )}
+              <Text className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-700'}`}>
+                {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
+              </Text>
+            </Pressable>
 
-        {/* Transfer ownership — owner only, on a member with app access. */}
-        {isView && canTransferOwnership ? (
-          <Pressable
-            onPress={() => void transferOwnership()}
-            disabled={accessBusy}
-            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border bg-amber-500/10 border-amber-200 active:bg-amber-100"
-          >
-            <Crown size={16} color={c.warning} />
-            <Text className="text-sm font-semibold text-amber-700">{t.transferOwnershipBtn}</Text>
-          </Pressable>
+            {/* Transfer ownership — owner only, on a member with app access. */}
+            {canTransferOwnership ? (
+              <Pressable
+                onPress={() => void transferOwnership()}
+                disabled={accessBusy}
+                style={{ width: '48.75%' }}
+                className="items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border bg-amber-500/10 border-amber-200 active:bg-amber-100"
+              >
+                <Crown size={18} color={c.warning} />
+                <Text className="text-xs font-semibold text-amber-700 text-center">{t.transferOwnershipBtn}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
 
         {/* Record timestamps (110 added employees.updated_at) */}

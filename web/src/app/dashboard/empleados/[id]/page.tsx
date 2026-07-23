@@ -583,26 +583,37 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
           />
         ) : null}
 
-            {/* Deactivate / reactivate — labeled button under App Access
-               (used to be the cryptic person-✕ icon in the header). */}
+          {/* Quick actions — 2-column tile grid (icon over label). Tiles use
+             bg-card + border so they read as buttons on the page background
+             in BOTH themes (bg-surface used to vanish in dark mode). */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border bg-card border-border-soft hover:bg-surface transition-colors"
+            >
+              <Clock size={18} className="text-primary" />
+              <span className="text-xs font-semibold text-primary text-center">{t.history.openBtn}</span>
+            </button>
+
+            {/* Deactivate / reactivate */}
             <button
               type="button"
               onClick={toggleActive}
-              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
-                employee.active ? 'bg-surface hover:bg-border-soft' : 'bg-emerald-500/10 hover:bg-emerald-100'
+              className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
+                employee.active
+                  ? 'bg-card border-border-soft hover:bg-surface'
+                  : 'bg-emerald-500/10 border-emerald-200 hover:bg-emerald-500/20'
               }`}
             >
               {employee.active ? (
-                <>
-                  <UserX size={15} className="text-muted" />
-                  <span className="text-sm font-semibold text-muted">{t.deactivateBtn}</span>
-                </>
+                <UserX size={18} className="text-muted" />
               ) : (
-                <>
-                  <UserCheck size={15} className="text-emerald-600" />
-                  <span className="text-sm font-semibold text-emerald-600">{t.reactivateBtn}</span>
-                </>
+                <UserCheck size={18} className="text-emerald-600" />
               )}
+              <span className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-600'}`}>
+                {employee.active ? t.deactivateBtn : t.reactivateBtn}
+              </span>
             </button>
 
             {/* Roster flag — keep office members out of job crew pickers. */}
@@ -610,45 +621,35 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
               type="button"
               onClick={toggleRoster}
               title={t.rosterHint}
-              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-colors ${
-                (employee.show_in_roster ?? true) ? 'bg-surface hover:bg-border-soft' : 'bg-amber-500/10 hover:bg-amber-100'
+              className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
+                (employee.show_in_roster ?? true)
+                  ? 'bg-card border-border-soft hover:bg-surface'
+                  : 'bg-amber-500/10 border-amber-200 hover:bg-amber-500/20'
               }`}
             >
               {(employee.show_in_roster ?? true) ? (
-                <>
-                  <UserX size={15} className="text-muted" />
-                  <span className="text-sm font-semibold text-muted">{t.rosterRemoveBtn}</span>
-                </>
+                <UserX size={18} className="text-muted" />
               ) : (
-                <>
-                  <UserCheck size={15} className="text-amber-600" />
-                  <span className="text-sm font-semibold text-amber-600">{t.rosterAddBtn}</span>
-                </>
+                <UserCheck size={18} className="text-amber-600" />
               )}
+              <span className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-600'}`}>
+                {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
+              </span>
             </button>
 
-            {/* Historial */}
-          <button
-            type="button"
-            onClick={() => setHistoryOpen(true)}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface hover:bg-border-soft transition-colors"
-          >
-            <Clock size={15} className="text-primary" />
-            <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
-          </button>
-
-          {/* Transfer ownership — owner only, on a member with app access. */}
-          {canTransferOwnership && (
-            <button
-              type="button"
-              onClick={transferOwnership}
-              disabled={accessBusy}
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-100 transition-colors disabled:opacity-50"
-            >
-              <Crown size={15} className="text-amber-600" />
-              <span className="text-sm font-semibold text-amber-700">{t.transferOwnershipBtn}</span>
-            </button>
-          )}
+            {/* Transfer ownership — owner only, on a member with app access. */}
+            {canTransferOwnership && (
+              <button
+                type="button"
+                onClick={transferOwnership}
+                disabled={accessBusy}
+                className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border bg-amber-500/10 border-amber-200 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+              >
+                <Crown size={18} className="text-amber-600" />
+                <span className="text-xs font-semibold text-amber-600 text-center">{t.transferOwnershipBtn}</span>
+              </button>
+            )}
+          </div>
 
           {/* Record timestamps (110 added employees.updated_at) */}
           {(() => {
