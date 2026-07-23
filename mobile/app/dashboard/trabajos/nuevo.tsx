@@ -365,7 +365,13 @@ export default function NuevoTrabajoRoute() {
           setDriverEmployeeIds(job.driver_employee_ids ?? []);
           if (restrictedCreator) setStatus('completed');
         } else if (job) {
-          const proposal = !!job.estimate_number;
+          const wasEstimate = !!job.estimate_number;
+          // Estimates and jobs are ONE record — the form styles itself by
+          // PHASE, not by estimate_number alone. In the quote phase the
+          // estimate form applies (issue/expiry, no crew/schedule); once
+          // accepted onward the same record opens the full job form so
+          // workers, dates and hours become editable.
+          const proposal = wasEstimate && ['proposal', 'sent', 'declined', 'cancelled'].includes(job.status);
           setIsProposal(proposal);
           setTitle(job.title ?? '');
           setClientId(job.client_id ?? '');
@@ -406,7 +412,7 @@ export default function NuevoTrabajoRoute() {
             setJobLng(job.job_lng);
             setCoordsText(`${job.job_lat}, ${job.job_lng}`);
           }
-          if (proposal) {
+          if (wasEstimate) {
             setClientNotes(job.notes ?? '');
             // A duplicated proposal is a new proposal: keep today's issue
             // date + default expiry instead of copying the source's.

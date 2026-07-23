@@ -537,12 +537,14 @@ export function JobsListScreen({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const isInvoiceable = (j: JobListItem) => j.status === 'completed' && !j.invoiceId;
-  const toggleSelect = (id: string) =>
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+    // Deselecting the last picked row drops out of select mode — the quick
+    // "oops" exit, no hunting for the header toggle.
+    if (next.size === 0) setSelectMode(false);
+  };
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
   // Jobs may span clients — one invoice is created per distinct client.
   const invoiceClientCount = new Set(selectedJobs.filter(j => isInvoiceable(j)).map(j => j.clientId ?? '∅')).size;
@@ -885,10 +887,13 @@ export function JobsListScreen({
               >
                 <Pressable
                   onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : openJob(job.id))}
-                  // Long-press enters selection with this job picked — same
-                  // gesture as the clients list (discoverable bulk delete).
+                  // Long-press toggles selection mode: enters with this job
+                  // picked; a second long-press anywhere EXITS — so an
+                  // accidental hold doesn't force a scroll back to the header
+                  // toggle. (Same gesture as the clients list.)
                   onLongPress={() => {
-                    if (selectMode || !(canDelete || isInvoiceable(job))) return;
+                    if (selectMode) { exitSelect(); return; }
+                    if (!(canDelete || isInvoiceable(job))) return;
                     setSelectMode(true);
                     toggleSelect(job.id);
                   }}

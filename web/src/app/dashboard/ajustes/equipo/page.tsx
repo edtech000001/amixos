@@ -35,7 +35,9 @@ import {
   resetRoleOverride,
 } from '@amixos/shared/lib/roleEditor';
 
-const ALL_ROLES: Role[] = ['owner', 'admin', 'manager', 'office', 'field', 'viewer'];
+// Owner is deliberately absent: it always has full control and can't be
+// edited, so a tab for it only invites confusion.
+const ALL_ROLES: Role[] = ['admin', 'manager', 'office', 'field', 'viewer'];
 
 export default function RolesSettingsPage() {
   const router = useRouter();

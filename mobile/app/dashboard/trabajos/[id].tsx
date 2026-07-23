@@ -12,8 +12,12 @@ import {
   TextInput,
   Platform,
   Image,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -35,7 +39,7 @@ import {
   Share2,
   X,
   Sparkles,
-  type LucideIcon, Archive, DollarSign } from 'lucide-react-native';
+  type LucideIcon, Archive, DollarSign, PenLine, Download } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
@@ -43,6 +47,7 @@ import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
+import { WEB_APP_URL } from '@/lib/webUrl';
 import { queuedUpdate } from '@/lib/offline/mutate';
 import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
 import { Button } from '@amixos/shared/ui';
@@ -53,12 +58,37 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
+import { memberNameMap } from '@amixos/shared/lib/memberNames';
+import { buildProposalHtml } from '@amixos/shared/lib/proposalHtml';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
-import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h, todayLocalISO } from '@amixos/shared/lib/format';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
+import { JobDocumentsSection } from '@/components/JobDocumentsSection';
+import { SignaturePad } from '@/components/SignaturePad';
+
+// Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
+// picked day across midnight).
+const parseISODate = (v: string) => {
+  const [y, m, d] = v.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
+const toISODate = (dt: Date) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+
+// The public link stores PNG data-URLs (canvas); on-site signing stores
+// utf8-encoded SVG data-URLs (react-native-svg pad). RN's <Image> can't
+// render SVG, so branch to SvgXml for those.
+function SignatureImage({ uri }: { uri: string }) {
+  if (uri.startsWith('data:image/svg+xml;utf8,')) {
+    const xml = decodeURIComponent(uri.slice('data:image/svg+xml;utf8,'.length));
+    return <SvgXml xml={xml} width={200} height={56} />;
+  }
+  return <Image source={{ uri }} style={{ width: 200, height: 56 }} resizeMode="contain" />;
+}
 
 interface Job {
   id: string;
@@ -110,6 +140,8 @@ interface Job {
   delegated_from_business_id: string | null;
   delegated_at: string | null;
   share_token: string | null;
+  created_by: string | null;
+  updated_by: string | null;
   client_response: 'accepted' | 'declined' | null;
   client_responded_at: string | null;
   client_signed_name: string | null;
@@ -358,6 +390,17 @@ export default function JobDetailRoute() {
     }, [id, business?.id, locale]),
   );
 
+  // user_id → display name, for the "created by / edited by" lines
+  // (migration 150 stamps created_by/updated_by at the DB level).
+  const [nameById, setNameById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!business) return;
+    void memberNameMap(supabase, business.id).then(setNameById);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+  const byUser = (userId: string | null | undefined) =>
+    userId && nameById[userId] ? ` · ${td.byUser.replace('{{name}}', nameById[userId])}` : '';
+
   // Generate (or reuse) the public share token + open the iOS/Android share
   // sheet with the proposal URL. Returns true if the share sheet opened.
   const shareProposal = async (): Promise<boolean> => {
@@ -368,11 +411,10 @@ export default function JobDetailRoute() {
       await supabase.from('jobs').update({ share_token: token }).eq('id', job.id);
       setJob((prev) => (prev ? { ...prev, share_token: token } : prev));
     }
-    const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? '';
-    const url = webUrl ? `${webUrl}/propuesta/${token}` : `/propuesta/${token}`;
+    const url = `${WEB_APP_URL}/propuesta/${token}`;
     try {
       const result = await Share.share({
-        message: `${job.title}${webUrl ? `\n${url}` : ''}`,
+        message: `${job.title}\n${url}`,
         url, // iOS picks this up natively in addition to message
       });
       return result.action !== Share.dismissedAction;
@@ -434,6 +476,108 @@ export default function JobDetailRoute() {
     }
   };
 
+  // One step back in the pipeline. Stepping a SIGNED estimate back before
+  // "accepted" invalidates the client's signed approval (the estimate is no
+  // longer accepted), so it warns first and clears the signature — same rule
+  // as reinstate, with a record kept in the activity log.
+  const stepBack = (prevKey: string) => {
+    if (!job) return;
+    const invalidatesSignature = !!job.client_signature && ['proposal', 'sent'].includes(prevKey);
+    if (!invalidatesSignature) { void updateStatus(prevKey); return; }
+    confirmAction({
+      title: td.backStepSignedConfirm,
+      confirmText: tc.buttons.continue,
+      destructive: true,
+      onConfirm: () => void (async () => {
+        await updateStatus(prevKey, {
+          client_response: null, client_responded_at: null,
+          client_signed_name: null, client_signature: null,
+        });
+        void logAudit(supabase, job.business_id, 'job.signature_cleared', 'job', job.id, {
+          job_title: job.title, signed_name: job.client_signed_name, signed_at: job.client_responded_at,
+        });
+      })(),
+    });
+  };
+
+  // ── Schedule prompt ──
+  // "Programar" with no date yet would flip the status to scheduled while
+  // the job silently has no date — ask for the date first and write both
+  // together. Jobs that already carry a date advance directly.
+  const [schedSheetOpen, setSchedSheetOpen] = useState(false);
+  const [schedDate, setSchedDate] = useState('');
+  const promptSchedule = () => {
+    if (!job) return;
+    if (job.scheduled_date) { void updateStatus('scheduled'); return; }
+    setSchedDate(todayLocalISO());
+    setSchedSheetOpen(true);
+  };
+  const saveSchedule = async () => {
+    if (!schedDate) return;
+    await updateStatus('scheduled', { scheduled_date: schedDate });
+    setSchedSheetOpen(false);
+  };
+  // Android's picker is a native dialog (not an RNModal), so it can safely
+  // open above the schedule sheet; iOS embeds a spinner inline instead
+  // (presenting a second RNModal over one is silently refused on iOS).
+  const openAndroidDatePicker = () => {
+    DateTimePickerAndroid.open({
+      value: parseISODate(schedDate || todayLocalISO()),
+      mode: 'date',
+      onChange: (e: { type: string }, d?: Date) => {
+        if (e.type === 'set' && d) setSchedDate(toISODate(d));
+      },
+    });
+  };
+
+  // ── Sign on site — the client signs on this device ──
+  // Same proof fields as the public accept-and-sign link, but written
+  // directly (owner is authenticated). queuedUpdate keeps it working
+  // offline — job sites without signal are exactly where this gets used.
+  const [signSheetOpen, setSignSheetOpen] = useState(false);
+  const [onsiteName, setOnsiteName] = useState('');
+  const [onsiteSig, setOnsiteSig] = useState<string | null>(null);
+  const [onsiteError, setOnsiteError] = useState('');
+  const [onsiteSaving, setOnsiteSaving] = useState(false);
+  const openSignSheet = () => {
+    setOnsiteName(job?.clients ? `${job.clients.first_name} ${job.clients.last_name}`.trim() : '');
+    setOnsiteSig(null);
+    setOnsiteError('');
+    setSignSheetOpen(true);
+  };
+  const saveOnsiteSignature = async () => {
+    if (!job) return;
+    const name = onsiteName.trim();
+    if (!name || !onsiteSig) { setOnsiteError(full.proposal.missingFields); return; }
+    setOnsiteSaving(true);
+    const now = new Date().toISOString();
+    const update = {
+      status: 'accepted', accepted_at: now,
+      client_response: 'accepted', client_responded_at: now,
+      client_signed_name: name, client_signature: onsiteSig,
+    };
+    try {
+      await queuedUpdate({
+        table: 'jobs',
+        match: { id: job.id },
+        payload: update,
+        businessId: job.business_id,
+        label: `${t.statuses.accepted}: ${job.title}`,
+      });
+    } catch {
+      setOnsiteSaving(false);
+      Alert.alert('', td.statusUpdateError);
+      return;
+    }
+    setJob(prev => (prev ? ({ ...prev, ...update } as Job) : prev));
+    void patchCached(`job_${job.id}`, update);
+    void logAudit(supabase, job.business_id, 'job.status_changed', 'job', job.id, {
+      from: job.status, to: 'accepted', job_title: job.title, signed_name: name, onsite: true,
+    });
+    setOnsiteSaving(false);
+    setSignSheetOpen(false);
+  };
+
   // Email the estimate: open the mail composer pre-filled with the client's
   // address + the public accept-and-sign link, then mark sent (mirrors the
   // invoice's send flow on web).
@@ -469,7 +613,7 @@ export default function JobDetailRoute() {
       await supabase.from('jobs').update({ share_token: token }).eq('id', job.id);
       setJob((prev) => (prev ? { ...prev, share_token: token } : prev));
     }
-    const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? '';
+    const webUrl = WEB_APP_URL;
     const url = `${webUrl}/propuesta/${token}`;
     const { subject, body } = renderInvoiceEmail({
       subjectTemplate: null,
@@ -495,9 +639,55 @@ export default function JobDetailRoute() {
     if (job.status === 'proposal') void updateStatus('sent');
   };
 
-  // Opens the action sheet for "Enviar cotización" — email it, share the
-  // link (both auto-mark as sent), or just mark as sent without sending
-  // anything. Mirrors the web's send flow.
+  // Generate the estimate PDF on-device and hand it to the native share
+  // sheet — same flow as the invoice detail's PDF button, no browser
+  // round-trip. Layout mirrors the public /propuesta page.
+  const downloadPdf = async () => {
+    if (!job || !business) return;
+    const tp = full.proposal;
+    const fmtD = (d: string | null) => (d ? formatDateLong(d, tp.dateLocale) : null);
+    const itemSum = items.reduce((s, i) => s + i.total, 0);
+    const biz = business as { name: string; logo_url?: string | null; city?: string | null; state?: string | null };
+    const html = buildProposalHtml({
+      business: { name: biz.name, logoUrl: biz.logo_url ?? null, city: biz.city ?? null, state: biz.state ?? null },
+      estimateNumber: job.estimate_number ?? '',
+      clientName: job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null,
+      clientCompany: job.clients?.company ?? null,
+      issueDate: fmtD(job.issue_date),
+      expiryDate: fmtD(job.expiry_date),
+      scheduledDate: fmtD(job.scheduled_date),
+      description: job.description,
+      notes: job.notes,
+      items: items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unit_price, total: i.total })),
+      subtotal: job.subtotal_amount > 0 ? job.subtotal_amount : itemSum,
+      taxRate: job.tax_rate ?? 0,
+      taxAmount: job.tax_amount ?? 0,
+      discount: job.discount ?? 0,
+      total: job.total_amount > 0 ? job.total_amount : itemSum,
+      signature: job.client_signature
+        ? {
+            image: job.client_signature,
+            line: tp.signedByLine
+              .replace('{{name}}', job.client_signed_name ?? '')
+              .replace('{{date}}', job.client_responded_at ? formatDateTimeLong(job.client_responded_at, dateLoc) : ''),
+          }
+        : null,
+      preparedBy: job.created_by ? nameById[job.created_by] ?? null : null,
+      t: tp,
+    });
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+      }
+    } catch {
+      Alert.alert('', td.shareError);
+    }
+  };
+
+  // Opens the action sheet for "Enviar cotización" — email it (auto-marks
+  // sent) or just mark as sent without sending anything. Link-sharing lives
+  // on the header share icon, so it's not duplicated here.
   const sendProposalAction = () => {
     if (!job) return;
     Alert.alert(td.sendAction, td.sendActionMessage, [
@@ -507,25 +697,18 @@ export default function JobDetailRoute() {
         onPress: () => updateStatus('sent'),
       },
       {
-        text: td.shareAndMark,
-        onPress: async () => {
-          const shared = await shareProposal();
-          if (shared) void updateStatus('sent');
-        },
-      },
-      {
         text: td.emailAction,
         onPress: () => void emailProposal(),
       },
     ]);
   };
 
-  const updateStatus = async (newStatus: string) => {
+  const updateStatus = async (newStatus: string, extra?: Record<string, string | null>) => {
     if (!job) return;
     const prevStatus = job.status;
     setUpdatingStatus(true);
     const now = new Date().toISOString();
-    const update: Record<string, string | null> = { status: newStatus };
+    const update: Record<string, string | null> = { status: newStatus, ...(extra ?? {}) };
     if (newStatus === 'completed') update.completed_date = now.split('T')[0];
     if (newStatus === 'sent') update.sent_at = now;
     if (newStatus === 'accepted') update.accepted_at = now;
@@ -830,12 +1013,12 @@ export default function JobDetailRoute() {
   // status nudge to the next step in the pipeline.
   const nextStatusAction = (() => {
     if (isCancelled) return null;
-    if (job.status === 'posible') return { label: t.statuses.scheduled, onPress: () => updateStatus('scheduled') };
+    if (job.status === 'posible') return { label: t.statuses.scheduled, onPress: promptSchedule };
     if (job.status === 'proposal') {
       return { label: td.sendAction, onPress: sendProposalAction };
     }
     if (job.status === 'sent') return { label: t.statuses.accepted, onPress: () => updateStatus('accepted') };
-    if (job.status === 'accepted') return { label: t.statuses.scheduled, onPress: () => updateStatus('scheduled') };
+    if (job.status === 'accepted') return { label: t.statuses.scheduled, onPress: promptSchedule };
     if (job.status === 'scheduled') return { label: t.statuses.in_progress, onPress: () => updateStatus('in_progress') };
     if (job.status === 'in_progress') return { label: t.statuses.completed, onPress: () => updateStatus('completed') };
     return null;
@@ -981,13 +1164,22 @@ export default function JobDetailRoute() {
         </Pressable>
         <View className="flex-row gap-1">
           {isProposal ? (
-            <Pressable
-              onPress={shareProposal}
-              hitSlop={8}
-              className="p-2 rounded-lg active:bg-primary/10"
-            >
-              <Send size={18} color={c.primary} />
-            </Pressable>
+            <>
+              <Pressable
+                onPress={shareProposal}
+                hitSlop={8}
+                className="p-2 rounded-lg active:bg-primary/10"
+              >
+                <Send size={18} color={c.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => void downloadPdf()}
+                hitSlop={8}
+                className="p-2 rounded-lg active:bg-primary/10"
+              >
+                <Download size={18} color={c.muted} />
+              </Pressable>
+            </>
           ) : null}
           {businesses.length > 1 && !job.delegated_to_business_id && can.delegateJob(currentRole) ? (
             <Pressable
@@ -1068,7 +1260,7 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
           <Text className="text-[11px] text-faint mt-1.5">
-            {td.createdOn.replace('{{date}}', fmtDateTime(job.created_at))}
+            {td.createdOn.replace('{{date}}', fmtDateTime(job.created_at))}{byUser(job.created_by)}
           </Text>
         </View>
 
@@ -1115,7 +1307,7 @@ export default function JobDetailRoute() {
           <View className="bg-card rounded-2xl border border-border-soft p-4 mb-5">
             <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{td.approvalTitle}</Text>
             <View className="bg-white rounded-xl border border-border-soft p-2 mb-2 self-start">
-              <Image source={{ uri: job.client_signature }} style={{ width: 200, height: 56 }} resizeMode="contain" />
+              <SignatureImage uri={job.client_signature} />
             </View>
             <Text className="text-xs text-muted">
               {td.signedByLine
@@ -1159,7 +1351,7 @@ export default function JobDetailRoute() {
             <View className="flex-row gap-2">
               {prevStatusAction ? (
                 <Pressable
-                  onPress={() => updateStatus(prevStatusAction.next)}
+                  onPress={() => stepBack(prevStatusAction.next)}
                   disabled={updatingStatus}
                   className={`${nextStatusAction ? '' : 'flex-1 '}flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-border-soft border border-border active:opacity-80`}
                 >
@@ -1179,6 +1371,18 @@ export default function JobDetailRoute() {
                 </Pressable>
               ) : null}
             </View>
+          ) : null}
+
+          {/* Sign on site — hand the device to the client to accept + sign
+             an estimate in person. */}
+          {isProposal && ['proposal', 'sent'].includes(job.status) ? (
+            <Pressable
+              onPress={openSignSheet}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
+            >
+              <PenLine size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{td.signOnSite}</Text>
+            </Pressable>
           ) : null}
 
           {/* Crew share only once the work is actually scheduled — before
@@ -1463,10 +1667,19 @@ export default function JobDetailRoute() {
           />
         </View>
 
+        {/* Documents (contracts, permits, signed paperwork) */}
+        <View className="mt-5">
+          <JobDocumentsSection
+            jobId={job.id}
+            businessId={job.business_id}
+            canWrite={can.editJobMetadata(currentRole)}
+          />
+        </View>
+
         {/* Metadata — last edited (created moved to top) */}
         <View className="gap-1 px-1 mt-4">
           <Text className="text-[10px] text-faint">
-            {td.lastEditedOn.replace('{{date}}', fmtDateTime(job.updated_at))}
+            {td.lastEditedOn.replace('{{date}}', fmtDateTime(job.updated_at))}{byUser(job.updated_by)}
           </Text>
           {job.delegated_to_business_id ? (
             <Text className="text-[10px] text-primary mt-1">
@@ -1701,6 +1914,86 @@ export default function JobDetailRoute() {
             </View>
           </Pressable>
         </Pressable>
+      </RNModal>
+
+      {/* Sign on site — hand the device to the client; same proof record as
+         the public accept-and-sign link. Backdrop is an absolute Pressable
+         FIRST child; the card is a plain sibling on top (see CLAUDE.md —
+         wrapping the card inside the backdrop breaks its touch handling). */}
+      <RNModal visible={signSheetOpen} transparent animationType="slide" onRequestClose={() => setSignSheetOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
+          <Pressable onPress={() => setSignSheetOpen(false)} className="absolute inset-0 bg-black/40" />
+          <View className="bg-card rounded-t-3xl pt-3 pb-8">
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{td.signOnSite}</Text>
+              <Pressable onPress={() => setSignSheetOpen(false)} hitSlop={8}><X size={20} color={c.faint} /></Pressable>
+            </View>
+            <View className="px-5 pt-4 gap-4">
+              <Text className="text-sm text-muted">{td.signOnSiteHint}</Text>
+              <View>
+                <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-1.5">{full.proposal.nameLabel}</Text>
+                <TextInput
+                  value={onsiteName}
+                  onChangeText={setOnsiteName}
+                  placeholder={full.proposal.namePlaceholder}
+                  placeholderTextColor={c.faint}
+                  className="bg-surface border border-border rounded-xl px-3.5 py-3 text-sm text-ink"
+                />
+              </View>
+              <View>
+                <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-1.5">{full.proposal.signLabel}</Text>
+                <SignaturePad hint={full.proposal.signHint} clearLabel={full.proposal.clearSignature} onChange={setOnsiteSig} />
+                <Text className="text-[11px] text-faint mt-2 leading-4">{full.proposal.signDisclaimer}</Text>
+              </View>
+              {onsiteError ? <Text className="text-sm text-red-600">{onsiteError}</Text> : null}
+              <Button onPress={saveOnsiteSignature} loading={onsiteSaving} fullWidth>
+                <CheckCircle2 size={16} color="#FFFFFF" />
+                <Text className="text-white font-semibold ml-2">{full.proposal.acceptButton}</Text>
+              </Button>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </RNModal>
+
+      {/* Schedule — asks for the work date so a "scheduled" job never
+         silently lacks one. */}
+      <RNModal visible={schedSheetOpen} transparent animationType="slide" onRequestClose={() => setSchedSheetOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setSchedSheetOpen(false)} className="absolute inset-0 bg-black/40" />
+          <View className="bg-card rounded-t-3xl pt-3 pb-8">
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{td.scheduleWork}</Text>
+              <Pressable onPress={() => setSchedSheetOpen(false)} hitSlop={8}><X size={20} color={c.faint} /></Pressable>
+            </View>
+            <View className="px-5 pt-4 gap-4">
+              <Text className="text-sm text-muted">{td.schedulePromptHint}</Text>
+              {Platform.OS === 'ios' ? (
+                <DateTimePicker
+                  value={parseISODate(schedDate || todayLocalISO())}
+                  mode="date"
+                  display="spinner"
+                  onChange={(_e, d) => { if (d) setSchedDate(toISODate(d)); }}
+                  style={{ height: 200, alignSelf: 'stretch' }}
+                />
+              ) : (
+                <Pressable
+                  onPress={openAndroidDatePicker}
+                  className="flex-row items-center gap-2 border border-border bg-surface rounded-xl px-4 py-3"
+                >
+                  <CalendarIcon size={16} color={c.muted} />
+                  <Text className="text-sm text-ink font-medium">
+                    {schedDate ? formatDateLong(schedDate, dateLoc) : ''}
+                  </Text>
+                </Pressable>
+              )}
+              <Button onPress={saveSchedule} loading={updatingStatus} fullWidth>
+                <Text className="text-white font-semibold">{td.scheduleWork}</Text>
+              </Button>
+            </View>
+          </View>
+        </View>
       </RNModal>
 
       {confirmSheet}

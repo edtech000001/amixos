@@ -220,6 +220,10 @@ function NuevoTrabajoContent() {
   const [error, setError] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(!!sourceId);
   const [editIsProposal, setEditIsProposal] = useState(false);
+  // True whenever the record carries an estimate_number, regardless of phase.
+  // A work-phase estimate opens the JOB form (editIsProposal=false) but its
+  // quote math (tax/discount) must still be preserved on save.
+  const [editIsEstimateRecord, setEditIsEstimateRecord] = useState(false);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -778,9 +782,16 @@ function NuevoTrabajoContent() {
             }
             setCustomFields(cf);
           }
-          const isEst = !!job.estimate_number;
-          setEditIsProposal(isEst);
-          if (isEst) {
+          const wasEstimate = !!job.estimate_number;
+          // Estimates and jobs are ONE record — the form styles itself by
+          // PHASE, not by estimate_number alone. In the quote phase the
+          // estimate form applies (issue/expiry, no crew/schedule); once
+          // accepted onward the same record opens the full job form so
+          // workers, dates and hours become editable.
+          const quotePhase = ['proposal', 'sent', 'declined', 'cancelled'].includes(job.status);
+          setEditIsProposal(wasEstimate && quotePhase);
+          setEditIsEstimateRecord(wasEstimate);
+          if (wasEstimate) {
             setClientNotes(job.notes || '');
             // A duplicated proposal is a new proposal: keep today's issue
             // date + default expiry instead of copying the source's.
@@ -1327,6 +1338,14 @@ function NuevoTrabajoContent() {
           published_to_crew: restrictedCreator ? true : publishedToCrew,
           custom_fields: customFields,
         };
+        // Converted estimate: keep the quote math. Tax/discount aren't shown
+        // in the job form, and writing the bare item subtotal as the total
+        // would silently change the price the client accepted.
+        if (editIsEstimateRecord) {
+          jobData.subtotal_amount = +subtotal.toFixed(2);
+          jobData.tax_amount = +taxAmt.toFixed(2);
+          jobData.total_amount = +total.toFixed(2);
+        }
 
         let finalJobId: string;
         if (editId) {

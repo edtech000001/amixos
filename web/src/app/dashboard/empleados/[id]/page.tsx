@@ -13,7 +13,7 @@ import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2, Eye, MapPin, Check,
+  ArrowLeft, Clock, DollarSign, UserX, UserCheck, Pencil, Save, X, Trash2, Eye, MapPin, Check, Crown,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { useLang } from '@/i18n/LangProvider';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -409,6 +409,32 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     canManageAccess && selAccess.role !== 'owner' &&
     !(currentRole === 'admin' && selAccess.role === 'admin');
 
+  // Hand the whole business to this member: they become Owner (billing and
+  // all), the current owner becomes Admin. Owner-only; server-guarded by
+  // transfer_business_ownership (migration 153) so nobody else can call it.
+  const canTransferOwnership =
+    currentRole === 'owner' && selAccess?.kind === 'active' && !selAccess.isYou && selAccess.role !== 'owner';
+  const transferOwnership = async () => {
+    if (!employee || !business || !selAccess || selAccess.kind !== 'active') return;
+    const m = members.find(x => x.id === selAccess.memberId);
+    if (!m) return;
+    const name = `${employee.first_name} ${employee.last_name}`.trim() || m.email || '';
+    if (!(await confirm({ message: t.transferOwnershipConfirm.replace('{{name}}', name), destructive: true }))) return;
+    setAccessBusy(true); setAccessError('');
+    const { data, error } = await supabase.rpc('transfer_business_ownership', {
+      b_id: business.id, new_owner_user_id: m.userId,
+    });
+    const res = data as { ok?: boolean } | null;
+    if (error || !res?.ok) { setAccessError(t.transferOwnershipError); setAccessBusy(false); return; }
+    await supabase.from('audit_log').insert({
+      business_id: business.id, action: 'business.ownership_transferred',
+      entity_type: 'business', entity_id: business.id,
+      details: { to_email: m.email, to_user_id: m.userId },
+    });
+    // Both parties' roles changed — a full reload re-derives everything.
+    window.location.reload();
+  };
+
   // Hard-delete this employee (+ revoke app access if any). Owner/admin only,
   // never the owner or yourself. FKs are set null / cascade, so it's safe.
   const isSelfOrOwner = selAccess?.kind === 'active' && (selAccess.isYou || selAccess.role === 'owner');
@@ -610,6 +636,38 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             <Clock size={15} className="text-primary" />
             <span className="text-sm font-semibold text-primary">{t.history.openBtn}</span>
           </button>
+
+          {/* Transfer ownership — owner only, on a member with app access. */}
+          {canTransferOwnership && (
+            <button
+              type="button"
+              onClick={transferOwnership}
+              disabled={accessBusy}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            >
+              <Crown size={15} className="text-amber-600" />
+              <span className="text-sm font-semibold text-amber-700">{t.transferOwnershipBtn}</span>
+            </button>
+          )}
+
+          {/* Record timestamps (110 added employees.updated_at) */}
+          {(() => {
+            const emp = employee as { created_at?: string; updated_at?: string | null };
+            return (
+              <div className="flex flex-col items-center gap-0.5 mt-1">
+                {emp.created_at && (
+                  <p className="text-[11px] text-faint">
+                    {t.createdOnLine.replace('{{date}}', formatDateTimeLong(emp.created_at, lang))}
+                  </p>
+                )}
+                {emp.updated_at && emp.updated_at !== emp.created_at && (
+                  <p className="text-[11px] text-faint">
+                    {t.lastEditedOnLine.replace('{{date}}', formatDateTimeLong(emp.updated_at, lang))}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           </div>
 
           <div className="lg:col-span-2 flex flex-col gap-5">

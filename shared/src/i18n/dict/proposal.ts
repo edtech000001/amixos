@@ -8,6 +8,7 @@ export type ProposalDict = {
   proposalLabel: string;
   client: string;
   noClient: string;
+  preparedBy: string;
   issueDate: string;
   validUntil: string;
   scheduledDate: string;
@@ -31,6 +32,7 @@ export type ProposalDict = {
   namePlaceholder: string;
   signLabel: string;
   signHint: string;
+  signDisclaimer: string;
   clearSignature: string;
   acceptButton: string;
   declineButton: string;
@@ -55,6 +57,7 @@ export const proposal: Record<Locale, ProposalDict> = {
     proposalLabel: 'Cotización',
     client: 'Cliente',
     noClient: 'Sin cliente',
+    preparedBy: 'Preparado por',
     issueDate: 'Fecha de emisión',
     validUntil: 'Válida hasta',
     scheduledDate: 'Inicio del proyecto',
@@ -77,6 +80,7 @@ export const proposal: Record<Locale, ProposalDict> = {
     namePlaceholder: 'Tu nombre',
     signLabel: 'Firma',
     signHint: 'Dibuja tu firma aquí',
+    signDisclaimer: 'Al firmar, aceptas que esta firma electrónica tiene la misma validez legal y efecto vinculante que una firma manuscrita en papel.',
     clearSignature: 'Borrar',
     acceptButton: 'Aceptar y firmar',
     declineButton: 'Rechazar cotización',
@@ -98,6 +102,7 @@ export const proposal: Record<Locale, ProposalDict> = {
     proposalLabel: 'Estimate',
     client: 'Client',
     noClient: 'No client',
+    preparedBy: 'Prepared by',
     issueDate: 'Issue date',
     validUntil: 'Valid until',
     scheduledDate: 'Project start',
@@ -120,6 +125,7 @@ export const proposal: Record<Locale, ProposalDict> = {
     namePlaceholder: 'Your name',
     signLabel: 'Signature',
     signHint: 'Draw your signature here',
+    signDisclaimer: 'By signing, you agree that this electronic signature has the same legal validity and binding effect as a handwritten signature on paper.',
     clearSignature: 'Clear',
     acceptButton: 'Accept & sign',
     declineButton: 'Decline estimate',

@@ -53,10 +53,15 @@ export default function FilesModule() {
   const limitBytes = subInfo ? storageLimitBytes(subInfo) : null;
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
 
+  const [breakdown, setBreakdown] = useState<Record<string, number> | null>(null);
   const loadUsage = async () => {
     if (!business) return;
     const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
     setUsedBytes(Number(data ?? 0));
+    // Breakdown (jobs vs library vs equipment) — best-effort: the RPC is
+    // migration 149; if it isn't run yet the meter just shows the total.
+    const { data: bd } = await supabase.rpc('business_storage_breakdown', { p_business_id: business.id });
+    if (bd && typeof bd === 'object') setBreakdown(bd as Record<string, number>);
   };
 
   const [categories, setCategories] = useState<FileCategory[]>([]);
@@ -219,6 +224,23 @@ export default function FilesModule() {
                 <div className="h-1.5 w-full rounded-full bg-border-soft overflow-hidden">
                   <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
+                {/* What's eating the space: job photos+documents vs this
+                   library vs equipment (needs migration 149). */}
+                {breakdown && (
+                  <p className="text-xs text-faint mt-1.5">
+                    {([
+                      // This screen's own library always shows (even at 0 —
+                      // link entries take no storage); the rest only when >0.
+                      [es ? 'Manuales y documentos' : 'Manuals & documents', Number(breakdown.files ?? 0), true],
+                      [es ? 'Trabajos (fotos y documentos)' : 'Jobs (photos & documents)', Number(breakdown.jobs ?? 0), false],
+                      [es ? 'Equipos' : 'Equipment', Number(breakdown.equipment ?? 0), false],
+                      [es ? 'Otros' : 'Other', Number(breakdown.other ?? 0), false],
+                    ] as [string, number, boolean][])
+                      .filter(([, v, always]) => always || v > 0)
+                      .map(([label, v]) => `${label}: ${formatBytes(v)}`)
+                      .join(' · ')}
+                  </p>
+                )}
                 {full100 && (
                   <p className="text-xs text-red-500 mt-1.5">
                     {es ? 'Almacenamiento lleno · mejora tu plan' : 'Storage full · upgrade your plan'}

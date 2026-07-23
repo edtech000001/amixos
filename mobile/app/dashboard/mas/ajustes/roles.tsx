@@ -28,7 +28,9 @@ import {
   resetRoleOverride,
 } from '@amixos/shared/lib/roleEditor';
 
-const ALL_ROLES: Role[] = ['owner', 'admin', 'manager', 'office', 'field', 'viewer'];
+// Owner is deliberately absent: it always has full control and can't be
+// edited, so a tab for it only invites confusion.
+const ALL_ROLES: Role[] = ['admin', 'manager', 'office', 'field', 'viewer'];
 
 function CheckBox({ checked, disabled, onPress }: { checked: boolean; disabled?: boolean; onPress: () => void }) {
   return (

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { SignaturePad } from '@/components/SignaturePad';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
@@ -25,6 +26,7 @@ interface ProposalData {
   client_responded_at: string | null;
   client_signed_name: string | null;
   client_signature: string | null;
+  created_by_name: string | null;
   clients: { first_name: string; last_name: string; company: string | null } | null;
   businesses: { name: string; logo_url: string | null; city: string; state: string } | null;
 }
@@ -39,93 +41,6 @@ interface JobItem {
 
 function fmtMoney(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// Draw-to-sign canvas. Reports the PNG data-URL after each finished stroke
-// (null when cleared) so the parent always holds the latest signature.
-function SignaturePad({ hint, clearLabel, onChange }: {
-  hint: string; clearLabel: string; onChange: (dataUrl: string | null) => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const [hasInk, setHasInk] = useState(false);
-
-  useEffect(() => {
-    const cv = canvasRef.current;
-    if (!cv) return;
-    const ratio = window.devicePixelRatio || 1;
-    cv.width = cv.offsetWidth * ratio;
-    cv.height = cv.offsetHeight * ratio;
-    const ctx = cv.getContext('2d')!;
-    ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#111827';
-  }, []);
-
-  const pos = (e: React.PointerEvent) => {
-    const r = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
-  const start = (e: React.PointerEvent) => {
-    const cv = canvasRef.current;
-    if (!cv) return;
-    cv.setPointerCapture(e.pointerId);
-    drawing.current = true;
-    const { x, y } = pos(e);
-    const ctx = cv.getContext('2d')!;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    // A dot for taps so a single click still leaves ink.
-    ctx.lineTo(x + 0.1, y + 0.1);
-    ctx.stroke();
-    setHasInk(true);
-  };
-  const move = (e: React.PointerEvent) => {
-    if (!drawing.current) return;
-    const cv = canvasRef.current!;
-    const { x, y } = pos(e);
-    const ctx = cv.getContext('2d')!;
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-  const end = () => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    onChange(canvasRef.current!.toDataURL('image/png'));
-  };
-  const clear = () => {
-    const cv = canvasRef.current!;
-    cv.getContext('2d')!.clearRect(0, 0, cv.width, cv.height);
-    setHasInk(false);
-    onChange(null);
-  };
-
-  return (
-    <div className="relative">
-      <canvas
-        ref={canvasRef}
-        className="w-full h-32 bg-white border border-gray-200 rounded-xl"
-        style={{ touchAction: 'none' }}
-        onPointerDown={start}
-        onPointerMove={move}
-        onPointerUp={end}
-        onPointerCancel={end}
-      />
-      {!hasInk && (
-        <span className="absolute inset-0 flex items-center justify-center text-sm text-gray-300 pointer-events-none select-none">
-          {hint}
-        </span>
-      )}
-      {hasInk && (
-        <button type="button" onClick={clear}
-          className="absolute top-2 right-2 text-xs text-gray-400 hover:text-gray-600 bg-white/80 px-2 py-0.5 rounded-lg border border-gray-200">
-          {clearLabel}
-        </button>
-      )}
-    </div>
-  );
 }
 
 export default function PublicProposalPage({ params }: { params: { token: string } }) {
@@ -260,6 +175,12 @@ export default function PublicProposalPage({ params }: { params: { token: string
                 {clientName ?? t.noClient}
                 {client?.company && <span className="text-gray-400 font-normal"> · {client.company}</span>}
               </p>
+              {proposal.created_by_name && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-400 mb-1">{t.preparedBy}</p>
+                  <p className="text-sm font-medium text-gray-900">{proposal.created_by_name}</p>
+                </div>
+              )}
             </div>
             <div className="text-right">
               {proposal.issue_date && (
@@ -417,6 +338,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
             />
             <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{t.signLabel}</label>
             <SignaturePad hint={t.signHint} clearLabel={t.clearSignature} onChange={setSignature}/>
+            <p className="text-xs text-gray-400 mt-2 leading-relaxed">{t.signDisclaimer}</p>
             {respondErr && <p className="text-sm text-red-600 mt-3">{respondErr}</p>}
             <div className="flex flex-col sm:flex-row gap-3 mt-5">
               <button

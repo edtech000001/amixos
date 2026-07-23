@@ -40,6 +40,7 @@ import {
   Eye,
   Check,
   type LucideIcon,
+  Crown,
 } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -47,7 +48,7 @@ import { useThemeColors } from '@/lib/ThemeProvider';
 import { fetchEmployeeLocations, setEmployeePrimaryLocation, toggleEmployeeBranch } from '@amixos/shared/lib/locations';
 import { createSupabaseClient } from '@/lib/supabase';
 import { isValidEmail } from '@amixos/shared/lib/validation';
-import { formatPhoneInput, formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatPhoneInput, formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { Button, Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHistoryView';
@@ -121,7 +122,7 @@ export default function EmpleadoDetailRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, startImpersonation, locations } = useApp();
+  const { business, user, currentRole, startImpersonation, locations, refetchBusiness } = useApp();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.employees;
@@ -609,6 +610,34 @@ export default function EmpleadoDetailRoute() {
   );
   const canManageAccess = can.manageMembers(currentRole);
 
+  // Hand the whole business to this member: they become Owner (billing and
+  // all), the current owner becomes Admin. Owner-only; server-guarded by
+  // transfer_business_ownership (migration 153) so nobody else can call it.
+  const canTransferOwnership =
+    currentRole === 'owner' && selAccess?.kind === 'active' && !selAccess.isYou && selAccess.role !== 'owner';
+  const transferOwnership = async () => {
+    if (!employee || !business || !selAccess || selAccess.kind !== 'active') return;
+    const m = members.find((x) => x.id === selAccess.memberId);
+    if (!m) return;
+    const name = `${employee.first_name} ${employee.last_name}`.trim() || m.email || '';
+    if (!(await confirmAsync(t.transferOwnershipConfirm.replace('{{name}}', name), t.transferOwnershipBtn))) return;
+    setAccessBusy(true); setAccessError('');
+    const { data, error } = await supabase.rpc('transfer_business_ownership', {
+      b_id: business.id, new_owner_user_id: m.userId,
+    });
+    const res = data as { ok?: boolean } | null;
+    if (error || !res?.ok) { setAccessError(t.transferOwnershipError); setAccessBusy(false); return; }
+    await supabase.from('audit_log').insert({
+      business_id: business.id, action: 'business.ownership_transferred',
+      entity_type: 'business', entity_id: business.id,
+      details: { to_email: m.email, to_user_id: m.userId },
+    });
+    // Both parties' roles changed — refetch the business/role state and land
+    // back on the dashboard as an Admin.
+    await refetchBusiness();
+    router.replace('/dashboard');
+  };
+
   // Hard-delete this employee (and revoke their app access if any). Owner/admin
   // only, and never the owner or yourself. FKs are on delete set null / cascade,
   // so this is safe. Soft removal = the deactivate (UserX) toggle in the header.
@@ -952,7 +981,7 @@ export default function EmpleadoDetailRoute() {
         {isView ? (
           <Pressable
             onPress={() => setHistoryOpen(true)}
-            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-surface active:bg-border-soft"
+            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
           >
             <Clock size={16} color={c.primary} />
             <Text className="text-sm font-semibold text-primary">{t.history.openBtn}</Text>
@@ -964,8 +993,8 @@ export default function EmpleadoDetailRoute() {
         {isView ? (
           <Pressable
             onPress={toggleActive}
-            className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
-              employee.active ? 'bg-surface active:bg-border-soft' : 'bg-emerald-500/10 active:bg-emerald-100'
+            className={`flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border ${
+              employee.active ? 'bg-card border-border active:bg-surface' : 'bg-emerald-500/10 border-emerald-200 active:bg-emerald-100'
             }`}
           >
             {employee.active ? (
@@ -983,8 +1012,8 @@ export default function EmpleadoDetailRoute() {
         {isView ? (
           <Pressable
             onPress={toggleRoster}
-            className={`flex-row items-center justify-center gap-2 py-3 rounded-2xl ${
-              (employee.show_in_roster ?? true) ? 'bg-surface active:bg-border-soft' : 'bg-amber-500/10 active:bg-amber-100'
+            className={`flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border ${
+              (employee.show_in_roster ?? true) ? 'bg-card border-border active:bg-surface' : 'bg-amber-500/10 border-amber-200 active:bg-amber-100'
             }`}
           >
             {(employee.show_in_roster ?? true) ? (
@@ -997,6 +1026,37 @@ export default function EmpleadoDetailRoute() {
             </Text>
           </Pressable>
         ) : null}
+
+        {/* Transfer ownership — owner only, on a member with app access. */}
+        {isView && canTransferOwnership ? (
+          <Pressable
+            onPress={() => void transferOwnership()}
+            disabled={accessBusy}
+            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl border bg-amber-500/10 border-amber-200 active:bg-amber-100"
+          >
+            <Crown size={16} color={c.warning} />
+            <Text className="text-sm font-semibold text-amber-700">{t.transferOwnershipBtn}</Text>
+          </Pressable>
+        ) : null}
+
+        {/* Record timestamps (110 added employees.updated_at) */}
+        {isView ? (() => {
+          const emp = employee as { created_at?: string; updated_at?: string | null };
+          return (
+            <View className="items-center gap-0.5 mt-1">
+              {emp.created_at ? (
+                <Text className="text-[11px] text-faint">
+                  {t.createdOnLine.replace('{{date}}', formatDateTimeLong(emp.created_at, locale))}
+                </Text>
+              ) : null}
+              {emp.updated_at && emp.updated_at !== emp.created_at ? (
+                <Text className="text-[11px] text-faint">
+                  {t.lastEditedOnLine.replace('{{date}}', formatDateTimeLong(emp.updated_at, locale))}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })() : null}
 
         {/* Delete moved to the header (top-right Trash icon). */}
 

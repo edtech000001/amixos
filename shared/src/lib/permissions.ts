@@ -173,10 +173,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
   },
   field: {
     resources: {
-      // Field crew manage their (assigned) jobs by default — create/edit/delete
-      // on. Estimates stay OFF by default (createEstimates) so a business opts
-      // in per-role from the role editor.
-      jobs: R('assigned', true, true, true),
+      // Field crew create + edit their (assigned) jobs by default; delete is
+      // OFF — the RLS side (089 default_role_permissions) never allowed field
+      // deletes, so offering the button only produced a dead action. Estimates
+      // stay OFF by default (createEstimates) so a business opts in per-role
+      // from the role editor.
+      jobs: R('assigned', true, true, false),
       clients: R('assigned', false, false, false),
       invoices: R('none'),
       employees: R('none'),

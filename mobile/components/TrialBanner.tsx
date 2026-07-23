@@ -4,6 +4,7 @@ import { Clock, AlertTriangle } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useAuthStore } from '@/lib/auth/store';
+import { WEB_APP_URL } from '@/lib/webUrl';
 import {
   trialDaysLeft,
   isTrialExpired,
@@ -47,7 +48,7 @@ export function TrialBanner() {
       return;
     }
     Linking.openURL(
-      `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+      `${WEB_APP_URL}/dashboard/ajustes?tab=cuenta`,
     ).catch(() => {});
   };
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal, Linking, Platform } from 'react-native';
+import { WEB_APP_URL } from '@/lib/webUrl';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Building2,
@@ -3346,7 +3347,7 @@ export function AccountSection() {
   // helpers. Manage/buy actions hand off to the web billing page.
   const openWebBilling = () =>
     Linking.openURL(
-      `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+      `${WEB_APP_URL}/dashboard/ajustes?tab=cuenta`,
     ).catch(() => {});
 
   const sub: SubscriptionInfo | null = business
@@ -3385,9 +3386,15 @@ export function AccountSection() {
           : business?.billing_period === 'monthly'
             ? locale === 'en' ? 'Monthly' : 'Mensual'
             : null;
-      const detail = planName
-        ? (period ? `${planName} · ${period}` : planName)
-        : (locale === 'en' ? 'Active' : 'Activa');
+      // Show WHICH plan is active: known plan name, else the raw plan key
+      // (capitalized — e.g. a custom/legacy key), else "custom plan" for
+      // grandfathered actives with no plan set.
+      const rawPlan = (sub.plan ?? '').trim();
+      const fallbackName = rawPlan
+        ? rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1)
+        : locale === 'en' ? 'Custom plan' : 'Plan personalizado';
+      const shownName = planName ?? fallbackName;
+      const detail = period ? `${shownName} · ${period}` : shownName;
       return {
         title: locale === 'en' ? 'Plan' : 'Plan',
         detail,

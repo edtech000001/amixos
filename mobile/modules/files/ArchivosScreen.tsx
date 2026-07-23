@@ -60,6 +60,7 @@ export default function ArchivosScreen() {
   } : null;
   const limitBytes = subInfo ? storageLimitBytes(subInfo) : null;
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
+  const [breakdown, setBreakdown] = useState<Record<string, number> | null>(null);
 
   // Blocks an upload that would push the business over its plan's storage limit
   // (mirrors web). Refetches usage fresh so the check is accurate.
@@ -96,6 +97,10 @@ export default function ArchivosScreen() {
     // Refresh storage usage alongside the tree (after uploads/deletes too).
     const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
     setUsedBytes(Number(data ?? 0));
+    // Breakdown (jobs vs library vs equipment) — best-effort: the RPC is
+    // migration 149; if it isn't run yet the meter just shows the total.
+    const { data: bd } = await supabase.rpc('business_storage_breakdown', { p_business_id: business.id });
+    if (bd && typeof bd === 'object') setBreakdown(bd as Record<string, number>);
   }, [business?.id]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -250,6 +255,23 @@ export default function ArchivosScreen() {
                 <View className="h-1.5 w-full rounded-full bg-border-soft overflow-hidden">
                   <View className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                 </View>
+                {/* What's eating the space: job photos+documents vs this
+                   library vs equipment (needs migration 149). */}
+                {breakdown ? (
+                  <Text className="text-xs text-faint mt-1.5">
+                    {([
+                      // This screen's own library always shows (even at 0 —
+                      // link entries take no storage); the rest only when >0.
+                      [es ? 'Manuales y documentos' : 'Manuals & documents', Number(breakdown.files ?? 0), true],
+                      [es ? 'Trabajos (fotos y documentos)' : 'Jobs (photos & documents)', Number(breakdown.jobs ?? 0), false],
+                      [es ? 'Equipos' : 'Equipment', Number(breakdown.equipment ?? 0), false],
+                      [es ? 'Otros' : 'Other', Number(breakdown.other ?? 0), false],
+                    ] as [string, number, boolean][])
+                      .filter(([, v, always]) => always || v > 0)
+                      .map(([label, v]) => `${label}: ${formatBytes(v)}`)
+                      .join(' · ')}
+                  </Text>
+                ) : null}
                 {full100 ? (
                   <Text className="text-xs text-red-500 mt-1.5">
                     {es ? 'Almacenamiento lleno · mejora tu plan' : 'Storage full · upgrade your plan'}

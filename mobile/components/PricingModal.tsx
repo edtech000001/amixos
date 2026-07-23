@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WEB_APP_URL } from '@/lib/webUrl';
 import {
   Modal as RNModal,
   View,
@@ -201,7 +202,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 <Pressable
                   onPress={() => {
                     Linking.openURL(
-                      `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+                      `${WEB_APP_URL}/dashboard/ajustes?tab=cuenta`,
                     ).catch(() => {});
                     onClose();
                   }}
@@ -308,7 +309,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                               // web billing page avoids the Apple/Google IAP cut
                               // (store rules bar selling digital subs in-app).
                               Linking.openURL(
-                                `${process.env.EXPO_PUBLIC_WEB_URL}/dashboard/ajustes?tab=cuenta`,
+                                `${WEB_APP_URL}/dashboard/ajustes?tab=cuenta`,
                               ).catch(() => {});
                               onClose();
                             }}

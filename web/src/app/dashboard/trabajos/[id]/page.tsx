@@ -9,7 +9,7 @@ import {
   FileText, CheckCircle2, Clock, AlertTriangle,
   XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
-  MessageSquare, Navigation, Archive, Mail } from 'lucide-react';
+  MessageSquare, Navigation, Archive, Mail, PenLine } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -24,12 +24,15 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
+import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
-import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
+import { JobDocumentsSection } from '@/components/jobs/JobDocumentsSection';
+import { SignaturePad } from '@/components/SignaturePad';
 
 interface Job {
   id: string; business_id: string;
@@ -48,7 +51,7 @@ interface Job {
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
   scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
-  share_token: string | null; created_by: string | null; cancelled_at: string | null;
+  share_token: string | null; created_by: string | null; updated_by: string | null; cancelled_at: string | null;
   client_response: 'accepted' | 'declined' | null; client_responded_at: string | null;
   client_signed_name: string | null; client_signature: string | null;
   delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
@@ -205,12 +208,22 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
   useEffect(() => { load(); }, [id, business, locale]);
 
-  const updateStatus = async (newStatus: string) => {
+  // user_id → display name, for the "created by / edited by" lines
+  // (migration 150 stamps created_by/updated_by at the DB level).
+  const [nameById, setNameById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!business) return;
+    void memberNameMap(supabase, business.id).then(setNameById);
+  }, [business?.id]);
+  const byUser = (userId: string | null | undefined) =>
+    userId && nameById[userId] ? ` · ${td.byUser.replace('{{name}}', nameById[userId])}` : '';
+
+  const updateStatus = async (newStatus: string, extra?: Record<string, string | null>) => {
     if (!job || !business) return;
     const prevStatus = job.status;
     setUpdatingStatus(true);
     const now = new Date().toISOString();
-    const update: any = { status: newStatus };
+    const update: any = { status: newStatus, ...(extra ?? {}) };
     if (newStatus === 'completed') update.completed_date = now.split('T')[0];
     if (newStatus === 'sent') update.sent_at = now;
     if (newStatus === 'accepted') update.accepted_at = now;
@@ -532,6 +545,82 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     shareText(lines.join('\n\n'), 'crew');
   };
 
+  // One step back in the pipeline. Stepping a SIGNED estimate back before
+  // "accepted" invalidates the client's signed approval (the estimate is no
+  // longer accepted), so it warns first and clears the signature — same rule
+  // as reinstate, with a record kept in the activity log.
+  const stepBack = async (prevKey: string) => {
+    if (!job || !business) return;
+    const invalidatesSignature = !!job.client_signature && ['proposal', 'sent'].includes(prevKey);
+    if (!invalidatesSignature) { void updateStatus(prevKey); return; }
+    const ok = await confirm({ message: td.backStepSignedConfirm, destructive: true });
+    if (!ok) return;
+    await updateStatus(prevKey, {
+      client_response: null, client_responded_at: null,
+      client_signed_name: null, client_signature: null,
+    });
+    void logAudit(supabase, business.id, 'job.signature_cleared', 'job', id, {
+      job_title: job.title, signed_name: job.client_signed_name, signed_at: job.client_responded_at,
+    });
+  };
+
+  // ── Schedule prompt ──
+  // "Programar trabajo" with no date yet would flip the status to scheduled
+  // while the job silently has no date — ask for the date first and write
+  // both together. Jobs that already carry a date advance directly.
+  const [schedModalOpen, setSchedModalOpen] = useState(false);
+  const [schedDate, setSchedDate] = useState('');
+  const promptSchedule = () => {
+    if (!job) return;
+    if (job.scheduled_date) { void updateStatus('scheduled'); return; }
+    setSchedDate(todayLocalISO());
+    setSchedModalOpen(true);
+  };
+  const saveSchedule = async () => {
+    if (!schedDate) return;
+    await updateStatus('scheduled', { scheduled_date: schedDate });
+    setSchedModalOpen(false);
+  };
+
+  // ── Sign on site — the client signs on the owner's device ──
+  // Same proof fields as the public accept-and-sign link, but written
+  // directly (owner is authenticated, no RPC needed).
+  const [signModalOpen, setSignModalOpen] = useState(false);
+  const [onsiteName, setOnsiteName] = useState('');
+  const [onsiteSig, setOnsiteSig] = useState<string | null>(null);
+  const [onsiteError, setOnsiteError] = useState('');
+  const [onsiteSaving, setOnsiteSaving] = useState(false);
+  const openSignModal = () => {
+    setOnsiteName(job?.clients ? `${job.clients.first_name} ${job.clients.last_name}`.trim() : '');
+    setOnsiteSig(null);
+    setOnsiteError('');
+    setSignModalOpen(true);
+  };
+  const saveOnsiteSignature = async () => {
+    if (!job || !business) return;
+    const name = onsiteName.trim();
+    if (!name || !onsiteSig) { setOnsiteError(full.proposal.missingFields); return; }
+    setOnsiteSaving(true);
+    const now = new Date().toISOString();
+    const update = {
+      status: 'accepted', accepted_at: now,
+      client_response: 'accepted' as const, client_responded_at: now,
+      client_signed_name: name, client_signature: onsiteSig,
+    };
+    const { error } = await supabase.from('jobs').update(update).eq('id', id);
+    if (error) {
+      setOnsiteSaving(false);
+      void alertMessage({ message: td.statusUpdateError, destructive: true });
+      return;
+    }
+    void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
+      from: job.status, to: 'accepted', job_title: job.title, signed_name: name, onsite: true,
+    });
+    setJob(prev => prev ? { ...prev, ...update } : prev);
+    setOnsiteSaving(false);
+    setSignModalOpen(false);
+  };
+
   // Email the estimate: open the mail client pre-filled with the client's
   // address + the public accept-and-sign link, then mark sent (mirrors the
   // invoice's send flow).
@@ -792,7 +881,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
           <div className="flex items-center gap-1.5 text-xs text-faint">
             <Clock size={11}/>
-            <span>{td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}</span>
+            <span>{td.createdOn.replace('{{date}}', formatDateTimeLong(job.created_at, dateLoc))}{byUser(job.created_by)}</span>
           </div>
         </div>
       </div>
@@ -847,7 +936,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => updateStatus(prevStep.key)}
+                  onClick={() => void stepBack(prevStep.key)}
                   loading={updatingStatus}
                 >
                   ← {prevStep.label}
@@ -856,7 +945,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
               {/* Lead → schedule */}
               {job.status === 'posible' && (
-                <Button onClick={() => updateStatus('scheduled')} loading={updatingStatus} size="sm">
+                <Button onClick={promptSchedule} loading={updatingStatus} size="sm">
                   {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
                 </Button>
               )}
@@ -865,6 +954,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <>
                   <Button onClick={emailProposal} loading={updatingStatus} size="sm">
                     <Mail size={14} className="mr-1.5"/> {td.emailAction}
+                  </Button>
+                  <Button variant="secondary" onClick={openSignModal} size="sm">
+                    <PenLine size={14} className="mr-1.5"/> {td.signOnSite}
                   </Button>
                   <Button variant="secondary" onClick={() => updateStatus('sent')} loading={updatingStatus} size="sm">
                     <Send size={14} className="mr-1.5"/> {t.actions.markSent}
@@ -876,6 +968,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <Button variant="secondary" size="sm" onClick={() => updateStatus('declined')} loading={updatingStatus}>
                     <XCircle size={14} className="mr-1.5"/> {t.actions.markDeclined}
                   </Button>
+                  <Button variant="secondary" size="sm" onClick={openSignModal}>
+                    <PenLine size={14} className="mr-1.5"/> {td.signOnSite}
+                  </Button>
                   <Button size="sm" onClick={() => updateStatus('accepted')} loading={updatingStatus}>
                     <CheckCircle2 size={14} className="mr-1.5"/> {t.actions.markAccepted}
                   </Button>
@@ -883,7 +978,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
               {job.status === 'accepted' && (
                 <>
-                  <Button size="sm" onClick={() => updateStatus('scheduled')} loading={updatingStatus}>
+                  <Button size="sm" onClick={promptSchedule} loading={updatingStatus}>
                     {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
@@ -1349,10 +1444,19 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         />
       </div>
 
+      {/* Documents (contracts, permits, signed paperwork) */}
+      <div className="mt-5">
+        <JobDocumentsSection
+          jobId={job.id}
+          businessId={job.business_id}
+          canWrite={can.editJobMetadata(currentRole)}
+        />
+      </div>
+
       {/* Last edited — bottom of the page, mirrors the mobile layout */}
       {job.updated_at && job.updated_at !== job.created_at ? (
         <p className="mt-5 px-1 text-xs text-faint">
-          {td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}
+          {td.lastEditedOn.replace('{{date}}', formatDateTimeLong(job.updated_at, dateLoc))}{byUser(job.updated_by)}
         </p>
       ) : null}
 
@@ -1487,6 +1591,59 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             >
               {deleting ? td.deleting : td.deleteBtn}
             </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Schedule — asks for the work date so a "scheduled" job never
+         silently lacks one. */}
+      <Modal open={schedModalOpen} onClose={() => setSchedModalOpen(false)} title={td.scheduleWork} size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted">{td.schedulePromptHint}</p>
+          <div>
+            <label className="block text-xs font-semibold text-faint uppercase tracking-wide mb-1.5">{td.scheduledDate}</label>
+            <input
+              type="date"
+              value={schedDate}
+              onChange={e => setSchedDate(e.target.value)}
+              className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm text-ink bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setSchedModalOpen(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={saveSchedule} loading={updatingStatus} fullWidth disabled={!schedDate}>
+              {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Sign on site — the client signs on this device; same proof record
+         as the public accept-and-sign link. */}
+      <Modal open={signModalOpen} onClose={() => setSignModalOpen(false)} title={td.signOnSite} size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted">{td.signOnSiteHint}</p>
+          <div>
+            <label className="block text-xs font-semibold text-faint uppercase tracking-wide mb-1.5">{full.proposal.nameLabel}</label>
+            <input
+              type="text"
+              value={onsiteName}
+              onChange={e => setOnsiteName(e.target.value)}
+              placeholder={full.proposal.namePlaceholder}
+              className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm text-ink bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-faint uppercase tracking-wide mb-1.5">{full.proposal.signLabel}</label>
+            <SignaturePad hint={full.proposal.signHint} clearLabel={full.proposal.clearSignature} onChange={setOnsiteSig}/>
+            <p className="text-xs text-faint mt-2 leading-relaxed">{full.proposal.signDisclaimer}</p>
+          </div>
+          {onsiteError && <p className="text-sm text-red-600">{onsiteError}</p>}
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => setSignModalOpen(false)} fullWidth>{tc.buttons.cancel}</Button>
+            <Button onClick={saveOnsiteSignature} loading={onsiteSaving} fullWidth>
+              <CheckCircle2 size={14} className="mr-1.5"/> {full.proposal.acceptButton}
+            </Button>
           </div>
         </div>
       </Modal>

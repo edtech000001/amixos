@@ -263,6 +263,7 @@ export type DashboardDict = {
     sendNoEmail: string;
     createdLabel: string;
     lastEditedLabel: string;
+    byUser: string;
     print: string;
     linkCopied: string;
     notFound: string;
@@ -690,7 +691,6 @@ export type DashboardDict = {
       deleteTooltip: string;
       sendAction: string;
       sendActionMessage: string;
-      shareAndMark: string;
       markOnly: string;
       shareError: string;
       statusUpdateError: string;
@@ -721,6 +721,21 @@ export type DashboardDict = {
       approvalTitle: string;
       signedByLine: string;
       cancelSignedConfirm: string;
+      backStepSignedConfirm: string;
+      signOnSite: string;
+      signOnSiteHint: string;
+      schedulePromptHint: string;
+      // Job documents
+      documentsHeading: string;
+      addDocumentBtn: string;
+      noDocuments: string;
+      docTooBig: string;
+      docLimitReached: string;
+      docStorageFull: string;
+      deleteDocConfirm: string;
+      docUploadError: string;
+      docImageWarn: string;
+      docImageAttachAnyway: string;
       // Cards
       proposalHeading: string;
       issuedAt: string;
@@ -734,6 +749,7 @@ export type DashboardDict = {
       internalNote: string;
       createdOn: string;
       lastEditedOn: string;
+      byUser: string;
       clientModalTitle: string;
       locationModalTitle: string;
       openInMaps: string;
@@ -971,6 +987,11 @@ export type DashboardDict = {
     deleteConfirm: string;
     deactivateBtn: string;
     rosterRemoveBtn: string;
+    createdOnLine: string;
+    lastEditedOnLine: string;
+    transferOwnershipBtn: string;
+    transferOwnershipConfirm: string;
+    transferOwnershipError: string;
     rosterAddBtn: string;
     rosterHint: string;
     reactivateBtn: string;
@@ -2832,6 +2853,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       sendNoEmail: 'Este cliente no tiene un correo guardado.',
       createdLabel: 'Creada',
       lastEditedLabel: 'Última edición',
+      byUser: 'por {{name}}',
       print: 'Imprimir / PDF',
       linkCopied: 'Enlace de la factura copiado',
       notFound: 'Factura no encontrada.',
@@ -3246,8 +3268,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareTooltip: 'Copiar enlace para compartir',
         shareCopied: 'Enlace copiado',
         sendAction: 'Enviar cotización',
-        sendActionMessage: 'Comparte el enlace con tu cliente, o solo márcala como enviada.',
-        shareAndMark: 'Compartir y marcar enviada',
+        sendActionMessage: 'Envíala por correo con el enlace para aceptar y firmar, o solo márcala como enviada.',
         markOnly: 'Solo marcar enviada',
         shareError: 'No se pudo compartir',
         statusUpdateError: 'No se pudo actualizar el estado. Intenta de nuevo.',
@@ -3282,6 +3303,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         approvalTitle: 'Aprobación del cliente',
         signedByLine: 'Firmado por {{name}} el {{date}}',
         cancelSignedConfirm: 'Esta cotización fue firmada por el cliente. Si la cancelas y luego la reactivas, la aprobación firmada se eliminará y el cliente tendrá que aprobar y firmar de nuevo. ¿Cancelar el trabajo?',
+        backStepSignedConfirm: 'Esta cotización fue firmada por el cliente. Al regresarla, la aprobación firmada se eliminará y el cliente tendrá que aceptar y firmar de nuevo. ¿Continuar?',
+        signOnSite: 'Firmar en persona',
+        signOnSiteHint: 'Entrega el dispositivo a tu cliente para que escriba su nombre y firme la cotización.',
+        schedulePromptHint: 'Elige la fecha del trabajo para programarlo. Podrás ajustar horarios y más detalles editando el trabajo.',
+        documentsHeading: 'Documentos',
+        addDocumentBtn: 'Agregar documento',
+        noDocuments: 'Sin documentos adjuntos.',
+        docTooBig: 'El archivo supera el límite de 50 MB.',
+        docLimitReached: 'Este trabajo ya tiene el máximo de {{max}} documentos.',
+        docStorageFull: 'Tu negocio alcanzó el límite de almacenamiento de tu plan. Mejora tu plan o libera espacio.',
+        deleteDocConfirm: '¿Eliminar este documento?',
+        docUploadError: 'No se pudo subir el documento. Intenta de nuevo.',
+        docImageWarn: 'Este archivo es una imagen. Las fotos del trabajo van en la sección Fotos. ¿Adjuntarla como documento de todos modos (por ejemplo, un contrato escaneado)?',
+        docImageAttachAnyway: 'Adjuntar de todos modos',
         proposalHeading: 'Cotización',
         issuedAt: 'Emitida',
         validUntil: 'Válida hasta',
@@ -3294,6 +3329,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNote: '📝 Nota interna',
         createdOn: 'Creado el {{date}}',
         lastEditedOn: 'Última edición {{date}}',
+        byUser: 'por {{name}}',
         clientModalTitle: 'Cliente',
         locationModalTitle: 'Ubicación',
         openInMaps: 'Abrir en Mapas',
@@ -3523,6 +3559,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteConfirm: '¿Eliminar a {{name}}? Esta acción no se puede deshacer y borra su historial.',
       deactivateBtn: 'Desactivar empleado',
       rosterRemoveBtn: 'Quitar de cuadrillas',
+      createdOnLine: 'Agregado el {{date}}',
+      lastEditedOnLine: 'Última edición {{date}}',
+      transferOwnershipBtn: 'Transferir propiedad',
+      transferOwnershipConfirm: '¿Transferir la propiedad del negocio a {{name}}? Esa persona pasará a ser la dueña (control total, incluida la facturación) y tu rol cambiará a Administrador. Esta acción solo la puede revertir el nuevo dueño.',
+      transferOwnershipError: 'No se pudo transferir la propiedad. Intenta de nuevo.',
       rosterAddBtn: 'Incluir en cuadrillas',
       rosterHint: 'No aparecerá al elegir líder, trabajadores o manejadores en un trabajo. Sigue activo para nómina y acceso.',
       reactivateBtn: 'Reactivar empleado',
@@ -5387,6 +5428,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       sendNoEmail: 'This client has no email on file.',
       createdLabel: 'Created',
       lastEditedLabel: 'Last edited',
+      byUser: 'by {{name}}',
       print: 'Print / PDF',
       linkCopied: 'Invoice link copied',
       notFound: 'Invoice not found.',
@@ -5801,8 +5843,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         shareTooltip: 'Copy share link',
         shareCopied: 'Link copied',
         sendAction: 'Send estimate',
-        sendActionMessage: 'Share the link with your client, or just mark it as sent.',
-        shareAndMark: 'Share and mark sent',
+        sendActionMessage: 'Send it by email with the accept-and-sign link, or just mark it as sent.',
         markOnly: 'Mark sent only',
         shareError: 'Could not share',
         statusUpdateError: "Couldn't update the status. Try again.",
@@ -5837,6 +5878,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         approvalTitle: 'Client approval',
         signedByLine: 'Signed by {{name}} on {{date}}',
         cancelSignedConfirm: 'This estimate was signed by the client. If you cancel it and later reinstate it, the signed approval will be removed and the client will need to approve and sign again. Cancel the job?',
+        backStepSignedConfirm: 'This estimate was signed by the client. Going back will remove the signed approval and the client will need to accept and sign again. Continue?',
+        signOnSite: 'Sign in person',
+        signOnSiteHint: 'Hand the device to your client so they can enter their name and sign the estimate.',
+        schedulePromptHint: 'Pick the work date to schedule it. You can fine-tune times and other details by editing the job.',
+        documentsHeading: 'Documents',
+        addDocumentBtn: 'Add document',
+        noDocuments: 'No documents attached.',
+        docTooBig: 'The file exceeds the 50 MB limit.',
+        docLimitReached: 'This job already has the maximum of {{max}} documents.',
+        docStorageFull: "Your business reached its plan's storage limit. Upgrade your plan or free up space.",
+        deleteDocConfirm: 'Delete this document?',
+        docUploadError: 'The document could not be uploaded. Try again.',
+        docImageWarn: 'This file is an image. Job photos belong in the Photos section. Attach it as a document anyway (e.g. a scanned contract)?',
+        docImageAttachAnyway: 'Attach anyway',
         proposalHeading: 'Estimate',
         issuedAt: 'Issued',
         validUntil: 'Valid until',
@@ -5849,6 +5904,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         internalNote: '📝 Internal note',
         createdOn: 'Created on {{date}}',
         lastEditedOn: 'Last edited {{date}}',
+        byUser: 'by {{name}}',
         clientModalTitle: 'Client',
         locationModalTitle: 'Location',
         openInMaps: 'Open in Maps',
@@ -6078,6 +6134,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteConfirm: 'Delete {{name}}? This cannot be undone and removes their history.',
       deactivateBtn: 'Deactivate employee',
       rosterRemoveBtn: 'Remove from crews',
+      createdOnLine: 'Added on {{date}}',
+      lastEditedOnLine: 'Last edited {{date}}',
+      transferOwnershipBtn: 'Transfer ownership',
+      transferOwnershipConfirm: 'Transfer business ownership to {{name}}? They will become the owner (full control, including billing) and your role will change to Admin. Only the new owner can reverse this.',
+      transferOwnershipError: 'Could not transfer ownership. Try again.',
       rosterAddBtn: 'Include in crews',
       rosterHint: 'Won\'t be offered when picking a lead, workers or drivers on a job. Still active for payroll and app access.',
       reactivateBtn: 'Reactivate employee',

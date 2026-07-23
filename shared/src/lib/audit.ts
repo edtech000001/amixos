@@ -41,6 +41,7 @@ export type AuditAction =
   // Business
   | 'business.updated'
   | 'business.deleted'
+  | 'business.ownership_transferred'
   // Modules (Addon Store)
   | 'module.enabled'
   | 'module.disabled'
@@ -129,6 +130,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'invite.revoked':      { es: 'Invitación revocada',       en: 'Invite revoked' },
   'invite.accepted':     { es: 'Invitación aceptada',       en: 'Invite accepted' },
   'business.updated':    { es: 'Negocio actualizado',       en: 'Business updated' },
+  'business.ownership_transferred': { es: 'Propiedad del negocio transferida', en: 'Business ownership transferred' },
   'business.deleted':    { es: 'Negocio eliminado',         en: 'Business deleted' },
   'module.enabled':      { es: 'Módulo activado',           en: 'Module enabled' },
   'module.disabled':     { es: 'Módulo desactivado',        en: 'Module disabled' },

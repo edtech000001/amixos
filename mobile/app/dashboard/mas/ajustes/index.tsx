@@ -1,5 +1,7 @@
+import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Linking, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import Animated, { FadeInRight } from 'react-native-reanimated';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronRight,
@@ -154,8 +156,18 @@ export default function AjustesIndex() {
     },
   ];
 
+  // Forward entrance every time Settings gains focus — the Tabs switch
+  // itself doesn't animate, and the ambient transition read as a backwards
+  // swipe. FadeInRight (short slide + fade) rather than a full-width slide:
+  // the previous screen disappears instantly on a tab switch, so a
+  // full-width slide reads as a harsh "swap" instead of a push. Re-keying
+  // the wrapper replays the entrance per focus.
+  const [focusKey, setFocusKey] = useState(0);
+  useFocusEffect(useCallback(() => { setFocusKey((k) => k + 1); }, []));
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <Animated.View key={focusKey} entering={FadeInRight.duration(240)} className="flex-1">
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
         {/* Back to the Más menu (Ajustes is pushed from there, not a dock tab). */}
         <View className="flex-row items-center mb-5 -ml-2">
@@ -218,6 +230,7 @@ export default function AjustesIndex() {
           <Text className="text-center text-[11px] text-faint mt-6">{APP_VERSION}</Text>
         ) : null}
       </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 }

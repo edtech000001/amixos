@@ -164,10 +164,11 @@ export function ClientsListScreen({
   // No persistent checkboxes.
   const [selectMode, setSelectMode] = useState(false);
   const selectionMode = selectMode || selectedIds.size > 0;
-  const exitSelect = () => {
+  // Stable identity — passed into the memo'd ClientRow (long-press exit).
+  const exitSelect = useCallback(() => {
     setSelectMode(false);
     onClearSelection();
-  };
+  }, [onClearSelection]);
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
   const selectedCountText = (
@@ -426,6 +427,7 @@ export function ClientsListScreen({
           fixedHeight={searching ? undefined : CLIENT_ROW_H}
           onToggleSelect={onToggleSelect}
           onClientPress={onClientPress}
+          onExitSelect={exitSelect}
         />
       );
     }
@@ -708,6 +710,7 @@ interface ClientRowProps {
   fixedHeight?: number;
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
+  onExitSelect: () => void;
 }
 
 const ClientRow = memo(function ClientRow({
@@ -719,16 +722,18 @@ const ClientRow = memo(function ClientRow({
   fixedHeight,
   onToggleSelect,
   onClientPress,
+  onExitSelect,
 }: ClientRowProps) {
   const tc = useThemeColors();
   const matchedContacts = matchingContacts(c, search);
   return (
     <Pressable
-      // Tap opens the client; long-press enters selection mode. While in
-      // selection mode the whole row is the toggle target (no tiny checkbox
-      // to aim for).
+      // Tap opens the client; long-press enters selection mode, and a second
+      // long-press anywhere EXITS it (an accidental hold shouldn't force a
+      // scroll back to the header toggle). While in selection mode the whole
+      // row is the toggle target (no tiny checkbox to aim for).
       onPress={() => (selectionMode ? onToggleSelect(c.id) : onClientPress(c.id))}
-      onLongPress={() => onToggleSelect(c.id)}
+      onLongPress={() => (selectionMode ? onExitSelect() : onToggleSelect(c.id))}
       delayLongPress={300}
       // Row sits inside the white card; border-x continues the card frame.
       // border-b-gray-200 keeps the divider readable (the original gray-50

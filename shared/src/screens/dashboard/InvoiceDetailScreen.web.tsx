@@ -74,6 +74,11 @@ export interface InvoiceDetail {
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
   updatedAt: string | null;
+  /** Auditing user ids (migration 150) + their resolved display names. */
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdByName?: string | null;
+  updatedByName?: string | null;
   clients: InvoiceDetailClient[];
 }
 
@@ -268,6 +273,7 @@ export function InvoiceDetailScreen({
             </div>
             <p className="text-xs text-faint mt-0.5">
               {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
+              {invoice.createdByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.createdByName)}` : ''}
             </p>
           </div>
         </div>
@@ -578,6 +584,7 @@ export function InvoiceDetailScreen({
         {invoice.updatedAt && invoice.updatedAt !== invoice.createdAt ? (
           <p className="text-xs text-faint text-center mt-1">
             {tInv.lastEditedLabel}: {formatDateTimeLong(invoice.updatedAt, dateLoc)}
+            {invoice.updatedByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.updatedByName)}` : ''}
           </p>
         ) : null}
         </div>

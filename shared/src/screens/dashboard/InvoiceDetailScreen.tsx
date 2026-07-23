@@ -68,6 +68,11 @@ export interface InvoiceDetail {
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
   updatedAt: string | null;
+  /** Auditing user ids (migration 150) + their resolved display names. */
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdByName?: string | null;
+  updatedByName?: string | null;
   clients: InvoiceDetailClient[];
   /** Resolved custom fields (label + display value), already ordered and
    *  filtered to non-empty entries by the caller. */
@@ -273,7 +278,10 @@ export function InvoiceDetailScreen({
                 </View>
               ) : null}
             </View>
-            <Text className="text-xs text-faint mt-1">{tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}</Text>
+            <Text className="text-xs text-faint mt-1">
+              {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
+              {invoice.createdByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.createdByName)}` : ''}
+            </Text>
           </View>
         </View>
         <View className="flex-row items-center gap-0.5 shrink-0">
@@ -567,6 +575,7 @@ export function InvoiceDetailScreen({
       {invoice.updatedAt && invoice.updatedAt !== invoice.createdAt ? (
         <Text className="text-xs text-faint text-center mt-2">
           {tInv.lastEditedLabel}: {formatDateTimeLong(invoice.updatedAt, dateLoc)}
+          {invoice.updatedByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.updatedByName)}` : ''}
         </Text>
       ) : null}
     </ScrollView>

@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
+import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import {
@@ -100,6 +101,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  // user_id → display name, for the "created by / edited by" lines
+  // (migration 150 stamps created_by/updated_by at the DB level).
+  const [nameById, setNameById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!business) return;
+    void memberNameMap(supabase, business.id).then(setNameById);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [invoiceConfigRaw, setInvoiceConfigRaw] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -379,6 +388,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       language: raw.language ?? 'es',
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
+      createdBy: (raw as { created_by?: string | null }).created_by ?? null,
+      updatedBy: (raw as { updated_by?: string | null }).updated_by ?? null,
       customFields,
       clients: clientList.map(c => ({
         id: c.id,
@@ -692,7 +703,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     <>
       <InvoiceDetailScreen
         loading={loading}
-        invoice={invoice}
+        invoice={invoice && {
+          ...invoice,
+          createdByName: invoice.createdBy ? nameById[invoice.createdBy] ?? null : null,
+          updatedByName: invoice.updatedBy ? nameById[invoice.updatedBy] ?? null : null,
+        }}
         branding={branding}
         templateConfig={templateConfig}
         updating={updating}
