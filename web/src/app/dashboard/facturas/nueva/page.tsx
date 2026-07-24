@@ -69,7 +69,7 @@ function NuevaFacturaContent() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, activeLocationId } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
@@ -441,7 +441,8 @@ function NuevaFacturaContent() {
       invoiceId = editId;
     } else {
       const { data, error: e } = await supabase.from('invoices')
-        .insert({ business_id: business.id, status, ...payload })
+        // File a manual invoice under the branch you're working in.
+        .insert({ business_id: business.id, status, location_id: activeLocationId ?? null, ...payload })
         .select()
         .single();
       if (e || !data) { setError(t.errorSave); setSaving(false); return; }

@@ -159,7 +159,7 @@ export async function createInvoiceFromJobs(
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id, custom_fields')
+    .select('id, title, client_id, custom_fields, location_id')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -209,6 +209,8 @@ export async function createInvoiceFromJobs(
       total_amount: total,
       // Notes are the user's to write — don't auto-fill with job titles.
       notes: null,
+      // Branch: inherit from the covered jobs (all one client, ~one branch).
+      location_id: (jobs[0] as any)?.location_id ?? null,
     })
     .select()
     .single();
@@ -250,7 +252,7 @@ export async function createInvoicesFromJobs(
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id, custom_fields')
+    .select('id, title, client_id, custom_fields, location_id')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -310,6 +312,7 @@ export async function createInvoicesFromJobs(
         discount,
         total_amount: total,
         notes: null,
+        location_id: (groupJobs[0] as any)?.location_id ?? null,
       })
       .select()
       .single();

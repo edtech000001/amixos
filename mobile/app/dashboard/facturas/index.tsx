@@ -36,7 +36,7 @@ export default function FacturasTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole } = useApp();
+  const { business, currentRole, activeLocationId } = useApp();
   const { t: full } = useLang();
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,12 +53,14 @@ export default function FacturasTab() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const raw = await fetchAll<RawInvoice>((from, to) =>
-      supabase.from('invoices')
+    const raw = await fetchAll<RawInvoice>((from, to) => {
+      let q = supabase.from('invoices')
         .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .range(from, to) as unknown as PromiseLike<{ data: RawInvoice[] | null; error: { message: string } | null }>);
+        .eq('business_id', businessId);
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q.order('created_at', { ascending: false })
+        .range(from, to) as unknown as PromiseLike<{ data: RawInvoice[] | null; error: { message: string } | null }>;
+    });
     setInvoices(raw.map(inv => {
       const pc = primaryClient(inv);
       return {
@@ -82,10 +84,10 @@ export default function FacturasTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   // Refresh on focus so newly created/edited invoices appear after returning.
-  useFocusEffect(useCallback(() => { load(); }, [business?.id]));
+  useFocusEffect(useCallback(() => { load(); }, [business?.id, activeLocationId]));
 
   const updateStatus = async (id: string, status: 'sent' | 'paid') => {
     const update: any = { status };

@@ -397,6 +397,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       invoice_number: invNum,
       status: 'draft',
       language: invoiceLang,
+      // Inherit the job's branch so the invoice files under the same location.
+      location_id: (job as { location_id?: string | null }).location_id ?? null,
       issue_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
       line_items: lineItems,

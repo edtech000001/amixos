@@ -45,9 +45,9 @@ let invoicesListCache: { key: string; invoices: InvoiceListItem[] } | null = nul
 export default function FacturasPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole } = useApp();
+  const { business, currentRole, activeLocationId } = useApp();
   const { t: full } = useLang();
-  const cacheKey = business?.id ?? null;
+  const cacheKey = business ? `${business.id}:${activeLocationId ?? 'all'}` : null;
   const [invoices, setInvoices] = useState<InvoiceListItem[]>(() =>
     cacheKey && invoicesListCache?.key === cacheKey ? invoicesListCache.invoices : []);
   const [loading, setLoading] = useState(() =>
@@ -81,12 +81,13 @@ export default function FacturasPage() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const raw = await fetchAll<RawInvoice>((from, to) =>
-      supabase.from('invoices')
+    const raw = await fetchAll<RawInvoice>((from, to) => {
+      let q = supabase.from('invoices')
         .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false })
-        .range(from, to));
+        .eq('business_id', businessId);
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q.order('created_at', { ascending: false }).range(from, to);
+    });
     const mapped: InvoiceListItem[] = raw.map(inv => {
       const pc = primaryClient(inv);
       return {
@@ -109,10 +110,10 @@ export default function FacturasPage() {
     });
     setInvoices(mapped);
     setLoading(false);
-    invoicesListCache = { key: businessId, invoices: mapped };
+    invoicesListCache = { key: `${businessId}:${activeLocationId ?? 'all'}`, invoices: mapped };
   };
 
-  useEffect(() => { load(); }, [business]);
+  useEffect(() => { load(); }, [business, activeLocationId]);
 
   const updateStatus = async (id: string, status: 'sent' | 'paid') => {
     const update: any = { status };
