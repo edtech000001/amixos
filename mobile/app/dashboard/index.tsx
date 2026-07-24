@@ -46,11 +46,22 @@ function OwnerDashboardHome() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole, loading: appLoading, refetchBusiness } = useApp();
+  const { business, user, currentRole, loading: appLoading } = useApp();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<DashboardRecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<DashboardUpcomingJob[]>([]);
   const [loading, setLoading] = useState(true);
+  // Dashboard layout is a PER-USER preference (profiles.dashboard_layout), not
+  // a business setting — otherwise one member's customization changes it for
+  // everyone. undefined = not yet loaded.
+  const [profileLayout, setProfileLayout] = useState<DashboardLayout | null | undefined>(undefined);
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void supabase.from('profiles').select('dashboard_layout').eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (active) setProfileLayout((data?.dashboard_layout as DashboardLayout | null) ?? null); });
+    return () => { active = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!business) return;
@@ -160,11 +171,12 @@ function OwnerDashboardHome() {
   }, [business?.id]);
 
   const saveLayout = async (layout: DashboardLayout): Promise<boolean> => {
-    if (!business) return false;
+    if (!user) return false;
     const { error } = await supabase
-      .from('businesses')
+      .from('profiles')
       .update({ dashboard_layout: layout })
-      .eq('id', business.id);
+      .eq('id', user.id);
+    if (!error) setProfileLayout(layout);
     return !error;
   };
 
@@ -179,9 +191,9 @@ function OwnerDashboardHome() {
         stats={stats}
         recent={recent}
         upcomingJobs={upcoming}
-        layout={business?.dashboard_layout ?? null}
+        layout={profileLayout ?? null}
         onSaveLayout={saveLayout}
-        onEditingDone={() => { void refetchBusiness(); }}
+        onEditingDone={() => {}}
         onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
         onViewAllInvoicesPress={() => router.push('/dashboard/facturas')}

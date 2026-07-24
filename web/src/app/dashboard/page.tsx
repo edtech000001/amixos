@@ -44,6 +44,7 @@ import {
   resolveDashboardLayout,
   type DashboardWidgetId,
   type DashboardWidgetSize,
+  type DashboardLayout,
 } from '@amixos/shared/lib/dashboardWidgets';
 import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
@@ -228,7 +229,18 @@ function SortableWidget({
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole, loading: appLoading, refetchBusiness } = useApp();
+  const { business, user, currentRole, loading: appLoading, refetchBusiness } = useApp();
+  // Dashboard layout is a PER-USER preference (profiles.dashboard_layout), not
+  // a business setting — otherwise one member's customization changes it for
+  // everyone. undefined = not yet loaded.
+  const [profileLayout, setProfileLayout] = useState<DashboardLayout | null | undefined>(undefined);
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void supabase.from('profiles').select('dashboard_layout').eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (active) setProfileLayout((data?.dashboard_layout as DashboardLayout | null) ?? null); });
+    return () => { active = false; };
+  }, [user?.id]);
   const { t: full } = useLang();
   const t = full.dashboard;
 
@@ -257,12 +269,12 @@ export default function DashboardPage() {
   // Layout state follows the business (keyed on id so a background refetch
   // doesn't clobber in-progress edits).
   useEffect(() => {
-    if (!business) return;
-    const resolved = resolveDashboardLayout(business.dashboard_layout, currentRole);
+    if (!business || profileLayout === undefined) return;
+    const resolved = resolveDashboardLayout(profileLayout, currentRole);
     setVisibleIds(resolved.visible.map(w => w.id));
     setHiddenIds(resolved.hidden);
     setSizes(Object.fromEntries(resolved.visible.map(w => [w.id, w.size])));
-  }, [business?.id, currentRole]);
+  }, [business?.id, currentRole, profileLayout]);
 
   useEffect(() => {
     if (!business) return;
@@ -340,13 +352,15 @@ export default function DashboardPage() {
     hidden: DashboardWidgetId[],
     nextSizes: Record<string, DashboardWidgetSize>,
   ) => {
-    if (!business) return;
+    if (!user) return;
     setSaveError(false);
+    const layout = buildDashboardLayout(visible, hidden, nextSizes);
     const { error } = await supabase
-      .from('businesses')
-      .update({ dashboard_layout: buildDashboardLayout(visible, hidden, nextSizes) })
-      .eq('id', business.id);
+      .from('profiles')
+      .update({ dashboard_layout: layout })
+      .eq('id', user.id);
     if (error) setSaveError(true);
+    else setProfileLayout(layout);
   };
 
   const handleDragEnd = (e: DragEndEvent) => {
