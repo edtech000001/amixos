@@ -218,6 +218,11 @@ const BRANCH_FIELD_JOB: ImportFieldDef = {
   hintEs: 'Nombre de la sucursal a la que pertenece el trabajo. Vacío = sin sucursal.',
   hintEn: 'Branch the job belongs to. Blank = no branch.',
 };
+const BRANCH_FIELD_INVENTORY: ImportFieldDef = {
+  key: 'branch', es: 'Sucursal', en: 'Branch',
+  hintEs: 'Nombre de la sucursal donde está el artículo. Vacío = sin sucursal.',
+  hintEn: 'Branch the item is stocked at. Blank = no branch.',
+};
 
 export const PAYROLL_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'worker',       es: 'Trabajador (nombre)', en: 'Worker (name)', required: true,
@@ -287,7 +292,7 @@ export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {})
   if (mode === 'invoices') return INVOICE_IMPORT_FIELDS;
   if (mode === 'payroll') return PAYROLL_IMPORT_FIELDS;
   if (mode === 'equipment') return EQUIPMENT_IMPORT_FIELDS;
-  if (mode === 'inventory') return INVENTORY_IMPORT_FIELDS;
+  if (mode === 'inventory') return opts.multiLocation ? [...INVENTORY_IMPORT_FIELDS, BRANCH_FIELD_INVENTORY] : INVENTORY_IMPORT_FIELDS;
   const jobFields = opts.jobPricing === false
     ? JOB_IMPORT_FIELDS.filter(f => !JOB_PRICING_KEYS.has(f.key))
     : JOB_IMPORT_FIELDS;
@@ -1382,6 +1387,9 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
     ctx.supabase.from('inventory_items').select('name, sku').eq('business_id', ctx.businessId).range(from, to));
   const existingNames = new Set(existing.map(e => normalizeName(e.name)));
   const existingSkus = new Set(existing.map(e => (e.sku ?? '').trim().toLowerCase()).filter(Boolean));
+  // Branch → location_id (single per item, like jobs). Blank/unmatched = unfiled.
+  const branch = branchMatcher(ctx);
+  const unknownBranches = new Set<string>();
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
     ctx.onProgress?.(idx, ctx.rows.length);
@@ -1393,6 +1401,12 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
     if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
     if ((sku && existingSkus.has(sku.toLowerCase())) || existingNames.has(normalizeName(name))) { skipped++; continue; }
 
+    let locationId: string | null = null;
+    if (branch.multi) {
+      const bn = get(row, 'branch');
+      locationId = branch.match(bn);
+      if (bn && !locationId) unknownBranches.add(bn);
+    }
     const { error } = await ctx.supabase.from('inventory_items').insert({
       business_id: ctx.businessId,
       name,
@@ -1402,6 +1416,7 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
       unit_cost: parseNum(get(row, 'unit_cost')) ?? 0,
       category: get(row, 'category') || null,
       low_stock_threshold: parseInt10(get(row, 'low_stock')) ?? 0,
+      ...(branch.multi ? { location_id: locationId } : {}),
     });
     if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
     existingNames.add(normalizeName(name));
@@ -1410,7 +1425,14 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
   }
 
   ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
-  return { success, skipped, failedRows, notes: [] };
+  const notes: string[] = [];
+  if (unknownBranches.size) {
+    notes.push(tr(
+      `Sucursal no reconocida (esos artículos quedaron sin sucursal): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+      `Unrecognized branch (those items were left unfiled): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+    ));
+  }
+  return { success, skipped, failedRows, notes };
 }
 
 export function runImportFor(mode: ImportMode, ctx: ImportRunCtx): Promise<ImportResult> {
