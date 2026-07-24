@@ -51,17 +51,20 @@ function OwnerDashboardHome() {
   const [recent, setRecent] = useState<DashboardRecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<DashboardUpcomingJob[]>([]);
   const [loading, setLoading] = useState(true);
-  // Dashboard layout is a PER-USER preference (profiles.dashboard_layout), not
-  // a business setting — otherwise one member's customization changes it for
-  // everyone. undefined = not yet loaded.
+  // Dashboard layout is scoped PER-USER-PER-BUSINESS
+  // (user_dashboard_layouts) — not a business setting — so one member's
+  // customization never changes another's, and each person can arrange each
+  // of their businesses differently. undefined = not yet loaded.
   const [profileLayout, setProfileLayout] = useState<DashboardLayout | null | undefined>(undefined);
   useEffect(() => {
-    if (!user) return;
+    if (!user || !business) return;
     let active = true;
-    void supabase.from('profiles').select('dashboard_layout').eq('id', user.id).maybeSingle()
-      .then(({ data }) => { if (active) setProfileLayout((data?.dashboard_layout as DashboardLayout | null) ?? null); });
+    setProfileLayout(undefined);
+    void supabase.from('user_dashboard_layouts').select('layout')
+      .eq('user_id', user.id).eq('business_id', business.id).maybeSingle()
+      .then(({ data }) => { if (active) setProfileLayout((data?.layout as DashboardLayout | null) ?? null); });
     return () => { active = false; };
-  }, [user?.id]);
+  }, [user?.id, business?.id]);
 
   useEffect(() => {
     if (!business) return;
@@ -171,11 +174,11 @@ function OwnerDashboardHome() {
   }, [business?.id]);
 
   const saveLayout = async (layout: DashboardLayout): Promise<boolean> => {
-    if (!user) return false;
+    if (!user || !business) return false;
     const { error } = await supabase
-      .from('profiles')
-      .update({ dashboard_layout: layout })
-      .eq('id', user.id);
+      .from('user_dashboard_layouts')
+      .upsert({ user_id: user.id, business_id: business.id, layout, updated_at: new Date().toISOString() },
+              { onConflict: 'user_id,business_id' });
     if (!error) setProfileLayout(layout);
     return !error;
   };
