@@ -223,6 +223,16 @@ const BRANCH_FIELD_INVENTORY: ImportFieldDef = {
   hintEs: 'Nombre de la sucursal donde está el artículo. Vacío = sin sucursal.',
   hintEn: 'Branch the item is stocked at. Blank = no branch.',
 };
+const BRANCH_FIELD_EQUIPMENT: ImportFieldDef = {
+  key: 'branch', es: 'Sucursal', en: 'Branch',
+  hintEs: 'Nombre de la sucursal a la que pertenece el equipo. Vacío = sin sucursal.',
+  hintEn: 'Branch the equipment belongs to. Blank = no branch.',
+};
+const BRANCH_FIELD_INVOICE: ImportFieldDef = {
+  key: 'branch', es: 'Sucursal', en: 'Branch',
+  hintEs: 'Nombre de la sucursal de la factura. Vacío = sin sucursal.',
+  hintEn: 'Branch the invoice belongs to. Blank = no branch.',
+};
 
 export const PAYROLL_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'worker',       es: 'Trabajador (nombre)', en: 'Worker (name)', required: true,
@@ -289,9 +299,9 @@ export const INVENTORY_IMPORT_FIELDS: ImportFieldDef[] = [
 
 export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {}): ImportFieldDef[] {
   if (mode === 'employees') return opts.multiLocation ? [...EMPLOYEE_IMPORT_FIELDS, BRANCH_FIELD_EMPLOYEE] : EMPLOYEE_IMPORT_FIELDS;
-  if (mode === 'invoices') return INVOICE_IMPORT_FIELDS;
+  if (mode === 'invoices') return opts.multiLocation ? [...INVOICE_IMPORT_FIELDS, BRANCH_FIELD_INVOICE] : INVOICE_IMPORT_FIELDS;
   if (mode === 'payroll') return PAYROLL_IMPORT_FIELDS;
-  if (mode === 'equipment') return EQUIPMENT_IMPORT_FIELDS;
+  if (mode === 'equipment') return opts.multiLocation ? [...EQUIPMENT_IMPORT_FIELDS, BRANCH_FIELD_EQUIPMENT] : EQUIPMENT_IMPORT_FIELDS;
   if (mode === 'inventory') return opts.multiLocation ? [...INVENTORY_IMPORT_FIELDS, BRANCH_FIELD_INVENTORY] : INVENTORY_IMPORT_FIELDS;
   const jobFields = opts.jobPricing === false
     ? JOB_IMPORT_FIELDS.filter(f => !JOB_PRICING_KEYS.has(f.key))
@@ -998,6 +1008,8 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   let success = 0, skipped = 0;
 
   const lang = invoiceDefaultLanguage(ctx.invoiceTemplate);
+  const branch = branchMatcher(ctx);
+  const unknownBranches = new Set<string>();
 
   const existingInv = await fetchAll<{ external_ref: string | null }>((from, to) =>
     ctx.supabase.from('invoices').select('external_ref').eq('business_id', ctx.businessId).range(from, to));
@@ -1114,6 +1126,11 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       discount: 0,
       total_amount: total,
       notes: get(first.row, 'notes') || null,
+      ...(branch.multi ? (() => {
+        const bn = get(first.row, 'branch'); const id = branch.match(bn);
+        if (bn && !id) unknownBranches.add(bn);
+        return { location_id: id };
+      })() : {}),
       ...(invCreatedTs ? { created_at: invCreatedTs } : {}),
       ...(invUpdatedTs ? { updated_at: invUpdatedTs } : {}),
     }).select('id').single();
@@ -1136,6 +1153,10 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   if (unlinkedLines) notes.push(tr(
     `${unlinkedLines} línea(s) sin Project ID coincidente — se guardaron en la factura pero sin trabajo vinculado.`,
     `${unlinkedLines} line(s) with no matching Project ID — kept on the invoice but not linked to a job.`,
+  ));
+  if (unknownBranches.size) notes.push(tr(
+    `Sucursal no reconocida (esas facturas quedaron sin sucursal): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+    `Unrecognized branch (those invoices were left unfiled): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
   ));
 
   ctx.onProgress?.(groups.length, groups.length);
@@ -1327,6 +1348,8 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   const existingNames = new Set(existing.map(e => normalizeName(e.name)));
   const employees = await fetchAll<EmployeeLite>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+  const branch = branchMatcher(ctx);
+  const unknownBranches = new Set<string>();
 
   for (let idx = 0; idx < ctx.rows.length; idx++) {
     ctx.onProgress?.(idx, ctx.rows.length);
@@ -1364,6 +1387,11 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
       insurance_expiration: parseDate(get(row, 'insurance_expiration')),
       notes: get(row, 'notes') || null,
       created_by: ctx.userId,
+      ...(branch.multi ? (() => {
+        const bn = get(row, 'branch'); const id = branch.match(bn);
+        if (bn && !id) unknownBranches.add(bn);
+        return { location_id: id };
+      })() : {}),
     });
     if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
     existingNames.add(normalizeName(name));
@@ -1371,7 +1399,14 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   }
 
   ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
-  return { success, skipped, failedRows, notes: [] };
+  const notes: string[] = [];
+  if (unknownBranches.size) {
+    notes.push(tr(
+      `Sucursal no reconocida (ese equipo quedó sin sucursal): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+      `Unrecognized branch (that equipment was left unfiled): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+    ));
+  }
+  return { success, skipped, failedRows, notes };
 }
 
 // ── Inventory import ─────────────────────────────────────────────────────────

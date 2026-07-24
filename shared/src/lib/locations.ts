@@ -229,3 +229,104 @@ export function employeeIdsAtLocation(
 ): Set<string> {
   return new Set(links.filter((l) => l.location_id === locationId).map((l) => l.employee_id));
 }
+
+// ── Client ↔ location assignments (mirrors employees) ─────────────────────
+// Clients are shared-by-default (no link = shows everywhere); a client can be
+// filed to a home branch and shared into others so they never vanish from a
+// branch where they have work.
+
+export interface ClientLocation {
+  id: string;
+  business_id: string;
+  client_id: string;
+  location_id: string;
+  is_primary: boolean;
+}
+
+export async function fetchClientLocations(
+  supabase: SupabaseLike,
+  businessId: string,
+): Promise<ClientLocation[]> {
+  return fetchAll<ClientLocation>((from, to) =>
+    supabase
+      .from('client_locations')
+      .select('id, business_id, client_id, location_id, is_primary')
+      .eq('business_id', businessId)
+      .range(from, to),
+  );
+}
+
+export async function setClientLocations(
+  supabase: SupabaseLike,
+  businessId: string,
+  clientId: string,
+  locationIds: string[],
+  primaryLocationId: string | null,
+): Promise<boolean> {
+  const del = await supabase
+    .from('client_locations')
+    .delete()
+    .eq('business_id', businessId)
+    .eq('client_id', clientId);
+  if (del.error) return false;
+  if (locationIds.length === 0) return true;
+  const rows = locationIds.map((location_id) => ({
+    business_id: businessId,
+    client_id: clientId,
+    location_id,
+    is_primary: location_id === primaryLocationId,
+  }));
+  const { error } = await supabase.from('client_locations').insert(rows);
+  return !error;
+}
+
+// Set the client's HOME branch without disturbing its shared branches.
+export async function setClientPrimaryLocation(
+  supabase: SupabaseLike,
+  businessId: string,
+  clientId: string,
+  homeLocationId: string | null,
+): Promise<boolean> {
+  const links = await fetchClientLocations(supabase, businessId).catch(() => [] as ClientLocation[]);
+  const mine = links.filter((l) => l.client_id === clientId);
+  const ids = new Set(mine.map((l) => l.location_id));
+  if (homeLocationId) ids.add(homeLocationId);
+  return setClientLocations(supabase, businessId, clientId, Array.from(ids), homeLocationId);
+}
+
+export function primaryClientLocationOf(links: ClientLocation[], clientId: string): string | null {
+  return links.find((l) => l.client_id === clientId && l.is_primary)?.location_id ?? null;
+}
+
+// Toggle whether a client is shared into a branch (never removes its home).
+export async function toggleClientBranch(
+  supabase: SupabaseLike,
+  businessId: string,
+  clientId: string,
+  locationId: string,
+): Promise<boolean> {
+  const links = await fetchClientLocations(supabase, businessId).catch(() => [] as ClientLocation[]);
+  const mine = links.filter((l) => l.client_id === clientId);
+  const primary = mine.find((l) => l.is_primary)?.location_id ?? null;
+  if (locationId === primary) return true;
+  const has = mine.some((l) => l.location_id === locationId);
+  const ids = has
+    ? mine.map((l) => l.location_id).filter((x) => x !== locationId)
+    : [...mine.map((l) => l.location_id), locationId];
+  await setClientLocations(supabase, businessId, clientId, Array.from(new Set(ids)), primary);
+  return !has;
+}
+
+// Client IDs linked to a given location. A client with NO links is shared
+// (shows in every branch) — the caller ORs that in.
+export function clientIdsAtLocation(
+  links: ClientLocation[],
+  locationId: string,
+): Set<string> {
+  return new Set(links.filter((l) => l.location_id === locationId).map((l) => l.client_id));
+}
+
+// Client IDs that have at least one branch link (i.e. are NOT shared-everywhere).
+export function clientsWithAnyLocation(links: ClientLocation[]): Set<string> {
+  return new Set(links.map((l) => l.client_id));
+}
