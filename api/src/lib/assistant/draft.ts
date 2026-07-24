@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { supabase } from '../../config/supabase';
-import type { AssistantContext, JobDraft } from './types';
+import type { AssistantContext, JobDraft, JobUpdateDraft } from './types';
 
 // Confirm-side validation + insert. Mirrors the job form's save() contract
 // (mobile/app/dashboard/trabajos/nuevo.tsx): jobs row + job_assignments rows
@@ -247,6 +247,104 @@ export async function confirmDraft(
     entity_type: 'job',
     entity_id: jobId,
     details: { title, source: 'assistant' },
+  });
+
+  return { jobId, alreadyExisted: false };
+}
+
+// ── Confirm a reschedule / edit of an EXISTING job ──────────────────────────
+export async function confirmJobUpdate(
+  ctx: AssistantContext,
+  draft: JobUpdateDraft,
+): Promise<{ jobId: string; alreadyExisted: boolean }> {
+  if (!draft || typeof draft !== 'object') throw new DraftValidationError('draft requerido');
+  if (draft.business_id !== ctx.businessId) throw new DraftValidationError('business mismatch');
+  const jobId = typeof draft.job_id === 'string' ? draft.job_id : '';
+  if (!jobId) throw new DraftValidationError('job_id requerido');
+
+  // The row must exist in this business (RLS re-checks the write too).
+  const { data: job } = await ctx.db
+    .from('jobs')
+    .select('id, title, all_day')
+    .eq('business_id', ctx.businessId)
+    .eq('id', jobId)
+    .maybeSingle();
+  if (!job) throw new DraftValidationError('trabajo no encontrado');
+
+  for (const d of [draft.scheduled_date, draft.end_date]) {
+    if (d != null && !DATE_RE.test(d)) throw new DraftValidationError('fecha inválida');
+  }
+
+  // Apply only the changed fields. all_day toggles time handling: true clears
+  // times; false keeps them.
+  const update: Record<string, unknown> = {};
+  if (draft.scheduled_date !== undefined) {
+    update.scheduled_date = draft.scheduled_date;
+    update.scheduled_at = new Date().toISOString(); // re-stamp the pipeline step
+  }
+  if (draft.end_date !== undefined) update.end_date = draft.end_date;
+  const effectiveAllDay = draft.all_day !== undefined ? draft.all_day
+    : (draft.time_start !== undefined || draft.time_end !== undefined) ? false
+      : undefined;
+  if (effectiveAllDay !== undefined) {
+    update.all_day = effectiveAllDay;
+    if (effectiveAllDay) {
+      update.time_start = null;
+      update.time_end = null;
+    } else {
+      if (draft.time_start !== undefined) update.time_start = draft.time_start;
+      if (draft.time_end !== undefined) update.time_end = draft.time_end;
+    }
+  } else {
+    if (draft.time_start !== undefined) update.time_start = draft.time_start;
+    if (draft.time_end !== undefined) update.time_end = draft.time_end;
+  }
+
+  const changingCrew = Array.isArray(draft.crew);
+
+  if (Object.keys(update).length === 0 && !changingCrew) {
+    throw new DraftValidationError('sin cambios');
+  }
+
+  if (Object.keys(update).length) {
+    const { error: upErr } = await ctx.db.from('jobs').update(update).eq('id', jobId);
+    if (upErr) throw new Error(upErr.message);
+  }
+
+  // Crew: replace assignments (validate referenced ids in-business first).
+  if (changingCrew) {
+    const crew = (draft.crew ?? []).filter(c => (c.worker_name ?? '').trim());
+    const ids = [...new Set(crew.map(c => c.employee_id).filter((v): v is string => !!v))];
+    if (ids.length) {
+      const { data } = await ctx.db.from('employees').select('id').eq('business_id', ctx.businessId).in('id', ids);
+      const found = new Set((data ?? []).map((r: any) => r.id));
+      if (ids.some(id => !found.has(id))) throw new DraftValidationError('empleado no encontrado');
+    }
+    let leadSeen = false;
+    for (const c of crew) {
+      if (c.is_lead) { if (leadSeen || !c.employee_id) c.is_lead = false; else leadSeen = true; }
+    }
+    await ctx.db.from('job_assignments').delete().eq('job_id', jobId);
+    if (crew.length) {
+      const rows = crew.map(c => ({
+        id: randomUUID(),
+        job_id: jobId,
+        ...(c.employee_id ? { employee_id: c.employee_id } : {}),
+        worker_name: c.worker_name,
+        is_lead: !!c.is_lead,
+      }));
+      const { error: asgErr } = await ctx.db.from('job_assignments').insert(rows);
+      if (asgErr) throw new Error(asgErr.message);
+    }
+  }
+
+  await supabase.from('audit_log').insert({
+    business_id: ctx.businessId,
+    user_id: ctx.userId,
+    action: 'job.updated',
+    entity_type: 'job',
+    entity_id: jobId,
+    details: { title: (job as any).title, source: 'assistant', reschedule: true },
   });
 
   return { jobId, alreadyExisted: false };

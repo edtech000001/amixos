@@ -4,7 +4,7 @@ import { checkRequiredFields } from './draft';
 import { geocodeAddress } from '../geocoding';
 import { buildCrewSuggestions } from '../crewFinder';
 import { fetchCrewFinderData, type CrewFinderTarget } from '../crewFinderData';
-import type { AssistantContext, JobDraft } from './types';
+import type { AssistantContext, JobDraft, JobUpdateDraft, DraftCrewMember } from './types';
 
 // Tool surface for the Ami loop. All executors run on ctx.db — the caller's
 // RLS-scoped client — so cross-business access is structurally impossible.
@@ -153,6 +153,38 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         worker_notes: { type: 'string' },
       },
       required: ['title', 'status', 'client_resolved'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_job',
+    description:
+      'Genera el BORRADOR de un CAMBIO a un trabajo EXISTENTE (reprogramar fecha, cambiar horario o cambiar la cuadrilla). NO aplica el cambio — el usuario debe presionar Confirmar. Primero usa query_jobs para encontrar el job_id exacto. Incluye SOLO los campos que cambian (p. ej. solo scheduled_date para posponer un día). Para cambiar la cuadrilla, manda la lista COMPLETA de crew que debe quedar (reemplaza la actual); los ids deben venir del roster.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'id exacto del trabajo (de query_jobs)' },
+        scheduled_date: { type: 'string', description: 'YYYY-MM-DD — nueva fecha' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD — nueva fecha fin (multi-día)' },
+        all_day: { type: 'boolean', description: 'false si el usuario da horas de inicio/fin' },
+        time_start: { type: 'string', description: 'HH:MM 24h' },
+        time_end: { type: 'string', description: 'HH:MM 24h' },
+        crew: {
+          type: 'array',
+          description: 'lista COMPLETA de la cuadrilla que debe quedar (reemplaza la actual)',
+          items: {
+            type: 'object',
+            properties: {
+              employee_id: { type: 'string' },
+              worker_name: { type: 'string' },
+              is_lead: { type: 'boolean' },
+            },
+            required: ['worker_name'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['job_id'],
       additionalProperties: false,
     },
   },
@@ -481,5 +513,87 @@ export function buildDraft(ctx: AssistantContext, input: ToolInput): JobDraft {
         : `This business requires ${reqCheck.unsupported.join(', ')}, which Ami can't fill yet — create this job from the Jobs screen`,
     );
   }
+  return draft;
+}
+
+// Resolve a crew input list into DraftCrewMember[] (drop unknown ids to manual
+// names, enforce a single registered lead) — shared shape with buildDraft.
+function resolveCrew(ctx: AssistantContext, raw: unknown, warnings: string[]): DraftCrewMember[] {
+  const employeeIds = new Set(ctx.employees.map(e => e.id));
+  const crew = (Array.isArray(raw) ? raw : [])
+    .map((c: any) => {
+      const name = asStr(c?.worker_name) ?? '';
+      if (!name) return null;
+      const id = asStr(c?.employee_id);
+      if (id && !employeeIds.has(id)) {
+        warnings.push(`Empleado no reconocido: ${name} (se agregará por nombre)`);
+        return { worker_name: name, is_lead: !!c?.is_lead };
+      }
+      return id ? { employee_id: id, worker_name: name, is_lead: !!c?.is_lead } : { worker_name: name, is_lead: !!c?.is_lead };
+    })
+    .filter(Boolean) as DraftCrewMember[];
+  let leadSeen = false;
+  for (const c of crew) {
+    if (c.is_lead) {
+      if (leadSeen || !c.employee_id) c.is_lead = false;
+      else leadSeen = true;
+    }
+  }
+  return crew;
+}
+
+/** Build a reschedule/edit draft for an EXISTING job. Fetches the target (so
+ *  we validate it's in-business and snapshot current values), then attaches
+ *  only the fields the model wants to change. Throws if the job isn't found. */
+export async function buildJobUpdateDraft(ctx: AssistantContext, input: ToolInput): Promise<JobUpdateDraft> {
+  const jobId = asStr(input.job_id);
+  if (!jobId) throw new Error('Falta el job_id del trabajo a cambiar.');
+  const { data: job, error } = await ctx.db
+    .from('jobs')
+    .select('id, title, scheduled_date, end_date, all_day, time_start, time_end')
+    .eq('business_id', ctx.businessId)
+    .eq('id', jobId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!job) throw new Error('No encontré ese trabajo en este negocio. Verifica con query_jobs.');
+  const { data: asg } = await ctx.db
+    .from('job_assignments')
+    .select('worker_name, is_lead')
+    .eq('job_id', jobId);
+  const beforeCrew = (asg ?? []).map((a: any) => `${a.worker_name}${a.is_lead ? ' (líder)' : ''}`);
+
+  const warnings: string[] = [];
+  const draft: JobUpdateDraft = {
+    kind: 'update',
+    job_id: jobId,
+    business_id: ctx.businessId,
+    title: (job as any).title ?? 'Trabajo',
+    before: {
+      scheduled_date: (job as any).scheduled_date ?? null,
+      end_date: (job as any).end_date ?? null,
+      all_day: (job as any).all_day ?? true,
+      time_start: (job as any).time_start ?? null,
+      time_end: (job as any).time_end ?? null,
+      crew: beforeCrew,
+    },
+    warnings,
+  };
+
+  const newDate = asDate(input.scheduled_date);
+  const newEnd = asDate(input.end_date);
+  if (newDate) draft.scheduled_date = newDate;
+  if (newEnd) draft.end_date = newEnd;
+  if (typeof input.all_day === 'boolean') draft.all_day = input.all_day;
+  const ts = asStr(input.time_start);
+  const te = asStr(input.time_end);
+  if (ts) { draft.time_start = ts; if (draft.all_day === undefined) draft.all_day = false; }
+  if (te) { draft.time_end = te; if (draft.all_day === undefined) draft.all_day = false; }
+  if (Array.isArray(input.crew)) draft.crew = resolveCrew(ctx, input.crew, warnings);
+
+  const hasChange =
+    draft.scheduled_date !== undefined || draft.end_date !== undefined ||
+    draft.all_day !== undefined || draft.time_start !== undefined ||
+    draft.time_end !== undefined || draft.crew !== undefined;
+  if (!hasChange) warnings.push('No indicaste ningún cambio (fecha, horario o cuadrilla).');
   return draft;
 }

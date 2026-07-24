@@ -1,9 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AssistantChatMessage, AssistantContext, JobDraft } from './types';
+import type { AssistantChatMessage, AssistantContext, AssistantDraft } from './types';
 import { buildSystemBlocks } from './prompt';
 import {
   TOOL_DEFINITIONS,
   buildDraft,
+  buildJobUpdateDraft,
   executeQueryClients,
   executeQueryEmployees,
   executeQueryJobs,
@@ -30,7 +31,7 @@ async function executeTool(
   ctx: AssistantContext,
   name: string,
   input: Record<string, any>,
-): Promise<{ result: string; draft?: JobDraft }> {
+): Promise<{ result: string; draft?: AssistantDraft }> {
   switch (name) {
     case 'query_jobs':
       return { result: JSON.stringify(await executeQueryJobs(ctx, input)) };
@@ -48,6 +49,10 @@ async function executeTool(
       // Spanish summary (incl. warnings) in its next turn.
       return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
     }
+    case 'update_job': {
+      const draft = await buildJobUpdateDraft(ctx, input);
+      return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
+    }
     default:
       throw new Error(`unknown tool: ${name}`);
   }
@@ -56,8 +61,8 @@ async function executeTool(
 export async function runAssistant(
   ctx: AssistantContext,
   transcript: AssistantChatMessage[],
-  pendingDraft?: JobDraft | null,
-): Promise<{ reply: string; pendingDraft: JobDraft | null }> {
+  pendingDraft?: AssistantDraft | null,
+): Promise<{ reply: string; pendingDraft: AssistantDraft | null }> {
   // Bound + sanitize the client-held transcript.
   const turns = transcript
     .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
@@ -81,7 +86,7 @@ export async function runAssistant(
     .map(m => ({ ...m, content: typeof m.content === 'string' ? m.content.slice(0, 4000) : m.content }));
   const system = buildSystemBlocks(ctx);
 
-  let latestDraft: JobDraft | null = null;
+  let latestDraft: AssistantDraft | null = null;
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const response = await anthropic.messages.create({
       model: MODEL,

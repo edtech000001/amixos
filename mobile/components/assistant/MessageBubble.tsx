@@ -1,6 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
+import { isJobUpdateDraft } from '@amixos/shared/assistant/types';
 import { JobDraftCard } from './JobDraftCard';
+import { JobUpdateCard } from './JobUpdateCard';
 
 interface Props {
   bubble: AssistantBubble;
@@ -34,14 +36,25 @@ export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, on
         <Text className="text-[15px] text-ink">{bubble.content}</Text>
       </View>
       {bubble.draft ? (
-        <JobDraftCard
-          draft={bubble.draft}
-          active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}
-          createdJobId={bubble.createdJobId}
-          confirming={confirming}
-          onConfirm={onConfirm}
-          onNavigate={onNavigate}
-        />
+        isJobUpdateDraft(bubble.draft) ? (
+          <JobUpdateCard
+            draft={bubble.draft}
+            active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}
+            createdJobId={bubble.createdJobId}
+            confirming={confirming}
+            onConfirm={onConfirm}
+            onNavigate={onNavigate}
+          />
+        ) : (
+          <JobDraftCard
+            draft={bubble.draft}
+            active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}
+            createdJobId={bubble.createdJobId}
+            confirming={confirming}
+            onConfirm={onConfirm}
+            onNavigate={onNavigate}
+          />
+        )
       ) : null}
     </View>
   );

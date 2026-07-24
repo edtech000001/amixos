@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { BotMessageSquare, Pencil, Check, X } from 'lucide-react';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
-import type { JobDraft } from '@amixos/shared/assistant/types';
+import type { AssistantDraft } from '@amixos/shared/assistant/types';
+import { isJobUpdateDraft } from '@amixos/shared/assistant/types';
 import { useLang } from '@/i18n/LangProvider';
 import { JobDraftCard } from './JobDraftCard';
+import { JobUpdateCard } from './JobUpdateCard';
 
 interface MessageListProps {
   bubbles: AssistantBubble[];
-  pendingDraft: JobDraft | null;
+  pendingDraft: AssistantDraft | null;
   sending: boolean;
   confirming: boolean;
   error: boolean;
@@ -118,13 +120,23 @@ export function MessageList({
                 {b.content}
               </div>
               {b.draft && (
-                <JobDraftCard
-                  draft={b.draft}
-                  active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}
-                  createdJobId={b.createdJobId}
-                  onConfirm={onConfirm}
-                  confirming={confirming}
-                />
+                isJobUpdateDraft(b.draft) ? (
+                  <JobUpdateCard
+                    draft={b.draft}
+                    active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}
+                    createdJobId={b.createdJobId}
+                    onConfirm={onConfirm}
+                    confirming={confirming}
+                  />
+                ) : (
+                  <JobDraftCard
+                    draft={b.draft}
+                    active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}
+                    createdJobId={b.createdJobId}
+                    onConfirm={onConfirm}
+                    confirming={confirming}
+                  />
+                )
               )}
             </div>
           ),

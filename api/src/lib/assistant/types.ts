@@ -25,6 +25,7 @@ export interface DraftCrewMember {
 }
 
 export interface JobDraft {
+  kind?: 'create';
   job_id: string;
   business_id: string;
   title: string;
@@ -47,6 +48,36 @@ export interface JobDraft {
   internal_notes?: string;
   worker_notes?: string;
   warnings: string[];
+}
+
+/** A change to an existing job (reschedule / retime / re-crew). Only changed
+ *  fields are set; `before` snapshots current values for the card display. */
+export interface JobUpdateDraft {
+  kind: 'update';
+  job_id: string;
+  business_id: string;
+  title: string;
+  scheduled_date?: string;
+  end_date?: string | null;
+  all_day?: boolean;
+  time_start?: string | null;
+  time_end?: string | null;
+  crew?: DraftCrewMember[];
+  before: {
+    scheduled_date?: string | null;
+    end_date?: string | null;
+    all_day?: boolean;
+    time_start?: string | null;
+    time_end?: string | null;
+    crew?: string[];
+  };
+  warnings: string[];
+}
+
+export type AssistantDraft = JobDraft | JobUpdateDraft;
+
+export function isJobUpdateDraft(d: AssistantDraft | null | undefined): d is JobUpdateDraft {
+  return !!d && (d as JobUpdateDraft).kind === 'update';
 }
 
 /** Per-request context threaded through the tool loop. */

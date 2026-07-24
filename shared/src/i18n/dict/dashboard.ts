@@ -2271,6 +2271,10 @@ export type DashboardDict = {
     suggestion2: string;
     suggestion3: string;
     draftTitle: string;
+    updateTitle: string;
+    updated: string;
+    timeLabel: string;
+    allDayLabel: string;
     confirm: string;
     confirming: string;
     created: string;
@@ -4825,6 +4829,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       suggestion2: '¿Quién trabajó ayer?',
       suggestion3: 'Agrega un trabajo nuevo para hoy',
       draftTitle: 'Borrador de trabajo',
+      updateTitle: 'Cambio al trabajo',
+      updated: 'Trabajo actualizado',
+      timeLabel: 'Horario',
+      allDayLabel: 'Todo el día',
       confirm: 'Confirmar',
       confirming: 'Creando…',
       created: 'Trabajo creado',
@@ -7405,6 +7413,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
       suggestion2: 'Who worked yesterday?',
       suggestion3: 'Add a new job for today',
       draftTitle: 'Job draft',
+      updateTitle: 'Job update',
+      updated: 'Job updated',
+      timeLabel: 'Time',
+      allDayLabel: 'All day',
       confirm: 'Confirm',
       confirming: 'Creating…',
       created: 'Job created',

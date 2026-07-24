@@ -3,10 +3,11 @@ import rateLimit from 'express-rate-limit';
 import { authenticate, AuthRequest, getBusinessRole } from '../middleware/auth';
 import { rlsClient } from '../lib/supabaseRls';
 import { runAssistant } from '../lib/assistant/loop';
-import { confirmDraft, DraftValidationError } from '../lib/assistant/draft';
+import { confirmDraft, confirmJobUpdate, DraftValidationError } from '../lib/assistant/draft';
 import { detectVoiceLocale, synthesizeSpeech } from '../lib/assistant/tts';
 import { isAssistantEnabled } from '../lib/assistant/types';
-import type { AssistantChatMessage, AssistantContext, JobDraft } from '../lib/assistant/types';
+import type { AssistantChatMessage, AssistantContext, JobDraft, JobUpdateDraft, AssistantDraft } from '../lib/assistant/types';
+import { isJobUpdateDraft } from '../lib/assistant/types';
 
 // "Ami" — the in-app AI assistant. /chat runs the Claude tool loop (reads +
 // job-draft proposals); /confirm executes a previously proposed draft. All
@@ -116,7 +117,7 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
     const { reply, pendingDraft } = await runAssistant(
       ctx,
       messages as AssistantChatMessage[],
-      (pending_draft ?? null) as JobDraft | null,
+      (pending_draft ?? null) as AssistantDraft | null,
     );
     return res.json({ success: true, data: { reply, pending_draft: pendingDraft } });
   } catch (e) {
@@ -163,7 +164,10 @@ assistantRouter.post('/confirm', authenticate, confirmLimiter, async (req: AuthR
     const ctx = await buildContext(req, business_id, locale);
     if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
 
-    const { jobId, alreadyExisted } = await confirmDraft(ctx, draft as JobDraft);
+    const d = draft as AssistantDraft;
+    const { jobId, alreadyExisted } = isJobUpdateDraft(d)
+      ? await confirmJobUpdate(ctx, d as JobUpdateDraft)
+      : await confirmDraft(ctx, d as JobDraft);
     return res.json({ success: true, data: { job_id: jobId, already_existed: alreadyExisted } });
   } catch (e) {
     if (e instanceof DraftValidationError) {

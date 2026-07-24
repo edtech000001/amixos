@@ -23,6 +23,8 @@ export interface DraftCrewMember {
  * confirms are idempotent.
  */
 export interface JobDraft {
+  /** Discriminant for the draft union — absent/'create' = a new job. */
+  kind?: 'create';
   job_id: string;
   business_id: string;
   title: string;
@@ -52,15 +54,53 @@ export interface JobDraft {
   warnings: string[];
 }
 
+/**
+ * A change to an EXISTING job the assistant proposes (reschedule / retime /
+ * re-crew). Nothing is written until the user presses Confirmar. Only the
+ * fields being changed are set; `before` snapshots the current values so the
+ * card can show old → new.
+ */
+export interface JobUpdateDraft {
+  kind: 'update';
+  job_id: string;
+  business_id: string;
+  title: string;
+  scheduled_date?: string; // YYYY-MM-DD
+  end_date?: string | null;
+  all_day?: boolean;
+  time_start?: string | null; // HH:MM
+  time_end?: string | null;
+  /** Present = replace the job's crew with this list. */
+  crew?: DraftCrewMember[];
+  /** Current values, for the before → after display. */
+  before: {
+    scheduled_date?: string | null;
+    end_date?: string | null;
+    all_day?: boolean;
+    time_start?: string | null;
+    time_end?: string | null;
+    crew?: string[];
+  };
+  warnings: string[];
+}
+
+/** Either draft the assistant can propose; discriminated by `kind`. */
+export type AssistantDraft = JobDraft | JobUpdateDraft;
+
+/** True when a draft targets an existing job (reschedule/edit). */
+export function isJobUpdateDraft(d: AssistantDraft | null | undefined): d is JobUpdateDraft {
+  return !!d && (d as JobUpdateDraft).kind === 'update';
+}
+
 export interface AssistantChatRequest {
   business_id: string;
   messages: AssistantChatMessage[];
-  pending_draft?: JobDraft | null;
+  pending_draft?: AssistantDraft | null;
 }
 
 export interface AssistantChatResponse {
   reply: string;
-  pending_draft?: JobDraft | null;
+  pending_draft?: AssistantDraft | null;
 }
 
 export interface AssistantConfirmResponse {

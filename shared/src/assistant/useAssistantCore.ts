@@ -3,7 +3,7 @@ import type {
   AssistantChatMessage,
   AssistantChatResponse,
   AssistantConfirmResponse,
-  JobDraft,
+  AssistantDraft,
 } from './types';
 
 // Platform-agnostic state machine for the Ami chat. Each platform injects a
@@ -19,7 +19,7 @@ export interface AssistantBubble extends AssistantChatMessage {
   /** Local-only id for list keys. */
   id: string;
   /** Attach the draft card to the assistant bubble that produced it. */
-  draft?: JobDraft | null;
+  draft?: AssistantDraft | null;
   /** Set on the bubble whose draft was confirmed. */
   createdJobId?: string;
 }
@@ -32,7 +32,7 @@ const MAX_WIRE_MESSAGES = 20;
 
 export function useAssistantCore(businessId: string | null, fetcher: AssistantFetcher) {
   const [bubbles, setBubbles] = useState<AssistantBubble[]>([]);
-  const [pendingDraft, setPendingDraft] = useState<JobDraft | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<AssistantDraft | null>(null);
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(false);
@@ -45,7 +45,7 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
   const runChat = useCallback(async (
     base: AssistantBubble[],
     text: string,
-    draftForBody: JobDraft | null,
+    draftForBody: AssistantDraft | null,
   ): Promise<string | null> => {
     const trimmed = text.trim();
     if (!trimmed || !businessId) return null;
