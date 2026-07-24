@@ -439,6 +439,7 @@ export function InvoicesListScreen({
                         </View>
                         <Text className="text-xs text-faint mt-0.5">
                           {client}
+                          {inv.company ? ` · ${inv.company}` : ''}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                           {sentAgo ? ` · ${sentAgo}` : ''}
                           {overdueAgo ? ` · ${overdueAgo}` : ''}

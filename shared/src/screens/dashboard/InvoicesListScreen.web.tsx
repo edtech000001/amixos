@@ -502,6 +502,7 @@ export function InvoicesListScreen({
                         </span>
                         <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
+                          {inv.company ? ` · ${inv.company}` : ''}
                           {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
                           {sentAgo ? ` · ${sentAgo}` : ''}
                           {overdueAgo ? ` · ${overdueAgo}` : ''}
@@ -510,7 +511,10 @@ export function InvoicesListScreen({
                       <span className="hidden md:flex w-36 shrink-0">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
                       </span>
-                      <span className="hidden md:block flex-1 min-w-0 text-sm text-muted truncate">{client}</span>
+                      <span className="hidden md:block flex-1 min-w-0 truncate">
+                        <span className="text-sm text-muted">{client}</span>
+                        {inv.company ? <span className="text-xs text-faint"> · {inv.company}</span> : null}
+                      </span>
                       <span className="hidden lg:block w-48 shrink-0 text-xs text-faint truncate">
                         {due ? t.dueShort.replace('{{date}}', due) : ''}
                         {sentAgo ? `${due ? ' · ' : ''}${sentAgo}` : ''}
