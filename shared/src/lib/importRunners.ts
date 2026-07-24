@@ -201,7 +201,23 @@ export interface ImportFieldOptions {
    *  Materiales/Precios columns (total + line items) are omitted, mirroring
    *  the job form. */
   jobPricing?: boolean;
+  /** true when the business has more than one branch — surfaces the Branch
+   *  column on employees/jobs so imported rows can be filed to a location.
+   *  Blank branch → employees join ALL branches, jobs stay unfiled. */
+  multiLocation?: boolean;
 }
+
+// Branch column, appended to employees/jobs only for multi-location businesses.
+const BRANCH_FIELD_EMPLOYEE: ImportFieldDef = {
+  key: 'branch', es: 'Sucursal', en: 'Branch',
+  hintEs: 'Nombre de la sucursal. Vacío = se agrega a TODAS las sucursales.',
+  hintEn: 'Branch name. Blank = added to ALL branches.',
+};
+const BRANCH_FIELD_JOB: ImportFieldDef = {
+  key: 'branch', es: 'Sucursal', en: 'Branch',
+  hintEs: 'Nombre de la sucursal a la que pertenece el trabajo. Vacío = sin sucursal.',
+  hintEn: 'Branch the job belongs to. Blank = no branch.',
+};
 
 export const PAYROLL_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'worker',       es: 'Trabajador (nombre)', en: 'Worker (name)', required: true,
@@ -267,14 +283,15 @@ export const INVENTORY_IMPORT_FIELDS: ImportFieldDef[] = [
 ];
 
 export function importFieldsFor(mode: ImportMode, opts: ImportFieldOptions = {}): ImportFieldDef[] {
-  if (mode === 'employees') return EMPLOYEE_IMPORT_FIELDS;
+  if (mode === 'employees') return opts.multiLocation ? [...EMPLOYEE_IMPORT_FIELDS, BRANCH_FIELD_EMPLOYEE] : EMPLOYEE_IMPORT_FIELDS;
   if (mode === 'invoices') return INVOICE_IMPORT_FIELDS;
   if (mode === 'payroll') return PAYROLL_IMPORT_FIELDS;
   if (mode === 'equipment') return EQUIPMENT_IMPORT_FIELDS;
   if (mode === 'inventory') return INVENTORY_IMPORT_FIELDS;
-  return opts.jobPricing === false
+  const jobFields = opts.jobPricing === false
     ? JOB_IMPORT_FIELDS.filter(f => !JOB_PRICING_KEYS.has(f.key))
     : JOB_IMPORT_FIELDS;
+  return opts.multiLocation ? [...jobFields, BRANCH_FIELD_JOB] : jobFields;
 }
 
 /**
@@ -370,6 +387,24 @@ export interface ImportRunCtx {
   shouldAbort?: () => boolean;
   /** invoices mode: businesses.invoice_template (picks es/en for new invoices). */
   invoiceTemplate?: unknown;
+  /** Business branches (multi-location). Drives the Branch column on
+   *  employees/jobs: a matched name files the row to that branch; blank joins
+   *  employees to ALL branches (jobs stay unfiled). Empty/absent = single
+   *  location, no branch handling. */
+  locations?: { id: string; name: string; is_default?: boolean }[];
+}
+
+// Case-insensitive branch-name → id matcher built from ctx.locations.
+function branchMatcher(ctx: ImportRunCtx) {
+  const byName = new Map<string, string>();
+  for (const l of ctx.locations ?? []) byName.set(l.name.trim().toLowerCase(), l.id);
+  const defaultId = (ctx.locations ?? []).find(l => l.is_default)?.id ?? ctx.locations?.[0]?.id ?? null;
+  return {
+    multi: (ctx.locations?.length ?? 0) > 1,
+    allIds: (ctx.locations ?? []).map(l => l.id),
+    defaultId,
+    match: (name: string): string | null => (name ? byName.get(name.trim().toLowerCase()) ?? null : null),
+  };
 }
 
 const trOf = (ctx: ImportRunCtx) => (es: string, en: string) => (ctx.locale === 'en' ? en : es);
@@ -446,6 +481,10 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
   let success = 0, skipped = 0, updated = 0;
+  // Branch → location_id (multi-location). A job belongs to ONE branch, so a
+  // blank/unmatched Branch cell leaves it unfiled (shows under "All locations").
+  const branch = branchMatcher(ctx);
+  const unknownJobBranches = new Set<string>();
 
   const existingJobs = await fetchAll<{
     id: string; external_ref: string | null; custom_fields: Record<string, string> | null;
@@ -749,6 +788,12 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       // worker's list. Proposals aren't crew-facing either.
       published_to_crew: status === 'scheduled' || status === 'in_progress',
       custom_fields: customFields,
+      ...(branch.multi ? (() => {
+        const bn = get(row, 'branch');
+        const id = branch.match(bn);
+        if (bn && !id) unknownJobBranches.add(bn);
+        return { location_id: id };
+      })() : {}),
       import_photo_names: photoNames.length ? photoNames : null,
       // Source-system record timestamps — only set when the CSV provides them
       // (blank keeps the now() defaults; updated_at trigger only fires on UPDATE).
@@ -810,6 +855,12 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
   const existing = await fetchAll<EmployeeLite>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
   const existingNames = new Set(existing.map(e => normalizeName(`${e.first_name} ${e.last_name ?? ''}`)));
+
+  // Branch handling (multi-location): a matched Branch cell files the worker to
+  // that one branch (their home); blank/unmatched joins them to ALL branches so
+  // they show everywhere. Single-location businesses skip this entirely.
+  const branch = branchMatcher(ctx);
+  const unknownBranches = new Set<string>();
 
   const payType = (raw: string): string => {
     const s = normalizeName(raw);
@@ -891,12 +942,37 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     const empUpdatedTs = parseTimestamp(get(row, 'updated_at'));
     if (empUpdatedTs) entry.updated_at = empUpdatedTs;
 
-    const { error } = await ctx.supabase.from('employees').insert(entry);
+    const { data: inserted, error } = await ctx.supabase.from('employees').insert(entry).select('id').maybeSingle();
     if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
     existingNames.add(fullKey);
+
+    // File the worker into branch(es) for multi-location businesses.
+    if (branch.multi && inserted?.id) {
+      const branchName = get(row, 'branch');
+      const matchedId = branch.match(branchName);
+      if (branchName && !matchedId) unknownBranches.add(branchName);
+      const locIds = matchedId ? [matchedId] : branch.allIds; // blank/unknown → all
+      const primary = matchedId ?? branch.defaultId;
+      if (locIds.length) {
+        const links = locIds.map(location_id => ({
+          business_id: ctx.businessId,
+          employee_id: inserted.id,
+          location_id,
+          is_primary: location_id === primary,
+        }));
+        await ctx.supabase.from('employee_locations').insert(links);
+      }
+    }
     success++;
   }
   const notes: string[] = [];
+  if (unknownBranches.size) {
+    const shown = Array.from(unknownBranches).slice(0, 10).join(', ');
+    notes.push(tr(
+      `Sucursal no reconocida (esas personas se agregaron a TODAS las sucursales): ${shown}.`,
+      `Unrecognized branch (those people were added to ALL branches): ${shown}.`,
+    ));
+  }
   if (unknownRoles.size) {
     const shown = Array.from(unknownRoles).slice(0, 10).join(', ');
     notes.push(tr(

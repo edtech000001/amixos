@@ -47,7 +47,8 @@ const sanitize = (s: string) => s.replace(/[�﻿]/g, '').replace(/[^\x20-\x7E\
 
 export function ImportDataModal({ open, mode, businessId, onClose, onDone }: ImportDataModalProps) {
   const supabase = createSupabaseClient();
-  const { user, business } = useApp();
+  const { user, business, locations } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const { locale } = useLang();
   const c = useThemeColors();
   const en = locale === 'en';
@@ -126,7 +127,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
 
   const useTemplates = importModeUsesTemplates(mode);
   // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).
-  const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false };
+  const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false, multiLocation };
   const allImportFields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean; hintEs?: string; hintEn?: string }[] = [
     ...importFieldsFor(mode, fieldOpts).map(f => ({ ...f, label: en ? f.en : f.es })),
     ...(useTemplates ? templates.map(t => {
@@ -252,6 +253,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
     templates: useTemplates ? templates : [],
     accessRoles,
     invoiceTemplate: business?.invoice_template,
+    locations: (locations ?? []).map(l => ({ id: l.id, name: l.name, is_default: l.is_default })),
     // Throttle renders: every 5 units (or the final tick) is plenty.
     onProgress: (done: number, total: number) => {
       if (done >= total || done % 5 === 0) setProgress({ done, total });

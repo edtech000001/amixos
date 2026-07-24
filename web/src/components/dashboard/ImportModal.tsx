@@ -55,8 +55,9 @@ export default function ImportModal({
   open, mode, businessId, supabase, templates = [], accessRoles = [], invoiceTemplate, onClose, onDone,
 }: Props) {
   const { locale } = useLang();
-  const { user, business } = useApp();
+  const { user, business, locations } = useApp();
   const en = locale === 'en';
+  const multiLocation = (locations?.length ?? 0) > 1;
   const tr = (esText: string, enText: string) => (en ? enText : esText);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -79,7 +80,7 @@ export default function ImportModal({
 
   const useTemplates = importModeUsesTemplates(mode);
   // Materiales/Precios columns follow the form's visibility (Ajustes → Trabajos).
-  const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false };
+  const fieldOpts = { jobPricing: business?.job_item_types_enabled !== false, multiLocation };
   const fields: { key: string; es: string; en: string; label: string; required?: boolean; isCustom?: boolean; hintEs?: string; hintEn?: string }[] = [
     ...importFieldsFor(mode, fieldOpts).map(f => ({ ...f, label: en ? f.en : f.es })),
     ...(useTemplates ? templates.map(t => {
@@ -148,6 +149,7 @@ export default function ImportModal({
     templates: useTemplates ? templates : [],
     accessRoles,
     invoiceTemplate,
+    locations: (locations ?? []).map(l => ({ id: l.id, name: l.name, is_default: l.is_default })),
     // Throttle renders: every 5 units (or the final tick) is plenty.
     onProgress: (done: number, total: number) => {
       if (done >= total || done % 5 === 0) setProgress({ done, total });
