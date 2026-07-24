@@ -17,6 +17,7 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
+import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 interface Client {
@@ -47,7 +48,8 @@ export default function ClientesTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, activeLocationId } = useApp();
+  const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -108,7 +110,16 @@ export default function ClientesTab() {
     setClients(cl);
     setContactsByClient(byClient);
     setLoading(false);
+    void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
   };
+
+  // Scope to the active branch: clients linked to it + shared clients (no link).
+  const scopedClients = useMemo(() => {
+    if (!activeLocationId) return clients;
+    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
+    const withAny = clientsWithAnyLocation(clientLocations);
+    return clients.filter(c => atBranch.has(c.id) || !withAny.has(c.id));
+  }, [clients, clientLocations, activeLocationId]);
 
   // Reload every time the list comes back into focus so edits / new
   // clients / deletes from sub-pages show up immediately. Keyed on
@@ -121,7 +132,7 @@ export default function ClientesTab() {
 
   const items: ClientListItem[] = useMemo(
     () =>
-      clients.map(c => ({
+      scopedClients.map(c => ({
         id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
@@ -133,7 +144,7 @@ export default function ClientesTab() {
         contacts: contactsByClient.get(c.id),
         customFields: c.custom_fields,
       })),
-    [clients, contactsByClient],
+    [scopedClients, contactsByClient],
   );
 
   // Keep this in lockstep with the list screen's own filter so select-all /

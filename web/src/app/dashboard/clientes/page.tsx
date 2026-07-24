@@ -15,6 +15,7 @@ import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
+import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
@@ -81,9 +82,10 @@ export default function ClientesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, activeLocationId } = useApp();
   const syncBanner = useGoogleSyncBanner();
   const cacheKey = business?.id ?? null;
+  const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
   const [clients, setClients] = useState<Client[]>(() =>
     cacheKey && clientsListCache?.key === cacheKey ? clientsListCache.clients : []);
   const [contactsByClient, setContactsByClient] = useState<
@@ -121,6 +123,9 @@ export default function ClientesPage() {
       // single page is always enough.
       supabase.from('client_field_templates').select('*').eq('business_id', businessId).order('sort_order'),
     ]);
+    // Client↔branch links (multi-location). A client with no link is shared
+    // and shows in every branch.
+    void fetchClientLocations(supabase, businessId).then(setClientLocations).catch(() => {});
     const byClient = new Map<string, { name: string; role: string | null }[]>();
     for (const ct of contactRows) {
       const arr = byClient.get(ct.client_id);
@@ -253,7 +258,16 @@ export default function ClientesPage() {
     });
   };
 
-  const listItems: ClientListItem[] = useMemo(() => clients.map(c => ({
+  // Scope to the active branch: clients linked to it, PLUS shared clients
+  // (no branch link at all). "All locations" = no filter.
+  const scopedClients = useMemo(() => {
+    if (!activeLocationId) return clients;
+    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
+    const withAny = clientsWithAnyLocation(clientLocations);
+    return clients.filter(c => atBranch.has(c.id) || !withAny.has(c.id));
+  }, [clients, clientLocations, activeLocationId]);
+
+  const listItems: ClientListItem[] = useMemo(() => scopedClients.map(c => ({
     id: c.id,
     firstName: c.first_name,
     lastName: c.last_name,
@@ -264,7 +278,7 @@ export default function ClientesPage() {
     state: c.state,
     contacts: contactsByClient.get(c.id),
     customFields: c.custom_fields,
-  })), [clients, contactsByClient]);
+  })), [scopedClients, contactsByClient]);
 
   // Keep this in lockstep with the list screen's own filter so select-all /
   // bulk-delete operate on exactly the rows the user sees.
