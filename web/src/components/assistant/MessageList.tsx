@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { BotMessageSquare } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BotMessageSquare, Pencil, Check, X } from 'lucide-react';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
 import type { JobDraft } from '@amixos/shared/assistant/types';
 import { useLang } from '@/i18n/LangProvider';
@@ -16,6 +16,8 @@ interface MessageListProps {
   onConfirm: () => void;
   /** Sends a suggestion chip's text as a message (empty state). */
   onSend: (text: string) => void;
+  /** Edit an earlier user message and re-run from there. */
+  onEditMessage?: (id: string, text: string) => void;
 }
 
 export function MessageList({
@@ -26,10 +28,18 @@ export function MessageList({
   error,
   onConfirm,
   onSend,
+  onEditMessage,
 }: MessageListProps) {
   const { t: full } = useLang();
   const t = full.dashboard.assistant;
+  const tc = full.common.buttons;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const saveEdit = () => {
+    if (editingId && editText.trim() && onEditMessage) onEditMessage(editingId, editText.trim());
+    setEditingId(null);
+  };
 
   // Stick to the bottom as bubbles / typing indicator / error appear.
   useEffect(() => {
@@ -67,12 +77,41 @@ export function MessageList({
       <div className="flex flex-col gap-3">
         {bubbles.map(b =>
           b.role === 'user' ? (
-            <div
-              key={b.id}
-              className="self-end max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-white"
-            >
-              {b.content}
-            </div>
+            editingId === b.id ? (
+              <div key={b.id} className="self-end w-[90%] flex flex-col gap-2">
+                <textarea
+                  value={editText}
+                  onChange={e => setEditText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') setEditingId(null); }}
+                  rows={2}
+                  autoFocus
+                  className="w-full resize-none rounded-2xl border border-primary/30 bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditingId(null)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted hover:bg-border-soft">
+                    <X size={13} className="mr-1 inline"/>{tc.cancel}
+                  </button>
+                  <button type="button" onClick={saveEdit} disabled={!editText.trim()}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                    <Check size={13} className="mr-1 inline"/>{tc.save}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div key={b.id} className="group flex items-center gap-1.5 self-end max-w-[90%]">
+                {onEditMessage && (
+                  <button type="button" onClick={() => { setEditingId(b.id); setEditText(b.content); }}
+                    title={tc.edit}
+                    className="shrink-0 rounded-lg p-1.5 text-faint opacity-0 transition-opacity hover:bg-border-soft hover:text-muted group-hover:opacity-100">
+                    <Pencil size={13}/>
+                  </button>
+                )}
+                <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-white">
+                  {b.content}
+                </div>
+              </div>
+            )
           ) : (
             <div key={b.id} className="self-start max-w-[85%]">
               <div className="whitespace-pre-wrap rounded-2xl rounded-bl-md bg-border-soft px-4 py-2.5 text-sm text-ink">

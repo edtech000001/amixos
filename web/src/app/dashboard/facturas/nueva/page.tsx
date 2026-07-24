@@ -138,7 +138,7 @@ function NuevaFacturaContent() {
   const langDefaultedRef = useRef(false);
   useEffect(() => {
     if (editId || langDefaultedRef.current || !business) return;
-    setLanguage(invoiceDefaultLanguage(business.invoice_template));
+    setLanguage(invoiceDefaultLanguage(business.invoice_template, locale));
     langDefaultedRef.current = true;
   }, [editId, business]);
 

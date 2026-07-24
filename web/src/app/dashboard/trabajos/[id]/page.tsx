@@ -362,7 +362,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     const invoiceDiscount = useStoredFinancials ? job.discount : 0;
     const invoiceTotal = invoiceSubtotal + invoiceTaxAmt - invoiceDiscount;
 
-    const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
+    const invoiceLang = invoiceDefaultLanguage(business.invoice_template, locale);
     const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id);
     const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 

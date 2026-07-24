@@ -585,10 +585,21 @@ export function activeBundleConfig(b: InvoiceThemeBundle): InvoiceTemplateConfig
   return b.active === 'freeform' ? b.freeform : b.flow;
 }
 
-/** The business-wide default invoice language stored in the theme config.
- *  New invoices seed their `language` from this (overridable per invoice). */
-export function invoiceDefaultLanguage(rawConfig: unknown): InvoiceLang {
-  return normalizeConfig(rawConfig).defaultLanguage;
+/** The business-wide default invoice language. New invoices seed their
+ *  `language` from this (overridable per invoice).
+ *
+ *  Reads the EXPLICIT choice from the theme configs where
+ *  setBundleDefaultLanguage stores it (flow/freeform), or a legacy top-level
+ *  config — NOT normalizeConfig(bundle), which always fell back to 'es' because
+ *  a bundle has no top-level defaultLanguage. When the business never chose a
+ *  language, falls back to `localeFallback` (the app UI language) so an
+ *  English-app business gets English invoices by default instead of Spanish. */
+export function invoiceDefaultLanguage(rawConfig: unknown, localeFallback?: string): InvoiceLang {
+  const o = asObj(rawConfig);
+  const explicit = [asObj(o.flow).defaultLanguage, asObj(o.freeform).defaultLanguage, o.defaultLanguage]
+    .find((v): v is InvoiceLang => v === 'en' || v === 'es');
+  if (explicit) return explicit;
+  return localeFallback === 'en' ? 'en' : localeFallback === 'es' ? 'es' : 'es';
 }
 
 /** Auto-number prefix by language: INV- (English) / FAC- (Spanish). Used as the

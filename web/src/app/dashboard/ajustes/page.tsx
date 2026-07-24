@@ -3282,7 +3282,10 @@ export default function AjustesPage() {
                 <p className="text-xs text-faint mb-4">{t.invoices.design.subtitle}</p>
                 <InvoiceDesigner
                   key={invoiceTheme.active}
-                  value={activeBundleConfig(invoiceTheme)}
+                  // Seed the preview's language from the business's explicit
+                  // choice, else the app locale (so an English-app business's
+                  // example renders in English, not the old hard-default es).
+                  value={{ ...activeBundleConfig(invoiceTheme), defaultLanguage: invoiceDefaultLanguage(business?.invoice_template, locale) }}
                   onChange={c => setInvoiceTheme(b => ({ ...b, [b.active]: c }))}
                   onSwitchMode={m => setInvoiceTheme(b => ({ ...b, active: m }))}
                   customFields={invoiceTemplates.filter(tpl => tpl.field_key).map(tpl => ({ key: tpl.field_key, label: tpl.field_label }))}
@@ -3364,7 +3367,7 @@ export default function AjustesPage() {
                   <div>
                     <label className="block text-sm font-medium text-ink mb-1.5">{t.invoices.defaultLanguageLabel}</label>
                     <select
-                      value={invoiceDefaultLanguage(business?.invoice_template)}
+                      value={invoiceDefaultLanguage(business?.invoice_template, locale)}
                       onChange={e => changeDefaultLanguage(e.target.value as InvoiceLang)}
                       className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                     >

@@ -87,9 +87,12 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
   const a = full.dashboard.assistant;
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
-  const { bubbles, pendingDraft, sending, confirming, error, send, confirm, reset } = assistant;
+  const { bubbles, pendingDraft, sending, confirming, error, send, editAndResend, confirm, reset } = assistant;
 
   const [text, setText] = useState('');
+  // When set, the composer is editing an earlier user turn (long-press) — send
+  // re-runs from there instead of appending.
+  const [editingId, setEditingId] = useState<string | null>(null);
   // Hands-free call mode: continuous listen → think → speak-aloud loop.
   // (Dictation-into-the-box is the keyboard mic's job on mobile; spoken
   // replies happen in call mode, so there's no separate read-aloud toggle.)
@@ -113,7 +116,13 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
     if (!canSend) return;
     const value = text;
     setText('');
-    void send(value);
+    if (editingId) {
+      const id = editingId;
+      setEditingId(null);
+      void editAndResend(id, value);
+    } else {
+      void send(value);
+    }
   };
 
   return (
@@ -192,6 +201,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
                   confirming={confirming}
                   onConfirm={() => void confirm()}
                   onNavigate={onClose}
+                  onEdit={item.role === 'user' ? () => { setEditingId(item.id); setText(item.content); } : undefined}
                 />
               )}
               // In an inverted list the header renders at the visual BOTTOM —
@@ -252,10 +262,16 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
               </Pressable>
             </Pressable>
           ) : (
-            <View
-              className="flex-row items-end px-4 pt-2 border-t border-border-soft"
-              style={{ paddingBottom: insets.bottom + 12 }}
-            >
+            <View className="border-t border-border-soft" style={{ paddingBottom: insets.bottom + 12 }}>
+            {editingId ? (
+              <View className="flex-row items-center justify-between px-4 pt-2">
+                <Text className="text-xs text-primary flex-1" numberOfLines={1}>{a.editingHint}</Text>
+                <Pressable onPress={() => { setEditingId(null); setText(''); }} hitSlop={8} className="p-1">
+                  <X size={16} color={c.muted} />
+                </Pressable>
+              </View>
+            ) : null}
+            <View className="flex-row items-end px-4 pt-2">
               <TextInput
                 value={text}
                 onChangeText={setText}
@@ -283,6 +299,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
               >
                 <Send size={18} color="#fff" />
               </Pressable>
+            </View>
             </View>
           )}
         </View>

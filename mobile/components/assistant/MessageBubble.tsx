@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
 import { JobDraftCard } from './JobDraftCard';
 
@@ -10,16 +10,22 @@ interface Props {
   confirming: boolean;
   onConfirm: () => void;
   onNavigate: () => void;
+  /** Long-press a user bubble to edit + re-run from there. */
+  onEdit?: () => void;
 }
 
 // One chat turn. User bubbles hug the right in primary; assistant bubbles hug
 // the left in gray and may carry a JobDraftCard under the text.
-export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, onNavigate }: Props) {
+export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, onNavigate, onEdit }: Props) {
   if (bubble.role === 'user') {
     return (
-      <View className="self-end bg-primary rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] mb-2">
+      <Pressable
+        onLongPress={onEdit}
+        delayLongPress={300}
+        className="self-end bg-primary rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] mb-2 active:opacity-80"
+      >
         <Text className="text-[15px] text-white">{bubble.content}</Text>
-      </View>
+      </Pressable>
     );
   }
   return (

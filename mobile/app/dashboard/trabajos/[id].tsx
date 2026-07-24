@@ -788,7 +788,7 @@ export default function JobDetailRoute() {
       .from('invoices')
       .select('*', { count: 'exact', head: true })
       .eq('business_id', business.id);
-    const invoiceLang = invoiceDefaultLanguage(business.invoice_template);
+    const invoiceLang = invoiceDefaultLanguage(business.invoice_template, locale);
     const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 
     const lineItems = items.map((i) => ({

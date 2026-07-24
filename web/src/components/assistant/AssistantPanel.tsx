@@ -34,7 +34,7 @@ const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}
 export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.assistant;
-  const { bubbles, pendingDraft, sending, confirming, error, send, confirm, reset } =
+  const { bubbles, pendingDraft, sending, confirming, error, send, editAndResend, confirm, reset } =
     useAssistant(businessId);
 
   const [input, setInput] = useState('');
@@ -134,6 +134,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
           error={error}
           onConfirm={() => void confirm()}
           onSend={s => void send(s)}
+          onEditMessage={(id, text) => void editAndResend(id, text)}
         />
 
         {/* Input — swapped for the call bar during a call so the transcript

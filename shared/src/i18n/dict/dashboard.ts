@@ -2264,6 +2264,7 @@ export type DashboardDict = {
     listening: string;
     micUnavailable: string;
     thinking: string;
+    editingHint: string;
     emptyTitle: string;
     emptyState: string;
     suggestion1: string;
@@ -4814,6 +4815,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       subtitle: 'Tu asistente de negocio',
       placeholder: 'Escríbele a Ami…',
       send: 'Enviar',
+      editingHint: 'Editando tu mensaje — se responderá de nuevo desde aquí',
       listening: 'Escuchando…',
       micUnavailable: 'Dictado no disponible en este navegador',
       thinking: 'Ami está pensando…',
@@ -7393,6 +7395,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       subtitle: 'Your business assistant',
       placeholder: 'Message Ami…',
       send: 'Send',
+      editingHint: 'Editing your message — Ami will reply again from here',
       listening: 'Listening…',
       micUnavailable: 'Dictation not available in this browser',
       thinking: 'Ami is thinking…',

@@ -1005,8 +1005,8 @@ export function FacturasSection() {
 
   // Default invoice language lives on this settings card (persists on change).
   // It's stored in the invoice theme bundle, applied to both layout modes.
-  const [defaultLang, setDefaultLang] = useState<InvoiceLang>(() => invoiceDefaultLanguage(business?.invoice_template));
-  useEffect(() => { setDefaultLang(invoiceDefaultLanguage(business?.invoice_template)); }, [business?.invoice_template]);
+  const [defaultLang, setDefaultLang] = useState<InvoiceLang>(() => invoiceDefaultLanguage(business?.invoice_template, locale));
+  useEffect(() => { setDefaultLang(invoiceDefaultLanguage(business?.invoice_template, locale)); }, [business?.invoice_template, locale]);
   const changeDefaultLang = async (lang: InvoiceLang) => {
     if (!business) return;
     setDefaultLang(lang);
@@ -4229,7 +4229,7 @@ function GoogleSyncSection() {
 export function InvoiceThemeSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.settings;
 
@@ -4305,7 +4305,9 @@ export function InvoiceThemeSection() {
         />
         <InvoiceDesigner
           key={bundle.active}
-          value={activeBundleConfig(bundle)}
+          // Seed the preview language from the explicit choice, else the app
+          // locale (English-app business → English example).
+          value={{ ...activeBundleConfig(bundle), defaultLanguage: invoiceDefaultLanguage(business?.invoice_template, locale) }}
           onChange={(c) => { setBundle(b => ({ ...b, [b.active]: c })); setMsg(null); }}
           onSwitchMode={(m) => setBundle(b => ({ ...b, active: m }))}
           branding={branding}
