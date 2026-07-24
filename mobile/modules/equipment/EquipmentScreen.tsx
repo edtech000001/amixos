@@ -107,6 +107,7 @@ interface EquipForm {
   purchase_date: string;
   warranty_expiration: string;
   location: string;
+  location_id: string;
   paid_off: boolean;
   loan_lender: string;
   value: string;
@@ -135,6 +136,7 @@ const EMPTY_FORM: EquipForm = {
   purchase_date: '',
   warranty_expiration: '',
   location: '',
+  location_id: '',
   paid_off: false,
   loan_lender: '',
   value: '',
@@ -288,7 +290,8 @@ export default function EquipmentScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = Dimensions.get('window');
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, locations, activeLocationId } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
@@ -406,12 +409,12 @@ export default function EquipmentScreen() {
 
   const loadEquipment = useCallback(async () => {
     if (!business) return;
-    const res = await loadCached(`equipment_${business.id}`, () =>
-      fetchAll<Equipment>((from, to) =>
-        supabase.from('equipment').select('*')
-          .eq('business_id', business.id)
-          .order('created_at', { ascending: false })
-          .range(from, to)));
+    const res = await loadCached(`equipment_${business.id}_${activeLocationId ?? 'all'}`, () =>
+      fetchAll<Equipment>((from, to) => {
+        let q = supabase.from('equipment').select('*').eq('business_id', business.id);
+        if (activeLocationId) q = q.eq('location_id', activeLocationId);
+        return q.order('created_at', { ascending: false }).range(from, to);
+      }));
     const data = res.data ?? [];
     setEquipment(data);
     if (data.length > 0) {
@@ -429,7 +432,7 @@ export default function EquipmentScreen() {
     } else {
       setCoverPhotos({});
     }
-  }, [business, supabase]);
+  }, [business, supabase, activeLocationId]);
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
@@ -530,6 +533,7 @@ export default function EquipmentScreen() {
       purchase_date: e.purchase_date ?? '',
       warranty_expiration: e.warranty_expiration ?? '',
       location: e.location ?? '',
+      location_id: (e as { location_id?: string | null }).location_id ?? '',
       paid_off: e.paid_off,
       loan_lender: e.loan_lender ?? '',
       value: e.value != null ? String(e.value) : '',
@@ -570,6 +574,7 @@ export default function EquipmentScreen() {
       purchase_date: form.purchase_date || null,
       warranty_expiration: form.warranty_expiration || null,
       location: form.location.trim() || null,
+      ...(multiLocation ? { location_id: form.location_id || null } : {}),
       paid_off: form.paid_off,
       loan_lender: form.paid_off ? null : form.loan_lender.trim() || null,
       value: form.value ? Number(form.value) : null,
@@ -1067,6 +1072,19 @@ export default function EquipmentScreen() {
                 />
                 <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
                   onChangeText={(v) => setForm((f) => ({ ...f, location: v }))} />
+
+                {multiLocation ? (
+                  <InlinePicker
+                    label={locale === 'en' ? 'Branch' : 'Sucursal'}
+                    value={form.location_id}
+                    placeholder={locale === 'en' ? 'No branch' : 'Sin sucursal'}
+                    options={[
+                      { value: '', label: locale === 'en' ? 'No branch' : 'Sin sucursal' },
+                      ...(locations ?? []).map((l) => ({ value: l.id, label: l.name })),
+                    ]}
+                    onSelect={(v) => setForm((f) => ({ ...f, location_id: v }))}
+                  />
+                ) : null}
 
                 {/* Notes */}
                 <Input label={t.notesLabel} placeholder={t.notesPlaceholder} value={form.notes}

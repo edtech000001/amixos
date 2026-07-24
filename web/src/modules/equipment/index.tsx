@@ -83,6 +83,7 @@ const EMPTY_FORM = {
   purchase_date: '',
   warranty_expiration: '',
   location: '',
+  location_id: '',
   paid_off: false,
   loan_lender: '',
   value: '',
@@ -145,7 +146,8 @@ function DetailCard({ children }: { children: ReactNode }) {
 
 export default function EquipmentModule() {
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, locations, activeLocationId } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
   const tc = full.common;
@@ -201,12 +203,11 @@ export default function EquipmentModule() {
 
   const loadEquipment = useCallback(async () => {
     if (!business) return;
-    const data = await fetchAll<Equipment>((from, to) =>
-      supabase.from('equipment').select('*')
-        .eq('business_id', business.id)
-        .order('created_at', { ascending: false })
-        .range(from, to),
-    );
+    const data = await fetchAll<Equipment>((from, to) => {
+      let q = supabase.from('equipment').select('*').eq('business_id', business.id);
+      if (activeLocationId) q = q.eq('location_id', activeLocationId);
+      return q.order('created_at', { ascending: false }).range(from, to);
+    });
     setEquipment(data);
     // Load one photo per equipment for the list thumbnail.
     if (data.length > 0) {
@@ -224,7 +225,7 @@ export default function EquipmentModule() {
     } else {
       setCoverPhotos({});
     }
-  }, [business, supabase]);
+  }, [business, supabase, activeLocationId]);
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
@@ -345,6 +346,7 @@ export default function EquipmentModule() {
       purchase_date: e.purchase_date ?? '',
       warranty_expiration: e.warranty_expiration ?? '',
       location: e.location ?? '',
+      location_id: (e as { location_id?: string | null }).location_id ?? '',
       paid_off: e.paid_off,
       loan_lender: e.loan_lender ?? '',
       value: e.value != null ? String(e.value) : '',
@@ -385,6 +387,7 @@ export default function EquipmentModule() {
       purchase_date: form.purchase_date || null,
       warranty_expiration: form.warranty_expiration || null,
       location: form.location.trim() || null,
+      ...(multiLocation ? { location_id: form.location_id || null } : {}),
       paid_off: form.paid_off,
       loan_lender: form.paid_off ? null : (form.loan_lender.trim() || null),
       value: form.value ? Number(form.value) : null,
@@ -828,6 +831,16 @@ export default function EquipmentModule() {
             </div>
             <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
               onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+            {multiLocation && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1.5">{locale === 'en' ? 'Branch' : 'Sucursal'}</label>
+                <select value={form.location_id} onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}
+                  className="w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm text-ink">
+                  <option value="">{locale === 'en' ? 'No branch' : 'Sin sucursal'}</option>
+                  {(locations ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
