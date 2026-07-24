@@ -8,6 +8,7 @@ import { useThemeColors } from '../../theme';
 import { DatePicker } from '../../ui';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
+import { formatMoneyInput } from '../../lib/format';
 import {
   type FormulaFieldDef,
   type FormulaToken,
@@ -188,6 +189,29 @@ export function PayrollScreen({
     const cd = Math.max(1, Math.min(90, parseInt(draftCustomDays, 10) || 7));
     if (draftFreq === 'custom' && cd !== (customDays ?? 7)) onCustomDaysChange?.(cd);
     if (JSON.stringify(cleaned) !== JSON.stringify(config)) onConfigChange(cleaned);
+    setSettingsOpen(false);
+  };
+  // Have the settings drafts diverged from the saved values? Guards the close
+  // gestures so a half-built pay formula isn't lost by an accidental tap-out.
+  const settingsDirty = () => {
+    const f = draftConfig.formula ?? null;
+    const cleaned = { ...draftConfig, formula: f && f.length ? f : null };
+    return (
+      draftFreq !== frequency ||
+      draftAnchor !== (anchorDate ?? '') ||
+      draftCustomDays !== String(customDays ?? 7) ||
+      JSON.stringify(cleaned) !== JSON.stringify(config)
+    );
+  };
+  const closeSettings = () => {
+    if (settingsDirty()) {
+      const u = full.common.unsavedChanges;
+      Alert.alert(u.title, u.body, [
+        { text: u.stay, style: 'cancel' },
+        { text: u.discard, style: 'destructive', onPress: () => setSettingsOpen(false) },
+      ]);
+      return;
+    }
     setSettingsOpen(false);
   };
 
@@ -415,7 +439,18 @@ export function PayrollScreen({
       checkComponentsOf(payRow),
     );
     const deduct = parseFloat(loanDeduct) || 0;
-    if (deduct > 0 && onLoanRepayment) onLoanRepayment(payRow.employeeId, deduct);
+    if (deduct > 0 && onLoanRepayment) {
+      // Record HOW this loan deduction was taken, so the ledger shows e.g.
+      // "Deducted from check #1123" / "from wire" / "from cash".
+      const num = checkNumber.trim();
+      const note =
+        method === 'check'
+          ? (num ? t.loanNoteFromCheckNum.replace('{{n}}', num) : t.loanNoteFromCheck)
+          : method === 'wire'
+            ? t.loanNoteFromWire
+            : t.loanNoteFromCash;
+      onLoanRepayment(payRow.employeeId, deduct, note);
+    }
     setPayRow(null);
   };
   const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
@@ -778,7 +813,7 @@ export function PayrollScreen({
 
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-ink mb-2">{t.amountLabel}</Text>
-                <TextInput value={manualAmount} onChangeText={v => setManualAmount(v.replace(/[^0-9.]/g, ''))} placeholder="0.00"
+                <TextInput value={formatMoneyInput(manualAmount)} onChangeText={v => setManualAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00"
                   placeholderTextColor={c.faint} keyboardType="decimal-pad"
                   className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
               </View>
@@ -905,16 +940,16 @@ export function PayrollScreen({
       </RNModal>
 
       {/* Payroll settings sheet — frequency / anchor / pay components. */}
-      <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={() => setSettingsOpen(false)}>
+      <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={closeSettings}>
         <View className="flex-1 justify-end">
                   <Pressable
-                    onPress={() => setSettingsOpen(false)}
+                    onPress={closeSettings}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-lg font-bold text-ink">{t.settingsTitle}</Text>
-              <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
+              <Pressable onPress={closeSettings} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
                 <X size={20} color={c.faint} />
               </Pressable>
             </View>
@@ -1122,12 +1157,13 @@ export function PayrollScreen({
 
       {/* Mark-paid sheet */}
       <RNModal visible={!!payRow} transparent animationType="fade" onRequestClose={() => setPayRow(null)}>
-        <View className="flex-1 justify-end">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setPayRow(null)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1219,8 +1255,8 @@ export function PayrollScreen({
             <View className="mb-4">
               <Text className="text-sm font-semibold text-ink mb-2">{t.bonusLabel}</Text>
               <TextInput
-                value={bonus}
-                onChangeText={v => setBonus(v.replace(/[^0-9.]/g, ''))}
+                value={formatMoneyInput(bonus)}
+                onChangeText={v => setBonus(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                 placeholder="0.00"
                 placeholderTextColor={c.faint}
                 keyboardType="decimal-pad"
@@ -1241,7 +1277,7 @@ export function PayrollScreen({
                 {loanBalanceOf(payRow.employeeId) > 0 ? (
                   <View className="mt-2">
                     <Text className="text-xs text-muted mb-1">{t.loanDeductLabel}</Text>
-                    <TextInput value={loanDeduct} onChangeText={v => setLoanDeduct(v.replace(/[^0-9.]/g, ''))}
+                    <TextInput value={formatMoneyInput(loanDeduct)} onChangeText={v => setLoanDeduct(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad"
                       className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
@@ -1256,6 +1292,7 @@ export function PayrollScreen({
             <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
             </Pressable>
+            </ScrollView>
           </View>
 
           {/* Loans overlay — in-modal (iOS refuses a 2nd RNModal). History,
@@ -1279,7 +1316,7 @@ export function PayrollScreen({
                 {showAddLoan || editingEntry ? (
                   <View className="gap-2 mb-3 rounded-2xl border border-border-soft bg-surface p-3">
                     <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</Text>
-                    <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
+                    <TextInput value={formatMoneyInput(loanAmount)} onChangeText={v => setLoanAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
                       className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
@@ -1328,7 +1365,7 @@ export function PayrollScreen({
               </View>
             </View>
           ) : null}
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Worker hours breakdown sheet */}
@@ -1434,7 +1471,7 @@ export function PayrollScreen({
                 {loanFormOpen ? (
                   <View className="gap-2 mb-3 rounded-2xl border border-border-soft bg-surface p-3">
                     <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
-                    <TextInput value={loanAmount} onChangeText={v => setLoanAmount(v.replace(/[^0-9.]/g, ''))}
+                    <TextInput value={formatMoneyInput(loanAmount)} onChangeText={v => setLoanAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
                       className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
                     <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
@@ -1443,7 +1480,7 @@ export function PayrollScreen({
                     <View className="flex-row gap-2 mt-1">
                       <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-border-soft items-center"><Text className="text-sm font-semibold text-muted">{full.common.buttons.cancel}</Text></Pressable>
                       <Pressable onPress={editingEntry ? submitEditLoan : showAddPayment ? submitAddPayment : submitAddLoan} disabled={(parseFloat(loanAmount) || 0) <= 0}
-                        className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) <= 0 ? 'bg-gray-300' : showAddPayment ? 'bg-emerald-600 active:opacity-90' : 'bg-primary active:opacity-90'}`}>
+                        className={`flex-1 py-2.5 rounded-xl items-center ${(parseFloat(loanAmount) || 0) <= 0 ? (showAddPayment ? 'bg-emerald-600/40' : 'bg-primary/40') : showAddPayment ? 'bg-emerald-600 active:opacity-90' : 'bg-primary active:opacity-90'}`}>
                         <Text className="text-sm font-semibold text-white">{t.loanSaveBtn}</Text>
                       </Pressable>
                     </View>

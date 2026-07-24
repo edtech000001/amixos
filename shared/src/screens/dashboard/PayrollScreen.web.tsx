@@ -11,6 +11,7 @@ import { DatePicker } from '../../ui/DatePicker';
 import { confirm } from '../../ui/confirmBus';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
+import { formatMoneyInput } from '../../lib/format';
 import {
   type FormulaFieldDef,
   type FormulaToken,
@@ -187,6 +188,26 @@ export function PayrollScreen({
     const cd = Math.max(1, Math.min(90, parseInt(draftCustomDays, 10) || 7));
     if (draftFreq === 'custom' && cd !== (customDays ?? 7)) onCustomDaysChange?.(cd);
     if (JSON.stringify(cleaned) !== JSON.stringify(config)) onConfigChange(cleaned);
+    setSettingsOpen(false);
+  };
+  // Guard the close gestures so a half-built pay formula isn't lost by an
+  // accidental backdrop click.
+  const settingsDirty = () => {
+    const f = draftConfig.formula ?? null;
+    const cleaned = { ...draftConfig, formula: f && f.length ? f : null };
+    return (
+      draftFreq !== frequency ||
+      draftAnchor !== (anchorDate ?? '') ||
+      draftCustomDays !== String(customDays ?? 7) ||
+      JSON.stringify(cleaned) !== JSON.stringify(config)
+    );
+  };
+  const closeSettings = async () => {
+    if (settingsDirty()) {
+      const u = full.common.unsavedChanges;
+      const ok = await confirm({ message: u.body, confirmText: u.discard, cancelText: u.stay, destructive: true });
+      if (!ok) return;
+    }
     setSettingsOpen(false);
   };
 
@@ -402,7 +423,18 @@ export function PayrollScreen({
       checkComponentsOf(payRow),
     );
     const deduct = parseFloat(loanDeduct) || 0;
-    if (deduct > 0 && onLoanRepayment) onLoanRepayment(payRow.employeeId, deduct);
+    if (deduct > 0 && onLoanRepayment) {
+      // Record HOW this loan deduction was taken (check #, wire, cash) on the
+      // ledger entry.
+      const num = checkNumber.trim();
+      const note =
+        method === 'check'
+          ? (num ? t.loanNoteFromCheckNum.replace('{{n}}', num) : t.loanNoteFromCheck)
+          : method === 'wire'
+            ? t.loanNoteFromWire
+            : t.loanNoteFromCash;
+      onLoanRepayment(payRow.employeeId, deduct, note);
+    }
     setPayRow(null);
   };
   const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
@@ -742,7 +774,7 @@ export function PayrollScreen({
 
             <div className="mb-4">
               <label className="block text-sm font-semibold text-ink mb-2">{t.amountLabel}</label>
-              <input value={manualAmount} onChange={e => setManualAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
+              <input value={formatMoneyInput(manualAmount)} onChange={e => setManualAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
 
@@ -762,11 +794,11 @@ export function PayrollScreen({
 
       {/* Payroll settings modal — frequency / anchor / pay components. */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setSettingsOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => void closeSettings()}>
           <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <p className="text-lg font-bold text-ink">{t.settingsTitle}</p>
-              <button type="button" onClick={() => setSettingsOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+              <button type="button" onClick={() => void closeSettings()} className="p-1.5 rounded-lg hover:bg-border-soft">
                 <X size={18} className="text-faint" />
               </button>
             </div>
@@ -1060,8 +1092,8 @@ export function PayrollScreen({
             <div className="mb-4">
               <label className="block text-sm font-semibold text-ink mb-2">{t.bonusLabel}</label>
               <input
-                value={bonus}
-                onChange={e => setBonus(e.target.value.replace(/[^0-9.]/g, ''))}
+                value={formatMoneyInput(bonus)}
+                onChange={e => setBonus(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                 placeholder="0.00"
                 inputMode="decimal"
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1081,7 +1113,7 @@ export function PayrollScreen({
                 {loanBalanceOf(payRow.employeeId) > 0 ? (
                   <div className="mt-2">
                     <label className="block text-xs text-muted mb-1">{t.loanDeductLabel}</label>
-                    <input value={loanDeduct} onChange={e => setLoanDeduct(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
+                    <input value={formatMoneyInput(loanDeduct)} onChange={e => setLoanDeduct(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
                       <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink">{fmt(netToPay)}</span></p>
@@ -1114,7 +1146,7 @@ export function PayrollScreen({
                 {showAddLoan || editingEntry ? (
                   <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-border-soft bg-surface p-3">
                     <p className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</p>
-                    <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
+                    <input value={formatMoneyInput(loanAmount)} onChange={e => setLoanAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
@@ -1249,7 +1281,7 @@ export function PayrollScreen({
                 {loanFormOpen ? (
                   <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-border-soft bg-surface p-3">
                     <p className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</p>
-                    <input value={loanAmount} onChange={e => setLoanAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
+                    <input value={formatMoneyInput(loanAmount)} onChange={e => setLoanAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder={t.loanAmountPlaceholder} inputMode="decimal"
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     <input value={loanNote} onChange={e => setLoanNote(e.target.value)} placeholder={t.loanNotePlaceholder}
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />

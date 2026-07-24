@@ -38,6 +38,27 @@ export function formatNumberGrouped(value: string | number | null | undefined): 
   return `${sign}${grouped}${decPart}`;
 }
 
+/**
+ * Live thousands-grouping for money TEXT INPUTS. Keep the RAW digits string in
+ * state (strip commas in onChangeText: `v.replace(/,/g,'')...`), and pass the
+ * value through this for display so the user sees "10,000" while state stays
+ * "10000" and parseFloat still works. Preserves an in-progress decimal
+ * ("1,234." while typing) and caps to 2 decimal places.
+ */
+export function formatMoneyInput(raw: string | null | undefined): string {
+  if (raw === null || raw === undefined || raw === '') return '';
+  const cleaned = String(raw).replace(/,/g, '');
+  const neg = cleaned.startsWith('-') ? '-' : '';
+  const body = neg ? cleaned.slice(1) : cleaned;
+  const dotIdx = body.indexOf('.');
+  const intDigits = (dotIdx === -1 ? body : body.slice(0, dotIdx)).replace(/\D/g, '');
+  const grouped = intDigits ? Number(intDigits).toLocaleString('en-US') : '';
+  if (dotIdx === -1) return neg + grouped;
+  // A decimal point is present — keep up to 2 decimal digits as typed.
+  const dec = body.slice(dotIdx + 1).replace(/\D/g, '').slice(0, 2);
+  return `${neg}${grouped || '0'}.${dec}`;
+}
+
 const MONTHS_EN = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',

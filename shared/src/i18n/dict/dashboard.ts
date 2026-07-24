@@ -2427,6 +2427,10 @@ export type DashboardDict = {
       loanOwed: string;
       loanDeductLabel: string;
       loanNetToPay: string;
+      loanNoteFromCheckNum: string;
+      loanNoteFromCheck: string;
+      loanNoteFromWire: string;
+      loanNoteFromCash: string;
       addLoanBtn: string;
       loanAmountPlaceholder: string;
       loanNotePlaceholder: string;
@@ -4976,6 +4980,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanOwed: 'debe',
         loanDeductLabel: 'Descontar de este cheque',
         loanNetToPay: 'Neto a pagar',
+        loanNoteFromCheckNum: 'Descontado del cheque #{{n}}',
+        loanNoteFromCheck: 'Descontado del cheque',
+        loanNoteFromWire: 'Descontado de la transferencia',
+        loanNoteFromCash: 'Descontado del pago en efectivo',
         addLoanBtn: 'Agregar préstamo',
         loanAmountPlaceholder: 'Monto del préstamo',
         loanNotePlaceholder: 'Nota (opcional)',
@@ -7551,6 +7559,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanOwed: 'owed',
         loanDeductLabel: 'Deduct from this check',
         loanNetToPay: 'Net to pay',
+        loanNoteFromCheckNum: 'Deducted from check #{{n}}',
+        loanNoteFromCheck: 'Deducted from check',
+        loanNoteFromWire: 'Deducted from wire',
+        loanNoteFromCash: 'Deducted from cash payment',
         addLoanBtn: 'Add loan',
         loanAmountPlaceholder: 'Loan amount',
         loanNotePlaceholder: 'Note (optional)',
