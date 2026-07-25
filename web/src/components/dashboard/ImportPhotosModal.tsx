@@ -2,6 +2,7 @@
 
 // Step 4 of the import hub: bulk photo upload. The jobs CSV's "Fotos
 import { logImportRun } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 // (nombres de archivo)" column left pending file names on each imported job
 // (jobs.import_photo_names); here the user drops their whole photo dump,
 // files are matched to jobs CLIENT-SIDE (shared/lib/importPhotos), and only
@@ -51,6 +52,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [picked, setPicked] = useState<Picked[]>([]);
   const [phase, setPhase] = useState<'pick' | 'review' | 'uploading' | 'done'>('pick');
+  const { label: elapsedLabel } = useElapsedTimer(phase === 'uploading');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [limitSkipped, setLimitSkipped] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -305,7 +307,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
             {phase === 'uploading' ? (
               <div>
                 <p className="text-sm text-muted mb-2">
-                  {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))}
+                  {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))} · {elapsedLabel}
                 </p>
                 <div className="h-2 rounded-full bg-border-soft overflow-hidden">
                   <div

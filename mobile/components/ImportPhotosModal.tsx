@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react-native';
@@ -49,6 +50,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [picked, setPicked] = useState<Picked[]>([]);
   const [phase, setPhase] = useState<'pick' | 'review' | 'uploading' | 'done'>('pick');
+  const { label: elapsedLabel } = useElapsedTimer(phase === 'uploading');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [limitSkipped, setLimitSkipped] = useState(0);
 
@@ -306,7 +308,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                 {phase === 'uploading' ? (
                   <View>
                     <Text className="text-sm text-muted mb-2">
-                      {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))}
+                      {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))} · {elapsedLabel}
                     </Text>
                     <View className="h-2 rounded-full bg-border-soft overflow-hidden">
                       <View

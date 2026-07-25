@@ -6,6 +6,7 @@
 // implementations.)
 
 import { fetchAll } from './supabaseFetch';
+import { batchInsert, chunkedInsert, type BatchInsertItem } from './importBatch';
 import { employeeBreakdownInRange, getPayrollPeriod, normalizeFrequency, parsePayrollAnchor, type PayrollJob, type PayrollTimesheet } from './payroll';
 import { fieldRefId, normalizeFormula } from './payrollFormula';
 import { logAudit } from './audit';
@@ -495,7 +496,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0, updated = 0;
+  let skipped = 0, updated = 0;
   // Branch → location_id (multi-location). A job belongs to ONE branch, so a
   // blank/unmatched Branch cell leaves it unfiled (shows under "All locations").
   const branch = branchMatcher(ctx);
@@ -550,9 +551,16 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     ? groupBy(jobRows.map((row, idx) => ({ row, idx })), ({ row, idx }) => get(row, 'external_ref') || `__row_${idx}`)
     : jobRows.map((row, idx) => ({ key: '', rows: [{ row, idx }] }));
 
-  let progressDone = 0;
+  // NEW jobs are queued here and batch-inserted after the loop; their crew +
+  // line items ride along in meta and get their job_id stamped on insert.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type JobMeta = { label: string; rowIndex: number; assigns: any[]; items: any[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newItems: BatchInsertItem<any, JobMeta>[] = [];
+
+  // Pass A — process each group: UPDATE existing jobs inline (sequential),
+  // queue NEW ones for the batch below. Progress is driven by the batch phase.
   for (const grp of groups) {
-    ctx.onProgress?.(progressDone++, groups.length);
     if (ctx.shouldAbort?.()) break;
     // Job-level fields come from the group's FIRST row.
     const { row, idx } = grp.rows[0];
@@ -821,10 +829,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       ...(status === 'invoiced' ? { invoiced_at: nowIso } : {}),
     };
 
-    const { data: job, error } = await ctx.supabase.from('jobs').insert(entry).select('id').single();
-    if (error || !job) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear', 'Could not create'), rowIndex: idx }); continue; }
-    if (ref) existingRefs.add(ref);
-
+    // Build crew rows now (job_id stamped after the batch insert returns ids).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const assigns: any[] = [];
     const seen = new Set<string>();
@@ -832,14 +837,32 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       const n = normalizeName(name);
       if (seen.has(n)) return;
       seen.add(n);
-      assigns.push({ job_id: job.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadName });
+      assigns.push({ employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadName });
     });
-    if (assigns.length) await ctx.supabase.from('job_assignments').insert(assigns);
-    if (items.length) {
-      await ctx.supabase.from('job_items').insert(items.map(i => ({ job_id: job.id, ...i })));
-    }
-    success++;
+    // Queue-time in-file dedup: a later row with the same Project ID now routes
+    // to the UPDATE path (existing undefined → skipped), matching the old code.
+    if (ref) existingRefs.add(ref);
+    newItems.push({ meta: { label, rowIndex: idx, assigns, items: [...items] }, entry });
   }
+
+  // Batch-insert the new jobs, then attach their crew + line items by new id.
+  const allAssigns: Record<string, unknown>[] = [];
+  const allJobItems: Record<string, unknown>[] = [];
+  const jobsBase = skipped + updated + failedRows.length;
+  const { success, failedRows: jobFr } = await batchInsert<Record<string, unknown>, JobMeta>({
+    supabase: ctx.supabase, table: 'jobs', items: newItems,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onInserted: (jobId, m) => {
+      for (const a of m.assigns) allAssigns.push({ job_id: jobId, ...a });
+      for (const it of m.items) allJobItems.push({ job_id: jobId, ...it });
+    },
+    onProgress: done => ctx.onProgress?.(jobsBase + done, groups.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...jobFr);
+  await chunkedInsert(ctx.supabase, 'job_assignments', allAssigns);
+  await chunkedInsert(ctx.supabase, 'job_items', allJobItems);
+
   const notes: string[] = [];
   if (clientResolver?.autoCreated.length) notes.push(autoCreatedNote(ctx, clientResolver.autoCreated));
   if (creatorsNoAccount.size) {
@@ -865,7 +888,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0;
+  let skipped = 0;
 
   const existing = await fetchAll<EmployeeLite>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
@@ -913,8 +936,13 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     return null;
   };
 
+  // Pass A — build employee entries + resolve each worker's branch links (the
+  // `employee_locations` rows, minus the employee_id we don't have yet). Dedup
+  // at queue time.
+  type EmpMeta = { label: string; rowIndex: number; links: { location_id: string; is_primary: boolean }[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: BatchInsertItem<any, EmpMeta>[] = [];
   for (let idx = 0; idx < ctx.rows.length; idx++) {
-    ctx.onProgress?.(idx, ctx.rows.length);
     if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const csvLine = idx + 2;
@@ -925,6 +953,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     if (!first) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing first name'), rowIndex: idx }); continue; }
     const fullKey = normalizeName(`${first} ${last}`);
     if (existingNames.has(fullKey)) { skipped++; continue; }
+    existingNames.add(fullKey);
 
     const customFields: Record<string, string> = {};
     ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
@@ -961,29 +990,35 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     const empUpdatedTs = parseTimestamp(get(row, 'updated_at'));
     if (empUpdatedTs) entry.updated_at = empUpdatedTs;
 
-    const { data: inserted, error } = await ctx.supabase.from('employees').insert(entry).select('id').maybeSingle();
-    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
-    existingNames.add(fullKey);
-
-    // File the worker into branch(es) for multi-location businesses.
-    if (branch.multi && inserted?.id) {
+    // Branch links (multi-location): matched → that one branch as home;
+    // blank/unmatched → ALL branches. Resolved now; employee_id stamped later.
+    let links: { location_id: string; is_primary: boolean }[] = [];
+    if (branch.multi) {
       const branchName = get(row, 'branch');
       const matchedId = branch.match(branchName);
       if (branchName && !matchedId) unknownBranches.add(branchName);
       const locIds = matchedId ? [matchedId] : branch.allIds; // blank/unknown → all
       const primary = matchedId ?? branch.defaultId;
-      if (locIds.length) {
-        const links = locIds.map(location_id => ({
-          business_id: ctx.businessId,
-          employee_id: inserted.id,
-          location_id,
-          is_primary: location_id === primary,
-        }));
-        await ctx.supabase.from('employee_locations').insert(links);
-      }
+      links = locIds.map(location_id => ({ location_id, is_primary: location_id === primary }));
     }
-    success++;
+    items.push({ meta: { label, rowIndex: idx, links }, entry });
   }
+
+  // Pass B — batch insert employees, accumulating branch links keyed by new id.
+  const empLocLinks: Record<string, unknown>[] = [];
+  const base = skipped + failedRows.length;
+  const { success, failedRows: fr } = await batchInsert<Record<string, unknown>, EmpMeta>({
+    supabase: ctx.supabase, table: 'employees', items,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onInserted: (empId, m) => {
+      for (const l of m.links) empLocLinks.push({ business_id: ctx.businessId, employee_id: empId, location_id: l.location_id, is_primary: l.is_primary });
+    },
+    onProgress: done => ctx.onProgress?.(base + done, ctx.rows.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...fr);
+  await chunkedInsert(ctx.supabase, 'employee_locations', empLocLinks);
+
   const notes: string[] = [];
   if (unknownBranches.size) {
     const shown = Array.from(unknownBranches).slice(0, 10).join(', ');
@@ -1009,7 +1044,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
   const notes: string[] = [];
-  let success = 0, skipped = 0;
+  let skipped = 0;
 
   const lang = invoiceDefaultLanguage(ctx.invoiceTemplate);
   const branch = branchMatcher(ctx);
@@ -1062,9 +1097,15 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   const groups = groupBy(filledRows.map((row, idx) => ({ row, idx })), ({ row }) => get(row, 'invoice_number'));
   let unlinkedLines = 0;
 
-  let progressDone = 0;
+  // NEW invoices queued for the batch below; each carries its client + linked
+  // job ids so the invoice_clients rows + per-invoice job status update run
+  // once ids are known.
+  type InvMeta = { label: string; rowIndex: number; clientId: string | null; jobIds: string[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newItems: BatchInsertItem<any, InvMeta>[] = [];
+
+  // Pass A — build invoice entries. Progress is driven by the batch phase.
   for (const grp of groups) {
-    ctx.onProgress?.(progressDone++, groups.length);
     if (ctx.shouldAbort?.()) break;
     const first = grp.rows[0];
     const csvLine = first.idx + 2;
@@ -1073,6 +1114,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
 
     if (!num) { failedRows.push({ label, reason: tr('Falta el número de factura', 'Missing invoice number'), rowIndex: first.idx }); continue; }
     if (existingRefs.has(num)) { skipped++; continue; }
+    existingRefs.add(num); // queue-time in-file dedup
 
     const clientId = await resolveClient(first.row);
 
@@ -1110,7 +1152,7 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     const invCreatedTs = parseTimestamp(get(first.row, 'created_at'));
     const invUpdatedTs = parseTimestamp(get(first.row, 'updated_at'));
 
-    const { data: invoice, error } = await ctx.supabase.from('invoices').insert({
+    newItems.push({ meta: { label, rowIndex: first.idx, clientId, jobIds: Array.from(linkedJobIds) }, entry: {
       business_id: ctx.businessId,
       client_id: clientId,
       invoice_number: num,
@@ -1137,20 +1179,31 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       })() : {}),
       ...(invCreatedTs ? { created_at: invCreatedTs } : {}),
       ...(invUpdatedTs ? { updated_at: invUpdatedTs } : {}),
-    }).select('id').single();
+    } });
+  }
 
-    if (error || !invoice) { failedRows.push({ label, reason: error?.message ?? tr('No se pudo crear la factura', 'Could not create invoice'), rowIndex: first.idx }); continue; }
-    existingRefs.add(num);
-    success++;
-
-    if (clientId) await ctx.supabase.from('invoice_clients').insert({ invoice_id: invoice.id, client_id: clientId });
-    const jobIds = Array.from(linkedJobIds);
-    if (jobIds.length) {
-      await ctx.supabase.from('jobs').update({
-        status: 'invoiced', invoice_id: invoice.id, invoiced_at: new Date().toISOString(),
-        ...(clientId ? { client_id: clientId } : {}),
-      }).in('id', jobIds);
-    }
+  // Batch-insert invoices, then attach client links + per-invoice job updates.
+  const invClientLinks: Record<string, unknown>[] = [];
+  const jobUpdates: { invoiceId: string; clientId: string | null; jobIds: string[] }[] = [];
+  const invBase = skipped + failedRows.length;
+  const { success, failedRows: invFr } = await batchInsert<Record<string, unknown>, InvMeta>({
+    supabase: ctx.supabase, table: 'invoices', items: newItems,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onInserted: (invoiceId, m) => {
+      if (m.clientId) invClientLinks.push({ invoice_id: invoiceId, client_id: m.clientId });
+      if (m.jobIds.length) jobUpdates.push({ invoiceId, clientId: m.clientId, jobIds: m.jobIds });
+    },
+    onProgress: done => ctx.onProgress?.(invBase + done, groups.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...invFr);
+  await chunkedInsert(ctx.supabase, 'invoice_clients', invClientLinks);
+  // Per-invoice job status update — distinct invoice_id each, so kept individual.
+  for (const u of jobUpdates) {
+    await ctx.supabase.from('jobs').update({
+      status: 'invoiced', invoice_id: u.invoiceId, invoiced_at: new Date().toISOString(),
+      ...(u.clientId ? { client_id: u.clientId } : {}),
+    }).in('id', u.jobIds);
   }
 
   if (autoCreated.length) notes.push(autoCreatedNote(ctx, autoCreated));
@@ -1191,7 +1244,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0;
+  let skipped = 0;
 
   const employees = await fetchAll<EmployeeLite>((from, to) =>
     ctx.supabase.from('employees').select('id, first_name, last_name, check_name').eq('business_id', ctx.businessId).range(from, to));
@@ -1232,8 +1285,12 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const allTimesheets: PayrollTimesheet[] = await fetchAll<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }>((from, to) =>
     ctx.supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', ctx.businessId).range(from, to));
 
+  // Pass A — validate + build payment entries. Missing-worker auto-create stays
+  // sequential here (it must resolve an id before the payment is built, and is
+  // rare relative to row count).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: BatchInsertItem<any, { label: string; rowIndex: number }>[] = [];
   for (let idx = 0; idx < ctx.rows.length; idx++) {
-    ctx.onProgress?.(idx, ctx.rows.length);
     if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const workerName = get(row, 'worker');
@@ -1277,6 +1334,9 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       failedRows.push({ label, reason: tr(`Método no reconocido: "${get(row, 'method')}". Válidos: efectivo, cheque, transferencia.`, `Unrecognized method: "${get(row, 'method')}". Valid: cash, check, wire.`), rowIndex: idx });
       continue;
     }
+    // Row is valid + will be inserted — mark its dedup key now (queue-time) so a
+    // duplicate check later in the same file is skipped.
+    existingKeys.add(key);
 
     // Formula-component columns (one per job field the pay formula reads,
     // e.g. an overnight-stay count) → the per-payment components snapshot.
@@ -1286,7 +1346,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       if (v !== null) components[tpl.field_label] = v;
     });
 
-    const { error } = await ctx.supabase.from('payroll_payments').insert({
+    items.push({ meta: { label, rowIndex: idx }, entry: {
       business_id: ctx.businessId,
       employee_id: empId,
       period_start: period.startStr,
@@ -1309,11 +1369,18 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       created_by: ctx.userId,
       // The paid date becomes the record's timestamp so history shows it.
       ...(paidDate ? { created_at: `${paidDate}T12:00:00` } : {}),
-    });
-    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
-    existingKeys.add(key);
-    success++;
+    } });
   }
+
+  // Pass B — batch insert payments (no child rows).
+  const base = skipped + failedRows.length;
+  const { success, failedRows: fr } = await batchInsert({
+    supabase: ctx.supabase, table: 'payroll_payments', items,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onProgress: done => ctx.onProgress?.(base + done, ctx.rows.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...fr);
 
   const notes: string[] = [];
   if (autoCreatedWorkers.length) {
@@ -1345,7 +1412,7 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0;
+  let skipped = 0;
 
   const existing = await fetchAll<{ name: string }>((from, to) =>
     ctx.supabase.from('equipment').select('name').eq('business_id', ctx.businessId).range(from, to));
@@ -1355,18 +1422,21 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   const branch = branchMatcher(ctx);
   const unknownBranches = new Set<string>();
 
+  // Pass A — build entries in memory; dedup at queue time (so two same-name
+  // rows in one file don't both insert).
+  const items: BatchInsertItem<Record<string, unknown>, { label: string; rowIndex: number }>[] = [];
   for (let idx = 0; idx < ctx.rows.length; idx++) {
-    ctx.onProgress?.(idx, ctx.rows.length);
     if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const name = get(row, 'name');
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || tr('(fila vacía)', '(empty row)')}`;
     if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
     if (existingNames.has(normalizeName(name))) { skipped++; continue; }
+    existingNames.add(normalizeName(name));
 
     const paidOff = parseYesNo(get(row, 'paid_off'));
     const assignedName = get(row, 'assigned_to');
-    const { error } = await ctx.supabase.from('equipment').insert({
+    items.push({ meta: { label, rowIndex: idx }, entry: {
       business_id: ctx.businessId,
       name,
       equipment_type: get(row, 'equipment_type') || null,
@@ -1396,11 +1466,18 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
         if (bn && !id) unknownBranches.add(bn);
         return { location_id: id };
       })() : {}),
-    });
-    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
-    existingNames.add(normalizeName(name));
-    success++;
+    } });
   }
+
+  // Pass B — batch insert (rows already resolved in Pass A count as "done").
+  const base = skipped + failedRows.length;
+  const { success, failedRows: fr } = await batchInsert({
+    supabase: ctx.supabase, table: 'equipment', items,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onProgress: done => ctx.onProgress?.(base + done, ctx.rows.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...fr);
 
   ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   const notes: string[] = [];
@@ -1420,7 +1497,7 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
   const tr = trOf(ctx);
   const get = getOf(ctx);
   const failedRows: ImportFailedRow[] = [];
-  let success = 0, skipped = 0;
+  let skipped = 0;
 
   const existing = await fetchAll<{ name: string; sku: string | null }>((from, to) =>
     ctx.supabase.from('inventory_items').select('name, sku').eq('business_id', ctx.businessId).range(from, to));
@@ -1430,8 +1507,9 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
   const branch = branchMatcher(ctx);
   const unknownBranches = new Set<string>();
 
+  // Pass A — build entries; dedup (SKU then name) at queue time.
+  const items: BatchInsertItem<Record<string, unknown>, { label: string; rowIndex: number }>[] = [];
   for (let idx = 0; idx < ctx.rows.length; idx++) {
-    ctx.onProgress?.(idx, ctx.rows.length);
     if (ctx.shouldAbort?.()) break;
     const row = ctx.rows[idx];
     const name = get(row, 'name');
@@ -1439,6 +1517,8 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || sku || tr('(fila vacía)', '(empty row)')}`;
     if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
     if ((sku && existingSkus.has(sku.toLowerCase())) || existingNames.has(normalizeName(name))) { skipped++; continue; }
+    existingNames.add(normalizeName(name));
+    if (sku) existingSkus.add(sku.toLowerCase());
 
     let locationId: string | null = null;
     if (branch.multi) {
@@ -1446,7 +1526,7 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
       locationId = branch.match(bn);
       if (bn && !locationId) unknownBranches.add(bn);
     }
-    const { error } = await ctx.supabase.from('inventory_items').insert({
+    items.push({ meta: { label, rowIndex: idx }, entry: {
       business_id: ctx.businessId,
       name,
       sku: sku || null,
@@ -1456,12 +1536,18 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
       category: get(row, 'category') || null,
       low_stock_threshold: parseInt10(get(row, 'low_stock')) ?? 0,
       ...(branch.multi ? { location_id: locationId } : {}),
-    });
-    if (error) { failedRows.push({ label, reason: error.message, rowIndex: idx }); continue; }
-    existingNames.add(normalizeName(name));
-    if (sku) existingSkus.add(sku.toLowerCase());
-    success++;
+    } });
   }
+
+  // Pass B — batch insert.
+  const base = skipped + failedRows.length;
+  const { success, failedRows: fr } = await batchInsert({
+    supabase: ctx.supabase, table: 'inventory_items', items,
+    labelOf: m => m.label, rowIndexOf: m => m.rowIndex,
+    onProgress: done => ctx.onProgress?.(base + done, ctx.rows.length),
+    shouldAbort: ctx.shouldAbort,
+  });
+  failedRows.push(...fr);
 
   ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   const notes: string[] = [];

@@ -18,6 +18,7 @@ import {
   formulaComponentTemplates,
   logImportRun,
 } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -57,6 +58,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
   const [step, setStep] = useState<Step>('upload');
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const { label: elapsedLabel } = useElapsedTimer(importing);
   // Import progress (rows/groups processed) — throttled by the runner cb.
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const abortRef = useRef(false);
@@ -551,7 +553,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
               <View className="flex-1 h-2 bg-border-soft rounded-full overflow-hidden">
                 <View className="h-full bg-primary rounded-full" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
               </View>
-              <Text className="text-xs font-semibold text-muted">{progress.done} / {progress.total}</Text>
+              <Text className="text-xs font-semibold text-muted">{progress.done} / {progress.total} · {elapsedLabel}</Text>
             </View>
           ) : null}
           <View className="flex-row items-center justify-between pt-2">
@@ -585,6 +587,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             <CheckCircle2 size={32} color={c.success} />
           </View>
           <Text className="text-lg font-semibold text-ink">{tr('¡Importación completa!', 'Import complete!')}</Text>
+          <Text className="text-xs text-faint -mt-2">{tr('Tiempo', 'Time')}: {elapsedLabel}</Text>
           <View className="bg-surface rounded-xl px-6 py-4 w-full">
             <View className="flex-row justify-between items-center mb-1">
               <Text className="text-sm text-muted">{`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${tr('importados', 'imported')}`}</Text>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
@@ -55,6 +56,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
+  const { label: elapsedLabel } = useElapsedTimer(importing);
   const [dragOver, setDragOver] = useState(false);
   const [importResult, setImportResult] = useState<{
     success: number;
@@ -426,7 +428,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
                     <div className="h-2 bg-border-soft rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
                     </div>
-                    <p className="text-[11px] text-faint mt-1 text-center">{progress.done} / {progress.total}</p>
+                    <p className="text-[11px] text-faint mt-1 text-center">{progress.done} / {progress.total} · {elapsedLabel}</p>
                   </div>
                 ) : null}
                 <Button onClick={runImport} loading={importing} fullWidth>
@@ -447,6 +449,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
                   <span className="text-emerald-600 font-semibold">{t.importModal.importedCount.replace('{{count}}', String(importResult.success))}</span>
                   {importResult.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.failedRows.length))}</span>}
                 </p>
+                <p className="text-xs text-faint mt-1">{locale === 'es' ? 'Tiempo' : 'Time'}: {elapsedLabel}</p>
                 {importResult.failedRows.length > 0 && (
                   <p className="text-xs text-faint mt-1">{t.importModal.errorsExplanation}</p>
                 )}

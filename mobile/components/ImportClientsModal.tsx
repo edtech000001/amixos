@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -97,6 +98,7 @@ export function ImportClientsModal({
   const [step, setStep] = useState<Step>('upload');
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const { label: elapsedLabel } = useElapsedTimer(importing);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
@@ -775,7 +777,7 @@ export function ImportClientsModal({
               className={`px-4 py-2 rounded-lg ${importing ? 'bg-primary/40' : 'bg-primary active:opacity-80'}`}
             >
               <Text className="text-sm font-semibold text-white">
-                {importing ? `Importando…${progress ? ` ${progress.done}/${progress.total}` : ''}` : `Importar ${rows.length}`}
+                {importing ? `Importando…${progress ? ` ${progress.done}/${progress.total} · ${elapsedLabel}` : ''}` : `Importar ${rows.length}`}
               </Text>
             </Pressable>
           </View>
@@ -788,6 +790,7 @@ export function ImportClientsModal({
             <CheckCircle2 size={32} color={c.success} />
           </View>
           <Text className="text-lg font-semibold text-ink">¡Importación completa!</Text>
+          <Text className="text-xs text-faint -mt-2">Tiempo: {elapsedLabel}</Text>
           <View className="bg-surface rounded-xl px-6 py-4 w-full">
             <View className="flex-row justify-between items-center mb-1">
               <Text className="text-sm text-muted">Importados</Text>

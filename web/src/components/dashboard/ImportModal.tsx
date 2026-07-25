@@ -31,6 +31,7 @@ import {
   type ImportTemplateField,
   logImportRun,
 } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { useApp } from '@/lib/AppContext';
 
 interface Props {
@@ -66,6 +67,8 @@ export default function ImportModal({
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
+  // Live elapsed time — ticks while importing, freezes on the done screen.
+  const { label: elapsedLabel } = useElapsedTimer(importing);
   // Import progress (rows/groups processed) — throttled by the runner cb.
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const abortRef = useRef(false);
@@ -272,7 +275,7 @@ export default function ImportModal({
               <div className="flex-1 h-2 bg-border-soft rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
               </div>
-              <p className="text-xs font-semibold text-muted shrink-0">{progress.done} / {progress.total}</p>
+              <p className="text-xs font-semibold text-muted shrink-0">{progress.done} / {progress.total} · {elapsedLabel}</p>
             </div>
           ) : null}
           {step === 'upload' && (
@@ -439,6 +442,7 @@ export default function ImportModal({
                   {(result.updated ?? 0) > 0 && <span className="text-blue-600 font-semibold ml-2">· {result.updated} {tr('actualizados', 'updated')}</span>}
                   {result.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {result.failedRows.length} {tr('con error', 'with errors')}</span>}
                 </p>
+                <p className="text-xs text-faint mt-1">{tr('Tiempo', 'Time')}: {elapsedLabel}</p>
               </div>
 
               {result.notes.length > 0 && (
