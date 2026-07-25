@@ -42,7 +42,8 @@ const ALL_ROLES: Role[] = ['admin', 'manager', 'office', 'field', 'viewer'];
 export default function RolesSettingsPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole, roleOverrides, reloadPermissions, loading: appLoading } = useApp();
+  const { business, currentRole, roleOverrides, reloadPermissions, loading: appLoading, locations } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;
 
@@ -202,7 +203,7 @@ export default function RolesSettingsPage() {
           {/* System section */}
           <h3 className="text-xs font-semibold text-faint uppercase tracking-wide mt-6 mb-2">{t.sectionSystem}</h3>
           <div className="flex flex-col gap-1">
-            {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
+            {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected) && (key !== 'switchLocations' || multiLocation)).map(key => (
               <label key={key} className={`flex items-center justify-between py-2 ${editable ? 'cursor-pointer' : ''}`}>
                 <span className="text-sm text-ink">{t.capNames[key]}</span>
                 <Cell supported checked={draft.caps[key]} onChange={v => setCap(key, v)} />

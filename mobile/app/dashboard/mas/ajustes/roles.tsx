@@ -48,7 +48,8 @@ function CheckBox({ checked, disabled, onPress }: { checked: boolean; disabled?:
 export default function RolesScreen() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, currentRole, roleOverrides, reloadPermissions } = useApp();
+  const { business, currentRole, roleOverrides, reloadPermissions, locations } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;
   const tc = full.common;
@@ -203,7 +204,7 @@ export default function RolesScreen() {
 
           {/* System */}
           <Text className="text-xs font-semibold text-faint uppercase mt-6 mb-1">{t.sectionSystem}</Text>
-          {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected)).map(key => (
+          {EDITABLE_CAPS.filter(key => capAppliesToRole(key, selected) && (key !== 'switchLocations' || multiLocation)).map(key => (
             <View key={key} className="flex-row items-center justify-between py-2.5 border-t border-border-soft">
               <Text className="text-sm text-ink flex-1 mr-3">{t.capNames[key]}</Text>
               <CheckBox checked={draft.caps[key]} disabled={!editable} onPress={() => setCap(key, !draft.caps[key])} />

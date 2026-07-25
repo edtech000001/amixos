@@ -176,7 +176,7 @@ const BIZ_US_STATES = [
 
 export default function AjustesPage() {
   const supabase = createSupabaseClient();
-  const { business, user, refetchBusiness, currentRole, businesses, roles, activeBusinessId } = useApp();
+  const { business, user, refetchBusiness, currentRole, businesses, roles, activeBusinessId, locations } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const tc = full.common;
@@ -3701,6 +3701,7 @@ export default function AjustesPage() {
               open
               businessId={business.id}
               templates={hubClientTemplates}
+              locations={locations.map(l => ({ id: l.id, name: l.name }))}
               onClose={() => setHubImport(null)}
               doneLabel={full.common.buttons.close}
             />

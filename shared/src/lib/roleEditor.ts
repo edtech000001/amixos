@@ -27,6 +27,7 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
   'createEstimates',
   'clockInOut',
   'scheduleJobs',
+  'switchLocations',
 ];
 
 // Caps that only govern field-crew surfaces (the field home clock card, and

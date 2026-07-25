@@ -15,7 +15,7 @@ import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
-import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
+import { fetchClientLocations, setClientLocations as saveClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
@@ -82,7 +82,8 @@ export default function ClientesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createSupabaseClient();
-  const { business, activeLocationId } = useApp();
+  const { business, activeLocationId, locations } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const syncBanner = useGoogleSyncBanner();
   const cacheKey = business?.id ?? null;
   const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
@@ -101,6 +102,8 @@ export default function ClientesPage() {
   useScrollRestore('clients-list', !loading);
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Client | null>(null);
+  // Branch links for the client being added/edited. Empty = shared everywhere.
+  const [branchIds, setBranchIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -141,8 +144,16 @@ export default function ClientesPage() {
 
   useEffect(() => { load(); }, [business, locale]);
 
-  const openAdd = () => { setSelected(null); setError(''); setFormMode('add'); };
-  const openEdit = (c: Client) => { setSelected(c); setError(''); setFormMode('edit'); };
+  // New client defaults to ALL branches selected = shared everywhere; an edited
+  // client with no explicit links shows all selected too. Deselecting limits it.
+  const openAdd = () => { setSelected(null); setBranchIds(locations.map(l => l.id)); setError(''); setFormMode('add'); };
+  const openEdit = (c: Client) => {
+    setSelected(c);
+    const links = clientLocations.filter(l => l.client_id === c.id).map(l => l.location_id);
+    setBranchIds(links.length > 0 ? links : locations.map(l => l.id));
+    setError('');
+    setFormMode('edit');
+  };
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: t.fields.firstName,
@@ -199,6 +210,13 @@ export default function ClientesPage() {
       custom_fields: Object.keys(form.custom_fields).length > 0 ? form.custom_fields : null,
     };
 
+    // "All branches selected" (or none) = shared everywhere → store NO links so
+    // the client stays visible even in branches added later. A partial selection
+    // stores explicit links restricting the client to those branches.
+    const allBranchIds = locations.map(l => l.id);
+    const branchLinksToSave =
+      branchIds.length === 0 || branchIds.length >= allBranchIds.length ? [] : branchIds;
+
     if (formMode === 'add') {
       const { data: created, error: e } = await supabase
         .from('clients')
@@ -206,6 +224,9 @@ export default function ClientesPage() {
         .select('id')
         .single();
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
+      if (created?.id && multiLocation && branchLinksToSave.length > 0) {
+        await saveClientLocations(supabase, business!.id, created.id, branchLinksToSave, branchLinksToSave[0] ?? null);
+      }
       // Fire-and-forget Google sync. Silent on success; surfaces the
       // failure via the banner if Google rejects the create.
       if (created?.id) {
@@ -220,6 +241,9 @@ export default function ClientesPage() {
     } else if (formMode === 'edit' && selected) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
+      if (multiLocation) {
+        await saveClientLocations(supabase, business!.id, selected.id, branchLinksToSave, branchLinksToSave[0] ?? null);
+      }
     }
     await load(); setSaving(false); setFormMode(null);
   };
@@ -400,6 +424,9 @@ export default function ClientesPage() {
         fieldLayout={business?.client_field_layout ?? null}
         saving={saving}
         error={error}
+        branchOptions={multiLocation ? locations.map(l => ({ id: l.id, name: l.name })) : undefined}
+        branchIds={branchIds}
+        onToggleBranch={(id) => setBranchIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
         onClose={() => setFormMode(null)}
         onSubmit={save}
       />
@@ -411,6 +438,7 @@ export default function ClientesPage() {
           open={importModal}
           businessId={business.id}
           templates={templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label }))}
+          locations={locations.map(l => ({ id: l.id, name: l.name }))}
           onClose={() => setImportModal(false)}
           onDone={load}
         />

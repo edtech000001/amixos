@@ -45,7 +45,7 @@ export default function InventoryModuleScreen() {
   const t = full.dashboard.inventory;
   const tc = full.common;
   const supabase = createSupabaseClient();
-  const { business, locations, activeLocationId } = useApp();
+  const { business, locations, activeLocationId, myHomeLocationId } = useApp();
   const c = useThemeColors();
 
   const [items, setItems] = useState<RawItem[]>([]);
@@ -126,7 +126,7 @@ export default function InventoryModuleScreen() {
   };
 
   const openAdd = () => {
-    setForm({ ...EMPTY, location_id: activeLocationId ?? null }); setError(''); setSelected(null); setModal('add');
+    setForm({ ...EMPTY, location_id: activeLocationId ?? myHomeLocationId ?? null }); setError(''); setSelected(null); setModal('add');
   };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id);

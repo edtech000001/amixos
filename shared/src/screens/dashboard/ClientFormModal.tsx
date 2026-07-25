@@ -74,6 +74,11 @@ export interface ClientFormModalProps {
   fieldLayout?: { key: string; section: string }[] | null;
   saving: boolean;
   error: string;
+  /** Multi-branch businesses only: branches to offer + current selection.
+   *  (Consumed by the web variant; mobile uses its own full-screen form.) */
+  branchOptions?: { id: string; name: string }[];
+  branchIds?: string[];
+  onToggleBranch?: (id: string) => void;
   onClose: () => void;
   onSubmit: (values: ClientFormValues) => Promise<void> | void;
 }

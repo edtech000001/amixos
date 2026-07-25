@@ -4,8 +4,9 @@
 // or "All". Only renders when the business runs ≥2 branches; single-location
 // businesses never see it. Reports stay business-wide regardless of this.
 //
-// Hidden for assigned-only roles (field crew): they're locked to their home
-// branch and shouldn't roam other locations' data. Gated on can.seeAllJobs.
+// Hidden for roles without the switchLocations capability: they're locked to
+// their home branch and shouldn't roam other locations' data (also enforced by
+// RLS). Gated on can.switchLocations.
 
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, ChevronDown, Check } from 'lucide-react';
@@ -26,8 +27,8 @@ export function LocationSwitcher() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  // Single-location businesses + assigned-only roles (field crew) never see it.
-  if (locations.length < 2 || !can.seeAllJobs(currentRole)) return null;
+  // Single-location businesses + roles locked to their home branch never see it.
+  if (locations.length < 2 || !can.switchLocations(currentRole)) return null;
 
   const allLabel = es ? 'Todas las ubicaciones' : 'All locations';
   const active = locations.find((l) => l.id === activeLocationId);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 // Import DatePicker from its file, NOT the '../../ui' barrel: the barrel also
@@ -98,6 +98,9 @@ export interface PayrollScreenProps {
   onBack: () => void;
   canManage: boolean;
   busy?: boolean;
+  /** Branch switcher (multi-location) rendered under the header so each
+   *  location's manager can pay their own workers. Route supplies the element. */
+  locationSwitcher?: ReactNode;
   /** Custom fields offered in the formula builder palette (number/boolean/
    *  select only — text and dates are excluded by the callers). */
   formulaFields?: { emp: FormulaFieldDef[]; job: FormulaFieldDef[] };
@@ -152,6 +155,7 @@ export function PayrollScreen({
   onBack,
   canManage,
   busy,
+  locationSwitcher,
   formulaFields,
   onHistoryPress,
   allWorkers,
@@ -547,6 +551,10 @@ export function PayrollScreen({
       </div>
 
       <div className="flex flex-col gap-4">
+        {/* Branch switcher (multi-location) — renders nothing for single-location
+           businesses or roles locked to their home branch. */}
+        {locationSwitcher ? <div>{locationSwitcher}</div> : null}
+
         {/* Period navigator */}
         <div className="flex items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
           <button type="button" onClick={onPrevPeriod} className="p-2 rounded-xl hover:bg-border-soft">

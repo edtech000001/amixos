@@ -93,7 +93,7 @@ export type DashboardDict = {
     scopeAssigned: string;
     scopeAll: string;
     resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; reports: string };
-    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; createEstimates: string; clockInOut: string; scheduleJobs: string };
+    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; createEstimates: string; clockInOut: string; scheduleJobs: string; switchLocations: string };
   };
   home: {
     welcome: string;
@@ -2698,7 +2698,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Asignados',
       scopeAll: 'Todos',
       resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', reports: 'Reportes' },
-      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)' },
+      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -5282,7 +5282,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Assigned',
       scopeAll: 'All',
       resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', reports: 'Reports' },
-      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)' },
+      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', switchLocations: 'Switch between branches (else limited to their own)' },
     },
     home: {
       welcome: 'Welcome 👋',

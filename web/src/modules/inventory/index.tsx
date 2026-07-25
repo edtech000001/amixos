@@ -43,7 +43,7 @@ export default function InventoryModule() {
   const tc = full.common;
 
   const supabase = createSupabaseClient();
-  const { business, locations, activeLocationId } = useApp();
+  const { business, locations, activeLocationId, myHomeLocationId } = useApp();
   const [items, setItems] = useState<RawItem[]>([]);
   const [modal, setModal] = useState<'add' | 'edit' | 'adjust' | null>(null);
   const [selected, setSelected] = useState<RawItem | null>(null);
@@ -103,7 +103,7 @@ export default function InventoryModule() {
 
   const openAdd = () => {
     // New stock defaults to the active branch, or the business default.
-    setForm({ ...EMPTY, location_id: activeLocationId ?? null }); setError(''); setModal('add');
+    setForm({ ...EMPTY, location_id: activeLocationId ?? myHomeLocationId ?? null }); setError(''); setModal('add');
   };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id); if (!item) return;

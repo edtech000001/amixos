@@ -98,7 +98,7 @@ export default function NuevaFacturaRoute() {
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
-  const { business, activeLocationId } = useApp();
+  const { business, activeLocationId, myHomeLocationId } = useApp();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.invoices.new;
@@ -587,8 +587,9 @@ export default function NuevaFacturaRoute() {
     } else {
       const { data, error: insErr } = await supabase
         .from('invoices')
-        // File a manual invoice under the branch you're working in.
-        .insert({ business_id: business.id, status, location_id: activeLocationId ?? null, ...payload })
+        // File a manual invoice under the branch you're working in, else your
+        // own home branch.
+        .insert({ business_id: business.id, status, location_id: activeLocationId ?? myHomeLocationId ?? null, ...payload })
         .select()
         .single();
       if (insErr || !data) {

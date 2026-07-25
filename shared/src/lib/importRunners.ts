@@ -930,6 +930,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
 
     const rawPayType = get(row, 'pay_type');
+    const accessR = accessRole(get(row, 'access_role'));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const entry: any = {
       business_id: ctx.businessId,
@@ -939,7 +940,6 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
       phone: get(row, 'phone') || null,
       email: get(row, 'email') || null,
       // employees.role stays the DB default ('worker') — cosmetic, not access.
-      intended_access_role: accessRole(get(row, 'access_role')),
       pay_type: rawPayType ? payType(rawPayType) : 'hourly',
       pay_rate: parseNum(get(row, 'pay_rate')) ?? 0,
       hire_date: parseDate(get(row, 'hire_date')),
@@ -952,6 +952,10 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
       emergency_contact_phone: get(row, 'emergency_contact_phone') || null,
       custom_fields: customFields,
     };
+    // Only send the planned app-access role when the CSV actually specifies one
+    // — a blank "App access" column shouldn't write a null (and avoids failing
+    // the row if the intended_access_role column isn't present yet).
+    if (accessR) entry.intended_access_role = accessR;
     const empCreatedTs = parseTimestamp(get(row, 'created_at'));
     if (empCreatedTs) entry.created_at = empCreatedTs;
     const empUpdatedTs = parseTimestamp(get(row, 'updated_at'));

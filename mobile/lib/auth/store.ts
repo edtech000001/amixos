@@ -6,6 +6,7 @@ import {
   setActiveRolePermissions,
   mergeRolePermissions,
   permissionsForRole,
+  can,
   type Role,
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
@@ -209,6 +210,9 @@ interface AuthStore {
   // per business in activeLocationByBiz so each workspace restores its branch.
   activeLocationId: string | null;
   activeLocationByBiz: Record<string, string>;
+  // The caller's OWN assigned (home/primary) branch, if any. Drives the default
+  // branch on new records so data auto-files to where the user works.
+  myHomeLocationId: string | null;
   // Map of business_id → caller's role in that business. Populated alongside
   // `businesses` on every SIGNED_IN / refetchBusiness.
   roles: Record<string, Role>;
@@ -258,6 +262,7 @@ export const useAuthStore = create<AuthStore>()(
       locations: [],
       activeLocationId: null,
       activeLocationByBiz: {},
+      myHomeLocationId: null,
       roles: {},
       currentRole: null,
       roleOverrides: {},
@@ -400,27 +405,36 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       // A saved choice wins (including '__all__' = explicit All). With no saved
-      // choice: owners default to all branches; everyone else to their own home
-      // branch (still switchable).
+      // choice everyone — owners included — defaults to their own assigned home
+      // branch when they have one (owners with none fall back to All). The home
+      // branch is also exposed as myHomeLocationId so new records auto-file to it.
       _loadLocations: async (businessId) => {
         if (!businessId) {
-          set({ locations: [], activeLocationId: null });
+          set({ locations: [], activeLocationId: null, myHomeLocationId: null });
           return;
         }
         try {
           const rows = await fetchLocations(supabase, businessId);
+          const uid = get().user?.id;
+          const home = rows.length >= 2 && uid
+            ? await fetchMyHomeLocation(supabase, businessId, uid)
+            : null;
+          const validHome = home && rows.some((l) => l.id === home) ? home : null;
           const saved = get().activeLocationByBiz[businessId];
           let active: string | null;
           if (saved !== undefined) {
             active = saved === '__all__' ? null : (rows.some((l) => l.id === saved) ? saved : null);
-          } else if (rows.length < 2 || get().roles[businessId] === 'owner') {
+          } else if (rows.length < 2) {
             active = null;
           } else {
-            const uid = get().user?.id;
-            const home = uid ? await fetchMyHomeLocation(supabase, businessId, uid) : null;
-            active = home && rows.some((l) => l.id === home) ? home : null;
+            active = validHome;
           }
-          set({ locations: rows, activeLocationId: active });
+          // Enforce the per-role location lock: a role without switchLocations is
+          // pinned to its own home branch (RLS enforces the same on reads).
+          if (rows.length >= 2 && !can.switchLocations(get().currentRole)) {
+            active = validHome;
+          }
+          set({ locations: rows, activeLocationId: active, myHomeLocationId: validHome });
         } catch {
           // Offline / transient — keep whatever was cached.
           set({ activeLocationId: get().activeLocationId });
@@ -606,6 +620,7 @@ export function useApp() {
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
   const locations = useAuthStore((s) => s.locations);
   const activeLocationId = useAuthStore((s) => s.activeLocationId);
+  const myHomeLocationId = useAuthStore((s) => s.myHomeLocationId);
   const setActiveLocation = useAuthStore((s) => s.setActiveLocation);
   const baseRole = useAuthStore((s) => s.currentRole);
   const basePermissions = useAuthStore((s) => s.permissions);
@@ -642,6 +657,7 @@ export function useApp() {
     setActiveBusiness,
     locations,
     activeLocationId,
+    myHomeLocationId,
     setActiveLocation,
     refetchLocations: () => useAuthStore.getState()._loadLocations(useAuthStore.getState().activeBusinessId),
     currentRole,

@@ -142,7 +142,7 @@ export default function NuevoTrabajoRoute() {
   const { edit, duplicate, modo, client: clientParam, copy } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string }>();
   const supabase = createSupabaseClient();
   const c = useThemeColors();
-  const { business, user, currentRole, activeLocationId, locations } = useApp();
+  const { business, user, currentRole, activeLocationId, myHomeLocationId, locations } = useApp();
   // Defense in depth: field crew / viewers can't create jobs (RLS rejects the
   // insert and they have no clients to pick). The entry points are hidden, but
   // guard the route too in case of a deep link.
@@ -203,11 +203,12 @@ export default function NuevoTrabajoRoute() {
     }
   }, [sourceId, modo, currentRole]);
 
-  // Default a NEW job's branch to the active branch, or the business default.
+  // Default a NEW job's branch to the active branch, else the user's own home
+  // branch (so data auto-files to where they work even when viewing "All").
   useEffect(() => {
     if (sourceId || locationId || locations.length === 0) return;
-    setLocationId(activeLocationId ?? '');
-  }, [sourceId, locations, activeLocationId]);
+    setLocationId(activeLocationId ?? myHomeLocationId ?? '');
+  }, [sourceId, locations, activeLocationId, myHomeLocationId]);
 
   // Form — shared
   const [title, setTitle] = useState('');

@@ -83,6 +83,10 @@ export interface ClientFormModalProps {
   fieldLayout?: { key: string; section: string }[] | null;
   saving: boolean;
   error: string;
+  /** Multi-branch businesses only: branches to offer + current selection. */
+  branchOptions?: { id: string; name: string }[];
+  branchIds?: string[];
+  onToggleBranch?: (id: string) => void;
   onClose: () => void;
   onSubmit: (values: ClientFormValues) => Promise<void> | void;
 }
@@ -102,6 +106,9 @@ export function ClientFormModal({
   fieldLayout,
   saving,
   error,
+  branchOptions,
+  branchIds,
+  onToggleBranch,
   onClose,
   onSubmit,
 }: ClientFormModalProps) {
@@ -454,6 +461,36 @@ export function ClientFormModal({
               </section>
             );
           })}
+
+          {branchOptions && branchOptions.length > 1 ? (
+            <section className="bg-card rounded-2xl border border-border-soft shadow-sm p-4">
+              <p className="text-xs font-semibold text-faint uppercase mb-3">
+                {locale === 'es' ? 'Sucursales' : 'Branches'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {branchOptions.map(loc => {
+                  const on = (branchIds ?? []).includes(loc.id);
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => onToggleBranch?.(loc.id)}
+                      className={`px-3.5 py-1.5 rounded-full border text-sm font-medium transition-colors ${
+                        on ? 'bg-primary border-primary text-white' : 'bg-card border-border text-ink hover:bg-surface'
+                      }`}
+                    >
+                      {loc.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-faint mt-2">
+                {locale === 'es'
+                  ? 'Todas seleccionadas = visible en todas. Deselecciona para limitar a sucursales específicas.'
+                  : 'All branches selected = visible everywhere. Deselect to limit to specific branches.'}
+              </p>
+            </section>
+          ) : null}
 
           {(emailError || error) ? <p className="text-xs text-red-500">{emailError || error}</p> : null}
 

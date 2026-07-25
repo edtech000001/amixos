@@ -92,8 +92,11 @@ export type CapabilityKey =
   | 'manageAssignmentFields' // per-worker assignment field templates
   | 'createEstimates'       // create estimates/proposals (vs plain work orders)
   | 'clockInOut'            // show the clock in/out card on the field home
-  | 'scheduleJobs';         // field crew may schedule/change job status (vs
+  | 'scheduleJobs'          // field crew may schedule/change job status (vs
                             // completed-only: record finished work, no scheduling)
+  | 'switchLocations';      // multi-location: may switch/view other branches
+                            // (false = locked to their own home branch across
+                            // the whole app; enforced in UI + RLS)
 
 export interface RolePermissions {
   resources: Record<ResourceKey, ResourcePerm>;
@@ -109,7 +112,7 @@ const caps = (overrides: Partial<Record<CapabilityKey, boolean>>): Record<Capabi
   viewAuditLog: false, viewAllTimesheets: false, writeOwnTimesheet: false, delegateJob: false,
   logCompletedJob: false, assignWorkers: false, manageFiles: false, manageIntegrations: false,
   manageAssignmentFields: false, createEstimates: false, clockInOut: false,
-  scheduleJobs: false,
+  scheduleJobs: false, switchLocations: false,
   ...overrides,
 });
 
@@ -130,7 +133,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       manageSettings: true, manageMembers: true, manageBilling: true, deleteBusiness: true,
       viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
       logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
-      manageAssignmentFields: true, createEstimates: true,
+      manageAssignmentFields: true, createEstimates: true, switchLocations: true,
     }),
   },
   admin: {
@@ -139,7 +142,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       manageSettings: true, manageMembers: true, manageBilling: false, deleteBusiness: false,
       viewAuditLog: true, viewAllTimesheets: true, writeOwnTimesheet: true, delegateJob: true,
       logCompletedJob: true, assignWorkers: true, manageFiles: true, manageIntegrations: true,
-      manageAssignmentFields: true, createEstimates: true,
+      manageAssignmentFields: true, createEstimates: true, switchLocations: true,
     }),
   },
   manager: {
@@ -154,7 +157,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
     },
     caps: caps({
       viewAllTimesheets: true, writeOwnTimesheet: true, assignWorkers: true,
-      manageFiles: true, manageIntegrations: true, createEstimates: true,
+      manageFiles: true, manageIntegrations: true, createEstimates: true, switchLocations: true,
     }),
   },
   office: {
@@ -169,6 +172,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
     },
     caps: caps({
       writeOwnTimesheet: true, manageFiles: true, manageIntegrations: true, createEstimates: true,
+      switchLocations: true,
     }),
   },
   field: {
@@ -200,7 +204,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       inventory: R('all', false, false, false),
       reports: R('all'),
     },
-    caps: caps({ viewAllTimesheets: true }),
+    caps: caps({ viewAllTimesheets: true, switchLocations: true }),
   },
 };
 
@@ -356,6 +360,11 @@ export const can = {
 
   // Audit log viewer
   seeAuditLog: (role: Role | null) => cap(role, 'viewAuditLog'),
+
+  // Multi-location: may switch to / view other branches. False = locked to the
+  // user's own home branch across the whole app (also enforced by RLS). Owners
+  // are never locked. Gates the LocationSwitcher.
+  switchLocations: (role: Role | null) => role === 'owner' || cap(role, 'switchLocations'),
 };
 
 // ─── Special-case helpers ────────────────────────────────────────────────

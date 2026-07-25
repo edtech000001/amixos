@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -95,6 +95,9 @@ export interface PayrollScreenProps {
   onBack: () => void;
   canManage: boolean;
   busy?: boolean;
+  /** Branch switcher (multi-location) rendered under the header so each
+   *  location's manager can pay their own workers. Route supplies the element. */
+  locationSwitcher?: ReactNode;
   /** Custom fields offered in the formula builder palette (number/boolean/
    *  select only — text and dates are excluded by the callers). */
   formulaFields?: { emp: FormulaFieldDef[]; job: FormulaFieldDef[] };
@@ -151,6 +154,7 @@ export function PayrollScreen({
   onBack,
   canManage,
   busy,
+  locationSwitcher,
   formulaFields,
   onHistoryPress,
   allWorkers,
@@ -565,6 +569,10 @@ export function PayrollScreen({
       </View>
 
       <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-4">
+        {/* Branch switcher (multi-location) — self-wraps; renders nothing for
+           single-location businesses or roles locked to their home branch. */}
+        {locationSwitcher ? <View className="-mx-5 -mt-1">{locationSwitcher}</View> : null}
+
         {/* Period navigator */}
         <View className="flex-row items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
           <Pressable onPress={onPrevPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-border-soft">

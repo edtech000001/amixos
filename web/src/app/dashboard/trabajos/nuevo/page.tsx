@@ -124,7 +124,7 @@ function NuevoTrabajoContent() {
   };
 
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, activeLocationId, locations } = useApp();
+  const { business, user, currentRole, activeLocationId, myHomeLocationId, locations } = useApp();
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
@@ -196,11 +196,12 @@ function NuevoTrabajoContent() {
     setStatus('completed');
   }, [sourceId, restrictedCreator]);
 
-  // Default a NEW job's branch to the active branch, or the business default.
+  // Default a NEW job's branch to the active branch, else the user's own home
+  // branch (so data auto-files to where they work even when viewing "All").
   useEffect(() => {
     if (sourceId || locationId || locations.length === 0) return;
-    setLocationId(activeLocationId ?? '');
-  }, [sourceId, locations, activeLocationId]);
+    setLocationId(activeLocationId ?? myHomeLocationId ?? '');
+  }, [sourceId, locations, activeLocationId, myHomeLocationId]);
 
   // Resolve the field creator's own employee row so we can self-assign them.
   useEffect(() => {

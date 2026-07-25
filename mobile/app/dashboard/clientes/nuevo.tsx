@@ -26,6 +26,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { fetchClientLocations, setClientLocations } from '@amixos/shared/lib/locations';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
@@ -74,7 +75,8 @@ export default function NuevoClienteRoute() {
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
+  const { business, locations } = useApp();
+  const multiLocation = (locations?.length ?? 0) > 1;
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -100,6 +102,13 @@ export default function NuevoClienteRoute() {
   const [priceTierId, setPriceTierId] = useState('');
   const [priceTiers, setPriceTiers] = useState<{ id: string; name: string }[]>([]);
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  // Branches this client belongs to. Chips default to ALL selected = shared
+  // across every branch; deselecting limits the client to the chosen subset.
+  // Initialized synchronously (locations come from the loaded store) so the
+  // default is part of the unsaved-changes baseline, not a post-mount change.
+  const [branchIds, setBranchIds] = useState<string[]>(() =>
+    edit ? [] : (locations ?? []).map(l => l.id),
+  );
 
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [saving, setSaving] = useState(false);
@@ -139,6 +148,15 @@ export default function NuevoClienteRoute() {
         setPriceTierId((c as { price_tier_id?: string | null }).price_tier_id ?? '');
         setCustomFields(c.custom_fields ?? {});
         setLoadingEdit(false);
+        // Seed the client's current branch links (best-effort; offline = none).
+        // No explicit links = shared everywhere → show all chips selected.
+        void fetchClientLocations(supabase, business.id)
+          .then(links => {
+            if (cancelled) return;
+            const mine = links.filter(l => l.client_id === editId).map(l => l.location_id);
+            setBranchIds(mine.length > 0 ? mine : (locations ?? []).map(l => l.id));
+          })
+          .catch(() => {});
       }
     })();
     return () => {
@@ -498,6 +516,9 @@ export default function NuevoClienteRoute() {
     {
       firstName, lastName, company, phoneCell, phoneOffice, emailOffice,
       emailHome, address, addressLine2, city, state, zipCode, notes, customFields,
+      // branchIds intentionally excluded: it's seeded asynchronously (links
+      // load after the baseline snapshot) so including it would false-trigger
+      // the unsaved-changes guard. Branch edits still persist on Save.
     },
     !loadingEdit,
   );
@@ -557,12 +578,22 @@ export default function NuevoClienteRoute() {
       custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
+    // "All branches selected" (or none) = shared everywhere → store NO links so
+    // the client stays visible even in branches added later. A partial selection
+    // stores explicit links restricting the client to those branches.
+    const allBranchIds = (locations ?? []).map(l => l.id);
+    const branchLinksToSave =
+      branchIds.length === 0 || branchIds.length >= allBranchIds.length ? [] : branchIds;
+
     if (editId) {
       const { error: e } = await supabase.from('clients').update(payload).eq('id', editId);
       if (e) {
         setError(t.modal.saveError);
         setSaving(false);
         return;
+      }
+      if (multiLocation) {
+        await setClientLocations(supabase, business.id, editId, branchLinksToSave, branchLinksToSave[0] ?? null);
       }
       void (async () => {
         const apiBaseUrl = getApiBaseUrl();
@@ -595,6 +626,9 @@ export default function NuevoClienteRoute() {
         void writeCached(`client_${newId}`, row);
         router.replace('/dashboard/clientes' as never);
       } else {
+        if (multiLocation && branchLinksToSave.length > 0) {
+          await setClientLocations(supabase, business.id, newId, branchLinksToSave, branchLinksToSave[0] ?? null);
+        }
         void (async () => {
           const apiBaseUrl = getApiBaseUrl();
           const jwt = await getJwt();
@@ -647,6 +681,41 @@ export default function NuevoClienteRoute() {
                 onValueChange={setPriceTierId}
                 options={[{ value: '', label: full.dashboard.settings.priceSheet.clientTierNone }, ...priceTiers.map(pt => ({ value: pt.id, label: pt.name }))]}
               />
+            </View>
+          ) : null}
+
+          {multiLocation ? (
+            <View className="mb-3">
+              <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">
+                {locale === 'en' ? 'Branches' : 'Sucursales'}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {(locations ?? []).map(loc => {
+                  const on = branchIds.includes(loc.id);
+                  return (
+                    <Pressable
+                      key={loc.id}
+                      onPress={() =>
+                        setBranchIds(prev =>
+                          prev.includes(loc.id) ? prev.filter(x => x !== loc.id) : [...prev, loc.id],
+                        )
+                      }
+                      className={`px-3.5 py-2 rounded-full border ${
+                        on ? 'bg-primary border-primary' : 'bg-card border-border'
+                      }`}
+                    >
+                      <Text className={`text-sm font-medium ${on ? 'text-white' : 'text-ink'}`}>
+                        {loc.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text className="text-xs text-faint mt-1.5">
+                {locale === 'en'
+                  ? 'All branches selected = visible everywhere. Deselect to limit to specific branches.'
+                  : 'Todas seleccionadas = visible en todas. Deselecciona para limitar a sucursales específicas.'}
+              </Text>
             </View>
           ) : null}
 

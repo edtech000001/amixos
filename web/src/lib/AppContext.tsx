@@ -7,6 +7,7 @@ import {
   setActiveRolePermissions,
   mergeRolePermissions,
   permissionsForRole,
+  can,
   type Role,
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
@@ -166,6 +167,9 @@ interface AppContextValue {
   // Active location filter for list views. Null = "All locations" (also the
   // value when a business has 0/1 locations). Reports always span all branches.
   activeLocationId: string | null;
+  // The caller's OWN assigned (home/primary) branch, if any. Drives the default
+  // branch on new records so data auto-files to where the user works.
+  myHomeLocationId: string | null;
   setActiveLocation: (locationId: string | null) => void;
   // Reload the active business's branches (call after add/rename/archive).
   refetchLocations: () => Promise<void>;
@@ -201,6 +205,7 @@ const AppContext = createContext<AppContextValue>({
   activeBusinessId: null,
   locations: [],
   activeLocationId: null,
+  myHomeLocationId: null,
   setActiveLocation: () => {},
   refetchLocations: async () => {},
   roles: {},
@@ -261,6 +266,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [activeLocationId, setActiveLocationIdState] = useState<string | null>(null);
+  const [myHomeLocationId, setMyHomeLocationId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [roleOverrides, setRoleOverrides] = useState<Partial<Record<Role, RolePermissions>>>({});
   const [loading, setLoading] = useState(true);
@@ -318,23 +324,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeBusinessId) {
       setLocations([]);
       setActiveLocationIdState(null);
+      setMyHomeLocationId(null);
       return;
     }
     const rows = await fetchLocations(supabase, activeBusinessId);
     setLocations(rows);
+    // The caller's OWN home branch — used to auto-select a branch on new records
+    // and as the default active filter. Fetched once per load.
+    const home = rows.length >= 2 && realUser
+      ? await fetchMyHomeLocation(supabase, activeBusinessId, realUser.id)
+      : null;
+    const validHome = home && rows.some((l) => l.id === home) ? home : null;
+    setMyHomeLocationId(validHome);
     const saved = readActiveLocCookie()[activeBusinessId];
     if (saved !== undefined) {
       if (saved === '__all__') { setActiveLocationIdState(null); return; }
       setActiveLocationIdState(rows.some((l) => l.id === saved) ? saved : null);
       return;
     }
-    const role = roles[activeBusinessId];
-    if (rows.length < 2 || role === 'owner') { setActiveLocationIdState(null); return; }
-    const home = realUser ? await fetchMyHomeLocation(supabase, activeBusinessId, realUser.id) : null;
-    setActiveLocationIdState(home && rows.some((l) => l.id === home) ? home : null);
-  }, [activeBusinessId, roles, realUser?.id]);
+    if (rows.length < 2) { setActiveLocationIdState(null); return; }
+    // Everyone — owners included — defaults to their own home branch when they
+    // have one; owners with no assigned branch fall back to All.
+    setActiveLocationIdState(validHome);
+  }, [activeBusinessId, realUser?.id]);
 
   useEffect(() => { void loadLocations(); }, [loadLocations]);
+
+  // Enforce the per-role location lock: a role without the switchLocations
+  // capability is pinned to its own home branch and can't view "All"/other
+  // branches. RLS enforces the same on reads; this keeps the UI consistent.
+  // Uses setActiveLocationIdState (not setActiveLocation) so the forced value
+  // isn't persisted as an explicit choice. Re-runs when overrides load so a
+  // lock configured in the role editor takes effect without a reload.
+  useEffect(() => {
+    if (locations.length < 2 || can.switchLocations(currentRole)) return;
+    if (activeLocationId !== myHomeLocationId) setActiveLocationIdState(myHomeLocationId);
+  }, [locations, currentRole, roleOverrides, myHomeLocationId, activeLocationId]);
 
   const setActiveLocation = useCallback((locationId: string | null) => {
     setActiveLocationIdState(locationId);
@@ -471,6 +496,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeBusinessId,
         locations,
         activeLocationId,
+        myHomeLocationId,
         setActiveLocation,
         refetchLocations: loadLocations,
         roles,

@@ -19,7 +19,7 @@ type StepKey = 'clients' | 'employees' | 'jobs' | 'photos' | 'invoices' | 'payro
 export default function ImportarDatosPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
-  const { business } = useApp();
+  const { business, locations } = useApp();
   const supabase = createSupabaseClient();
 
   const [openStep, setOpenStep] = useState<StepKey | null>(null);
@@ -83,6 +83,7 @@ export default function ImportarDatosPage() {
         onClose={() => setOpenStep(null)}
         businessId={business.id}
         templates={clientTemplates}
+        locations={locations.map(l => ({ id: l.id, name: l.name }))}
         onImportComplete={() => {}}
       />
       <ImportPhotosModal

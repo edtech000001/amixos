@@ -27,6 +27,8 @@ import type { FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { confirm as confirmDialog, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
+import { LocationSwitcher } from '@/components/dashboard/LocationSwitcher';
 
 interface PaymentRow {
   id: string;
@@ -43,10 +45,11 @@ interface PaymentRow {
 export default function NominaPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole } = useApp();
+  const { business, user, currentRole, activeLocationId } = useApp();
   const { t, locale } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const canManage = currentRole === 'owner' || currentRole === 'admin';
+  const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
 
   const [frequency, setFrequency] = useState<PayrollFrequency>(normalizeFrequency(business?.payroll_frequency));
   const [anchorDate, setAnchorDate] = useState<string | null>(business?.payroll_anchor_date ?? null);
@@ -141,6 +144,8 @@ export default function NominaPage() {
     });
     setLoanBalances(balances);
     setLoanEntries(entries);
+    // Branch memberships for the location filter (best-effort).
+    void fetchEmployeeLocations(supabase, bid).then(setEmpLocations).catch(() => {});
     setLoading(false);
   }, [business, supabase, period.startStr, period.endStr]);
 
@@ -187,10 +192,19 @@ export default function NominaPage() {
 
 
 
+  // Scope the paid workers to the active branch: only employees assigned to it.
+  // "All locations" (null) pays everyone. Workers with no branch assignment are
+  // excluded from a branch view (mirrors the Team list's branch filter).
+  const scopedEmployees = useMemo(() => {
+    if (!activeLocationId) return employees;
+    const ids = employeeIdsAtLocation(empLocations, activeLocationId);
+    return employees.filter(e => ids.has(e.id));
+  }, [employees, empLocations, activeLocationId]);
+
   const rows: PayrollScreenRow[] = useMemo(() => {
     // includeZero + post-filter: a 0-hour worker WITH a payment this period
     // (manual check — owner pay, ex-worker correction) must stay visible.
-    const base = computePayrollRows({ employees, timesheets, jobs, period, includeZero: true, config });
+    const base = computePayrollRows({ employees: scopedEmployees, timesheets, jobs, period, includeZero: true, config });
     // Several payments can cover one period (partial checks) — group them.
     const payByEmp = new Map<string, PaymentRow[]>();
     payments.forEach(p => {
@@ -221,7 +235,7 @@ export default function NominaPage() {
         }),
       };
     }).filter(r => r.hours > 0 || r.payType === 'salary' || (r.payments?.length ?? 0) > 0);
-  }, [employees, timesheets, jobs, payments, period, config]);
+  }, [scopedEmployees, timesheets, jobs, payments, period, config]);
 
   const onFrequencyChange = async (f: PayrollFrequency) => {
     setFrequency(f);
@@ -387,6 +401,7 @@ export default function NominaPage() {
       onPrevPeriod={() => setOffset(o => o - 1)}
       onNextPeriod={() => setOffset(o => o + 1)}
       rows={rows}
+      locationSwitcher={<LocationSwitcher />}
       config={config}
       formulaFields={formulaFields}
       allWorkers={employees.filter(e => (e as { active?: boolean | null }).active !== false).map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name}` }))}

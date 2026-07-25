@@ -21,6 +21,8 @@ export interface ImportClientsModalProps {
   onClose: () => void;
   businessId: string;
   templates: { field_key: string; field_label: string }[];
+  /** Business branches — adds a Branch column for multi-location businesses. */
+  locations?: { id: string; name: string }[];
   onImportComplete: () => void;
 }
 
@@ -64,13 +66,22 @@ export function ImportClientsModal({
   onClose,
   businessId,
   templates,
+  locations,
   onImportComplete,
 }: ImportClientsModalProps) {
   const supabase = createSupabaseClient();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.clients;
   const syncBanner = useGoogleSyncBanner();
+
+  // Branch column only for multi-location businesses. Not a `clients` column —
+  // a matched name links the client to that one branch; blank/unknown leaves it
+  // shared across every branch (the client list's default for unlinked rows).
+  const multiLocation = (locations?.length ?? 0) > 1;
+  const branchByName = new Map<string, string>();
+  for (const l of locations ?? []) branchByName.set(l.name.trim().toLowerCase(), l.id);
+  const branchLabel = locale === 'en' ? 'Branch' : 'Sucursal';
 
   // Only queue the Google-Contacts mirror if sync is actually connected
   // for this business — otherwise the user sees "Agregando a Google
@@ -145,7 +156,7 @@ export function ImportClientsModal({
   // back to one-by-one inserts on that slice so we can identify the
   // specific bad row and capture its error reason.
   const insertBatchWithRetry = async (
-    batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string> }[],
+    batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null }[],
   ): Promise<{
     success: number;
     insertedIds: string[];
@@ -154,6 +165,8 @@ export function ImportClientsModal({
     let success = 0;
     const insertedIds: string[] = [];
     const failedRows: { label: string; reason: string }[] = [];
+    // Branch links (matched branches only) written once all clients exist.
+    const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
     for (let i = 0; i < batch.length; i += 50) {
       setProgress({ done: i, total: batch.length });
       const slice = batch.slice(i, i + 50);
@@ -172,13 +185,29 @@ export function ImportClientsModal({
             failedRows.push({ label: rowLabel(b.entry, b.originalRow, b.csvLine), reason: e2.message });
           } else {
             success++;
-            if (d2?.id) insertedIds.push(d2.id);
+            if (d2?.id) {
+              insertedIds.push(d2.id);
+              if (b.branchId) branchLinks.push({ business_id: businessId, client_id: d2.id, location_id: b.branchId, is_primary: true });
+            }
           }
         }
       } else {
         success += slice.length;
-        if (Array.isArray(data)) insertedIds.push(...data.map((r: { id: string }) => r.id));
+        // Rows come back in insertion order — zip ids to the slice to attach
+        // each row's matched branch link.
+        if (Array.isArray(data)) {
+          data.forEach((r: { id: string }, j: number) => {
+            insertedIds.push(r.id);
+            const b = slice[j];
+            if (b?.branchId) branchLinks.push({ business_id: businessId, client_id: r.id, location_id: b.branchId, is_primary: true });
+          });
+        }
       }
+    }
+    // Best-effort — a link failure doesn't undo imported clients (they just
+    // stay shared across branches).
+    for (let i = 0; i < branchLinks.length; i += 200) {
+      await supabase.from('client_locations').insert(branchLinks.slice(i, i + 200));
     }
     return { success, insertedIds, failedRows };
   };
@@ -188,7 +217,10 @@ export function ImportClientsModal({
   // it as a template. Same column names as the web template — so a file
   // built on one platform imports cleanly on the other.
   const downloadTemplate = async () => {
-    const headers = CLIENT_FIELD_KEYS.map(k => FIELD_LABELS[k]).join(',');
+    const headers = [
+      ...CLIENT_FIELD_KEYS.map(k => FIELD_LABELS[k]),
+      ...(multiLocation ? [branchLabel] : []),
+    ].join(',');
     const example = [
       'Juan', 'Pérez', 'Pérez Construcción',
       '(555) 123-4567', '(555) 987-6543',
@@ -196,6 +228,7 @@ export function ImportClientsModal({
       '123 Main St', 'Omaha', 'NE', '68102',
       'Cliente nuevo',
       '6/9/2026 8:00', '6/12/2026 4:45 PM',
+      ...(multiLocation ? [locations?.[0]?.name ?? ''] : []),
     ].join(',');
     const csv = `${headers}\n${example}\n`;
     const path = `${FileSystem.cacheDirectory}${t.importModal.templateFilename}`;
@@ -310,7 +343,10 @@ export function ImportClientsModal({
   };
 
   const allImportFields = [
-    ...CLIENT_FIELD_KEYS.map(k => ({ key: k, label: FIELD_LABELS[k], isCustom: false, hint: FIELD_HINTS[k] })),
+    ...CLIENT_FIELD_KEYS.map(k => ({ key: k, label: FIELD_LABELS[k], isCustom: false, hint: FIELD_HINTS[k] as string | undefined })),
+    ...(multiLocation
+      ? [{ key: 'branch', label: branchLabel, isCustom: false, hint: (locale === 'en' ? 'Blank = visible in all branches.' : 'Vacío = visible en todas las sucursales.') as string | undefined }]
+      : []),
     ...templates.map(tpl => ({
       key: `custom:${tpl.field_key}`,
       label: tpl.field_label,
@@ -427,8 +463,9 @@ export function ImportClientsModal({
 
   const runImport = async () => {
     setImporting(true);
-    const batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string> }[] = [];
+    const batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null }[] = [];
     const failedRows: { label: string; reason: string }[] = [];
+    const unknownBranches = new Set<string>();
 
     rows.forEach((row, idx) => {
       // CSV line: header is line 1, data starts at line 2.
@@ -475,12 +512,32 @@ export function ImportClientsModal({
       }
       if (!entry.first_name) entry.first_name = entry.last_name || entry.company || '';
       if (!entry.last_name) entry.last_name = '';
-      batch.push({ entry, csvLine, originalRow: row });
+      // Resolve the branch cell (multi-location only). Matched → that branch;
+      // blank stays shared; non-empty unmatched is reported (client still imports).
+      let branchId: string | null = null;
+      if (multiLocation) {
+        const bCol = colMap['branch'];
+        const branchRaw = bCol && row[bCol] ? row[bCol].trim() : '';
+        if (branchRaw) {
+          branchId = branchByName.get(branchRaw.toLowerCase()) ?? null;
+          if (!branchId) unknownBranches.add(branchRaw);
+        }
+      }
+      batch.push({ entry, csvLine, originalRow: row, branchId });
     });
 
     const { success, insertedIds, failedRows: dbFailures } =
       await insertBatchWithRetry(batch);
     failedRows.push(...dbFailures);
+    if (unknownBranches.size) {
+      const shown = Array.from(unknownBranches).slice(0, 10).join(', ');
+      failedRows.push({
+        label: locale === 'en' ? 'Unrecognized branches' : 'Sucursales no reconocidas',
+        reason: locale === 'en'
+          ? `${shown} — clients imported as shared (all branches).`
+          : `${shown} — clientes importados como compartidos (todas las sucursales).`,
+      });
+    }
 
     // Hand off to the banner provider — it owns throttling, persistence,
     // and auto-resume if the app is killed mid-batch.

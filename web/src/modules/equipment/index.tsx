@@ -146,7 +146,7 @@ function DetailCard({ children }: { children: ReactNode }) {
 
 export default function EquipmentModule() {
   const supabase = createSupabaseClient();
-  const { business, user, locations, activeLocationId } = useApp();
+  const { business, user, locations, activeLocationId, myHomeLocationId } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
@@ -310,7 +310,8 @@ export default function EquipmentModule() {
 
   const openAdd = () => {
     setSelected(null);
-    setForm(EMPTY_FORM);
+    // Auto-file new equipment to the branch you're viewing, else your home branch.
+    setForm({ ...EMPTY_FORM, location_id: activeLocationId ?? myHomeLocationId ?? '' });
     setPhotos([]);
     setPendingPhotos([]);
     setError('');
