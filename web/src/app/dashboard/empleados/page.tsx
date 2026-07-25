@@ -712,6 +712,36 @@ export default function EmpleadosPage() {
     await loadTimesheets(); await loadHourTotals();
   };
 
+  // Bulk-delete selected employees. Removes app-access memberships first (mirrors
+  // the single delete), skips your own record, then the rows. Returns false when
+  // cancelled so the list keeps its selection.
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const bulkDeleteEmployees = async (ids: string[]): Promise<boolean> => {
+    if (!business || ids.length === 0) return false;
+    const toDelete = employees
+      .filter(e => ids.includes(e.id) && !(e.user_id && e.user_id === user?.id))
+      .map(e => e.id);
+    if (toDelete.length === 0) return false;
+    const ok = await confirm({
+      message: t.confirmDeleteBulk.replace('{{count}}', String(toDelete.length)),
+      confirmText: t.bulkDelete,
+      destructive: true,
+    });
+    if (!ok) return false;
+    setBulkDeleting(true);
+    const userIds = employees.filter(e => toDelete.includes(e.id) && e.user_id).map(e => e.user_id as string);
+    if (userIds.length) {
+      await supabase.from('business_members').delete().eq('business_id', business.id).in('user_id', userIds);
+    }
+    for (let i = 0; i < toDelete.length; i += 50) {
+      await supabase.from('employees').delete().in('id', toDelete.slice(i, i + 50));
+    }
+    await loadEmployees();
+    await loadPeople();
+    setBulkDeleting(false);
+    return true;
+  };
+
   // ─── App access (invite / change role / revoke / remove) ───────────────
   // Managed straight from the person modal. RLS is the real lock; these
   // controls only show for owner/admin. After each action we reload the
@@ -1166,6 +1196,8 @@ export default function EmpleadosPage() {
       onLogHours={() => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); }}
       onEditTimesheet={editTimesheet}
       onDeleteTimesheet={deleteTimesheet}
+      onBulkDelete={can.deleteEmployee(currentRole) ? bulkDeleteEmployees : undefined}
+      bulkDeleting={bulkDeleting}
       modalsSlot={modals}
     />
   );

@@ -8,6 +8,7 @@ import {
   Modal as RNModal,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -41,7 +42,7 @@ import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { type Role } from '@amixos/shared/lib/permissions';
+import { can, type Role } from '@amixos/shared/lib/permissions';
 
 interface RawEmployee {
   id: string;
@@ -419,6 +420,44 @@ export default function EmpleadosRoute() {
     setEmployees((prev) =>
       prev.map((emp) => (emp.id === e.id ? { ...emp, active: nextActive } : emp)),
     );
+  };
+
+  // Bulk-delete selected employees. Removes their app-access membership first
+  // (mirrors the single-delete), skips your own record, then the rows. Returns
+  // false when cancelled so the list keeps its selection.
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const bulkDeleteEmployees = (ids: string[]): Promise<boolean> => {
+    if (!business || ids.length === 0) return Promise.resolve(false);
+    // Never delete your own employee record from a bulk action.
+    const toDelete = employees
+      .filter((e) => ids.includes(e.id) && !(e.user_id && e.user_id === user?.id))
+      .map((e) => e.id);
+    if (toDelete.length === 0) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      Alert.alert('', t.confirmDeleteBulk.replace('{{count}}', String(toDelete.length)), [
+        { text: tc.buttons.cancel, style: 'cancel', onPress: () => resolve(false) },
+        {
+          text: t.bulkDelete,
+          style: 'destructive',
+          onPress: async () => {
+            setBulkDeleting(true);
+            const userIds = employees
+              .filter((e) => toDelete.includes(e.id) && e.user_id)
+              .map((e) => e.user_id as string);
+            if (userIds.length) {
+              await supabase.from('business_members').delete().eq('business_id', business.id).in('user_id', userIds);
+            }
+            for (let i = 0; i < toDelete.length; i += 50) {
+              await supabase.from('employees').delete().in('id', toDelete.slice(i, i + 50));
+            }
+            await loadEmployees();
+            await loadPeople();
+            setBulkDeleting(false);
+            resolve(true);
+          },
+        },
+      ]);
+    });
   };
 
   // Add + row taps both navigate to dedicated screens now (no in-list modal):
@@ -949,6 +988,8 @@ export default function EmpleadosRoute() {
         onLogHours={openLogHours}
         onEditTimesheet={editTimesheet}
         onDeleteTimesheet={deleteTimesheet}
+        onBulkDelete={can.deleteEmployee(currentRole) ? bulkDeleteEmployees : undefined}
+        bulkDeleting={bulkDeleting}
         modalsSlot={modalsSlot}
       />
     </SafeAreaView>

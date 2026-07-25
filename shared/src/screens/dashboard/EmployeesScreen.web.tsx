@@ -5,14 +5,14 @@
 // API as EmployeesScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Plus,
   Clock,
   ClipboardList,
   UserCheck,
   Pencil, Trash2,
-  Search, X, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
+  Search, X, SlidersHorizontal, ChevronDown, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { ROLE_LABELS } from '../../lib/permissions';
@@ -93,6 +93,10 @@ export interface EmployeesScreenProps {
   /** Edit / delete a logged-hours entry (History tab). */
   onEditTimesheet?: (id: string) => void;
   onDeleteTimesheet?: (id: string) => void;
+  /** Bulk-delete the selected employees. Return false to keep the selection
+   *  (cancelled); anything else clears it. Omit to hide multi-select. */
+  onBulkDelete?: (ids: string[]) => Promise<boolean> | void;
+  bulkDeleting?: boolean;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
   /** Custom-field definitions (from employee_field_templates) — drive the
@@ -114,6 +118,8 @@ export function EmployeesScreen({
   onLogHours,
   onEditTimesheet,
   onDeleteTimesheet,
+  onBulkDelete,
+  bulkDeleting,
   customFieldDefs,
   modalsSlot,
 }: EmployeesScreenProps) {
@@ -199,6 +205,43 @@ export function EmployeesScreen({
       return true;
     });
   }, [employees, search, filterFields, filterSel]);
+
+  // Multi-select + bulk delete (team tab). Mirrors the clients list.
+  const canBulkDelete = !!onBulkDelete;
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectionMode = selectMode || selectedIds.size > 0;
+  // Anchor for shift-click range selection (index into filteredEmployees).
+  const lastIdxRef = useRef<number | null>(null);
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); lastIdxRef.current = null; };
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Row click in select mode: plain click toggles + moves the anchor; shift+click
+  // selects every row between the anchor and this one (like a file list).
+  const rowClick = (ev: React.MouseEvent, id: string, index: number) => {
+    if (!selectionMode) { onEditEmployee(id); return; }
+    if (ev.shiftKey && lastIdxRef.current !== null) {
+      const [a, b] = lastIdxRef.current < index ? [lastIdxRef.current, index] : [index, lastIdxRef.current];
+      setSelectedIds(prev => {
+        const n = new Set(prev);
+        for (let i = a; i <= b; i++) n.add(filteredEmployees[i].id);
+        return n;
+      });
+    } else {
+      toggleSelect(id);
+      lastIdxRef.current = index;
+    }
+  };
+  const allSelected = filteredEmployees.length > 0 && selectedIds.size === filteredEmployees.length;
+  const toggleSelectAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(filteredEmployees.map(e => e.id)));
+  const handleBulkDelete = async () => {
+    if (!onBulkDelete || selectedIds.size === 0) return;
+    const res = await onBulkDelete(Array.from(selectedIds));
+    if (res !== false) exitSelect();
+  };
+  const selectedCountLabel = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
+    .replace('{{count}}', String(selectedIds.size));
 
   const [tsSearch, setTsSearch] = useState('');
   const filteredTimesheets = useMemo(() => {
@@ -371,7 +414,41 @@ export function EmployeesScreen({
             </>
           ) : null}
         </div>
+        {canBulkDelete && employees.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => (selectionMode ? exitSelect() : setSelectMode(true))}
+            title={t.selectAllShort}
+            className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              selectionMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+            }`}
+          >
+            <ListChecks size={15} />
+          </button>
+        ) : null}
         </div>
+        {selectionMode ? (
+          <div className="flex items-center justify-between mb-3 px-4 py-2.5 rounded-2xl bg-primary/5 border border-primary/30">
+            <span className="text-sm font-semibold text-primary">{selectedCountLabel}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={toggleSelectAll} className="text-xs font-semibold text-primary hover:underline">
+                {t.selectAllShort}
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0 || !!bulkDeleting}
+                className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-red-700 disabled:bg-gray-300 transition-colors"
+              >
+                <Trash2 size={14} />
+                {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
+              </button>
+              <button type="button" onClick={exitSelect} className="text-faint hover:text-muted p-1">
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
         {employees.length === 0 ? (
           <div className="flex flex-col items-center py-20">
             <UserCheck size={40} className="text-faint" />
@@ -410,11 +487,18 @@ export function EmployeesScreen({
                 // Lets the page's scroll restore find and re-center this
                 // exact row when the user returns from the detail.
                 data-scroll-anchor={e.id}
-                onClick={() => onEditEmployee(e.id)}
-                className={`w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors ${
-                  i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''
-                }`}
+                onClick={(ev) => rowClick(ev, e.id, i)}
+                className={`w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors select-none ${
+                  selectedIds.has(e.id) ? 'bg-primary/5' : ''
+                } ${i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
+                {selectionMode ? (
+                  <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${
+                    selectedIds.has(e.id) ? 'bg-primary border-primary' : 'border-border bg-card'
+                  }`}>
+                    {selectedIds.has(e.id) ? <Check size={15} className="text-white" /> : null}
+                  </div>
+                ) : (
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                     e.active ? 'bg-primary/10' : 'bg-border-soft'
@@ -424,6 +508,7 @@ export function EmployeesScreen({
                     {e.firstName.charAt(0)}{e.lastName.charAt(0)}
                   </span>
                 </div>
+                )}
                 {/* Name (flex) | role | pay | phone | badges — aligned columns
                    that collapse back under the name on narrow windows. */}
                 <div className="min-w-0 flex-1">

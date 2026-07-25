@@ -962,6 +962,11 @@ export type DashboardDict = {
     deleteHoursConfirm: string;
     teamSearchPlaceholder: string;
     resultsCount: string;
+    selectAllShort: string;
+    selectedCountSingle: string;
+    selectedCountPlural: string;
+    bulkDelete: string;
+    confirmDeleteBulk: string;
     filter: {
       button: string;
       status: string;
@@ -3543,6 +3548,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteHoursConfirm: '¿Eliminar este registro de horas?',
       teamSearchPlaceholder: 'Buscar por nombre, teléfono o campo…',
       resultsCount: '{{count}} resultados',
+      selectAllShort: 'Todos',
+      selectedCountSingle: '{{count}} seleccionado',
+      selectedCountPlural: '{{count}} seleccionados',
+      bulkDelete: 'Eliminar',
+      confirmDeleteBulk: '¿Eliminar {{count}} empleados? Esta acción no se puede deshacer y borra su historial.',
       filter: {
         button: 'Filtrar',
         status: 'Estado',
@@ -6127,6 +6137,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       deleteHoursConfirm: 'Delete this hours entry?',
       teamSearchPlaceholder: 'Search name, phone or field…',
       resultsCount: '{{count}} results',
+      selectAllShort: 'All',
+      selectedCountSingle: '{{count}} selected',
+      selectedCountPlural: '{{count}} selected',
+      bulkDelete: 'Delete',
+      confirmDeleteBulk: 'Delete {{count}} employees? This cannot be undone and removes their history.',
       filter: {
         button: 'Filter',
         status: 'Status',

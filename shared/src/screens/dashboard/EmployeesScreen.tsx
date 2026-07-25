@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal } from 'react-native';
 import {
   Clock,
   ClipboardList,
   UserCheck,
   Plus, Pencil, Trash2, X,
-  Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react-native';
+  Search, SlidersHorizontal, ChevronDown, Check, ListChecks } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -87,6 +87,11 @@ export interface EmployeesScreenProps {
   /** Edit / delete a logged-hours entry (History tab). */
   onEditTimesheet?: (id: string) => void;
   onDeleteTimesheet?: (id: string) => void;
+  /** Bulk-delete the selected employees. Return false to keep the selection
+   *  (e.g. the confirm was cancelled); anything else clears it. Omit to hide
+   *  the multi-select affordance entirely (no delete permission). */
+  onBulkDelete?: (ids: string[]) => Promise<boolean> | void;
+  bulkDeleting?: boolean;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
   /** Custom-field definitions (from employee_field_templates) — drive the
@@ -108,6 +113,8 @@ export function EmployeesScreen({
   onLogHours,
   onEditTimesheet,
   onDeleteTimesheet,
+  onBulkDelete,
+  bulkDeleting,
   customFieldDefs,
   modalsSlot,
 }: EmployeesScreenProps) {
@@ -195,6 +202,28 @@ export function EmployeesScreen({
     });
   }, [employees, search, filterFields, filterSel]);
 
+  // Multi-select + bulk delete (team tab). Long-press a row to enter select
+  // mode; tap toggles; a bottom bar deletes. Mirrors the clients/jobs lists.
+  const canBulkDelete = !!onBulkDelete;
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectionMode = selectMode || selectedIds.size > 0;
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const enterSelect = (id: string) => { setSelectMode(true); setSelectedIds(new Set([id])); };
+  const allSelected = filteredEmployees.length > 0 && selectedIds.size === filteredEmployees.length;
+  const toggleSelectAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(filteredEmployees.map(e => e.id)));
+  const rowPress = (id: string) => (selectionMode ? toggleSelect(id) : onEditEmployee(id));
+  const handleBulkDelete = async () => {
+    if (!onBulkDelete || selectedIds.size === 0) return;
+    const res = await onBulkDelete(Array.from(selectedIds));
+    if (res !== false) exitSelect();
+  };
+  const selectedCountLabel = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
+    .replace('{{count}}', String(selectedIds.size));
+
   const [tsSearch, setTsSearch] = useState('');
   const filteredTimesheets = useMemo(() => {
     const q = norm(tsSearch.trim());
@@ -213,7 +242,7 @@ export function EmployeesScreen({
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-44">
+    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectionMode ? 'pb-80' : 'pb-44'}`}>
       {/* Header — "add" is the bottom-right Fab; log-hours stays here as a
          secondary action. */}
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
@@ -278,74 +307,28 @@ export function EmployeesScreen({
           >
             <SlidersHorizontal size={16} color={filtersActive || filterOpen ? c.primary : c.muted} />
           </Pressable>
+          {canBulkDelete && employees.length > 0 ? (
+            <Pressable
+              onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
+              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+                selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+              }`}
+            >
+              <ListChecks size={16} color={selectionMode ? c.primary : c.muted} />
+            </Pressable>
+          ) : null}
         </View>
-        {filterOpen ? (
-          <View className="bg-card rounded-2xl border border-border-soft py-1 mb-4 overflow-hidden">
-            {filterFields.map(f => {
-              const sel = filterSel[f.key] ?? [];
-              const open = openField === f.key;
-              const values = open ? valueCounts(f) : [];
-              const vq = norm(valueSearch.trim());
-              const shown = vq
-                ? values.filter(([v]) => norm(v === '' ? t.filter.empty : f.labelOf(v)).includes(vq))
-                : values;
-              return (
-                <View key={f.key} className="border-b border-border-soft">
-                  <Pressable
-                    onPress={() => { setOpenField(open ? null : f.key); setValueSearch(''); }}
-                    className="flex-row items-center justify-between px-4 py-3 active:bg-surface"
-                  >
-                    <View className="flex-row items-center gap-2">
-                      <Text className="text-sm font-semibold text-ink">{f.label}</Text>
-                      {sel.length ? (
-                        <View className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary items-center justify-center">
-                          <Text className="text-[10px] font-bold text-white">{sel.length}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <ChevronDown size={15} color={c.faint} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
-                  </Pressable>
-                  {open ? (
-                    <View className="px-2 pb-2">
-                      {values.length > 8 ? (
-                        <TextInput
-                          value={valueSearch}
-                          onChangeText={setValueSearch}
-                          placeholder={t.filter.searchValue}
-                          placeholderTextColor={c.faint}
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          className="mb-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-ink"
-                        />
-                      ) : null}
-                      <ScrollView className="max-h-52" nestedScrollEnabled>
-                        {shown.map(([v, count]) => {
-                          const on = sel.includes(v);
-                          return (
-                            <Pressable
-                              key={v || '(empty)'}
-                              onPress={() => toggleFilterValue(f.key, v)}
-                              className="flex-row items-center gap-2 px-2 py-2 rounded-lg active:bg-surface"
-                            >
-                              <View className={`w-4 h-4 rounded border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
-                                {on ? <Check size={11} color="#fff" /> : null}
-                              </View>
-                              <Text className={`flex-1 text-sm ${v === '' ? 'italic text-faint' : 'text-ink'}`} numberOfLines={1}>
-                                {v === '' ? t.filter.empty : f.labelOf(v)}
-                              </Text>
-                              <Text className="text-xs text-faint">{count}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
-            {filtersActive ? (
-              <Pressable onPress={clearFilters} className="mx-2 my-2 py-2 rounded-xl bg-border-soft items-center active:opacity-80">
-                <Text className="text-sm font-semibold text-ink">{t.filter.clear}</Text>
+
+        {selectionMode ? (
+          <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-3">
+            <Pressable onPress={exitSelect} className="p-1 rounded">
+              <X size={14} color={c.primary} />
+            </Pressable>
+            <Text className="text-sm font-medium text-primary flex-shrink" numberOfLines={1}>{selectedCountLabel}</Text>
+            <View className="flex-1" />
+            {!allSelected && filteredEmployees.length > 0 ? (
+              <Pressable onPress={toggleSelectAll} className="px-2 py-1.5 rounded-lg active:bg-primary/10">
+                <Text className="text-xs font-semibold text-primary">{t.selectAllShort}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -360,14 +343,25 @@ export function EmployeesScreen({
           </View>
         ) : (
           <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-            {filteredEmployees.map((e, i) => (
+            {filteredEmployees.map((e, i) => {
+              const selected = selectedIds.has(e.id);
+              return (
               <Pressable
                 key={e.id}
-                onPress={() => onEditEmployee(e.id)}
+                onPress={() => rowPress(e.id)}
+                onLongPress={canBulkDelete ? () => enterSelect(e.id) : undefined}
+                delayLongPress={300}
                 className={`flex-row items-start gap-3 px-5 py-4 active:bg-surface ${
-                  i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''
-                }`}
+                  selected ? 'bg-primary/5' : ''
+                } ${i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
+                {selectionMode ? (
+                  <View className={`w-6 h-6 mt-1 rounded-md border items-center justify-center ${
+                    selected ? 'bg-primary border-primary' : 'border-border bg-card'
+                  }`}>
+                    {selected ? <Check size={14} color="#fff" /> : null}
+                  </View>
+                ) : (
                 <View
                   className={`w-9 h-9 rounded-full items-center justify-center ${
                     e.active ? 'bg-primary/10' : 'bg-border-soft'
@@ -381,6 +375,7 @@ export function EmployeesScreen({
                     {e.firstName.charAt(0)}{e.lastName.charAt(0)}
                   </Text>
                 </View>
+                )}
                 <View className="min-w-0 flex-1">
                   <Text className="text-sm font-semibold text-ink" numberOfLines={2}>
                     {e.firstName} {e.lastName}
@@ -409,7 +404,8 @@ export function EmployeesScreen({
                   </Text>
                 </View>
               </Pressable>
-            ))}
+              );
+            })}
           </View>
         )}
         </>
@@ -516,8 +512,119 @@ export function EmployeesScreen({
     </ScrollView>
 
     {/* New employee — floating action, bottom-right thumb reach. The Hours
-       logged tab has its own inline "add entry" button. */}
-    {tab === 'empleados' ? <Fab onPress={onAddEmployee} /> : null}
+       logged tab has its own inline "add entry" button. Hidden while selecting. */}
+    {tab === 'empleados' && !selectionMode ? <Fab onPress={onAddEmployee} /> : null}
+
+    {/* Bulk-delete pill — floating bottom-left, matching the jobs list. */}
+    {tab === 'empleados' && selectionMode ? (
+      <Pressable
+        onPress={handleBulkDelete}
+        disabled={selectedIds.size === 0 || !!bulkDeleting}
+        className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
+        style={{
+          backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
+          elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+        }}
+      >
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text className="text-white font-semibold">
+          {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
+        </Text>
+      </Pressable>
+    ) : null}
+
+    {/* Filter bottom sheet — matches the jobs sort/group sheet. fade (not slide)
+       so the dim backdrop doesn't read as a gray bar rising. */}
+    <RNModal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
+      <View className="flex-1 justify-end">
+        <Pressable
+          onPress={() => setFilterOpen(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10 max-h-[85%]">
+          <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-base font-bold text-ink">{t.filter.button}</Text>
+            <View className="flex-row items-center gap-3">
+              {filtersActive ? (
+                <Pressable onPress={clearFilters} hitSlop={8}>
+                  <Text className="text-sm font-semibold text-muted">{t.filter.clear}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={() => setFilterOpen(false)} hitSlop={8}>
+                <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
+              </Pressable>
+            </View>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View className="gap-1.5">
+              {filterFields.map(f => {
+                const sel = filterSel[f.key] ?? [];
+                const open = openField === f.key;
+                const values = open ? valueCounts(f) : [];
+                const vq = norm(valueSearch.trim());
+                const shown = vq
+                  ? values.filter(([v]) => norm(v === '' ? t.filter.empty : f.labelOf(v)).includes(vq))
+                  : values;
+                return (
+                  <View key={f.key} className={`rounded-2xl overflow-hidden ${open ? 'bg-surface' : ''}`}>
+                    <Pressable
+                      onPress={() => { setOpenField(open ? null : f.key); setValueSearch(''); }}
+                      className={`flex-row items-center justify-between px-4 py-3.5 rounded-2xl ${open ? '' : 'active:bg-surface'}`}
+                    >
+                      <View className="flex-row items-center gap-2">
+                        <Text className={`text-base ${sel.length ? 'text-primary font-semibold' : 'text-ink font-medium'}`}>{f.label}</Text>
+                        {sel.length ? (
+                          <View className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary items-center justify-center">
+                            <Text className="text-[11px] font-bold text-white">{sel.length}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <ChevronDown size={17} color={c.faint} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
+                    </Pressable>
+                    {open ? (
+                      <View className="px-2 pb-2">
+                        {values.length > 8 ? (
+                          <TextInput
+                            value={valueSearch}
+                            onChangeText={setValueSearch}
+                            placeholder={t.filter.searchValue}
+                            placeholderTextColor={c.faint}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            className="mb-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
+                          />
+                        ) : null}
+                        <ScrollView className="max-h-64" nestedScrollEnabled>
+                          {shown.map(([v, count]) => {
+                            const on = sel.includes(v);
+                            return (
+                              <Pressable
+                                key={v || '(empty)'}
+                                onPress={() => toggleFilterValue(f.key, v)}
+                                className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-card"
+                              >
+                                <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
+                                  {on ? <Check size={13} color="#fff" /> : null}
+                                </View>
+                                <Text className={`flex-1 text-base ${v === '' ? 'italic text-faint' : on ? 'text-primary font-medium' : 'text-ink'}`} numberOfLines={1}>
+                                  {v === '' ? t.filter.empty : f.labelOf(v)}
+                                </Text>
+                                <Text className="text-xs text-faint">{count}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </RNModal>
     </View>
   );
 }
