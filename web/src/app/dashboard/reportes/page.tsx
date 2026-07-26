@@ -15,7 +15,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { computePayrollRows, normalizePayrollConfig } from '@amixos/shared/lib/payroll';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
@@ -172,32 +172,54 @@ export default function ReportesPage() {
   useEffect(() => {
     if (!business) return;
     const businessId = business.id;
+    // Keyset (id-cursor) pagination — OFFSET .range() re-scans all prior rows
+    // per page under RLS and times out once jobs/invoices grow into the
+    // thousands. Reports still loads full tables to aggregate client-side; a
+    // server-side aggregate (RPC/view) would be the next step for instant reports.
     Promise.all([
-      fetchAll<Invoice>((from, to) =>
-        supabase.from('invoices')
+      fetchAllById<Invoice>((afterId, pageSize) => {
+        let q = supabase.from('invoices')
           .select('id, status, total_amount, paid_at, created_at, issue_date, line_items')
-          .eq('business_id', businessId).range(from, to)),
-      fetchAll<Job>((from, to) =>
-        supabase.from('jobs')
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
+      fetchAllById<Job>((afterId, pageSize) => {
+        let q = supabase.from('jobs')
           .select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
-          .eq('business_id', businessId).range(from, to)),
-      fetchAll<Client>((from, to) =>
-        supabase.from('clients')
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
+      fetchAllById<Client>((afterId, pageSize) => {
+        let q = supabase.from('clients')
           .select('id, created_at')
-          .eq('business_id', businessId).range(from, to)),
-      fetchAll<Timesheet>((from, to) =>
-        supabase.from('timesheets')
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
+      fetchAllById<Timesheet>((afterId, pageSize) => {
+        let q = supabase.from('timesheets')
           .select('id, hours_worked, work_date, employee_id, worker_name')
-          .eq('business_id', businessId).range(from, to)),
-      fetchAll<Employee>((from, to) =>
-        supabase.from('employees')
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
+      fetchAllById<Employee>((afterId, pageSize) => {
+        let q = supabase.from('employees')
           .select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields')
-          .eq('business_id', businessId).range(from, to)),
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
       inventoryEnabled
-        ? fetchAll<InventoryItem>((from, to) =>
-            supabase.from('inventory_items')
+        ? fetchAllById<InventoryItem>((afterId, pageSize) => {
+            let q = supabase.from('inventory_items')
               .select('id, quantity, unit_cost')
-              .eq('business_id', businessId).range(from, to))
+              .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          })
         : Promise.resolve([] as InventoryItem[]),
     ]).then(([inv, j, cl, ts, emp, inv_items]) => {
       setInvoices(inv);
