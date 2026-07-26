@@ -4,7 +4,7 @@
 // InventoryScreen.tsx so the web page wrapper is untouched and the bundler
 // resolves this .web.tsx variant automatically.
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Plus,
   Search,
@@ -39,6 +39,15 @@ export interface InventoryScreenProps {
   onAdjustItem: (id: string) => void;
   onDeleteItem: (id: string) => void;
   modalsSlot?: ReactNode;
+  // ── Server mode (opt-in) — the wrapper does the search/segment/paging in the
+  // DB and passes whole-scope stats. On: skip client filtering, use serverStats
+  // for the summary, report filters via onFiltersChange, page via onLoadMore.
+  serverMode?: boolean;
+  serverStats?: { count: number; value: number; lowStockCount: number };
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: { search: string; lowStockOnly: boolean }) => void;
 }
 
 type Filter = 'todos' | 'bajo_stock';
@@ -52,6 +61,12 @@ export function InventoryScreen({
   onAdjustItem,
   onDeleteItem,
   modalsSlot,
+  serverMode = false,
+  serverStats,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: InventoryScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.inventory;
@@ -59,23 +74,55 @@ export function InventoryScreen({
   const [search, setSearch] = usePersistedSearch('search.inventory');
   const [filter, setFilter] = useState<Filter>('todos');
 
+  // In server mode `items` is ALREADY the search/segment-filtered page(s), so we
+  // don't re-filter. In client mode we filter the full array.
   const filtered = useMemo(() => {
+    if (serverMode) return items;
     const q = search.toLowerCase();
     return items.filter(i => {
       const matchSearch = `${i.name} ${i.sku ?? ''} ${i.category ?? ''}`.toLowerCase().includes(q);
       if (filter === 'bajo_stock') return matchSearch && i.quantity <= i.lowStockThreshold;
       return matchSearch;
     });
-  }, [items, search, filter]);
+  }, [items, search, filter, serverMode]);
 
-  const lowStockCount = items.filter(i => i.quantity <= i.lowStockThreshold).length;
-  const totalValue = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
+  // Server mode: report search + segment UP (debounced) so the wrapper re-queries.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange) return;
+    onFiltersChange({ search: debouncedSearch, lowStockOnly: filter === 'bajo_stock' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, debouncedSearch, filter]);
+
+  // Infinite scroll: load the next page when the sentinel nears the viewport.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!serverMode || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting && hasMore && !loadingMore) onLoadMore(); },
+      { rootMargin: '800px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [serverMode, onLoadMore, hasMore, loadingMore]);
+
+  // Summary sums EVERY item in scope — from serverStats when paginating, else
+  // computed over the full loaded array.
+  const summaryCount = serverMode && serverStats ? serverStats.count : items.length;
+  const lowStockCount = serverMode && serverStats ? serverStats.lowStockCount : items.filter(i => i.quantity <= i.lowStockThreshold).length;
+  const totalValue = serverMode && serverStats ? serverStats.value : items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
   const valueFormatted = `$${totalValue.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
   const summaryText = t.summary
-    .replace('{{count}}', String(items.length))
+    .replace('{{count}}', String(summaryCount))
     .replace('{{value}}', valueFormatted);
   const summaryLowStockText = t.summaryLowStock.replace('{{count}}', String(lowStockCount));
   const lowStockBannerText = (lowStockCount > 1
@@ -239,6 +286,17 @@ export function InventoryScreen({
               </div>
             );
           })}
+          {/* Infinite-scroll footer: sentinel triggers the next page. */}
+          {serverMode ? (
+            <>
+              {loadingMore ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                </div>
+              ) : null}
+              <div ref={sentinelRef} className="h-1" />
+            </>
+          ) : null}
         </div>
       )}
 

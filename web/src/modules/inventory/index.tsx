@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -13,7 +13,13 @@ import {
   InventoryScreen,
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import {
+  fetchInventoryPage,
+  fetchInventoryStats,
+  type InventoryCursor,
+  type InventoryQueryParams,
+  type InventoryStats,
+} from '@amixos/shared/lib/inventoryQuery';
 import { can } from '@amixos/shared/lib/permissions';
 
 interface RawItem {
@@ -58,22 +64,60 @@ export default function InventoryModule() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  // ── Server-side pagination + search + segment + whole-scope stats ───────────
+  const [serverStats, setServerStats] = useState<InventoryStats>({ count: 0, value: 0, lowStockCount: 0 });
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<InventoryCursor | null>(null);
+  const paramsRef = useRef<{ search: string; lowStockOnly: boolean } | null>(null);
+
+  const runQuery = async (base: { search: string; lowStockOnly: boolean }) => {
     if (!business) return;
-    const businessId = business.id;
-    const data = await fetchAllById<RawItem>((afterId, pageSize) => {
-      let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
-      // Scope stock to the active branch ("All" = no filter).
-      if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      q = q.order('id', { ascending: true }).limit(pageSize);
-      if (afterId) q = q.gt('id', afterId);
-      return q;
-    });
-    setItems(data);
-    setLoading(false);
+    const seq = ++loadSeqRef.current;
+    paramsRef.current = base;
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    const params: InventoryQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, ...base };
+    try {
+      const [page, stats] = await Promise.all([
+        fetchInventoryPage<RawItem>(supabase, '*', { ...params, pageSize: 50 }),
+        fetchInventoryStats(supabase, { businessId: business.id, locationId: activeLocationId ?? null }),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setItems(page.items);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      setServerStats(stats);
+    } catch (e) {
+      console.error('Inventory query failed', e);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, [business, activeLocationId]);
+  const loadMore = async () => {
+    if (loadingMore || !paramsRef.current || !cursorRef.current || !business) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchInventoryPage<RawItem>(supabase, '*', { businessId: business.id, locationId: activeLocationId ?? null, ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setItems(prev => [...prev, ...page.items]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch (e) {
+      console.error('Inventory load-more failed', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current); };
+  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => { void runQuery(f); };
+  // Re-query on branch change (the screen doesn't know about locations).
+  useEffect(() => { reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,
@@ -133,7 +177,7 @@ export default function InventoryModule() {
       const { error: e } = await supabase.from('inventory_items').update(payload).eq('id', selected.id);
       if (e) { setError(t.modal.errorSave); setSaving(false); return; }
     }
-    await load(); setSaving(false); setModal(null);
+    reRun(); setSaving(false); setModal(null);
   };
 
   const adjust = async () => {
@@ -242,6 +286,12 @@ export default function InventoryModule() {
       onAdjustItem={canEdit ? openAdjust : undefined}
       onDeleteItem={canEdit ? remove : undefined}
       modalsSlot={canEdit ? modals : undefined}
+      serverMode
+      serverStats={serverStats}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={loadMore}
+      onFiltersChange={handleFiltersChange}
     />
   );
 }

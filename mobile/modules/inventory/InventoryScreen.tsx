@@ -16,7 +16,12 @@ import {
   InventoryScreen as SharedInventoryScreen,
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import {
+  fetchInventoryPage,
+  fetchInventoryStats,
+  type InventoryCursor,
+  type InventoryStats,
+} from '@amixos/shared/lib/inventoryQuery';
 import { can } from '@amixos/shared/lib/permissions';
 
 interface RawItem {
@@ -65,22 +70,72 @@ export default function InventoryModuleScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
 
-  const load = async () => {
+  // ── Server-side pagination + search + segment + whole-scope stats ───────────
+  const [serverStats, setServerStats] = useState<InventoryStats>({ count: 0, value: 0, lowStockCount: 0 });
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<InventoryCursor | null>(null);
+  const paramsRef = useRef<{ search: string; lowStockOnly: boolean } | null>(null);
+
+  const runQuery = async (base: { search: string; lowStockOnly: boolean }) => {
+    paramsRef.current = base;
     if (!business) return;
     const businessId = business.id;
-    const res = await loadCached(`inventory_${businessId}_${activeLocationId ?? 'all'}`, () =>
-      fetchAllById<RawItem>((afterId, pageSize) => {
-        let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
-        if (activeLocationId) q = q.eq('location_id', activeLocationId);
-        q = q.order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }));
-    setItems(res.data ?? []);
-    setLoading(false);
+    const seq = ++loadSeqRef.current;
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    const params = { businessId, locationId: activeLocationId ?? null, ...base };
+    // Only the default (unfiltered) view is cached for offline; search / segment
+    // fetch online.
+    const isDefault = !base.search && !base.lowStockOnly;
+    const fetchFresh = async () => {
+      const [page, stats] = await Promise.all([
+        fetchInventoryPage<RawItem>(supabase, '*', { ...params, pageSize: 50 }),
+        fetchInventoryStats(supabase, { businessId, locationId: activeLocationId ?? null }),
+      ]);
+      return { items: page.items, nextCursor: page.nextCursor, stats };
+    };
+    try {
+      if (isDefault) {
+        const res = await loadCached<{ items: RawItem[]; nextCursor: InventoryCursor | null; stats: InventoryStats }>(`inventory_${businessId}_${activeLocationId ?? 'all'}`, fetchFresh);
+        if (seq !== loadSeqRef.current) return;
+        const d = res.data;
+        setItems(d?.items ?? []);
+        cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
+        setHasMore(!res.fromCache && !!d?.nextCursor);
+        setServerStats(d?.stats ?? { count: 0, value: 0, lowStockCount: 0 });
+      } else {
+        const d = await fetchFresh();
+        if (seq !== loadSeqRef.current) return;
+        setItems(d.items);
+        cursorRef.current = d.nextCursor;
+        setHasMore(!!d.nextCursor);
+        setServerStats(d.stats);
+      }
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [business, activeLocationId]);
+  const loadMore = async () => {
+    if (loadingMore || !paramsRef.current || !cursorRef.current || !business) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchInventoryPage<RawItem>(supabase, '*', { businessId: business.id, locationId: activeLocationId ?? null, ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setItems(prev => [...prev, ...page.items]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { setLoadingMore(false); }
+  };
+
+  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current); };
+  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => { void runQuery(f); };
+  // Re-query when business finally loads or the branch changes.
+  useEffect(() => { reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,
@@ -418,6 +473,12 @@ export default function InventoryModuleScreen() {
         onAdjustItem={canEdit ? openAdjust : undefined}
         onDeleteItem={canEdit ? remove : undefined}
         modalsSlot={canEdit ? modals : undefined}
+        serverMode
+        serverStats={serverStats}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        onFiltersChange={handleFiltersChange}
       />
     </SafeAreaView>
   );
