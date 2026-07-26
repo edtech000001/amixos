@@ -19,7 +19,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type AnySupabase = { from: (table: string) => any };
+type AnySupabase = { from: (table: string) => any; rpc: (fn: string, params?: any) => any };
 
 export interface JobsCursor {
   createdAt: string;
@@ -167,6 +167,75 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
   const nextCursor =
     jobs.length === pageSize && last?.created_at ? { createdAt: last.created_at, id: last.id } : null;
   return { jobs, nextCursor };
+}
+
+export interface JobGroup {
+  key: string;
+  label: string;
+  count: number;
+}
+
+/** Turn the UI tabs into the job_group_index RPC's flat filter args. Returns
+ *  null when the selection can't be expressed as a single status set (multiple
+ *  tabs, or the delegated tab) — the caller should fall back to loading all
+ *  matching jobs and grouping client-side. */
+export function jobTabFilterParams(
+  tabs: string[],
+  searching: boolean,
+): { statusInclude: string[] | null; excludeClosed: boolean; archived: 'exclude' | 'only' | 'any' } | null {
+  if (!tabs.length) {
+    if (searching) return { statusInclude: null, excludeClosed: false, archived: 'any' };
+    return { statusInclude: null, excludeClosed: true, archived: 'exclude' };
+  }
+  if (tabs.length === 1) {
+    const tk = tabs[0];
+    if (tk === 'archived') return { statusInclude: null, excludeClosed: false, archived: 'only' };
+    if (tk === 'propuestas') return { statusInclude: PROPOSAL_STATUSES, excludeClosed: false, archived: 'exclude' };
+    if (tk === 'delegated') return null; // needs a delegated filter the RPC lacks
+    return { statusInclude: [tk], excludeClosed: false, archived: 'exclude' };
+  }
+  return null; // multi-tab — group client-side
+}
+
+/** The lazy group-by index: groups + counts for the active filters, with NO job
+ *  rows loaded. Returns null when the tab selection can't be pushed to the RPC
+ *  (caller then loads all matching + groups client-side). */
+export async function fetchJobGroupIndex(
+  supabase: AnySupabase,
+  params: {
+    businessId: string; groupBy: string; tabs?: string[]; search?: string;
+    locationId?: string | null; dateFrom?: string | null; dateTo?: string | null;
+  },
+): Promise<JobGroup[] | null> {
+  const term = params.search?.trim() ?? '';
+  const fp = jobTabFilterParams(params.tabs ?? [], !!term);
+  if (!fp) return null;
+  let clientIds: string[] | null = null;
+  let crewJobIds: string[] | null = null;
+  if (term) {
+    const ids = await resolveSearchIds(supabase, params.businessId, term);
+    clientIds = ids.clientIds;
+    crewJobIds = ids.crewJobIds;
+  }
+  const { data, error } = await supabase.rpc('job_group_index', {
+    p_business_id: params.businessId,
+    p_group_by: params.groupBy,
+    p_status_include: fp.statusInclude,
+    p_exclude_closed: fp.excludeClosed,
+    p_archived: fp.archived,
+    p_search_term: term || null,
+    p_client_ids: clientIds,
+    p_crew_job_ids: crewJobIds,
+    p_location_id: params.locationId ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r: { group_key: string; group_label: string; cnt: number | string }) => ({
+    key: r.group_key,
+    label: r.group_label,
+    count: Number(r.cnt),
+  }));
 }
 
 /** Per-tab counts for the badges — one count-only query per tab, in parallel.
