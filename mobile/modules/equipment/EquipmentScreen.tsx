@@ -61,7 +61,7 @@ import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/of
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
@@ -410,10 +410,12 @@ export default function EquipmentScreen() {
   const loadEquipment = useCallback(async () => {
     if (!business) return;
     const res = await loadCached(`equipment_${business.id}_${activeLocationId ?? 'all'}`, () =>
-      fetchAll<Equipment>((from, to) => {
+      fetchAllById<Equipment>((afterId, pageSize) => {
         let q = supabase.from('equipment').select('*').eq('business_id', business.id);
         if (activeLocationId) q = q.eq('location_id', activeLocationId);
-        return q.order('created_at', { ascending: false }).range(from, to);
+        q = q.order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
       }));
     const data = res.data ?? [];
     setEquipment(data);
@@ -436,13 +438,15 @@ export default function EquipmentScreen() {
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
-    const data = await fetchAll<EmployeeOption>((from, to) =>
-      supabase.from('employees').select('id, first_name, last_name')
+    const data = await fetchAllById<EmployeeOption>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('id, first_name, last_name')
         .eq('business_id', business.id)
         .eq('active', true)
-        .order('first_name')
-        .range(from, to),
-    );
+        .order('id', { ascending: true })
+        .limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
     setEmployees(data);
   }, [business, supabase]);
 

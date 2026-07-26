@@ -29,7 +29,7 @@ import {
   diffEmployeeChanges,
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { fetchEmployeeLocations, employeeIdsAtLocation, setEmployeePrimaryLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
@@ -342,9 +342,12 @@ export default function EmpleadosPage() {
   const loadEmployees = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawEmployee>((from, to) =>
-      supabase.from('employees').select('*').eq('business_id', businessId)
-        .order('first_name').range(from, to));
+    const data = await fetchAllById<RawEmployee>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('*').eq('business_id', businessId)
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
     setEmployees(data);
   };
   const loadTimesheets = async () => {
@@ -404,8 +407,12 @@ export default function EmpleadosPage() {
   //     list is always complete — owner, legacy users, etc. (option B). The
   //     insert is best-effort: RLS rejects it for non-admins, which we ignore.
   const fetchEmployees = (bid: string) =>
-    fetchAll<RawEmployee>((from, to) =>
-      supabase.from('employees').select('*').eq('business_id', bid).order('first_name').range(from, to));
+    fetchAllById<RawEmployee>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('*').eq('business_id', bid)
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
 
   const loadPeople = async () => {
     if (!business || !user) return;

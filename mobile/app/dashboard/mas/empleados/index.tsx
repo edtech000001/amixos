@@ -38,7 +38,7 @@ import {
   diffEmployeeChanges,
   logEmployeeMilestone,
 } from '@amixos/shared/lib/employeeHistory';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
@@ -238,8 +238,12 @@ export default function EmpleadosRoute() {
   };
 
   const fetchEmployees = (bid: string) =>
-    fetchAll<RawEmployee>((from, to) =>
-      supabase.from('employees').select('*').eq('business_id', bid).order('first_name').range(from, to));
+    fetchAllById<RawEmployee>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('*').eq('business_id', bid)
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
 
   const loadEmployees = async () => {
     if (!business) return;

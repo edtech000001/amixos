@@ -38,7 +38,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
@@ -203,10 +203,12 @@ export default function EquipmentModule() {
 
   const loadEquipment = useCallback(async () => {
     if (!business) return;
-    const data = await fetchAll<Equipment>((from, to) => {
+    const data = await fetchAllById<Equipment>((afterId, pageSize) => {
       let q = supabase.from('equipment').select('*').eq('business_id', business.id);
       if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q.order('created_at', { ascending: false }).range(from, to);
+      q = q.order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
     });
     setEquipment(data);
     // Load one photo per equipment for the list thumbnail.
@@ -229,13 +231,15 @@ export default function EquipmentModule() {
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
-    const data = await fetchAll<EmployeeOption>((from, to) =>
-      supabase.from('employees').select('id, first_name, last_name')
+    const data = await fetchAllById<EmployeeOption>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('id, first_name, last_name')
         .eq('business_id', business.id)
         .eq('active', true)
-        .order('first_name')
-        .range(from, to),
-    );
+        .order('id', { ascending: true })
+        .limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
     setEmployees(data);
   }, [business, supabase]);
 

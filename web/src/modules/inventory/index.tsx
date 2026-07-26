@@ -13,7 +13,7 @@ import {
   InventoryScreen,
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 
 interface RawItem {
   id: string;
@@ -57,11 +57,13 @@ export default function InventoryModule() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const data = await fetchAll<RawItem>((from, to) => {
+    const data = await fetchAllById<RawItem>((afterId, pageSize) => {
       let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
       // Scope stock to the active branch ("All" = no filter).
       if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q.order('name').range(from, to);
+      q = q.order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
     });
     setItems(data);
     setLoading(false);

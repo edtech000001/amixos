@@ -16,7 +16,7 @@ import {
   InventoryScreen as SharedInventoryScreen,
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 
 interface RawItem {
   id: string;
@@ -65,10 +65,12 @@ export default function InventoryModuleScreen() {
     if (!business) return;
     const businessId = business.id;
     const res = await loadCached(`inventory_${businessId}_${activeLocationId ?? 'all'}`, () =>
-      fetchAll<RawItem>((from, to) => {
+      fetchAllById<RawItem>((afterId, pageSize) => {
         let q = supabase.from('inventory_items').select('*').eq('business_id', businessId);
         if (activeLocationId) q = q.eq('location_id', activeLocationId);
-        return q.order('name').range(from, to);
+        q = q.order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
       }));
     setItems(res.data ?? []);
     setLoading(false);
