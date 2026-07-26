@@ -42,21 +42,33 @@ function serializeWithinCap(value: unknown): string | null {
   return null;
 }
 
+// Sibling key holding the epoch-ms of the last write, so a screen can show
+// "saved 2h ago". Kept separate from the payload so writeCached/prependCached/
+// patchCached don't need to wrap the value in an envelope (which would break
+// their raw array/object reads).
+const TS_SUFFIX = '__ts';
+
 /** Size-capped AsyncStorage write. Drops the entry entirely if it can't fit
- *  (better a missing offline copy than blowing the storage budget). */
+ *  (better a missing offline copy than blowing the storage budget). Stamps the
+ *  write time so callers can report freshness. */
 async function safeSet(full: string, value: unknown): Promise<void> {
   const json = serializeWithinCap(value);
   if (json == null) {
     await AsyncStorage.removeItem(full).catch(() => {});
+    await AsyncStorage.removeItem(full + TS_SUFFIX).catch(() => {});
     return;
   }
   await AsyncStorage.setItem(full, json).catch(() => {});
+  await AsyncStorage.setItem(full + TS_SUFFIX, String(Date.now())).catch(() => {});
 }
 
 export interface CachedResult<T> {
   data: T | null;
   /** True when the value came from cache (the live fetch failed / offline). */
   fromCache: boolean;
+  /** Epoch-ms this copy was written. ~now on a fresh live fetch; the original
+   *  save time when served from cache; null when unknown / nothing cached. */
+  cachedAt: number | null;
 }
 
 export async function loadCached<T>(
@@ -69,17 +81,20 @@ export async function loadCached<T>(
     // Persist for offline reuse (fire-and-forget, size-capped). The caller gets
     // the FULL data; only the on-disk copy is trimmed if it's over the cap.
     void safeSet(full, data);
-    return { data, fromCache: false };
+    return { data, fromCache: false, cachedAt: Date.now() };
   } catch {
     const raw = await AsyncStorage.getItem(full).catch(() => null);
     if (raw != null) {
       try {
-        return { data: JSON.parse(raw) as T, fromCache: true };
+        const data = JSON.parse(raw) as T;
+        const tsRaw = await AsyncStorage.getItem(full + TS_SUFFIX).catch(() => null);
+        const cachedAt = tsRaw ? (Number(tsRaw) || null) : null;
+        return { data, fromCache: true, cachedAt };
       } catch {
         /* corrupt cache — fall through */
       }
     }
-    return { data: null, fromCache: false };
+    return { data: null, fromCache: false, cachedAt: null };
   }
 }
 

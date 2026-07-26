@@ -16,7 +16,8 @@ import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
-import { startNetworkMonitor } from '@/lib/offline/network';
+import { startNetworkMonitor, onReconnect } from '@/lib/offline/network';
+import { prefetchForOffline } from '@/lib/offline/prefetch';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
 import { useOutboxStore } from '@/lib/offline/outbox';
 import { useNetworkStore } from '@/lib/offline/network';
@@ -96,7 +97,7 @@ export default function DashboardLayout() {
 function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
-  const { currentRole, user, impersonating } = useApp();
+  const { currentRole, user, impersonating, business } = useApp();
   const insets = useSafeAreaInsets();
   // Load the user's dock-app selection (synced via profiles.dock_apps) once.
   // Every role-eligible app stays REGISTERED as a tab below (href fixed by role
@@ -116,6 +117,15 @@ function DashboardTabs() {
     startSyncRunner();
     return stop;
   }, []);
+
+  // Warm the offline cache so field crews always have the job-form pickers
+  // (clients, crew, templates) available with no signal — now while online, and
+  // again on every reconnect so the saved copy stays fresh. Debounced inside.
+  useEffect(() => {
+    if (!business?.id) return;
+    void prefetchForOffline(business.id);
+    return onReconnect(() => { void prefetchForOffline(business.id); });
+  }, [business?.id]);
   const { status } = useGoogleSyncBanner();
   // The offline-sync banner shows whenever there are queued ops OR we're offline
   // (the "showing saved data" hint) — it also needs to push content down, not

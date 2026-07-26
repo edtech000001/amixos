@@ -23,6 +23,7 @@ import {
   Plus,
   FileText,
   Building2,
+  CloudOff,
   Star,
   UserPlus,
   Share2,
@@ -40,7 +41,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
-import { formatDateLong, formatDateTimeLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatNumberGrouped, formatRelativeLong } from '@amixos/shared/lib/format';
 import { triggerGoogleSyncOrThrow, triggerClientContactGoogleSync, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
@@ -186,6 +187,10 @@ export default function ClienteDetailRoute() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [loading, setLoading] = useState(true);
+  // True when the live fetch failed and we're showing the saved offline copy —
+  // surfaced as a chip (with its save time) so the user knows how stale it is.
+  const [offlineCopy, setOfflineCopy] = useState(false);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
 
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
@@ -247,6 +252,8 @@ export default function ClienteDetailRoute() {
     setInvoices(invData);
     setTemplates(localizeTemplates(tplData, locale));
     setContacts(contactsRes.data ?? []);
+    setOfflineCopy(clientRes.fromCache || contactsRes.fromCache);
+    setCachedAt(clientRes.cachedAt ?? contactsRes.cachedAt);
     setLoading(false);
 
     // Background fetch of all roles across the business. Cheap query
@@ -618,6 +625,17 @@ export default function ClienteDetailRoute() {
               <View className="flex-row items-center gap-1.5 mt-0.5">
                 <Building2 size={13} color={c.faint} />
                 <Text className="text-sm text-muted">{client.company}</Text>
+              </View>
+            ) : null}
+            {offlineCopy ? (
+              <View className="flex-row items-center gap-1.5 self-start mt-1.5 px-2.5 py-1 rounded-full bg-amber-500/10">
+                <CloudOff size={12} color="#B45309" />
+                <Text className="text-xs font-medium" style={{ color: '#B45309' }}>
+                  {locale === 'es' ? 'Copia sin conexión' : 'Offline copy'}
+                  {cachedAt
+                    ? ` · ${formatRelativeLong(new Date(cachedAt), full.dashboard.clients.detail.commLog.rel)}`
+                    : ''}
+                </Text>
               </View>
             ) : null}
           </View>

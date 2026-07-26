@@ -413,10 +413,12 @@ function NuevoTrabajoContent() {
                       <p className="px-4 py-3 text-xs text-faint text-center">{t.clientNoResults}</p>
                     )}
                   </div>
-                  <button type="button" onClick={openQuickClient}
-                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-border-soft">
-                    {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
-                  </button>
+                  {can.createClient(currentRole) && (
+                    <button type="button" onClick={openQuickClient}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors border-t border-border-soft">
+                      {locale === 'es' ? '+ Crear cliente nuevo' : '+ Create new client'}
+                    </button>
+                  )}
                 </div>
               )}
               {clientId && (

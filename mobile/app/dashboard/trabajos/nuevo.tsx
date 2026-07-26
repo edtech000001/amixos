@@ -40,7 +40,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
 import { isOnlineNow } from '@/lib/offline/network';
 import { JOB_PHOTOS_BUCKET, MAX_PHOTOS_PER_JOB, jobPhotoPath, jobPhotoFilename } from '@amixos/shared/lib/jobPhotos';
-import { prependCached, writeCached } from '@/lib/offline/cache';
+import { loadCached, prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { CrewFinderSheet } from '@/modules/crewFinder/CrewFinderSheet';
@@ -312,38 +312,54 @@ export default function NuevoTrabajoRoute() {
     if (!business) return;
     let cancelled = false;
     (async () => {
-      const [cl, emp, { data: tpl }, contactRows] = await Promise.all([
-        fetchAll<Client>((from, to) =>
-          supabase
-            .from('clients')
-            .select('id, first_name, last_name, company, city, state')
+      // Read through the offline cache so a field tech can open the job form and
+      // pick clients/crew/templates with NO signal — the last successful fetch is
+      // served from AsyncStorage. loadCached never throws, so one read failing
+      // offline can't blank out the others (which is what killed the whole
+      // Promise.all before, leaving clients + employees empty).
+      const [clRes, empRes, tplRes, contactRes] = await Promise.all([
+        loadCached<Client[]>(`jobform_clients_${business.id}`, () =>
+          fetchAll<Client>((from, to) =>
+            supabase
+              .from('clients')
+              .select('id, first_name, last_name, company, city, state')
+              .eq('business_id', business.id)
+              .order('first_name')
+              .range(from, to))),
+        loadCached<Employee[]>(`jobform_employees_${business.id}`, () =>
+          fetchAll<Employee>((from, to) =>
+            supabase
+              .from('employees')
+              .select('id, first_name, last_name, role, show_in_roster')
+              .eq('business_id', business.id)
+              .eq('active', true)
+              .order('first_name')
+              .range(from, to))),
+        loadCached<FieldTemplate[]>(`jobform_templates_${business.id}`, async () => {
+          const { data, error } = await supabase
+            .from('job_field_templates')
+            .select('*')
             .eq('business_id', business.id)
-            .order('first_name')
-            .range(from, to)),
-        fetchAll<Employee>((from, to) =>
-          supabase
-            .from('employees')
-            .select('id, first_name, last_name, role, show_in_roster')
-            .eq('business_id', business.id)
-            .eq('active', true)
-            .order('first_name')
-            .range(from, to)),
-        supabase
-          .from('job_field_templates')
-          .select('*')
-          .eq('business_id', business.id)
-          .order('sort_order'),
+            .order('sort_order');
+          if (error) throw error;
+          return (data ?? []) as FieldTemplate[];
+        }),
         // Client contacts — so the picker can find an account by a contact's
         // name (primary contact first).
-        fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
-          supabase
-            .from('client_contacts')
-            .select('client_id, name, role')
-            .eq('business_id', business.id)
-            .order('is_primary', { ascending: false })
-            .range(from, to)).catch(() => []),
+        loadCached<{ client_id: string; name: string; role: string | null }[]>(`jobform_contacts_${business.id}`, () =>
+          fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
+            supabase
+              .from('client_contacts')
+              .select('client_id, name, role')
+              .eq('business_id', business.id)
+              .order('is_primary', { ascending: false })
+              .range(from, to))),
       ]);
       if (cancelled) return;
+      const cl = clRes.data ?? [];
+      const emp = empRes.data ?? [];
+      const tpl = tplRes.data ?? [];
+      const contactRows = contactRes.data ?? [];
       const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
       for (const ct of contactRows) {
         (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
@@ -2123,17 +2139,19 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-sm text-faint">{t.clientNoResults}</Text>
                 </View>
               ) : null}
-              {/* Inline create — always available, prominent in the empty state.
+              {/* Inline create — only when the role can create clients.
                  Pre-fills the first name with the current search text. */}
-              <Pressable
-                onPress={openQuickAdd}
-                className="flex-row items-center gap-2 px-5 py-3.5 active:bg-surface border-t border-border-soft"
-              >
-                <UserPlus size={16} color={c.primary} />
-                <Text className="text-sm font-semibold text-primary">
-                  {locale === 'es' ? 'Crear cliente nuevo' : 'Create new client'}
-                </Text>
-              </Pressable>
+              {can.createClient(currentRole) ? (
+                <Pressable
+                  onPress={openQuickAdd}
+                  className="flex-row items-center gap-2 px-5 py-3.5 active:bg-surface border-t border-border-soft"
+                >
+                  <UserPlus size={16} color={c.primary} />
+                  <Text className="text-sm font-semibold text-primary">
+                    {locale === 'es' ? 'Crear cliente nuevo' : 'Create new client'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </ScrollView>
           </View>
         </View>
