@@ -161,6 +161,17 @@ export interface JobsListScreenProps {
   /** Active business id — scopes persisted filters per business so they don't
    *  carry over when switching companies. */
   businessId?: string;
+  // Server-side mode (opt-in). Implemented on the web variant first; mobile
+  // accepts the props for a shared type but ignores them until its own phase.
+  serverMode?: boolean;
+  serverCounts?: Record<string, number>;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: {
+    search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
+    dateFrom: string | null; dateTo: string | null;
+  }) => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {

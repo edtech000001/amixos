@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { fetchJobsPage, fetchJobTabCounts, type JobsCursor, type JobsQueryParams } from '@amixos/shared/lib/jobsQuery';
 import {
   JobsListScreen,
   type JobListItem,
@@ -62,22 +62,14 @@ function assignmentName(a: { worker_name: string | null }): string | null {
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
-// Module-level cache — survives SPA route changes, so coming back from a job
-// detail paints the last full list instantly (no loading flash, and the
-// scroll restore has the real page height to jump to) while a background
-// refresh replaces it.
-let jobsListCache: { key: string; jobs: RawJob[] } | null = null;
-
 export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
   const { business, businesses, currentRole, activeLocationId } = useApp();
-  const cacheKey = business ? `${business.id}:${activeLocationId ?? 'all'}` : null;
-  const [rawJobs, setRawJobs] = useState<RawJob[]>(() =>
-    cacheKey && jobsListCache?.key === cacheKey ? jobsListCache.jobs : []);
-  const [loading, setLoading] = useState(() =>
-    !(cacheKey && jobsListCache?.key === cacheKey));
+  // Server-side pagination: rawJobs holds the loaded page(s), not the full table.
+  const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
+  const [loading, setLoading] = useState(true);
   const [initialTab, setInitialTab] = useState<TabKey>('all');
   const [importOpen, setImportOpen] = useState(false);
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
@@ -125,67 +117,69 @@ export default function TrabajosPage() {
 
   // Guards against a stale slow load overwriting a newer one (e.g. branch switch).
   const loadSeqRef = useRef(0);
-  const load = async () => {
-    if (!business) return;
-    const businessId = business.id;
+  // ── Server-side pagination (Phase 1) ──────────────────────────────────────
+  // The list no longer loads all jobs — JobsListScreen reports its search/tab
+  // filters via onFiltersChange, we fetch one page (newest-first, keyset), and
+  // load more as the user scrolls. Counts come from the DB, not the array.
+  const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const cursorRef = useRef<JobsCursor | null>(null);
+  const paramsRef = useRef<JobsQueryParams | null>(null);
+
+  const runQuery = async (params: JobsQueryParams) => {
     const seq = ++loadSeqRef.current;
-    const baseQuery = () => {
-      let q = supabase.from('jobs').select(JOB_LIST_SELECT).eq('business_id', businessId);
-      // Scope to the active branch when one is selected ("All" = no filter).
-      if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q;
-    };
-
-    // Fast first paint — the newest 30 in one small round-trip, so switching
-    // to Jobs feels instant; the full set replaces it right after.
-    if (rawJobs.length === 0) {
-      const { data: first } = await baseQuery().order('created_at', { ascending: false }).limit(30);
-      if (seq === loadSeqRef.current && first?.length) {
-        setRawJobs(first as RawJob[]);
-        setLoading(false);
-      }
-    }
-
-    let data: RawJob[];
+    paramsRef.current = params;
+    setLoading(true);
+    cursorRef.current = null;
     try {
-      // Keyset by id (the list re-sorts client-side) so each page is a bounded,
-      // fast index scan instead of an ever-growing OFFSET re-scan. Rendered
-      // PROGRESSIVELY: each page is merged (deduped) into what's shown, so the
-      // list GROWS as it streams instead of blanking for a minute — and the
-      // newest-first fast-paint rows are never dropped mid-load. Smaller pages
-      // (400) so each chunk lands fast.
-      data = await fetchAllById<RawJob>((afterId, pageSize) => {
-        let q = baseQuery().order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }, {
-        pageSize: 400,
-        onPage: (loaded) => {
-          if (seq !== loadSeqRef.current) return;
-          setRawJobs(prev => {
-            const seen = new Set(prev.map(j => j.id));
-            const merged = prev.slice();
-            for (const j of loaded) if (!seen.has(j.id)) merged.push(j);
-            return merged;
-          });
-          setLoading(false);
-        },
-      });
+      const [page, counts] = await Promise.all([
+        fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS]),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(page.jobs);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      setServerCounts(counts);
     } catch (e) {
-      // Full load failed (e.g. a slow query hitting the statement timeout). Keep
-      // the fast-paint rows rather than crashing the whole page with an error.
-      console.error('Jobs full load failed', e);
+      console.error('Jobs query failed', e);
+    } finally {
       if (seq === loadSeqRef.current) setLoading(false);
-      return;
     }
-    if (seq !== loadSeqRef.current) return;
-    setRawJobs(data);
-    setLoading(false);
-    // Only the full set is cached (never the 30-row fast paint).
-    jobsListCache = { key: `${businessId}:${activeLocationId ?? 'all'}`, jobs: data };
   };
 
-  useEffect(() => { load(); }, [business, activeLocationId]);
+  const loadMore = async () => {
+    if (!cursorRef.current || loadingMore || !paramsRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(prev => [...prev, ...page.jobs]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch (e) {
+      console.error('Jobs load-more failed', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Re-run the current query — after a mutation, or when the branch changes
+  // (location isn't part of the child's reported filters).
+  const reload = () => {
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+  };
+  useEffect(() => {
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLocationId]);
+
+  const handleFiltersChange = (f: { search: string; tabs: string[]; dateFrom: string | null; dateTo: string | null }) => {
+    if (!business) return;
+    void runQuery({ businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo });
+  };
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
@@ -250,7 +244,7 @@ export default function TrabajosPage() {
         supabase={supabase}
         templates={jobTemplates}
         onClose={() => setImportOpen(false)}
-        onDone={load}
+        onDone={reload}
       />
     )}
     <JobsListScreen
@@ -301,7 +295,7 @@ export default function TrabajosPage() {
                 await supabase.from('jobs').delete().in('id', jobIds.slice(i, i + 50));
               }
               void logAudit(supabase, business.id, 'job.deleted', 'job', null, { count: jobIds.length, bulk: true });
-              await load();
+              reload();
             }
           : undefined
       }
@@ -317,7 +311,7 @@ export default function TrabajosPage() {
             .in('id', jobIds.slice(i, i + 50));
         }
         void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
-        await load();
+        reload();
       }}
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
@@ -328,6 +322,12 @@ export default function TrabajosPage() {
       canCreateEstimates={can.createEstimate(currentRole)}
       alertThresholds={alertThresholds}
       businessId={business?.id}
+      serverMode
+      serverCounts={serverCounts}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={loadMore}
+      onFiltersChange={handleFiltersChange}
     />
     </>
   );

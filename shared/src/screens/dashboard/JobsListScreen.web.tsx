@@ -176,6 +176,20 @@ export interface JobsListScreenProps {
   /** Active business id — scopes persisted filters per business so they don't
    *  carry over when switching companies. */
   businessId?: string;
+  // ─── Server-side mode (opt-in) ──────────────────────────────────────────
+  // When true, `jobs` is the server-filtered page(s) (not the full table): the
+  // screen skips its own search/tab filtering, uses `serverCounts` for the tab
+  // badges, reports filter changes via `onFiltersChange`, and asks for more via
+  // `onLoadMore` when scrolled near the bottom. Off = today's client-side behavior.
+  serverMode?: boolean;
+  serverCounts?: Record<string, number>;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: {
+    search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
+    dateFrom: string | null; dateTo: string | null;
+  }) => void;
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -236,6 +250,12 @@ export function JobsListScreen({
   canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
   businessId,
+  serverMode = false,
+  serverCounts,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
@@ -351,10 +371,14 @@ export function JobsListScreen({
       search,
     ) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
 
+  // In server mode `jobs` is ALREADY the search/tab-filtered page(s) from the
+  // DB, so we don't re-filter — we only sort/group the loaded rows. In client
+  // mode we filter the full array as before.
   const filtered = useMemo(() => {
+    if (serverMode) return jobs;
     return jobs.filter((j) => passesSearchDate(j) && matchesTab(j));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, search, tabs, dateFrom, dateTo]);
+  }, [jobs, search, tabs, dateFrom, dateTo, serverMode]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -370,7 +394,7 @@ export function JobsListScreen({
   // Counts reflect the active search + date range so the badges tell the user
   // WHERE matches are (e.g. "Invoiced 1"). With no search this is every job,
   // i.e. the plain totals.
-  const counts = useMemo(() => {
+  const computedCounts = useMemo(() => {
     const pool = jobs.filter(passesSearchDate);
     return TAB_KEYS.reduce((acc, k) => {
       acc[k] = k === 'all' ? pool.length : pool.filter((j) => jobInTab(j, k as StatusTabKey)).length;
@@ -378,6 +402,40 @@ export function JobsListScreen({
     }, {} as Record<TabKey, number>);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, search, dateFrom, dateTo]);
+  // Server mode gets exact counts from the DB (the loaded page can't be counted
+  // client-side); client mode computes them from the full array.
+  const counts = serverMode && serverCounts
+    ? (serverCounts as Record<TabKey, number>)
+    : computedCounts;
+
+  // Server mode: report filter changes UP so the wrapper re-queries. Search is
+  // debounced so we don't fire a query per keystroke. Gated on `hydrated` so the
+  // first query uses the restored filters, not the pre-restore defaults.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !hydrated) return;
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, hydrated, debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo]);
+
+  // Infinite scroll: load the next page when a sentinel near the list bottom
+  // scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!serverMode || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting && hasMore && !loadingMore) onLoadMore(); },
+      { rootMargin: '800px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [serverMode, onLoadMore, hasMore, loadingMore]);
 
   const pendingValue = jobs
     .filter((j) => j.status === 'sent' && !isExpired(j))
@@ -620,9 +678,16 @@ export function JobsListScreen({
         <div>
           <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
           <p className="text-sm text-muted mt-0.5">
-            {search.trim()
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(jobs.length))}
+            {(() => {
+              // In server mode the loaded page isn't the total — use the DB
+              // count (active tab, else 'all') so the header shows the real number.
+              const total = serverMode
+                ? (tabs.length === 1 ? counts[tabs[0]] : counts.all) ?? filtered.length
+                : (search.trim() ? filtered.length : jobs.length);
+              return search.trim()
+                ? t.countFound.replace('{{count}}', String(total))
+                : t.countTotal.replace('{{count}}', String(total));
+            })()}
             {pendingValue > 0 ? (
               <span className="text-blue-600 font-medium">
                 {' · '}
@@ -1056,6 +1121,16 @@ export function JobsListScreen({
           })}
           </Fragment>
           ))}
+          {serverMode ? (
+            <>
+              {loadingMore ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                </div>
+              ) : null}
+              <div ref={sentinelRef} className="h-1" />
+            </>
+          ) : null}
         </div>
       )}
 
