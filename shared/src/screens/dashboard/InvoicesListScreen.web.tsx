@@ -23,6 +23,8 @@ export interface InvoiceListItem {
   state: string | null;
   /** Invoice issue date (yyyy-mm-dd) — drives the date-range filter. */
   issueDate: string | null;
+  /** When the invoice was sent (drives the "sent Nd ago" label). */
+  sentAt?: string | null;
   /** Extra search text: line-item names + linked jobs' Project IDs. */
   searchExtra?: string;
 }
@@ -42,6 +44,24 @@ export interface InvoicesListScreenProps {
   onBulkDelete?: (ids: string[]) => Promise<void> | void;
   /** Scopes the persisted group-by preference per business. */
   businessId?: string;
+  // ── Server mode (opt-in) — the wrapper does the search/status/counts/paging in
+  // the DB. On: this screen skips its own filtering, uses `serverCounts` for the
+  // badges + `serverTotal` for the header, reports filter changes via
+  // `onFiltersChange`, and asks for more via `onLoadMore` near the bottom.
+  serverMode?: boolean;
+  serverCounts?: Record<string, number>;
+  /** Total invoices matching the active filters (for the header count). */
+  serverTotal?: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: {
+    search: string;
+    statuses: string[];
+    groupBy: GroupKey;
+    dateFrom: string | null;
+    dateTo: string | null;
+  }) => void;
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
@@ -71,6 +91,13 @@ export function InvoicesListScreen({
   onUpdateStatus,
   onBulkDelete,
   businessId,
+  serverMode = false,
+  serverCounts,
+  serverTotal,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices;
@@ -90,11 +117,15 @@ export function InvoicesListScreen({
   // jobs list, so leaving the page keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
   const [groupBy, setGroupByState] = useState<GroupKey>('none');
+  // Gate the server-mode filter report until after the group-by restore, so the
+  // first query uses the saved grouping, not the pre-restore default.
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     // Restored after mount — reading localStorage during initial render
     // would mismatch the server-rendered HTML.
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem(groupStoreKey) : null;
     if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved);
+    setHydrated(true);
   }, [groupStoreKey]);
   const setGroupBy = (g: GroupKey) => {
     setGroupByState(g);
@@ -116,11 +147,16 @@ export function InvoicesListScreen({
     { key: 'state', label: tg.state, Icon: MapPin },
   ];
 
-  const counts = useMemo(() => {
+  const computedCounts = useMemo(() => {
     const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0, total_loss: 0 };
     for (const inv of invoices) if (inv.status in c) c[inv.status as StatusKey]++;
     return c;
   }, [invoices]);
+  // Server mode gets exact counts from the DB (a partial page can't be counted
+  // client-side); client mode counts the full array.
+  const counts = serverMode && serverCounts
+    ? (serverCounts as Record<StatusKey, number>)
+    : computedCounts;
 
   const dateActive = !!dateFrom || !!dateTo;
   const clearDate = () => { setDateFrom(null); setDateTo(null); };
@@ -133,7 +169,11 @@ export function InvoicesListScreen({
     return true;
   };
 
+  // In server mode `invoices` is ALREADY the search/status/date-filtered page(s)
+  // from the DB in newest-first order, so we don't re-filter or re-sort — we only
+  // group the loaded rows. In client mode we filter + sort the full array.
   const filtered = useMemo(() => {
+    if (serverMode) return invoices;
     const q = search.toLowerCase();
     return invoices.filter((inv) => {
       if (statuses.length && !statusSet.has(inv.status)) return false;
@@ -147,7 +187,7 @@ export function InvoicesListScreen({
       // Newest first, by issue date (fallback: keep the fetch order).
       .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, statuses, search, dateFrom, dateTo]);
+  }, [invoices, statuses, search, dateFrom, dateTo, serverMode]);
 
   const sections = useMemo(() => {
     if (groupBy === 'none') return [{ title: '', data: filtered }];
@@ -186,6 +226,38 @@ export function InvoicesListScreen({
   // Raw sum, rounded ONCE to the cent (decimal-aware: float .665 stores as
   // .66499…, the toFixed pass restores the intended half-up → .67).
   const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
+  // In server mode the loaded rows are only part of the match set, so the sum is
+  // only meaningful once everything for the current filter is loaded.
+  const showTotal = filtered.length > 0 && (!serverMode || !hasMore);
+
+  // Server mode: report filter changes UP so the wrapper re-queries. Search is
+  // debounced so we don't fire a query per keystroke. Gated on `hydrated` so the
+  // first query uses the restored group-by, not the pre-restore default.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !hydrated) return;
+    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, hydrated, debouncedSearch, statuses, groupBy, dateFrom, dateTo]);
+
+  // Infinite scroll: load the next page when a sentinel near the list bottom
+  // scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!serverMode || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting && hasMore && !loadingMore) onLoadMore(); },
+      { rootMargin: '800px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [serverMode, onLoadMore, hasMore, loadingMore]);
 
   // ── Selection mode (mass delete) — jobs/clients pattern + shift-click range.
   const [selectMode, setSelectMode] = useState(false);
@@ -238,8 +310,8 @@ export function InvoicesListScreen({
         <div>
           <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
           <p className="text-sm text-muted mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(invoices.length))}</p>
+              ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
+              : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? invoices.length) : invoices.length))}</p>
         </div>
         <div className="flex items-center gap-2">
           {onPriceSheetPress ? (
@@ -433,7 +505,7 @@ export function InvoicesListScreen({
       ) : null}
 
       {/* Summary */}
-      {filtered.length > 0 ? (
+      {showTotal ? (
         <p className="text-xs text-muted mb-3">
           {t.summaryTotal}: <span className="text-ink font-bold">{fmt(total)}</span>
         </p>
@@ -532,6 +604,18 @@ export function InvoicesListScreen({
               </div>
             </div>
           ))}
+          {/* Infinite-scroll footer: sentinel triggers the next page, spinner
+             shows while it loads. */}
+          {serverMode ? (
+            <>
+              {loadingMore ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                </div>
+              ) : null}
+              <div ref={sentinelRef} className="h-1" />
+            </>
+          ) : null}
         </div>
       )}
     </div>

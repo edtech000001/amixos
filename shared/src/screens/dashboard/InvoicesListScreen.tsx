@@ -44,6 +44,24 @@ export interface InvoicesListScreenProps {
   onBulkDelete?: (ids: string[]) => Promise<void> | void;
   /** Scopes the persisted group-by preference per business. */
   businessId?: string;
+  // ── Server mode (opt-in) — the wrapper does the search/status/counts/paging in
+  // the DB. On: this screen skips its own filtering, uses `serverCounts` for the
+  // badges + `serverTotal` for the header, reports filter changes via
+  // `onFiltersChange`, and asks for more via `onLoadMore` near the bottom.
+  serverMode?: boolean;
+  serverCounts?: Record<string, number>;
+  /** Total invoices matching the active filters (for the header count). */
+  serverTotal?: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: {
+    search: string;
+    statuses: string[];
+    groupBy: GroupKey;
+    dateFrom: string | null;
+    dateTo: string | null;
+  }) => void;
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
@@ -81,6 +99,13 @@ export function InvoicesListScreen({
   onUpdateStatus,
   onBulkDelete,
   businessId,
+  serverMode = false,
+  serverCounts,
+  serverTotal,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -103,12 +128,17 @@ export function InvoicesListScreen({
   // jobs list, so leaving the screen keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
   const [groupBy, setGroupByState] = useState<GroupKey>('none');
+  // Gate the server-mode filter report until after the group-by restore, so the
+  // first query uses the saved grouping. AsyncStorage is async, so this is a
+  // state flag (not a synchronous read like web).
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem(groupStoreKey)
       .then(saved => {
         if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved as GroupKey);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setReady(true));
   }, [groupStoreKey]);
   const setGroupBy = (g: GroupKey) => {
     setGroupByState(g);
@@ -131,11 +161,16 @@ export function InvoicesListScreen({
   ];
 
   // Per-status counts for the tab badges.
-  const counts = useMemo(() => {
-    const c: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0, total_loss: 0 };
-    for (const inv of invoices) if (inv.status in c) c[inv.status as StatusKey]++;
-    return c;
+  const computedCounts = useMemo(() => {
+    const cc: Record<StatusKey, number> = { draft: 0, sent: 0, paid: 0, overdue: 0, total_loss: 0 };
+    for (const inv of invoices) if (inv.status in cc) cc[inv.status as StatusKey]++;
+    return cc;
   }, [invoices]);
+  // Server mode gets exact counts from the DB (a partial page can't be counted
+  // client-side); client mode counts the full array.
+  const counts = serverMode && serverCounts
+    ? (serverCounts as Record<StatusKey, number>)
+    : computedCounts;
 
   const dateActive = !!dateFrom || !!dateTo;
   const clearDate = () => { setDateFrom(null); setDateTo(null); };
@@ -148,7 +183,11 @@ export function InvoicesListScreen({
     return true;
   };
 
+  // In server mode `invoices` is ALREADY the search/status/date-filtered page(s)
+  // from the DB in newest-first order, so we don't re-filter or re-sort — we only
+  // group the loaded rows. In client mode we filter + sort the full array.
   const filtered = useMemo(() => {
+    if (serverMode) return invoices;
     const q = search.toLowerCase();
     return invoices.filter(inv => {
       if (statuses.length && !statusSet.has(inv.status)) return false;
@@ -162,7 +201,7 @@ export function InvoicesListScreen({
       // Newest first, by issue date (fallback: keep the fetch order).
       .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, statuses, search, dateFrom, dateTo]);
+  }, [invoices, statuses, search, dateFrom, dateTo, serverMode]);
 
   // Sections for the chosen grouping. 'none' = one untitled section.
   const sections = useMemo(() => {
@@ -202,6 +241,23 @@ export function InvoicesListScreen({
   // Raw sum, rounded ONCE to the cent (decimal-aware: float .665 stores as
   // .66499…, the toFixed pass restores the intended half-up → .67).
   const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
+  // In server mode the loaded rows are only part of the match set, so the sum is
+  // only meaningful once everything for the current filter is loaded.
+  const showTotal = filtered.length > 0 && (!serverMode || !hasMore);
+
+  // Server mode: report filter changes UP so the wrapper re-queries. Search is
+  // debounced so we don't fire a query per keystroke. Gated on `ready` so the
+  // first query uses the restored group-by, not the pre-restore default.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !ready) return;
+    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, ready, debouncedSearch, statuses, groupBy, dateFrom, dateTo]);
 
   // ── Selection mode (mass delete) — jobs/clients mobile pattern.
   const [selectMode, setSelectMode] = useState(false);
@@ -239,8 +295,8 @@ export function InvoicesListScreen({
           <Text className="text-2xl font-bold text-ink">{t.title}</Text>
           <Text className="text-sm text-muted mt-0.5">
             {search.trim() || statuses.length || dateFrom || dateTo
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(invoices.length))}
+              ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
+              : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? invoices.length) : invoices.length))}
           </Text>
         </View>
         <View className="flex-row items-center gap-2 ml-2">
@@ -363,7 +419,7 @@ export function InvoicesListScreen({
       ) : null}
 
       {/* Summary */}
-      {filtered.length > 0 ? (
+      {showTotal ? (
         <Text className="text-xs text-muted mb-3">
           {t.summaryTotal}:{' '}
           <Text className="text-ink font-bold">{fmt(total)}</Text>
@@ -461,6 +517,17 @@ export function InvoicesListScreen({
         initialNumToRender={12}
         windowSize={7}
         maxToRenderPerBatch={10}
+        onEndReachedThreshold={0.6}
+        onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
+        ListFooterComponent={
+          serverMode && loadingMore ? (
+            <View className="items-center py-6">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
+              </View>
+            </View>
+          ) : null
+        }
       />
 
     {/* Bulk-delete pill — screen-anchored (bottom-left), aligned with the FAB. */}
