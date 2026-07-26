@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, Modal as RNModal, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal, Alert, type ViewToken } from 'react-native';
 import {
   Search,
   ClipboardList,
@@ -214,6 +214,9 @@ function isExpired(j: JobListItem) {
   return j.expiryDate && j.status === 'sent' && new Date(j.expiryDate) < new Date();
 }
 
+// SectionList section shape (needs a `data` key rather than groupJobs' `jobs`).
+type JobFlatSection = { title: string; data: JobListItem[] };
+
 export function JobsListScreen({
   loading,
   jobs,
@@ -263,37 +266,22 @@ export function JobsListScreen({
   // reorder rows — a preserved pixel offset would then point at a different
   // job. So: remember which job was opened, and when the refreshed data lands
   // scroll that row back into view (positions tracked via onLayout).
-  const scrollRef = useRef<ScrollView>(null);
-  const listTopY = useRef(0);
-  const rowY = useRef<Record<string, number>>({});
-  // Anchor = the opened job + where its row sat when it was tapped, so the
-  // effect below can tell "row moved" apart from "nothing changed".
-  const pendingAnchor = useRef<{ id: string; y: number | null } | null>(null);
+  const sectionListRef = useRef<SectionList<JobListItem, JobFlatSection>>(null);
+  // The job that was opened; on return we bring it back into view.
+  const pendingAnchor = useRef<string | null>(null);
+  // Ids currently on screen — lets us SKIP re-scrolling when the anchored job
+  // is already visible (its native offset survived), avoiding a double hop.
+  const viewableIds = useRef<Set<string>>(new Set());
   const openJob = (id: string) => {
-    pendingAnchor.current = { id, y: rowY.current[id] ?? null };
+    pendingAnchor.current = id;
     onJobPress(id);
   };
-  useEffect(() => {
-    const anchor = pendingAnchor.current;
-    if (!anchor) return;
-    // A partial fast-paint (first 30 rows) may not include the anchored job —
-    // keep the anchor armed until a data set containing it lands.
-    if (!jobs.some(j => j.id === anchor.id)) return;
-    pendingAnchor.current = null;
-    // Small delay so the refreshed rows have laid out (onLayout fired) before
-    // we read their positions.
-    const timer = setTimeout(() => {
-      const y = rowY.current[anchor.id];
-      if (y == null) return;
-      // The native scroll offset already survived the round-trip. Only
-      // re-scroll when the refresh actually MOVED the row (regrouped /
-      // reordered) — re-scrolling an unmoved row visibly hops the list a
-      // second time for no reason.
-      if (anchor.y != null && Math.abs(y - anchor.y) < 2) return;
-      scrollRef.current?.scrollTo({ y: Math.max(0, listTopY.current + y - 120), animated: false });
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [jobs]);
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    viewableIds.current = new Set(
+      viewableItems.map(v => (v.item as JobListItem | undefined)?.id).filter((x): x is string => !!x),
+    );
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 20 }).current;
 
   // Persisted filters are scoped per business so switching companies doesn't
   // carry one company's filters into another.
@@ -400,6 +388,37 @@ export function JobsListScreen({
     [filtered, sortBy, groupBy, t, locale],
   );
   const sortActive = sortBy !== 'recent' || groupBy !== 'none';
+
+  // SectionList data + an id → {sectionIndex,itemIndex} map for scroll-restore.
+  const flatSections = useMemo<JobFlatSection[]>(
+    () => sections.map(s => ({ title: s.title, data: s.jobs })),
+    [sections],
+  );
+  const jobLocation = useMemo(() => {
+    const m = new Map<string, { sectionIndex: number; itemIndex: number }>();
+    flatSections.forEach((s, si) => s.data.forEach((j, ii) => m.set(j.id, { sectionIndex: si, itemIndex: ii })));
+    return m;
+  }, [flatSections]);
+  // Re-anchor after returning from a job detail. The list stays mounted so its
+  // native offset survives; only when the on-focus refresh regroups/reorders
+  // does the anchored job move off screen — then scroll it back. If it's still
+  // visible we do nothing, avoiding a second hop.
+  useEffect(() => {
+    const id = pendingAnchor.current;
+    if (!id) return;
+    // A partial fast-paint (first 30) may not include the anchor — stay armed.
+    if (!jobs.some(j => j.id === id)) return;
+    pendingAnchor.current = null;
+    if (viewableIds.current.has(id)) return;
+    const loc = jobLocation.get(id);
+    if (!loc) return;
+    const timer = setTimeout(() => {
+      try {
+        sectionListRef.current?.scrollToLocation({ ...loc, viewPosition: 0.3, animated: false });
+      } catch { /* not laid out yet — onScrollToIndexFailed retries */ }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [jobs, jobLocation]);
 
   // Icons for the sort/group sheet rows (matches the Equipment group sheet style).
   const SORT_ICON: Record<JobSortKey, typeof Clock> = {
@@ -652,16 +671,161 @@ export function JobsListScreen({
     return map;
   }, [sections, alertThresholds, t, full]);
 
-  return (
-    <View className="flex-1 bg-surface">
-    <ScrollView
-      ref={scrollRef}
-      className="flex-1"
-      contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-96' : 'pb-44'}`}
-      // A manual scroll after returning cancels the pending re-anchor so the
-      // list never yanks away from where the user just scrolled to.
-      onScrollBeginDrag={() => { pendingAnchor.current = null; }}
-    >
+  // One job card (renderItem). Same layout as before; the outer view no longer
+  // needs onLayout — scroll-restore now uses scrollToLocation, not row Ys.
+  const renderJob = ({ item: job }: { item: JobListItem }) => {
+    const {
+      statusLabel, pillBg, pillText, dot, priorityLabel, priorityColor,
+      expired, isProposal, alertStyle, overdue, durationText, alertChipLabel,
+    } = cardDataByJob.get(job.id)!;
+    const selectable = selectMode && (canDelete || isInvoiceable(job));
+    const picked = selectedIds.has(job.id);
+    return (
+      <View className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
+      <View
+        className={`rounded-2xl border overflow-hidden ${
+          picked
+            ? 'bg-primary/5 border-primary'
+            : overdue
+            ? 'bg-red-500/10 border-red-200 border-l-4 border-l-red-500'
+            : alertStyle
+              ? `bg-card border-border-soft border-l-4 ${alertStyle.borderClass}`
+              : 'bg-card border-border-soft'
+        }`}
+      >
+        <Pressable
+          onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : openJob(job.id))}
+          onLongPress={() => {
+            if (selectMode) { exitSelect(); return; }
+            if (!(canDelete || isInvoiceable(job))) return;
+            setSelectMode(true);
+            toggleSelect(job.id);
+          }}
+          className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-surface'}`}
+        >
+          {selectMode ? (
+            <View className={`w-5 h-5 mt-0.5 rounded-md border items-center justify-center ${
+              picked ? 'bg-primary border-primary' : 'border-border'
+            }`}>
+              {picked ? <Check size={13} color="#FFFFFF" /> : null}
+            </View>
+          ) : (
+            <View className={`w-2.5 h-2.5 rounded-full mt-1.5 ${dot}`} />
+          )}
+
+          <View className="flex-1 min-w-0">
+            <Text className="text-xs font-mono text-faint" numberOfLines={1}>
+              {jobRefLabel({ estimateNumber: job.estimateNumber, externalRef: job.externalRef, id: job.id })}
+            </Text>
+            <Text className="text-sm font-bold text-ink" numberOfLines={1}>{job.title}</Text>
+            {job.clientName ? (
+              <Text className="text-xs text-muted mt-0.5">
+                {job.clientName}{job.clientCompany ? ` · ${job.clientCompany}` : ''}
+              </Text>
+            ) : null}
+
+            <View className="flex-row flex-wrap items-center gap-2 mt-2">
+              {!isProposal && job.priority !== 'normal' ? (
+                <Text className={`text-xs font-semibold ${priorityColor}`}>{priorityLabel}</Text>
+              ) : null}
+              <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
+                <Text className={`text-xs font-semibold ${pillText}`}>{statusLabel}</Text>
+              </View>
+              {job.publishedToCrew === false ? (
+                <View className="px-2 py-0.5 rounded-full bg-border">
+                  <Text className="text-[10px] font-semibold text-muted">{t.new.privateBadge}</Text>
+                </View>
+              ) : null}
+              {expired ? <Text className="text-xs text-orange-500 font-medium">{t.expired}</Text> : null}
+            </View>
+
+            <View className="flex-row flex-wrap gap-x-4 gap-y-1 mt-2">
+              {isProposal && job.issueDate ? (
+                <View className="flex-row items-center gap-1">
+                  <Calendar size={12} color={c.faint} />
+                  <Text className="text-xs text-faint">
+                    {formatDateLong(job.issueDate, dateLoc)}
+                    {job.expiryDate ? ` · ${t.dueShort.replace('{{date}}', formatDateLong(job.expiryDate, dateLoc))}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+              {!isProposal && job.scheduledDate ? (
+                <View className="flex-row items-center gap-1">
+                  {overdue
+                    ? <AlertTriangle size={13} color={c.danger} accessibilityLabel={overdueBadgeLabel} />
+                    : <Calendar size={12} color={c.faint} />}
+                  <Text className={`text-xs ${overdue ? 'text-red-600 font-bold' : 'text-faint'}`}>
+                    {formatDateLong(job.scheduledDate, dateLoc)}
+                    {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+              {durationText ? (
+                <View className="flex-row items-center gap-1">
+                  <Clock size={12} color={c.faint} />
+                  <Text className="text-xs text-faint">{durationText}</Text>
+                </View>
+              ) : null}
+              {alertStyle && alertChipLabel ? (
+                <View className={`flex-row items-center px-2 py-0.5 rounded-full ${alertStyle.bgClass}`}>
+                  <Text className={`text-[10px] font-semibold ${alertStyle.textClass}`}>{alertChipLabel}</Text>
+                </View>
+              ) : null}
+              {job.jobCity || job.jobAddress ? (
+                <View className="flex-row items-center gap-1">
+                  <MapPin size={12} color={c.faint} />
+                  <Text className="text-xs text-faint">
+                    {job.jobCity || job.jobAddress}{job.jobState ? `, ${job.jobState}` : ''}
+                  </Text>
+                </View>
+              ) : null}
+              {job.totalAmount > 0 ? (
+                <Text className="text-xs font-bold text-ink">{fmt(job.totalAmount)}</Text>
+              ) : null}
+              {job.delegatedToBusinessName ? (
+                <View className="flex-row items-center gap-1">
+                  <Building2 size={12} color="#9333EA" />
+                  <Text className="text-xs font-semibold text-purple-600">
+                    {tw.delegatedBadge.replace('{{name}}', job.delegatedToBusinessName)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {job.leadName || job.workerNames.length > 0 ? (
+              <View className="flex-row items-center gap-1 mt-2">
+                <Users size={12} color={c.faint} />
+                <Text className="text-xs text-muted font-medium">
+                  {job.leadName
+                    ? `${t.leadPrefix}: ${job.leadName}`
+                    : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {selectMode ? null : <ChevronRight size={16} color={c.faint} />}
+        </Pressable>
+
+        {selectMode ? null : renderActionBar(job)}
+      </View>
+      </View>
+    );
+  };
+
+  const renderJobSection = ({ section }: { section: JobFlatSection }) =>
+    section.title ? (
+      <View className="flex-row items-center gap-2 mt-2 mb-2">
+        <Text className="text-xs font-bold text-muted uppercase tracking-wide">{section.title}</Text>
+        <View className="px-1.5 py-0.5 rounded-full bg-border">
+          <Text className="text-[10px] font-bold text-muted">{section.data.length}</Text>
+        </View>
+      </View>
+    ) : null;
+
+  // Header + search + status tabs + selection banner ride above the rows.
+  const jobsHeader = (
+    <>
       {/* Header */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
@@ -819,8 +983,30 @@ export function JobsListScreen({
         </View>
       ) : null}
 
-      {/* Job list */}
-      {loading ? (
+    </>
+  );
+
+  return (
+    <View className="flex-1 bg-surface">
+      <SectionList
+        ref={sectionListRef}
+        sections={loading || filtered.length === 0 ? [] : flatSections}
+        keyExtractor={item => item.id}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={jobsHeader}
+        renderSectionHeader={renderJobSection}
+        renderItem={renderJob}
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        onScrollBeginDrag={() => { pendingAnchor.current = null; }}
+        onScrollToIndexFailed={() => {}}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectMode ? 384 : 176 }}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={10}
+        windowSize={9}
+        maxToRenderPerBatch={8}
+        ListEmptyComponent={loading ? (
         <View className="items-center py-20">
           <View className="flex-row gap-1">
             {[0, 1, 2].map(i => (
@@ -828,7 +1014,7 @@ export function JobsListScreen({
             ))}
           </View>
         </View>
-      ) : filtered.length === 0 ? (
+      ) : (
         <View className="items-center py-20">
           <ClipboardList size={40} color={c.faint} />
           <Text className="text-sm text-faint mt-3">
@@ -840,203 +1026,8 @@ export function JobsListScreen({
             </Pressable>
           ) : null}
         </View>
-      ) : (
-        <View
-          className="flex-col gap-3"
-          onLayout={e => { listTopY.current = e.nativeEvent.layout.y; }}
-        >
-          {sections.map(section => (
-          <Fragment key={section.title ?? '__all__'}>
-          {section.title ? (
-            <View className="flex-row items-center gap-2 mt-2">
-              <Text className="text-xs font-bold text-muted uppercase tracking-wide">
-                {section.title}
-              </Text>
-              <View className="px-1.5 py-0.5 rounded-full bg-border">
-                <Text className="text-[10px] font-bold text-muted">{section.jobs.length}</Text>
-              </View>
-            </View>
-          ) : null}
-          {section.jobs.map(job => {
-            // Precomputed in cardDataByJob — see the useMemo above.
-            const {
-              statusLabel, pillBg, pillText, dot, priorityLabel, priorityColor,
-              expired, isProposal, alertStyle, overdue, durationText, alertChipLabel,
-            } = cardDataByJob.get(job.id)!;
-
-            const selectable = selectMode && (canDelete || isInvoiceable(job));
-            const picked = selectedIds.has(job.id);
-            return (
-              // Outer view carries the shadow; inner clips content (RN clips
-              // shadows under overflow-hidden).
-              <View
-                key={job.id}
-                onLayout={e => { rowY.current[job.id] = e.nativeEvent.layout.y; }}
-                className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}
-              >
-              <View
-                className={`rounded-2xl border overflow-hidden ${
-                  picked
-                    ? 'bg-primary/5 border-primary'
-                    : overdue
-                    ? 'bg-red-500/10 border-red-200 border-l-4 border-l-red-500'
-                    : alertStyle
-                      ? `bg-card border-border-soft border-l-4 ${alertStyle.borderClass}`
-                      : 'bg-card border-border-soft'
-                }`}
-              >
-                <Pressable
-                  onPress={() => (selectable ? toggleSelect(job.id) : selectMode ? undefined : openJob(job.id))}
-                  // Long-press toggles selection mode: enters with this job
-                  // picked; a second long-press anywhere EXITS — so an
-                  // accidental hold doesn't force a scroll back to the header
-                  // toggle. (Same gesture as the clients list.)
-                  onLongPress={() => {
-                    if (selectMode) { exitSelect(); return; }
-                    if (!(canDelete || isInvoiceable(job))) return;
-                    setSelectMode(true);
-                    toggleSelect(job.id);
-                  }}
-                  className={`flex-row items-start gap-4 p-5 ${overdue ? 'active:bg-red-100' : 'active:bg-surface'}`}
-                >
-                  {selectMode ? (
-                    <View className={`w-5 h-5 mt-0.5 rounded-md border items-center justify-center ${
-                      picked ? 'bg-primary border-primary' : selectable ? 'border-border' : 'border-border'
-                    }`}>
-                      {picked ? <Check size={13} color="#FFFFFF" /> : null}
-                    </View>
-                  ) : (
-                    <View className={`w-2.5 h-2.5 rounded-full mt-1.5 ${dot}`} />
-                  )}
-
-                  <View className="flex-1 min-w-0">
-                    {/* Reference code on its own line above the title so it
-                       never squeezes the title's width. */}
-                    <Text className="text-xs font-mono text-faint" numberOfLines={1}>
-                      {jobRefLabel({ estimateNumber: job.estimateNumber, externalRef: job.externalRef, id: job.id })}
-                    </Text>
-                    <Text className="text-sm font-bold text-ink" numberOfLines={1}>
-                      {job.title}
-                    </Text>
-                    {job.clientName ? (
-                      <Text className="text-xs text-muted mt-0.5">
-                        {job.clientName}
-                        {job.clientCompany ? ` · ${job.clientCompany}` : ''}
-                      </Text>
-                    ) : null}
-
-                    {/* Status indicators — their own line, wrap as needed. */}
-                    <View className="flex-row flex-wrap items-center gap-2 mt-2">
-                      {!isProposal && job.priority !== 'normal' ? (
-                        <Text className={`text-xs font-semibold ${priorityColor}`}>
-                          {priorityLabel}
-                        </Text>
-                      ) : null}
-                      <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
-                        <Text className={`text-xs font-semibold ${pillText}`}>
-                          {statusLabel}
-                        </Text>
-                      </View>
-                      {/* Crew-visibility marker. Default migration value
-                         is true, so this badge only fires when the owner
-                         explicitly kept the job in their private scheduler. */}
-                      {job.publishedToCrew === false ? (
-                        <View className="px-2 py-0.5 rounded-full bg-border">
-                          <Text className="text-[10px] font-semibold text-muted">{t.new.privateBadge}</Text>
-                        </View>
-                      ) : null}
-                      {expired ? (
-                        <Text className="text-xs text-orange-500 font-medium">{t.expired}</Text>
-                      ) : null}
-                    </View>
-
-                    {/* Meta row */}
-                    <View className="flex-row flex-wrap gap-x-4 gap-y-1 mt-2">
-                      {isProposal && job.issueDate ? (
-                        <View className="flex-row items-center gap-1">
-                          <Calendar size={12} color={c.faint} />
-                          <Text className="text-xs text-faint">
-                            {formatDateLong(job.issueDate, dateLoc)}
-                            {job.expiryDate
-                              ? ` · ${t.dueShort.replace('{{date}}', formatDateLong(job.expiryDate, dateLoc))}`
-                              : ''}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {!isProposal && job.scheduledDate ? (
-                        <View className="flex-row items-center gap-1">
-                          {overdue
-                            ? <AlertTriangle size={13} color={c.danger} accessibilityLabel={overdueBadgeLabel} />
-                            : <Calendar size={12} color={c.faint} />}
-                          <Text className={`text-xs ${overdue ? 'text-red-600 font-bold' : 'text-faint'}`}>
-                            {formatDateLong(job.scheduledDate, dateLoc)}
-                            {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {durationText ? (
-                        <View className="flex-row items-center gap-1">
-                          <Clock size={12} color={c.faint} />
-                          <Text className="text-xs text-faint">{durationText}</Text>
-                        </View>
-                      ) : null}
-                      {alertStyle && alertChipLabel ? (
-                        <View className={`flex-row items-center px-2 py-0.5 rounded-full ${alertStyle.bgClass}`}>
-                          <Text className={`text-[10px] font-semibold ${alertStyle.textClass}`}>
-                            {alertChipLabel}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {job.jobCity || job.jobAddress ? (
-                        <View className="flex-row items-center gap-1">
-                          <MapPin size={12} color={c.faint} />
-                          <Text className="text-xs text-faint">
-                            {job.jobCity || job.jobAddress}
-                            {job.jobState ? `, ${job.jobState}` : ''}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {job.totalAmount > 0 ? (
-                        <Text className="text-xs font-bold text-ink">
-                          {fmt(job.totalAmount)}
-                        </Text>
-                      ) : null}
-                      {job.delegatedToBusinessName ? (
-                        <View className="flex-row items-center gap-1">
-                          <Building2 size={12} color="#9333EA" />
-                          <Text className="text-xs font-semibold text-purple-600">
-                            {tw.delegatedBadge.replace('{{name}}', job.delegatedToBusinessName)}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {/* Lead / crew — its own right-aligned line near the bottom
-                       so the lead is easy to scan, distinct from the meta row. */}
-                    {job.leadName || job.workerNames.length > 0 ? (
-                      <View className="flex-row items-center gap-1 mt-2">
-                        <Users size={12} color={c.faint} />
-                        <Text className="text-xs text-muted font-medium">
-                          {job.leadName
-                            ? `${t.leadPrefix}: ${job.leadName}`
-                            : `${job.workerNames.slice(0, 2).join(', ')}${job.workerNames.length > 2 ? ` +${job.workerNames.length - 2}` : ''}`}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {selectMode ? null : <ChevronRight size={16} color={c.faint} />}
-                </Pressable>
-
-                {selectMode ? null : renderActionBar(job)}
-              </View>
-              </View>
-            );
-          })}
-          </Fragment>
-          ))}
-        </View>
       )}
+        />
 
       {/* Sort & group bottom sheet — selectable chips instead of long
           radio rows. animationType="fade" (not "slide") on purpose: slide
@@ -1174,7 +1165,6 @@ export function JobsListScreen({
           </Pressable>
         </Pressable>
       </RNModal>
-    </ScrollView>
 
     {/* New job/proposal — floating action, bottom-right thumb reach.
        Hidden for roles that can't create jobs (field crew / viewers). */}
