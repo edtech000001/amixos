@@ -41,7 +41,15 @@ export interface JobsQueryParams {
   /** Keyset cursor from the previous page's last row; null for the first page. */
   cursor?: JobsCursor | null;
   pageSize?: number;
+  /** Lazy group loading: when groupKey is set, restrict to that one group of the
+   *  groupBy dimension (column-based dims only — 'client' | 'state'). */
+  groupBy?: string;
+  groupKey?: string | null;
 }
+
+/** Group dimensions whose per-group jobs can be loaded with a plain column
+ *  filter (no join). client/state; lead/company go through Phase 2a instead. */
+export const LAZY_GROUP_DIMS = ['client', 'state'];
 
 export interface JobsPage<T extends { id: string; created_at?: string | null }> {
   jobs: T[];
@@ -148,6 +156,11 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
   if (params.locationId) q = q.eq('location_id', params.locationId);
   if (params.dateFrom) q = q.gte('scheduled_date', params.dateFrom);
   if (params.dateTo) q = q.lte('scheduled_date', params.dateTo);
+  // Lazy group loading: restrict to a single group (column-based dims only).
+  if (params.groupKey !== undefined && params.groupBy) {
+    const col = params.groupBy === 'client' ? 'client_id' : params.groupBy === 'state' ? 'job_state' : null;
+    if (col) q = params.groupKey === '' ? q.is(col, null) : q.eq(col, params.groupKey);
+  }
 
   const searchOr = await searchOrClause(supabase, params.businessId, term);
   if (searchOr) q = q.or(searchOr);
@@ -173,6 +186,24 @@ export interface JobGroup {
   key: string;
   label: string;
   count: number;
+}
+
+/** Load ALL jobs in one group (a column-based group dim), newest-first — the
+ *  lazy group-by loads each group fully when it's scrolled to. */
+export async function fetchAllJobsInGroup<T extends { id: string; created_at?: string | null }>(
+  supabase: AnySupabase,
+  select: string,
+  params: JobsQueryParams,
+): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: JobsCursor | null = null;
+  for (let i = 0; i < 100; i++) {
+    const page = await fetchJobsPage<T>(supabase, select, { ...params, cursor, pageSize: 1000 });
+    out.push(...page.jobs);
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return out;
 }
 
 /** Turn the UI tabs into the job_group_index RPC's flat filter args. Returns
