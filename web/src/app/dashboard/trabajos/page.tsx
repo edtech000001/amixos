@@ -126,22 +126,45 @@ export default function TrabajosPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const cursorRef = useRef<JobsCursor | null>(null);
   const paramsRef = useRef<JobsQueryParams | null>(null);
+  // Whether the current view needs the FULL matching set (advanced sort/group,
+  // which can't be done correctly on a single page) vs. paginated browsing.
+  const loadAllRef = useRef(false);
 
-  const runQuery = async (params: JobsQueryParams) => {
+  const runQuery = async (params: JobsQueryParams, loadAll = false) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
+    loadAllRef.current = loadAll;
     setLoading(true);
     cursorRef.current = null;
+    setHasMore(false);
     try {
-      const [page, counts] = await Promise.all([
-        fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS, 'archived']),
-      ]);
-      if (seq !== loadSeqRef.current) return;
-      setRawJobs(page.jobs);
-      cursorRef.current = page.nextCursor;
-      setHasMore(!!page.nextCursor);
-      setServerCounts(counts);
+      const countsP = fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS, 'archived']);
+      if (loadAll) {
+        // Load every matching row (in big pages) so sort/group is complete. Fast
+        // when a tab/search narrows the set; a full unfiltered group loads all.
+        const acc: RawJob[] = [];
+        let cursor: JobsCursor | null = null;
+        for (let i = 0; i < 200; i++) {
+          const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, cursor, pageSize: 1000 });
+          acc.push(...page.jobs);
+          if (seq === loadSeqRef.current) setRawJobs([...acc]); // progressive
+          if (!page.nextCursor) break;
+          cursor = page.nextCursor;
+        }
+        const counts = await countsP;
+        if (seq !== loadSeqRef.current) return;
+        setServerCounts(counts);
+      } else {
+        const [page, counts] = await Promise.all([
+          fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
+          countsP,
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setRawJobs(page.jobs);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerCounts(counts);
+      }
     } catch (e) {
       console.error('Jobs query failed', e);
     } finally {
@@ -169,16 +192,19 @@ export default function TrabajosPage() {
   // Re-run the current query — after a mutation, or when the branch changes
   // (location isn't part of the child's reported filters).
   const reload = () => {
-    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null }, loadAllRef.current);
   };
   useEffect(() => {
-    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null }, loadAllRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
 
-  const handleFiltersChange = (f: { search: string; tabs: string[]; dateFrom: string | null; dateTo: string | null }) => {
+  const handleFiltersChange = (f: { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
     if (!business) return;
-    void runQuery({ businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo });
+    // Advanced sort/group needs the full matching set to be correct; the default
+    // (recent, ungrouped) browses one page at a time.
+    const needsAll = f.sortBy !== 'recent' || f.groupBy !== 'none';
+    void runQuery({ businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo }, needsAll);
   };
 
   const updateStatus = async (id: string, status: string) => {
