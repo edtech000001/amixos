@@ -119,6 +119,21 @@ export default function TrabajosTab() {
         let q = baseQuery().order('id', { ascending: true }).limit(pageSize);
         if (afterId) q = q.gt('id', afterId);
         return q;
+      }, {
+        pageSize: 400,
+        // Render progressively — merge each page (deduped) into what's shown so
+        // the list grows as it streams instead of blanking, keeping the
+        // newest-first fast-paint rows visible throughout.
+        onPage: (loaded) => {
+          if (seq !== loadSeqRef.current) return;
+          setRawJobs(prev => {
+            const seen = new Set(prev.map(j => j.id));
+            const merged = prev.slice();
+            for (const j of loaded) if (!seen.has(j.id)) merged.push(j);
+            return merged;
+          });
+          setLoading(false);
+        },
       }));
     if (seq !== loadSeqRef.current) return;
     setRawJobs(res.data ?? []);

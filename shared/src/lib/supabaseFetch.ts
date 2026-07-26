@@ -36,17 +36,21 @@ export type SupabasePageQuery<T> = (
   to: number,
 ) => PromiseLike<SupabasePageResult<T>>;
 
-export interface FetchAllOptions {
+export interface FetchAllOptions<T = unknown> {
   pageSize?: number;
   // Safety valve to prevent runaway loops if a caller misuses the helper.
   // Default 100 pages × 1000 rows = 100k rows per business, which is
   // already well past any realistic workload.
   maxPages?: number;
+  /** Called after each page with the rows accumulated so far, so a list can
+   *  render PROGRESSIVELY (fill in as pages stream) instead of blocking on the
+   *  whole load. The array is a live-growing reference — copy it if you keep it. */
+  onPage?: (loaded: T[]) => void;
 }
 
 export async function fetchAll<T>(
   buildPage: SupabasePageQuery<T>,
-  options: FetchAllOptions = {},
+  options: FetchAllOptions<T> = {},
 ): Promise<T[]> {
   const pageSize = options.pageSize ?? 1000;
   const maxPages = options.maxPages ?? 100;
@@ -59,6 +63,7 @@ export async function fetchAll<T>(
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
     all.push(...data);
+    options.onPage?.(all);
     if (data.length < pageSize) break;
   }
 
@@ -91,7 +96,7 @@ export type SupabaseKeysetQuery<T> = (
 //   });
 export async function fetchAllById<T extends { id: string }>(
   buildPage: SupabaseKeysetQuery<T>,
-  options: FetchAllOptions = {},
+  options: FetchAllOptions<T> = {},
 ): Promise<T[]> {
   const pageSize = options.pageSize ?? 1000;
   const maxPages = options.maxPages ?? 100;
@@ -103,6 +108,7 @@ export async function fetchAllById<T extends { id: string }>(
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
     all.push(...data);
+    options.onPage?.(all);
     if (data.length < pageSize) break;
     afterId = data[data.length - 1].id;
   }

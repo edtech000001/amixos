@@ -149,11 +149,27 @@ export default function TrabajosPage() {
     let data: RawJob[];
     try {
       // Keyset by id (the list re-sorts client-side) so each page is a bounded,
-      // fast index scan instead of an ever-growing OFFSET re-scan.
+      // fast index scan instead of an ever-growing OFFSET re-scan. Rendered
+      // PROGRESSIVELY: each page is merged (deduped) into what's shown, so the
+      // list GROWS as it streams instead of blanking for a minute — and the
+      // newest-first fast-paint rows are never dropped mid-load. Smaller pages
+      // (400) so each chunk lands fast.
       data = await fetchAllById<RawJob>((afterId, pageSize) => {
         let q = baseQuery().order('id', { ascending: true }).limit(pageSize);
         if (afterId) q = q.gt('id', afterId);
         return q;
+      }, {
+        pageSize: 400,
+        onPage: (loaded) => {
+          if (seq !== loadSeqRef.current) return;
+          setRawJobs(prev => {
+            const seen = new Set(prev.map(j => j.id));
+            const merged = prev.slice();
+            for (const j of loaded) if (!seen.has(j.id)) merged.push(j);
+            return merged;
+          });
+          setLoading(false);
+        },
       });
     } catch (e) {
       // Full load failed (e.g. a slow query hitting the statement timeout). Keep
