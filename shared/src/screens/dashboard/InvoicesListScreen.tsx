@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal } from 'react-native';
 import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -228,11 +228,11 @@ export function InvoicesListScreen({
   const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
     .replace('{{count}}', String(selectedIds.size));
 
-  return (
-    <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectMode ? 'pb-64' : 'pb-44'}`}>
-      {/* Header — filter controls live up here so the search bar gets the full
-          width (mirrors the jobs list). */}
+  // Header (title, filters, search, status tabs, selection banner, summary)
+  // rides as the SectionList header so the whole screen scrolls as one while
+  // invoice rows virtualize.
+  const listHeader = (
+    <>
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
           <Text className="text-2xl font-bold text-ink">{t.title}</Text>
@@ -368,95 +368,97 @@ export function InvoicesListScreen({
           <Text className="text-ink font-bold">{fmt(total)}</Text>
         </Text>
       ) : null}
+    </>
+  );
 
-      {/* List */}
-      {loading ? (
-        <View className="items-center py-20">
-          <View className="flex-row gap-1">
-            {[0, 1, 2].map(i => (
-              <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-            ))}
-          </View>
-        </View>
-      ) : filtered.length === 0 ? (
-        <View className="items-center py-20">
-          <FileText size={40} color={c.faint} />
-          <Text className="text-sm text-faint mt-3">{t.empty}</Text>
-          <Pressable onPress={onNewInvoicePress} className="mt-1">
-            <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View className="gap-4">
-          {sections.map(section => (
-            <View key={section.title || '__all'}>
-              {section.title ? (
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2 px-1">
-                  {section.title} · {section.data.length}
-                </Text>
+  return (
+    <View className="flex-1 bg-surface">
+      <SectionList
+        className="flex-1"
+        sections={loading || filtered.length === 0 ? [] : sections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={listHeader}
+        renderSectionHeader={({ section }) =>
+          section.title ? (
+            <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-4 mb-2 px-1">
+              {section.title} · {section.data.length}
+            </Text>
+          ) : null
+        }
+        renderItem={({ item: inv, index, section }) => {
+          // Recreate the "one rounded card per section" look: round the first
+          // and last rows and draw side borders so the group reads as a card.
+          const isFirst = index === 0;
+          const isLast = index === section.data.length - 1;
+          const statusKey = inv.status as keyof typeof tStatus;
+          const statusLabel = tStatus[statusKey] ?? inv.status;
+          const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
+          const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
+          const client = inv.clientNames ?? t.noClient;
+          const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
+          const sentAgo = inv.status === 'sent' && inv.sentAt
+            ? (() => { const n = daysSince(inv.sentAt); return n === 0 ? t.sentToday : t.sentAgo.replace('{{n}}', String(n)); })()
+            : null;
+          const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
+            ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
+            : null;
+          return (
+            <Pressable
+              onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
+              className={`flex-row items-center gap-4 px-5 py-4 border-x border-border-soft ${isFirst ? 'rounded-t-2xl border-t' : ''} ${isLast ? 'rounded-b-2xl border-b' : 'border-b'} ${
+                selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'bg-card active:bg-surface'
+              }`}
+            >
+              {selectMode ? (
+                <View className={`w-5 h-5 rounded-md border items-center justify-center ${
+                  selectedIds.has(inv.id) ? 'bg-primary border-primary' : 'border-border'
+                }`}>
+                  {selectedIds.has(inv.id) ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
+                </View>
               ) : null}
-              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-                {section.data.map((inv, i) => {
-                  const statusKey = inv.status as keyof typeof tStatus;
-                  const statusLabel = tStatus[statusKey] ?? inv.status;
-                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
-                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
-                  const client = inv.clientNames ?? t.noClient;
-                  const due = inv.dueDate ? formatDateLong(inv.dueDate, t.dateLocale) : null;
-                  // Elapsed info shown next to the date (not folded into the pill):
-                  // "sent Nd ago" for open sent invoices, "overdue by Nd" for overdue.
-                  const sentAgo = inv.status === 'sent' && inv.sentAt
-                    ? (() => { const n = daysSince(inv.sentAt); return n === 0 ? t.sentToday : t.sentAgo.replace('{{n}}', String(n)); })()
-                    : null;
-                  const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
-                    ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
-                    : null;
-                  return (
-                    <Pressable
-                      key={inv.id}
-                      onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
-                      className={`flex-row items-center gap-4 px-5 py-4 ${
-                        selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'active:bg-surface'
-                      } ${i < section.data.length - 1 ? 'border-b border-border-soft' : ''}`}
-                    >
-                      {selectMode ? (
-                        <View className={`w-5 h-5 rounded-md border items-center justify-center ${
-                          selectedIds.has(inv.id) ? 'bg-primary border-primary' : 'border-border'
-                        }`}>
-                          {selectedIds.has(inv.id) ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
-                        </View>
-                      ) : null}
-                      <View className="flex-1 min-w-0">
-                        <View className="flex-row items-center gap-2 flex-wrap">
-                          <Text className="text-sm font-semibold text-ink">
-                            {inv.invoiceNumber}
-                          </Text>
-                          <View className={`px-2 py-0.5 rounded-full ${pillBg}`}>
-                            <Text className={`text-xs font-medium ${pillText}`}>
-                              {statusLabel}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text className="text-xs text-faint mt-0.5">
-                          {client}
-                          {inv.company ? ` · ${inv.company}` : ''}
-                          {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
-                          {sentAgo ? ` · ${sentAgo}` : ''}
-                          {overdueAgo ? ` · ${overdueAgo}` : ''}
-                        </Text>
-                      </View>
-                      <Text className="text-sm font-bold text-ink">
-                        {fmt(inv.totalAmount)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+              <View className="flex-1 min-w-0">
+                <View className="flex-row items-center gap-2 flex-wrap">
+                  <Text className="text-sm font-semibold text-ink">{inv.invoiceNumber}</Text>
+                  <View className={`px-2 py-0.5 rounded-full ${pillBg}`}>
+                    <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-faint mt-0.5">
+                  {client}
+                  {inv.company ? ` · ${inv.company}` : ''}
+                  {due ? ` · ${t.dueShort.replace('{{date}}', due)}` : ''}
+                  {sentAgo ? ` · ${sentAgo}` : ''}
+                  {overdueAgo ? ` · ${overdueAgo}` : ''}
+                </Text>
+              </View>
+              <Text className="text-sm font-bold text-ink">{fmt(inv.totalAmount)}</Text>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          loading ? (
+            <View className="items-center py-20">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
               </View>
             </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+          ) : (
+            <View className="items-center py-20">
+              <FileText size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">{t.empty}</Text>
+              <Pressable onPress={onNewInvoicePress} className="mt-1">
+                <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
+              </Pressable>
+            </View>
+          )
+        }
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectMode ? 256 : 176 }}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={12}
+        windowSize={7}
+        maxToRenderPerBatch={10}
+      />
 
     {/* Bulk-delete pill — screen-anchored (bottom-left), aligned with the FAB. */}
     {selectMode && onBulkDelete ? (
