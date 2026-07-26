@@ -63,6 +63,14 @@ import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import {
+  fetchEquipmentPage,
+  fetchAllEquipmentMatching,
+  fetchEquipmentCount,
+  equipmentNeedsAll,
+  type EquipmentCursor,
+  type EquipmentQueryParams,
+} from '@amixos/shared/lib/equipmentQuery';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   EQUIPMENT_BUCKET,
@@ -308,13 +316,15 @@ export default function EquipmentScreen() {
   const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupHydrated = useRef(false);
+  // State mirror so the server-query effect re-runs once hydration finishes.
+  const [ready, setReady] = useState(false);
   const groupKey = business?.id ? `${EQUIPMENT_GROUP_KEY}.${business.id}` : EQUIPMENT_GROUP_KEY;
   useEffect(() => {
     let cancelled = false;
     groupHydrated.current = false;
     AsyncStorage.getItem(groupKey)
       .then((raw) => { if (!cancelled) setGroupBy(parseEquipmentGroupKey(raw)); })
-      .finally(() => { groupHydrated.current = true; });
+      .finally(() => { groupHydrated.current = true; setReady(true); });
     return () => { cancelled = true; };
   }, [groupKey]);
   useEffect(() => {
@@ -344,9 +354,19 @@ export default function EquipmentScreen() {
   };
 
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [coverPhotos, setCoverPhotos] = useState<Record<string, EquipmentPhoto>>({});
   const [search, setSearch] = useState('');
+  // ── Server-side pagination + search + grouping ──────────────────────────────
+  const [serverTotal, setServerTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<EquipmentCursor | null>(null);
+  const paramsRef = useRef<EquipmentQueryParams | null>(null);
+  const modeRef = useRef<'page' | 'all'>('page');
   const [modal, setModal] = useState<'add' | 'edit' | 'detail' | null>(null);
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [form, setForm] = useState<EquipForm>(EMPTY_FORM);
@@ -413,34 +433,102 @@ export default function EquipmentScreen() {
     { value: t.typeSuggestions.other, label: t.typeSuggestions.other },
   ], [t]);
 
-  const loadEquipment = useCallback(async () => {
+  // Load one cover photo per equipment for the given ids and MERGE into the map.
+  const loadCovers = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const { data: ph } = await supabase.from('equipment_photos').select('*').in('equipment_id', ids).order('sort_order');
+      setCoverPhotos(prev => {
+        const next = { ...prev };
+        for (const p of (ph as EquipmentPhoto[] | null) ?? []) if (!next[p.equipment_id]) next[p.equipment_id] = p;
+        return next;
+      });
+    } catch { /* offline — no covers */ }
+  }, [supabase]);
+
+  // Force-refresh one equipment's cover after a photo change.
+  const refreshCover = useCallback(async (id: string) => {
+    const { data: ph } = await supabase.from('equipment_photos').select('*').eq('equipment_id', id).order('sort_order').limit(1);
+    setCoverPhotos(prev => {
+      const next = { ...prev };
+      const p = ((ph as EquipmentPhoto[] | null) ?? [])[0];
+      if (p) next[id] = p; else delete next[id];
+      return next;
+    });
+  }, [supabase]);
+
+  // Plain function (reads groupBy/debouncedSearch at call time — see web module).
+  const runQuery = async () => {
     if (!business) return;
-    const res = await loadCached(`equipment_${business.id}_${activeLocationId ?? 'all'}`, () =>
-      fetchAllById<Equipment>((afterId, pageSize) => {
-        let q = supabase.from('equipment').select('*').eq('business_id', business.id);
-        if (activeLocationId) q = q.eq('location_id', activeLocationId);
-        q = q.order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }));
-    const data = res.data ?? [];
-    setEquipment(data);
-    if (data.length > 0) {
-      const ids = data.map((e) => e.id);
-      const { data: ph } = await supabase
-        .from('equipment_photos')
-        .select('*')
-        .in('equipment_id', ids)
-        .order('sort_order');
-      const covers: Record<string, EquipmentPhoto> = {};
-      for (const p of (ph as EquipmentPhoto[] | null) ?? []) {
-        if (!covers[p.equipment_id]) covers[p.equipment_id] = p;
+    const seq = ++loadSeqRef.current;
+    const searching = debouncedSearch.trim().length > 0;
+    const needsAll = equipmentNeedsAll(groupBy, searching);
+    const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
+    paramsRef.current = base;
+    modeRef.current = needsAll ? 'all' : 'page';
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    const isDefault = !searching && groupBy === 'none';
+    try {
+      if (isDefault) {
+        // Cache the default view for offline.
+        const res = await loadCached<{ items: Equipment[]; nextCursor: EquipmentCursor | null; total: number }>(`equipment_${business.id}_${activeLocationId ?? 'all'}`, async () => {
+          const [page, total] = await Promise.all([
+            fetchEquipmentPage<Equipment>(supabase, '*', { ...base, pageSize: 50 }),
+            fetchEquipmentCount(supabase, base),
+          ]);
+          return { items: page.items, nextCursor: page.nextCursor, total };
+        });
+        if (seq !== loadSeqRef.current) return;
+        const d = res.data;
+        setEquipment(d?.items ?? []);
+        cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
+        setHasMore(!res.fromCache && !!d?.nextCursor);
+        setServerTotal(d?.total ?? 0);
+        setCoverPhotos({});
+        await loadCovers((d?.items ?? []).map(r => r.id));
+      } else if (needsAll) {
+        const rows = await fetchAllEquipmentMatching<Equipment>(supabase, '*', base);
+        const total = await fetchEquipmentCount(supabase, base);
+        if (seq !== loadSeqRef.current) return;
+        setEquipment(rows);
+        setServerTotal(total);
+        setCoverPhotos({});
+        await loadCovers(rows.map(r => r.id));
+      } else {
+        const [page, total] = await Promise.all([
+          fetchEquipmentPage<Equipment>(supabase, '*', { ...base, pageSize: 50 }),
+          fetchEquipmentCount(supabase, base),
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setEquipment(page.items);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerTotal(total);
+        setCoverPhotos({});
+        await loadCovers(page.items.map(r => r.id));
       }
-      setCoverPhotos(covers);
-    } else {
-      setCoverPhotos({});
-    }
-  }, [business, supabase, activeLocationId]);
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || modeRef.current !== 'page' || !cursorRef.current || !business || !paramsRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchEquipmentPage<Equipment>(supabase, '*', { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setEquipment(prev => [...prev, ...page.items]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      await loadCovers(page.items.map(r => r.id));
+    } catch { /* offline / error */ }
+    finally { setLoadingMore(false); }
+  };
+
+  const reRun = () => { void runQuery(); };
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
@@ -456,7 +544,18 @@ export default function EquipmentScreen() {
     setEmployees(data);
   }, [business, supabase]);
 
-  useEffect(() => { loadEquipment(); loadEmployees(); }, [loadEquipment, loadEmployees]);
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
+  // Debounce the search box.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  // Drive the server query: re-run on branch / group / debounced-search change.
+  useEffect(() => {
+    if (!business || !ready) return;
+    void runQuery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business, ready, debouncedSearch, groupBy, activeLocationId]);
 
   const loadPhotosFor = useCallback(async (equipmentId: string) => {
     const { data } = await supabase
@@ -652,7 +751,7 @@ export default function EquipmentScreen() {
     setDeleting(false);
     setConfirmingDelete(false);
     setModal(null); setSelected(null);
-    await loadEquipment();
+    reRun();
   };
 
   // ── Photo capture / upload ─────────────────────────────────────────
@@ -726,7 +825,7 @@ export default function EquipmentScreen() {
     try {
       await uploadPhotoFromUri(uri, selected.id, photos.length);
       await loadPhotosFor(selected.id);
-      await loadEquipment();
+      await refreshCover(selected.id);
     } catch {
       setError(t.photoUploadError);
     }
@@ -746,7 +845,7 @@ export default function EquipmentScreen() {
           await supabase.from('equipment_photos').delete().eq('id', photo.id);
           await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path]);
           if (selected) await loadPhotosFor(selected.id);
-          await loadEquipment();
+          if (selected) await refreshCover(selected.id);
         },
       },
     ]);
@@ -765,7 +864,7 @@ export default function EquipmentScreen() {
         supabase.from('equipment_photos').update({ sort_order: i }).eq('id', p.id),
       ),
     );
-    await loadEquipment();
+    await refreshCover(selected.id);
   };
 
   // ── Full-screen photo viewer (detail view) ─────────────────────────
@@ -841,7 +940,7 @@ export default function EquipmentScreen() {
         <View className="ml-1 flex-1">
           <Text className="text-lg font-semibold text-ink">{t.title}</Text>
           <Text className="text-xs text-muted">
-            {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
+            {t.countTotal.replace('{{count}}', String(serverTotal))} · {t.subtitle}
           </Text>
         </View>
         {/* Group-by — icon-only, highlighted when active (matches clients). */}
@@ -944,17 +1043,36 @@ export default function EquipmentScreen() {
         }}
         ItemSeparatorComponent={() => <View className="h-3" />}
         ListEmptyComponent={
-          <View className="bg-card rounded-2xl border border-border-soft p-8 items-center">
-            <Forklift size={32} color={c.faint} />
-            <Text className="text-sm font-semibold text-ink mt-3">{t.emptyTitle}</Text>
-            <Text className="text-xs text-muted mt-1 text-center">{t.emptyHint}</Text>
-          </View>
+          loading && equipment.length === 0 ? (
+            <View className="items-center py-16">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
+              </View>
+            </View>
+          ) : (
+            <View className="bg-card rounded-2xl border border-border-soft p-8 items-center">
+              <Forklift size={32} color={c.faint} />
+              <Text className="text-sm font-semibold text-ink mt-3">{t.emptyTitle}</Text>
+              <Text className="text-xs text-muted mt-1 text-center">{t.emptyHint}</Text>
+            </View>
+          )
         }
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 128 }}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={8}
         windowSize={7}
         maxToRenderPerBatch={6}
+        onEndReachedThreshold={0.6}
+        onEndReached={() => { if (hasMore && !loadingMore) void loadMore(); }}
+        ListFooterComponent={
+          loadingMore ? (
+            <View className="items-center py-6">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
+              </View>
+            </View>
+          ) : null
+        }
       />
 
       {/* Add equipment — floating action, one-handed thumb reach. */}

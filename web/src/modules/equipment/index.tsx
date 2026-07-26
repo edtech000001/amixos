@@ -40,6 +40,14 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
+  fetchEquipmentPage,
+  fetchAllEquipmentMatching,
+  fetchEquipmentCount,
+  equipmentNeedsAll,
+  type EquipmentCursor,
+  type EquipmentQueryParams,
+} from '@amixos/shared/lib/equipmentQuery';
+import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
   equipmentPhotoPath,
@@ -158,6 +166,7 @@ export default function EquipmentModule() {
   const tc = full.common;
 
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   // Map of equipment_id → first photo (for list thumbnails). Detail
   // modal loads the full set on open.
@@ -206,33 +215,102 @@ export default function EquipmentModule() {
     { value: t.typeSuggestions.other, label: t.typeSuggestions.other },
   ], [t]);
 
-  const loadEquipment = useCallback(async () => {
-    if (!business) return;
-    const data = await fetchAllById<Equipment>((afterId, pageSize) => {
-      let q = supabase.from('equipment').select('*').eq('business_id', business.id);
-      if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      q = q.order('id', { ascending: true }).limit(pageSize);
-      if (afterId) q = q.gt('id', afterId);
-      return q;
+  // ── Server-side pagination + search + grouping ──────────────────────────────
+  const [serverTotal, setServerTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<EquipmentCursor | null>(null);
+  const paramsRef = useRef<EquipmentQueryParams | null>(null);
+  const modeRef = useRef<'page' | 'all'>('page');
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Load one cover photo per equipment (list thumbnail) for the given ids and
+  // MERGE into the map — pages accumulate.
+  const loadCovers = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const { data: ph } = await supabase.from('equipment_photos').select('*').in('equipment_id', ids).order('sort_order');
+    setCoverPhotos(prev => {
+      const next = { ...prev };
+      for (const p of (ph as EquipmentPhoto[] | null) ?? []) if (!next[p.equipment_id]) next[p.equipment_id] = p;
+      return next;
     });
-    setEquipment(data);
-    // Load one photo per equipment for the list thumbnail.
-    if (data.length > 0) {
-      const ids = data.map(e => e.id);
-      const { data: ph } = await supabase
-        .from('equipment_photos')
-        .select('*')
-        .in('equipment_id', ids)
-        .order('sort_order');
-      const covers: Record<string, EquipmentPhoto> = {};
-      for (const p of (ph as EquipmentPhoto[] | null) ?? []) {
-        if (!covers[p.equipment_id]) covers[p.equipment_id] = p;
+  }, [supabase]);
+
+  // Force-refresh one equipment's cover after a photo change (add / delete / set-cover).
+  const refreshCover = useCallback(async (id: string) => {
+    const { data: ph } = await supabase.from('equipment_photos').select('*').eq('equipment_id', id).order('sort_order').limit(1);
+    setCoverPhotos(prev => {
+      const next = { ...prev };
+      const p = ((ph as EquipmentPhoto[] | null) ?? [])[0];
+      if (p) next[id] = p; else delete next[id];
+      return next;
+    });
+  }, [supabase]);
+
+  // Plain function (not useCallback): it reads groupBy/debouncedSearch — declared
+  // below — at CALL time, so it can't sit in a deps array without a TDZ. The
+  // query effect (after the groupBy declaration) drives it.
+  const runQuery = async () => {
+    if (!business) return;
+    const seq = ++loadSeqRef.current;
+    const needsAll = equipmentNeedsAll(groupBy, debouncedSearch.trim().length > 0);
+    const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
+    paramsRef.current = base;
+    modeRef.current = needsAll ? 'all' : 'page';
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    try {
+      const countP = fetchEquipmentCount(supabase, base);
+      if (needsAll) {
+        const rows = await fetchAllEquipmentMatching<Equipment>(supabase, '*', base);
+        const total = await countP;
+        if (seq !== loadSeqRef.current) return;
+        setEquipment(rows);
+        setServerTotal(total);
+        setCoverPhotos({});
+        await loadCovers(rows.map(r => r.id));
+      } else {
+        const [page, total] = await Promise.all([
+          fetchEquipmentPage<Equipment>(supabase, '*', { ...base, pageSize: 50 }),
+          countP,
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setEquipment(page.items);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerTotal(total);
+        setCoverPhotos({});
+        await loadCovers(page.items.map(r => r.id));
       }
-      setCoverPhotos(covers);
-    } else {
-      setCoverPhotos({});
+    } catch (e) {
+      console.error('Equipment query failed', e);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [business, supabase, activeLocationId]);
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || modeRef.current !== 'page' || !cursorRef.current || !business || !paramsRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchEquipmentPage<Equipment>(supabase, '*', { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setEquipment(prev => [...prev, ...page.items]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      await loadCovers(page.items.map(r => r.id));
+    } catch (e) {
+      console.error('Equipment load-more failed', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const reRun = () => { void runQuery(); };
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
@@ -248,7 +326,12 @@ export default function EquipmentModule() {
     setEmployees(data);
   }, [business, supabase]);
 
-  useEffect(() => { loadEquipment(); loadEmployees(); }, [loadEquipment, loadEmployees]);
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
+  // Debounce the search box so we don't query per keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
 
   const loadPhotosFor = useCallback(async (equipmentId: string) => {
     const { data } = await supabase
@@ -290,6 +373,26 @@ export default function EquipmentModule() {
     if (!groupHydrated || typeof window === 'undefined') return;
     window.localStorage.setItem(groupKey, groupBy);
   }, [groupHydrated, groupKey, groupBy]);
+  // Drive the server query: re-run on branch / group / debounced-search change,
+  // once the saved group-by has hydrated so the first query uses it. 'none' (and
+  // any search) pages; a real grouping loads all matching and groups.
+  useEffect(() => {
+    if (!business || !groupHydrated) return;
+    void runQuery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business, groupHydrated, debouncedSearch, groupBy, activeLocationId]);
+  // Infinite scroll (flat/search view): load the next page when the sentinel nears view.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting && hasMore && !loadingMore) void loadMore(); },
+      { rootMargin: '600px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loadingMore]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
     { key: 'none', label: t.groups.none, Icon: List },
@@ -426,7 +529,7 @@ export default function EquipmentModule() {
       const { error: err } = await supabase.from('equipment').update(payload).eq('id', selected.id);
       if (err) { setError(t.saveError); setSaving(false); return; }
     }
-    await loadEquipment();
+    reRun();
     setSaving(false);
     setModal(null);
     setSelected(null);
@@ -441,7 +544,7 @@ export default function EquipmentModule() {
     // FK is on delete cascade). A periodic cleanup job can sweep
     // orphaned objects later.
     setModal(null); setSelected(null);
-    await loadEquipment();
+    reRun();
   };
 
   // ── Photo upload ───────────────────────────────────────────────────
@@ -492,7 +595,7 @@ export default function EquipmentModule() {
         await uploadFile(picked[i], selected.id, photos.length + i);
       }
       await loadPhotosFor(selected.id);
-      await loadEquipment(); // refresh cover thumbnails
+      await refreshCover(selected.id); // refresh the list cover thumbnail
     } catch {
       setError(t.photoUploadError);
     }
@@ -510,7 +613,7 @@ export default function EquipmentModule() {
     await supabase.from('equipment_photos').delete().eq('id', photo.id);
     await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path]);
     if (selected) await loadPhotosFor(selected.id);
-    await loadEquipment();
+    if (selected) await refreshCover(selected.id);
   };
 
   // Make a photo the cover (list thumbnail) by moving it to sort_order 0 and
@@ -525,7 +628,7 @@ export default function EquipmentModule() {
         supabase.from('equipment_photos').update({ sort_order: i }).eq('id', p.id),
       ),
     );
-    await loadEquipment(); // refresh the list cover thumbnail
+    await refreshCover(selected.id); // refresh the list cover thumbnail
   };
 
   // ── Full-screen photo viewer (detail view) ─────────────────────────
@@ -595,7 +698,7 @@ export default function EquipmentModule() {
           <div>
             <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
             <p className="text-xs text-muted">
-              {t.countTotal.replace('{{count}}', String(filtered.length))} · {t.subtitle}
+              {t.countTotal.replace('{{count}}', String(serverTotal))} · {t.subtitle}
             </p>
           </div>
         </div>
@@ -655,7 +758,11 @@ export default function EquipmentModule() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading && equipment.length === 0 ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border-soft p-10 text-center">
           <Forklift size={36} className="text-faint mx-auto mb-3" />
           <p className="text-sm font-semibold text-ink">{t.emptyTitle}</p>
@@ -731,6 +838,17 @@ export default function EquipmentModule() {
               </div>
             </div>
           ))}
+          {/* Infinite-scroll footer (flat/search view): sentinel loads the next page. */}
+          {modeRef.current === 'page' ? (
+            <>
+              {loadingMore ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                </div>
+              ) : null}
+              <div ref={sentinelRef} className="h-1" />
+            </>
+          ) : null}
         </div>
       )}
 
