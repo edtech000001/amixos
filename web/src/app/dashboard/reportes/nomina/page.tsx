@@ -113,7 +113,10 @@ export default function NominaPage() {
         .gte('work_date', period.startStr).lte('work_date', period.endStr),
       supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
         .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
-      supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at, components').eq('business_id', bid).eq('period_start', period.startStr),
+      // Match by period OVERLAP, not exact period_start: if the owner changes the
+      // pay start date the boundaries shift, and an already-paid worker must still
+      // show as paid (the snapshot lives on permanently in Payroll History either way).
+      supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at, components').eq('business_id', bid).lte('period_start', period.endStr).gte('period_end', period.startStr),
       // Loan ledger — full history; balance per worker = sum(amount) across ALL periods.
       supabase.from('employee_loans').select('id, employee_id, amount, note, entry_date').eq('business_id', bid).order('entry_date', { ascending: false }),
     ]);
@@ -311,8 +314,11 @@ export default function NominaPage() {
   const onClearPayments = async (employeeId: string) => {
     if (!business) return;
     setBusy(true);
+    // Clear whatever payment the current-period view counts as "paid" (overlap
+    // match, so it still targets the right snapshot after an anchor change).
     await supabase.from('payroll_payments').delete()
-      .eq('business_id', business.id).eq('employee_id', employeeId).eq('period_start', period.startStr);
+      .eq('business_id', business.id).eq('employee_id', employeeId)
+      .lte('period_start', period.endStr).gte('period_end', period.startStr);
     const clearedEmp = employees.find(e => e.id === employeeId);
     void logAudit(supabase, business.id, 'payroll.payments_cleared', 'payroll', employeeId, {
       name: clearedEmp ? `${clearedEmp.first_name} ${clearedEmp.last_name}` : undefined,

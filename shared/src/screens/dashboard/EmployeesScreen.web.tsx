@@ -618,7 +618,7 @@ export function EmployeesScreen({
                 >
                   <span className="flex-1 text-sm text-ink font-medium truncate">{ts.workerName ?? '—'}</span>
                   <span className="w-24 text-xs text-muted text-center">
-                    {new Date(ts.workDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
+                    {new Date(ts.workDate + 'T00:00:00').toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
                   </span>
                   <span className="w-16 text-sm font-semibold text-ink text-center">{ts.hoursWorked ?? '—'}</span>
                   <span className="w-40 text-xs text-faint truncate">{ts.jobDescription ?? '—'}</span>

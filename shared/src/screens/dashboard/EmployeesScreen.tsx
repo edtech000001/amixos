@@ -390,9 +390,8 @@ export function EmployeesScreen({
     );
   };
 
-  // Hours + History tab bodies (small, period-bounded — plain ScrollView).
-  const otherTabBody = tab === 'horas' ? (
-        /* Hours tab — per-worker totals for the current pay period. */
+  // Hours tab — per-worker totals for the current pay period (small; plain ScrollView).
+  const otherTabBody = (
         <>
           {payPeriodLabel ? (
             <Text className="text-xs text-faint mb-3">
@@ -422,73 +421,71 @@ export function EmployeesScreen({
             </View>
           )}
         </>
-      ) : (
-        <>
-          {/* Search + add new entry */}
-          <View className="flex-row items-center gap-2 mb-4">
-            <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5 py-2.5">
-              <Search size={16} color={c.faint} />
-              <TextInput
-                value={tsSearch}
-                onChangeText={setTsSearch}
-                placeholder={t.hoursSearchPlaceholder}
-                placeholderTextColor={c.faint}
-                autoCapitalize="none"
-                autoCorrect={false}
-                className="flex-1 ml-2 text-sm text-ink"
-              />
-              {tsSearch ? (
-                <Pressable onPress={() => setTsSearch('')} hitSlop={8}>
-                  <X size={16} color={c.faint} />
-                </Pressable>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={onLogHours}
-              className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
-            >
-              <Plus size={15} color="#fff" />
-              <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
-            </Pressable>
-          </View>
-          {filteredTimesheets.length === 0 ? (
-            <View className="items-center py-20">
-              <ClipboardList size={40} color={c.faint} />
-              <Text className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</Text>
-            </View>
-          ) : (
-            <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-              {filteredTimesheets.map((ts, i) => (
-                <View
-                  key={ts.id}
-                  className={`flex-row items-center px-4 py-3 ${
-                    i < filteredTimesheets.length - 1 ? 'border-b border-border-soft' : ''
-                  }`}
-                >
-                  <View className="flex-1 min-w-0 pr-2">
-                    <Text className="text-sm text-ink font-semibold" numberOfLines={1}>
-                      {ts.workerName ?? '—'}
-                    </Text>
-                    <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
-                      {new Date(ts.workDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
-                      {ts.jobDescription ? ` · ${ts.jobDescription}` : ''}
-                    </Text>
-                  </View>
-                  <Text className="text-sm font-semibold text-ink mr-1">
-                    {ts.hoursWorked ?? '—'}h
-                  </Text>
-                  <Pressable onPress={() => onEditTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
-                    <Pencil size={16} color={c.muted} />
-                  </Pressable>
-                  <Pressable onPress={() => onDeleteTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
-                    <Trash2 size={16} color={c.danger} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
       );
+
+  // History tab — every logged/manual entry (all-time, not period-bound).
+  // Virtualized via FlatList since it's no longer capped, so it stays smooth as
+  // entries accumulate over the years.
+  const historySearchBar = (
+    <View className="flex-row items-center gap-2 mb-4">
+      <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5 py-2.5">
+        <Search size={16} color={c.faint} />
+        <TextInput
+          value={tsSearch}
+          onChangeText={setTsSearch}
+          placeholder={t.hoursSearchPlaceholder}
+          placeholderTextColor={c.faint}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="flex-1 ml-2 text-sm text-ink"
+        />
+        {tsSearch ? (
+          <Pressable onPress={() => setTsSearch('')} hitSlop={8}>
+            <X size={16} color={c.faint} />
+          </Pressable>
+        ) : null}
+      </View>
+      <Pressable
+        onPress={onLogHours}
+        className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
+      >
+        <Plus size={15} color="#fff" />
+        <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderTimesheet = ({ item: ts, index: i }: { item: TimesheetListItem; index: number }) => {
+    // Recreate the seamless card look with per-row rounding/borders.
+    const isFirst = i === 0;
+    const isLast = i === filteredTimesheets.length - 1;
+    return (
+      <View
+        className={`flex-row items-center px-4 py-3 bg-card border-x border-border-soft ${
+          isFirst ? 'rounded-t-2xl border-t' : ''
+        } ${isLast ? 'rounded-b-2xl border-b' : 'border-b'}`}
+      >
+        <View className="flex-1 min-w-0 pr-2">
+          <Text className="text-sm text-ink font-semibold" numberOfLines={1}>
+            {ts.workerName ?? '—'}
+          </Text>
+          <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
+            {new Date(ts.workDate + 'T00:00:00').toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
+            {ts.jobDescription ? ` · ${ts.jobDescription}` : ''}
+          </Text>
+        </View>
+        <Text className="text-sm font-semibold text-ink mr-1">
+          {ts.hoursWorked ?? '—'}h
+        </Text>
+        <Pressable onPress={() => onEditTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+          <Pencil size={16} color={c.muted} />
+        </Pressable>
+        <Pressable onPress={() => onDeleteTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+          <Trash2 size={16} color={c.danger} />
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <View className="flex-1 bg-surface">
@@ -513,6 +510,24 @@ export function EmployeesScreen({
           windowSize={7}
           maxToRenderPerBatch={10}
         />
+      ) : tab === 'historial' ? (
+        <FlatList
+          data={filteredTimesheets}
+          keyExtractor={ts => ts.id}
+          renderItem={renderTimesheet}
+          ListHeaderComponent={<>{topBar}{historySearchBar}</>}
+          ListEmptyComponent={
+            <View className="items-center py-20">
+              <ClipboardList size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</Text>
+            </View>
+          }
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={15}
+          windowSize={7}
+          maxToRenderPerBatch={12}
+        />
       ) : (
         <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-44" keyboardShouldPersistTaps="handled">
           {topBar}
@@ -520,7 +535,7 @@ export function EmployeesScreen({
           {modalsSlot}
         </ScrollView>
       )}
-      {tab === 'empleados' ? modalsSlot : null}
+      {tab !== 'horas' ? modalsSlot : null}
 
     {/* New employee — floating action, bottom-right thumb reach. The Hours
        logged tab has its own inline "add entry" button. Hidden while selecting. */}

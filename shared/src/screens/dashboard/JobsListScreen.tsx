@@ -1001,7 +1001,12 @@ export function JobsListScreen({
         viewabilityConfig={viewabilityConfig}
         onScrollBeginDrag={() => { pendingAnchor.current = null; }}
         onScrollToIndexFailed={() => {}}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectMode ? 384 : 176 }}
+        // Anchors the visible rows so growing the header (the selection banner
+        // appearing on long-press) doesn't shift/drift the list under the user.
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        // Constant so toggling select mode doesn't reflow the content height
+        // (leaves room for the floating action pills that appear while selecting).
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 220 }}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={10}
         windowSize={9}

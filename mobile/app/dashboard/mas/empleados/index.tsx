@@ -251,13 +251,16 @@ export default function EmpleadosRoute() {
   };
   const loadTimesheets = async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from('timesheets')
-      .select('*')
-      .eq('business_id', business.id)
-      .order('work_date', { ascending: false })
-      .limit(50);
-    setTimesheets(data ?? []);
+    // All logged/manual hours (not period-bound) — paginate past the 1000-row
+    // cap, then sort newest-first for the History tab.
+    const rows = await fetchAllById<RawTimesheet>((afterId, pageSize) => {
+      let q = supabase.from('timesheets').select('*').eq('business_id', business.id)
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    });
+    rows.sort((a, b) => (a.work_date < b.work_date ? 1 : a.work_date > b.work_date ? -1 : 0));
+    setTimesheets(rows);
   };
   // Per-worker hour totals for the CURRENT pay period (Hours tab). Uses the SAME
   // engine as Payroll so hours logged on JOBS (total_hours + driver hours, split
