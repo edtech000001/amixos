@@ -11,7 +11,8 @@ import {
   JobsListScreen,
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
-import { fetchJobsPage, fetchJobTabCounts, type JobsCursor, type JobsQueryParams } from '@amixos/shared/lib/jobsQuery';
+import { fetchJobsPage, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup } from '@amixos/shared/lib/jobsQuery';
+import { usStateName } from '@amixos/shared/lib/usStates';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -62,7 +63,7 @@ export default function TrabajosTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,11 +94,18 @@ export default function TrabajosTab() {
   const paramsRef = useRef<JobsQueryParams | null>(null);
   // Whether the current view needs the FULL matching set (advanced sort/group).
   const loadAllRef = useRef(false);
+  // Lazy group-by (Phase 2b): 'group' mode loads the group index then each
+  // group's jobs on demand as the list reaches the bottom.
+  const modeRef = useRef<'page' | 'all' | 'group'>('page');
+  const groupIndexRef = useRef<JobGroup[]>([]);
+  const loadedGroupsRef = useRef(0);
+  const groupByRef = useRef<string>('none');
 
   const runQuery = async (params: JobsQueryParams, loadAll = false) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
     loadAllRef.current = loadAll;
+    modeRef.current = loadAll ? 'all' : 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
@@ -132,8 +140,37 @@ export default function TrabajosTab() {
     setLoading(false);
   };
 
+  // Order the group index to match groupJobs (alphabetical by displayed label,
+  // empty bucket last) so groups load top-to-bottom.
+  const orderGroups = (index: JobGroup[], groupBy: string): JobGroup[] => {
+    const labelOf = (g: JobGroup) => (groupBy === 'state' ? usStateName(g.key, locale) : g.label);
+    return index.slice().sort((a, b) => {
+      const ae = a.key === '', be = b.key === '';
+      if (ae !== be) return ae ? 1 : -1;
+      return labelOf(a).localeCompare(labelOf(b));
+    });
+  };
+
+  const loadNextGroup = async () => {
+    const seq = loadSeqRef.current;
+    const idx = loadedGroupsRef.current;
+    const grp = groupIndexRef.current[idx];
+    if (!grp || !paramsRef.current) { setHasMore(false); return; }
+    setLoadingMore(true);
+    try {
+      const groupJobsData = await fetchAllJobsInGroup<RawJob>(supabase, JOB_LIST_SELECT, { ...paramsRef.current, groupBy: groupByRef.current, groupKey: grp.key });
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(prev => [...prev, ...groupJobsData]);
+      loadedGroupsRef.current = idx + 1;
+      setHasMore(loadedGroupsRef.current < groupIndexRef.current.length);
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { setLoadingMore(false); }
+  };
+
   const loadMore = async () => {
-    if (!cursorRef.current || loadingMore || !paramsRef.current) return;
+    if (loadingMore || !paramsRef.current) return;
+    if (modeRef.current === 'group') { void loadNextGroup(); return; }
+    if (!cursorRef.current) return;
     const seq = loadSeqRef.current;
     setLoadingMore(true);
     try {
@@ -146,12 +183,41 @@ export default function TrabajosTab() {
     finally { setLoadingMore(false); }
   };
 
-  const reload = () => {
-    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null }, loadAllRef.current);
+  // Lazy group-by: fetch the group index, then the first group (more on scroll).
+  // Falls back to load-all + client grouping when the index can't be built.
+  const runGroupLazy = async (params: JobsQueryParams, groupBy: string) => {
+    const seq = ++loadSeqRef.current;
+    paramsRef.current = params;
+    groupByRef.current = groupBy;
+    modeRef.current = 'group';
+    loadAllRef.current = false;
+    setLoading(true); setHasMore(false); cursorRef.current = null;
+    try {
+      const [index, counts] = await Promise.all([
+        fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo }),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, COUNT_TABS),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setServerCounts(counts);
+      if (index === null) { await runQuery(params, true); return; }
+      groupIndexRef.current = orderGroups(index, groupBy);
+      loadedGroupsRef.current = 0;
+      setRawJobs([]);
+      await loadNextGroup();
+    } catch { /* offline / error */ }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
+
+  const reRun = (locationId: string | null) => {
+    if (!paramsRef.current) return;
+    const p = { ...paramsRef.current, locationId };
+    if (modeRef.current === 'group') void runGroupLazy(p, groupByRef.current);
+    else void runQuery(p, loadAllRef.current);
+  };
+  const reload = () => reRun(activeLocationId ?? null);
   // Re-query on branch change (location isn't part of the child's filters).
   useEffect(() => {
-    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null }, loadAllRef.current);
+    reRun(activeLocationId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
   // Refresh the current query when returning from create/edit.
@@ -159,9 +225,13 @@ export default function TrabajosTab() {
 
   const handleFiltersChange = (f: { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
     if (!business) return;
-    // Advanced sort/group needs the full matching set; the default browses a page.
-    const needsAll = f.sortBy !== 'recent' || f.groupBy !== 'none';
-    void runQuery({ businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo }, needsAll);
+    const params = { businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo };
+    if (f.groupBy !== 'none' && LAZY_GROUP_DIMS.includes(f.groupBy)) {
+      void runGroupLazy(params, f.groupBy);
+    } else {
+      const needsAll = f.sortBy !== 'recent' || f.groupBy !== 'none';
+      void runQuery(params, needsAll);
+    }
   };
 
   const updateStatus = async (id: string, status: string) => {
