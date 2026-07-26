@@ -10,7 +10,7 @@ import {
   InvoicesListScreen,
   type InvoiceListItem,
 } from '@amixos/shared/screens/dashboard/InvoicesListScreen';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
@@ -81,12 +81,14 @@ export default function FacturasPage() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
-    const raw = await fetchAll<RawInvoice>((from, to) => {
+    const raw = await fetchAllById<RawInvoice>((afterId, pageSize) => {
       let q = supabase.from('invoices')
         .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
         .eq('business_id', businessId);
       if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q.order('created_at', { ascending: false }).range(from, to);
+      q = q.order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
     });
     const mapped: InvoiceListItem[] = raw.map(inv => {
       const pc = primaryClient(inv);

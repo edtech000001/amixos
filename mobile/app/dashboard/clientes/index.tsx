@@ -13,7 +13,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAll, fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
@@ -71,13 +71,16 @@ export default function ClientesTab() {
     // Clients list is cached so it (and on-site adds) work offline. Contacts +
     // templates are best-effort — offline they just come back empty.
     const clRes = await loadCached(`clients_list_${businessId}`, () =>
-      fetchAll<Client>((from, to) =>
-        supabase
+      fetchAllById<Client>((afterId, pageSize) => {
+        let q = supabase
           .from('clients')
           .select('*')
           .eq('business_id', businessId)
-          .order('created_at', { ascending: false })
-          .range(from, to)));
+          .order('id', { ascending: true })
+          .limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }));
     const cl = clRes.data ?? [];
 
     let contactRows: { client_id: string; name: string; role: string | null }[] = [];

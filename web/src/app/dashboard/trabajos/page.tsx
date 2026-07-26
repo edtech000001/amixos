@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
   JobsListScreen,
   type JobListItem,
@@ -48,11 +48,15 @@ interface RawJob {
   archived_at?: string | null;
   created_at: string;
   clients: { first_name: string; last_name: string; company: string | null } | null;
-  job_assignments: { worker_name: string | null; is_lead: boolean | null; employees: { first_name: string; last_name: string } | null }[];
+  job_assignments: { worker_name: string | null; is_lead: boolean | null }[];
 }
 
-function assignmentName(a: { worker_name: string | null; employees: { first_name: string; last_name: string } | null }): string | null {
-  return a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name;
+// worker_name is denormalized on the assignment (set at assign time on web,
+// mobile, and import), so the list reads it directly — no employees join. This
+// avoids a per-assignment RLS-triggering nested join that made the list time
+// out once a business had thousands of jobs.
+function assignmentName(a: { worker_name: string | null }): string | null {
+  return a.worker_name;
 }
 
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated'] as const;
@@ -116,7 +120,7 @@ export default function TrabajosPage() {
     expiry_date, delegated_to_business_id, delegated_from_business_id,
     published_to_crew, created_at, archived_at,
     clients(first_name, last_name, company),
-    job_assignments(worker_name, is_lead, employees(first_name, last_name))
+    job_assignments(worker_name, is_lead)
   `;
 
   // Guards against a stale slow load overwriting a newer one (e.g. branch switch).
@@ -142,9 +146,22 @@ export default function TrabajosPage() {
       }
     }
 
-    const data = await fetchAll<RawJob>((from, to) =>
-      baseQuery().order('created_at', { ascending: false }).range(from, to),
-    );
+    let data: RawJob[];
+    try {
+      // Keyset by id (the list re-sorts client-side) so each page is a bounded,
+      // fast index scan instead of an ever-growing OFFSET re-scan.
+      data = await fetchAllById<RawJob>((afterId, pageSize) => {
+        let q = baseQuery().order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      });
+    } catch (e) {
+      // Full load failed (e.g. a slow query hitting the statement timeout). Keep
+      // the fast-paint rows rather than crashing the whole page with an error.
+      console.error('Jobs full load failed', e);
+      if (seq === loadSeqRef.current) setLoading(false);
+      return;
+    }
     if (seq !== loadSeqRef.current) return;
     setRawJobs(data);
     setLoading(false);
@@ -190,7 +207,7 @@ export default function TrabajosPage() {
       .map(assignmentName)
       .filter((s): s is string => !!s),
     leadName: assignmentName(
-      j.job_assignments.find(a => a.is_lead) ?? { worker_name: null, employees: null },
+      j.job_assignments.find(a => a.is_lead) ?? { worker_name: null },
     ),
     delegatedToBusinessName: j.delegated_to_business_id
       ? businesses.find(b => b.id === j.delegated_to_business_id)?.name ?? null

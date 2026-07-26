@@ -64,3 +64,48 @@ export async function fetchAll<T>(
 
   return all;
 }
+
+export type SupabaseKeysetQuery<T> = (
+  afterId: string | null,
+  pageSize: number,
+) => PromiseLike<SupabasePageResult<T>>;
+
+// KEYSET pagination by the row `id` (uuid PK) — the scalable alternative to
+// `fetchAll`'s OFFSET (`.range()`) paging. OFFSET makes each later page
+// re-scan every row before it, so on a large table (thousands of rows) with
+// per-row RLS the query gets slower page by page and eventually hits the
+// statement timeout. Keyset instead asks for "the next `pageSize` rows whose
+// id > the last one I saw", so every page is a bounded index range-scan that
+// stays fast no matter how big the table grows.
+//
+// Order is by `id` (not created_at), so use this ONLY for callers that re-sort
+// the result themselves (all the dashboard lists do). Requires a composite
+// index on (business_id, id) for the range scan to be cheap.
+//
+// Usage:
+//   const jobs = await fetchAllById<RawJob>((afterId, pageSize) => {
+//     let q = supabase.from('jobs').select(SEL).eq('business_id', bid)
+//       .order('id', { ascending: true }).limit(pageSize);
+//     if (afterId) q = q.gt('id', afterId);
+//     return q;
+//   });
+export async function fetchAllById<T extends { id: string }>(
+  buildPage: SupabaseKeysetQuery<T>,
+  options: FetchAllOptions = {},
+): Promise<T[]> {
+  const pageSize = options.pageSize ?? 1000;
+  const maxPages = options.maxPages ?? 100;
+  const all: T[] = [];
+  let afterId: string | null = null;
+
+  for (let page = 0; page < maxPages; page++) {
+    const { data, error } = await buildPage(afterId, pageSize);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    afterId = data[data.length - 1].id;
+  }
+
+  return all;
+}

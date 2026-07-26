@@ -10,7 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAll, fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -113,9 +113,12 @@ export default function ClientesPage() {
     if (!business) return;
     const businessId = business.id;
     const [cl, contactRows, { data: tpl }] = await Promise.all([
-      fetchAll<Client>((from, to) =>
-        supabase.from('clients').select('*').eq('business_id', businessId)
-          .order('created_at', { ascending: false }).range(from, to)),
+      fetchAllById<Client>((afterId, pageSize) => {
+        let q = supabase.from('clients').select('*').eq('business_id', businessId)
+          .order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }),
       // Contact people across the whole business — searched + shown under the
       // matched client. Paginated: a busy business can have >1000 contacts.
       fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
